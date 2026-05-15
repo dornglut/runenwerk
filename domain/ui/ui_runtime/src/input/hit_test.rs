@@ -126,7 +126,10 @@ fn combine_clip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ButtonNode, PopupNode, RadialMenuNode, UiRuntimeState, compute_tree_layout};
+    use crate::{
+        ButtonNode, PopupNode, RadialMenuNode, StackNode, UiRuntimeState, compute_tree_layout,
+    };
+    use ui_layout::SizePolicy;
     use ui_math::{UiPoint, UiRect, UiSize};
     use ui_text::FontId;
     use ui_theme::ThemeTokens;
@@ -310,5 +313,72 @@ mod tests {
         );
 
         assert_eq!(hit_test_widget(&tree, &layouts, point), Some(high_item_id));
+    }
+
+    #[test]
+    fn structural_chrome_slots_hit_their_child_slot_before_the_host() {
+        let theme = ThemeTokens::default();
+        let chrome_id = WidgetId(2);
+        let close_id = WidgetId(3);
+        let label_id = WidgetId(4);
+        let active_indicator_id = WidgetId(5);
+        let text_style = theme.body_small_text_style(FontId(1));
+        let mut chrome = StackNode::horizontal(0.0);
+        chrome.child_main_policies = vec![
+            SizePolicy::Fixed(18.0),
+            SizePolicy::Fixed(80.0),
+            SizePolicy::Fixed(18.0),
+        ];
+        let mut close = ButtonNode::new("x", text_style.clone(), theme.clone());
+        close.padding = ui_math::UiInsets::ZERO;
+        close.min_size = UiSize::new(18.0, 18.0);
+        let mut label = ButtonNode::new("Viewport", text_style.clone(), theme.clone());
+        label.fill_width = true;
+        let mut indicator = ButtonNode::new("", text_style, theme.clone());
+        indicator.padding = ui_math::UiInsets::ZERO;
+        indicator.min_size = UiSize::new(18.0, 18.0);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(crate::PanelNode::new(theme)),
+            vec![UiNode::with_children(
+                chrome_id,
+                UiNodeKind::Stack(chrome),
+                vec![
+                    UiNode::new(close_id, UiNodeKind::Button(close)),
+                    UiNode::new(label_id, UiNodeKind::Button(label)),
+                    UiNode::new(active_indicator_id, UiNodeKind::Button(indicator)),
+                ],
+            )],
+        ));
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 160.0, 48.0),
+            &UiRuntimeState::default(),
+        );
+        let close = layouts.get(&close_id).expect("close slot layout").bounds;
+        let label = layouts.get(&label_id).expect("label slot layout").bounds;
+        let indicator = layouts
+            .get(&active_indicator_id)
+            .expect("indicator slot layout")
+            .bounds;
+
+        assert_eq!(
+            hit_test_widget(&tree, &layouts, UiPoint::new(close.x + 1.0, close.y + 1.0)),
+            Some(close_id)
+        );
+        assert_eq!(
+            hit_test_widget(&tree, &layouts, UiPoint::new(label.x + 1.0, label.y + 1.0)),
+            Some(label_id)
+        );
+        assert_eq!(
+            hit_test_widget(
+                &tree,
+                &layouts,
+                UiPoint::new(indicator.x + 1.0, indicator.y + 1.0)
+            ),
+            Some(active_indicator_id)
+        );
+        assert!(close.x + close.width <= label.x);
+        assert!(label.x + label.width <= indicator.x);
     }
 }

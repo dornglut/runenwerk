@@ -23,14 +23,15 @@ use crate::{
     build_entity_table_panel, dock_split_preview_label_widget_id,
     dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
     map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
-    tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
-    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_list_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
-    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
-    tool_surface_kind_definition_key, toolbar_workspace_close_widget_id,
-    workspace_split_host_widget_id,
+    tab_active_indicator_widget_id, tab_chrome_widget_id, tab_close_button_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
+    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tool_surface_definition_id, tool_surface_kind_definition_key,
+    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
+    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -171,6 +172,43 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                 menu: crate::ToolbarMenuKind::Workspace,
             },
         ]
+    );
+    let modelling_chrome =
+        toolbar_workspace_chrome_widget_id(crate::MODELLING_WORKSPACE_PROFILE_ID);
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        modelling_chrome,
+        toolbar_workspace_close_widget_id(crate::MODELLING_WORKSPACE_PROFILE_ID),
+        ui_definition::UiChromeSlotKindDefinition::CloseAffordance,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        modelling_chrome,
+        crate::TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
+        ui_definition::UiChromeSlotKindDefinition::Label,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        modelling_chrome,
+        crate::TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
+        ui_definition::UiChromeSlotKindDefinition::DragRegion,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        modelling_chrome,
+        toolbar_workspace_active_indicator_widget_id(crate::MODELLING_WORKSPACE_PROFILE_ID),
+        ui_definition::UiChromeSlotKindDefinition::ActiveIndicator,
+    );
+    let layouts = ui_runtime::compute_tree_layout(
+        &build.tree,
+        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    assert_horizontal_slot_order(
+        &layouts,
+        toolbar_workspace_close_widget_id(crate::MODELLING_WORKSPACE_PROFILE_ID),
+        crate::TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
+        toolbar_workspace_active_indicator_widget_id(crate::MODELLING_WORKSPACE_PROFILE_ID),
     );
 
     let workspace_menu_frame_model = EditorShellFrameModel::new(
@@ -1146,6 +1184,47 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
             && *close_panel == viewport_panel
             && *close_epoch == projection_epoch
     ));
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        tab_chrome_widget_id(viewport_stack, 0),
+        tab_close_button_widget_id(viewport_stack, 0),
+        ui_definition::UiChromeSlotKindDefinition::CloseAffordance,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        tab_chrome_widget_id(viewport_stack, 0),
+        tab_close_button_widget_id(viewport_stack, 0),
+        ui_definition::UiChromeSlotKindDefinition::CommandArea,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        tab_chrome_widget_id(viewport_stack, 0),
+        crate::tab_button_widget_id(viewport_stack, 0),
+        ui_definition::UiChromeSlotKindDefinition::Label,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        tab_chrome_widget_id(viewport_stack, 0),
+        crate::tab_button_widget_id(viewport_stack, 0),
+        ui_definition::UiChromeSlotKindDefinition::DragRegion,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        tab_chrome_widget_id(viewport_stack, 0),
+        tab_active_indicator_widget_id(viewport_stack, 0),
+        ui_definition::UiChromeSlotKindDefinition::ActiveIndicator,
+    );
+    let layouts = ui_runtime::compute_tree_layout(
+        &build.tree,
+        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    assert_horizontal_slot_order(
+        &layouts,
+        tab_close_button_widget_id(viewport_stack, 0),
+        crate::tab_button_widget_id(viewport_stack, 0),
+        tab_active_indicator_widget_id(viewport_stack, 0),
+    );
 }
 
 #[test]
@@ -1883,6 +1962,52 @@ fn tab_stack_by_panel(workspace: &WorkspaceState, panel_id: PanelInstanceId) -> 
         .find(|stack| stack.ordered_panels.contains(&panel_id))
         .map(|stack| stack.id)
         .expect("panel should belong to a tab stack")
+}
+
+fn assert_chrome_slot(
+    model: &ui_definition::FormedInteractionModel,
+    host_widget_id: WidgetId,
+    slot_widget_id: WidgetId,
+    kind: ui_definition::UiChromeSlotKindDefinition,
+) {
+    assert!(
+        model.chrome_slots.iter().any(|slot| {
+            slot.host_widget_id == host_widget_id
+                && slot.slot_widget_id == slot_widget_id
+                && slot.kind == kind
+        }),
+        "expected chrome slot {kind:?} for host {host_widget_id:?} and slot {slot_widget_id:?}; slots: {:?}",
+        model.chrome_slots,
+    );
+}
+
+fn assert_horizontal_slot_order(
+    layouts: &ui_runtime::ComputedLayoutMap,
+    close_widget_id: WidgetId,
+    label_widget_id: WidgetId,
+    active_indicator_widget_id: WidgetId,
+) {
+    let close = layouts
+        .get(&close_widget_id)
+        .expect("close slot layout should exist")
+        .bounds;
+    let label = layouts
+        .get(&label_widget_id)
+        .expect("label slot layout should exist")
+        .bounds;
+    let active_indicator = layouts
+        .get(&active_indicator_widget_id)
+        .expect("active indicator slot layout should exist")
+        .bounds;
+
+    assert!(
+        close.x + close.width <= label.x,
+        "close slot should not overlap label slot: close={close:?}, label={label:?}",
+    );
+    assert!(
+        label.x + label.width <= active_indicator.x,
+        "label slot should not overlap active indicator slot: label={label:?}, active={active_indicator:?}",
+    );
 }
 
 fn ui_tree_contains_widget(node: &crate::UiNode, widget_id: WidgetId) -> bool {

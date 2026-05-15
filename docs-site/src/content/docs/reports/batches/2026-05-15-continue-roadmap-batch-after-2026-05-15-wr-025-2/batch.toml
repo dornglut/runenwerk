@@ -1,0 +1,30 @@
+id = "2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025-2"
+goal = "Continue roadmap batch after 2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025: WR-025"
+approval_state = "approved"
+base_branch = "main"
+base_sha = "f5c51a14bb1ea71c374b3f908aa66e39ef9766b5"
+execution_mode = "worktree"
+integration_risk = "isolated worktrees pending"
+integration_status = "not_started"
+closeout_status = "not_started"
+integrated_target = ""
+integrated_sha = ""
+validation_results = ["2026-05-15T20:49:52+00:00 batch validate passed: host batch validation; cargo test -p ui_definition, cargo test -p ui_runtime scroll, cargo test -p ui_runtime popup, cargo test -p ui_runtime menu, cargo test -p editor_shell, cargo test -p runenwerk_editor viewport, cargo test -p runenwerk_editor input_bridge, cargo check -p runenwerk_editor, task roadmap:render, task roadmap:validate, task roadmap:check, task docs:validate"]
+roadmap_evidence_updates = []
+tooling_hardening = []
+
+[[items]]
+id = "WR-025"
+title = "UI Runtime V2 and interaction formation"
+lane = "Architecture guardrail"
+dependency_level = "L1"
+gate = "Accepted architecture gate"
+score = 4.8
+branch = "codex/2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025-2-wr-025"
+worktree = ""
+worktree_cleanup = ""
+prompt_path = "docs-site/src/content/docs/reports/batches/2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025-2/prompts/wr-025.md"
+status = "proposed"
+roadmap_outcome = "unknown"
+write_scopes = ["domain/ui/ui_definition", "domain/ui/ui_runtime", "domain/editor/editor_shell", "apps/runenwerk_editor/tests/viewport_architecture_guards.rs", "docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md", "docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md", "docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md", "docs-site/src/content/docs/domain/ui/README.md", "docs-site/src/content/docs/domain/ui/architecture.md", "docs-site/src/content/docs/domain/ui/roadmap.md", "docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md", "docs-site/src/content/docs/workspace/roadmap-items.yaml"]
+validations = ["cargo test -p ui_definition", "cargo test -p ui_runtime scroll", "cargo test -p ui_runtime popup", "cargo test -p ui_runtime menu", "cargo test -p editor_shell", "cargo test -p runenwerk_editor viewport", "cargo test -p runenwerk_editor input_bridge", "cargo check -p runenwerk_editor", "task roadmap:render", "task roadmap:validate", "task roadmap:check", "task docs:validate"]

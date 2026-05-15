@@ -180,11 +180,19 @@ without recreating the same policy in several layers.
   `domain/editor/editor_shell/src/composition/toolbar_definition.rs::build_defined_toolbar_menu_popup_with_binding`
   and `domain/editor/editor_shell/src/composition/build_editor_shell.rs::tab_stack_popup_interaction_model`
   adapt toolbar and tab-stack menus into formed menu-sizing records.
+- `IV2-chrome-slots` has its first code-bearing retained slice.
+  `domain/ui/ui_definition/src/interaction.rs` defines formed chrome-slot
+  records for close affordance, command area, label, drag region, and active
+  indicator roles. `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame`
+  and `domain/editor/editor_shell/src/composition/toolbar_definition.rs::project_workspace_close_buttons`
+  now emit structural tab/workspace chrome slot rows instead of close/indicator
+  overlay adornments, and `domain/ui/ui_runtime/src/input/hit_test.rs` covers
+  child slot hit precedence.
 
-The viewport tools/options/details popup adapters, chrome slots,
-dock/drop-zone policy, and status/viewport arbitration remain separate WR-025
-slices. WR-024 may consume only the landed menu-stack, scroll-ownership, and
-menu-sizing behaviors until those later slices exist.
+The viewport tools/options/details popup adapters, dock/drop-zone policy, and
+status/viewport arbitration remain separate WR-025 slices. WR-024 may consume
+only the landed menu-stack, scroll-ownership, menu-sizing, and chrome-slot
+behaviors until those later slices exist.
 
 ## Strangler Migration
 

@@ -169,6 +169,14 @@ Landed slice status as of 2026-05-15:
   `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`. Toolbar and
   tab-stack adapters publish the formed sizing records from
   `domain/editor/editor_shell/src/composition/`.
+- `IV2-chrome-slots` now carries formed chrome-slot records in
+  `domain/ui/ui_definition/src/interaction.rs`. The editor shell publishes tab
+  and workspace close, command, label, drag, and active-indicator slots from
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_tab_strip_from_frame`
+  and
+  `domain/editor/editor_shell/src/composition/toolbar_definition.rs::project_workspace_close_buttons`,
+  while `domain/ui/ui_runtime/src/input/hit_test.rs` guards structural child
+  hit precedence.
 - App production viewport input remains app-owned. The guard is
   `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`.
 

@@ -12,15 +12,15 @@ use crate::{
     TOOLBAR_ROW_WIDGET_ID, TOOLBAR_ROWS_WIDGET_ID, TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
     TOOLBAR_SCROLL_WIDGET_ID, TOOLBAR_SEPARATOR_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID,
     ToolbarViewModel, WorkspaceProfileId, toolbar_menu_item_widget_id,
-    toolbar_workspace_active_indicator_overlay_widget_id,
-    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_close_overlay_widget_id,
+    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id,
 };
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, FormedInteractionModel, FormedMenuSizing,
-    FormedMenuStackScope, FormedRetainedUiProduct, FormedScrollOwner, FormedUiRoute,
-    NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding, UiDefinitionContext,
+    AuthoredUiNodePath, AuthoredUiTemplate, FormedChromeSlot, FormedInteractionModel,
+    FormedMenuSizing, FormedMenuStackScope, FormedRetainedUiProduct, FormedScrollOwner,
+    FormedUiRoute, NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding,
+    UiChromeSlotInputPolicyDefinition, UiChromeSlotKindDefinition, UiDefinitionContext,
     UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition, UiMenuOverflowDefinition,
     UiRouteSlotId, UiScrollBoundaryPolicyDefinition, UiValue, form_retained_ui,
     normalize_authored_template,
@@ -29,10 +29,8 @@ use ui_math::Axis;
 use ui_math::{UiInsets, UiSize};
 use ui_text::{FontId, TextVerticalAlign};
 use ui_theme::{ThemeTokens, UiColor};
-use ui_tree::{
-    OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, UiNode, UiNodeKind,
-};
-use ui_widgets::{button, button_selected, label};
+use ui_tree::{PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, UiNode, UiNodeKind};
+use ui_widgets::{button, button_selected, hstack_with_policies};
 
 use super::surface_definition_context::contrast_popup_theme;
 
@@ -400,18 +398,16 @@ fn project_workspace_close_buttons(
         else {
             continue;
         };
-        let close_overlay_widget_id = toolbar_workspace_close_overlay_widget_id(profile_id);
         let active_indicator_widget_id = toolbar_workspace_active_indicator_widget_id(profile_id);
-        let active_indicator_overlay_widget_id =
-            toolbar_workspace_active_indicator_overlay_widget_id(profile_id);
+        let chrome_widget_id = toolbar_workspace_chrome_widget_id(profile_id);
         if row.children.iter().any(|child| {
             child.id == close_widget_id
-                || child.id == close_overlay_widget_id
+                || child.id == chrome_widget_id
                 || child.id == active_indicator_widget_id
-                || child.id == active_indicator_overlay_widget_id
         }) {
             continue;
         }
+        let anchor = row.children.remove(anchor_index);
         let mut close = button(
             close_widget_id,
             "x",
@@ -423,30 +419,32 @@ fn project_workspace_close_buttons(
             button.enabled = open_workspace_count > 1;
         }
         row.children.insert(
-            anchor_index + 1,
-            UiNode::with_children(
-                close_overlay_widget_id,
-                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_start(
-                    anchor_widget_id,
-                    theme.spacing.xs,
-                )),
-                vec![close],
+            anchor_index,
+            hstack_with_policies(
+                chrome_widget_id,
+                theme.spacing.xs,
+                vec![
+                    ui_layout::SizePolicy::Auto,
+                    ui_layout::SizePolicy::Auto,
+                    ui_layout::SizePolicy::Auto,
+                ],
+                vec![
+                    close,
+                    anchor,
+                    workspace_active_indicator_node(
+                        active_indicator_widget_id,
+                        workspace_button_is_active(view_model, profile_id),
+                        theme,
+                    ),
+                ],
             ),
         );
-        row.children.insert(
-            anchor_index + 2,
-            UiNode::with_children(
-                active_indicator_overlay_widget_id,
-                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
-                    anchor_widget_id,
-                    theme.spacing.xs,
-                )),
-                vec![workspace_active_indicator_node(
-                    active_indicator_widget_id,
-                    workspace_button_is_active(view_model, profile_id),
-                    theme,
-                )],
-            ),
+        push_workspace_chrome_slots(
+            &mut product.interaction_model,
+            chrome_widget_id,
+            close_widget_id,
+            anchor_widget_id,
+            active_indicator_widget_id,
         );
         product.routes_by_widget_id.insert(
             close_widget_id,
@@ -457,6 +455,50 @@ fn project_workspace_close_buttons(
             AuthoredUiNodePath(format!("root/scroll/rows/top_row/{route}")),
         );
     }
+}
+
+fn push_workspace_chrome_slots(
+    model: &mut FormedInteractionModel,
+    host_widget_id: ui_tree::WidgetId,
+    close_widget_id: ui_tree::WidgetId,
+    label_widget_id: ui_tree::WidgetId,
+    active_indicator_widget_id: ui_tree::WidgetId,
+) {
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: close_widget_id,
+        kind: UiChromeSlotKindDefinition::CloseAffordance,
+        input_policy: UiChromeSlotInputPolicyDefinition::Command,
+        order: 0,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: close_widget_id,
+        kind: UiChromeSlotKindDefinition::CommandArea,
+        input_policy: UiChromeSlotInputPolicyDefinition::Command,
+        order: 0,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: label_widget_id,
+        kind: UiChromeSlotKindDefinition::Label,
+        input_policy: UiChromeSlotInputPolicyDefinition::Activate,
+        order: 1,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: label_widget_id,
+        kind: UiChromeSlotKindDefinition::DragRegion,
+        input_policy: UiChromeSlotInputPolicyDefinition::Drag,
+        order: 1,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: active_indicator_widget_id,
+        kind: UiChromeSlotKindDefinition::ActiveIndicator,
+        input_policy: UiChromeSlotInputPolicyDefinition::None,
+        order: 2,
+    });
 }
 
 fn workspace_profile_for_stable_name(name: &str) -> Option<WorkspaceProfileId> {
@@ -508,25 +550,26 @@ fn workspace_active_indicator_node(
     active: bool,
     theme: &ThemeTokens,
 ) -> UiNode {
-    let mut text_style = toolbar_icon_text_style(theme);
-    text_style.color = if active {
-        [
-            theme.accent.r,
-            theme.accent.g,
-            theme.accent.b,
-            theme.accent.a,
-        ]
+    let mut indicator_theme = theme.clone();
+    indicator_theme.background_panel = if active {
+        theme.accent
     } else {
-        [
-            theme.foreground_muted.r,
-            theme.foreground_muted.g,
-            theme.foreground_muted.b,
-            theme.foreground_muted.a,
-        ]
+        UiColor::new(0.0, 0.0, 0.0, 0.0)
     };
-    let mut node = label(id, if active { "●" } else { "○" }, text_style);
-    if let UiNodeKind::Label(label) = &mut node.kind {
-        label.constraints = ui_layout::LayoutConstraints::tight(UiSize::new(18.0, 18.0));
+    indicator_theme.border = if active {
+        theme.accent
+    } else {
+        theme.foreground_muted
+    };
+    indicator_theme.border_width = theme.border_width.max(1.0);
+    let mut node = button(id, "", toolbar_icon_text_style(theme), indicator_theme);
+    if let UiNodeKind::Button(button) = &mut node.kind {
+        button.padding = UiInsets::ZERO;
+        button.min_size = UiSize::new(18.0, 18.0);
+        button.corner_radius = Some(f32::MAX);
+        button.selected = active;
+        button.selected_fill = Some(theme.accent);
+        button.selected_border = Some(theme.accent);
     }
     node
 }

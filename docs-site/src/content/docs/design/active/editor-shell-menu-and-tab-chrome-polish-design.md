@@ -60,19 +60,22 @@ viewport arbitration app-local UI truth, accepting compiled-reactive or
 ECS-driven UI, or changing retained UI execution strategy.
 
 2026-05-15 boundary update: WR-025 now provides the first code-bearing
-`IV2-menu-stack`, `IV2-scroll-ownership`, and `IV2-menu-sizing` slices through
+`IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, and
+`IV2-chrome-slots` slices through
 `domain/ui/ui_definition/src/interaction.rs`,
 `domain/ui/ui_definition/src/validate.rs::validate_menu`,
 `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`,
+`domain/ui/ui_runtime/src/input/hit_test.rs`,
 `domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`,
 `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`, and
 toolbar/tab-stack adapters in
 `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`.
 WR-024 may consume those landed contracts for popup layer behavior,
 outside-dismiss, focus return, Escape dismissal, Switch Type submenu anchoring,
-wheel boundary ownership, menu item fill, popup clamp, and scroll fallback.
-Chrome slots, docking/drop-zone precedence, status overflow, and viewport
-arbitration remain WR-025-gated.
+wheel boundary ownership, menu item fill, popup clamp, scroll fallback, and
+tab/workspace close, label/drag, and active-indicator slot placement.
+Docking/drop-zone precedence, status overflow, and viewport arbitration remain
+WR-025-gated.
 
 ## Interaction V2 Slice Dependencies
 

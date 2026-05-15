@@ -46,6 +46,7 @@ pub struct UiMenuStackScopeDefinition {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FormedInteractionModel {
+    pub chrome_slots: Vec<FormedChromeSlot>,
     pub menu_scopes: Vec<FormedMenuStackScope>,
     pub menu_sizing: Vec<FormedMenuSizing>,
     pub scroll_owners: Vec<FormedScrollOwner>,
@@ -53,9 +54,14 @@ pub struct FormedInteractionModel {
 
 impl FormedInteractionModel {
     pub fn extend(&mut self, other: FormedInteractionModel) {
+        self.chrome_slots.extend(other.chrome_slots);
         self.menu_scopes.extend(other.menu_scopes);
         self.menu_sizing.extend(other.menu_sizing);
         self.scroll_owners.extend(other.scroll_owners);
+    }
+
+    pub fn push_chrome_slot(&mut self, slot: FormedChromeSlot) {
+        self.chrome_slots.push(slot);
     }
 
     pub fn push_menu_scope(&mut self, scope: FormedMenuStackScope) {
@@ -69,6 +75,33 @@ impl FormedInteractionModel {
     pub fn push_scroll_owner(&mut self, owner: FormedScrollOwner) {
         self.scroll_owners.push(owner);
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormedChromeSlot {
+    pub host_widget_id: WidgetId,
+    pub slot_widget_id: WidgetId,
+    pub kind: UiChromeSlotKindDefinition,
+    pub input_policy: UiChromeSlotInputPolicyDefinition,
+    pub order: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiChromeSlotKindDefinition {
+    CloseAffordance,
+    ActiveIndicator,
+    Label,
+    CommandArea,
+    DragRegion,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiChromeSlotInputPolicyDefinition {
+    #[default]
+    None,
+    Activate,
+    Command,
+    Drag,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

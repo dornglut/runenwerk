@@ -4,8 +4,9 @@
 use std::collections::BTreeMap;
 
 use ui_definition::{
-    FormedInteractionModel, FormedMenuSizing, FormedMenuStackScope, FormedScrollOwner,
-    FormedUiRoute, UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition,
+    FormedChromeSlot, FormedInteractionModel, FormedMenuSizing, FormedMenuStackScope,
+    FormedScrollOwner, FormedUiRoute, UiChromeSlotInputPolicyDefinition,
+    UiChromeSlotKindDefinition, UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition,
     UiMenuOverflowDefinition, UiScrollBoundaryPolicyDefinition,
 };
 use ui_layout::SizePolicy;
@@ -35,19 +36,18 @@ use crate::{
     WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
     build_defined_toolbar_with_template, dock_split_preview_label_widget_id,
     dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id,
-    tab_active_indicator_overlay_widget_id, tab_active_indicator_widget_id,
-    tab_close_button_widget_id, tab_close_overlay_widget_id, tab_stack_action_menu_list_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_action_menu_scroll_widget_id,
-    tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
-    tab_stack_content_widget_id, tab_stack_duplicate_button_widget_id,
-    tab_stack_lock_type_toggle_widget_id, tab_stack_new_surface_menu_item_widget_id,
-    tab_stack_new_surface_menu_list_widget_id, tab_stack_new_surface_menu_popup_widget_id,
-    tab_stack_new_surface_menu_scroll_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_split_vertical_button_widget_id, tab_stack_surface_menu_item_widget_id,
-    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
-    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
-    tab_strip_scroll_widget_id,
+    tab_active_indicator_widget_id, tab_chrome_widget_id, tab_close_button_widget_id,
+    tab_stack_action_menu_list_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_action_menu_scroll_widget_id, tab_stack_close_area_button_widget_id,
+    tab_stack_container_widget_id, tab_stack_content_widget_id,
+    tab_stack_duplicate_button_widget_id, tab_stack_lock_type_toggle_widget_id,
+    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_list_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_surface_menu_scroll_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_reset_area_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_split_vertical_button_widget_id,
+    tab_stack_surface_menu_item_widget_id, tab_stack_surface_menu_list_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
+    tab_stack_surface_submenu_anchor_widget_id, tab_strip_scroll_widget_id,
 };
 
 use super::surface_definition_context::contrast_popup_theme;
@@ -248,6 +248,7 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         toolbar_routes_by_widget_id.extend(popup.routes_by_widget_id.clone());
         interaction_model.extend(popup.interaction_model.clone());
     }
+    interaction_model.extend(tab_stack_chrome_interaction_model(&workspace_projection));
     interaction_model.extend(tab_stack_popup_interaction_model(frame_model));
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
         frame_model,
@@ -505,13 +506,13 @@ fn build_tab_strip_from_frame(
                 .unwrap_or_else(|| panel_kind_label(tab.panel.panel_kind));
             let title = format!("{dragging_marker}{surface_title}");
             let is_active = active_panel_id == Some(tab.panel.panel_instance_id);
-            children.push(button_selected(
+            let label = button_selected(
                 tab.widget_id,
                 title,
                 theme.body_small_text_style(FontId(1)),
                 theme.clone(),
                 is_active,
-            ));
+            );
             let mut close_button = button(
                 tab_close_button_widget_id(tab_stack.tab_stack_id, insert_index),
                 "x",
@@ -532,25 +533,16 @@ fn build_tab_strip_from_frame(
                 button.corner_radius = Some(f32::MAX);
                 button.reveal_on_hover_anchor = Some(tab.widget_id);
             }
-            children.push(UiNode::with_children(
-                tab_close_overlay_widget_id(tab_stack.tab_stack_id, insert_index),
-                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_start(
-                    tab.widget_id,
-                    theme.spacing.xs,
-                )),
-                vec![close_button],
-            ));
-            children.push(UiNode::with_children(
-                tab_active_indicator_overlay_widget_id(tab_stack.tab_stack_id, insert_index),
-                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
-                    tab.widget_id,
-                    theme.spacing.xs,
-                )),
-                vec![active_indicator_node(
+            children.push(tab_chrome_slot_row(
+                tab_chrome_widget_id(tab_stack.tab_stack_id, insert_index),
+                close_button,
+                label,
+                active_indicator_node(
                     tab_active_indicator_widget_id(tab_stack.tab_stack_id, insert_index),
                     is_active,
                     theme,
-                )],
+                ),
+                theme,
             ));
         }
     }
@@ -570,6 +562,21 @@ fn build_tab_strip_from_frame(
         tab_strip_scroll_widget_id(tab_stack.tab_stack_id),
         theme.clone(),
         vec![strip_row],
+    )
+}
+
+fn tab_chrome_slot_row(
+    row_id: WidgetId,
+    close: UiNode,
+    label: UiNode,
+    active_indicator: UiNode,
+    theme: &ThemeTokens,
+) -> UiNode {
+    hstack_with_policies(
+        row_id,
+        theme.spacing.xs,
+        vec![SizePolicy::Auto, SizePolicy::Auto, SizePolicy::Auto],
+        vec![close, label, active_indicator],
     )
 }
 
@@ -699,6 +706,68 @@ fn tab_stack_popup_interaction_model(
         }
     }
     model
+}
+
+fn tab_stack_chrome_interaction_model(
+    workspace_projection: &WorkspaceProjectionArtifact,
+) -> FormedInteractionModel {
+    let mut model = FormedInteractionModel::default();
+    for stack in projected_tab_stacks_for_routes(workspace_projection) {
+        for (index, tab) in stack.tabs.iter().enumerate() {
+            push_chrome_slots(
+                &mut model,
+                tab_chrome_widget_id(stack.tab_stack_id, index),
+                tab_close_button_widget_id(stack.tab_stack_id, index),
+                tab.widget_id,
+                tab_active_indicator_widget_id(stack.tab_stack_id, index),
+            );
+        }
+    }
+    model
+}
+
+fn push_chrome_slots(
+    model: &mut FormedInteractionModel,
+    host_widget_id: WidgetId,
+    close_widget_id: WidgetId,
+    label_widget_id: WidgetId,
+    active_indicator_widget_id: WidgetId,
+) {
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: close_widget_id,
+        kind: UiChromeSlotKindDefinition::CloseAffordance,
+        input_policy: UiChromeSlotInputPolicyDefinition::Command,
+        order: 0,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: close_widget_id,
+        kind: UiChromeSlotKindDefinition::CommandArea,
+        input_policy: UiChromeSlotInputPolicyDefinition::Command,
+        order: 0,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: label_widget_id,
+        kind: UiChromeSlotKindDefinition::Label,
+        input_policy: UiChromeSlotInputPolicyDefinition::Activate,
+        order: 1,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: label_widget_id,
+        kind: UiChromeSlotKindDefinition::DragRegion,
+        input_policy: UiChromeSlotInputPolicyDefinition::Drag,
+        order: 1,
+    });
+    model.push_chrome_slot(FormedChromeSlot {
+        host_widget_id,
+        slot_widget_id: active_indicator_widget_id,
+        kind: UiChromeSlotKindDefinition::ActiveIndicator,
+        input_policy: UiChromeSlotInputPolicyDefinition::None,
+        order: 2,
+    });
 }
 
 fn push_tab_stack_menu_scope(
@@ -937,25 +1006,26 @@ fn scrollable_shell_popup_menu_content(
 }
 
 fn active_indicator_node(id: WidgetId, active: bool, theme: &ThemeTokens) -> UiNode {
-    let mut text_style = icon_glyph_text_style(theme);
-    text_style.color = if active {
-        [
-            theme.accent.r,
-            theme.accent.g,
-            theme.accent.b,
-            theme.accent.a,
-        ]
+    let mut indicator_theme = theme.clone();
+    indicator_theme.background_panel = if active {
+        theme.accent
     } else {
-        [
-            theme.foreground_muted.r,
-            theme.foreground_muted.g,
-            theme.foreground_muted.b,
-            theme.foreground_muted.a,
-        ]
+        UiColor::new(0.0, 0.0, 0.0, 0.0)
     };
-    let mut node = label(id, if active { "●" } else { "○" }, text_style);
-    if let UiNodeKind::Label(label) = &mut node.kind {
-        label.constraints = ui_layout::LayoutConstraints::tight(UiSize::new(18.0, 18.0));
+    indicator_theme.border = if active {
+        theme.accent
+    } else {
+        theme.foreground_muted
+    };
+    indicator_theme.border_width = theme.border_width.max(1.0);
+    let mut node = button(id, "", icon_glyph_text_style(theme), indicator_theme);
+    if let UiNodeKind::Button(button) = &mut node.kind {
+        button.padding = UiInsets::ZERO;
+        button.min_size = UiSize::new(18.0, 18.0);
+        button.corner_radius = Some(f32::MAX);
+        button.selected = active;
+        button.selected_fill = Some(theme.accent);
+        button.selected_border = Some(theme.accent);
     }
     node
 }

@@ -24,6 +24,7 @@ pub const TOOLBAR_WORKSPACE_CLOSE_WIDGET_ID_BASE: u64 = 30_100;
 pub const TOOLBAR_WORKSPACE_CLOSE_OVERLAY_WIDGET_ID_BASE: u64 = 30_200;
 pub const TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_WIDGET_ID_BASE: u64 = 30_300;
 pub const TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE: u64 = 30_400;
+pub const TOOLBAR_WORKSPACE_CHROME_WIDGET_ID_BASE: u64 = 30_500;
 pub const TOOLBAR_MENU_ROW_WIDGET_ID: WidgetId = WidgetId(19);
 pub const TOOLBAR_MENU_POPUP_LIST_WIDGET_ID: WidgetId = WidgetId(90_995);
 pub const TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID: WidgetId = WidgetId(90_996);
@@ -140,6 +141,7 @@ pub const TAB_CLOSE_BUTTON_WIDGET_ID_BASE: u64 = 1_500_000;
 pub const TAB_CLOSE_OVERLAY_WIDGET_ID_BASE: u64 = 1_550_000;
 pub const TAB_ACTIVE_INDICATOR_WIDGET_ID_BASE: u64 = 1_560_000;
 pub const TAB_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE: u64 = 1_570_000;
+pub const TAB_CHROME_WIDGET_ID_BASE: u64 = 1_580_000;
 pub const FLOATING_HOST_WIDGET_ID_BASE: u64 = 1_600_000;
 pub const TAB_STACK_NEW_TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_950_000;
 pub const TAB_STACK_SPLIT_HORIZONTAL_BUTTON_WIDGET_ID_BASE: u64 = 2_000_000;
@@ -239,6 +241,10 @@ pub fn toolbar_workspace_active_indicator_overlay_widget_id(
     WidgetId(TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE + profile_id.raw())
 }
 
+pub fn toolbar_workspace_chrome_widget_id(profile_id: WorkspaceProfileId) -> WidgetId {
+    WidgetId(TOOLBAR_WORKSPACE_CHROME_WIDGET_ID_BASE + profile_id.raw())
+}
+
 pub fn surface_widget_scope_base(surface_id: ToolSurfaceInstanceId) -> u64 {
     surface_id.raw().saturating_mul(SURFACE_WIDGET_SCOPE_STRIDE)
 }
@@ -332,6 +338,12 @@ pub fn tab_active_indicator_overlay_widget_id(
         TAB_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE
             + tab_stack_id.raw() * STACK_WIDGET_STRIDE
             + tab_index as u64,
+    )
+}
+
+pub fn tab_chrome_widget_id(tab_stack_id: TabStackId, tab_index: usize) -> WidgetId {
+    WidgetId(
+        TAB_CHROME_WIDGET_ID_BASE + tab_stack_id.raw() * STACK_WIDGET_STRIDE + tab_index as u64,
     )
 }
 
