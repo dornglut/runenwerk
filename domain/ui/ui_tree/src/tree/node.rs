@@ -111,6 +111,16 @@ pub struct OverlayAdornmentNode {
 }
 
 impl OverlayAdornmentNode {
+    pub fn anchored_inside_top_start(anchor: WidgetId, offset: f32) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::TopStart,
+            offset,
+            min_size: UiSize::ZERO,
+            stretch_child: false,
+        }
+    }
+
     pub fn anchored_inside_top_end(anchor: WidgetId, offset: f32) -> Self {
         Self {
             anchor,

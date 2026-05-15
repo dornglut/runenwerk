@@ -7,11 +7,14 @@ use crate::{
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID,
     TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID,
     TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
+    TOOLBAR_MENU_POPUP_LIST_WIDGET_ID, TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID,
     TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID, TOOLBAR_ROOT_WIDGET_ID,
     TOOLBAR_ROW_WIDGET_ID, TOOLBAR_ROWS_WIDGET_ID, TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
     TOOLBAR_SCROLL_WIDGET_ID, TOOLBAR_SEPARATOR_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID,
     ToolbarViewModel, WorkspaceProfileId, toolbar_menu_item_widget_id,
-    toolbar_workspace_close_overlay_widget_id, toolbar_workspace_close_widget_id,
+    toolbar_workspace_active_indicator_overlay_widget_id,
+    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_close_overlay_widget_id,
+    toolbar_workspace_close_widget_id,
 };
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
@@ -25,7 +28,9 @@ use ui_theme::{ThemeTokens, UiColor};
 use ui_tree::{
     OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, UiNode, UiNodeKind,
 };
-use ui_widgets::{button, button_selected};
+use ui_widgets::{button, button_selected, label};
+
+use super::surface_definition_context::contrast_popup_theme;
 
 const TOOLBAR_TEMPLATE_RON: &str = include_str!("../../../../../assets/editor/ui/toolbar.ron");
 const EDITOR_BINDINGS_RON: &str =
@@ -153,9 +158,18 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
             PopupSide::Bottom,
             PopupAlign::Start,
             PopupFlipPolicy::FlipToFit,
-            theme.clone(),
+            contrast_popup_theme(theme),
         )),
-        children,
+        vec![ui_widgets::vscroll(
+            TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID,
+            contrast_popup_theme(theme),
+            vec![ui_widgets::vstack_with_policies(
+                TOOLBAR_MENU_POPUP_LIST_WIDGET_ID,
+                theme.spacing.xs,
+                vec![ui_layout::SizePolicy::Auto; children.len()],
+                children,
+            )],
+        )],
     );
     paths_by_widget_id.insert(
         TOOLBAR_MENU_POPUP_WIDGET_ID,
@@ -361,11 +375,15 @@ fn project_workspace_close_buttons(
             continue;
         };
         let close_overlay_widget_id = toolbar_workspace_close_overlay_widget_id(profile_id);
-        if row
-            .children
-            .iter()
-            .any(|child| child.id == close_widget_id || child.id == close_overlay_widget_id)
-        {
+        let active_indicator_widget_id = toolbar_workspace_active_indicator_widget_id(profile_id);
+        let active_indicator_overlay_widget_id =
+            toolbar_workspace_active_indicator_overlay_widget_id(profile_id);
+        if row.children.iter().any(|child| {
+            child.id == close_widget_id
+                || child.id == close_overlay_widget_id
+                || child.id == active_indicator_widget_id
+                || child.id == active_indicator_overlay_widget_id
+        }) {
             continue;
         }
         let mut close = button(
@@ -382,11 +400,26 @@ fn project_workspace_close_buttons(
             anchor_index + 1,
             UiNode::with_children(
                 close_overlay_widget_id,
-                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_start(
                     anchor_widget_id,
                     theme.spacing.xs,
                 )),
                 vec![close],
+            ),
+        );
+        row.children.insert(
+            anchor_index + 2,
+            UiNode::with_children(
+                active_indicator_overlay_widget_id,
+                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+                    anchor_widget_id,
+                    theme.spacing.xs,
+                )),
+                vec![workspace_active_indicator_node(
+                    active_indicator_widget_id,
+                    workspace_button_is_active(view_model, profile_id),
+                    theme,
+                )],
             ),
         );
         product.routes_by_widget_id.insert(
@@ -407,6 +440,16 @@ fn workspace_profile_for_stable_name(name: &str) -> Option<WorkspaceProfileId> {
         "workspace_editor_design" => Some(EDITOR_DESIGN_WORKSPACE_PROFILE_ID),
         _ => None,
     }
+}
+
+fn workspace_button_is_active(
+    view_model: &ToolbarViewModel,
+    profile_id: WorkspaceProfileId,
+) -> bool {
+    view_model.buttons.iter().any(|button| {
+        workspace_profile_for_stable_name(button.stable_name) == Some(profile_id)
+            && button.is_active
+    })
 }
 
 fn toolbar_icon_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
@@ -432,6 +475,34 @@ fn style_workspace_close_button(
     button.min_size = UiSize::new(18.0, 18.0);
     button.corner_radius = Some(f32::MAX);
     button.reveal_on_hover_anchor = Some(anchor);
+}
+
+fn workspace_active_indicator_node(
+    id: ui_tree::WidgetId,
+    active: bool,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let mut text_style = toolbar_icon_text_style(theme);
+    text_style.color = if active {
+        [
+            theme.accent.r,
+            theme.accent.g,
+            theme.accent.b,
+            theme.accent.a,
+        ]
+    } else {
+        [
+            theme.foreground_muted.r,
+            theme.foreground_muted.g,
+            theme.foreground_muted.b,
+            theme.foreground_muted.a,
+        ]
+    };
+    let mut node = label(id, if active { "●" } else { "○" }, text_style);
+    if let UiNodeKind::Label(label) = &mut node.kind {
+        label.constraints = ui_layout::LayoutConstraints::tight(UiSize::new(18.0, 18.0));
+    }
+    node
 }
 
 fn register_toolbar_widget_ids(context: &mut UiDefinitionContext) {

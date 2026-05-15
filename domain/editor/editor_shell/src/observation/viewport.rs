@@ -39,5 +39,7 @@ pub struct ViewportObservationFrame {
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,
     pub preview_active: bool,
+    pub frame_rate_fps: Option<f32>,
+    pub frame_time_ms: Option<f32>,
     pub overlay_status_lines: Vec<String>,
 }

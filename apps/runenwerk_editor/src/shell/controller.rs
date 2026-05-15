@@ -29,10 +29,11 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource,
 };
 use crate::shell::{
-    CornerAreaSplitSession, CornerSplitResizeSession, EditorSurfaceProviderRegistry,
-    RunenwerkEditorShellState, SurfaceProviderDispatchContext, active_document_context,
-    build_editor_shell_frame_model, dispatch_shell_command,
-    dispatch_shell_command_with_viewport_commands, mounted_surface_requests,
+    CornerAreaSplitSession, CornerSplitResizeSession, EditorShellFrameMetrics,
+    EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderDispatchContext,
+    active_document_context, build_editor_shell_frame_model_with_frame_metrics,
+    dispatch_shell_command, dispatch_shell_command_with_viewport_commands,
+    mounted_surface_requests,
 };
 use editor_shell::TabStackPopupMenuKind;
 
@@ -83,6 +84,7 @@ impl RunenwerkEditorShellController {
             shell_state,
             theme,
             app.surface_provider_registry(),
+            None,
             None,
             None,
             None,
@@ -169,12 +171,14 @@ impl RunenwerkEditorShellController {
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
         viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        frame_metrics: Option<EditorShellFrameMetrics>,
     ) -> ShellUiExpressionFrame {
         let frame_model = Self::rebuild_frame_model_with_provider_context(
             app,
             shell_state,
             theme,
             app.surface_provider_registry(),
+            frame_metrics,
             viewport_observations,
             tool_surface_bindings,
             viewport_instances,
@@ -229,15 +233,17 @@ impl RunenwerkEditorShellController {
         shell_state: &RunenwerkEditorShellState,
         theme: &ThemeTokens,
         registry: &EditorSurfaceProviderRegistry,
+        frame_metrics: Option<EditorShellFrameMetrics>,
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
         viewport_instances: Option<&ViewportInstanceRegistryResource>,
     ) -> EditorShellFrameModel {
-        build_editor_shell_frame_model(
+        build_editor_shell_frame_model_with_frame_metrics(
             app,
             shell_state,
             registry,
             theme,
+            frame_metrics,
             viewport_observations,
             tool_surface_bindings,
             viewport_instances,
@@ -286,6 +292,7 @@ impl RunenwerkEditorShellController {
             shell_state,
             theme,
             registry.as_ref(),
+            None,
             viewport_observations,
             tool_surface_bindings,
             viewport_instances,

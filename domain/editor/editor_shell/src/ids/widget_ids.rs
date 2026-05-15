@@ -22,7 +22,11 @@ pub const TOOLBAR_ADD_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(18);
 pub const TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID: WidgetId = WidgetId(30_018);
 pub const TOOLBAR_WORKSPACE_CLOSE_WIDGET_ID_BASE: u64 = 30_100;
 pub const TOOLBAR_WORKSPACE_CLOSE_OVERLAY_WIDGET_ID_BASE: u64 = 30_200;
+pub const TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_WIDGET_ID_BASE: u64 = 30_300;
+pub const TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE: u64 = 30_400;
 pub const TOOLBAR_MENU_ROW_WIDGET_ID: WidgetId = WidgetId(19);
+pub const TOOLBAR_MENU_POPUP_LIST_WIDGET_ID: WidgetId = WidgetId(90_995);
+pub const TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID: WidgetId = WidgetId(90_996);
 pub const TOOLBAR_MENU_POPUP_WIDGET_ID: WidgetId = WidgetId(90_997);
 pub const TOOLBAR_SELECT_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_001);
 pub const TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID: WidgetId = WidgetId(80_002);
@@ -92,6 +96,10 @@ pub const VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID: WidgetId = WidgetId(80);
 pub const VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID: WidgetId = WidgetId(86);
 pub const VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID: WidgetId = WidgetId(87);
 pub const VIEWPORT_TOOLS_MENU_WIDGET_ID: WidgetId = WidgetId(88);
+pub const VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID: WidgetId = WidgetId(89);
+pub const VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID: WidgetId = WidgetId(90);
+pub const VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID: WidgetId = WidgetId(91);
+pub const VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID: WidgetId = WidgetId(92);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);
@@ -130,6 +138,8 @@ pub const TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_200_000;
 pub const TAB_DROP_ZONE_WIDGET_ID_BASE: u64 = 1_400_000;
 pub const TAB_CLOSE_BUTTON_WIDGET_ID_BASE: u64 = 1_500_000;
 pub const TAB_CLOSE_OVERLAY_WIDGET_ID_BASE: u64 = 1_550_000;
+pub const TAB_ACTIVE_INDICATOR_WIDGET_ID_BASE: u64 = 1_560_000;
+pub const TAB_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE: u64 = 1_570_000;
 pub const FLOATING_HOST_WIDGET_ID_BASE: u64 = 1_600_000;
 pub const TAB_STACK_NEW_TAB_BUTTON_WIDGET_ID_BASE: u64 = 1_950_000;
 pub const TAB_STACK_SPLIT_HORIZONTAL_BUTTON_WIDGET_ID_BASE: u64 = 2_000_000;
@@ -142,7 +152,13 @@ pub const TAB_STACK_SWITCH_SURFACE_BUTTON_WIDGET_ID_BASE: u64 = 2_260_000;
 pub const TAB_STACK_SURFACE_SUBMENU_ANCHOR_WIDGET_ID_BASE: u64 = 2_265_000;
 pub const TAB_STACK_ACTION_MENU_BUTTON_WIDGET_ID_BASE: u64 = 2_270_000;
 pub const TAB_STACK_ACTION_MENU_POPUP_WIDGET_ID_BASE: u64 = 2_280_000;
+pub const TAB_STACK_ACTION_MENU_SCROLL_WIDGET_ID_BASE: u64 = 2_281_000;
+pub const TAB_STACK_ACTION_MENU_LIST_WIDGET_ID_BASE: u64 = 2_282_000;
+pub const TAB_STACK_NEW_SURFACE_MENU_SCROLL_WIDGET_ID_BASE: u64 = 2_293_000;
+pub const TAB_STACK_NEW_SURFACE_MENU_LIST_WIDGET_ID_BASE: u64 = 2_294_000;
 pub const TAB_STACK_SURFACE_MENU_POPUP_WIDGET_ID_BASE: u64 = 2_285_000;
+pub const TAB_STACK_SURFACE_MENU_SCROLL_WIDGET_ID_BASE: u64 = 2_286_000;
+pub const TAB_STACK_SURFACE_MENU_LIST_WIDGET_ID_BASE: u64 = 2_287_000;
 pub const TAB_STACK_SURFACE_MENU_ITEM_WIDGET_ID_BASE: u64 = 2_290_000;
 pub const TAB_STACK_NEW_SURFACE_MENU_POPUP_WIDGET_ID_BASE: u64 = 2_295_000;
 pub const TAB_STACK_NEW_SURFACE_MENU_ITEM_WIDGET_ID_BASE: u64 = 2_296_000;
@@ -211,6 +227,16 @@ pub fn toolbar_workspace_close_widget_id(profile_id: WorkspaceProfileId) -> Widg
 
 pub fn toolbar_workspace_close_overlay_widget_id(profile_id: WorkspaceProfileId) -> WidgetId {
     WidgetId(TOOLBAR_WORKSPACE_CLOSE_OVERLAY_WIDGET_ID_BASE + profile_id.raw())
+}
+
+pub fn toolbar_workspace_active_indicator_widget_id(profile_id: WorkspaceProfileId) -> WidgetId {
+    WidgetId(TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_WIDGET_ID_BASE + profile_id.raw())
+}
+
+pub fn toolbar_workspace_active_indicator_overlay_widget_id(
+    profile_id: WorkspaceProfileId,
+) -> WidgetId {
+    WidgetId(TOOLBAR_WORKSPACE_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE + profile_id.raw())
 }
 
 pub fn surface_widget_scope_base(surface_id: ToolSurfaceInstanceId) -> u64 {
@@ -290,6 +316,25 @@ pub fn tab_close_overlay_widget_id(tab_stack_id: TabStackId, tab_index: usize) -
     )
 }
 
+pub fn tab_active_indicator_widget_id(tab_stack_id: TabStackId, tab_index: usize) -> WidgetId {
+    WidgetId(
+        TAB_ACTIVE_INDICATOR_WIDGET_ID_BASE
+            + tab_stack_id.raw() * STACK_WIDGET_STRIDE
+            + tab_index as u64,
+    )
+}
+
+pub fn tab_active_indicator_overlay_widget_id(
+    tab_stack_id: TabStackId,
+    tab_index: usize,
+) -> WidgetId {
+    WidgetId(
+        TAB_ACTIVE_INDICATOR_OVERLAY_WIDGET_ID_BASE
+            + tab_stack_id.raw() * STACK_WIDGET_STRIDE
+            + tab_index as u64,
+    )
+}
+
 pub fn tab_drop_zone_widget_id(tab_stack_id: TabStackId, insert_index: usize) -> WidgetId {
     WidgetId(
         TAB_DROP_ZONE_WIDGET_ID_BASE
@@ -342,8 +387,24 @@ pub fn tab_stack_action_menu_popup_widget_id(tab_stack_id: TabStackId) -> Widget
     WidgetId(TAB_STACK_ACTION_MENU_POPUP_WIDGET_ID_BASE + tab_stack_id.raw())
 }
 
+pub fn tab_stack_action_menu_scroll_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_ACTION_MENU_SCROLL_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_action_menu_list_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_ACTION_MENU_LIST_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
 pub fn tab_stack_surface_menu_popup_widget_id(tab_stack_id: TabStackId) -> WidgetId {
     WidgetId(TAB_STACK_SURFACE_MENU_POPUP_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_surface_menu_scroll_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_SURFACE_MENU_SCROLL_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_surface_menu_list_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_SURFACE_MENU_LIST_WIDGET_ID_BASE + tab_stack_id.raw())
 }
 
 pub fn tab_stack_popup_menu_widget_id(
@@ -372,6 +433,14 @@ pub fn tab_stack_surface_menu_item_widget_id(
 
 pub fn tab_stack_new_surface_menu_popup_widget_id(tab_stack_id: TabStackId) -> WidgetId {
     WidgetId(TAB_STACK_NEW_SURFACE_MENU_POPUP_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_new_surface_menu_scroll_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_NEW_SURFACE_MENU_SCROLL_WIDGET_ID_BASE + tab_stack_id.raw())
+}
+
+pub fn tab_stack_new_surface_menu_list_widget_id(tab_stack_id: TabStackId) -> WidgetId {
+    WidgetId(TAB_STACK_NEW_SURFACE_MENU_LIST_WIDGET_ID_BASE + tab_stack_id.raw())
 }
 
 pub fn tab_stack_new_surface_menu_item_widget_id(

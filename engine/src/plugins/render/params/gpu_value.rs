@@ -147,6 +147,16 @@ impl GpuUniformField for [f32; 4] {
     const ABI_SIZE: usize = 16;
 }
 
+impl<const N: usize> GpuUniformField for [[f32; 4]; N] {
+    const ABI_ALIGN: usize = 16;
+    const ABI_SIZE: usize = 16 * N;
+}
+
+impl<const N: usize> GpuUniformField for [[u32; 4]; N] {
+    const ABI_ALIGN: usize = 16;
+    const ABI_SIZE: usize = 16 * N;
+}
+
 impl ToGpuValue for glam::Vec2 {
     type Gpu = [f32; 2];
 

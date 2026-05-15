@@ -664,22 +664,29 @@ fn layout_popup(
     let popup_bounds = UiRect::new(x, y, popup_width, popup_height);
     let content_bounds = popup_bounds.inset(popup.padding);
 
-    let child_items = node
+    let normal_children = node
         .children
         .iter()
         .filter(|child| !is_popup_node(child))
-        .map(|child| StackItem::auto(measure_node(child)))
+        .collect::<Vec<_>>();
+    let stretch_single_scroll_child = normal_children.len() == 1
+        && matches!(normal_children[0].kind, UiNodeKind::Scroll(_))
+        && measured_size.height > popup_bounds.height + f32::EPSILON;
+    let child_items = normal_children
+        .iter()
+        .map(|child| {
+            if stretch_single_scroll_child {
+                StackItem::flex(measure_node(child), 1.0)
+            } else {
+                StackItem::auto(measure_node(child))
+            }
+        })
         .collect::<Vec<_>>();
     let arranged = StackLayout::vertical(popup.gap)
         .with_main_align(MainAxisAlignment::Start)
         .with_cross_align(CrossAxisAlignment::Stretch)
         .arrange(content_bounds, &child_items);
-    for (child, child_bounds) in node
-        .children
-        .iter()
-        .filter(|child| !is_popup_node(child))
-        .zip(arranged)
-    {
+    for (child, child_bounds) in normal_children.into_iter().zip(arranged) {
         layout_node(child, child_bounds, state, out);
     }
 

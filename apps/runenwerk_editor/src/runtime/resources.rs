@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
+use editor_core::EntityId;
 use editor_shell::{
     ToolSurfaceInstanceId, WorkspaceIdentityAllocator, form_workspace_state_from_definition,
 };
 use editor_viewport::{ViewportCameraSettings, ViewportId, ViewportRuntimeSettings};
 use engine::plugins::render::{GpuParams, GpuUniform};
 use glam::{Vec3, vec3};
-use scene::Vec3Value;
+use scene::{LocalTransform, Vec3Value};
 use ui_math::UiVector;
 use ui_theme::ThemeTokens;
 
@@ -29,6 +30,7 @@ const CAMERA_ORBIT_SENSITIVITY: f32 = 0.006;
 const CAMERA_PAN_SENSITIVITY: f32 = 0.0015;
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.08;
 const CAMERA_MAX_PITCH_RADIANS: f32 = 1.553_343;
+pub const EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES: usize = 64;
 
 pub use editor_viewport::ViewportDebugStage as EditorViewportDebugStage;
 
@@ -313,6 +315,117 @@ pub struct EditorViewportSceneProductUniform {
     pub primitive_params_a: [f32; 4],
     pub primitive_params_b: [f32; 4],
     pub primitive_flags: [u32; 4],
+    pub primitive_slot_transforms: [[f32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
+    pub primitive_slot_params_a: [[f32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
+    pub primitive_slot_params_b: [[f32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
+    pub primitive_slot_flags: [[u32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EditorViewportPrimitiveInstance {
+    pub entity_id: EntityId,
+    pub translation: Vec3Value,
+    pub scale: Vec3Value,
+    pub primitive_kind: EditorPrimitiveKind,
+    pub box_half_extents: Vec3Value,
+    pub sphere_radius: f32,
+    pub capsule_radius: f32,
+    pub capsule_half_height: f32,
+    pub selected: bool,
+    pub hovered: bool,
+}
+
+impl EditorViewportPrimitiveInstance {
+    pub fn from_transform_and_primitive(
+        entity_id: EntityId,
+        transform: LocalTransform,
+        primitive: EditorPrimitive,
+        selected: bool,
+        hovered: bool,
+    ) -> Self {
+        let safe_scale = Vec3Value::new(
+            transform.scale.x.abs().max(0.0001),
+            transform.scale.y.abs().max(0.0001),
+            transform.scale.z.abs().max(0.0001),
+        );
+        let radial_scale = safe_scale.x.max(safe_scale.z);
+        let sphere_scale = safe_scale.x.max(safe_scale.y).max(safe_scale.z);
+        Self {
+            entity_id,
+            translation: transform.translation,
+            scale: safe_scale,
+            primitive_kind: primitive.kind(),
+            box_half_extents: Vec3Value::new(
+                primitive.box_half_extents.x.max(0.05) * safe_scale.x,
+                primitive.box_half_extents.y.max(0.05) * safe_scale.y,
+                primitive.box_half_extents.z.max(0.05) * safe_scale.z,
+            ),
+            sphere_radius: primitive.sphere_radius.max(0.05) * sphere_scale,
+            capsule_radius: primitive.capsule_radius.max(0.05) * radial_scale,
+            capsule_half_height: primitive.capsule_half_height.max(0.05) * safe_scale.y,
+            selected,
+            hovered,
+        }
+    }
+
+    pub fn first_hit_aabb_half_extents(self) -> Vec3 {
+        match self.primitive_kind {
+            EditorPrimitiveKind::Box => self.box_half_extents.to_glam(),
+            EditorPrimitiveKind::Sphere => vec3(
+                self.sphere_radius.max(0.05),
+                self.sphere_radius.max(0.05),
+                self.sphere_radius.max(0.05),
+            ),
+            EditorPrimitiveKind::Capsule => vec3(
+                self.capsule_radius.max(0.05),
+                self.capsule_radius.max(0.05) + self.capsule_half_height.max(0.05),
+                self.capsule_radius.max(0.05),
+            ),
+            EditorPrimitiveKind::Cylinder => vec3(
+                self.capsule_radius.max(0.05),
+                self.capsule_half_height.max(0.05),
+                self.capsule_radius.max(0.05),
+            ),
+            EditorPrimitiveKind::Torus => vec3(
+                self.sphere_radius.max(0.05) * 2.0,
+                self.sphere_radius.max(0.05) * 0.5,
+                self.sphere_radius.max(0.05) * 2.0,
+            ),
+            EditorPrimitiveKind::Plane => self.box_half_extents.to_glam(),
+        }
+    }
+
+    pub fn entity_id_low_u32(self) -> u32 {
+        u32::try_from(self.entity_id.0).unwrap_or(u32::MAX)
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct EditorViewportSceneRenderPacket {
+    primitives: Vec<EditorViewportPrimitiveInstance>,
+}
+
+impl EditorViewportSceneRenderPacket {
+    pub fn from_primitives(
+        primitives: impl IntoIterator<Item = EditorViewportPrimitiveInstance>,
+    ) -> Self {
+        let mut primitives = primitives.into_iter().collect::<Vec<_>>();
+        primitives.sort_by_key(|primitive| primitive.entity_id.0);
+        primitives.truncate(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES);
+        Self { primitives }
+    }
+
+    pub fn primitives(&self) -> &[EditorViewportPrimitiveInstance] {
+        &self.primitives
+    }
+
+    pub fn len(&self) -> usize {
+        self.primitives.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.primitives.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -403,7 +516,7 @@ impl EditorViewportBranchTraceSnapshot {
     }
 }
 
-#[derive(Debug, Clone, Copy, ecs::Component, ecs::Resource)]
+#[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct EditorViewportRenderState {
     pub viewport_bounds_px: (f32, f32, f32, f32),
     pub effective_shell_scale: f32,
@@ -418,6 +531,7 @@ pub struct EditorViewportRenderState {
     pub sphere_radius: f32,
     pub capsule_radius: f32,
     pub capsule_half_height: f32,
+    pub scene_packet: EditorViewportSceneRenderPacket,
     pub camera_settings: ViewportCameraSettings,
     pub camera: EditorViewportCamera,
     pub camera_fov_y_radians: f32,
@@ -444,6 +558,7 @@ impl Default for EditorViewportRenderState {
             sphere_radius: 0.6,
             capsule_radius: 0.35,
             capsule_half_height: 0.75,
+            scene_packet: EditorViewportSceneRenderPacket::default(),
             camera_settings: ViewportCameraSettings::default(),
             camera: editor_viewport_camera(),
             camera_fov_y_radians: editor_viewport_camera_fov_y_radians(),
@@ -587,20 +702,46 @@ impl EditorViewportRenderState {
     }
 
     pub fn set_primitive(&mut self, translation: Vec3Value, primitive: EditorPrimitive) {
-        self.has_primitive = true;
-        self.primitive_kind = match primitive.kind() {
-            EditorPrimitiveKind::Capsule => EditorPrimitiveKind::Box,
-            kind => kind,
-        };
-        self.primitive_translation = translation;
-        self.box_half_extents = primitive.box_half_extents;
-        self.sphere_radius = primitive.sphere_radius;
-        self.capsule_radius = primitive.capsule_radius;
-        self.capsule_half_height = primitive.capsule_half_height;
+        let transform = LocalTransform::from_translation(translation);
+        let instance = EditorViewportPrimitiveInstance::from_transform_and_primitive(
+            EntityId(0),
+            transform,
+            primitive,
+            false,
+            false,
+        );
+        self.set_scene_packet(EditorViewportSceneRenderPacket::from_primitives([instance]));
+    }
+
+    pub fn set_scene_packet(&mut self, packet: EditorViewportSceneRenderPacket) {
+        self.has_primitive = !packet.is_empty();
+        self.scene_packet = packet;
+        self.sync_first_primitive_mirror();
     }
 
     pub fn clear_primitive(&mut self) {
         self.has_primitive = false;
+        self.scene_packet = EditorViewportSceneRenderPacket::default();
+        self.sync_first_primitive_mirror();
+    }
+
+    fn sync_first_primitive_mirror(&mut self) {
+        let Some(first) = self.scene_packet.primitives().first().copied() else {
+            self.primitive_kind = EditorPrimitiveKind::Box;
+            self.primitive_translation = Vec3Value::zero();
+            self.box_half_extents = Vec3Value::new(0.5, 0.5, 0.5);
+            self.sphere_radius = 0.6;
+            self.capsule_radius = 0.35;
+            self.capsule_half_height = 0.75;
+            return;
+        };
+
+        self.primitive_kind = first.primitive_kind;
+        self.primitive_translation = first.translation;
+        self.box_half_extents = first.box_half_extents;
+        self.sphere_radius = first.sphere_radius;
+        self.capsule_radius = first.capsule_radius;
+        self.capsule_half_height = first.capsule_half_height;
     }
 
     pub fn update_visibility_diagnostics(&mut self, viewport_valid: bool, shader_loaded: bool) {
@@ -677,6 +818,46 @@ impl EditorViewportRenderState {
         let width = surface.0.max(1) as f32;
         let height = surface.1.max(1) as f32;
         let camera = self.camera;
+        let mut primitive_slot_transforms = [[0.0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
+        let mut primitive_slot_params_a = [[0.0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
+        let mut primitive_slot_params_b = [[0.0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
+        let mut primitive_slot_flags = [[0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
+        for (index, primitive) in self
+            .scene_packet
+            .primitives()
+            .iter()
+            .take(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES)
+            .enumerate()
+        {
+            primitive_slot_transforms[index] = [
+                primitive.translation.x,
+                primitive.translation.y,
+                primitive.translation.z,
+                0.0,
+            ];
+            primitive_slot_params_a[index] = [
+                primitive.box_half_extents.x.max(0.05),
+                primitive.box_half_extents.y.max(0.05),
+                primitive.box_half_extents.z.max(0.05),
+                primitive.sphere_radius.max(0.05),
+            ];
+            primitive_slot_params_b[index] = [
+                primitive.capsule_radius.max(0.05),
+                primitive.capsule_half_height.max(0.05),
+                0.0,
+                0.0,
+            ];
+            primitive_slot_flags[index] = [
+                primitive.primitive_kind.as_u32(),
+                primitive.entity_id_low_u32(),
+                u32::from(primitive.selected),
+                u32::from(primitive.hovered),
+            ];
+        }
+        let primitive_count = self
+            .scene_packet
+            .len()
+            .min(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES) as u32;
 
         EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
@@ -710,10 +891,14 @@ impl EditorViewportRenderState {
             ],
             primitive_flags: [
                 self.primitive_kind.as_u32(),
-                if self.has_primitive { 1 } else { 0 },
+                primitive_count,
                 self.debug_stage.as_u32(),
                 if self.root_background_opaque { 1 } else { 0 },
             ],
+            primitive_slot_transforms,
+            primitive_slot_params_a,
+            primitive_slot_params_b,
+            primitive_slot_flags,
         }
     }
 
@@ -849,5 +1034,42 @@ mod tests {
 
         assert_eq!(uniform.viewport, [0.0, 0.0, 1280.0, 720.0]);
         assert_eq!(uniform.camera_position[3], 42.0_f32.to_radians());
+    }
+
+    #[test]
+    fn scene_packet_sorts_instances_and_serializes_uniform_slots() {
+        let mut sphere = EditorPrimitive::default();
+        sphere.set_kind(EditorPrimitiveKind::Sphere);
+        sphere.sphere_radius = 1.25;
+        let mut box_primitive = EditorPrimitive::default();
+        box_primitive.box_half_extents = Vec3Value::new(0.25, 0.5, 0.75);
+
+        let packet = EditorViewportSceneRenderPacket::from_primitives([
+            EditorViewportPrimitiveInstance::from_transform_and_primitive(
+                editor_core::EntityId(20),
+                LocalTransform::from_translation(Vec3Value::new(2.0, 0.0, 0.0)),
+                sphere,
+                false,
+                true,
+            ),
+            EditorViewportPrimitiveInstance::from_transform_and_primitive(
+                editor_core::EntityId(4),
+                LocalTransform::from_translation(Vec3Value::new(-1.0, 0.0, 0.0)),
+                box_primitive,
+                true,
+                false,
+            ),
+        ]);
+
+        let mut state = EditorViewportRenderState::default();
+        state.set_scene_packet(packet);
+        let uniform = state.compose_scene_product_uniform((1280, 720));
+
+        assert_eq!(uniform.primitive_flags[1], 2);
+        assert_eq!(uniform.primitive_slot_flags[0], [0, 4, 1, 0]);
+        assert_eq!(uniform.primitive_slot_flags[1], [1, 20, 0, 1]);
+        assert_eq!(uniform.primitive_slot_transforms[0], [-1.0, 0.0, 0.0, 0.0]);
+        assert_eq!(uniform.primitive_slot_params_a[0], [0.25, 0.5, 0.75, 0.6]);
+        assert_eq!(uniform.primitive_slot_params_a[1][3], 1.25);
     }
 }

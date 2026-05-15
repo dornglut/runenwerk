@@ -83,9 +83,16 @@ pub struct SurfaceProviderBuildContext<'a> {
     pub app: &'a RunenwerkEditorApp,
     pub shell_state: &'a RunenwerkEditorShellState,
     pub theme: &'a ThemeTokens,
+    pub frame_metrics: Option<EditorShellFrameMetrics>,
     pub viewport_observations: Option<&'a ViewportArtifactObservationResource>,
     pub tool_surface_bindings: Option<&'a ToolSurfaceRuntimeBindingRegistryResource>,
     pub viewport_instances: Option<&'a ViewportInstanceRegistryResource>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EditorShellFrameMetrics {
+    pub fps_ema: f32,
+    pub frame_ms_ema: f32,
 }
 
 pub struct SurfaceProviderDispatchContext<'a> {
@@ -264,6 +271,29 @@ pub fn build_editor_shell_frame_model(
     tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
     viewport_instances: Option<&ViewportInstanceRegistryResource>,
 ) -> EditorShellFrameModel {
+    build_editor_shell_frame_model_with_frame_metrics(
+        app,
+        shell_state,
+        registry,
+        theme,
+        None,
+        viewport_observations,
+        tool_surface_bindings,
+        viewport_instances,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_editor_shell_frame_model_with_frame_metrics(
+    app: &RunenwerkEditorApp,
+    shell_state: &RunenwerkEditorShellState,
+    registry: &EditorSurfaceProviderRegistry,
+    theme: &ThemeTokens,
+    frame_metrics: Option<EditorShellFrameMetrics>,
+    viewport_observations: Option<&ViewportArtifactObservationResource>,
+    tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+    viewport_instances: Option<&ViewportInstanceRegistryResource>,
+) -> EditorShellFrameModel {
     let scene_version = app.runtime().current_scene_reality_version();
     let session = app.runtime().session_reality();
     let history = session.history();
@@ -284,6 +314,7 @@ pub fn build_editor_shell_frame_model(
         app,
         shell_state,
         theme,
+        frame_metrics,
         viewport_observations,
         tool_surface_bindings,
         viewport_instances,
@@ -478,6 +509,7 @@ fn build_viewport_observation_frame(
     tool_state: ViewportToolState,
     source_version: RealityVersion,
     fallback_viewport_id: Option<editor_viewport::ViewportId>,
+    frame_metrics: Option<EditorShellFrameMetrics>,
     overlay_status_lines: Vec<String>,
 ) -> ViewportObservationFrame {
     let viewport_id = products
@@ -536,6 +568,12 @@ fn build_viewport_observation_frame(
         hovered_entity: tool_state.hovered_entity,
         drag_in_progress,
         preview_active: tool_state.active_preview.is_some(),
+        frame_rate_fps: frame_metrics
+            .map(|metrics| metrics.fps_ema)
+            .filter(|value| value.is_finite() && *value > 0.0),
+        frame_time_ms: frame_metrics
+            .map(|metrics| metrics.frame_ms_ema)
+            .filter(|value| value.is_finite() && *value > 0.0),
         overlay_status_lines,
     }
 }
@@ -569,6 +607,8 @@ fn build_viewport_view_model(frame: &ViewportObservationFrame) -> ViewportViewMo
         hovered_entity: frame.hovered_entity,
         drag_in_progress: frame.drag_in_progress,
         preview_active: frame.preview_active,
+        frame_rate_fps: frame.frame_rate_fps,
+        frame_time_ms: frame.frame_time_ms,
         overlay_status_lines: frame.overlay_status_lines.clone(),
     }
 }
@@ -1644,6 +1684,7 @@ mod tests {
             app,
             shell_state,
             theme,
+            frame_metrics: None,
             viewport_observations: None,
             tool_surface_bindings: None,
             viewport_instances: None,

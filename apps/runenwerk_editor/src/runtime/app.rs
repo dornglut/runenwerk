@@ -92,7 +92,7 @@ fn register_editor_render_flow(app: &mut App) {
         .offscreen_products_only()
         .shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
         .uniform_from_state_with_surface_to(
-            scene_product_uniform,
+            scene_product_uniform.clone(),
             EditorViewportRenderState::compose_scene_product_uniform,
         )
         .write_target_alias(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)
@@ -101,6 +101,10 @@ fn register_editor_render_flow(app: &mut App) {
         .offscreen_products_only()
         .depends_on(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .shader_asset(EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID)
+        .uniform_from_state_with_surface_to(
+            scene_product_uniform,
+            EditorViewportRenderState::compose_scene_product_uniform,
+        )
         .write_target_alias(VIEWPORT_TARGET_ALIAS_PICKING_IDS)
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)

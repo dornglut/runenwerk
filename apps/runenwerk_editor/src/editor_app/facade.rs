@@ -159,6 +159,7 @@ impl RunenwerkEditorApp {
         viewport_observations: Option<&ViewportArtifactObservationResource>,
         tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
         viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        frame_metrics: Option<crate::shell::EditorShellFrameMetrics>,
     ) -> editor_shell::ShellUiExpressionFrame {
         RunenwerkEditorShellController::build_expression_frame_with_surface_resources(
             self,
@@ -169,6 +170,7 @@ impl RunenwerkEditorApp {
             viewport_observations,
             tool_surface_bindings,
             viewport_instances,
+            frame_metrics,
         )
     }
 

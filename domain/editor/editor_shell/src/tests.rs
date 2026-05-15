@@ -1171,7 +1171,7 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
                 ..
             },
         ] if *tab_stack_id == viewport_stack
-            && *anchor_widget_id == tab_stack_container_widget_id(viewport_stack)
+            && *anchor_widget_id == tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
             && *split_stack == viewport_stack
     ));
 }

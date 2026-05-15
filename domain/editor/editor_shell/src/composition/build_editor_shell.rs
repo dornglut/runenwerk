@@ -12,7 +12,7 @@ use ui_tree::{OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, Popu
 
 use crate::{
     UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
-    panel, spacer, split, vstack_with_policies,
+    panel, spacer, split, vscroll, vstack_with_policies,
 };
 use ui_math::UiSize;
 
@@ -31,16 +31,22 @@ use crate::{
     WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
     build_defined_toolbar_with_template, dock_split_preview_label_widget_id,
     dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id,
-    tab_close_button_widget_id, tab_close_overlay_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_active_indicator_overlay_widget_id, tab_active_indicator_widget_id,
+    tab_close_button_widget_id, tab_close_overlay_widget_id, tab_stack_action_menu_list_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_action_menu_scroll_widget_id,
     tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
     tab_stack_content_widget_id, tab_stack_duplicate_button_widget_id,
     tab_stack_lock_type_toggle_widget_id, tab_stack_new_surface_menu_item_widget_id,
-    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_new_surface_menu_list_widget_id, tab_stack_new_surface_menu_popup_widget_id,
+    tab_stack_new_surface_menu_scroll_widget_id, tab_stack_new_tab_button_widget_id,
     tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
     tab_stack_split_vertical_button_widget_id, tab_stack_surface_menu_item_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
     tab_strip_scroll_widget_id,
 };
+
+use super::surface_definition_context::contrast_popup_theme;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoutedShellAction {
@@ -519,11 +525,23 @@ fn build_tab_strip_from_frame(
             }
             children.push(UiNode::with_children(
                 tab_close_overlay_widget_id(tab_stack.tab_stack_id, insert_index),
-                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_start(
                     tab.widget_id,
                     theme.spacing.xs,
                 )),
                 vec![close_button],
+            ));
+            children.push(UiNode::with_children(
+                tab_active_indicator_overlay_widget_id(tab_stack.tab_stack_id, insert_index),
+                UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+                    tab.widget_id,
+                    theme.spacing.xs,
+                )),
+                vec![active_indicator_node(
+                    tab_active_indicator_widget_id(tab_stack.tab_stack_id, insert_index),
+                    is_active,
+                    theme,
+                )],
             ));
         }
     }
@@ -590,7 +608,7 @@ fn build_tab_stack_action_menu_popup(
     } else {
         "Lock Type"
     };
-    let mut children = vec![
+    let children = vec![
         tab_stack_action_menu_item(
             tab_stack_split_horizontal_button_widget_id(tab_stack_id),
             "Split Horizontal",
@@ -635,13 +653,7 @@ fn build_tab_stack_action_menu_popup(
         ),
     ];
 
-    let mut popup_theme = theme.clone();
-    popup_theme.background_panel = UiColor::new(
-        theme.background_panel.r,
-        theme.background_panel.g,
-        theme.background_panel.b,
-        0.98,
-    );
+    let popup_theme = contrast_popup_theme(theme);
     let mut root = UiNode::with_children(
         tab_stack_action_menu_popup_widget_id(tab_stack_id),
         UiNodeKind::Popup(PopupNode::anchored_outside(
@@ -653,7 +665,12 @@ fn build_tab_stack_action_menu_popup(
         )),
         Vec::new(),
     );
-    root.children.append(&mut children);
+    root.children.push(scrollable_shell_popup_menu_content(
+        tab_stack_action_menu_scroll_widget_id(tab_stack_id),
+        tab_stack_action_menu_list_widget_id(tab_stack_id),
+        theme,
+        children,
+    ));
     root
 }
 
@@ -664,7 +681,7 @@ fn build_tab_stack_surface_menu_popup(
     tool_surface_kinds: &[ToolSurfaceKind],
 ) -> UiNode {
     let text_style = compact_shell_text_style(theme);
-    let mut children = tool_surface_kinds
+    let children = tool_surface_kinds
         .iter()
         .copied()
         .enumerate()
@@ -678,13 +695,7 @@ fn build_tab_stack_surface_menu_popup(
         })
         .collect::<Vec<_>>();
 
-    let mut popup_theme = theme.clone();
-    popup_theme.background_panel = UiColor::new(
-        theme.background_panel.r,
-        theme.background_panel.g,
-        theme.background_panel.b,
-        0.98,
-    );
+    let popup_theme = contrast_popup_theme(theme);
     let mut root = UiNode::with_children(
         tab_stack_surface_menu_popup_widget_id(tab_stack.tab_stack_id),
         UiNodeKind::Popup(PopupNode::anchored_outside(
@@ -696,7 +707,12 @@ fn build_tab_stack_surface_menu_popup(
         )),
         Vec::new(),
     );
-    root.children.append(&mut children);
+    root.children.push(scrollable_shell_popup_menu_content(
+        tab_stack_surface_menu_scroll_widget_id(tab_stack.tab_stack_id),
+        tab_stack_surface_menu_list_widget_id(tab_stack.tab_stack_id),
+        theme,
+        children,
+    ));
     root
 }
 
@@ -708,7 +724,7 @@ fn build_tab_stack_create_surface_menu_popup(
 ) -> UiNode {
     let text_style = compact_shell_text_style(theme);
     let locked_kind = tab_stack.locked_tool_surface_kind;
-    let mut children = tool_surface_kinds
+    let children = tool_surface_kinds
         .iter()
         .copied()
         .enumerate()
@@ -726,13 +742,7 @@ fn build_tab_stack_create_surface_menu_popup(
         })
         .collect::<Vec<_>>();
 
-    let mut popup_theme = theme.clone();
-    popup_theme.background_panel = UiColor::new(
-        theme.background_panel.r,
-        theme.background_panel.g,
-        theme.background_panel.b,
-        0.98,
-    );
+    let popup_theme = contrast_popup_theme(theme);
     let mut root = UiNode::with_children(
         tab_stack_new_surface_menu_popup_widget_id(tab_stack.tab_stack_id),
         UiNodeKind::Popup(PopupNode::anchored_outside(
@@ -744,8 +754,55 @@ fn build_tab_stack_create_surface_menu_popup(
         )),
         Vec::new(),
     );
-    root.children.append(&mut children);
+    root.children.push(scrollable_shell_popup_menu_content(
+        tab_stack_new_surface_menu_scroll_widget_id(tab_stack.tab_stack_id),
+        tab_stack_new_surface_menu_list_widget_id(tab_stack.tab_stack_id),
+        theme,
+        children,
+    ));
     root
+}
+
+fn scrollable_shell_popup_menu_content(
+    scroll_id: WidgetId,
+    list_id: WidgetId,
+    theme: &ThemeTokens,
+    items: Vec<UiNode>,
+) -> UiNode {
+    vscroll(
+        scroll_id,
+        contrast_popup_theme(theme),
+        vec![vstack_with_policies(
+            list_id,
+            theme.spacing.xs,
+            vec![SizePolicy::Auto; items.len()],
+            items,
+        )],
+    )
+}
+
+fn active_indicator_node(id: WidgetId, active: bool, theme: &ThemeTokens) -> UiNode {
+    let mut text_style = icon_glyph_text_style(theme);
+    text_style.color = if active {
+        [
+            theme.accent.r,
+            theme.accent.g,
+            theme.accent.b,
+            theme.accent.a,
+        ]
+    } else {
+        [
+            theme.foreground_muted.r,
+            theme.foreground_muted.g,
+            theme.foreground_muted.b,
+            theme.foreground_muted.a,
+        ]
+    };
+    let mut node = label(id, if active { "●" } else { "○" }, text_style);
+    if let UiNodeKind::Label(label) = &mut node.kind {
+        label.constraints = ui_layout::LayoutConstraints::tight(UiSize::new(18.0, 18.0));
+    }
+    node
 }
 
 fn build_dock_split_preview_overlays(
@@ -1361,7 +1418,7 @@ fn register_tab_stack_chrome_routes(
         tab_stack_surface_submenu_anchor_widget_id(stack.tab_stack_id),
         RoutedShellAction::ToggleTabStackSurfaceMenu {
             tab_stack_id: stack.tab_stack_id,
-            anchor_widget_id: tab_stack_container_widget_id(stack.tab_stack_id),
+            anchor_widget_id: tab_stack_surface_submenu_anchor_widget_id(stack.tab_stack_id),
         },
     );
     if let Some(active_panel) = stack.active_panel {

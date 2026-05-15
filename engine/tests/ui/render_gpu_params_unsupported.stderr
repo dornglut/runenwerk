@@ -10,14 +10,14 @@ help: the trait `GpuUniformField` is not implemented for `Unsupported`
 4 | struct Unsupported;
   | ^^^^^^^^^^^^^^^^^^
   = help: the following other types implement trait `GpuUniformField`:
+            [[f32; 4]; N]
+            [[u32; 4]; N]
             [f32; 2]
             [f32; 3]
             [f32; 4]
             [i32; 2]
             [i32; 3]
             [i32; 4]
-            [u32; 2]
-            [u32; 3]
           and $N others
 
 error[E0277]: the trait bound `Unsupported: GpuUniformField` is not satisfied
@@ -32,14 +32,14 @@ help: the trait `GpuUniformField` is not implemented for `Unsupported`
 4 | struct Unsupported;
   | ^^^^^^^^^^^^^^^^^^
   = help: the following other types implement trait `GpuUniformField`:
+            [[f32; 4]; N]
+            [[u32; 4]; N]
             [f32; 2]
             [f32; 3]
             [f32; 4]
             [i32; 2]
             [i32; 3]
             [i32; 4]
-            [u32; 2]
-            [u32; 3]
           and $N others
   = help: see issue #48214
   = note: this error originates in the derive macro `GpuUniform` (in Nightly builds, run with -Z macro-backtrace for more info)

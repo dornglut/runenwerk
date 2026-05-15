@@ -11,7 +11,7 @@ use ui_math::UiVector;
 
 use crate::runtime::resources::{EditorViewportDebugStage, EditorViewportRenderState};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ViewportRenderStateEntry {
     pub viewport_id: ViewportId,
     pub tool_surface_id: Option<ToolSurfaceInstanceId>,

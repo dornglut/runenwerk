@@ -17,7 +17,8 @@ use ui_render_data::{
 
 use crate::editor_runtime::EditorPrimitive;
 use crate::runtime::resources::{
-    EditorHostResource, EditorViewportDebugStage, EditorViewportRenderState, effective_shell_scale,
+    EditorHostResource, EditorViewportDebugStage, EditorViewportPrimitiveInstance,
+    EditorViewportRenderState, EditorViewportSceneRenderPacket, effective_shell_scale,
     scaled_shell_theme,
 };
 use crate::runtime::viewport::{
@@ -44,6 +45,7 @@ const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
 #[allow(clippy::too_many_arguments)]
 pub fn submit_editor_frame_system(
     window: Res<WindowState>,
+    debug_metrics: Res<engine::DebugMetricsState>,
     mut host: ResMut<EditorHostResource>,
     mut viewport_render_states: ResMut<ViewportRenderStateResource>,
     viewport_observations: Res<ViewportArtifactObservationResource>,
@@ -88,6 +90,10 @@ pub fn submit_editor_frame_system(
             Some(&viewport_observations),
             Some(&tool_surface_bindings),
             Some(&viewport_instances),
+            Some(crate::shell::EditorShellFrameMetrics {
+                fps_ema: debug_metrics.fps_ema,
+                frame_ms_ema: debug_metrics.frame_ms_ema,
+            }),
         );
         (
             expression.metadata.source_version,
@@ -235,7 +241,7 @@ fn sync_viewport_render_states_from_bindings(
     for binding in tool_surface_bindings.bindings() {
         let mut render_state = viewport_render_states
             .state_for(binding.viewport_id)
-            .map(|previous| previous.render_state)
+            .map(|previous| previous.render_state.clone())
             .or_else(|| {
                 workspace_state
                     .tool_surface(binding.tool_surface_id)
@@ -497,10 +503,12 @@ fn populate_viewport_render_state(
     let bounds_changed = render_state.set_viewport_bounds(viewport_bounds_tuple(viewport_bounds));
 
     let runtime = app.runtime();
-    if let Some((transform, primitive)) = selected_or_first_editor_primitive(runtime) {
-        render_state.set_primitive(transform.translation, primitive);
-    } else {
+    let packet =
+        extract_viewport_scene_render_packet(runtime, app.viewport_tool_state().hovered_entity);
+    if packet.is_empty() {
         render_state.clear_primitive();
+    } else {
+        render_state.set_scene_packet(packet);
     }
 
     bounds_changed
@@ -510,22 +518,28 @@ fn viewport_bounds_tuple(bounds: UiRect) -> (f32, f32, f32, f32) {
     (bounds.x, bounds.y, bounds.width, bounds.height)
 }
 
-fn selected_or_first_editor_primitive(
+pub(crate) fn extract_viewport_scene_render_packet(
     runtime: &crate::editor_runtime::RunenwerkEditorRuntime,
-) -> Option<(LocalTransform, EditorPrimitive)> {
-    if let Some(selected) = runtime.selected_entity()
-        && let Some(result) = entity_primitive(runtime, selected)
-    {
-        return Some(result);
-    }
-
-    runtime
-        .document()
-        .entity_ids()
-        .find_map(|entity| entity_primitive(runtime, entity))
+    hovered_entity: Option<editor_core::EntityId>,
+) -> EditorViewportSceneRenderPacket {
+    let selected_entity = runtime.selected_entity();
+    EditorViewportSceneRenderPacket::from_primitives(runtime.document().entity_ids().filter_map(
+        |entity| {
+            let (transform, primitive) = entity_primitive(runtime, entity)?;
+            Some(
+                EditorViewportPrimitiveInstance::from_transform_and_primitive(
+                    entity,
+                    transform,
+                    primitive,
+                    selected_entity == Some(entity),
+                    hovered_entity == Some(entity),
+                ),
+            )
+        },
+    ))
 }
 
-fn entity_primitive(
+pub(crate) fn entity_primitive(
     runtime: &crate::editor_runtime::RunenwerkEditorRuntime,
     entity: editor_core::EntityId,
 ) -> Option<(LocalTransform, EditorPrimitive)> {
@@ -541,10 +555,45 @@ fn entity_primitive(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::editor_runtime::{execute_scene_intent, register_mvp_component_types};
     use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, ViewportRenderStateCommand};
+    use editor_core::{ChangeOrigin, CommandId, EntityId, SelectionTarget};
+    use editor_scene::{
+        SceneCommandIntent, SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent,
+        SdfPrimitiveKind, SdfPrimitiveSpec,
+    };
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
     use editor_viewport::ViewportId;
+    use scene::Vec3Value;
     use ui_render_data::ViewportSurfaceEmbedPrimitive;
+
+    fn create_sdf_primitive(
+        runtime: &mut crate::editor_runtime::RunenwerkEditorRuntime,
+        command_id: u64,
+        display_name: &str,
+        translation: SceneVec3,
+        kind: SdfPrimitiveKind,
+    ) -> EntityId {
+        let before = runtime.document().entity_ids().collect::<Vec<_>>();
+        execute_scene_intent(
+            runtime,
+            CommandId(command_id),
+            SceneCommandIntent::CreateSdfPrimitive {
+                parent: None,
+                display_name: display_name.to_string(),
+                primitive: SdfPrimitiveSpec::new(kind, SdfBooleanIntent::Add).with_transform(
+                    SceneTransform::new(translation, SceneQuat::identity(), SceneVec3::one()),
+                ),
+            },
+        )
+        .expect("SDF primitive creation should succeed");
+
+        runtime
+            .document()
+            .entity_ids()
+            .find(|entity| !before.contains(entity))
+            .expect("SDF primitive creation should register one entity")
+    }
 
     fn binding(
         surface: u64,
@@ -663,6 +712,46 @@ mod tests {
                 .state_for(second)
                 .map(|state| state.render_state.debug_stage),
             Some(EditorViewportDebugStage::PrimitiveAvailability),
+        );
+    }
+
+    #[test]
+    fn extracted_scene_packet_includes_all_primitives_with_selection_and_hover_flags() {
+        let mut runtime = crate::editor_runtime::RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let hovered = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Hovered",
+            SceneVec3::new(-1.0, 0.0, 0.0),
+            SdfPrimitiveKind::Box,
+        );
+        let selected = create_sdf_primitive(
+            &mut runtime,
+            11,
+            "Selected",
+            SceneVec3::new(2.0, 0.0, 0.0),
+            SdfPrimitiveKind::Sphere,
+        );
+        runtime.set_selection_single_with_origin(
+            SelectionTarget::Entity(selected),
+            ChangeOrigin::Runtime,
+        );
+
+        let packet = extract_viewport_scene_render_packet(&runtime, Some(hovered));
+        let primitives = packet.primitives();
+
+        assert_eq!(primitives.len(), 2);
+        assert_eq!(primitives[0].entity_id, hovered);
+        assert_eq!(primitives[1].entity_id, selected);
+        assert!(primitives[0].hovered);
+        assert!(!primitives[0].selected);
+        assert!(primitives[1].selected);
+        assert!(!primitives[1].hovered);
+        assert_eq!(primitives[0].translation, Vec3Value::new(-1.0, 0.0, 0.0));
+        assert_eq!(
+            primitives[1].primitive_kind,
+            crate::editor_runtime::EditorPrimitiveKind::Sphere
         );
     }
 }

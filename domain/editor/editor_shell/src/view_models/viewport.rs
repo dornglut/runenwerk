@@ -30,6 +30,8 @@ pub struct ViewportViewModel {
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,
     pub preview_active: bool,
+    pub frame_rate_fps: Option<f32>,
+    pub frame_time_ms: Option<f32>,
     pub overlay_status_lines: Vec<String>,
 }
 
@@ -50,6 +52,8 @@ impl Default for ViewportViewModel {
             hovered_entity: None,
             drag_in_progress: false,
             preview_active: false,
+            frame_rate_fps: None,
+            frame_time_ms: None,
             overlay_status_lines: Vec::new(),
         }
     }

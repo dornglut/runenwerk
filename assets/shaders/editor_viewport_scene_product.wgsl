@@ -9,7 +9,13 @@ struct EditorViewportSceneProductUniform {
     primitive_params_a : vec4<f32>,
     primitive_params_b : vec4<f32>,
     primitive_flags : vec4<u32>,
+    primitive_slot_transforms : array<vec4<f32>, 64>,
+    primitive_slot_params_a : array<vec4<f32>, 64>,
+    primitive_slot_params_b : array<vec4<f32>, 64>,
+    primitive_slot_flags : array<vec4<u32>, 64>,
 };
+
+const MAX_PRIMITIVES : u32 = 64u;
 
 @group(0) @binding(0)
 var<uniform> u : EditorViewportSceneProductUniform;
@@ -49,26 +55,37 @@ fn sdf_capsule(sample_pos: vec3<f32>, center: vec3<f32>, radius: f32, half_heigh
 }
 
 fn sdf_main_primitive(sample_pos: vec3<f32>) -> f32 {
-    let center = u.object_transform.xyz;
-    let primitive_kind = u.primitive_flags.x;
+    return sdf_primitive_slot(sample_pos, 0u);
+}
+
+fn primitive_count() -> u32 {
+    return min(u.primitive_flags.y, MAX_PRIMITIVES);
+}
+
+fn sdf_primitive_slot(sample_pos: vec3<f32>, primitive_index: u32) -> f32 {
+    let slot = u.primitive_slot_flags[primitive_index];
+    let center = u.primitive_slot_transforms[primitive_index].xyz;
+    let primitive_kind = slot.x;
+    let params_a = u.primitive_slot_params_a[primitive_index];
+    let params_b = u.primitive_slot_params_b[primitive_index];
 
     if primitive_kind == 1u {
-        return sdf_sphere(sample_pos, center, max(u.primitive_params_a.w, 0.05));
+        return sdf_sphere(sample_pos, center, max(params_a.w, 0.05));
     }
 
     if primitive_kind == 2u {
         return sdf_capsule(
             sample_pos,
             center,
-            max(u.primitive_params_b.x, 0.05),
-            max(u.primitive_params_b.y, 0.05),
+            max(params_b.x, 0.05),
+            max(params_b.y, 0.05),
         );
     }
 
     return sdf_box(
         sample_pos,
         center,
-        max(u.primitive_params_a.xyz, vec3<f32>(0.05, 0.05, 0.05)),
+        max(params_a.xyz, vec3<f32>(0.05, 0.05, 0.05)),
     );
 }
 
@@ -77,20 +94,63 @@ fn sdf_ground_box(sample_pos: vec3<f32>) -> f32 {
 }
 
 fn scene_sdf(sample_pos: vec3<f32>) -> f32 {
-    let ground = sdf_ground_box(sample_pos);
-    if u.primitive_flags.y == 0u {
-        return ground;
+    var distance = sdf_ground_box(sample_pos);
+    let count = primitive_count();
+    if count == 0u {
+        return distance;
     }
-    return min(ground, sdf_main_primitive(sample_pos));
+
+    var index = 0u;
+    loop {
+        if index >= count {
+            break;
+        }
+        distance = min(distance, sdf_primitive_slot(sample_pos, index));
+        index = index + 1u;
+    }
+    return distance;
 }
 
 fn is_ground_hit(sample_pos: vec3<f32>) -> bool {
     let ground_distance = abs(sdf_ground_box(sample_pos));
-    if u.primitive_flags.y == 0u {
+    let count = primitive_count();
+    if count == 0u {
         return true;
     }
-    let primitive_distance = abs(sdf_main_primitive(sample_pos));
+
+    var primitive_distance = 1e9;
+    var index = 0u;
+    loop {
+        if index >= count {
+            break;
+        }
+        primitive_distance = min(primitive_distance, abs(sdf_primitive_slot(sample_pos, index)));
+        index = index + 1u;
+    }
     return ground_distance <= primitive_distance;
+}
+
+fn hit_primitive_flags(sample_pos: vec3<f32>) -> vec4<u32> {
+    let count = primitive_count();
+    if count == 0u {
+        return vec4<u32>(0u, 0u, 0u, 0u);
+    }
+
+    var best_distance = 1e9;
+    var best_flags = vec4<u32>(0u, 0u, 0u, 0u);
+    var index = 0u;
+    loop {
+        if index >= count {
+            break;
+        }
+        let primitive_distance = abs(sdf_primitive_slot(sample_pos, index));
+        if primitive_distance < best_distance {
+            best_distance = primitive_distance;
+            best_flags = u.primitive_slot_flags[index];
+        }
+        index = index + 1u;
+    }
+    return best_flags;
 }
 
 fn estimate_normal(sample_pos: vec3<f32>) -> vec3<f32> {
@@ -175,7 +235,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let viewport_size = target_size;
     let viewport_local = pixel / viewport_size;
     let ndc = vec2<f32>(viewport_local.x * 2.0 - 1.0, 1.0 - viewport_local.y * 2.0);
-    let has_primitive = u.primitive_flags.y != 0u;
+    let has_primitive = primitive_count() != 0u;
 
     if debug_stage == 2u {
         let gradient = vec3<f32>(
@@ -235,6 +295,14 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     var base = vec3<f32>(0.72, 0.74, 0.77);
     if is_ground_hit(sample_pos) {
         base = vec3<f32>(0.34, 0.37, 0.41);
+    } else {
+        let flags = hit_primitive_flags(sample_pos);
+        if flags.z != 0u {
+            base = vec3<f32>(0.86, 0.78, 0.46);
+        }
+        if flags.w != 0u {
+            base = mix(base, vec3<f32>(0.40, 0.72, 0.96), 0.45);
+        }
     }
     let lit = base * diff + vec3<f32>(0.15, 0.20, 0.28) * rim;
     return vec4<f32>(lit, 1.0);

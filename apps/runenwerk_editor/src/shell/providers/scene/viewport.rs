@@ -73,6 +73,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             tool_state,
             context.app.runtime().current_scene_reality_version(),
             expected_viewport_id,
+            context.frame_metrics,
             context
                 .app
                 .procgen_runtime()

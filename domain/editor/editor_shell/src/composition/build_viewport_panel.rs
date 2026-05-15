@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_shell/src/composition/build_viewport_panel.rs
 //! Purpose: Compose viewport panel widgets.
 
-use crate::{UiNode, button_selected, hstack_with_policies, label};
+use crate::{UiNode, button_selected, hstack_with_policies, label, vscroll, vstack_with_policies};
 use editor_viewport::{ViewportDebugStage, ViewportSurfacePresentationSlot};
 use ui_definition::{
     AuthoredUiTemplate, UiDefinitionContext, form_retained_ui, normalize_authored_template,
@@ -16,19 +16,21 @@ use crate::{
     VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID,
     VIEWPORT_CHROME_CONTENT_WIDGET_ID, VIEWPORT_CHROME_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID,
     VIEWPORT_DETAILS_PANEL_WIDGET_ID, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
-    VIEWPORT_TOOLS_MENU_WIDGET_ID, ViewportViewModel, viewport_debug_stage_button_widget_id,
-    viewport_embed_slot_for, viewport_product_button_widget_id,
-    viewport_tool_radial_item_widget_id,
+    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+    VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
+    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_LABEL_WIDGET_ID,
+    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID,
+    VIEWPORT_SURFACE_EMBED_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID, VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID, VIEWPORT_TOOLS_MENU_WIDGET_ID, ViewportViewModel,
+    viewport_debug_stage_button_widget_id, viewport_embed_slot_for,
+    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
 };
 
 use super::surface_control_polish::{compact_surface_action_button, compact_surface_toggle};
 use super::surface_definition_context::{
-    find_node_mut, register_widget_ids_by_path, scoped_definition_context,
+    contrast_popup_theme, find_node_mut, register_widget_ids_by_path, scoped_definition_context,
     set_stack_child_main_policies, transparent_panel_background,
 };
 
@@ -237,13 +239,20 @@ fn viewport_tools_menu(
     scope: SurfaceWidgetScope,
 ) -> Option<UiNode> {
     view_model.tools_menu_open.then(|| {
-        let mut popup_theme = theme.clone();
-        popup_theme.background_panel = UiColor::new(
-            theme.background_panel.r,
-            theme.background_panel.g,
-            theme.background_panel.b,
-            0.96,
-        );
+        let popup_theme = contrast_popup_theme(theme);
+        let items = ["Select", "Move", "Rotate", "Scale"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, label)| {
+                compact_surface_action_button(
+                    scope.widget_id(viewport_tool_radial_item_widget_id(index)),
+                    label,
+                    false,
+                    true,
+                    theme,
+                )
+            })
+            .collect::<Vec<_>>();
         UiNode::with_children(
             scope.widget_id(VIEWPORT_TOOLS_MENU_WIDGET_ID),
             UiNodeKind::Popup(PopupNode::anchored_outside(
@@ -253,19 +262,12 @@ fn viewport_tools_menu(
                 PopupFlipPolicy::FlipToFit,
                 popup_theme,
             )),
-            ["Select", "Move", "Rotate", "Scale"]
-                .into_iter()
-                .enumerate()
-                .map(|(index, label)| {
-                    compact_surface_action_button(
-                        scope.widget_id(viewport_tool_radial_item_widget_id(index)),
-                        label,
-                        false,
-                        true,
-                        theme,
-                    )
-                })
-                .collect(),
+            vec![scrollable_popup_menu_content(
+                scope.widget_id(VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID),
+                scope.widget_id(VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID),
+                theme,
+                items,
+            )],
         )
     })
 }
@@ -276,13 +278,7 @@ fn viewport_options_popup(
     scope: SurfaceWidgetScope,
 ) -> Option<UiNode> {
     view_model.options_menu_open.then(|| {
-        let mut popup_theme = theme.clone();
-        popup_theme.background_panel = UiColor::new(
-            theme.background_panel.r,
-            theme.background_panel.g,
-            theme.background_panel.b,
-            0.96,
-        );
+        let popup_theme = contrast_popup_theme(theme);
         let mut items = vec![
             compact_surface_toggle(
                 scope.widget_id(VIEWPORT_DETAILS_TOGGLE_WIDGET_ID),
@@ -339,9 +335,32 @@ fn viewport_options_popup(
                 PopupFlipPolicy::FlipToFit,
                 popup_theme,
             )),
-            items,
+            vec![scrollable_popup_menu_content(
+                scope.widget_id(VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID),
+                scope.widget_id(VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID),
+                theme,
+                items,
+            )],
         )
     })
+}
+
+fn scrollable_popup_menu_content(
+    scroll_id: crate::WidgetId,
+    list_id: crate::WidgetId,
+    theme: &ThemeTokens,
+    items: Vec<UiNode>,
+) -> UiNode {
+    vscroll(
+        scroll_id,
+        contrast_popup_theme(theme),
+        vec![vstack_with_policies(
+            list_id,
+            theme.spacing.xs,
+            vec![SizePolicy::Auto; items.len()],
+            items,
+        )],
+    )
 }
 
 fn viewport_status_overlay(
@@ -417,9 +436,15 @@ fn viewport_details_text(view_model: &ViewportViewModel) -> String {
 }
 
 fn viewport_statistics_text(view_model: &ViewportViewModel) -> String {
+    let frame_metrics = match (view_model.frame_rate_fps, view_model.frame_time_ms) {
+        (Some(fps), Some(frame_ms)) => format!(" fps={fps:.1} frame_ms={frame_ms:.2}"),
+        (Some(fps), None) => format!(" fps={fps:.1}"),
+        (None, Some(frame_ms)) => format!(" frame_ms={frame_ms:.2}"),
+        (None, None) => String::new(),
+    };
     format!(
-        "Statistics: drag={} preview={}",
-        view_model.drag_in_progress, view_model.preview_active
+        "Statistics: drag={} preview={}{}",
+        view_model.drag_in_progress, view_model.preview_active, frame_metrics
     )
 }
 
@@ -647,6 +672,8 @@ mod tests {
             statistics_visible: true,
             drag_in_progress: true,
             preview_active: true,
+            frame_rate_fps: Some(60.0),
+            frame_time_ms: Some(16.67),
             ..Default::default()
         };
         let statistics = build_viewport_panel(
@@ -660,7 +687,10 @@ mod tests {
         assert!(matches!(
             &statistics_label.kind,
             UiNodeKind::Label(label)
-                if label.text.contains("drag=true") && label.text.contains("preview=true")
+                if label.text.contains("drag=true")
+                    && label.text.contains("preview=true")
+                    && label.text.contains("fps=60.0")
+                    && label.text.contains("frame_ms=16.67")
         ));
     }
 

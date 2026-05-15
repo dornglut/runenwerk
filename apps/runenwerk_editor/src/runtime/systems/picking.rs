@@ -5,8 +5,12 @@ use glam::{Vec2, Vec3, vec2, vec3};
 use scene::{LocalTransform, Vec3Value};
 use ui_math::{UiPoint, UiRect};
 
-use crate::editor_runtime::{EditorPrimitive, RunenwerkEditorRuntime};
-use crate::runtime::resources::{EditorHostResource, EditorViewportCamera, editor_viewport_camera};
+use super::extract_viewport_scene_render_packet;
+use crate::editor_runtime::RunenwerkEditorRuntime;
+use crate::runtime::resources::{
+    EditorHostResource, EditorViewportCamera, EditorViewportSceneRenderPacket,
+    editor_viewport_camera,
+};
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
     ViewportRenderStateResource,
@@ -51,12 +55,17 @@ pub fn produce_editor_picking_system(
                 (
                     state.render_state.camera,
                     state.render_state.camera_fov_y_radians,
+                    state.render_state.scene_packet.clone(),
                 )
             })
             .unwrap_or_else(|| {
                 (
                     editor_viewport_camera(),
                     crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+                    extract_viewport_scene_render_packet(
+                        host.app.runtime(),
+                        host.app.viewport_tool_state().hovered_entity,
+                    ),
                 )
             });
         let next_hit = if let Some(ray) = viewport_ray(
@@ -67,6 +76,7 @@ pub fn produce_editor_picking_system(
         ) {
             compose_picking_hit(
                 host.app.runtime(),
+                &viewport_camera.2,
                 host.app.runtime().session().active_tool(),
                 host.app.runtime().selected_entity(),
                 cursor,
@@ -111,6 +121,7 @@ pub fn produce_editor_picking_system(
 #[allow(clippy::too_many_arguments)]
 fn compose_picking_hit(
     runtime: &RunenwerkEditorRuntime,
+    scene_packet: &EditorViewportSceneRenderPacket,
     active_tool: Option<ToolId>,
     selected_entity: Option<EntityId>,
     cursor: UiPoint,
@@ -136,7 +147,7 @@ fn compose_picking_hit(
         };
     }
 
-    let entity_hit = pick_entity_hit(runtime, ray);
+    let entity_hit = pick_entity_hit(scene_packet, ray);
     let grid_hit = pick_grid_hit(ray);
     choose_primary_hit(entity_hit, grid_hit)
 }
@@ -155,23 +166,15 @@ fn choose_primary_hit(
     }
 }
 
-fn pick_entity_hit(runtime: &RunenwerkEditorRuntime, ray: PickingRay) -> Option<EditorPickingHit> {
+fn pick_entity_hit(
+    scene_packet: &EditorViewportSceneRenderPacket,
+    ray: PickingRay,
+) -> Option<EditorPickingHit> {
     let mut best: Option<EditorPickingHit> = None;
 
-    for entity in runtime.document().entity_ids() {
-        let Some(ecs_entity) = runtime.ids().resolve_entity(entity) else {
-            continue;
-        };
-        let Some(transform) = runtime.world().get::<LocalTransform>(ecs_entity).copied() else {
-            continue;
-        };
-        let Some(primitive) = runtime.world().get::<EditorPrimitive>(ecs_entity).copied() else {
-            continue;
-        };
-
-        let half_extents =
-            scaled_half_extents(primitive.box_extents_for_picking(), transform.scale);
-        let center = transform.translation.to_glam();
+    for primitive in scene_packet.primitives() {
+        let half_extents = primitive.first_hit_aabb_half_extents();
+        let center = primitive.translation.to_glam();
         let min = center - half_extents;
         let max = center + half_extents;
 
@@ -179,7 +182,7 @@ fn pick_entity_hit(runtime: &RunenwerkEditorRuntime, ray: PickingRay) -> Option<
             continue;
         };
         let candidate = EditorPickingHit {
-            target: EditorPickingTarget::Entity(entity.0),
+            target: EditorPickingTarget::Entity(primitive.entity_id.0),
             distance,
         };
 
@@ -370,15 +373,6 @@ fn ray_aabb_first_hit(origin: Vec3, direction: Vec3, min: Vec3, max: Vec3) -> Op
     Some(t_min.max(0.0))
 }
 
-fn scaled_half_extents(half_extents: Vec3Value, scale: Vec3Value) -> Vec3 {
-    let safe_scale = vec3(scale.x.abs(), scale.y.abs(), scale.z.abs());
-    vec3(
-        half_extents.x.max(0.05) * safe_scale.x.max(0.0001),
-        half_extents.y.max(0.05) * safe_scale.y.max(0.0001),
-        half_extents.z.max(0.05) * safe_scale.z.max(0.0001),
-    )
-}
-
 fn entity_transform(runtime: &RunenwerkEditorRuntime, entity: EntityId) -> Option<LocalTransform> {
     let ecs_entity = runtime.ids().resolve_entity(entity)?;
     runtime.world().get::<LocalTransform>(ecs_entity).copied()
@@ -445,9 +439,17 @@ fn structural_context_for_widget(
 mod tests {
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
-    use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
+    use crate::editor_runtime::{
+        EditorPrimitive, bootstrap_mvp_scene_if_empty, execute_scene_intent,
+        register_mvp_component_types,
+    };
     use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
     use crate::shell::RunenwerkEditorShellController;
+    use editor_core::CommandId;
+    use editor_scene::{
+        SceneCommandIntent, SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent,
+        SdfPrimitiveKind, SdfPrimitiveSpec,
+    };
     use editor_viewport::ViewportId;
     use engine::plugins::render::UiFontAtlasResource;
     use ui_theme::ThemeTokens;
@@ -457,6 +459,34 @@ mod tests {
         register_mvp_component_types(app.runtime_mut());
         bootstrap_mvp_scene_if_empty(app.runtime_mut()).expect("mvp bootstrap should succeed");
         app.runtime
+    }
+
+    fn create_sdf_primitive(
+        runtime: &mut RunenwerkEditorRuntime,
+        command_id: u64,
+        display_name: &str,
+        translation: SceneVec3,
+        kind: SdfPrimitiveKind,
+    ) -> EntityId {
+        let before = runtime.document().entity_ids().collect::<Vec<_>>();
+        execute_scene_intent(
+            runtime,
+            CommandId(command_id),
+            SceneCommandIntent::CreateSdfPrimitive {
+                parent: None,
+                display_name: display_name.to_string(),
+                primitive: SdfPrimitiveSpec::new(kind, SdfBooleanIntent::Add).with_transform(
+                    SceneTransform::new(translation, SceneQuat::identity(), SceneVec3::one()),
+                ),
+            },
+        )
+        .expect("SDF primitive creation should succeed");
+
+        runtime
+            .document()
+            .entity_ids()
+            .find(|entity| !before.contains(entity))
+            .expect("SDF primitive creation should register one entity")
     }
 
     fn seeded_host_with_projection() -> EditorHostResource {
@@ -543,9 +573,11 @@ mod tests {
         let camera = editor_viewport_camera();
         let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
         let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
 
         let hit = compose_picking_hit(
             &runtime,
+            &scene_packet,
             None,
             None,
             UiPoint::new(640.0, 360.0),
@@ -579,9 +611,11 @@ mod tests {
         let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
         let ray = viewport_ray(cursor, viewport_bounds, camera, camera_fov_y)
             .expect("center of a valid viewport should produce a picking ray");
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
 
         let hit = compose_picking_hit(
             &runtime,
+            &scene_packet,
             None,
             None,
             cursor,
@@ -592,6 +626,50 @@ mod tests {
         );
 
         assert_eq!(hit.target, EditorPickingTarget::Entity(entity.0));
+    }
+
+    #[test]
+    fn compose_hit_uses_scene_packet_for_multiple_primitives() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let _side_entity = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Side Box",
+            SceneVec3::new(-3.0, 0.0, 0.0),
+            SdfPrimitiveKind::Box,
+        );
+        let target_entity = create_sdf_primitive(
+            &mut runtime,
+            11,
+            "Center Sphere",
+            SceneVec3::new(0.0, 0.0, 0.0),
+            SdfPrimitiveKind::Sphere,
+        );
+        let transform =
+            entity_transform(&runtime, target_entity).expect("target entity should have transform");
+        let camera = editor_viewport_camera();
+        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            camera,
+            camera_fov_y,
+            PickingRay {
+                origin: camera.position,
+                direction,
+            },
+        );
+
+        assert_eq!(scene_packet.len(), 2);
+        assert_eq!(hit.target, EditorPickingTarget::Entity(target_entity.0));
     }
 
     #[test]
@@ -608,8 +686,10 @@ mod tests {
 
         let camera = editor_viewport_camera();
         let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
         let hit = compose_picking_hit(
             &runtime,
+            &scene_packet,
             None,
             None,
             UiPoint::new(640.0, 360.0),
@@ -637,9 +717,11 @@ mod tests {
         runtime
             .remove_component_for_editor_entity::<EditorPrimitive>(entity)
             .expect("primitive should be removable");
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
 
         let hit = compose_picking_hit(
             &runtime,
+            &scene_packet,
             None,
             None,
             UiPoint::new(0.0, 0.0),

@@ -65,6 +65,19 @@ pub(crate) fn transparent_panel_background(theme: &ThemeTokens, alpha: f32) -> U
     )
 }
 
+pub(crate) fn contrast_popup_theme(theme: &ThemeTokens) -> ThemeTokens {
+    let mut popup_theme = theme.clone();
+    popup_theme.background_panel = toned_panel_background(theme, 0.08, 0.98);
+    popup_theme.border = UiColor::new(
+        (theme.border.r + 0.18).clamp(0.0, 1.0),
+        (theme.border.g + 0.18).clamp(0.0, 1.0),
+        (theme.border.b + 0.18).clamp(0.0, 1.0),
+        1.0,
+    );
+    popup_theme.border_width = theme.border_width.max(1.5);
+    popup_theme
+}
+
 pub(crate) fn apply_panel_background(node: &mut UiNode, background: UiColor) {
     if let UiNodeKind::Panel(panel) = &mut node.kind {
         panel.theme.background_panel = background;
