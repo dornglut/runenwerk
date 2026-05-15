@@ -18,19 +18,36 @@ const DRAW_KEY_SOLID: UiDrawKey = UiDrawKey::new(1, None);
 pub const DRAWING_INK_TEXTURE_NAMESPACE: &str = "runenwerk.draw.ink";
 const IMMEDIATE_STROKE_PRIMITIVE_ORDER: u32 = 25_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DrawingInkSurfaceKind {
     Committed,
     Preview,
+    GpuCommitted,
+    GpuPreview,
 }
 
 impl DrawingInkSurfaceKind {
+    pub fn gpu_variant(self) -> Self {
+        match self {
+            Self::Committed | Self::GpuCommitted => Self::GpuCommitted,
+            Self::Preview | Self::GpuPreview => Self::GpuPreview,
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::Committed => "committed",
             Self::Preview => "preview",
+            Self::GpuCommitted => "gpu.committed",
+            Self::GpuPreview => "gpu.preview",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DrawingInkSurfaceProjection<'a> {
+    pub product: &'a DrawingInkTileProduct,
+    pub surface_kind: DrawingInkSurfaceKind,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -69,6 +86,27 @@ pub fn build_workspace_frame_with_ink_and_stroke(
     )
 }
 
+pub(crate) fn build_workspace_frame_with_ink_surface_refs_and_stroke(
+    workspace: &DrawingWorkspaceProjection,
+    ink_tiles: &[DrawingInkSurfaceProjection<'_>],
+    preview_tiles: &[DrawingInkSurfaceProjection<'_>],
+    immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
+) -> UiFrame {
+    let mut layer = UiLayer::new(DRAWING_CANVAS_LAYER_ID);
+    push_workspace_base(&mut layer, workspace);
+    push_projected_ink_surfaces(&mut layer, workspace, ink_tiles, 10);
+    push_projected_ink_surfaces(&mut layer, workspace, preview_tiles, 20_000);
+    if let Some(stroke) = immediate_stroke {
+        push_immediate_stroke(&mut layer, workspace, stroke);
+    }
+
+    UiFrame::with_surfaces(vec![UiSurface::with_layers(
+        DRAWING_UI_SURFACE_ID,
+        workspace.window_size,
+        vec![layer],
+    )])
+}
+
 pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
     workspace: &DrawingWorkspaceProjection,
     ink_tiles: &[&DrawingInkTileProduct],
@@ -76,38 +114,7 @@ pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
     immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
 ) -> UiFrame {
     let mut layer = UiLayer::new(DRAWING_CANVAS_LAYER_ID);
-    push_rect(
-        &mut layer,
-        UiRect::new(
-            0.0,
-            0.0,
-            workspace.window_size.width,
-            workspace.window_size.height,
-        ),
-        UiPaint::rgba(0.055, 0.058, 0.062, 1.0),
-        0,
-    );
-    push_rect(
-        &mut layer,
-        workspace.toolbar_bounds,
-        UiPaint::rgba(0.095, 0.1, 0.108, 1.0),
-        1,
-    );
-    if workspace.layer_panel_bounds.width > 0.0 {
-        push_rect(
-            &mut layer,
-            workspace.layer_panel_bounds,
-            UiPaint::rgba(0.09, 0.092, 0.098, 1.0),
-            2,
-        );
-        push_tablet_panel(&mut layer, workspace, 30_000);
-    }
-    push_rect(
-        &mut layer,
-        workspace.canvas_view.screen_bounds,
-        UiPaint::rgba(0.93, 0.925, 0.9, 1.0),
-        3,
-    );
+    push_workspace_base(&mut layer, workspace);
     push_ink_surfaces(
         &mut layer,
         workspace,
@@ -131,6 +138,41 @@ pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
         workspace.window_size,
         vec![layer],
     )])
+}
+
+fn push_workspace_base(layer: &mut UiLayer, workspace: &DrawingWorkspaceProjection) {
+    push_rect(
+        layer,
+        UiRect::new(
+            0.0,
+            0.0,
+            workspace.window_size.width,
+            workspace.window_size.height,
+        ),
+        UiPaint::rgba(0.055, 0.058, 0.062, 1.0),
+        0,
+    );
+    push_rect(
+        layer,
+        workspace.toolbar_bounds,
+        UiPaint::rgba(0.095, 0.1, 0.108, 1.0),
+        1,
+    );
+    if workspace.layer_panel_bounds.width > 0.0 {
+        push_rect(
+            layer,
+            workspace.layer_panel_bounds,
+            UiPaint::rgba(0.09, 0.092, 0.098, 1.0),
+            2,
+        );
+        push_tablet_panel(layer, workspace, 30_000);
+    }
+    push_rect(
+        layer,
+        workspace.canvas_view.screen_bounds,
+        UiPaint::rgba(0.93, 0.925, 0.9, 1.0),
+        3,
+    );
 }
 
 fn push_immediate_stroke(
@@ -344,6 +386,59 @@ fn push_ink_surfaces(
         )));
         primitive_order = primitive_order.saturating_add(1);
     }
+}
+
+fn push_projected_ink_surfaces(
+    layer: &mut UiLayer,
+    workspace: &DrawingWorkspaceProjection,
+    ink_tiles: &[DrawingInkSurfaceProjection<'_>],
+    primitive_order_start: u32,
+) {
+    let mut primitive_order = primitive_order_start;
+    for projection in ink_tiles {
+        push_ink_surface(
+            layer,
+            workspace,
+            projection.product,
+            projection.surface_kind,
+            primitive_order,
+        );
+        primitive_order = primitive_order.saturating_add(1);
+    }
+}
+
+fn push_ink_surface(
+    layer: &mut UiLayer,
+    workspace: &DrawingWorkspaceProjection,
+    product: &DrawingInkTileProduct,
+    surface_kind: DrawingInkSurfaceKind,
+    primitive_order: u32,
+) {
+    let Some(rect) = workspace
+        .canvas_view
+        .canvas_rect_to_screen(product.metadata.invalidation_bounds)
+        .and_then(|rect| rect.intersect(workspace.canvas_view.screen_bounds))
+    else {
+        return;
+    };
+    if rect.width <= 0.0 || rect.height <= 0.0 {
+        return;
+    }
+    layer.push(UiPrimitive::ProductSurface(ProductSurfacePrimitive::new(
+        ProductSurfaceTextureBindingSource::dynamic_texture(
+            DRAWING_INK_TEXTURE_NAMESPACE,
+            drawing_ink_texture_target_id(
+                surface_kind,
+                product.metadata.quality_class,
+                product.metadata.tile_id,
+            ),
+        ),
+        rect,
+        UiRect::new(0.0, 0.0, 1.0, 1.0),
+        UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
+        ProductSurfaceAlphaMode::Straight,
+        UiSortKey::new(0, 0, primitive_order),
+    )));
 }
 
 pub fn drawing_ink_texture_target_id(

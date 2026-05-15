@@ -7,6 +7,7 @@ use engine::plugins::{
 use engine::prelude::*;
 use native_tablet_input::NativeTabletRuntimePlugin;
 
+use crate::runtime::gpu_ink::register_drawing_ink_gpu_flow;
 use crate::runtime::plugin::DrawingAppPlugin;
 
 const WINDOW_TITLE: &str = "Runenwerk Draw";
@@ -22,6 +23,7 @@ fn configure_app(app: &mut App) {
     app.add_plugin(RenderPlugin);
     app.add_plugin(NativeTabletRuntimePlugin);
     register_draw_render_flow(app);
+    register_drawing_ink_gpu_flow(app);
     app.add_plugin(DrawingAppPlugin);
 }
 

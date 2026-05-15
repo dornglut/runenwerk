@@ -35,9 +35,11 @@ pub enum RenderTextureDiffStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RenderTextureDiffMetrics {
+    pub total_pixel_count: u64,
     pub changed_pixel_count: u64,
+    pub changed_pixel_ratio: f32,
     pub max_delta: u8,
     pub mean_delta: f32,
 }

@@ -82,8 +82,12 @@ impl DrawingInkUploadTrackerResource {
         surface_kind: DrawingInkSurfaceKind,
     ) -> &BTreeMap<DrawingInkUploadKey, u64> {
         match surface_kind {
-            DrawingInkSurfaceKind::Committed => &self.committed_generations,
-            DrawingInkSurfaceKind::Preview => &self.preview_generations,
+            DrawingInkSurfaceKind::Committed | DrawingInkSurfaceKind::GpuCommitted => {
+                &self.committed_generations
+            }
+            DrawingInkSurfaceKind::Preview | DrawingInkSurfaceKind::GpuPreview => {
+                &self.preview_generations
+            }
         }
     }
 
@@ -92,8 +96,12 @@ impl DrawingInkUploadTrackerResource {
         surface_kind: DrawingInkSurfaceKind,
     ) -> &mut BTreeMap<DrawingInkUploadKey, u64> {
         match surface_kind {
-            DrawingInkSurfaceKind::Committed => &mut self.committed_generations,
-            DrawingInkSurfaceKind::Preview => &mut self.preview_generations,
+            DrawingInkSurfaceKind::Committed | DrawingInkSurfaceKind::GpuCommitted => {
+                &mut self.committed_generations
+            }
+            DrawingInkSurfaceKind::Preview | DrawingInkSurfaceKind::GpuPreview => {
+                &mut self.preview_generations
+            }
         }
     }
 }

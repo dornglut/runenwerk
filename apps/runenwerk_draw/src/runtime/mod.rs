@@ -1,6 +1,7 @@
 //! Runtime integration for the drawing app.
 
 pub mod app;
+pub mod gpu_ink;
 pub mod ink;
 pub mod ink_jobs;
 pub mod plugin;
@@ -8,6 +9,11 @@ pub mod resources;
 pub mod systems;
 
 pub use app::{build_app, build_headless_app, run};
+pub use gpu_ink::{
+    DrawingInkGpuFlowResource, apply_drawing_ink_gpu_validation_report,
+    prepare_drawing_ink_gpu_frame, process_drawing_ink_gpu_validation_report_system,
+    register_drawing_ink_gpu_flow,
+};
 pub use ink::{
     DrawingPreviewInkJobProcessReport, process_drawing_preview_ink_jobs,
     publish_drawing_ink_products, publish_drawing_ink_products_at_barrier,

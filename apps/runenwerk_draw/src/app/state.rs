@@ -11,10 +11,10 @@ use ui_math::UiSize;
 use ui_render_data::UiFrame;
 
 use crate::app::{
-    DrawingImmediateStrokeProjection, DrawingInkRuntimeState, DrawingPreviewStroke,
-    DrawingTabletPanelProjection, DrawingToolInputEvent, DrawingToolRouteKind,
-    DrawingWorkspaceProjection, build_workspace_frame,
-    build_workspace_frame_with_ink_refs_and_stroke, minimal_drawing_document,
+    DrawingImmediateStrokeProjection, DrawingInkRuntimeState, DrawingInkSurfaceKind,
+    DrawingInkSurfaceProjection, DrawingPreviewStroke, DrawingTabletPanelProjection,
+    DrawingToolInputEvent, DrawingToolRouteKind, DrawingWorkspaceProjection, build_workspace_frame,
+    build_workspace_frame_with_ink_surface_refs_and_stroke, minimal_drawing_document,
 };
 
 pub const DEFAULT_DRAWING_BRUSH_ID: BrushId = BrushId::new(1);
@@ -475,14 +475,29 @@ impl RunenwerkDrawApp {
 
     fn rebuild_last_frame(&mut self) {
         let frame = {
-            let visible_products = self.ink_runtime.visible_products().collect::<Vec<_>>();
+            let visible_products = self
+                .ink_runtime
+                .visible_products()
+                .map(|product| DrawingInkSurfaceProjection {
+                    product,
+                    surface_kind: self
+                        .ink_runtime
+                        .visible_surface_kind_for(DrawingInkSurfaceKind::Committed, product),
+                })
+                .collect::<Vec<_>>();
             let preview_products = self
                 .ink_runtime
                 .preview_products()
                 .iter()
+                .map(|product| DrawingInkSurfaceProjection {
+                    product,
+                    surface_kind: self
+                        .ink_runtime
+                        .visible_surface_kind_for(DrawingInkSurfaceKind::Preview, product),
+                })
                 .collect::<Vec<_>>();
             let immediate_stroke = self.immediate_stroke_projection();
-            build_workspace_frame_with_ink_refs_and_stroke(
+            build_workspace_frame_with_ink_surface_refs_and_stroke(
                 &self.workspace,
                 &visible_products,
                 &preview_products,
