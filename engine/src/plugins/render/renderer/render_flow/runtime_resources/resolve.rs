@@ -13,6 +13,11 @@ impl FlowRuntimeResources {
         }
 
         if let Some(id) = self.resource_ids_by_label.get(value) {
+            if let Some(RenderResourceDescriptor::TargetAlias(alias)) = self.descriptors.get(id)
+                && let Some(binding) = self.target_alias_bindings.get(alias.label.as_str())
+            {
+                return Some(runtime_resource_key_for_target_binding(binding));
+            }
             return Some(RuntimeResourceKey::FlowOwned(*id));
         }
 
@@ -525,5 +530,16 @@ impl FlowRuntimeResources {
             );
         }
         Ok(resolved)
+    }
+}
+
+fn runtime_resource_key_for_target_binding(binding: &PreparedTargetBinding) -> RuntimeResourceKey {
+    match binding {
+        PreparedTargetBinding::DynamicTexture(key) => {
+            RuntimeResourceKey::DynamicTexture(key.clone())
+        }
+        PreparedTargetBinding::SurfaceColor => RuntimeResourceKey::SurfaceColor,
+        PreparedTargetBinding::SurfaceDepth => RuntimeResourceKey::SurfaceDepth,
+        PreparedTargetBinding::FlowOwned(id) => RuntimeResourceKey::FlowOwned(*id),
     }
 }

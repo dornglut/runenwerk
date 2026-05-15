@@ -5,8 +5,10 @@ use drawing::{
     DrawingTileFormationDiagnosticCode, DrawingTileFormationPolicy, ProductQualityClass,
     StrokeToolKind, form_drawing_ink_tiles, ratify_drawing_document,
 };
+use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
-    FeatureContributionStatus, PreparedRenderProductSelectionResource, PreparedUiFrameResource,
+    FeatureContributionStatus, PreparedRenderFrameRequestResource,
+    PreparedRenderProductSelectionResource, PreparedUiFrameResource,
     RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
     UiFrameSubmissionRegistryResource,
 };
@@ -22,12 +24,12 @@ use native_tablet_input::{
 };
 use product::ProductScaleBand;
 use runenwerk_draw::app::{
-    DRAWING_UI_SURFACE_ID, DrawingInkRuntimeState, DrawingToolRouteKind, RunenwerkDrawApp,
-    minimal_drawing_document,
+    DRAWING_UI_SURFACE_ID, DrawingInkGpuValidationMetrics, DrawingInkRuntimeState,
+    DrawingInkSurfaceKind, DrawingToolRouteKind, RunenwerkDrawApp, minimal_drawing_document,
 };
 use runenwerk_draw::runtime::{
-    DRAWING_UI_FRAME_PRODUCER_ID, DrawingHostResource, build_headless_app,
-    process_drawing_preview_ink_jobs, publish_drawing_ink_products,
+    DRAWING_UI_FRAME_PRODUCER_ID, DrawingHostResource, DrawingInkGpuFlowResource,
+    build_headless_app, process_drawing_preview_ink_jobs, publish_drawing_ink_products,
     publish_drawing_ink_products_with_executor_and_cache, publish_drawing_ink_query_snapshots,
 };
 use ui_input::{
@@ -36,7 +38,7 @@ use ui_input::{
     PointerToolKind, UiInputEvent,
 };
 use ui_math::{UiPoint, UiVector};
-use ui_render_data::UiPrimitive;
+use ui_render_data::{ProductSurfaceTextureBindingSource, UiPrimitive};
 
 #[test]
 fn minimal_document_opens_as_the_app_shell_document() {
@@ -1139,14 +1141,15 @@ fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
             .expect("drawing host resource should exist");
         let start = screen_point_for_canvas(&host.app, 512.0, 512.0);
         let end = screen_point_for_canvas(&host.app, 704.0, 640.0);
-        host.app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
-            PointerEventKind::Down,
-            start,
-            UiVector::ZERO,
-            Some(PointerButton::Primary),
-            Modifiers::default(),
-            1,
-        )));
+        host.app
+            .dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+                PointerEventKind::Down,
+                start,
+                UiVector::ZERO,
+                Some(PointerButton::Primary),
+                Modifiers::default(),
+                1,
+            )));
         end
     };
 
@@ -1167,18 +1170,22 @@ fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
             .expect("drawing host resource should exist");
         let mut publications = ProductPublicationRuntimeResource::default();
         let mut snapshots = QuerySnapshotRuntimeResource::default();
-        host.app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
-            PointerEventKind::Up,
-            end,
-            UiVector::ZERO,
-            Some(PointerButton::Primary),
-            Modifiers::default(),
-            0,
-        )));
+        host.app
+            .dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
+                PointerEventKind::Up,
+                end,
+                UiVector::ZERO,
+                Some(PointerButton::Primary),
+                Modifiers::default(),
+                0,
+            )));
         publish_visible_ink_until_clean(&mut host.app, &mut publications, &mut snapshots);
-        assert!(host.app.ink_runtime().visible_products().all(|product| {
-            product.metadata.quality_class == ProductQualityClass::Final
-        }));
+        assert!(
+            host.app
+                .ink_runtime()
+                .visible_products()
+                .all(|product| { product.metadata.quality_class == ProductQualityClass::Final })
+        );
         let final_visible_count = host.app.ink_runtime().visible_product_count();
         assert!(final_visible_count > 0);
         final_visible_count
@@ -1203,10 +1210,16 @@ fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
         .iter()
         .find(|selection| selection.view_id == "runenwerk.draw.canvas")
         .expect("drawing canvas should publish one product selection");
-    assert_eq!(canvas_selection.selected_products.len(), final_visible_count);
-    assert!(canvas_selection.selected_products.iter().all(|product| {
-        product.scale_band == ProductScaleBand::Final
-    }));
+    assert_eq!(
+        canvas_selection.selected_products.len(),
+        final_visible_count
+    );
+    assert!(
+        canvas_selection
+            .selected_products
+            .iter()
+            .all(|product| { product.scale_band == ProductScaleBand::Final })
+    );
 
     let host = runtime
         .world()
@@ -1216,6 +1229,163 @@ fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
         product_surface_primitive_count(host.app.last_frame()),
         final_visible_count,
         "final accepted tiles should remain projected as product-surface UI primitives"
+    );
+}
+
+#[test]
+fn runtime_requests_gpu_ink_validation_through_public_render_flow() {
+    let mut runtime = build_headless_app()
+        .run_for_frames(1)
+        .expect("drawing app should run its startup frame");
+    let gpu_flow = *runtime
+        .world()
+        .resource::<DrawingInkGpuFlowResource>()
+        .expect("drawing GPU ink flow resource should exist");
+    let mut publications = ProductPublicationRuntimeResource::default();
+    let mut snapshots = QuerySnapshotRuntimeResource::default();
+
+    {
+        let host = runtime
+            .world_mut()
+            .resource_mut::<DrawingHostResource>()
+            .expect("drawing host resource should exist");
+        let start = screen_point_for_canvas(&host.app, 512.0, 512.0);
+        let end = screen_point_for_canvas(&host.app, 704.0, 640.0);
+        draw_and_accept_stroke(&mut host.app, &mut publications, &mut snapshots, start, end);
+    }
+
+    runtime = runtime
+        .run_for_frames(1)
+        .expect("GPU ink validation request frame should run");
+    assert!(
+        dynamic_target_ids(&runtime)
+            .iter()
+            .any(|target_id| target_id.starts_with("gpu.committed.final.")),
+        "GPU validation should request a committed final GPU dynamic target"
+    );
+
+    let frame_requests = runtime
+        .world()
+        .resource::<PreparedRenderFrameRequestResource>()
+        .expect("prepared frame requests should exist");
+    let invocations = frame_requests.requested_flow_invocations();
+    assert_eq!(invocations.len(), 1);
+    assert_eq!(invocations[0].flow_id, gpu_flow.flow_id);
+    assert_eq!(invocations[0].target_alias_bindings.len(), 2);
+
+    let debug_config = runtime
+        .world()
+        .resource::<RenderDebugConfigResource>()
+        .expect("render debug config should exist");
+    assert_eq!(debug_config.texture_diffs.len(), 1);
+    let diff = &debug_config.texture_diffs[0];
+    assert!(diff.id.starts_with("runenwerk.draw.ink.gpu.diff."));
+    assert_eq!(diff.max_channel_delta, Some(2));
+    assert_eq!(diff.max_changed_pixels_per_million, Some(10_000));
+}
+
+#[test]
+fn gpu_validation_promotion_and_failure_keep_cpu_fallback_available() {
+    let mut app = RunenwerkDrawApp::new();
+    let mut publications = ProductPublicationRuntimeResource::default();
+    let mut snapshots = QuerySnapshotRuntimeResource::default();
+    let start = screen_point_for_canvas(&app, 512.0, 512.0);
+    let end = screen_point_for_canvas(&app, 704.0, 640.0);
+    draw_and_accept_stroke(&mut app, &mut publications, &mut snapshots, start, end);
+    let product = app
+        .ink_runtime()
+        .visible_products()
+        .next()
+        .expect("accepted stroke should form a visible product")
+        .clone();
+
+    assert!(
+        product_surface_target_ids(app.last_frame())
+            .iter()
+            .any(|target_id| target_id.starts_with("committed.final."))
+    );
+
+    app.ink_runtime_mut().record_gpu_validation_pass(
+        DrawingInkSurfaceKind::Committed,
+        &product,
+        DrawingInkGpuValidationMetrics {
+            max_channel_delta: 2,
+            changed_pixel_count: 0,
+            total_pixel_count: product.payload.width as u64 * product.payload.height as u64,
+            changed_pixel_ratio: 0.0,
+        },
+    );
+    app.set_window_size(app.workspace().window_size);
+    assert!(
+        product_surface_target_ids(app.last_frame())
+            .iter()
+            .any(|target_id| target_id.starts_with("gpu.committed.final.")),
+        "passed GPU validation should promote the visible product surface to the GPU target"
+    );
+
+    app.ink_runtime_mut().record_gpu_validation_failure(
+        DrawingInkSurfaceKind::Committed,
+        &product,
+        "forced validation failure",
+    );
+    app.set_window_size(app.workspace().window_size);
+    assert!(
+        product_surface_target_ids(app.last_frame())
+            .iter()
+            .any(|target_id| target_id.starts_with("committed.final.")),
+        "GPU validation failure should keep the CPU committed surface visible"
+    );
+}
+
+#[test]
+fn stale_gpu_validation_does_not_promote_new_tile_generation() {
+    let mut app = RunenwerkDrawApp::new();
+    let mut publications = ProductPublicationRuntimeResource::default();
+    let mut snapshots = QuerySnapshotRuntimeResource::default();
+    let start = screen_point_for_canvas(&app, 512.0, 512.0);
+    let end = screen_point_for_canvas(&app, 704.0, 640.0);
+    draw_and_accept_stroke(&mut app, &mut publications, &mut snapshots, start, end);
+    let old_product = app
+        .ink_runtime()
+        .visible_products()
+        .next()
+        .expect("accepted stroke should form a visible product")
+        .clone();
+    app.ink_runtime_mut().record_gpu_validation_pass(
+        DrawingInkSurfaceKind::Committed,
+        &old_product,
+        DrawingInkGpuValidationMetrics {
+            max_channel_delta: 0,
+            changed_pixel_count: 0,
+            total_pixel_count: old_product.payload.width as u64 * old_product.payload.height as u64,
+            changed_pixel_ratio: 0.0,
+        },
+    );
+
+    draw_and_accept_stroke(&mut app, &mut publications, &mut snapshots, start, end);
+    let new_product = app
+        .ink_runtime()
+        .visible_products()
+        .find(|product| product.metadata.tile_id == old_product.metadata.tile_id)
+        .expect("second stroke should refresh the same visible tile")
+        .clone();
+    assert_ne!(
+        old_product.descriptor_generation,
+        new_product.descriptor_generation
+    );
+    app.set_window_size(app.workspace().window_size);
+
+    let target_ids = product_surface_target_ids(app.last_frame());
+    assert!(
+        target_ids
+            .iter()
+            .any(|target_id| target_id.starts_with("committed.final."))
+    );
+    assert!(
+        target_ids
+            .iter()
+            .all(|target_id| !target_id.starts_with("gpu.committed.final.")),
+        "stale GPU validation must not promote a newer tile generation"
     );
 }
 
@@ -1754,6 +1924,23 @@ fn product_surface_primitive_count(frame: &ui_render_data::UiFrame) -> usize {
         .flat_map(|layer| layer.primitives.iter())
         .filter(|primitive| matches!(primitive, UiPrimitive::ProductSurface(_)))
         .count()
+}
+
+fn product_surface_target_ids(frame: &ui_render_data::UiFrame) -> Vec<String> {
+    frame
+        .surfaces
+        .iter()
+        .flat_map(|surface| surface.layers.iter())
+        .flat_map(|layer| layer.primitives.iter())
+        .filter_map(|primitive| match primitive {
+            UiPrimitive::ProductSurface(surface) => match &surface.source {
+                ProductSurfaceTextureBindingSource::DynamicTexture { target_id, .. } => {
+                    Some(target_id.clone())
+                }
+            },
+            _ => None,
+        })
+        .collect()
 }
 
 fn stroke_primitive_count(frame: &ui_render_data::UiFrame) -> usize {

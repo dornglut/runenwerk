@@ -2,14 +2,15 @@
 
 use engine::WindowState;
 use engine::plugins::InputState;
+use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
-    PreparedRenderProductSelectionResource, RenderDynamicTextureRetention,
-    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
-    RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadDescriptor,
-    RenderDynamicTextureUploadRegistryResource, RenderFrameProducerId, RenderTextureSampleMode,
-    RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
-    UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
-    UiFrameSubmissionRegistryResource,
+    PreparedRenderFrameRequestResource, PreparedRenderProductSelectionResource,
+    RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource,
+    RenderDynamicTextureUploadDescriptor, RenderDynamicTextureUploadRegistryResource,
+    RenderFrameProducerId, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderTextureTargetUsage, RenderTextureUploadAlphaMode, UiFrameProducerId, UiFrameRoute,
+    UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
 };
 use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
@@ -31,6 +32,7 @@ use crate::app::{
     DRAWING_INK_TEXTURE_NAMESPACE, DrawingInkSurfaceKind, DrawingTabletPanelProjection,
     drawing_ink_texture_target_id,
 };
+use crate::runtime::gpu_ink::{DrawingInkGpuFlowResource, prepare_drawing_ink_gpu_frame};
 use crate::runtime::ink::process_drawing_preview_ink_jobs;
 use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerResource};
 
@@ -288,6 +290,9 @@ pub fn submit_draw_frame_system(
     mut dynamic_targets: ResMut<RenderDynamicTextureTargetRequestRegistryResource>,
     mut texture_uploads: ResMut<RenderDynamicTextureUploadRegistryResource>,
     mut product_selections: ResMut<PreparedRenderProductSelectionResource>,
+    mut frame_requests: ResMut<PreparedRenderFrameRequestResource>,
+    mut debug_config: ResMut<RenderDebugConfigResource>,
+    gpu_flow: Res<DrawingInkGpuFlowResource>,
 ) {
     let size = UiSize::new(window.size_px.0 as f32, window.size_px.1 as f32);
     let frame = host.app.rebuild_frame(size).clone();
@@ -305,6 +310,15 @@ pub fn submit_draw_frame_system(
     let preview_upload_products =
         upload_tracker.products_requiring_upload(DrawingInkSurfaceKind::Preview, &preview_products);
 
+    let gpu_target_descriptors = prepare_drawing_ink_gpu_frame(
+        &mut host.app,
+        DRAWING_RENDER_FRAME_PRODUCER_ID,
+        &gpu_flow,
+        &mut frame_requests,
+        &mut debug_config,
+        &committed_products,
+        &preview_products,
+    );
     let target_descriptors =
         ink_target_descriptors(&committed_products, DrawingInkSurfaceKind::Committed)
             .into_iter()
@@ -312,6 +326,7 @@ pub fn submit_draw_frame_system(
                 &preview_products,
                 DrawingInkSurfaceKind::Preview,
             ))
+            .chain(gpu_target_descriptors)
             .collect::<Vec<_>>();
     let target_requests_accepted =
         dynamic_targets.replace_contribution(DRAWING_RENDER_FRAME_PRODUCER_ID, target_descriptors)

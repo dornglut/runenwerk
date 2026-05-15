@@ -77,7 +77,9 @@ pub struct RenderTextureDiffDto {
     pub diff_id: String,
     pub status: String,
     pub mismatch_sample_count: usize,
+    pub total_pixel_count: Option<u64>,
     pub changed_pixel_count: Option<u64>,
+    pub changed_pixel_ratio: Option<f32>,
     pub max_delta: Option<u8>,
     pub mean_delta: Option<f32>,
     pub diff_image_path: Option<String>,
@@ -388,10 +390,18 @@ fn texture_diff_to_dto(value: &RenderTextureDiffResult) -> RenderTextureDiffDto 
             RenderTextureDiffStatus::Failed => "failed".to_string(),
         },
         mismatch_sample_count: value.mismatch_samples.len(),
+        total_pixel_count: value
+            .metrics
+            .as_ref()
+            .map(|metrics| metrics.total_pixel_count),
         changed_pixel_count: value
             .metrics
             .as_ref()
             .map(|metrics| metrics.changed_pixel_count),
+        changed_pixel_ratio: value
+            .metrics
+            .as_ref()
+            .map(|metrics| metrics.changed_pixel_ratio),
         max_delta: value.metrics.as_ref().map(|metrics| metrics.max_delta),
         mean_delta: value.metrics.as_ref().map(|metrics| metrics.mean_delta),
         diff_image_path: value

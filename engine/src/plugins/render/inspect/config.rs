@@ -121,6 +121,8 @@ pub struct RenderTextureDiffRequest {
     pub left_selector: RenderCaptureSelector,
     pub right_selector: RenderCaptureSelector,
     pub mismatch_sample_limit: usize,
+    pub max_channel_delta: Option<u8>,
+    pub max_changed_pixels_per_million: Option<u32>,
 }
 
 impl RenderTextureDiffRequest {
@@ -134,7 +136,19 @@ impl RenderTextureDiffRequest {
             left_selector,
             right_selector,
             mismatch_sample_limit: 16,
+            max_channel_delta: None,
+            max_changed_pixels_per_million: None,
         }
+    }
+
+    pub fn with_thresholds(
+        mut self,
+        max_channel_delta: u8,
+        max_changed_pixels_per_million: u32,
+    ) -> Self {
+        self.max_channel_delta = Some(max_channel_delta);
+        self.max_changed_pixels_per_million = Some(max_changed_pixels_per_million);
+        self
     }
 }
 

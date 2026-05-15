@@ -217,6 +217,10 @@ impl RenderFlow {
         self.resolve_resource_id(label)
     }
 
+    pub fn pass_id(&self, label: &str) -> Option<RenderPassId> {
+        self.resolve_pass_id(label)
+    }
+
     pub fn project_uniforms(
         &self,
         frame_data: &RenderFrameDataRegistry<'_>,

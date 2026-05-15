@@ -297,7 +297,9 @@ pub(crate) fn evaluate_texture_diffs(
             if pixel_count == 0 {
                 result.status = RenderTextureDiffStatus::Compared;
                 result.metrics = Some(RenderTextureDiffMetrics {
+                    total_pixel_count: 0,
                     changed_pixel_count: 0,
+                    changed_pixel_ratio: 0.0,
                     max_delta: 0,
                     mean_delta: 0.0,
                 });
@@ -352,16 +354,79 @@ pub(crate) fn evaluate_texture_diffs(
                 }
             }
 
-            result.status = RenderTextureDiffStatus::Compared;
-            result.metrics = Some(RenderTextureDiffMetrics {
+            let changed_pixel_ratio = changed_pixel_count as f32 / pixel_count as f32;
+            let metrics = RenderTextureDiffMetrics {
+                total_pixel_count: pixel_count as u64,
                 changed_pixel_count,
+                changed_pixel_ratio,
                 max_delta,
                 mean_delta: total_delta as f32 / pixel_count as f32,
-            });
+            };
+            result.status = texture_diff_threshold_status(request, &metrics);
+            if matches!(result.status, RenderTextureDiffStatus::Failed) {
+                result.message = Some(texture_diff_threshold_message(request, &metrics));
+            }
+            result.metrics = Some(metrics);
 
             result
         })
         .collect()
+}
+
+fn texture_diff_threshold_status(
+    request: &RenderTextureDiffRequest,
+    metrics: &RenderTextureDiffMetrics,
+) -> RenderTextureDiffStatus {
+    if let Some(max_channel_delta) = request.max_channel_delta
+        && metrics.max_delta > max_channel_delta
+    {
+        return RenderTextureDiffStatus::Failed;
+    }
+
+    if let Some(max_changed_pixels_per_million) = request.max_changed_pixels_per_million {
+        let allowed_changed_pixels =
+            allowed_changed_pixels(metrics.total_pixel_count, max_changed_pixels_per_million);
+        if metrics.changed_pixel_count > allowed_changed_pixels {
+            return RenderTextureDiffStatus::Failed;
+        }
+    }
+
+    RenderTextureDiffStatus::Compared
+}
+
+fn texture_diff_threshold_message(
+    request: &RenderTextureDiffRequest,
+    metrics: &RenderTextureDiffMetrics,
+) -> RenderCaptureTerminalReason {
+    if let Some(max_channel_delta) = request.max_channel_delta
+        && metrics.max_delta > max_channel_delta
+    {
+        return RenderCaptureTerminalReason::new(
+            "diff_max_delta_exceeded",
+            format!(
+                "max channel delta {} exceeds threshold {}",
+                metrics.max_delta, max_channel_delta
+            ),
+        );
+    }
+
+    let max_changed_pixels_per_million = request.max_changed_pixels_per_million.unwrap_or(0);
+    let allowed_changed_pixels =
+        allowed_changed_pixels(metrics.total_pixel_count, max_changed_pixels_per_million);
+    RenderCaptureTerminalReason::new(
+        "diff_changed_pixel_ratio_exceeded",
+        format!(
+            "changed pixels {} exceeds allowed {} ({}/1_000_000)",
+            metrics.changed_pixel_count, allowed_changed_pixels, max_changed_pixels_per_million
+        ),
+    )
+}
+
+fn allowed_changed_pixels(total_pixel_count: u64, max_changed_pixels_per_million: u32) -> u64 {
+    total_pixel_count
+        .saturating_mul(max_changed_pixels_per_million as u64)
+        .saturating_add(999_999)
+        / 1_000_000
 }
 
 fn find_capture_for_selector<'a>(
@@ -626,8 +691,36 @@ mod tests {
             .as_ref()
             .expect("diff metrics should be present");
         assert_eq!(metrics.changed_pixel_count, 1);
+        assert_eq!(metrics.total_pixel_count, 1);
+        assert_eq!(metrics.changed_pixel_ratio, 1.0);
         assert_eq!(metrics.max_delta, 6);
         assert!(metrics.mean_delta > 0.0);
         assert!(result.diff_image_path.is_none());
+    }
+
+    #[test]
+    fn texture_diff_thresholds_fail_when_metrics_exceed_limits() {
+        let left_selector = test_selector("pass.left");
+        let right_selector = test_selector("pass.right");
+        let captures = vec![
+            completed_capture(9, &left_selector, [1, 2, 3, 255]),
+            completed_capture(9, &right_selector, [1, 2, 9, 255]),
+        ];
+        let diffs = vec![
+            RenderTextureDiffRequest::new("left-vs-right", left_selector, right_selector)
+                .with_thresholds(2, 10_000),
+        ];
+
+        let results = evaluate_texture_diffs(&diffs, &captures);
+        let result = &results[0];
+        assert_eq!(result.status, RenderTextureDiffStatus::Failed);
+        assert_eq!(
+            result
+                .message
+                .as_ref()
+                .expect("threshold failure should report a message")
+                .code,
+            "diff_max_delta_exceeded"
+        );
     }
 }

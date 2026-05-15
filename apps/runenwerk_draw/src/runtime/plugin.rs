@@ -9,6 +9,9 @@ use engine::runtime::{
     SystemConfigExt,
 };
 
+use crate::runtime::gpu_ink::{
+    DrawingInkGpuValidationReportCursorResource, process_drawing_ink_gpu_validation_report_system,
+};
 use crate::runtime::ink::{
     publish_drawing_ink_products_at_barrier, publish_drawing_ink_query_snapshots_at_barrier,
 };
@@ -23,6 +26,7 @@ pub struct DrawingAppPlugin;
 pub enum DrawingRuntimeSet {
     InputRoute,
     PreviewJobs,
+    GpuValidation,
     FrameSubmit,
 }
 
@@ -34,6 +38,9 @@ impl IntoSystemSetKey for DrawingRuntimeSet {
             }
             Self::PreviewJobs => {
                 SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::PreviewJobs")
+            }
+            Self::GpuValidation => {
+                SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::GpuValidation")
             }
             Self::FrameSubmit => {
                 SystemSetKey::of::<DrawingRuntimeSet>("DrawingRuntimeSet::FrameSubmit")
@@ -47,6 +54,7 @@ impl Plugin for DrawingAppPlugin {
         install_draw_runtime_job_executor(app);
         app.init_resource::<DrawingHostResource>();
         app.init_resource::<DrawingInkUploadTrackerResource>();
+        app.init_resource::<DrawingInkGpuValidationReportCursorResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
         app.add_barrier_handler(
             BarrierKind::ProductPublication,
@@ -74,8 +82,18 @@ impl Plugin for DrawingAppPlugin {
         );
         app.add_systems(
             Update,
+            process_drawing_ink_gpu_validation_report_system
+                .in_set(DrawingRuntimeSet::GpuValidation)
+                .after(DrawingRuntimeSet::PreviewJobs)
+                .after(DrawingRuntimeSet::InputRoute)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
             submit_draw_frame_system
                 .in_set(DrawingRuntimeSet::FrameSubmit)
+                .after(DrawingRuntimeSet::GpuValidation)
                 .after(DrawingRuntimeSet::PreviewJobs)
                 .after(DrawingRuntimeSet::InputRoute)
                 .after(CoreSet::Input)
