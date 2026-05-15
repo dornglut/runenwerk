@@ -123,6 +123,25 @@ The old retained path may remain during migration only behind named
 compatibility adapters. Those adapters must identify the target formed contract
 and the guard that prevents the old behavior from expanding.
 
+The canonical retained UI migration slices are:
+
+- `IV2-menu-stack` for popup stack, menu scope, submenu anchors,
+  outside-dismiss, escape, and focus return;
+- `IV2-scroll-ownership` for nearest scroll owner, axis ownership, boundary
+  consumption, scrollbar capture, and viewport fallback rejection;
+- `IV2-menu-sizing` for intrinsic menu measurement, item fill, popup clamp, and
+  scroll fallback;
+- `IV2-chrome-slots` for close affordance, active indicator, label, command,
+  and drag slots in tab and workspace chrome;
+- `IV2-dock-drop-zones` for tab reorder, split insertion, floating-host,
+  invalid-target, and preview-only drop-zone policy;
+- `IV2-status-and-viewport-arbitration` for compact status overflow, essential
+  metric priority, and viewport pointer/wheel arbitration.
+
+These names do not add runtime behavior by themselves. They define the stable
+contract references that downstream retained UI work must consume or cite as
+explicit compatibility targets.
+
 ## Dependent Work Policy
 
 Editor shell polish is downstream implementation evidence, not the durable

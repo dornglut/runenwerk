@@ -54,6 +54,19 @@ define:
 - the editor/app guard that proves viewport input, split borders, scrollbars,
   and sibling panels do not receive events after UI ownership is claimed.
 
+The retained-node concepts in this document map to the WR-025 slice catalog:
+
+| Retained concept | Required Interaction V2 slice |
+|---|---|
+| `MenuPopup` | `IV2-menu-stack`, `IV2-scroll-ownership`, and `IV2-menu-sizing` |
+| `OverlayAdornment` | `IV2-chrome-slots` when used for tab/workspace chrome; otherwise a future explicit adornment slice before durable behavior changes |
+| `DockDropPreview` | `IV2-dock-drop-zones` |
+| `RadialMenu` | `IV2-menu-stack` plus a later radial hit-testing/focus sub-slice before implementation |
+
+The mappings above are guardrails, not implementation permission. A phase below
+can start only when the corresponding slice has validation, formed model output,
+retained formation, runtime enforcement, and editor/app guard coverage.
+
 ## Target Concepts
 
 ### MenuPopup

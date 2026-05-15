@@ -961,25 +961,25 @@ items:
   - cargo test -p editor_shell
   - cargo test -p ui_runtime layout_popup
   - cargo test -p runenwerk_editor viewport
-  next_evidence: Retained-UI slice evidence after the relevant Interaction V2 contracts exist for popup stack, scroll
-    ownership, menu sizing, focus return, chrome slots, status overflow, and viewport input arbitration.
+  next_evidence: Retained-UI slice evidence after the relevant named Interaction V2 contracts exist for IV2-menu-stack,
+    IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration.
   current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2
     contract layer, not as a pile of isolated cosmetic fixes.
   current_call: Ready-next only after the Interaction V2 contract/migration spine leads; route long-term popup, scroll,
     chrome, docking, and status overflow decisions through WR-025.
   main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming
     those contracts or as explicitly bounded compatibility evidence.
-  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant Interaction V2 contract
-    slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep changes
-    explicitly compatibility-scoped.
+  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant named Interaction
+    V2 slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep
+    changes explicitly compatibility-scoped.
   diagram_call:
   - FPS stats
   - contrast, scroll, tab chrome
   ddd_owner: domain/editor/editor_shell with domain/ui runtime layout support
   adr_requirement: No ADR for narrow retained UI chrome/layout polish; WR-025 owns accepted ADR 0009 for durable interaction
     formation.
-  fitness_function_requirement: Popup layout, submenu anchor, active indicator, statistics projection, and Interaction V2
-    guard tests.
+  fitness_function_requirement: Popup layout, submenu anchor, active indicator, statistics projection, and named Interaction
+    V2 slice-consumption guard tests.
   ownership_mode: Stream-aligned editor shell guardrail work.
 - id: WR-025
   title: UI Runtime V2 and interaction formation
@@ -1019,17 +1019,18 @@ items:
   - task roadmap:check
   - task docs:validate
   next_evidence: Accepted ADR 0009, active Interaction V2 design, roadmap row, subordinate polish-design link, and explicit
-    migration spine from definition vocabulary through validation, formed model, retained adapter, runtime enforcement,
-    and editor/app guards.
+    retained UI slice catalog for IV2-menu-stack, IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones,
+    and IV2-status-and-viewport-arbitration through the definition vocabulary, validation, formed model, retained adapter,
+    runtime enforcement, and editor/app guard spine.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
   current_call: Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption,
     retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice.
-  first_move: Keep docs and roadmap source aligned with accepted ADR 0009, then define retained UI migration slices through
-    the Interaction V2 spine before WR-024 consumes them.
+  first_move: Keep docs and roadmap source aligned with accepted ADR 0009, then define the retained UI migration slice
+    catalog through the Interaction V2 spine before WR-024 consumes it.
   diagram_call:
   - retained UI first
-  - interaction contracts
+  - named interaction slices
   ddd_owner: domain/ui with domain/editor/editor_shell and runenwerk_editor adapters
   adr_requirement: Accepted ADR 0009 is in force for Interaction V2. Any alternate UI execution target still requires a
     separate accepted ADR or active design before code.

@@ -81,6 +81,19 @@ definition vocabulary
 Narrow shell polish docs are supporting evidence. They do not own long-term UI
 policy and cannot promote alternate execution targets.
 
+The current retained UI slice catalog is:
+
+- `IV2-menu-stack`
+- `IV2-scroll-ownership`
+- `IV2-menu-sizing`
+- `IV2-chrome-slots`
+- `IV2-dock-drop-zones`
+- `IV2-status-and-viewport-arbitration`
+
+Each slice is defined in
+[Editor UI Runtime V2 and Interaction Formation Design](../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md)
+and must be consumed as a contract by downstream retained UI work.
+
 ## Scope Boundary
 
 `domain/ui` owns substrate/runtime contracts (`ui_tree`, `ui_runtime`,

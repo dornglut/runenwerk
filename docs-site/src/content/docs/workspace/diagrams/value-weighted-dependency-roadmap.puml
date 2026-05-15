@@ -78,7 +78,7 @@ package "Level 1 - Depends On Current Stabilization" {
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
-  component "WR-025 UI Runtime V2 interaction formation\nstate=current_candidate\nscore=4.8 gate=accepted architecture gate\nV5 B2\ncall=retained UI first\ninteraction contracts" as UIV2 <<V5>>
+  component "WR-025 UI Runtime V2 interaction formation\nstate=current_candidate\nscore=4.8 gate=accepted architecture gate\nV5 B2\ncall=retained UI first\nnamed interaction slices" as UIV2 <<V5>>
 
 }
 

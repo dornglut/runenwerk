@@ -59,6 +59,23 @@ Invalid WR-024 work includes defining a new popup policy in shell code, making
 viewport arbitration app-local UI truth, accepting compiled-reactive or
 ECS-driven UI, or changing retained UI execution strategy.
 
+## Interaction V2 Slice Dependencies
+
+WR-024 must cite one of these WR-025 slice names for every retained UI change:
+
+| Polish symptom | Required Interaction V2 slice |
+|---|---|
+| Popup contrast and menu layer behavior | `IV2-menu-stack` |
+| Scrollable popup content and wheel boundary behavior | `IV2-scroll-ownership` plus `IV2-menu-sizing` |
+| Switch Type submenu placement | `IV2-menu-stack` |
+| Tab/workspace close affordance and active indicator placement | `IV2-chrome-slots` |
+| Tab reorder versus split preview precedence | `IV2-dock-drop-zones` |
+| Viewport FPS/frame-time status display and overflow | `IV2-status-and-viewport-arbitration` |
+
+Compatibility-only WR-024 work must name the old retained path, the target slice
+above, and the guard that prevents the compatibility path from becoming durable
+policy.
+
 ## Decisions
 
 Owning code paths:

@@ -111,7 +111,7 @@ Blocker weight:
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
 | WR-018 | Rendered World V1 | P0 | V5 | B2 | 3.0 | Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers on the same extracted packet. | Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry. |
-| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption, retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then define retained UI migration slices through the Interaction V2 spine before WR-024 consumes them. |
+| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption, retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then define the retained UI migration slice catalog through the Interaction V2 spine before WR-024 consumes it. |
 
 ## Support Only
 
