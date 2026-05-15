@@ -14,7 +14,9 @@ from parallel_batch import (
     batch_finalization_errors,
     batch_execution_state,
     build_manifest,
+    continuation_items_for_manifest,
     default_batch_id,
+    default_continuation_goal,
     default_kickoff_goal,
     finalize_batch_manifest,
     kickoff_next_step_lines,
@@ -36,6 +38,7 @@ from roadmap_state import (
     changed_files_for_worktree,
     load_batch_manifest,
     load_roadmap,
+    render_batch_manifest,
     select_batch_candidates,
     validate_batch_against_roadmap,
     validate_completed_items_not_current_in_docs,
@@ -325,6 +328,99 @@ def test_batch_kickoff_rejects_when_no_current_candidates() -> None:
 
         assert result.exit_code != 0
         assert "no current_candidate items are eligible" in result.output
+
+
+def test_batch_continue_selects_still_current_finalized_items() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    finalized_item = manifest.items[0].model_copy(
+        update={
+            "status": "integrated",
+            "roadmap_outcome": "slice_landed_item_still_current",
+        }
+    )
+    finalized = manifest.model_copy(
+        update={
+            "integration_status": "merged",
+            "closeout_status": "completed",
+            "items": [finalized_item],
+        }
+    )
+
+    selected = continuation_items_for_manifest(finalized, roadmap)
+
+    assert [item.id for item in selected] == ["WR-001"]
+    assert default_continuation_goal(finalized, selected) == "Continue roadmap batch after batch-test: WR-001"
+
+
+def test_batch_continue_rejects_open_batches() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+
+    with pytest.raises(WorkflowError, match="batch must be finalized"):
+        continuation_items_for_manifest(manifest, roadmap)
+
+
+def test_batch_continue_writes_followup_manifest_from_cli() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        roadmap = RoadmapState.model_validate(valid_state())
+        manifest = build_manifest(
+            "batch-test",
+            "test",
+            [roadmap.items[0]],
+            Path("docs-site/src/content/docs/reports/batches/batch-test"),
+        )
+        finalized_item = manifest.items[0].model_copy(
+            update={
+                "status": "integrated",
+                "roadmap_outcome": "slice_landed_item_still_current",
+            }
+        )
+        finalized = manifest.model_copy(
+            update={
+                "integration_status": "merged",
+                "closeout_status": "completed",
+                "items": [finalized_item],
+            }
+        )
+        root = Path(temp_dir)
+        source = root / "roadmap.yaml"
+        batch = root / "batch.toml"
+        out = root / "followup.toml"
+        source.write_text(yaml.safe_dump(valid_state(), sort_keys=False), encoding="utf-8")
+        batch.write_text(render_batch_manifest(finalized), encoding="utf-8")
+
+        result = CliRunner().invoke(
+            batch_app,
+            [
+                "continue",
+                "--batch",
+                str(batch),
+                "--source",
+                str(source),
+                "--out",
+                str(out),
+                "--batch-id",
+                "followup",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        followup = load_batch_manifest(out)
+        assert followup.id == "followup"
+        assert followup.approval_state == "proposed"
+        assert [item.id for item in followup.items] == ["WR-001"]
+        assert "task batch:approve" in result.output
 
 
 def test_flat_worktree_path_avoids_batch_id_nesting() -> None:

@@ -101,6 +101,20 @@ only `planning_state=current_candidate` items, writes the proposed manifest, and
 prints the exact follow-up commands. Use `batch:propose` directly only when the
 coordinator needs a custom goal, scope, output path, or discovery flag.
 
+After a finalized batch lands a slice but leaves a roadmap item current, use:
+
+```text
+task batch:continue -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
+```
+
+`batch:continue` reads finalized items whose roadmap outcome is
+`slice_landed_item_still_current` and writes a new proposed manifest from the
+current roadmap source. It does not approve or start implementation. The
+coordinator still presents the proposal and waits for user approval. If the next
+slice needs broader code ownership than the roadmap row currently allows, update
+the roadmap source first through the normal governance/intake path instead of
+letting the continuation batch exceed its manifest scopes.
+
 ## Execution Shape
 
 Preferred execution uses real git worktrees or otherwise isolated worker
@@ -126,7 +140,9 @@ After workers finish, the coordinator:
 2. rejects or repairs conflicts, ownership leaks, or scope expansion;
 3. runs focused validation and broader workspace checks where needed;
 4. updates roadmap docs, score evidence, triage status, and lifecycle links;
-5. reports remaining blockers and the next recommended batch.
+5. reports remaining blockers and the next recommended batch;
+6. runs `batch:continue` when still-current integrated items should immediately
+   become the next approval-gated proposal.
 
 Coordinator-level docs updates are mandatory. Worker-local docs updates are not
 enough because the workspace roadmap needs to record what the batch changed.

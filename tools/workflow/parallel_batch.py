@@ -145,6 +145,55 @@ def kickoff(
     print_kickoff_next_steps(batch_path, manifest)
 
 
+@app.command("continue")
+def continue_batch(
+    batch: Path = typer.Option(..., help="Finalized batch manifest path."),
+    out: Path | None = typer.Option(None, help="Continuation batch manifest path."),
+    batch_id: str | None = typer.Option(None, help="Stable continuation batch id."),
+    goal: str | None = typer.Option(None, help="Continuation batch goal."),
+    include_all_current: bool = typer.Option(
+        False,
+        help="Continue with all currently eligible roadmap candidates, not only still-current items from the source batch.",
+    ),
+    force: bool = typer.Option(False, help="Allow overwriting an existing --out manifest."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+) -> None:
+    manifest = load_batch_manifest(batch)
+    roadmap = load_roadmap(source)
+    try:
+        selected = continuation_items_for_manifest(manifest, roadmap, include_all_current=include_all_current)
+    except WorkflowError as error:
+        console.print("[red]batch continuation failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+
+    conflicts = validate_write_scopes(selected)
+    if conflicts:
+        console.print("[red]batch continuation failed[/red]")
+        for conflict in conflicts:
+            console.print(f"- write-scope conflict: {conflict}")
+        raise typer.Exit(1)
+
+    resolved_goal = goal or default_continuation_goal(manifest, selected)
+    resolved_id = batch_id or default_batch_id(resolved_goal)
+    if out is None:
+        resolved_id, batch_path = next_available_batch_path(resolved_id)
+    else:
+        batch_path = out
+    if batch_path.exists() and not force:
+        console.print("[red]batch continuation failed[/red]")
+        console.print(f"- output manifest already exists: {repo_path(batch_path)}")
+        raise typer.Exit(1)
+
+    continuation = build_manifest(resolved_id, resolved_goal, selected, batch_path.parent)
+    batch_path.parent.mkdir(parents=True, exist_ok=True)
+    batch_path.write_text(render_batch_manifest(continuation), encoding="utf-8", newline="\n")
+
+    console.print(f"[green]wrote batch continuation:[/green] {repo_path(batch_path)}")
+    print_kickoff_next_steps(batch_path, continuation)
+
+
 @app.command()
 def approve(
     batch: Path = typer.Option(..., help="Batch manifest path."),
@@ -618,6 +667,48 @@ def default_kickoff_goal(items: list[RoadmapItem]) -> str:
     if len(items) == 1:
         return f"Next current-candidate roadmap batch: {items[0].id} {items[0].title}"
     return f"Next current-candidate roadmap batch: {ids}"
+
+
+def default_continuation_goal(manifest: BatchManifest, items: list[RoadmapItem]) -> str:
+    ids = ", ".join(item.id for item in items)
+    return f"Continue roadmap batch after {manifest.id}: {ids}"
+
+
+def next_available_batch_path(batch_id: str) -> tuple[str, Path]:
+    candidate_id = batch_id
+    candidate_path = DEFAULT_BATCH_ROOT / candidate_id / "batch.toml"
+    if not candidate_path.exists():
+        return candidate_id, candidate_path
+    for suffix in range(2, 100):
+        candidate_id = f"{batch_id}-{suffix}"
+        candidate_path = DEFAULT_BATCH_ROOT / candidate_id / "batch.toml"
+        if not candidate_path.exists():
+            return candidate_id, candidate_path
+    raise WorkflowError(f"could not find available batch path for id {batch_id!r}")
+
+
+def continuation_items_for_manifest(
+    manifest: BatchManifest,
+    roadmap,
+    *,
+    include_all_current: bool = False,
+) -> list[RoadmapItem]:
+    if manifest.integration_status != "merged" or manifest.closeout_status != "completed":
+        raise WorkflowError("batch must be finalized before a continuation can be proposed")
+    if include_all_current:
+        selected = select_batch_candidates(roadmap)
+    else:
+        continued_ids = tuple(
+            item.id
+            for item in manifest.items
+            if item.roadmap_outcome == "slice_landed_item_still_current"
+        )
+        if not continued_ids:
+            raise WorkflowError("no integrated still-current roadmap items are available for continuation")
+        selected = select_batch_candidates(roadmap, item_ids=continued_ids)
+    if not selected:
+        raise WorkflowError("no eligible roadmap items are available for continuation")
+    return selected
 
 
 def print_kickoff_next_steps(batch_path: Path, manifest: BatchManifest) -> None:

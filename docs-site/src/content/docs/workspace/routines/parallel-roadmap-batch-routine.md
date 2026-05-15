@@ -65,7 +65,10 @@ Before execution:
 11. Update `roadmap-items.yaml` first, then run `task roadmap:render`.
 12. Run `task roadmap:check`, `task puml:validate`, and `task docs:validate`.
 13. Update owning roadmap docs, lifecycle links, and closeout notes.
-14. Report completed slices and the next recommended batch.
+14. When finalized items still have `roadmap_outcome=slice_landed_item_still_current`,
+    run `task batch:continue -- --batch <batch.toml>` to create the next
+    approval-gated proposal from current roadmap source.
+15. Report completed slices and the next recommended batch.
 
 ## Required Closeout Docs
 
@@ -77,6 +80,10 @@ truth:
 - generated `roadmap-decision-register.md` for evidence and current decision;
 - generated `design-implementation-triage.md` for implement-now/ready-next movement;
 - owning roadmap docs when a phase checkbox or status changes.
+
+Continuation proposals are closeout artifacts, not permission to continue
+implementation. They must be reviewed like any other batch proposal, especially
+when the next slice needs broader write scopes than the completed slice.
 
 ## Stop Conditions
 

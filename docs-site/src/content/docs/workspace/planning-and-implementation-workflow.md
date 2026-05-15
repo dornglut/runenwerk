@@ -108,10 +108,14 @@ task batch:propose -- --goal "<batch goal>" --scope L0 --out docs-site/src/conte
 task batch:approve -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 task batch:prepare -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 task batch:scope-check -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
+task batch:continue -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 ```
 
 The coordinator proposes candidate rows, worker scopes, validations, and
 closeout docs first. Implementation starts only after explicit user approval.
+Use `batch:continue` only after finalization, when integrated items remain
+current and should become the next proposal. It writes a proposed manifest; it
+does not approve or start implementation.
 
 ## Purpose
 
