@@ -53,7 +53,7 @@ legend right
 endlegend
 
 package "Level 0 - Completed / Support Substrate" {
-  component "WR-001 Post-Phase 6D product-job / Draw bridge\nstate=completed\nscore=4.8 gate=continue next slice\nV5 B2\ncall=post-DRF2 bridge or\nproduct-job follow-up" as DRAWNEXT <<completed>>
+  component "WR-001 Post-Phase 6D product-job / Draw bridge\nstate=completed\nscore=4.8 gate=continue next slice\nV5 B2\ncall=DRF3 bridge landed\nWR-006 GPU proof complete" as DRAWNEXT <<completed>>
 
   component "WR-002 ECS/runtime support\nstate=support_only\nscore=2.7 gate=supporting now\nV4 B2\ncall=F2 lifecycle and\nF3 plan reporting" as ECSRUNTIME <<support_only>>
 
@@ -66,9 +66,9 @@ package "Level 0 - Completed / Support Substrate" {
 }
 
 package "Level 1 - Depends On Current Stabilization" {
-  component "WR-006 Draw DRF4-DRF5\nstate=current_candidate\nscore=2.2 gate=ready next\nV4 B2\ncall=GPU proof,\nGPU promotion, CPU fallback" as DRAW <<V4>>
+  component "WR-006 Draw DRF4-DRF5\nstate=completed\nscore=2.2 gate=completed\nV4 B2\ncall=GPU proof landed\nGPU promotion, CPU fallback landed" as DRAW <<completed>>
 
-  component "WR-007 Net replication Phase 1-3\nstate=ready_next\nscore=1.4 gate=ready next\nV4 B2\ncall=ACK hardening, delta lifecycle,\nbridge convergence" as NET <<V4>>
+  component "WR-007 Net replication Phase 1-3\nstate=current_candidate\nscore=1.4 gate=ready next\nV4 B2\ncall=ACK hardening, delta lifecycle,\nbridge convergence" as NET <<V4>>
 
   component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
 

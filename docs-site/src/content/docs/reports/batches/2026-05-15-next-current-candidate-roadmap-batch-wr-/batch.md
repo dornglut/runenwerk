@@ -12,17 +12,19 @@ last_reviewed: 2026-05-15
 
 Goal: Next current-candidate roadmap batch: WR-006 Runenwerk Draw DRF4 through DRF5
 Approval state: approved
-Integration status: not_started
-Closeout status: worker_validated_pending_integration
+Integration status: merged
+Closeout status: completed
 
 ## Validation Results
 
 - 2026-05-15T12:17:30+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine
 - 2026-05-15T12:19:54+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine
+- 2026-05-15T12:36:40+00:00 post-merge roadmap closeout validation passed: roadmap validate, roadmap render check, PlantUML validation, docs validation
 
 ## Roadmap Evidence Updates
 
-- Not recorded.
+- 2026-05-15 WR-006 completed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public render-flow/product-surface APIs.
+- 2026-05-15 WR-007 is the current L1 candidate after WR-006; WR-008 remains hardware-acceptance-blocked with its WR-006 dependency complete.
 
 ## Tooling Hardening
 

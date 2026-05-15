@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-15
 related:
   - ./planning-methods.md
   - ./roadmap-items.yaml
@@ -110,7 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-006 | Runenwerk Draw DRF4 through DRF5 | P1 | V4 | B2 | 2.2 | Ready as a focused Draw/render L1 batch after WR-001 DRF3 landed. Keep CPU tile formation canonical and do not combine with net replication unless a fresh batch proves disjoint gates and scopes. | Start from apps/runenwerk-draw/roadmap.md Phase DRF4 and use only public render-flow/product-surface APIs. |
+| WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Ready for the next focused net hardening batch focused on ACK/baseline and delta lifecycle only, without broadening replication scope. | Start from net/multiplayer-replication-implementation-roadmap.md Phase 1-3 ACK/baseline hardening, keeping the write scope to net and domain/ecs. |
 
 ## Support Only
 
@@ -125,8 +125,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | Main blocker |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Ready for a focused net hardening batch when replication evidence is the selected next product risk. | ACK/baseline hardening and delta lifecycle rules need tests and code evidence before broader declarative replication. |
-| WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B3 | 1.0 | Code work can continue, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
+| WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B3 | 1.0 | Code work can continue after the WR-006 dependency, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
 | WR-009 | Native multi-window editor presentation | P2 | V3 | B3 | 0.7 | Design is active, but it should not preempt current product-surface and post-6D work. | Runtime window state and render surface handling are still singleton-shaped; second-window productization needs window-scoped runtime, input, UI frame, and swapchain ownership. |
 | WR-010 | Render fragment and data-driven maturity R10 | P2 | V3 | B3 | 0.7 | Keep queued after render surface, ergonomics, persistence, and inspection follow-ups. | Fragment assets and hot reload need stable target aliases, prepared flow invocations, diagnostics, and a product priority. |
 
@@ -134,7 +133,8 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current decision | Evidence |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | P0 | V5 | B2 | 4.8 | DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not reopen procgen bake/rollback. | 2026-05-15 DRF3 preview/final product-surface bridge landed; next evidence is either WR-006 DRF4/DRF5 GPU proof and promotion or a separately scoped runtime product-job support slice. |
+| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | P0 | V5 | B2 | 4.8 | DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not reopen procgen bake/rollback. | 2026-05-15 DRF3 preview/final product-surface bridge landed and WR-006 completed DRF4/DRF5 GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job evidence before reactivation. |
+| WR-006 | Runenwerk Draw DRF4 through DRF5 | P1 | V4 | B2 | 2.2 | DRF4 and DRF5 are complete; keep CPU tile formation canonical while future Draw work builds on validated GPU promotion/fallback. | 2026-05-15 WR-006 landed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public render-flow/product-surface APIs; validation passed with cargo test -p runenwerk_draw and cargo test -p engine. |
 
 ## Blocked Or Deferred
 
@@ -173,10 +173,12 @@ The current code-facing answer is:
    batch.
 3. Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
    until roadmap evidence explicitly reactivates one of them.
-4. Use `WR-006` as the current implementation candidate.
-5. Keep `WR-007` as the comparable ready-next net candidate if replication
-   risk becomes the selected product focus.
-6. Keep gameplay graph, particles, physics, animation, world processes, alternate UI execution, and deferred SDF capability detail drafts behind their owning contract gates.
+4. Treat `WR-006` as completed Draw GPU proof and promotion evidence.
+5. Use `WR-007` as the current implementation candidate for the next focused
+   net hardening batch.
+6. Keep `WR-008` code-reachable but product-acceptance-blocked until hardware
+   validation evidence exists.
+7. Keep gameplay graph, particles, physics, animation, world processes, alternate UI execution, and deferred SDF capability detail drafts behind their owning contract gates.
 
 After completing any phased implementation, run the phase completion drift-check
 routine before starting the next phase.

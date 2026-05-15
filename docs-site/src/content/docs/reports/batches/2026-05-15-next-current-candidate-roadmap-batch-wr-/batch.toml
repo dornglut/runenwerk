@@ -5,10 +5,10 @@ base_branch = "main"
 base_sha = "0aaf987ca8b8f823fefd3fe19892c0a9ae37472b"
 execution_mode = "worktree"
 integration_risk = "isolated worktrees"
-integration_status = "not_started"
-closeout_status = "worker_validated_pending_integration"
-validation_results = ["2026-05-15T12:17:30+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine", "2026-05-15T12:19:54+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine"]
-roadmap_evidence_updates = []
+integration_status = "merged"
+closeout_status = "completed"
+validation_results = ["2026-05-15T12:17:30+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine", "2026-05-15T12:19:54+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine", "2026-05-15T12:36:40+00:00 post-merge roadmap closeout validation passed: roadmap validate, roadmap render check, PlantUML validation, docs validation"]
+roadmap_evidence_updates = ["2026-05-15 WR-006 completed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public render-flow/product-surface APIs.", "2026-05-15 WR-007 is the current L1 candidate after WR-006; WR-008 remains hardware-acceptance-blocked with its WR-006 dependency complete."]
 tooling_hardening = ["Fixed Godot generated cache churn by ignoring playgrounds/godot-chunking-demo/.godot/ and removing the previously tracked generated .godot cache/editor/import state from Git's index while preserving local files."]
 
 [[items]]

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-15
 related:
   - ./planning-methods.md
   - ./roadmap-decision-register.md
@@ -46,7 +46,7 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Now (Current Cross-Repo Priorities)
 
-- [ ] `WR-001`: Continue post-Phase 6D product-job follow-ups from the runtime product job and Draw roadmaps. Status: 2026-05-14 parallel batch completed the Draw DRF2 app-derived tile cache slice: cache metadata, 512 MiB default budget, LRU eviction, protected visible/pending/last-good tiles, and cache-hit access refresh. Next work should choose the next bounded Draw/product-job slice without reopening procgen bake/rollback unless validation regresses or an owning roadmap accepts a new procgen slice (source: `workspace/sdf-first-execution-roadmap.md`, `engine/roadmaps/runtime-product-job-executor-roadmap.md`, and `apps/runenwerk-draw/roadmap.md`).
+- [ ] `WR-001`: Continue post-Phase 6D product-job follow-ups only when fresh runtime product-job evidence exists. Status: 2026-05-15 WR-001 completed the DRF3 preview/final product-surface bridge, and WR-006 completed the dependent DRF4-DRF5 GPU proof, promotion, stale rejection, and CPU fallback slice. Do not reopen procgen bake/rollback unless validation regresses or an owning roadmap accepts a new procgen slice (source: `workspace/sdf-first-execution-roadmap.md`, `engine/roadmaps/runtime-product-job-executor-roadmap.md`, and `apps/runenwerk-draw/roadmap.md`).
 - [ ] `WR-002`: Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) as inputs to the SDF-first execution fabric. Status: 2026-05-14 parallel batch completed the M5 consumer lag/backpressure diagnostics slice for ECS broadcast consumers; F2 lifecycle/finalization and F3 deterministic registration/plan reporting remain open (source: `workspace/sdf-first-execution-roadmap.md` and `net/ecs-runtime-prioritized-roadmap.md`).
 - [ ] `WR-003`: Execute render immediate remaining phases only through product-selection and derived GPU-residency contracts. Status: 2026-05-14 parallel batch tightened prepared render product selection so one prepared view cannot be owned by two producers; R4/R6/R7 code-truth audit found current proofs on the compiled flow path, so later render work remains contract-following support rather than renderer-owned world truth (source: `workspace/sdf-first-execution-roadmap.md` and `engine/plugins/render/docs/roadmap.md`).
 - [ ] `WR-004`: Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: 2026-05-14 parallel batch added entity-table and SDF operation surface routing/capability guard coverage; keep this always-on while editor surface work lands (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
@@ -55,17 +55,24 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Latest Parallel Batch Closeout
 
-The 2026-05-14 `codex/roadmap-parallel-integration` batch completed bounded
-slices for `WR-001` through `WR-005` and validated them with focused tests,
-docs validation, formatting, `cargo check --workspace`, and broad `engine` and
-`runenwerk_editor` test passes.
+The 2026-05-15 WR-006 batch completed the Draw DRF4-DRF5 GPU validation and
+promotion slice, merged it to `main`, and validated it with `cargo test -p
+runenwerk_draw`, `cargo test -p engine`, formatting, and batch scope checks.
+It also fixed generated Godot cache churn by ignoring
+`playgrounds/godot-chunking-demo/.godot/` and removing the previously tracked
+generated cache/editor/import state from Git.
+
+The 2026-05-14 `codex/roadmap-parallel-integration` batch remains the previous
+multi-track baseline for bounded `WR-001` through `WR-005` slices.
 
 Remaining near-term blockers:
 
-- `WR-001`: DRF3 product-surface bridge, GPU proof, GPU promotion/fallback, and
-  persistent sidecars remain later Draw phases.
+- `WR-007`: ACK/baseline hardening and delta lifecycle rules are the current
+  L1 implementation candidate after WR-006.
 - `WR-002`: F2 runtime-owned frame finalization and F3 deterministic plan
   reporting remain open.
+- `WR-008`: product acceptance remains hardware-blocked even though its WR-006
+  dependency is complete.
 - `WR-003`: further render work should continue through product-selection,
   dynamic target, and derived residency contracts.
 - `WR-004`: guard work remains always-on.
@@ -82,7 +89,7 @@ Remaining near-term blockers:
 ## Next (After Now Is Stable)
 
 - [ ] Execute render usability/data-maturity phases `R5`, `R8`, `R9`, `R10` (source: `engine/plugins/render/docs/roadmap.md`).
-- [ ] Execute the Runenwerk Draw rendering foundation roadmap after current SDF-first Now items are stable. Status: planned as a Next app/render track; it must keep CPU ink formation canonical, add preview/final tile profiles, app-derived tile caching, GPU proof through public render-flow APIs, and CPU current or last-good fallback without package sidecars, paper response, watercolor, eraser compositing, export, or comic layout in this foundation slice (source: `apps/runenwerk-draw/roadmap.md`).
+- [ ] Continue Runenwerk Draw work only through newly accepted slices after the DRF1-DRF5 foundation. Status: the foundation keeps CPU ink formation canonical, includes preview/final tile profiles, app-derived tile caching, GPU proof through public render-flow APIs, and CPU current or last-good fallback. Package sidecars, paper response, watercolor, eraser compositing, export, and comic layout remain outside that completed foundation slice (source: `apps/runenwerk-draw/roadmap.md`).
 - [ ] Drive multiplayer replication through Milestone A (authoritative replication core) with the existing phase plan (source: `net/multiplayer-replication-implementation-roadmap.md`).
 - [ ] Continue ECS runtime multiplayer-enabling checklist items (`M1`-`M5`) in Priority 2 (source: `net/ecs-runtime-prioritized-roadmap.md`).
 
@@ -92,6 +99,7 @@ Remaining near-term blockers:
 
 ## Completed Baselines (Do Not Reopen Without Reason)
 
+- [x] Complete Runenwerk Draw rendering foundation DRF1-DRF5. Status: implemented and focused-validated as of 2026-05-15; Draw forms preview/final CPU tile products, caches app-derived tile payloads, bridges product surfaces through public render APIs, requests GPU ink proof flows, compares GPU captures against CPU reference output with strict texture diff thresholds, promotes only matching tile generations, rejects stale GPU output, and keeps CPU current or last-good fallback authoritative on GPU validation failure (source: `apps/runenwerk-draw/roadmap.md` and `reports/batches/2026-05-15-next-current-candidate-roadmap-batch-wr-/batch.md`).
 - [x] Complete the Runenwerk editor MVP critical path and acceptance gate. Status: automated and manual/UI verified; the source checklist is complete (source: `apps/runenwerk-editor/execution-priority-checklist.md`).
 - [x] Complete SDF-first execution Phase 6D: procgen bake, rollback, persistence, and runtime preview reload classification. Status: implemented and focused-validated as of 2026-05-14; `domain/procgen` forms offline bake outcomes with operation records, formed field-preview products, product descriptors, changed regions, explanations, and rollback evidence; `runenwerk_editor` publishes accepted bakes through product barriers, restores last-good bake products on rollback, persists app-owned bake archives, and classifies procgen graph reloads as live `ProcgenPreview` products while worker pools, renderer rebuilds, GPU upload, caves, stamps, and scatter remain deferred (source: `workspace/sdf-first-execution-roadmap.md` and `reports/closeouts/sdf-first-execution-phase-6d/closeout.md`).
 - [x] Complete SDF-first execution Phase 6C: first concrete procgen terrain/material CPU preview. Status: implemented and focused-validated as of 2026-05-13; `domain/procgen` forms deterministic scalar-distance and material-channel `world_sdf::FieldPreviewProduct` payloads from bounded procgen documents, product publication uses formed preview descriptors instead of the Phase 6B generic field-candidate descriptor, query snapshots publish only after product publication, and editor preview surfaces expose sample counts, distance ranges, material masks, and diagnostics while renderer rebuilds, GPU upload, worker pools, caves, stamps, and scatter remain deferred (source: `workspace/sdf-first-execution-roadmap.md` and `reports/closeouts/sdf-first-execution-phase-6c/closeout.md`).

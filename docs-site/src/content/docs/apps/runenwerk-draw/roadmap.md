@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: app
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-15
 related_designs:
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
   - ../../design/active/drawing-domain-crate-design.md
@@ -17,6 +17,7 @@ related_reports:
   - ../../reports/closeouts/drawing-phase-5/closeout.md
   - ../../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md
   - ../../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md
+  - ../../reports/batches/2026-05-15-next-current-candidate-roadmap-batch-wr-/batch.md
 ---
 
 # Runenwerk Draw Rendering Foundation Roadmap
@@ -27,21 +28,26 @@ Make `runenwerk_draw` ink rendering production-ready enough for later paper,
 watercolor, live effects, and export work without moving drawing semantics into
 the renderer.
 
-The current baseline is Phase 5.1 plus the runtime-job responsiveness and cache
-identity proof:
+The current baseline includes DRF1 through DRF5 on top of Phase 5.1 and the
+runtime-job responsiveness/cache identity proof:
 immediate pen feedback is projected through `UiPrimitive::Stroke`, while
 deterministic CPU RGBA8 preview and committed ink tiles are formed by
 `domain/drawing` through runtime jobs, published through product and query
 snapshot barriers, uploaded through generic engine dynamic texture uploads, and
 projected as neutral product-surface UI primitives. Preview/final quality now
-participates in tile identity, descriptor generation, cache identity, and render
-selection; app-visible final tile lifecycle is still a later phase.
+participates in tile identity, descriptor generation, cache identity, render
+selection, GPU validation requests, and CPU/GPU visibility promotion.
 Draw also has the first in-memory committed-tile cache proof: engine runtime
 owns metadata-only cache decisions, while the app owns cached tile payloads and
 stages accepted cache hits through the normal product/query barriers.
 The DRF2 app-derived cache slice now records preview/final cache metadata,
 enforces a 512 MiB default memory budget where possible, refreshes LRU access on
 cache hits, and protects visible, pending, and last-good tiles from eviction.
+The DRF4-DRF5 GPU proof slice now requests Draw-owned GPU ink flows through
+public render-flow APIs, compares GPU output against CPU reference captures with
+max RGBA channel delta 2 and changed pixels <= 1%, promotes only matching tile
+generations to GPU-backed product surfaces, rejects stale GPU generations, and
+keeps CPU current or last-good tiles authoritative when GPU validation fails.
 
 ## Foundation Policy
 
@@ -69,8 +75,8 @@ The current contracts are aligned with the future preview/final split:
   generation, cache key construction, and render product scale/selection. This
   is implemented in `domain/drawing`, `domain/product`, and Draw render
   selection/upload keys.
-- Final-quality ink tiles are a roadmap target, not current app-visible
-  behavior.
+- Final-quality ink tiles are represented through product-surface descriptors,
+  cache identity, render selection, and GPU validation/promotion state.
 - Publication and query-snapshot rejection diagnostics must remain visible and
   retryable, so cache/GPU phases cannot silently lock a failed generation as
   complete.
@@ -149,6 +155,9 @@ Acceptance:
 Owner: `apps/runenwerk_draw` with generic render substrate from
 `engine/src/plugins/render`.
 
+Status: implemented for preview/final product-surface descriptors and
+backend-neutral dynamic texture selection.
+
 Target modules:
 
 - `apps/runenwerk_draw/src/runtime/systems.rs::submit_draw_frame_system`
@@ -181,10 +190,13 @@ Acceptance:
 Owner: `apps/runenwerk_draw` for Draw-specific flow requests and
 `engine/src/plugins/render` for generic execution only.
 
+Status: implemented through Draw-owned GPU ink flow requests, render capture
+selectors, and generic render texture diff thresholds.
+
 Target modules:
 
 - `apps/runenwerk_draw/src/runtime/app.rs::register_draw_render_flow`
-- future `apps/runenwerk_draw/src/runtime/gpu_ink.rs::register_drawing_ink_gpu_flow`
+- `apps/runenwerk_draw/src/runtime/gpu_ink.rs::register_drawing_ink_gpu_flow`
 - `engine/src/plugins/render/api/flow.rs::RenderFlow`
 - `engine/src/plugins/render/inspect/config.rs::RenderTextureDiffRequest`
 
@@ -213,6 +225,9 @@ Acceptance:
 ## Phase DRF5 - GPU Promotion And Fallback
 
 Owner: `apps/runenwerk_draw`.
+
+Status: implemented for per-generation GPU validation, promotion, stale
+generation rejection, and CPU current/last-good fallback.
 
 Target modules:
 
