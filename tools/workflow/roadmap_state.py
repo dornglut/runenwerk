@@ -38,6 +38,8 @@ Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanningState = Literal["current_candidate", "support_only", "ready_next", "completed", "blocked_deferred"]
 Priority = Literal["P0", "P1", "P2", "P3"]
 ApprovalState = Literal["proposed", "approved", "rejected"]
+BatchItemStatus = Literal["proposed", "approved", "running", "slice_completed", "integrated", "roadmap_closed", "rejected"]
+RoadmapOutcome = Literal["unknown", "roadmap_completed", "slice_landed_item_still_current", "deferred_followup_required"]
 
 
 class WorkflowError(ValueError):
@@ -226,8 +228,10 @@ class BatchItem(StrictModel):
     score: float
     branch: str
     worktree: str = ""
+    worktree_cleanup: str = ""
     prompt_path: str
-    status: Literal["proposed", "approved", "running", "completed", "rejected"] = "proposed"
+    status: BatchItemStatus = "proposed"
+    roadmap_outcome: RoadmapOutcome = "unknown"
     write_scopes: list[str] = Field(default_factory=list)
     validations: list[str] = Field(default_factory=list)
 
@@ -236,6 +240,13 @@ class BatchItem(StrictModel):
     def validate_id(cls, value: str) -> str:
         if not ID_PATTERN.fullmatch(value):
             raise ValueError("batch item id must match WR-000")
+        return value
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def migrate_completed_status(cls, value: str) -> str:
+        if value == "completed":
+            return "slice_completed"
         return value
 
 
@@ -249,6 +260,8 @@ class BatchManifest(StrictModel):
     integration_risk: str
     integration_status: str = "not_started"
     closeout_status: str = "not_started"
+    integrated_target: str = ""
+    integrated_sha: str = ""
     validation_results: list[str] = Field(default_factory=list)
     roadmap_evidence_updates: list[str] = Field(default_factory=list)
     tooling_hardening: list[str] = Field(default_factory=list)
@@ -453,6 +466,54 @@ def validate_changed_paths(paths: list[str], scopes: list[str]) -> list[str]:
     return violations
 
 
+def validate_completion_evidence(items: list[RoadmapItem]) -> list[str]:
+    errors: list[str] = []
+    for item in items:
+        if item.planning_state != "completed":
+            continue
+        evidence = " ".join(
+            [
+                item.next_evidence,
+                item.current_decision,
+                item.current_call,
+                item.first_move,
+            ]
+        ).lower()
+        if not any(marker in evidence for marker in ("closeout", "batch", "landed", "implemented", "validated", "complete")):
+            errors.append(
+                f"{item.id}: completed items must reference closeout evidence, batch evidence, or explicit implementation evidence"
+            )
+    return errors
+
+
+def validate_completed_items_not_current_in_docs(
+    items: list[RoadmapItem],
+    doc_paths: list[Path] | None = None,
+) -> list[str]:
+    completed_ids = [item.id for item in items if item.planning_state == "completed"]
+    if not completed_ids:
+        return []
+    paths = doc_paths or [
+        REPO_ROOT / "docs-site/src/content/docs/workspace/roadmap-index.md",
+        REPO_ROOT / "docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md",
+        REPO_ROOT / "docs-site/src/content/docs/workspace/design-implementation-triage.md",
+    ]
+    errors: list[str] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            lowered = line.lower()
+            if "current" not in lowered:
+                continue
+            for item_id in completed_ids:
+                if item_id.lower() in lowered:
+                    errors.append(
+                        f"{repo_path(path)}:{lineno}: completed item {item_id} is still described as current work"
+                    )
+    return errors
+
+
 def normalized_write_scopes_with_generated_outputs(scopes: list[str]) -> list[str]:
     normalized_scopes = [normalize_repo_path(scope) for scope in scopes]
     roadmap_source_scope = normalize_repo_path(str(ROADMAP_SOURCE.relative_to(REPO_ROOT)))
@@ -641,12 +702,18 @@ def validate(source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML sour
     roadmap = load_roadmap(source)
     conflicts = validate_write_scopes([item for item in roadmap.items if item.can_enter_implementation_batch])
     missing_scope_paths = validate_existing_write_scope_paths([item for item in roadmap.items if item.can_enter_implementation_batch])
-    if conflicts or missing_scope_paths:
+    completion_errors = validate_completion_evidence(roadmap.items)
+    current_doc_errors = validate_completed_items_not_current_in_docs(roadmap.items)
+    if conflicts or missing_scope_paths or completion_errors or current_doc_errors:
         console.print("[red]roadmap validation failed[/red]")
         for conflict in conflicts:
             console.print(f"- write-scope conflict: {conflict}")
         for missing_scope_path in missing_scope_paths:
             console.print(f"- write-scope path missing: {missing_scope_path}")
+        for completion_error in completion_errors:
+            console.print(f"- completion evidence missing: {completion_error}")
+        for current_doc_error in current_doc_errors:
+            console.print(f"- stale current-work doc: {current_doc_error}")
         raise typer.Exit(1)
     console.print(f"[green]roadmap validation passed:[/green] {len(roadmap.items)} items, {len(roadmap.edges)} edges")
 

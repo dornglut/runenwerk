@@ -5,15 +5,16 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-15
 ---
 
 # Batch 2026-05-14-l0-substrate-pilot
 
 Goal: L0 substrate pilot: ECS/runtime and render contract support
 Approval state: approved
-Integration status: integrated
+Integration status: merged
 Closeout status: completed
+Integrated into: main@e7beb2d35523f769d94a79ee5c6f0ae65f4d8a79
 
 ## Validation Results
 
@@ -56,13 +57,15 @@ Closeout status: completed
 ### WR-002 ECS/runtime convergence support for product jobs and diagnostics
 
 - Branch: `codex/2026-05-14-l0-substrate-pilot-wr-002`
-- Worktree: `C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-14-l0-substrate-pilot/WR-002`
-- Status: `completed`
+- Worktree: `cleaned after integration`
+- Status: `integrated`
+- Roadmap outcome: `deferred_followup_required`
 - Write scopes: `domain/ecs`, `docs-site/src/content/docs/net/ecs-runtime-prioritized-roadmap.md`
 
 ### WR-003 Render contract follow-ups through product selection and derived residency
 
 - Branch: `codex/2026-05-14-l0-substrate-pilot-wr-003`
-- Worktree: `C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-14-l0-substrate-pilot/WR-003`
-- Status: `completed`
+- Worktree: `cleaned after integration`
+- Status: `integrated`
+- Roadmap outcome: `deferred_followup_required`
 - Write scopes: `engine/src/plugins/render`, `docs-site/src/content/docs/engine/plugins/render`

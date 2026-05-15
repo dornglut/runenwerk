@@ -14,6 +14,7 @@ Goal: Next current-candidate roadmap batch: WR-025, WR-018, WR-007
 Approval state: approved
 Integration status: merged
 Closeout status: completed
+Integrated into: main@e7beb2d35523f769d94a79ee5c6f0ae65f4d8a79
 
 ## Validation Results
 
@@ -37,20 +38,23 @@ Closeout status: completed
 ### WR-025 UI Runtime V2 and interaction formation
 
 - Branch: `codex/2026-05-15-next-current-candidate-roadmap-batch-wr--wr-025`
-- Worktree: `C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-15-next-current-candidate-roadmap-batch-wr-/WR-025`
-- Status: `completed`
+- Worktree: `cleaned after integration`
+- Status: `integrated`
+- Roadmap outcome: `slice_landed_item_still_current`
 - Write scopes: `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`, `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md`, `docs-site/src/content/docs/design/active/editor-ui-popup-adornment-drop-preview-contract.md`, `docs-site/src/content/docs/design/deferred/ui-model-multiple-execution-strategies-design.md`, `docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md`, `docs-site/src/content/docs/domain/ui/README.md`, `docs-site/src/content/docs/domain/ui/architecture.md`, `docs-site/src/content/docs/domain/ui/roadmap.md`, `docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md`, `docs-site/src/content/docs/workspace/roadmap-items.yaml`
 
 ### WR-018 Rendered World V1
 
 - Branch: `codex/2026-05-15-next-current-candidate-roadmap-batch-wr--wr-018`
-- Worktree: `C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-15-next-current-candidate-roadmap-batch-wr-/WR-018`
-- Status: `completed`
+- Worktree: `cleaned after integration`
+- Status: `integrated`
+- Roadmap outcome: `slice_landed_item_still_current`
 - Write scopes: `apps/runenwerk_editor/src/runtime`, `assets/shaders`, `docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md`
 
 ### WR-007 Multiplayer replication Phase 1 to Phase 3
 
 - Branch: `codex/2026-05-15-next-current-candidate-roadmap-batch-wr--wr-007`
-- Worktree: `C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-15-next-current-candidate-roadmap-batch-wr-/WR-007`
-- Status: `completed`
+- Worktree: `cleaned after integration`
+- Status: `roadmap_closed`
+- Roadmap outcome: `roadmap_completed`
 - Write scopes: `net`, `domain/ecs`

@@ -92,6 +92,16 @@ tasks:
     cmds:
       - uv run python tools/workflow/parallel_batch.py closeout {{.CLI_ARGS}}
 
+  batch:finalize:
+    desc: Finalize an integrated batch, update closeout state, and clean worker worktrees.
+    cmds:
+      - uv run python tools/workflow/parallel_batch.py finalize {{.CLI_ARGS}}
+
+  repo:hygiene:
+    desc: Check local branch, worktree, and batch-manifest hygiene.
+    cmds:
+      - uv run python tools/workflow/repo_hygiene.py check {{.CLI_ARGS}}
+
   docs:validate:
     desc: Validate docs-site structure and links handled by repository docs validation.
     cmds:
@@ -161,6 +171,7 @@ tasks:
   ci:local:
     desc: Run the full local host validation pipeline.
     cmds:
+      - task repo:hygiene
       - task roadmap:validate
       - task roadmap:check
       - task puml:validate

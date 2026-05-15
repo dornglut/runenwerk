@@ -14,6 +14,7 @@ Goal: WR-001 post-DRF2 product-job and Draw bridge stabilization
 Approval state: approved
 Integration status: merged
 Closeout status: completed
+Integrated into: main@e7beb2d35523f769d94a79ee5c6f0ae65f4d8a79
 
 ## Validation Results
 
@@ -35,6 +36,7 @@ Closeout status: completed
 ### WR-001 Post-Phase 6D product-job and Draw cache follow-up
 
 - Branch: `codex/2026-05-14-wr-001-post-drf2-product-job-and-draw-br-wr-001`
-- Worktree: `C:/rw-wt/WR-001`
-- Status: `completed`
+- Worktree: `cleaned after integration`
+- Status: `roadmap_closed`
+- Roadmap outcome: `roadmap_completed`
 - Write scopes: `apps/runenwerk_draw`, `engine/src/runtime`

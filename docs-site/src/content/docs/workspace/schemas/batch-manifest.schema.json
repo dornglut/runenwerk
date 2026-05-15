@@ -34,6 +34,17 @@
           "title": "Prompt Path",
           "type": "string"
         },
+        "roadmap_outcome": {
+          "default": "unknown",
+          "enum": [
+            "unknown",
+            "roadmap_completed",
+            "slice_landed_item_still_current",
+            "deferred_followup_required"
+          ],
+          "title": "Roadmap Outcome",
+          "type": "string"
+        },
         "score": {
           "title": "Score",
           "type": "number"
@@ -44,7 +55,9 @@
             "proposed",
             "approved",
             "running",
-            "completed",
+            "slice_completed",
+            "integrated",
+            "roadmap_closed",
             "rejected"
           ],
           "title": "Status",
@@ -64,6 +77,11 @@
         "worktree": {
           "default": "",
           "title": "Worktree",
+          "type": "string"
+        },
+        "worktree_cleanup": {
+          "default": "",
+          "title": "Worktree Cleanup",
           "type": "string"
         },
         "write_scopes": {
@@ -128,6 +146,16 @@
     },
     "id": {
       "title": "Id",
+      "type": "string"
+    },
+    "integrated_sha": {
+      "default": "",
+      "title": "Integrated Sha",
+      "type": "string"
+    },
+    "integrated_target": {
+      "default": "",
+      "title": "Integrated Target",
       "type": "string"
     },
     "integration_risk": {

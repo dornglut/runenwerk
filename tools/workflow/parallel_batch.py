@@ -389,6 +389,44 @@ def closeout(batch: Path = typer.Option(..., help="Batch manifest path."), write
         console.print(report)
 
 
+@app.command()
+def finalize(
+    batch: Path = typer.Option(..., help="Batch manifest path."),
+    target: str = typer.Option("main", help="Integration target branch or ref."),
+    write: bool = typer.Option(False, help="Write batch.md after finalization."),
+    cleanup: bool = typer.Option(True, "--cleanup/--no-cleanup", help="Remove integrated worker worktrees and branches."),
+    keep_branches: bool = typer.Option(False, help="Preserve worker branches after worktree cleanup."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+) -> None:
+    manifest = load_batch_manifest(batch)
+    roadmap = load_roadmap(source)
+    before = repo_refs_snapshot()
+    try:
+        updated = finalize_batch_manifest(
+            manifest,
+            roadmap,
+            target=target,
+            cleanup=cleanup,
+            keep_branches=keep_branches,
+        )
+    except WorkflowError as error:
+        console.print("[red]batch finalization failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+
+    batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
+    if write:
+        report_path = batch.parent / "batch.md"
+        report_path.write_text(render_batch_report(updated), encoding="utf-8", newline="\n")
+        console.print(f"[green]wrote batch report:[/green] {repo_path(report_path)}")
+    console.print("[green]batch finalized[/green]")
+    console.print("[bold]Before cleanup[/bold]")
+    console.print(before or "no refs reported")
+    console.print("[bold]After cleanup[/bold]")
+    console.print(repo_refs_snapshot() or "no refs reported")
+
+
 def build_manifest(batch_id: str, goal: str, items: list[RoadmapItem], batch_dir: Path) -> BatchManifest:
     base_branch = git_output(["git", "branch", "--show-current"]) or "unknown"
     base_sha = git_output(["git", "rev-parse", "HEAD"]) or "unknown"
@@ -495,6 +533,7 @@ def render_batch_report(manifest: BatchManifest) -> str:
         f"Approval state: {manifest.approval_state}",
         f"Integration status: {manifest.integration_status}",
         f"Closeout status: {manifest.closeout_status}",
+        f"Integrated into: {integrated_into_label(manifest)}",
         "",
         "## Validation Results",
         "",
@@ -538,13 +577,28 @@ def render_batch_report(manifest: BatchManifest) -> str:
                 f"### {item.id} {item.title}",
                 "",
                 f"- Branch: `{item.branch}`",
-                f"- Worktree: `{item.worktree or 'not prepared'}`",
+                f"- Worktree: `{worktree_report_value(item)}`",
                 f"- Status: `{item.status}`",
+                f"- Roadmap outcome: `{item.roadmap_outcome}`",
                 f"- Write scopes: {', '.join(f'`{scope}`' for scope in item.write_scopes)}",
                 "",
             ]
         )
     return "\n".join(lines)
+
+
+def integrated_into_label(manifest: BatchManifest) -> str:
+    if manifest.integrated_target and manifest.integrated_sha:
+        return f"{manifest.integrated_target}@{manifest.integrated_sha}"
+    if manifest.integrated_target:
+        return manifest.integrated_target
+    return "not recorded"
+
+
+def worktree_report_value(item: BatchItem) -> str:
+    if item.worktree_cleanup:
+        return item.worktree_cleanup
+    return item.worktree or "not prepared"
 
 
 def default_batch_id(goal: str) -> str:
@@ -583,7 +637,7 @@ def kickoff_next_step_lines(batch_path: Path, manifest: BatchManifest) -> list[s
     for item in manifest.items:
         lines.append(f"task batch:worker-prompt -- --batch {batch_arg} --item {item.id}")
     lines.append(f"task batch:scope-check -- --batch {batch_arg}")
-    lines.append(f"task batch:closeout -- --batch {batch_arg} --write")
+    lines.append(f"task batch:finalize -- --batch {batch_arg} --target main --write --cleanup")
     return lines
 
 
@@ -721,6 +775,166 @@ def write_validation_result(batch: Path, manifest: BatchManifest, status: str, c
     result = f"{timestamp} batch validate {status}: host batch validation; {command_summary}"
     updated = manifest.model_copy(update={"validation_results": [*manifest.validation_results, result]})
     batch.write_text(render_batch_manifest(updated), encoding="utf-8", newline="\n")
+
+
+def finalize_batch_manifest(
+    manifest: BatchManifest,
+    roadmap,
+    *,
+    target: str,
+    cleanup: bool = True,
+    keep_branches: bool = False,
+) -> BatchManifest:
+    errors = batch_finalization_errors(manifest, target)
+    if errors:
+        raise WorkflowError("\n".join(errors))
+
+    target_sha = git_output(["git", "rev-parse", target])
+    updated_items: list[BatchItem] = []
+    for item in manifest.items:
+        roadmap_item = roadmap.by_id.get(item.id)
+        outcome = roadmap_outcome_for_item(roadmap_item)
+        status = "roadmap_closed" if outcome == "roadmap_completed" else "integrated"
+        worktree = item.worktree
+        worktree_cleanup = item.worktree_cleanup
+        if cleanup and worktree:
+            remove_worker_worktree_if_present(Path(worktree))
+            worktree = ""
+            worktree_cleanup = "cleaned after integration"
+        if cleanup and not keep_branches and branch_exists(item.branch):
+            delete_worker_branch(item.branch)
+        updated_items.append(
+            item.model_copy(
+                update={
+                    "status": status,
+                    "roadmap_outcome": outcome,
+                    "worktree": worktree,
+                    "worktree_cleanup": worktree_cleanup,
+                }
+            )
+        )
+
+    return manifest.model_copy(
+        update={
+            "integration_status": "merged",
+            "closeout_status": "completed",
+            "integrated_target": target,
+            "integrated_sha": target_sha,
+            "items": updated_items,
+            "integration_risk": "integrated; worker worktrees cleaned" if cleanup else "integrated; cleanup skipped",
+        }
+    )
+
+
+def batch_finalization_errors(manifest: BatchManifest, target: str) -> list[str]:
+    errors: list[str] = []
+    if not git_output(["git", "rev-parse", "--verify", target]):
+        return [f"target ref {target!r} does not exist"]
+    for item in manifest.items:
+        if branch_exists(item.branch) and not branch_is_ancestor(item.branch, target):
+            errors.append(f"{item.id}: worker branch {item.branch} has commits not integrated into {target}")
+        if not item.worktree:
+            continue
+        worktree = Path(item.worktree)
+        if not worktree.is_absolute():
+            worktree = REPO_ROOT / worktree
+        if not worktree.exists():
+            continue
+        try:
+            paths = changed_files_for_worktree(worktree, manifest.base_sha)
+        except (OSError, subprocess.CalledProcessError) as error:
+            errors.append(f"{item.id}: cannot inspect worker worktree {slash_path(worktree)}: {error}")
+            continue
+        normalized_scopes = [normalize_repo_path(scope) for scope in item.write_scopes]
+        for path in paths:
+            normalized = normalize_repo_path(path)
+            in_scope = any(path_within_scope(normalized, scope) for scope in normalized_scopes)
+            if path_matches_ref(worktree, target, normalized):
+                continue
+            if in_scope:
+                errors.append(f"{item.id}: dirty in-scope worker change is not integrated into {target}: {normalized}")
+            else:
+                errors.append(f"{item.id}: dirty out-of-scope worker change blocks finalization: {normalized}")
+    return errors
+
+
+def roadmap_outcome_for_item(item: RoadmapItem | None) -> str:
+    if item is None:
+        return "deferred_followup_required"
+    if item.planning_state == "completed":
+        return "roadmap_completed"
+    if item.planning_state == "current_candidate":
+        return "slice_landed_item_still_current"
+    return "deferred_followup_required"
+
+
+def branch_exists(branch: str) -> bool:
+    return bool(git_output(["git", "rev-parse", "--verify", branch]))
+
+
+def branch_is_ancestor(branch: str, target: str) -> bool:
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", branch, target],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
+def path_matches_ref(worktree: Path, ref: str, path: str) -> bool:
+    ref_has_path = subprocess.run(
+        ["git", "-C", str(worktree), "cat-file", "-e", f"{ref}:{path}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode == 0
+    worktree_path = worktree / path
+    if not worktree_path.exists():
+        return not ref_has_path
+    if not worktree_path.is_file() or not ref_has_path:
+        return False
+    ref_bytes = subprocess.run(
+        ["git", "-C", str(worktree), "show", f"{ref}:{path}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    ).stdout
+    return worktree_path.read_bytes() == ref_bytes
+
+
+def remove_worker_worktree_if_present(worktree: Path) -> None:
+    if not worktree.is_absolute():
+        worktree = REPO_ROOT / worktree
+    if not worktree.exists():
+        return
+    subprocess.run(
+        ["git", "-c", "core.longpaths=true", "worktree", "remove", "--force", str(worktree)],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+
+
+def delete_worker_branch(branch: str) -> None:
+    subprocess.run(["git", "branch", "-D", branch], cwd=REPO_ROOT, check=True)
+
+
+def repo_refs_snapshot() -> str:
+    branches = subprocess.run(
+        ["git", "branch", "--list"],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    ).stdout.strip()
+    worktrees = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    ).stdout.strip()
+    return f"branches:\n{branches}\n\nworktrees:\n{worktrees}".strip()
 
 
 def in_scope_changes_for_manifest(manifest: BatchManifest) -> list[str]:

@@ -11,11 +11,14 @@ from typer.testing import CliRunner
 from generate_roadmap_docs import render_current_candidates_roadmap, render_dependency_roadmap, render_outputs
 from parallel_batch import (
     app as batch_app,
+    batch_finalization_errors,
     batch_execution_state,
     build_manifest,
     default_batch_id,
     default_kickoff_goal,
+    finalize_batch_manifest,
     kickoff_next_step_lines,
+    render_batch_report,
     run_host_batch_validation,
     run_official_batch_validation,
     refresh_base_manifest,
@@ -34,11 +37,14 @@ from roadmap_state import (
     load_roadmap,
     select_batch_candidates,
     validate_batch_against_roadmap,
+    validate_completed_items_not_current_in_docs,
+    validate_completion_evidence,
     validate_changed_paths,
     validate_existing_write_scope_paths,
     validate_write_scopes,
     write_schema_files,
 )
+from repo_hygiene import batch_manifest_errors, local_branches
 from roadmap_intake import (
     apply_intake_proposal,
     build_intake_proposal,
@@ -268,7 +274,7 @@ def test_batch_kickoff_defaults_to_current_candidates() -> None:
         "task batch:validate -- --batch reports/batch-test/batch.toml",
         "task batch:worker-prompt -- --batch reports/batch-test/batch.toml --item WR-001",
         "task batch:scope-check -- --batch reports/batch-test/batch.toml",
-        "task batch:closeout -- --batch reports/batch-test/batch.toml --write",
+        "task batch:finalize -- --batch reports/batch-test/batch.toml --target main --write --cleanup",
     ]
 
 
@@ -552,6 +558,193 @@ def test_validation_results_are_written_only_by_explicit_write() -> None:
 
     assert len(updated.validation_results) == 1
     assert "batch validate passed" in updated.validation_results[0]
+
+
+def test_finalize_refuses_dirty_in_scope_worker_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+
+    monkeypatch.setattr("parallel_batch.git_output", lambda command: "target" if "main" in command else "")
+    monkeypatch.setattr("parallel_batch.branch_exists", lambda _branch: False)
+    monkeypatch.setattr("parallel_batch.changed_files_for_worktree", lambda _worktree, _base_sha: ["tools/workflow/file.py"])
+    monkeypatch.setattr("parallel_batch.path_matches_ref", lambda _worktree, _target, _path: False)
+    monkeypatch.setattr("parallel_batch.Path.exists", lambda _path: True)
+
+    assert batch_finalization_errors(approved, "main") == [
+        "WR-001: dirty in-scope worker change is not integrated into main: tools/workflow/file.py"
+    ]
+
+
+def test_finalize_refuses_unmerged_worker_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+
+    monkeypatch.setattr("parallel_batch.git_output", lambda command: "target" if "main" in command else "branch")
+    monkeypatch.setattr("parallel_batch.branch_exists", lambda _branch: True)
+    monkeypatch.setattr("parallel_batch.branch_is_ancestor", lambda _branch, _target: False)
+
+    assert batch_finalization_errors(manifest, "main") == [
+        "WR-001: worker branch codex/batch-test-wr-001 has commits not integrated into main"
+    ]
+
+
+def test_finalize_cleans_integrated_worktrees_and_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    batch_item = manifest.items[0].model_copy(update={"worktree": "worker", "status": "slice_completed"})
+    approved = manifest.model_copy(update={"approval_state": "approved", "items": [batch_item]})
+    removed_worktrees: list[str] = []
+    deleted_branches: list[str] = []
+
+    monkeypatch.setattr("parallel_batch.git_output", lambda _command: "abc123")
+    monkeypatch.setattr("parallel_batch.branch_exists", lambda _branch: True)
+    monkeypatch.setattr("parallel_batch.branch_is_ancestor", lambda _branch, _target: True)
+    monkeypatch.setattr("parallel_batch.changed_files_for_worktree", lambda _worktree, _base_sha: ["tools/workflow/file.py"])
+    monkeypatch.setattr("parallel_batch.path_matches_ref", lambda _worktree, _target, _path: True)
+    monkeypatch.setattr("parallel_batch.Path.exists", lambda _path: True)
+    monkeypatch.setattr("parallel_batch.remove_worker_worktree_if_present", lambda path: removed_worktrees.append(str(path)))
+    monkeypatch.setattr("parallel_batch.delete_worker_branch", lambda branch: deleted_branches.append(branch))
+
+    finalized = finalize_batch_manifest(approved, roadmap, target="main", cleanup=True)
+
+    assert removed_worktrees == ["worker"]
+    assert deleted_branches == ["codex/batch-test-wr-001"]
+    assert finalized.integration_status == "merged"
+    assert finalized.closeout_status == "completed"
+    assert finalized.integrated_target == "main"
+    assert finalized.items[0].status == "integrated"
+    assert finalized.items[0].roadmap_outcome == "slice_landed_item_still_current"
+    assert finalized.items[0].worktree == ""
+    assert finalized.items[0].worktree_cleanup == "cleaned after integration"
+
+
+def test_finalize_preserves_branches_when_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    deleted_branches: list[str] = []
+
+    monkeypatch.setattr("parallel_batch.git_output", lambda _command: "abc123")
+    monkeypatch.setattr("parallel_batch.branch_exists", lambda _branch: True)
+    monkeypatch.setattr("parallel_batch.branch_is_ancestor", lambda _branch, _target: True)
+    monkeypatch.setattr("parallel_batch.delete_worker_branch", lambda branch: deleted_branches.append(branch))
+
+    finalize_batch_manifest(manifest, roadmap, target="main", cleanup=True, keep_branches=True)
+
+    assert deleted_branches == []
+
+
+def test_batch_report_renders_cleaned_worktrees_and_roadmap_outcome() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    item = manifest.items[0].model_copy(
+        update={
+            "worktree": "",
+            "worktree_cleanup": "cleaned after integration",
+            "status": "integrated",
+            "roadmap_outcome": "slice_landed_item_still_current",
+        }
+    )
+    finalized = manifest.model_copy(
+        update={
+            "integration_status": "merged",
+            "closeout_status": "completed",
+            "integrated_target": "main",
+            "integrated_sha": "abc123",
+            "items": [item],
+        }
+    )
+    report = render_batch_report(finalized)
+
+    assert "Integrated into: main@abc123" in report
+    assert "- Worktree: `cleaned after integration`" in report
+    assert "- Roadmap outcome: `slice_landed_item_still_current`" in report
+
+
+def test_hygiene_rejects_finalized_manifest_with_stale_worktree() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    item_with_stale_worktree = manifest.items[0].model_copy(update={"worktree": "worker"})
+    finalized = manifest.model_copy(
+        update={"integration_status": "merged", "closeout_status": "completed", "items": [item_with_stale_worktree]}
+    )
+
+    assert batch_manifest_errors(Path("reports/batch-test/batch.toml"), finalized) == [
+        "reports/batch-test/batch.toml:WR-001: finalized batch still records active worktree "
+        + str((REPO_ROOT / "worker")).replace("\\", "/")
+    ]
+
+
+def test_hygiene_uses_portable_merged_branch_option_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_git_stdout(command: list[str]) -> str:
+        commands.append(command)
+        return "main\ncodex/done\n"
+
+    monkeypatch.setattr("repo_hygiene.git_stdout", fake_git_stdout)
+
+    assert local_branches(merged_only=True) == ["main", "codex/done"]
+    assert commands == [["branch", "--format=%(refname:short)", "--merged"]]
+
+
+def test_roadmap_completion_requires_evidence() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_evidence(roadmap.items) == [
+        "WR-001: completed items must reference closeout evidence, batch evidence, or explicit implementation evidence"
+    ]
+
+    state["items"][0]["next_evidence"] = "2026-05-15 batch evidence landed."
+    roadmap = RoadmapState.model_validate(state)
+    assert validate_completion_evidence(roadmap.items) == []
+
+
+def test_completed_items_are_rejected_from_current_docs(tmp_path: Path) -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["next_evidence"] = "Closeout evidence."
+    roadmap = RoadmapState.model_validate(state)
+    doc = tmp_path / "roadmap-index.md"
+    doc.write_text("WR-001 is the current implementation candidate.\n", encoding="utf-8")
+    expected_path = str(doc).replace("\\", "/")
+
+    assert validate_completed_items_not_current_in_docs(roadmap.items, [doc]) == [
+        f"{expected_path}:1: completed item WR-001 is still described as current work"
+    ]
 
 
 def test_refresh_base_is_blocked_after_integration_starts() -> None:
