@@ -3,6 +3,10 @@
     "RenderTargets": {
       "additionalProperties": false,
       "properties": {
+        "current_candidates_roadmap": {
+          "title": "Current Candidates Roadmap",
+          "type": "string"
+        },
         "decision_register": {
           "title": "Decision Register",
           "type": "string"
@@ -19,6 +23,7 @@
       "required": [
         "decision_register",
         "dependency_roadmap",
+        "current_candidates_roadmap",
         "triage"
       ],
       "title": "RenderTargets",
@@ -163,6 +168,17 @@
           "title": "Ownership Mode",
           "type": "string"
         },
+        "planning_state": {
+          "enum": [
+            "current_candidate",
+            "support_only",
+            "ready_next",
+            "completed",
+            "blocked_deferred"
+          ],
+          "title": "Planning State",
+          "type": "string"
+        },
         "priority": {
           "enum": [
             "P0",
@@ -182,15 +198,6 @@
           "minimum": 1,
           "title": "Rr Oe",
           "type": "integer"
-        },
-        "status": {
-          "enum": [
-            "implement_now",
-            "ready_next",
-            "blocked_deferred"
-          ],
-          "title": "Status",
-          "type": "string"
         },
         "tc": {
           "maximum": 5,
@@ -236,7 +243,7 @@
         "lane",
         "dependency_level",
         "gate",
-        "status",
+        "planning_state",
         "priority",
         "value",
         "blocker",

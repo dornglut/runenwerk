@@ -1,0 +1,39 @@
+@startuml
+title Runenwerk Current Roadmap Candidates
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+skinparam component {
+  BackgroundColor<<candidate>> #FFF2CC
+  BorderColor<<candidate>> #AA7700
+  BackgroundColor<<context>> #EEEEEE
+  BorderColor<<context>> #666666
+  FontColor<<context>> #666666
+}
+
+legend right
+  <b>Selectable Work</b>
+  Only planning_state=current_candidate nodes may enter implementation batches.
+  Context nodes are direct dependencies and are not selectable here.
+endlegend
+
+package "Immediate Dependency Context" {
+  component "WR-001 Post-Phase 6D product-job / Draw bridge\nstate=completed\nV5 B2" as DRAWNEXT <<context>>
+
+  component "WR-003 Render contract follow-ups\nstate=support_only\nV4 B2" as RENDER <<context>>
+
+}
+
+package "Current Implementation Candidates" {
+  component "WR-006 Draw DRF4-DRF5\nstate=current_candidate\nscore=2.2 V4 B2\ncall=GPU proof,\nGPU promotion, CPU fallback" as DRAW <<candidate>>
+
+}
+
+DRAWNEXT -down-> DRAW : dependency context
+RENDER -down-> DRAW : dependency context
+
+@enduml

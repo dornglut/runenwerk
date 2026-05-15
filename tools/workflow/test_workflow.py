@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from generate_roadmap_docs import render_outputs
+from generate_roadmap_docs import render_current_candidates_roadmap, render_dependency_roadmap, render_outputs
 from parallel_batch import (
     batch_execution_state,
     build_manifest,
@@ -43,6 +43,7 @@ def valid_state() -> dict:
         "render": {
             "decision_register": "decision.md",
             "dependency_roadmap": "roadmap.puml",
+            "current_candidates_roadmap": "candidates.puml",
             "triage": "triage.md",
         },
         "items": [
@@ -58,6 +59,7 @@ def item(
     *,
     value: int = 4,
     blocker: int = 2,
+    planning_state: str = "current_candidate",
     dependencies: list[str] | None = None,
     write_scopes: list[str] | None = None,
 ) -> dict:
@@ -69,7 +71,7 @@ def item(
         "lane": "Core",
         "dependency_level": "L0",
         "gate": "Supporting now" if blocker < 5 else "Policy deferred",
-        "status": "implement_now",
+        "planning_state": planning_state,
         "priority": "P0",
         "value": value,
         "blocker": blocker,
@@ -130,6 +132,39 @@ def test_b5_items_are_excluded_from_implementation_batch() -> None:
     assert [item.id for item in selected] == ["WR-001"]
 
 
+def test_only_current_candidates_enter_implementation_batch() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "support_only"
+    state["items"][1]["blocker"] = 2
+    state["items"][1]["gate"] = "Supporting now"
+    state["items"][1]["planning_state"] = "completed"
+    roadmap = RoadmapState.model_validate(state)
+
+    assert select_batch_candidates(roadmap, level="L0") == []
+
+
+def test_explicit_completed_or_support_only_items_are_rejected() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][1]["blocker"] = 2
+    state["items"][1]["gate"] = "Supporting now"
+    state["items"][1]["planning_state"] = "support_only"
+    roadmap = RoadmapState.model_validate(state)
+
+    with pytest.raises(WorkflowError, match="planning_state 'completed' is not current_candidate"):
+        select_batch_candidates(roadmap, item_ids=("WR-001",))
+    with pytest.raises(WorkflowError, match="planning_state 'support_only' is not current_candidate"):
+        select_batch_candidates(roadmap, item_ids=("WR-002",))
+
+
+def test_invalid_planning_state_is_rejected() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "implement_now"
+
+    with pytest.raises(ValueError):
+        RoadmapState.model_validate(state)
+
+
 def test_overlapping_write_scopes_are_detected() -> None:
     state = valid_state()
     state["items"][1]["blocker"] = 2
@@ -153,6 +188,7 @@ def test_render_check_can_detect_stale_files() -> None:
         state["render"] = {
             "decision_register": str(root / "decision.md"),
             "dependency_roadmap": str(root / "roadmap.puml"),
+            "current_candidates_roadmap": str(root / "candidates.puml"),
             "triage": str(root / "triage.md"),
         }
         source = root / "roadmap.yaml"
@@ -165,6 +201,25 @@ def test_render_check_can_detect_stale_files() -> None:
         roadmap = load_roadmap(source)
         outputs = render_outputs(roadmap)
         assert any(not path.exists() or path.read_text(encoding="utf-8") != expected for path, expected in outputs.items())
+
+
+def test_generated_roadmap_diagrams_separate_dependency_truth_from_candidates() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][1]["blocker"] = 2
+    state["items"][1]["gate"] = "Ready next"
+    state["items"][1]["planning_state"] = "current_candidate"
+    roadmap = RoadmapState.model_validate(state)
+
+    dependency = render_dependency_roadmap(roadmap)
+    candidates = render_current_candidates_roadmap(roadmap)
+
+    assert "Level 0 - Completed / Support Substrate" in dependency
+    assert "Parallel" + " Now" not in dependency
+    assert "state=completed" in dependency
+    assert "Current Implementation Candidates" in candidates
+    assert "state=current_candidate" in candidates
+    assert "state=completed" in candidates
 
 
 def test_schema_generation_check_detects_missing_files() -> None:
@@ -210,7 +265,7 @@ def test_batch_approval_validation_rejects_blocked_items() -> None:
     )
 
     assert validate_batch_against_roadmap(manifest, roadmap) == [
-        "WR-002: roadmap gate is not implementation-ready"
+        "WR-002: B5 is above the B2 implementation gate"
     ]
 
 

@@ -106,25 +106,35 @@ Blocker weight:
 | B5 | Deferred by policy. Do not implement until promoted by an active design, accepted design, ADR, or roadmap update. |
 
 <!-- BEGIN GENERATED ROADMAP STATUS -->
-## Implement Now
+## Current Candidate
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | P0 | V5 | B2 | 4.8 | Continue only if the next bounded slice has fresh product-job evidence. The 2026-05-15 WR-001 batch bridged preview and final Draw tile surfaces through existing render APIs; re-score WR-006 versus WR-007 before starting the next L1 batch. | Continue from runtime-product-job-executor-roadmap.md, runenwerk-draw/roadmap.md, and sdf-first-execution-roadmap.md. |
-| WR-002 | ECS/runtime convergence support for product jobs and diagnostics | P0 | V4 | B2 | 2.7 | Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 pilot landed M5 consumer lag/backpressure diagnostics and F3 plan reporting; F2 remains open. | Close remaining lifecycle finalization from net/ecs-runtime-prioritized-roadmap.md. |
-| WR-003 | Render contract follow-ups through product selection and derived residency | P0 | V4 | B2 | 2.4 | Implement only as contract-following follow-up, not as renderer-owned world truth. The 2026-05-14 pilot added prepared-view ownership guards plus selected-source residency derivation and invalidation. | Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md and render-product-surface-foundation-bundle-design.md. |
-| WR-004 | UI/editor guard and sequencing maintenance | P0 | V4 | B1 | 7.5 | Keep active while any editor surface work lands. The 2026-05-14 parallel batch added entity-table and SDF operation routing/capability guards. | Preserve structural routing, capability gating, and surface ownership guard coverage from domain/ui/roadmap.md. |
-| WR-005 | Design lifecycle cleanup for implemented active designs | P1 | V3 | B1 | 4.0 | Can be done now as documentation work. The 2026-05-14 parallel batch moved the surface workflow contract redesign to implemented lifecycle; more candidates remain. | Review active designs that already say implemented, then promote or move them according to design/README.md. |
+| WR-006 | Runenwerk Draw DRF4 through DRF5 | P1 | V4 | B2 | 2.2 | Ready as a focused Draw/render L1 batch after WR-001 DRF3 landed. Keep CPU tile formation canonical and do not combine with net replication unless a fresh batch proves disjoint gates and scopes. | Start from apps/runenwerk-draw/roadmap.md Phase DRF4 and use only public render-flow/product-surface APIs. |
+
+## Support Only
+
+| ID | Track | Priority | Value | Blocker | Score | Current call | Reactivation evidence |
+|---|---|---:|---:|---:|---:|---|---|
+| WR-002 | ECS/runtime convergence support for product jobs and diagnostics | P0 | V4 | B2 | 2.7 | Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 pilot landed M5 consumer lag/backpressure diagnostics and F3 plan reporting; F2 remains open. | 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed and F2 lifecycle/finalization remains. |
+| WR-003 | Render contract follow-ups through product selection and derived residency | P0 | V4 | B2 | 2.4 | Implement only as contract-following follow-up, not as renderer-owned world truth. The 2026-05-14 pilot added prepared-view ownership guards plus selected-source residency derivation and invalidation. | 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source residency invalidation, and conflict rejection for selected source state. |
+| WR-004 | UI/editor guard and sequencing maintenance | P0 | V4 | B1 | 7.5 | Keep active while any editor surface work lands. The 2026-05-14 parallel batch added entity-table and SDF operation routing/capability guards. | 2026-05-14 entity-table and SDF surface routing/capability guards landed. |
+| WR-005 | Design lifecycle cleanup for implemented active designs | P1 | V3 | B1 | 4.0 | Can be done now as documentation work. The 2026-05-14 parallel batch moved the surface workflow contract redesign to implemented lifecycle; more candidates remain. | 2026-05-14 surface workflow design moved to implemented lifecycle; more candidates remain. |
 
 ## Ready Next
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | Main blocker |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-006 | Runenwerk Draw DRF4 through DRF5 | P1 | V4 | B2 | 2.2 | Ready as a focused Draw/render L1 batch after WR-001 DRF3 landed. Keep CPU tile formation canonical and do not combine with net replication unless a fresh batch proves disjoint gates and scopes. | Remaining DRF4 to DRF5 work must keep CPU tile formation canonical and use public render-flow/product-surface APIs. |
 | WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Ready for a focused net hardening batch when replication evidence is the selected next product risk. | ACK/baseline hardening and delta lifecycle rules need tests and code evidence before broader declarative replication. |
 | WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B3 | 1.0 | Code work can continue, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
 | WR-009 | Native multi-window editor presentation | P2 | V3 | B3 | 0.7 | Design is active, but it should not preempt current product-surface and post-6D work. | Runtime window state and render surface handling are still singleton-shaped; second-window productization needs window-scoped runtime, input, UI frame, and swapchain ownership. |
 | WR-010 | Render fragment and data-driven maturity R10 | P2 | V3 | B3 | 0.7 | Keep queued after render surface, ergonomics, persistence, and inspection follow-ups. | Fragment assets and hot reload need stable target aliases, prepared flow invocations, diagnostics, and a product priority. |
+
+## Completed Evidence
+
+| ID | Track | Priority | Value | Blocker | Score | Current decision | Evidence |
+|---|---|---:|---:|---:|---:|---|---|
+| WR-001 | Post-Phase 6D product-job and Draw cache follow-up | P0 | V5 | B2 | 4.8 | DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not reopen procgen bake/rollback. | 2026-05-15 DRF3 preview/final product-surface bridge landed; next evidence is either WR-006 DRF4/DRF5 GPU proof and promotion or a separately scoped runtime product-job support slice. |
 
 ## Blocked Or Deferred
 
@@ -159,12 +169,14 @@ clear record of any implementation drift.
 The current code-facing answer is:
 
 1. Treat SDF-first Phase 6D as complete unless validation regresses.
-2. Continue `WR-001` with the next post-DRF2 product-job or Draw bridge slice.
-3. Do only directly supporting `WR-002`, `WR-003`, `WR-004`, and `WR-005`
-   work in parallel.
-4. After that stabilizes, choose between later Draw DRF work and net Phase 1
-   hardening using gate state, dependency level, lane, and score.
-5. Keep gameplay graph, particles, physics, animation, world processes, alternate UI execution, and deferred SDF capability detail drafts behind their owning contract gates.
+2. Treat `WR-001` as completed evidence, not as a selectable implementation
+   batch.
+3. Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
+   until roadmap evidence explicitly reactivates one of them.
+4. Use `WR-006` as the current implementation candidate.
+5. Keep `WR-007` as the comparable ready-next net candidate if replication
+   risk becomes the selected product focus.
+6. Keep gameplay graph, particles, physics, animation, world processes, alternate UI execution, and deferred SDF capability detail drafts behind their owning contract gates.
 
 After completing any phased implementation, run the phase completion drift-check
 routine before starting the next phase.
