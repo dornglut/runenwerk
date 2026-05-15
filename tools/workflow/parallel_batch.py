@@ -61,14 +61,22 @@ def propose(
 ) -> None:
     roadmap = load_roadmap(source)
     level_from_scope, item_ids = parse_scope_selector(scope)
-    selected = select_batch_candidates(
-        roadmap,
-        level=level or level_from_scope,
-        item_ids=item_ids,
-        include_discovery=include_discovery,
-    )
+    try:
+        selected = select_batch_candidates(
+            roadmap,
+            level=level or level_from_scope,
+            item_ids=item_ids,
+            include_discovery=include_discovery,
+        )
+    except WorkflowError as error:
+        console.print("[red]batch proposal failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
     if not selected:
-        raise WorkflowError("no eligible roadmap items matched the requested batch scope")
+        console.print("[red]batch proposal failed[/red]")
+        console.print("- no eligible roadmap items matched the requested batch scope")
+        raise typer.Exit(1)
 
     conflicts = validate_write_scopes(selected)
     if conflicts and not allow_scope_conflicts:

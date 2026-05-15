@@ -6,6 +6,7 @@ roadmap:
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
   dependency_roadmap: docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  current_candidates_roadmap: docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
   triage: docs-site/src/content/docs/workspace/design-implementation-triage.md
 items:
 - id: WR-001
@@ -15,7 +16,7 @@ items:
   lane: Core delivery
   dependency_level: L0
   gate: Continue next slice
-  status: implement_now
+  planning_state: completed
   priority: P0
   value: 5
   blocker: 2
@@ -60,7 +61,7 @@ items:
   lane: Core support
   dependency_level: L0
   gate: Supporting now
-  status: implement_now
+  planning_state: support_only
   priority: P0
   value: 4
   blocker: 2
@@ -99,7 +100,7 @@ items:
   lane: Core support
   dependency_level: L0
   gate: Supporting now
-  status: implement_now
+  planning_state: support_only
   priority: P0
   value: 4
   blocker: 2
@@ -138,7 +139,7 @@ items:
   lane: Guardrail
   dependency_level: L0
   gate: Always-on guard
-  status: implement_now
+  planning_state: support_only
   priority: P0
   value: 4
   blocker: 1
@@ -176,7 +177,7 @@ items:
   lane: Docs
   dependency_level: L0
   gate: Docs now
-  status: implement_now
+  planning_state: support_only
   priority: P1
   value: 3
   blocker: 1
@@ -213,7 +214,7 @@ items:
   lane: Core delivery
   dependency_level: L1
   gate: Ready next
-  status: ready_next
+  planning_state: current_candidate
   priority: P1
   value: 4
   blocker: 2
@@ -238,6 +239,7 @@ items:
   current_decision: Preferred next L1 candidate if product-surface continuity remains the focus after WR-001 DRF3.
   current_call: Ready as a focused Draw/render L1 batch after WR-001 DRF3 landed. Keep CPU tile formation canonical
     and do not combine with net replication unless a fresh batch proves disjoint gates and scopes.
+  first_move: Start from apps/runenwerk-draw/roadmap.md Phase DRF4 and use only public render-flow/product-surface APIs.
   main_blocker: Remaining DRF4 to DRF5 work must keep CPU tile formation canonical and use public render-flow/product-surface
     APIs.
   diagram_call:
@@ -254,7 +256,7 @@ items:
   lane: Core delivery
   dependency_level: L1
   gate: Ready next
-  status: ready_next
+  planning_state: ready_next
   priority: P1
   value: 4
   blocker: 2
@@ -293,7 +295,7 @@ items:
   lane: Product discovery
   dependency_level: L1
   gate: Product evidence gate
-  status: ready_next
+  planning_state: ready_next
   priority: P1
   value: 3
   blocker: 3
@@ -330,7 +332,7 @@ items:
   lane: Productization
   dependency_level: L2
   gate: Runtime gate
-  status: ready_next
+  planning_state: ready_next
   priority: P2
   value: 3
   blocker: 3
@@ -369,7 +371,7 @@ items:
   lane: Productization
   dependency_level: L2
   gate: Product priority gate
-  status: ready_next
+  planning_state: ready_next
   priority: P2
   value: 3
   blocker: 3
@@ -407,7 +409,7 @@ items:
   lane: Contract
   dependency_level: L2
   gate: Domain contract gate
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P2
   value: 4
   blocker: 4
@@ -446,7 +448,7 @@ items:
   lane: Contract
   dependency_level: L2
   gate: Domain contract gate
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P2
   value: 3
   blocker: 4
@@ -481,7 +483,7 @@ items:
   lane: Contract
   dependency_level: L3
   gate: Domain contract gate
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P2
   value: 3
   blocker: 4
@@ -519,7 +521,7 @@ items:
   lane: Contract
   dependency_level: L3
   gate: Product contract gate
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P3
   value: 3
   blocker: 4
@@ -556,7 +558,7 @@ items:
   lane: Deferred
   dependency_level: L4
   gate: Policy deferred
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P3
   value: 2
   blocker: 5
@@ -592,7 +594,7 @@ items:
   lane: Deferred
   dependency_level: L4
   gate: Policy deferred
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P3
   value: 2
   blocker: 5
@@ -629,7 +631,7 @@ items:
   lane: Deferred
   dependency_level: L4
   gate: Policy deferred
-  status: blocked_deferred
+  planning_state: blocked_deferred
   priority: P3
   value: 2
   blocker: 5
@@ -672,10 +674,10 @@ edges:
   label: surface/projection safety
 - source: WR-005
   target: WR-001
-  label: status alignment
+  label: roadmap alignment
 - source: WR-001
   target: WR-006
-  label: DRF3-DRF5 sequence
+  label: post-DRF3 sequence
 - source: WR-003
   target: WR-006
   label: product-surface APIs

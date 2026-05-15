@@ -27,10 +27,12 @@ app = typer.Typer(no_args_is_help=True, help="Generate Runenwerk roadmap docs an
 def render_outputs(roadmap: RoadmapState) -> dict[Path, str]:
     decision_register = REPO_ROOT / roadmap.render.decision_register
     dependency_roadmap = REPO_ROOT / roadmap.render.dependency_roadmap
+    current_candidates_roadmap = REPO_ROOT / roadmap.render.current_candidates_roadmap
     triage = REPO_ROOT / roadmap.render.triage
     return {
         decision_register: render_decision_register(roadmap),
         dependency_roadmap: render_dependency_roadmap(roadmap),
+        current_candidates_roadmap: render_current_candidates_roadmap(roadmap),
         triage: render_triage_document(triage, roadmap),
     }
 
@@ -53,6 +55,7 @@ def render_decision_register(roadmap: RoadmapState) -> str:
         "  - ./roadmap-items.yaml",
         "  - ./schemas/roadmap-items.schema.json",
         "  - ./diagrams/value-weighted-dependency-roadmap.puml",
+        "  - ./diagrams/current-roadmap-candidates.puml",
         "---",
         "",
         "# Roadmap Decision Register",
@@ -87,8 +90,8 @@ def render_decision_register(roadmap: RoadmapState) -> str:
         "",
         "## Scorecard",
         "",
-        "| ID | Track | Lane | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |",
-        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
+        "| ID | Track | Lane | Planning state | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |",
+        "|---|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
     ]
     for item in roadmap.items:
         lines.append(
@@ -98,6 +101,7 @@ def render_decision_register(roadmap: RoadmapState) -> str:
                     item.id,
                     item.title,
                     item.lane,
+                    item.planning_state,
                     item.dependency_level,
                     item.gate,
                     str(item.value),
@@ -134,7 +138,7 @@ def render_decision_register(roadmap: RoadmapState) -> str:
 
 def render_dependency_roadmap(roadmap: RoadmapState) -> str:
     levels = [
-        ("L0", "Level 0 - Parallel Now"),
+        ("L0", "Level 0 - Completed / Support Substrate"),
         ("L1", "Level 1 - Depends On Current Stabilization"),
         ("L2", "Level 2 - Productization / Contract-Gated"),
         ("L3", "Level 3 - Downstream Domain Tracks"),
@@ -161,6 +165,12 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
         "  BorderColor<<V2>> #666666",
         "  BackgroundColor<<V1>> #F5F5F5",
         "  BorderColor<<V1>> #999999",
+        "  BackgroundColor<<completed>> #EEEEEE",
+        "  BorderColor<<completed>> #666666",
+        "  FontColor<<completed>> #666666",
+        "  BackgroundColor<<support_only>> #F4F4F4",
+        "  BorderColor<<support_only>> #777777",
+        "  FontColor<<support_only>> #666666",
         "}",
         "",
         "legend right",
@@ -168,10 +178,11 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
         "  Value-weighted layered PDM / Activity-on-Node roadmap",
         "",
         "  <b>Layout</b>",
-        "  Same level = parallelizable work",
+        "  Same level = dependency tier, not necessarily selectable work",
         "  Downward edge = dependency or sequencing gate",
         "  Scores rank comparable work only.",
         "  Gate and dependency level win before score.",
+        "  Completed and support-only nodes are context, not batch candidates.",
         "",
         "  <b>Value Weight</b>",
         "  <#FFDCDC> V5 = unlocks current focus or many downstream tracks",
@@ -212,12 +223,95 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
 def render_component(item: RoadmapItem) -> str:
     label_lines = [
         f"{item.id} {item.diagram_title}",
+        f"state={item.planning_state}",
         f"score={item.score:.1f} gate={item.gate.lower()}",
         f"{item.value_label} {item.blocker_label}",
         "call=" + "\\n".join(item.diagram_call),
     ]
     label = "\\n".join(label_lines).replace('"', '\\"')
-    return f'  component "{label}" as {item.alias} <<{item.value_label}>>'
+    return f'  component "{label}" as {item.alias} <<{component_stereotype(item)}>>'
+
+
+def component_stereotype(item: RoadmapItem) -> str:
+    if item.planning_state in {"completed", "support_only"}:
+        return item.planning_state
+    return item.value_label
+
+
+def render_current_candidates_roadmap(roadmap: RoadmapState) -> str:
+    candidates = [item for item in roadmap.items if item.can_enter_implementation_batch]
+    candidate_ids = {item.id for item in candidates}
+    dependency_ids = {dependency for item in candidates for dependency in item.dependencies}
+    dependencies = [item for item in roadmap.items if item.id in dependency_ids and item.id not in candidate_ids]
+    by_id = roadmap.by_id
+    lines = [
+        "@startuml",
+        "title Runenwerk Current Roadmap Candidates",
+        "",
+        "top to bottom direction",
+        "skinparam componentStyle rectangle",
+        "skinparam shadowing false",
+        "skinparam packageStyle rectangle",
+        "skinparam defaultFontName Monospaced",
+        "",
+        "skinparam component {",
+        "  BackgroundColor<<candidate>> #FFF2CC",
+        "  BorderColor<<candidate>> #AA7700",
+        "  BackgroundColor<<context>> #EEEEEE",
+        "  BorderColor<<context>> #666666",
+        "  FontColor<<context>> #666666",
+        "}",
+        "",
+        "legend right",
+        "  <b>Selectable Work</b>",
+        "  Only planning_state=current_candidate nodes may enter implementation batches.",
+        "  Context nodes are direct dependencies and are not selectable here.",
+        "endlegend",
+        "",
+    ]
+    if dependencies:
+        lines.append('package "Immediate Dependency Context" {')
+        for item in dependencies:
+            lines.append(render_candidate_context_component(item))
+            lines.append("")
+        lines.append("}")
+        lines.append("")
+    lines.append('package "Current Implementation Candidates" {')
+    for item in candidates:
+        lines.append(render_candidate_component(item))
+        lines.append("")
+    if not candidates:
+        lines.append('  component "No current_candidate items" as NO_CANDIDATES <<context>>')
+        lines.append("")
+    lines.append("}")
+    lines.append("")
+    for item in candidates:
+        for dependency in item.dependencies:
+            if dependency in by_id:
+                lines.append(f"{by_id[dependency].alias} -down-> {item.alias} : dependency context")
+    lines.extend(["", "@enduml", ""])
+    return "\n".join(lines)
+
+
+def render_candidate_component(item: RoadmapItem) -> str:
+    label_lines = [
+        f"{item.id} {item.diagram_title}",
+        f"state={item.planning_state}",
+        f"score={item.score:.1f} {item.value_label} {item.blocker_label}",
+        "call=" + "\\n".join(item.diagram_call),
+    ]
+    label = "\\n".join(label_lines).replace('"', '\\"')
+    return f'  component "{label}" as {item.alias} <<candidate>>'
+
+
+def render_candidate_context_component(item: RoadmapItem) -> str:
+    label_lines = [
+        f"{item.id} {item.diagram_title}",
+        f"state={item.planning_state}",
+        f"{item.value_label} {item.blocker_label}",
+    ]
+    label = "\\n".join(label_lines).replace('"', '\\"')
+    return f'  component "{label}" as {item.alias} <<context>>'
 
 
 def render_triage_document(path: Path, roadmap: RoadmapState) -> str:
@@ -237,18 +331,31 @@ def render_triage_document(path: Path, roadmap: RoadmapState) -> str:
 
 def render_triage_status(roadmap: RoadmapState) -> str:
     groups = {
-        "implement_now": [item for item in roadmap.items if item.status == "implement_now"],
-        "ready_next": [item for item in roadmap.items if item.status == "ready_next"],
-        "blocked_deferred": [item for item in roadmap.items if item.status == "blocked_deferred"],
+        "current_candidate": [item for item in roadmap.items if item.planning_state == "current_candidate"],
+        "support_only": [item for item in roadmap.items if item.planning_state == "support_only"],
+        "ready_next": [item for item in roadmap.items if item.planning_state == "ready_next"],
+        "completed": [item for item in roadmap.items if item.planning_state == "completed"],
+        "blocked_deferred": [item for item in roadmap.items if item.planning_state == "blocked_deferred"],
     }
     lines = [
-        "## Implement Now",
+        "## Current Candidate",
         "",
         "| ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |",
         "|---|---|---:|---:|---:|---:|---|---|",
     ]
-    for item in groups["implement_now"]:
+    for item in groups["current_candidate"]:
         lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.current_call} | {item.first_move} |")
+    lines.extend(
+        [
+            "",
+            "## Support Only",
+            "",
+            "| ID | Track | Priority | Value | Blocker | Score | Current call | Reactivation evidence |",
+            "|---|---|---:|---:|---:|---:|---|---|",
+        ]
+    )
+    for item in groups["support_only"]:
+        lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.current_call} | {item.next_evidence} |")
     lines.extend(
         [
             "",
@@ -260,6 +367,17 @@ def render_triage_status(roadmap: RoadmapState) -> str:
     )
     for item in groups["ready_next"]:
         lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.current_call} | {item.main_blocker} |")
+    lines.extend(
+        [
+            "",
+            "## Completed Evidence",
+            "",
+            "| ID | Track | Priority | Value | Blocker | Score | Current decision | Evidence |",
+            "|---|---|---:|---:|---:|---:|---|---|",
+        ]
+    )
+    for item in groups["completed"]:
+        lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.current_decision} | {item.next_evidence} |")
     lines.extend(
         [
             "",

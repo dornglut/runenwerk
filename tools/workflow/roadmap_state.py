@@ -35,7 +35,7 @@ ALLOWED_CONFIDENCE = {1.0, 0.8, 0.5, 0.3}
 ID_PATTERN = re.compile(r"^WR-\d{3}$")
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
-Status = Literal["implement_now", "ready_next", "blocked_deferred"]
+PlanningState = Literal["current_candidate", "support_only", "ready_next", "completed", "blocked_deferred"]
 Priority = Literal["P0", "P1", "P2", "P3"]
 ApprovalState = Literal["proposed", "approved", "rejected"]
 
@@ -57,6 +57,7 @@ class RoadmapMeta(StrictModel):
 class RenderTargets(StrictModel):
     decision_register: str
     dependency_roadmap: str
+    current_candidates_roadmap: str
     triage: str
 
 
@@ -81,7 +82,7 @@ class RoadmapItem(StrictModel):
     lane: str
     dependency_level: Level
     gate: str
-    status: Status
+    planning_state: PlanningState
     priority: Priority
     value: Annotated[int, Field(ge=1, le=5)]
     blocker: Annotated[int, Field(ge=1, le=5)]
@@ -158,7 +159,11 @@ class RoadmapItem(StrictModel):
 
     @property
     def can_enter_implementation_batch(self) -> bool:
-        return self.status == "implement_now" and self.blocker <= 2 and not self.is_policy_deferred
+        return self.planning_state == "current_candidate" and self.blocker <= 2 and not self.is_policy_deferred
+
+    @property
+    def can_enter_discovery_batch(self) -> bool:
+        return self.planning_state in {"current_candidate", "ready_next"} and self.blocker <= 4 and not self.is_policy_deferred
 
     @property
     def value_label(self) -> str:
@@ -321,15 +326,38 @@ def select_batch_candidates(
 
     selected: list[RoadmapItem] = []
     for item in candidates:
-        if item.is_policy_deferred:
+        reason = batch_ineligibility_reason(item, include_discovery=include_discovery)
+        if reason:
             continue
-        if include_discovery:
-            if item.blocker <= 4 and item.status != "blocked_deferred":
-                selected.append(item)
-        elif item.can_enter_implementation_batch:
-            selected.append(item)
+        selected.append(item)
+
+    if item_ids and len(selected) != len(candidates):
+        rejected = [
+            f"{item.id}: {batch_ineligibility_reason(item, include_discovery=include_discovery)}"
+            for item in candidates
+            if batch_ineligibility_reason(item, include_discovery=include_discovery)
+        ]
+        raise WorkflowError("\n".join(rejected))
 
     return sorted(selected, key=lambda item: (item.level_number, item.lane, -item.score, item.id))
+
+
+def batch_ineligibility_reason(item: RoadmapItem, *, include_discovery: bool = False) -> str | None:
+    if include_discovery:
+        if item.planning_state not in {"current_candidate", "ready_next"}:
+            return f"planning_state {item.planning_state!r} is not discovery-ready"
+        if item.blocker > 4:
+            return f"{item.blocker_label} is above the B4 discovery gate"
+        if item.is_policy_deferred:
+            return f"planning_state {item.planning_state!r} is policy-deferred"
+        return None
+    if item.planning_state != "current_candidate":
+        return f"planning_state {item.planning_state!r} is not current_candidate"
+    if item.blocker > 2:
+        return f"{item.blocker_label} is above the B2 implementation gate"
+    if item.is_policy_deferred:
+        return f"planning_state {item.planning_state!r} is policy-deferred"
+    return None
 
 
 def validate_write_scopes(items: list[RoadmapItem] | list[BatchItem]) -> list[str]:
@@ -363,8 +391,9 @@ def validate_batch_against_roadmap(manifest: BatchManifest, roadmap: RoadmapStat
         if roadmap_item is None:
             errors.append(f"{batch_item.id}: not present in roadmap source")
             continue
-        if not roadmap_item.can_enter_implementation_batch:
-            errors.append(f"{batch_item.id}: roadmap gate is not implementation-ready")
+        reason = batch_ineligibility_reason(roadmap_item)
+        if reason:
+            errors.append(f"{batch_item.id}: {reason}")
         if batch_item.title != roadmap_item.title:
             errors.append(f"{batch_item.id}: title is stale")
         if batch_item.lane != roadmap_item.lane:
