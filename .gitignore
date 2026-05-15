@@ -8,7 +8,7 @@ logs/*.tracy
 assets/models/*.blend1
 var/dev/server-cert.der
 *.txt
-playgrounds/godot-chunking-demo/.godot/editor/*
+playgrounds/godot-chunking-demo/.godot/
 editor-scenes/*.changes.ron
 editor-scenes/*.workspace.ron
 editor-scenes/workspaces/*.workspace.ron

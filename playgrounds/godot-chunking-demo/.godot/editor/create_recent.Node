@@ -1,9 +1,0 @@
-ChunkStreamingNode
-MeshInstance3D
-DirectionalLight3D
-WorldEnvironment
-SpringArm3D
-Camera3D
-CollisionShape3D
-ShapeCast3D
-CharacterBody3D

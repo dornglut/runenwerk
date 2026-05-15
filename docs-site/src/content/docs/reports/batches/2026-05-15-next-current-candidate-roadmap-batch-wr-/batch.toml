@@ -1,0 +1,26 @@
+id = "2026-05-15-next-current-candidate-roadmap-batch-wr-"
+goal = "Next current-candidate roadmap batch: WR-006 Runenwerk Draw DRF4 through DRF5"
+approval_state = "approved"
+base_branch = "main"
+base_sha = "0aaf987ca8b8f823fefd3fe19892c0a9ae37472b"
+execution_mode = "worktree"
+integration_risk = "isolated worktrees"
+integration_status = "not_started"
+closeout_status = "worker_validated_pending_integration"
+validation_results = ["2026-05-15T12:17:30+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine", "2026-05-15T12:19:54+00:00 batch validate passed: host batch validation; cargo test -p runenwerk_draw, cargo test -p engine"]
+roadmap_evidence_updates = []
+tooling_hardening = ["Fixed Godot generated cache churn by ignoring playgrounds/godot-chunking-demo/.godot/ and removing the previously tracked generated .godot cache/editor/import state from Git's index while preserving local files."]
+
+[[items]]
+id = "WR-006"
+title = "Runenwerk Draw DRF4 through DRF5"
+lane = "Core delivery"
+dependency_level = "L1"
+gate = "Ready next"
+score = 2.2
+branch = "codex/2026-05-15-next-current-candidate-roadmap-batch-wr--wr-006"
+worktree = "C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-15-next-current-candidate-roadmap-batch-wr-/WR-006"
+prompt_path = "C:/Users/joshi/Projekte/Runenwerk/docs-site/src/content/docs/reports/batches/2026-05-15-next-current-candidate-roadmap-batch-wr-/prompts/wr-006.md"
+status = "completed"
+write_scopes = ["apps/runenwerk_draw", "engine/src/plugins/render"]
+validations = ["cargo test -p runenwerk_draw", "cargo test -p engine"]
