@@ -89,6 +89,17 @@ For planning, implementation, routine selection, and closeout shape, follow `doc
 
 For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
 
+For new Codex threads, prefer the one-line repo workflow commands:
+
+```text
+Run task batch:kickoff -- --next and follow the generated workflow.
+Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+```
+
+`task batch:kickoff -- --next` is the normal implementation entrypoint for the
+current roadmap candidate batch. `task roadmap:intake` is the normal entrypoint
+for new designs or change ideas that need roadmap review before implementation.
+
 For architecture-sensitive changes, run the architecture governance review before implementation when the task may affect dependency direction, domain ownership, ADR-worthy decisions, migration strategy, tradeoffs, enforcement, or ownership mode.
 Use `task ai:architecture-governance -- --task "<task>" --scope "<scope>"` as the kickoff checklist.
 

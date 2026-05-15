@@ -54,13 +54,37 @@ python3 tools/context/export_repo_context.py --output ./Runenwerk-content.txt
 
 ## AI Workflow Kickoff
 
-Use this to generate a task-shaped AI workflow prompt and checklist:
+Use these one-line prompts when starting a new Codex thread from the repository
+root:
+
+```text
+Run task batch:kickoff -- --next and follow the generated workflow.
+```
+
+```text
+Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+```
+
+`batch:kickoff` creates the next approved-roadmap batch proposal from
+`planning_state=current_candidate` rows in
+`docs-site/src/content/docs/workspace/roadmap-items.yaml` and prints the exact
+approval, preparation, validation, worker prompt, scope-check, and closeout
+commands. It does not approve implementation unless `--approve` is explicitly
+passed.
+
+`roadmap:intake` creates a review proposal for a new design or change idea. It
+does not edit the canonical roadmap until an accepted proposal is applied with
+`task roadmap:apply-intake`.
+
+Lower-level prompt and checklist helpers are still available:
 
 ```bash
 task ai:list
 task ai:implementation -- --task "<task>" --scope "<scope>"
 task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap/design>"
 ```
+
+Details: `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
 
 Runenwerk does not configure remote CI. Run these validation shortcuts from the
 repository root before pushing, opening a PR, or closing out a batch:
