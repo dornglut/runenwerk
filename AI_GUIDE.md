@@ -14,6 +14,17 @@ For documentation placement, lifecycle states, frontmatter, and naming rules, fo
 
 For planning, implementation, routine selection, and closeout shape, follow `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
 
+For new Codex threads, use the one-line repo workflow commands first:
+
+```text
+Run task batch:kickoff -- --next and follow the generated workflow.
+Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+```
+
+Use `task batch:kickoff -- --next` for existing roadmap implementation work.
+Use `task roadmap:intake` for new designs or change ideas that need roadmap
+review before implementation.
+
 Read the relevant root docs:
 
 ```text
@@ -40,9 +51,10 @@ Where shell support is available, the stable wrapper is:
 task ai:architecture-governance -- --task "<task>" --scope "<scope>"
 ```
 
-For approved concurrent roadmap work, use:
+For approved concurrent roadmap work, the lower-level commands remain:
 
 ```text
+task batch:kickoff -- --next
 task roadmap:validate
 task batch:propose -- --goal "<batch goal>" --scope "L0"
 task ai:parallel-roadmap-batch -- --task "<batch goal>" --scope "<WR rows or roadmap docs>"
