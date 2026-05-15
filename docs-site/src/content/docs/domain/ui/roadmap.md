@@ -215,6 +215,17 @@ definition vocabulary
   -> editor/app guard
 ```
 
+Retained UI slice catalog:
+
+| Slice | Readiness gate | Downstream consumer |
+|---|---|---|
+| `IV2-menu-stack` | popup stack/menu scope vocabulary, parent/child anchor validation, retained menu formation, runtime layer/dismiss/focus enforcement, and shell/app guards | toolbar, viewport, tab action, and Switch Type menu polish |
+| `IV2-scroll-ownership` | scroll owner/axis/boundary policy, retained scroll formation, runtime input ownership reporting, and viewport fallback guards | scrollable popups, status bars, and panel overflow polish |
+| `IV2-menu-sizing` | intrinsic menu sizing, item fill, clamp, and scroll fallback contracts with runtime layout tests | popup width/item stretch fixes |
+| `IV2-chrome-slots` | close, active indicator, label, command, and drag slots with shell projection and primitive-order guards | tab/workspace chrome polish |
+| `IV2-dock-drop-zones` | tab reorder, split insertion, floating-host, invalid-target, and preview-only drop-zone policy with shell/controller guards | docking preview and tab-strip precedence polish |
+| `IV2-status-and-viewport-arbitration` | status overflow and viewport pointer/wheel arbitration with shell projection and app guard tests | FPS/frame-time status and compact viewport metadata polish |
+
 Phase 8 leads WR-024. Shell polish may proceed only as retained UI
 implementation after the relevant contract slice is defined, or as bounded
 compatibility evidence that names the old path, target formed contract, and
@@ -231,11 +242,11 @@ chrome, status, or viewport-input policy in app or shell code.
 - [x] Broaden reusable control adoption in editor surfaces. Status: implemented as of 2026-05-09 for the M4E cleanup. `editor_shell` now owns shared retained surface fixture helpers, shared compact reusable-control polish, and self-authoring control-panel composition; app providers supply DTOs/actions/routes instead of direct reusable-control construction.
 - [x] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: updated as of 2026-05-09; guard coverage rejects direct app-provider reusable-control construction while preserving existing `ui_definition` behavior-isolation and surface-routing checks.
 - [ ] Keep future UI execution strategies design-gated. Status: active/open; compiled-reactive UI and ECS-driven UI remain future formation targets only after a new active design or accepted ADR identifies the concrete surface, formation product, invalidation/debug model, and command/ratification boundaries. Any future target must consume normalized definitions plus formed interaction contracts.
-- [ ] Migrate retained UI slices to Interaction V2 contracts. Status: accepted/current; ADR 0009 owns the long-term contract decision and `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md` owns the migration spine for definition vocabulary, validation, `FormedInteractionModel`, retained formation adapters, runtime enforcement, and editor/app guards. The retained UI path remains the first target.
+- [ ] Migrate retained UI slices to Interaction V2 contracts. Status: accepted/current with slice catalog defined for `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration`. ADR 0009 owns the long-term contract decision and `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md` owns the migration spine for definition vocabulary, validation, `FormedInteractionModel`, retained formation adapters, runtime enforcement, and editor/app guards. The retained UI path remains the first target.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
-- [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume defined contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
+- [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-08.
 
 ## Non-Goals for This Track

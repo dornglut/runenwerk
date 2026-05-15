@@ -116,6 +116,11 @@ If this design becomes active, the hard rules should be:
 - alternate targets must consume `FormedInteractionModel`; they may not bypass
   popup stack, scroll ownership, focus, docking/drop-zone, viewport input, or
   status overflow contracts by reinterpreting raw authored definitions directly.
+- alternate targets must declare which retained Interaction V2 slice contracts
+  they consume or extend, starting from `IV2-menu-stack`,
+  `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`,
+  `IV2-dock-drop-zones`, and
+  `IV2-status-and-viewport-arbitration`.
 
 ## Open Questions
 

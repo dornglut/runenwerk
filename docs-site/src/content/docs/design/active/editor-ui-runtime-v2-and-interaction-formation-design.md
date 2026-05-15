@@ -130,13 +130,34 @@ changes:
 If a slice cannot name those six parts, it is not ready for implementation
 outside explicit compatibility evidence.
 
+## Retained UI Slice Catalog
+
+WR-025 defines the retained UI migration slices as contract work. The slice
+names are intentionally stable so WR-024 and later implementation work can cite
+the exact contract it consumes instead of redefining policy in shell or app
+code.
+
+| Slice | Old retained path | Formed contract | Retained adapter and runtime enforcement | Guard before WR-024 consumption |
+|---|---|---|---|---|
+| `IV2-menu-stack` | Toolbar, viewport, tab action, and Switch Type menus open from local shell state and concrete runtime anchors. | Popup stack, menu scope, parent/child anchor, outside-dismiss, escape, and focus-return records in `FormedInteractionModel`. | Editor shell maps menu descriptors into formed menu scopes; retained formation creates anchored menu products; `ui_runtime` owns layer order, hit testing, dismiss routing, and focus return. | Definition validation rejects submenu anchors without a stable parent scope; runtime tests cover popup layer order and outside-dismiss; shell tests cover Switch Type submenu anchoring and focus return. |
+| `IV2-scroll-ownership` | Scroll widgets report boundary input as unhandled, letting viewport zoom or sibling surfaces receive wheel input. | Scroll owner, axis policy, boundary-consumption, scrollbar-drag ownership, and viewport-fallback rejection records. | Retained adapter marks scrollable menu/status/panel regions with ownership policy; `ui_runtime` reports input ownership separately from content mutation. | Runtime tests cover nearest scroll owner, clipping, axis ownership, boundary consumption, and scrollbar capture; app guards prove viewport wheel input is delivered only after UI declines ownership. |
+| `IV2-menu-sizing` | Menu width, item fill, clamp, and scroll fallback are inferred from popup/button defaults. | Menu intrinsic measurement, max item width, popup clamp, item fill, and overflow fallback policy. | Editor definition/shell descriptors declare sizing intent; retained formation emits a menu product with explicit measurement policy; `ui_runtime` enforces item fill and scroll fallback after clamp. | Definition validation rejects menu lists without sizing/stretch policy; runtime layout tests prove clamped popups stretch items to measured width and scroll when required. |
+| `IV2-chrome-slots` | Tab and workspace close/active indicators are overlay popups competing with labels and drag regions. | Structural chrome slots for close affordance, active indicator, label, command area, and drag region. | Editor shell maps tab/workspace chrome descriptors into formed chrome slots; retained formation emits structural nodes instead of overlay adornments; `ui_runtime` preserves slot hit precedence. | Shell tests prove close, active indicator, label, and drag slots do not overlap; primitive-order tests cover visual precedence where overlay behavior used to hide conflicts. |
+| `IV2-dock-drop-zones` | Dock previews and tab reorder zones compete through local hit-test order and reserved preview spacing. | Dock/drop-zone priority, invalid target, tab reorder, split insertion, floating host, and preview-only state records. | Editor shell projects drag state into formed drop-zone candidates; retained formation renders preview-only products; `ui_runtime` applies drop-zone hit precedence without mutating workspace layout. | Shell/controller tests cover split-border precedence, tab reorder precedence, invalid targets, candidate cycling, and preview-only state without layout reservation. |
+| `IV2-status-and-viewport-arbitration` | Viewport metrics/status controls are projected as local text or overlays with no explicit overflow/input ownership rule. | Status overflow, essential metric priority, compact wrapping/scrolling, and viewport input arbitration policy. | App/runtime metrics remain app-owned data; editor shell maps them into formed status descriptors; retained formation emits status products; `ui_runtime` owns overflow hit/input behavior. | Shell tests cover FPS/frame-time projection and status overflow; app guards prove viewport input remains fail-closed while a status or popup surface owns pointer or wheel input. |
+
+These slices are not an implementation order for all future UI work. They are
+the minimum contract catalog needed before retained UI polish can proceed
+without recreating the same policy in several layers.
+
 ## Strangler Migration
 
 Phase 1 - Design Gate
 
 - Accept ADR 0009, update roadmap source/indexes, and keep subordinate links from the existing polish design.
 - Do not change runtime behavior in this phase.
-- Exit when roadmap render/check and docs validation pass.
+- Exit when roadmap render/check and docs validation pass and the retained UI
+  slice catalog is linked from the UI and editor roadmaps.
 
 Phase 2 - Menus And Scroll
 

@@ -136,6 +136,17 @@ Shell polish and popup/adornment/drop-preview documents can supply migration
 evidence, but they do not move long-term popup, scroll, focus, docking, chrome,
 status, or viewport-input ownership out of this UI/editor/app split.
 
+The current retained UI migration slice catalog is:
+
+| Slice | `domain/ui` responsibility | Adjacent owner responsibility |
+|---|---|---|
+| `IV2-menu-stack` | generic popup/menu scope records, validation, retained formation, layer order, hit testing, outside-dismiss, and focus-return enforcement | `domain/editor/editor_definition` and `editor_shell` provide editor menu descriptors and shell adapters; `apps/runenwerk_editor` executes routed commands |
+| `IV2-scroll-ownership` | scroll owner and axis policy, boundary-consumption, scrollbar capture, and input ownership reporting | editor/app layers keep viewport zoom and provider behavior outside UI authority until UI declines ownership |
+| `IV2-menu-sizing` | menu sizing/stretch policy, retained menu measurement, clamp, and scroll fallback | editor descriptors provide menu intent without one-off shell/runtime defaults |
+| `IV2-chrome-slots` | generic chrome slot vocabulary and retained slot formation/enforcement | editor shell owns tab/workspace chrome semantics, labels, commands, and route mapping |
+| `IV2-dock-drop-zones` | generic drop-zone/hit priority vocabulary where reusable; retained runtime enforces formed preview hit policy | editor shell owns workspace docking intent, preview-only state, and workspace mutation on commit |
+| `IV2-status-and-viewport-arbitration` | status overflow policy and UI input ownership reporting | app/editor layers own metrics data, viewport resources, and fail-closed viewport input arbitration |
+
 Related non-`domain/ui` owners currently in the runtime path:
 
 - `domain/editor/editor_shell`
