@@ -476,6 +476,70 @@ impl<'w> SystemParam<'w> for Commands {
     }
 }
 
+macro_rules! impl_tuple_system_param {
+    ($(($index:tt, $param:ident)),+ $(,)?) => {
+        impl<'w, $($param),+> SystemParam<'w> for ($($param,)+)
+        where
+            $($param: SystemParam<'w>,)+
+        {
+            type State = ($($param::State,)+);
+
+            fn init_state(world: &mut World) -> Result<Self::State, SystemParamError> {
+                Ok((
+                    $($param::init_state(world)?,)+
+                ))
+            }
+
+            fn access(state: &Self::State) -> QueryAccess {
+                let mut access = QueryAccess::default();
+                $(
+                    access.extend($param::access(&state.$index));
+                )+
+                access
+            }
+
+            fn slot_descriptor() -> ParamSlotDescriptor {
+                ParamSlotDescriptor {
+                    kind: "tuple",
+                    label: "Tuple",
+                    type_name: std::any::type_name::<Self>(),
+                }
+            }
+
+            unsafe fn extract(
+                state: &'w mut Self::State,
+                world: *mut World,
+                commands: *mut Commands,
+            ) -> Result<Self, SystemParamError> {
+                Ok((
+                    $(
+                        // Safety: tuple extraction forwards the scheduler-validated
+                        // world and command pointers to each child parameter.
+                        unsafe { $param::extract(&mut state.$index, world, commands)? },
+                    )+
+                ))
+            }
+        }
+    };
+}
+
+impl_tuple_system_param!((0, A), (1, B));
+impl_tuple_system_param!((0, A), (1, B), (2, C));
+impl_tuple_system_param!((0, A), (1, B), (2, C), (3, D));
+impl_tuple_system_param!((0, A), (1, B), (2, C), (3, D), (4, E));
+impl_tuple_system_param!((0, A), (1, B), (2, C), (3, D), (4, E), (5, F));
+impl_tuple_system_param!((0, A), (1, B), (2, C), (3, D), (4, E), (5, F), (6, G),);
+impl_tuple_system_param!(
+    (0, A),
+    (1, B),
+    (2, C),
+    (3, D),
+    (4, E),
+    (5, F),
+    (6, G),
+    (7, H),
+);
+
 impl<'w, T: 'static> SystemParam<'w> for BroadcastReader<T> {
     type State = BroadcastReaderState;
 

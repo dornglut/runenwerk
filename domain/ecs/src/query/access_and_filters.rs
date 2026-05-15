@@ -205,6 +205,49 @@ impl QueryAccess {
     pub(crate) fn set_deferred_structural_mutation(&mut self) {
         self.deferred_structural_mutation = true;
     }
+
+    pub(crate) fn extend(&mut self, other: Self) {
+        for access in other.component_reads {
+            push_unique_access(&mut self.component_reads, access);
+        }
+        for access in other.orphaned_component_reads {
+            push_unique_access(&mut self.orphaned_component_reads, access);
+        }
+        for access in other.component_writes {
+            push_unique_access(&mut self.component_writes, access);
+        }
+        for access in other.resource_reads {
+            push_unique_access(&mut self.resource_reads, access);
+        }
+        for access in other.resource_writes {
+            push_unique_access(&mut self.resource_writes, access);
+        }
+        for access in other.broadcast_reads {
+            push_unique_access(&mut self.broadcast_reads, access);
+        }
+        for access in other.broadcast_writes {
+            push_unique_access(&mut self.broadcast_writes, access);
+        }
+        for access in other.work_queue_reads {
+            push_unique_access(&mut self.work_queue_reads, access);
+        }
+        for access in other.work_queue_writes {
+            push_unique_access(&mut self.work_queue_writes, access);
+        }
+        for access in other.work_queue_drains {
+            push_unique_access(&mut self.work_queue_drains, access);
+        }
+        for access in other.tick_buffer_reads {
+            push_unique_access(&mut self.tick_buffer_reads, access);
+        }
+        for access in other.tick_buffer_writes {
+            push_unique_access(&mut self.tick_buffer_writes, access);
+        }
+        for access in other.tick_buffer_drains {
+            push_unique_access(&mut self.tick_buffer_drains, access);
+        }
+        self.deferred_structural_mutation |= other.deferred_structural_mutation;
+    }
 }
 
 pub trait QueryFilter {

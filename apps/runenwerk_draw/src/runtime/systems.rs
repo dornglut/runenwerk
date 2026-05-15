@@ -39,6 +39,15 @@ use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerReso
 pub const DRAWING_UI_FRAME_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(4_001);
 pub const DRAWING_RENDER_FRAME_PRODUCER_ID: RenderFrameProducerId = render_frame_producer_id(4_001);
 
+type DrawingFrameSubmissionResources = (
+    ResMut<UiFrameSubmissionRegistryResource>,
+    ResMut<RenderDynamicTextureTargetRequestRegistryResource>,
+    ResMut<RenderDynamicTextureUploadRegistryResource>,
+    ResMut<PreparedRenderProductSelectionResource>,
+    ResMut<PreparedRenderFrameRequestResource>,
+    ResMut<RenderDebugConfigResource>,
+);
+
 const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
     match UiFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
@@ -286,14 +295,17 @@ pub fn submit_draw_frame_system(
     window: Res<WindowState>,
     mut host: ResMut<DrawingHostResource>,
     mut upload_tracker: ResMut<DrawingInkUploadTrackerResource>,
-    mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
-    mut dynamic_targets: ResMut<RenderDynamicTextureTargetRequestRegistryResource>,
-    mut texture_uploads: ResMut<RenderDynamicTextureUploadRegistryResource>,
-    mut product_selections: ResMut<PreparedRenderProductSelectionResource>,
-    mut frame_requests: ResMut<PreparedRenderFrameRequestResource>,
-    mut debug_config: ResMut<RenderDebugConfigResource>,
     gpu_flow: Res<DrawingInkGpuFlowResource>,
+    render_submission: DrawingFrameSubmissionResources,
 ) {
+    let (
+        mut submissions,
+        mut dynamic_targets,
+        mut texture_uploads,
+        mut product_selections,
+        mut frame_requests,
+        mut debug_config,
+    ) = render_submission;
     let size = UiSize::new(window.size_px.0 as f32, window.size_px.1 as f32);
     let frame = host.app.rebuild_frame(size).clone();
     let committed_products = host
