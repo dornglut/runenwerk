@@ -111,7 +111,7 @@ Blocker weight:
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
 | WR-018 | Rendered World V1 | P0 | V5 | B2 | 3.0 | Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers on the same extracted packet. | Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry. |
-| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption, retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then define the retained UI migration slice catalog through the Interaction V2 spine before WR-024 consumes it. |
+| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate with first runtime-backed slice implemented for IV2-menu-stack plus IV2-scroll-ownership. WR-024 shell polish may consume only the landed menu-stack/scroll-ownership contracts, while IV2-menu-sizing, IV2-chrome-slots, dock/drop-zone, and status/viewport arbitration remain WR-025-gated. | Use the landed generic menu-stack and scroll-ownership spine before WR-024 touches popup dismissal, focus return, popup layering, submenu anchoring, or viewport wheel fallback; define the next named Interaction V2 contract slice before extending shell polish beyond those behaviors. |
 
 ## Support Only
 

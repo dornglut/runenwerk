@@ -18,10 +18,13 @@ use crate::{
 };
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, FormedRetainedUiProduct, FormedUiRoute,
-    NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding, UiDefinitionContext,
-    UiRouteSlotId, UiValue, form_retained_ui, normalize_authored_template,
+    AuthoredUiNodePath, AuthoredUiTemplate, FormedInteractionModel, FormedMenuStackScope,
+    FormedRetainedUiProduct, FormedScrollOwner, FormedUiRoute, NormalizedUiTemplate,
+    UiAvailability, UiAvailabilityBinding, UiDefinitionContext, UiMenuDismissPolicyDefinition,
+    UiRouteSlotId, UiScrollBoundaryPolicyDefinition, UiValue, form_retained_ui,
+    normalize_authored_template,
 };
+use ui_math::Axis;
 use ui_math::{UiInsets, UiSize};
 use ui_text::{FontId, TextVerticalAlign};
 use ui_theme::{ThemeTokens, UiColor};
@@ -176,6 +179,21 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
         AuthoredUiNodePath("root/menu_popup".to_string()),
     );
 
+    let mut interaction_model = FormedInteractionModel::default();
+    interaction_model.push_menu_scope(FormedMenuStackScope {
+        scope_id: format!("toolbar.{active_menu_id}"),
+        popup_widget_id: TOOLBAR_MENU_POPUP_WIDGET_ID,
+        anchor_widget_id: anchor,
+        parent_scope_id: None,
+        dismiss: UiMenuDismissPolicyDefinition::OutsidePointerDown,
+        focus_return: Some(anchor),
+    });
+    interaction_model.push_scroll_owner(FormedScrollOwner {
+        widget_id: TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID,
+        axes: vec![Axis::Vertical],
+        boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+    });
+
     Some(FormedRetainedUiProduct {
         root,
         routes_by_widget_id,
@@ -183,6 +201,7 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
         embeds_by_widget_id: BTreeMap::new(),
         diagnostics: Vec::new(),
         availability_by_widget_id,
+        interaction_model,
     })
 }
 

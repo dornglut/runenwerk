@@ -31,7 +31,9 @@ fn hit_test_node(
         return None;
     }
 
-    for child in node.children.iter().rev() {
+    let mut children = node.children.iter().enumerate().collect::<Vec<_>>();
+    children.sort_by_key(|(index, child)| (node_layer_order(child), *index));
+    for (_, child) in children.into_iter().rev() {
         if let Some(hit) = hit_test_node(child, layouts, point, clip) {
             return Some(hit);
         }
@@ -42,6 +44,14 @@ fn hit_test_node(
     }
 
     Some(node.id)
+}
+
+fn node_layer_order(node: &UiNode) -> u32 {
+    match &node.kind {
+        UiNodeKind::Popup(popup) => popup.layer_order,
+        UiNodeKind::RadialMenu(radial) => radial.layer_order,
+        _ => 0,
+    }
 }
 
 fn clip_rect_for_node(node: &UiNode, layout: &ComputedLayout) -> Option<ui_math::UiRect> {
@@ -116,7 +126,7 @@ fn combine_clip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ButtonNode, RadialMenuNode, UiRuntimeState, compute_tree_layout};
+    use crate::{ButtonNode, PopupNode, RadialMenuNode, UiRuntimeState, compute_tree_layout};
     use ui_math::{UiPoint, UiRect, UiSize};
     use ui_text::FontId;
     use ui_theme::ThemeTokens;
@@ -240,5 +250,65 @@ mod tests {
             Some(north_id)
         );
         assert_eq!(hit_test_widget(&tree, &layouts, east_point), Some(east_id));
+    }
+
+    #[test]
+    fn higher_layer_popup_wins_hit_testing_over_later_sibling() {
+        let theme = ThemeTokens::default();
+        let anchor_id = WidgetId(2);
+        let high_popup_id = WidgetId(3);
+        let high_item_id = WidgetId(4);
+        let low_popup_id = WidgetId(5);
+        let low_item_id = WidgetId(6);
+        let text_style = theme.body_small_text_style(FontId(1));
+        let mut high_popup = PopupNode::anchored_bottom_start(anchor_id, theme.clone());
+        high_popup.layer_order = 4;
+        let mut low_popup = PopupNode::anchored_bottom_start(anchor_id, theme.clone());
+        low_popup.layer_order = 2;
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(crate::PanelNode::new(theme.clone())),
+            vec![
+                UiNode::new(
+                    anchor_id,
+                    UiNodeKind::Button(ButtonNode::new("Open", text_style.clone(), theme.clone())),
+                ),
+                UiNode::with_children(
+                    high_popup_id,
+                    UiNodeKind::Popup(high_popup),
+                    vec![UiNode::new(
+                        high_item_id,
+                        UiNodeKind::Button(ButtonNode::new(
+                            "High",
+                            text_style.clone(),
+                            theme.clone(),
+                        )),
+                    )],
+                ),
+                UiNode::with_children(
+                    low_popup_id,
+                    UiNodeKind::Popup(low_popup),
+                    vec![UiNode::new(
+                        low_item_id,
+                        UiNodeKind::Button(ButtonNode::new("Low", text_style, theme)),
+                    )],
+                ),
+            ],
+        ));
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 320.0, 220.0),
+            &UiRuntimeState::default(),
+        );
+        let low_item = layouts
+            .get(&low_item_id)
+            .expect("low popup item should have layout")
+            .bounds;
+        let point = UiPoint::new(
+            low_item.x + low_item.width * 0.5,
+            low_item.y + low_item.height * 0.5,
+        );
+
+        assert_eq!(hit_test_widget(&tree, &layouts, point), Some(high_item_id));
     }
 }

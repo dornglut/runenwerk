@@ -1003,10 +1003,12 @@ items:
   dependencies:
   - WR-004
   write_scopes:
+  - domain/ui/ui_definition
+  - domain/ui/ui_runtime
+  - domain/editor/editor_shell
+  - apps/runenwerk_editor/tests/viewport_architecture_guards.rs
   - docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
   - docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md
-  - docs-site/src/content/docs/design/active/editor-ui-popup-adornment-drop-preview-contract.md
-  - docs-site/src/content/docs/design/deferred/ui-model-multiple-execution-strategies-design.md
   - docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md
   - docs-site/src/content/docs/domain/ui/README.md
   - docs-site/src/content/docs/domain/ui/architecture.md
@@ -1014,20 +1016,29 @@ items:
   - docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
   - docs-site/src/content/docs/workspace/roadmap-items.yaml
   validations:
+  - cargo test -p ui_definition
+  - cargo test -p ui_runtime scroll
+  - cargo test -p ui_runtime popup
+  - cargo test -p ui_runtime menu
+  - cargo test -p editor_shell
+  - cargo test -p runenwerk_editor viewport
+  - cargo test -p runenwerk_editor input_bridge
+  - cargo check -p runenwerk_editor
   - task roadmap:render
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: Accepted ADR 0009, active Interaction V2 design, roadmap row, subordinate polish-design link, and explicit
-    retained UI slice catalog for IV2-menu-stack, IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones,
-    and IV2-status-and-viewport-arbitration through the definition vocabulary, validation, formed model, retained adapter,
-    runtime enforcement, and editor/app guard spine.
+  next_evidence: Remaining retained UI migration slices after the first code-bearing IV2-menu-stack and IV2-scroll-ownership
+    guard slice landed; next work should consume those contracts for WR-024 shell polish or define the next named Interaction
+    V2 contract slice before implementation.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
-  current_call: Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption,
-    retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice.
-  first_move: Keep docs and roadmap source aligned with accepted ADR 0009, then define the retained UI migration slice
-    catalog through the Interaction V2 spine before WR-024 consumes it.
+  current_call: Accepted architecture gate with first runtime-backed slice implemented for IV2-menu-stack plus IV2-scroll-ownership.
+    WR-024 shell polish may consume only the landed menu-stack/scroll-ownership contracts, while IV2-menu-sizing,
+    IV2-chrome-slots, dock/drop-zone, and status/viewport arbitration remain WR-025-gated.
+  first_move: Use the landed generic menu-stack and scroll-ownership spine before WR-024 touches popup dismissal, focus
+    return, popup layering, submenu anchoring, or viewport wheel fallback; define the next named Interaction V2 contract
+    slice before extending shell polish beyond those behaviors.
   diagram_call:
   - retained UI first
   - named interaction slices

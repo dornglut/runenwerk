@@ -150,6 +150,33 @@ These slices are not an implementation order for all future UI work. They are
 the minimum contract catalog needed before retained UI polish can proceed
 without recreating the same policy in several layers.
 
+2026-05-15 implementation status:
+
+- `IV2-menu-stack` has its first code-bearing retained slice. `domain/ui/ui_definition/src/interaction.rs`
+  defines menu-scope records, `domain/ui/ui_definition/src/validate.rs::validate_menu`
+  rejects invalid scope identity/parenting, and `domain/ui/ui_runtime/src/input/hit_test.rs`
+  plus `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`
+  enforce popup layer order and Escape dismissal.
+- Outside pointer dismissal and focus return are enforced in
+  `domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`.
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`
+  adapts tab action and Switch Type menus into formed interaction scopes, and
+  `domain/editor/editor_shell/src/composition/toolbar_definition.rs::build_defined_toolbar_menu_popup_with_binding`
+  adapts toolbar menu popups.
+- `IV2-scroll-ownership` has its first code-bearing retained slice.
+  `domain/ui/ui_definition/src/form.rs::form_retained_ui` forms scroll-owner
+  records for retained scroll nodes, and
+  `domain/ui/ui_runtime/src/input/pointer.rs::apply_scroll_wheel_delta`
+  reports boundary wheel input as owned even when the offset does not mutate.
+- `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`
+  guards the production bridge boundary without moving viewport input authority
+  into `domain/ui`.
+
+The viewport tools/options/details popup adapters, menu sizing, chrome slots,
+dock/drop-zone policy, and status/viewport arbitration remain separate WR-025
+slices. WR-024 may consume only the landed menu-stack and scroll-ownership
+behaviors until those later slices exist.
+
 ## Strangler Migration
 
 Phase 1 - Design Gate

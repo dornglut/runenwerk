@@ -79,7 +79,9 @@ impl UiRuntime {
             UiInputEvent::Pointer(pointer) => {
                 dispatch_pointer_event(tree, layouts, &mut self.state, pointer)
             }
-            UiInputEvent::Keyboard(keyboard) => self.dispatch_keyboard_event(tree, keyboard),
+            UiInputEvent::Keyboard(keyboard) => {
+                self.dispatch_keyboard_event(tree, layouts, keyboard)
+            }
             UiInputEvent::Text(text) => self.dispatch_text_event(tree, text),
         }
     }
@@ -174,8 +176,16 @@ impl UiRuntime {
     fn dispatch_keyboard_event(
         &mut self,
         tree: &UiTree,
+        layouts: &ComputedLayoutMap,
         event: &ui_input::KeyboardEvent,
     ) -> UiInputOutcome {
+        if matches!(event.key, Key::Escape)
+            && matches!(event.state, KeyState::Pressed | KeyState::Repeated)
+            && let Some(outcome) = self.dispatch_popup_escape_dismiss(tree, layouts)
+        {
+            return outcome;
+        }
+
         if matches!(event.key, Key::Tab)
             && matches!(event.state, KeyState::Pressed | KeyState::Repeated)
         {
@@ -201,6 +211,35 @@ impl UiRuntime {
         };
 
         outcome(Some(target), response, interactions)
+    }
+
+    fn dispatch_popup_escape_dismiss(
+        &mut self,
+        tree: &UiTree,
+        layouts: &ComputedLayoutMap,
+    ) -> Option<UiInputOutcome> {
+        let (popup, anchor) = topmost_popup_scope(tree, layouts)?;
+        let focus_return = tree.walk().any(|node| node.id == anchor).then_some(anchor);
+        let focus_change = self.set_focus(focus_return);
+
+        let mut interactions = UiInteractionResults::new();
+        interactions.push(UiInteraction::PopupDismissRequested {
+            popup,
+            focus_return,
+        });
+        if !matches!(focus_change, FocusChange::None) {
+            interactions.push(UiInteraction::FocusChanged(focus_change));
+        }
+
+        let response = InputResponse {
+            propagation: EventPropagation::Stop,
+            capture: PointerCapture::None,
+            focus_change,
+            repaint: !matches!(focus_change, FocusChange::None),
+            relayout: false,
+        };
+
+        Some(outcome(Some(popup), response, interactions))
     }
 
     fn dispatch_text_event(
@@ -313,6 +352,24 @@ fn focusable_widgets(tree: &UiTree) -> Vec<WidgetId> {
         .collect()
 }
 
+fn topmost_popup_scope(tree: &UiTree, layouts: &ComputedLayoutMap) -> Option<(WidgetId, WidgetId)> {
+    tree.walk()
+        .enumerate()
+        .filter_map(|(tree_order, node)| {
+            let UiNodeKind::Popup(popup) = &node.kind else {
+                return None;
+            };
+            layouts.contains_key(&node.id).then_some((
+                popup.layer_order,
+                tree_order,
+                node.id,
+                popup.anchor,
+            ))
+        })
+        .max_by_key(|(layer_order, tree_order, _, _)| (*layer_order, *tree_order))
+        .map(|(_, _, popup, anchor)| (popup, anchor))
+}
+
 fn focused_widget_captures_viewport_shortcuts(tree: &UiTree, widget_id: WidgetId) -> bool {
     let Some(node) = tree.walk().find(|node| node.id == widget_id) else {
         return false;
@@ -391,9 +448,9 @@ mod tests {
     use super::*;
     use crate::output::build_ui_frame::{scrollbar_geometry, scrollbar_geometry_for_axis};
     use crate::{
-        ButtonNode, ImageNode, NumericInputNode, PanelNode, ScrollInputPolicies, ScrollInputPolicy,
-        ScrollNode, SpacerNode, StackNode, TabsNode, TextInputNode, ToggleNode, UiNode, UiNodeKind,
-        ViewportSurfaceEmbedNode,
+        ButtonNode, ImageNode, NumericInputNode, PanelNode, PopupNode, ScrollInputPolicies,
+        ScrollInputPolicy, ScrollNode, SpacerNode, StackNode, TabsNode, TextInputNode, ToggleNode,
+        UiNode, UiNodeKind, ViewportSurfaceEmbedNode,
     };
     use ui_input::{
         FocusChange, FocusTargetId, Key, KeyState, KeyboardEvent, Modifiers, PointerButton,
@@ -995,6 +1052,168 @@ mod tests {
                 repaint: true,
                 relayout: true,
             },
+        );
+    }
+
+    #[test]
+    fn outside_pointer_down_requests_popup_dismiss_and_returns_focus_to_anchor() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let anchor_id = WidgetId(31);
+        let popup_id = WidgetId(32);
+        let item_id = WidgetId(33);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![
+                UiNode::new(
+                    anchor_id,
+                    UiNodeKind::Button(ButtonNode::new("Menu", text_style.clone(), theme.clone())),
+                ),
+                UiNode::with_children(
+                    popup_id,
+                    UiNodeKind::Popup(PopupNode::anchored_bottom_start(anchor_id, theme.clone())),
+                    vec![UiNode::new(
+                        item_id,
+                        UiNodeKind::Button(ButtonNode::new("Open", text_style, theme)),
+                    )],
+                ),
+            ],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 320.0, 220.0);
+        let mut runtime = UiRuntime::new();
+        runtime.set_focused_widget(Some(item_id));
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: UiPoint::new(
+                    bounds.x + bounds.width - 4.0,
+                    bounds.y + bounds.height - 4.0,
+                ),
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(popup_id));
+        assert_eq!(
+            runtime.state().focused_target,
+            Some(FocusTargetId(anchor_id.0)),
+        );
+        assert!(
+            outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::PopupDismissRequested {
+                    popup: popup_id,
+                    focus_return: Some(anchor_id),
+                }),
+            "outside pointer down should request popup stack dismissal",
+        );
+        assert!(
+            outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::FocusChanged(FocusChange::Set(
+                    FocusTargetId(anchor_id.0),
+                ))),
+            "dismissal should report focus return to the popup anchor",
+        );
+    }
+
+    #[test]
+    fn escape_requests_top_popup_dismiss_and_returns_focus_to_anchor() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let low_anchor_id = WidgetId(34);
+        let high_anchor_id = WidgetId(35);
+        let low_popup_id = WidgetId(36);
+        let high_popup_id = WidgetId(37);
+        let high_item_id = WidgetId(38);
+        let mut high_popup = PopupNode::anchored_bottom_start(high_anchor_id, theme.clone());
+        high_popup.layer_order = 3;
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![
+                UiNode::new(
+                    low_anchor_id,
+                    UiNodeKind::Button(ButtonNode::new("Low", text_style.clone(), theme.clone())),
+                ),
+                UiNode::new(
+                    high_anchor_id,
+                    UiNodeKind::Button(ButtonNode::new("High", text_style.clone(), theme.clone())),
+                ),
+                UiNode::with_children(
+                    low_popup_id,
+                    UiNodeKind::Popup(PopupNode::anchored_bottom_start(
+                        low_anchor_id,
+                        theme.clone(),
+                    )),
+                    vec![UiNode::new(
+                        WidgetId(39),
+                        UiNodeKind::Button(ButtonNode::new(
+                            "Low item",
+                            text_style.clone(),
+                            theme.clone(),
+                        )),
+                    )],
+                ),
+                UiNode::with_children(
+                    high_popup_id,
+                    UiNodeKind::Popup(high_popup),
+                    vec![UiNode::new(
+                        high_item_id,
+                        UiNodeKind::Button(ButtonNode::new("High item", text_style, theme)),
+                    )],
+                ),
+            ],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 360.0, 240.0);
+        let mut runtime = UiRuntime::new();
+        runtime.set_focused_widget(Some(high_item_id));
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Keyboard(KeyboardEvent {
+                key: Key::Escape,
+                state: KeyState::Pressed,
+                modifiers: Modifiers::default(),
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(high_popup_id));
+        assert_eq!(
+            runtime.state().focused_target,
+            Some(FocusTargetId(high_anchor_id.0)),
+        );
+        assert!(
+            outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::PopupDismissRequested {
+                    popup: high_popup_id,
+                    focus_return: Some(high_anchor_id),
+                }),
+            "escape should dismiss the topmost popup scope",
+        );
+        assert!(
+            !outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::PopupDismissRequested {
+                    popup: low_popup_id,
+                    focus_return: Some(low_anchor_id),
+                })
         );
     }
 
@@ -2185,6 +2404,56 @@ mod tests {
         assert!(
             vertical_offset > 0.0,
             "vertical ancestor should consume wheel when nested horizontal scroll has no horizontal delta (vertical={vertical_offset}, horizontal={horizontal_offset})",
+        );
+    }
+
+    #[test]
+    fn wheel_scroll_at_boundary_is_owned_without_mutating_offset() {
+        let scroll_id = WidgetId(91);
+        let child_id = WidgetId(92);
+        let tree = vertical_overflow_scroll_tree(scroll_id, child_id);
+        let bounds = UiRect::new(0.0, 0.0, 220.0, 120.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let max_offset = runtime
+            .max_scroll_offset_for_layout(&tree, &layouts, scroll_id)
+            .expect("scroll max offset should exist");
+        runtime.set_scroll_offset(scroll_id, max_offset);
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let pointer = center_of(&layouts, scroll_id);
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: pointer,
+                delta: UiVector::new(0.0, -8.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(scroll_id));
+        assert_eq!(
+            outcome.dispatch.response.propagation,
+            ui_input::EventPropagation::Stop,
+            "boundary wheel input remains owned by the nearest scroll owner",
+        );
+        assert_eq!(runtime.scroll_offset(scroll_id), max_offset);
+        assert!(
+            outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::ScrollInputOwned {
+                    owner: scroll_id,
+                    axis: Axis::Vertical,
+                    changed: false,
+                    at_boundary: true,
+                }),
+            "boundary ownership should be reported separately from content mutation",
         );
     }
 

@@ -589,6 +589,25 @@ fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session()
 }
 
 #[test]
+fn production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership() {
+    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+
+    assert!(
+        input_bridge.contains("pointer_event_consumed_by_ui(&outcome)"),
+        "viewport scroll fallback must consult the ui_runtime dispatch outcome",
+    );
+    assert!(
+        input_bridge.contains("value.dispatch.response.propagation == EventPropagation::Stop"),
+        "viewport scroll fallback must treat ui_runtime stop propagation as UI ownership",
+    );
+    assert!(
+        input_bridge.contains("ViewportRenderStateCommand::ZoomCamera")
+            && input_bridge.contains("!pointer_event_consumed_by_ui(&outcome)"),
+        "camera zoom should be enqueued only after UI scroll ownership declines the wheel event",
+    );
+}
+
+#[test]
 fn production_picking_routes_only_through_viewport_scene_region() {
     let picking = include_str!("../src/runtime/systems/picking.rs");
 

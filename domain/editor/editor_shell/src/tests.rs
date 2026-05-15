@@ -26,7 +26,8 @@ use crate::{
     tab_close_button_widget_id, tab_stack_action_menu_popup_widget_id,
     tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
     tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
     tool_surface_definition_id, tool_surface_kind_definition_key,
     toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
@@ -323,6 +324,28 @@ fn active_top_bar_menu_projects_as_popup_without_pushing_content_down() {
             .expect("inactive body root")
             .bounds,
         "opening a menu must not add a second toolbar row or push content down"
+    );
+    assert!(
+        active
+            .projection_artifacts
+            .interaction_model
+            .menu_scopes
+            .iter()
+            .any(
+                |scope| scope.popup_widget_id == crate::TOOLBAR_MENU_POPUP_WIDGET_ID
+                    && scope.anchor_widget_id == crate::TOOLBAR_FILE_MENU_WIDGET_ID
+                    && scope.parent_scope_id.is_none()
+            ),
+        "toolbar popup should expose a formed Interaction V2 menu-stack scope",
+    );
+    assert!(
+        active
+            .projection_artifacts
+            .interaction_model
+            .scroll_owners
+            .iter()
+            .any(|owner| owner.widget_id == crate::TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID),
+        "toolbar popup scroll should expose a formed Interaction V2 scroll owner",
     );
 }
 
@@ -1174,6 +1197,82 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
             && *anchor_widget_id == tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
             && *split_stack == viewport_stack
     ));
+}
+
+#[test]
+fn tab_stack_surface_submenu_keeps_parent_menu_stack_scope() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let active_frame_model = frame_model_for_workspace(&workspace)
+        .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
+            kind: TabStackPopupMenuKind::SurfaceKinds,
+            tab_stack_id: viewport_stack,
+            anchor_widget_id: tab_stack_surface_submenu_anchor_widget_id(viewport_stack),
+        }));
+    let active_build =
+        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+
+    assert!(ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_action_menu_popup_widget_id(viewport_stack)
+    ));
+    assert!(ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
+    ));
+    assert!(ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_surface_menu_popup_widget_id(viewport_stack)
+    ));
+
+    let layouts = ui_runtime::compute_tree_layout(
+        &active_build.tree,
+        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
+        &ui_runtime::UiRuntimeState::default(),
+    );
+    let surface_popup = layouts
+        .get(&tab_stack_surface_menu_popup_widget_id(viewport_stack))
+        .expect("surface submenu popup should lay out from its parent menu anchor");
+    assert!(
+        surface_popup.bounds.width > 0.0 && surface_popup.bounds.height > 0.0,
+        "surface submenu must not fall back to a zero-size unanchored layout",
+    );
+
+    let scopes = &active_build
+        .projection_artifacts
+        .interaction_model
+        .menu_scopes;
+    let parent_scope = scopes
+        .iter()
+        .find(|scope| {
+            scope.popup_widget_id == tab_stack_action_menu_popup_widget_id(viewport_stack)
+        })
+        .expect("parent area-actions menu scope should be formed");
+    let child_scope = scopes
+        .iter()
+        .find(|scope| {
+            scope.popup_widget_id == tab_stack_surface_menu_popup_widget_id(viewport_stack)
+        })
+        .expect("surface submenu scope should be formed");
+    assert_eq!(
+        child_scope.parent_scope_id.as_deref(),
+        Some(parent_scope.scope_id.as_str()),
+        "surface submenu should declare the parent area-actions menu scope",
+    );
+    assert_eq!(
+        child_scope.anchor_widget_id,
+        tab_stack_surface_submenu_anchor_widget_id(viewport_stack),
+    );
+    assert!(
+        active_build
+            .projection_artifacts
+            .interaction_model
+            .scroll_owners
+            .iter()
+            .any(|owner| owner.widget_id == tab_stack_surface_menu_scroll_widget_id(viewport_stack)),
+        "surface submenu scroll should be a formed Interaction V2 scroll owner",
+    );
 }
 
 #[test]

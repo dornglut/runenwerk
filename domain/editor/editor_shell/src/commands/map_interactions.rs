@@ -140,6 +140,8 @@ pub fn map_interactions_to_shell_commands(
             UiInteraction::HoveredChanged { .. }
             | UiInteraction::PressedChanged { .. }
             | UiInteraction::FocusChanged(_)
+            | UiInteraction::PopupDismissRequested { .. }
+            | UiInteraction::ScrollInputOwned { .. }
             | UiInteraction::TreeRowToggled { .. } => {}
         }
     }

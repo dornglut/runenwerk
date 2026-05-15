@@ -147,6 +147,24 @@ The current retained UI migration slice catalog is:
 | `IV2-dock-drop-zones` | generic drop-zone/hit priority vocabulary where reusable; retained runtime enforces formed preview hit policy | editor shell owns workspace docking intent, preview-only state, and workspace mutation on commit |
 | `IV2-status-and-viewport-arbitration` | status overflow policy and UI input ownership reporting | app/editor layers own metrics data, viewport resources, and fail-closed viewport input arbitration |
 
+Landed slice status as of 2026-05-15:
+
+- `IV2-menu-stack` now has generic definition/runtime support through
+  `domain/ui/ui_definition/src/interaction.rs`,
+  `domain/ui/ui_definition/src/validate.rs::validate_menu`,
+  `domain/ui/ui_runtime/src/input/hit_test.rs`, and
+  `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`.
+  Toolbar and tab-stack menu adapters live in
+  `domain/editor/editor_shell/src/composition/toolbar_definition.rs::build_defined_toolbar_menu_popup_with_binding`
+  and
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`.
+- `IV2-scroll-ownership` now forms retained scroll owners in
+  `domain/ui/ui_definition/src/form.rs::form_retained_ui` and reports wheel
+  boundary ownership in
+  `domain/ui/ui_runtime/src/input/pointer.rs::apply_scroll_wheel_delta`.
+- App production viewport input remains app-owned. The guard is
+  `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`.
+
 Related non-`domain/ui` owners currently in the runtime path:
 
 - `domain/editor/editor_shell`

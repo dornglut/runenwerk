@@ -3,7 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use ui_definition::FormedUiRoute;
+use ui_definition::{
+    FormedInteractionModel, FormedMenuStackScope, FormedScrollOwner, FormedUiRoute,
+    UiMenuDismissPolicyDefinition, UiScrollBoundaryPolicyDefinition,
+};
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets};
 use ui_text::{FontId, TextVerticalAlign};
@@ -199,6 +202,7 @@ pub struct ShellProjectionArtifacts {
     pub workspace: WorkspaceProjectionArtifact,
     pub widget_actions_by_id: BTreeMap<WidgetId, RoutedShellAction>,
     pub widget_structural_context_by_id: BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
+    pub interaction_model: FormedInteractionModel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,9 +242,12 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
     let tab_stack_popup_menus =
         build_tab_stack_popup_menus(frame_model, &workspace_projection, theme);
     let mut toolbar_routes_by_widget_id = toolbar.routes_by_widget_id.clone();
+    let mut interaction_model = toolbar.interaction_model.clone();
     if let Some(popup) = toolbar_menu_popup.as_ref() {
         toolbar_routes_by_widget_id.extend(popup.routes_by_widget_id.clone());
+        interaction_model.extend(popup.interaction_model.clone());
     }
+    interaction_model.extend(tab_stack_popup_interaction_model(frame_model));
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
         frame_model,
         &workspace_projection,
@@ -250,6 +257,7 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         projection_epoch: 0,
         widget_actions_by_id,
         widget_structural_context_by_id,
+        interaction_model,
         workspace: workspace_projection,
     };
 
@@ -576,24 +584,137 @@ fn build_tab_stack_popup_menus(
     projected_tab_stacks_for_routes(workspace_projection)
         .into_iter()
         .filter(|stack| stack.tab_stack_id == active_menu.tab_stack_id)
-        .map(|stack| match active_menu.kind {
+        .flat_map(|stack| match active_menu.kind {
             TabStackPopupMenuKind::AreaActions => {
-                build_tab_stack_action_menu_popup(stack, active_menu.anchor_widget_id, theme)
+                vec![build_tab_stack_action_menu_popup(
+                    stack,
+                    active_menu.anchor_widget_id,
+                    theme,
+                )]
             }
-            TabStackPopupMenuKind::SurfaceKinds => build_tab_stack_surface_menu_popup(
-                stack,
-                active_menu.anchor_widget_id,
-                theme,
-                &available_tool_surface_kinds(frame_model),
-            ),
-            TabStackPopupMenuKind::CreateSurface => build_tab_stack_create_surface_menu_popup(
-                stack,
-                active_menu.anchor_widget_id,
-                theme,
-                &available_tool_surface_kinds(frame_model),
-            ),
+            TabStackPopupMenuKind::SurfaceKinds => vec![
+                build_tab_stack_action_menu_popup(
+                    stack,
+                    tab_stack_container_widget_id(active_menu.tab_stack_id),
+                    theme,
+                ),
+                build_tab_stack_surface_menu_popup(
+                    stack,
+                    active_menu.anchor_widget_id,
+                    theme,
+                    &available_tool_surface_kinds(frame_model),
+                ),
+            ],
+            TabStackPopupMenuKind::CreateSurface => {
+                vec![build_tab_stack_create_surface_menu_popup(
+                    stack,
+                    active_menu.anchor_widget_id,
+                    theme,
+                    &available_tool_surface_kinds(frame_model),
+                )]
+            }
         })
         .collect()
+}
+
+fn tab_stack_popup_interaction_model(
+    frame_model: &EditorShellFrameModel,
+) -> FormedInteractionModel {
+    let Some(active_menu) = frame_model.active_tab_stack_popup_menu.as_ref() else {
+        return FormedInteractionModel::default();
+    };
+    let mut model = FormedInteractionModel::default();
+    match active_menu.kind {
+        TabStackPopupMenuKind::AreaActions => {
+            push_tab_stack_menu_scope(
+                &mut model,
+                tab_stack_area_action_scope_id(active_menu.tab_stack_id),
+                tab_stack_action_menu_popup_widget_id(active_menu.tab_stack_id),
+                active_menu.anchor_widget_id,
+                None,
+            );
+            push_tab_stack_scroll_owner(
+                &mut model,
+                tab_stack_action_menu_scroll_widget_id(active_menu.tab_stack_id),
+            );
+        }
+        TabStackPopupMenuKind::SurfaceKinds => {
+            let parent_scope = tab_stack_area_action_scope_id(active_menu.tab_stack_id);
+            push_tab_stack_menu_scope(
+                &mut model,
+                parent_scope.clone(),
+                tab_stack_action_menu_popup_widget_id(active_menu.tab_stack_id),
+                tab_stack_container_widget_id(active_menu.tab_stack_id),
+                None,
+            );
+            push_tab_stack_menu_scope(
+                &mut model,
+                tab_stack_surface_kind_scope_id(active_menu.tab_stack_id),
+                tab_stack_surface_menu_popup_widget_id(active_menu.tab_stack_id),
+                active_menu.anchor_widget_id,
+                Some(parent_scope),
+            );
+            push_tab_stack_scroll_owner(
+                &mut model,
+                tab_stack_action_menu_scroll_widget_id(active_menu.tab_stack_id),
+            );
+            push_tab_stack_scroll_owner(
+                &mut model,
+                tab_stack_surface_menu_scroll_widget_id(active_menu.tab_stack_id),
+            );
+        }
+        TabStackPopupMenuKind::CreateSurface => {
+            push_tab_stack_menu_scope(
+                &mut model,
+                tab_stack_create_surface_scope_id(active_menu.tab_stack_id),
+                tab_stack_new_surface_menu_popup_widget_id(active_menu.tab_stack_id),
+                active_menu.anchor_widget_id,
+                None,
+            );
+            push_tab_stack_scroll_owner(
+                &mut model,
+                tab_stack_new_surface_menu_scroll_widget_id(active_menu.tab_stack_id),
+            );
+        }
+    }
+    model
+}
+
+fn push_tab_stack_menu_scope(
+    model: &mut FormedInteractionModel,
+    scope_id: String,
+    popup_widget_id: WidgetId,
+    anchor_widget_id: WidgetId,
+    parent_scope_id: Option<String>,
+) {
+    model.push_menu_scope(FormedMenuStackScope {
+        scope_id,
+        popup_widget_id,
+        anchor_widget_id,
+        parent_scope_id,
+        dismiss: UiMenuDismissPolicyDefinition::OutsidePointerDown,
+        focus_return: Some(anchor_widget_id),
+    });
+}
+
+fn push_tab_stack_scroll_owner(model: &mut FormedInteractionModel, widget_id: WidgetId) {
+    model.push_scroll_owner(FormedScrollOwner {
+        widget_id,
+        axes: vec![Axis::Vertical],
+        boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+    });
+}
+
+fn tab_stack_area_action_scope_id(tab_stack_id: TabStackId) -> String {
+    format!("tab_stack.{}.area_actions", tab_stack_id.raw())
+}
+
+fn tab_stack_surface_kind_scope_id(tab_stack_id: TabStackId) -> String {
+    format!("tab_stack.{}.surface_kinds", tab_stack_id.raw())
+}
+
+fn tab_stack_create_surface_scope_id(tab_stack_id: TabStackId) -> String {
+    format!("tab_stack.{}.create_surface", tab_stack_id.raw())
 }
 
 fn build_tab_stack_action_menu_popup(

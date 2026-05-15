@@ -134,6 +134,15 @@ pub fn dispatch_pointer_event(
             )
         }
         PointerEventKind::Down => {
+            if matches!(
+                event.button,
+                Some(PointerButton::Primary | PointerButton::Secondary)
+            ) && let Some(outcome) =
+                dispatch_popup_stack_outside_dismiss(tree, layouts, state, event)
+            {
+                return outcome;
+            }
+
             state.hovered_scrollbar =
                 scrollbar_axis_target_at_position(tree, layouts, event.position);
             if event.button == Some(PointerButton::Primary)
@@ -404,8 +413,7 @@ pub fn dispatch_pointer_event(
             let owners = raw_hover_target
                 .map(|widget| find_scroll_owner_chain(tree, widget))
                 .unwrap_or_default();
-            let Some((scroll_owner, changed)) =
-                apply_scroll_wheel_delta(tree, layouts, state, &owners, event)
+            let Some(ownership) = apply_scroll_wheel_delta(tree, layouts, state, &owners, event)
             else {
                 return outcome(
                     target,
@@ -416,20 +424,124 @@ pub fn dispatch_pointer_event(
                     interactions,
                 );
             };
+            interactions.push(UiInteraction::ScrollInputOwned {
+                owner: ownership.owner,
+                axis: ownership.axis,
+                changed: ownership.changed,
+                at_boundary: ownership.at_boundary,
+            });
 
             outcome(
-                Some(scroll_owner),
+                Some(ownership.owner),
                 InputResponse {
                     propagation: EventPropagation::Stop,
                     capture: PointerCapture::None,
                     focus_change: FocusChange::None,
-                    repaint: changed,
+                    repaint: ownership.changed,
                     relayout: false,
                 },
                 interactions,
             )
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PopupStackScope {
+    popup: WidgetId,
+    anchor: WidgetId,
+    layer_order: u32,
+    tree_order: usize,
+}
+
+fn dispatch_popup_stack_outside_dismiss(
+    tree: &UiTree,
+    layouts: &ComputedLayoutMap,
+    state: &mut UiRuntimeState,
+    event: &PointerEvent,
+) -> Option<UiInputOutcome> {
+    let scopes = popup_stack_scopes(tree, layouts);
+    let top = scopes
+        .iter()
+        .max_by_key(|scope| (scope.layer_order, scope.tree_order))
+        .copied()?;
+    if popup_stack_contains_point(&scopes, layouts, event.position) {
+        return None;
+    }
+
+    let focus_return = find_node(tree, top.anchor).map(|node| node.id);
+    let focus_change = match focus_return {
+        Some(widget_id) => {
+            let target = FocusTargetId(widget_id.0);
+            if state.focused_target == Some(target) {
+                FocusChange::None
+            } else {
+                state.focused_target = Some(target);
+                FocusChange::Set(target)
+            }
+        }
+        None if state.focused_target.is_some() => {
+            state.focused_target = None;
+            FocusChange::Clear
+        }
+        None => FocusChange::None,
+    };
+    state.pressed_widget = None;
+    state.captured_widget = None;
+    state.middle_pan_anchor = None;
+    state.middle_pan_last_position = None;
+    state.scrollbar_thumb_drag = None;
+
+    let mut interactions = UiInteractionResults::new();
+    interactions.push(UiInteraction::PopupDismissRequested {
+        popup: top.popup,
+        focus_return,
+    });
+    push_focus_change_if_needed(&mut interactions, focus_change);
+
+    Some(outcome(
+        Some(top.popup),
+        InputResponse {
+            propagation: EventPropagation::Stop,
+            capture: PointerCapture::None,
+            focus_change,
+            repaint: true,
+            relayout: false,
+        },
+        interactions,
+    ))
+}
+
+fn popup_stack_scopes(tree: &UiTree, layouts: &ComputedLayoutMap) -> Vec<PopupStackScope> {
+    tree.walk()
+        .enumerate()
+        .filter_map(|(tree_order, node)| {
+            let UiNodeKind::Popup(popup) = &node.kind else {
+                return None;
+            };
+            layouts.contains_key(&node.id).then_some(PopupStackScope {
+                popup: node.id,
+                anchor: popup.anchor,
+                layer_order: popup.layer_order,
+                tree_order,
+            })
+        })
+        .collect()
+}
+
+fn popup_stack_contains_point(
+    scopes: &[PopupStackScope],
+    layouts: &ComputedLayoutMap,
+    point: ui_math::UiPoint,
+) -> bool {
+    scopes.iter().any(|scope| {
+        layouts
+            .get(&scope.popup)
+            .is_some_and(|layout| layout.bounds.contains(point))
+            || layouts
+                .get(&scope.anchor)
+                .is_some_and(|layout| layout.bounds.contains(point))
+    })
 }
 
 fn scrollbar_thumb_geometry_at_position(
@@ -817,13 +929,21 @@ fn scroll_primary_delta(
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ScrollWheelOwnership {
+    owner: WidgetId,
+    axis: ui_math::Axis,
+    changed: bool,
+    at_boundary: bool,
+}
+
 fn apply_scroll_wheel_delta(
     tree: &UiTree,
     layouts: &ComputedLayoutMap,
     state: &mut UiRuntimeState,
     owners: &[WidgetId],
     event: &PointerEvent,
-) -> Option<(WidgetId, bool)> {
+) -> Option<ScrollWheelOwnership> {
     for &owner in owners {
         let Some(node) = find_node(tree, owner) else {
             continue;
@@ -850,12 +970,16 @@ fn apply_scroll_wheel_delta(
                 .clamp(0.0, max_offset);
             let next_offset = (current_offset - scroll_pixels(raw_delta)).clamp(0.0, max_offset);
             let changed = (next_offset - current_offset).abs() > f32::EPSILON;
-            if !changed {
-                continue;
+            if changed {
+                state.set_scroll_offset_for_axis(owner, axis, next_offset);
+                state.mark_scrollbar_active(owner, axis);
             }
-            state.set_scroll_offset_for_axis(owner, axis, next_offset);
-            state.mark_scrollbar_active(owner, axis);
-            return Some((owner, true));
+            return Some(ScrollWheelOwnership {
+                owner,
+                axis,
+                changed,
+                at_boundary: !changed,
+            });
         }
     }
 

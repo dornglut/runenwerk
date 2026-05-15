@@ -59,6 +59,18 @@ Invalid WR-024 work includes defining a new popup policy in shell code, making
 viewport arbitration app-local UI truth, accepting compiled-reactive or
 ECS-driven UI, or changing retained UI execution strategy.
 
+2026-05-15 boundary update: WR-025 now provides the first code-bearing
+`IV2-menu-stack` and `IV2-scroll-ownership` slice through
+`domain/ui/ui_definition/src/interaction.rs`,
+`domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`,
+`domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`, and
+toolbar/tab-stack adapters in
+`domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`.
+WR-024 may consume those landed contracts for popup layer behavior,
+outside-dismiss, focus return, Escape dismissal, Switch Type submenu anchoring,
+and wheel boundary ownership. Menu sizing, chrome slots, docking/drop-zone
+precedence, status overflow, and viewport arbitration remain WR-025-gated.
+
 ## Interaction V2 Slice Dependencies
 
 WR-024 must cite one of these WR-025 slice names for every retained UI change:

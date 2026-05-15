@@ -5,8 +5,9 @@ use crate::{
     UiAvailabilityId, UiAxisDefinition, UiCollectionItem, UiCollectionSlotId,
     UiDefinitionDiagnostic, UiEmbedSlotId, UiMenuSlotId, UiNodeDefinition, UiNodeId, UiRouteSlotId,
     UiScrollAxisDefinition, UiScrollInputDefinition, UiScrollInputPolicyDefinition,
-    UiSelectionSlotId, UiValue, UiValueBinding, UiValueSlotId,
+    UiScrollOwnershipDefinition, UiSelectionSlotId, UiValue, UiValueBinding, UiValueSlotId,
 };
+use crate::{FormedInteractionModel, FormedScrollOwner};
 use std::collections::{BTreeMap, BTreeSet};
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiSize};
@@ -38,6 +39,7 @@ pub struct FormedRetainedUiProduct {
     pub embeds_by_widget_id: BTreeMap<WidgetId, FormedUiEmbed>,
     pub diagnostics: Vec<UiDefinitionDiagnostic>,
     pub availability_by_widget_id: BTreeMap<WidgetId, UiAvailability>,
+    pub interaction_model: FormedInteractionModel,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +108,7 @@ pub fn form_retained_ui(
         embeds_by_widget_id: state.embeds_by_widget_id,
         diagnostics: state.diagnostics,
         availability_by_widget_id: state.availability_by_widget_id,
+        interaction_model: state.interaction_model,
     }
 }
 
@@ -115,6 +118,7 @@ struct FormationState {
     paths_by_widget_id: BTreeMap<WidgetId, AuthoredUiNodePath>,
     embeds_by_widget_id: BTreeMap<WidgetId, FormedUiEmbed>,
     availability_by_widget_id: BTreeMap<WidgetId, UiAvailability>,
+    interaction_model: FormedInteractionModel,
     used_widget_ids: BTreeSet<WidgetId>,
     diagnostics: Vec<UiDefinitionDiagnostic>,
 }
@@ -167,6 +171,7 @@ fn form_node(
         UiNodeDefinition::Scroll {
             axis,
             input,
+            ownership,
             children,
             ..
         } => {
@@ -183,6 +188,9 @@ fn form_node(
             if let UiNodeKind::Scroll(scroll) = &mut node.kind {
                 scroll.input_policies = scroll_input_policies(*input);
             }
+            state
+                .interaction_model
+                .push_scroll_owner(formed_scroll_owner(widget_id, *axis, *ownership));
             node
         }
         UiNodeDefinition::Split {
@@ -879,10 +887,29 @@ fn scroll_input_policy(input: UiScrollInputPolicyDefinition) -> ScrollInputPolic
     }
 }
 
+fn formed_scroll_owner(
+    widget_id: WidgetId,
+    axis: UiScrollAxisDefinition,
+    ownership: UiScrollOwnershipDefinition,
+) -> FormedScrollOwner {
+    FormedScrollOwner {
+        widget_id,
+        axes: match axis {
+            UiScrollAxisDefinition::Horizontal => vec![Axis::Horizontal],
+            UiScrollAxisDefinition::Vertical => vec![Axis::Vertical],
+            UiScrollAxisDefinition::Both => vec![Axis::Horizontal, Axis::Vertical],
+        },
+        boundary: ownership.boundary,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AuthoredUiTemplate, UiCollectionSlotRef, UiNodeId, UiRouteSlotRef};
+    use crate::{
+        AuthoredUiTemplate, UiCollectionSlotRef, UiNodeId, UiRouteSlotRef,
+        UiScrollBoundaryPolicyDefinition,
+    };
 
     #[test]
     fn disabled_button_forms_without_route() {
@@ -920,6 +947,9 @@ mod tests {
                     horizontal: UiScrollInputPolicyDefinition::MiddleDragOnly,
                     vertical: UiScrollInputPolicyDefinition::WheelOnly,
                 },
+                ownership: UiScrollOwnershipDefinition {
+                    boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+                },
                 children: vec![UiNodeDefinition::Label {
                     id: "entry".into(),
                     label: UiValueBinding::static_text("line"),
@@ -944,6 +974,14 @@ mod tests {
                 ScrollInputPolicy::MiddleDragOnly,
                 ScrollInputPolicy::WheelOnly,
             )
+        );
+        assert_eq!(
+            product.interaction_model.scroll_owners,
+            vec![FormedScrollOwner {
+                widget_id: product.root.id,
+                axes: vec![Axis::Horizontal, Axis::Vertical],
+                boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+            }]
         );
     }
 

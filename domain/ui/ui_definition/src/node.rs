@@ -4,6 +4,7 @@ use crate::{
     availability::UiAvailabilityBinding,
     embed::UiEmbedSlotRef,
     identity::{UiNodeId, UiTemplateId},
+    interaction::UiScrollOwnershipDefinition,
     slot::{UiCollectionSlotRef, UiMenuSlotRef, UiRouteSlotRef, UiSelectionSlotRef},
     value::UiValueBinding,
 };
@@ -77,6 +78,8 @@ pub enum UiNodeDefinition {
         axis: UiScrollAxisDefinition,
         #[serde(default)]
         input: UiScrollInputDefinition,
+        #[serde(default)]
+        ownership: UiScrollOwnershipDefinition,
         children: Vec<UiNodeDefinition>,
     },
     Split {

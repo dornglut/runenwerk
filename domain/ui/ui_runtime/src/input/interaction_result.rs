@@ -3,6 +3,7 @@
 
 use crate::WidgetId;
 use ui_input::{FocusChange, KeyboardEvent, TextInputEvent};
+use ui_math::Axis;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiInteraction {
@@ -16,6 +17,16 @@ pub enum UiInteraction {
         current: Option<WidgetId>,
     },
     FocusChanged(FocusChange),
+    PopupDismissRequested {
+        popup: WidgetId,
+        focus_return: Option<WidgetId>,
+    },
+    ScrollInputOwned {
+        owner: WidgetId,
+        axis: Axis,
+        changed: bool,
+        at_boundary: bool,
+    },
     KeyboardInput {
         target: WidgetId,
         event: KeyboardEvent,

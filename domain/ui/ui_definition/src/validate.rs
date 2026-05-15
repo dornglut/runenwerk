@@ -1,7 +1,8 @@
 //! UI definition validation.
 
 use crate::{
-    AuthoredId, AuthoredUiNodePath, AuthoredUiTemplate, UiDefinitionDiagnostic, UiNodeDefinition,
+    AuthoredId, AuthoredUiNodePath, AuthoredUiTemplate, UiDefinitionDiagnostic, UiMenuDefinition,
+    UiNodeDefinition,
 };
 use std::collections::BTreeSet;
 
@@ -15,7 +16,40 @@ pub fn validate_authored_template(template: &AuthoredUiTemplate) -> Vec<UiDefini
         &mut ids,
         &mut diagnostics,
     );
+    for menu in &template.menus {
+        validate_menu(menu, &mut diagnostics);
+    }
     diagnostics
+}
+
+fn validate_menu(menu: &UiMenuDefinition, diagnostics: &mut Vec<UiDefinitionDiagnostic>) {
+    if menu.id.trim().is_empty() {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            "ui.definition.menu.id.empty",
+            "menu id must not be empty",
+        ));
+    }
+    let Some(scope) = menu.scope.as_ref() else {
+        return;
+    };
+    if scope.id.trim().is_empty() {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            "ui.definition.menu_scope.id.empty",
+            format!("menu '{}' stack scope id must not be empty", menu.id),
+        ));
+    }
+    if scope.anchor.as_str().trim().is_empty() {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            "ui.definition.menu_scope.anchor.empty",
+            format!("menu '{}' stack scope anchor must not be empty", menu.id),
+        ));
+    }
+    if scope.parent.as_deref() == Some(scope.id.as_str()) {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            "ui.definition.menu_scope.parent.self",
+            format!("menu '{}' stack scope must not parent itself", menu.id),
+        ));
+    }
 }
 
 fn validate_node(
@@ -70,5 +104,46 @@ fn validate_id(id: &AuthoredId, kind: &str, diagnostics: &mut Vec<UiDefinitionDi
             "ui.definition.id.whitespace",
             format!("{kind} id '{value}' must not contain whitespace"),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        UiMenuDismissPolicyDefinition, UiMenuFocusReturnDefinition, UiMenuStackScopeDefinition,
+    };
+
+    #[test]
+    fn menu_stack_scope_rejects_self_parent() {
+        let template = AuthoredUiTemplate {
+            id: "test.menu".into(),
+            root: UiNodeDefinition::Panel {
+                id: "root".into(),
+                children: Vec::new(),
+                availability: None,
+            },
+            templates: Vec::new(),
+            menus: vec![UiMenuDefinition {
+                id: "file".to_string(),
+                scope: Some(UiMenuStackScopeDefinition {
+                    id: "file".to_string(),
+                    anchor: "file_anchor".into(),
+                    parent: Some("file".to_string()),
+                    dismiss: UiMenuDismissPolicyDefinition::OutsidePointerDown,
+                    focus_return: UiMenuFocusReturnDefinition::Anchor,
+                }),
+                items: Vec::new(),
+            }],
+        };
+
+        let diagnostics = validate_authored_template(&template);
+
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "ui.definition.menu_scope.parent.self"),
+            "menu stack validation should reject self-parented scopes: {diagnostics:?}",
+        );
     }
 }
