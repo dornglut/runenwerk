@@ -260,6 +260,13 @@ def test_batch_manifest_and_worker_prompt() -> None:
     manifest = build_manifest("batch-test", "test", [roadmap.items[0]], Path("docs-site/src/content/docs/reports/batches/batch-test"))
     assert manifest.items[0].branch == "codex/batch-test-wr-001"
     assert manifest.items[0].prompt_path.endswith("/wr-001.md")
+    absolute_manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        REPO_ROOT / "docs-site/src/content/docs/reports/batches/batch-test",
+    )
+    assert absolute_manifest.items[0].prompt_path == "docs-site/src/content/docs/reports/batches/batch-test/prompts/wr-001.md"
     prompt = render_worker_prompt(manifest, roadmap.items[0], manifest.items[0])
     assert prompt.startswith("---\ntitle: Worker Prompt WR-001")
     assert "roadmap-items.yaml" in prompt

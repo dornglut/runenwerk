@@ -490,7 +490,7 @@ def build_manifest(batch_id: str, goal: str, items: list[RoadmapItem], batch_dir
                 gate=item.gate,
                 score=item.score,
                 branch=f"codex/{batch_id}-{item.id.lower()}",
-                prompt_path=slash_path(batch_dir / "prompts" / f"{item.id.lower()}.md"),
+                prompt_path=repo_path(batch_dir / "prompts" / f"{item.id.lower()}.md"),
                 write_scopes=item.write_scopes,
                 validations=item.validations,
             )
