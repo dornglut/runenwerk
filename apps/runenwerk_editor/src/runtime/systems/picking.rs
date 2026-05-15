@@ -5,12 +5,14 @@ use glam::{Vec2, Vec3, vec2, vec3};
 use scene::{LocalTransform, Vec3Value};
 use ui_math::{UiPoint, UiRect};
 
-use super::extract_viewport_scene_render_packet;
 use crate::editor_runtime::RunenwerkEditorRuntime;
+#[cfg(test)]
+use crate::runtime::resources::editor_viewport_camera;
 use crate::runtime::resources::{
     EditorHostResource, EditorViewportCamera, EditorViewportSceneRenderPacket,
-    editor_viewport_camera,
 };
+#[cfg(test)]
+use crate::runtime::systems::extract_viewport_scene_render_packet;
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
     ViewportRenderStateResource,
@@ -49,42 +51,29 @@ pub fn produce_editor_picking_system(
             .result_for(viewport_id)
             .map(|value| value.hit)
             .unwrap_or_else(EditorPickingHit::none);
-        let viewport_camera = viewport_render_states
-            .state_for(viewport_id)
-            .map(|state| {
-                (
-                    state.render_state.camera,
-                    state.render_state.camera_fov_y_radians,
-                    state.render_state.scene_packet.clone(),
-                )
-            })
-            .unwrap_or_else(|| {
-                (
-                    editor_viewport_camera(),
-                    crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
-                    extract_viewport_scene_render_packet(
-                        host.app.runtime(),
-                        host.app.viewport_tool_state().hovered_entity,
-                    ),
-                )
-            });
-        let next_hit = if let Some(ray) = viewport_ray(
-            cursor,
-            viewport_bounds,
-            viewport_camera.0,
-            viewport_camera.1,
-        ) {
-            compose_picking_hit(
-                host.app.runtime(),
-                &viewport_camera.2,
-                host.app.runtime().session().active_tool(),
-                host.app.runtime().selected_entity(),
+        let next_hit = if let Some(scene_context) =
+            picking_scene_context_for_viewport(&viewport_render_states, viewport_id)
+        {
+            if let Some(ray) = viewport_ray(
                 cursor,
                 viewport_bounds,
-                viewport_camera.0,
-                viewport_camera.1,
-                ray,
-            )
+                scene_context.camera,
+                scene_context.camera_fov_y,
+            ) {
+                compose_picking_hit(
+                    host.app.runtime(),
+                    &scene_context.scene_packet,
+                    host.app.runtime().session().active_tool(),
+                    host.app.runtime().selected_entity(),
+                    cursor,
+                    viewport_bounds,
+                    scene_context.camera,
+                    scene_context.camera_fov_y,
+                    ray,
+                )
+            } else {
+                EditorPickingHit::none()
+            }
         } else {
             EditorPickingHit::none()
         };
@@ -116,6 +105,25 @@ pub fn produce_editor_picking_system(
     } else {
         viewport_picking_results.clear_all_hits((cursor.x, cursor.y));
     }
+}
+
+#[derive(Debug, Clone)]
+struct PickingSceneContext {
+    camera: EditorViewportCamera,
+    camera_fov_y: f32,
+    scene_packet: EditorViewportSceneRenderPacket,
+}
+
+fn picking_scene_context_for_viewport(
+    viewport_render_states: &ViewportRenderStateResource,
+    viewport_id: editor_viewport::ViewportId,
+) -> Option<PickingSceneContext> {
+    let state = viewport_render_states.state_for(viewport_id)?;
+    Some(PickingSceneContext {
+        camera: state.render_state.camera,
+        camera_fov_y: state.render_state.camera_fov_y_radians,
+        scene_packet: state.render_state.scene_packet.clone(),
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -443,7 +451,9 @@ mod tests {
         EditorPrimitive, bootstrap_mvp_scene_if_empty, execute_scene_intent,
         register_mvp_component_types,
     };
-    use crate::runtime::viewport::{ViewportLayoutEntry, ViewportLayoutMapResource};
+    use crate::runtime::viewport::{
+        ViewportLayoutEntry, ViewportLayoutMapResource, ViewportRenderStateEntry,
+    };
     use crate::shell::RunenwerkEditorShellController;
     use editor_core::CommandId;
     use editor_scene::{
@@ -670,6 +680,35 @@ mod tests {
 
         assert_eq!(scene_packet.len(), 2);
         assert_eq!(hit.target, EditorPickingTarget::Entity(target_entity.0));
+    }
+
+    #[test]
+    fn picking_scene_context_comes_from_viewport_render_state_packet() {
+        let viewport_id = ViewportId(4);
+        let mut render_states = ViewportRenderStateResource::default();
+        assert!(
+            picking_scene_context_for_viewport(&render_states, viewport_id).is_none(),
+            "CPU picking must not independently scan runtime entities before a render-state packet exists"
+        );
+
+        let mut render_state = crate::runtime::resources::EditorViewportRenderState::default();
+        render_state.set_primitive(Vec3Value::new(2.0, 1.0, -3.0), EditorPrimitive::default());
+        let expected_packet = render_state.scene_packet.clone();
+        render_states.upsert_state(ViewportRenderStateEntry {
+            viewport_id,
+            tool_surface_id: None,
+            bounds: UiRect::new(0.0, 0.0, 640.0, 360.0),
+            render_state,
+        });
+
+        let context = picking_scene_context_for_viewport(&render_states, viewport_id)
+            .expect("render-state packet should provide picking scene context");
+
+        assert_eq!(context.scene_packet, expected_packet);
+        assert_eq!(
+            context.scene_packet.primitives()[0].translation,
+            Vec3Value::new(2.0, 1.0, -3.0)
+        );
     }
 
     #[test]

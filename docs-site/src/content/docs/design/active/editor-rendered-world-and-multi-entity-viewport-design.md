@@ -68,6 +68,7 @@ The V1 GPU packet is intentionally uniform-backed because prepared render invoca
 - Rendering and GPU picking products consume the same packet layout.
 - Rendering and GPU picking products decode the same editor primitive kind set from that layout.
 - CPU picking uses the same extracted packet shape, not an independent runtime scan with different primitive normalization.
+- CPU entity picking consumes the viewport render-state scene packet; when that packet is not available, it reports no entity hit instead of extracting a separate runtime view.
 - `EditorViewportRenderState::has_primitive` means "scene packet has at least one renderable primitive".
 - Viewport render jobs remain per viewport and target-local.
 
