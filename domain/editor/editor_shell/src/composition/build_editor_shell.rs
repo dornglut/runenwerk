@@ -5,10 +5,13 @@ use std::collections::BTreeMap;
 
 use ui_definition::{
     FormedChromeSlot, FormedDockDropZone, FormedInteractionModel, FormedMenuSizing,
-    FormedMenuStackScope, FormedScrollOwner, FormedUiRoute, UiChromeSlotInputPolicyDefinition,
-    UiChromeSlotKindDefinition, UiDockDropScopeDefinition, UiDockDropSideDefinition,
-    UiDockDropZoneKindDefinition, UiDockDropZoneStateDefinition, UiMenuDismissPolicyDefinition,
-    UiMenuItemWidthDefinition, UiMenuOverflowDefinition, UiScrollBoundaryPolicyDefinition,
+    FormedMenuStackScope, FormedScrollOwner, FormedUiRoute, FormedViewportStatusMetric,
+    FormedViewportStatusRegion, UiChromeSlotInputPolicyDefinition, UiChromeSlotKindDefinition,
+    UiDockDropScopeDefinition, UiDockDropSideDefinition, UiDockDropZoneKindDefinition,
+    UiDockDropZoneStateDefinition, UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition,
+    UiMenuOverflowDefinition, UiScrollBoundaryPolicyDefinition, UiStatusOverflowPolicyDefinition,
+    UiViewportInputArbitrationPolicyDefinition, UiViewportStatusMetricKindDefinition,
+    UiViewportStatusMetricPriorityDefinition,
 };
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets};
@@ -33,10 +36,17 @@ use crate::{
     FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
     PanelInstanceId, PanelKind, ROOT_WIDGET_ID, SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction,
     SurfaceProviderId, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
+    ToolbarCommandKind, ToolbarMenuKind, VIEWPORT_CANVAS_WIDGET_ID,
+    VIEWPORT_DETAILS_LABEL_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID,
+    VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID,
+    VIEWPORT_SURFACE_EMBED_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID, VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
     WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
     build_defined_toolbar_with_template, dock_split_preview_label_widget_id,
-    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id,
+    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, surface_widget_id,
     tab_active_indicator_widget_id, tab_chrome_widget_id, tab_close_button_widget_id,
     tab_stack_action_menu_list_widget_id, tab_stack_action_menu_popup_widget_id,
     tab_stack_action_menu_scroll_widget_id, tab_stack_close_area_button_widget_id,
@@ -261,6 +271,7 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         docking_visual_state,
     ));
     interaction_model.extend(tab_stack_popup_interaction_model(frame_model));
+    interaction_model.extend(viewport_surface_interaction_model(frame_model));
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
         frame_model,
         &workspace_projection,
@@ -879,6 +890,171 @@ fn dock_drop_side_definition(side: crate::DockSplitSide) -> UiDockDropSideDefini
         crate::DockSplitSide::Top => UiDockDropSideDefinition::Top,
         crate::DockSplitSide::Bottom => UiDockDropSideDefinition::Bottom,
     }
+}
+
+fn viewport_surface_interaction_model(
+    frame_model: &EditorShellFrameModel,
+) -> FormedInteractionModel {
+    let mut model = FormedInteractionModel::default();
+
+    for surface in frame_model
+        .surfaces
+        .values()
+        .filter(|surface| surface.surface_kind == ToolSurfaceKind::Viewport)
+    {
+        push_viewport_popup_interactions(
+            &mut model,
+            surface.surface_instance_id,
+            &surface.artifact.root,
+        );
+
+        let status_widget_id =
+            surface_widget_id(surface.surface_instance_id, VIEWPORT_STATUS_WIDGET_ID);
+        if !tree_contains_widget(&surface.artifact.root, status_widget_id) {
+            continue;
+        }
+
+        let viewport_canvas_widget_id =
+            surface_widget_id(surface.surface_instance_id, VIEWPORT_CANVAS_WIDGET_ID);
+        let viewport_surface_widget_id = surface_widget_id(
+            surface.surface_instance_id,
+            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+        );
+        let metrics = viewport_status_metrics(surface.surface_instance_id, &surface.artifact.root);
+        model.push_viewport_status_region(FormedViewportStatusRegion {
+            status_widget_id,
+            viewport_canvas_widget_id,
+            viewport_surface_widget_id,
+            overflow: UiStatusOverflowPolicyDefinition::SingleRowHorizontalScroll,
+            input_arbitration:
+                UiViewportInputArbitrationPolicyDefinition::UiOwnsStatusBeforeViewportFallback,
+            metrics,
+        });
+        model.push_scroll_owner(FormedScrollOwner {
+            widget_id: status_widget_id,
+            axes: vec![Axis::Horizontal],
+            boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+        });
+    }
+
+    model
+}
+
+fn push_viewport_popup_interactions(
+    model: &mut FormedInteractionModel,
+    surface_id: ToolSurfaceInstanceId,
+    root: &UiNode,
+) {
+    push_viewport_popup_interaction(
+        model,
+        surface_id,
+        root,
+        "viewport.options",
+        VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+        VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+        VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID,
+        VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID,
+    );
+    push_viewport_popup_interaction(
+        model,
+        surface_id,
+        root,
+        "viewport.tools",
+        VIEWPORT_TOOLS_MENU_WIDGET_ID,
+        VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+        VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
+        VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID,
+    );
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "viewport popup formation maps explicit widget contract endpoints"
+)]
+fn push_viewport_popup_interaction(
+    model: &mut FormedInteractionModel,
+    surface_id: ToolSurfaceInstanceId,
+    root: &UiNode,
+    scope_kind: &str,
+    popup_widget_id: WidgetId,
+    anchor_widget_id: WidgetId,
+    scroll_widget_id: WidgetId,
+    list_widget_id: WidgetId,
+) {
+    let popup_widget_id = surface_widget_id(surface_id, popup_widget_id);
+    if !tree_contains_widget(root, popup_widget_id) {
+        return;
+    }
+
+    let anchor_widget_id = surface_widget_id(surface_id, anchor_widget_id);
+    let scroll_widget_id = surface_widget_id(surface_id, scroll_widget_id);
+    let list_widget_id = surface_widget_id(surface_id, list_widget_id);
+    model.push_menu_scope(FormedMenuStackScope {
+        scope_id: format!("{scope_kind}:{}", surface_id.raw()),
+        popup_widget_id,
+        anchor_widget_id,
+        parent_scope_id: None,
+        dismiss: UiMenuDismissPolicyDefinition::OutsidePointerDown,
+        focus_return: Some(anchor_widget_id),
+    });
+    model.push_menu_sizing(FormedMenuSizing {
+        popup_widget_id,
+        list_widget_id,
+        item_width: UiMenuItemWidthDefinition::FillToMenuWidth,
+        overflow: UiMenuOverflowDefinition::ScrollWhenClamped,
+    });
+    model.push_scroll_owner(FormedScrollOwner {
+        widget_id: scroll_widget_id,
+        axes: vec![Axis::Vertical],
+        boundary: UiScrollBoundaryPolicyDefinition::ConsumeAtBoundary,
+    });
+}
+
+fn viewport_status_metrics(
+    surface_id: ToolSurfaceInstanceId,
+    root: &UiNode,
+) -> Vec<FormedViewportStatusMetric> {
+    let mut metrics = Vec::new();
+    let details_widget_id = surface_widget_id(surface_id, VIEWPORT_DETAILS_LABEL_WIDGET_ID);
+    if tree_contains_widget(root, details_widget_id) {
+        metrics.push(FormedViewportStatusMetric {
+            widget_id: details_widget_id,
+            kind: UiViewportStatusMetricKindDefinition::Details,
+            priority: UiViewportStatusMetricPriorityDefinition::Supplemental,
+        });
+    }
+
+    let statistics_widget_id = surface_widget_id(surface_id, VIEWPORT_STATISTICS_LABEL_WIDGET_ID);
+    if tree_contains_widget(root, statistics_widget_id) {
+        metrics.push(FormedViewportStatusMetric {
+            widget_id: statistics_widget_id,
+            kind: UiViewportStatusMetricKindDefinition::FrameRate,
+            priority: UiViewportStatusMetricPriorityDefinition::Essential,
+        });
+        metrics.push(FormedViewportStatusMetric {
+            widget_id: statistics_widget_id,
+            kind: UiViewportStatusMetricKindDefinition::FrameTime,
+            priority: UiViewportStatusMetricPriorityDefinition::Essential,
+        });
+    }
+
+    let overlay_widget_id = surface_widget_id(surface_id, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID);
+    if tree_contains_widget(root, overlay_widget_id) {
+        metrics.push(FormedViewportStatusMetric {
+            widget_id: overlay_widget_id,
+            kind: UiViewportStatusMetricKindDefinition::OverlayStatus,
+            priority: UiViewportStatusMetricPriorityDefinition::Supplemental,
+        });
+    }
+    metrics
+}
+
+fn tree_contains_widget(node: &UiNode, widget_id: WidgetId) -> bool {
+    node.id == widget_id
+        || node
+            .children
+            .iter()
+            .any(|child| tree_contains_widget(child, widget_id))
 }
 
 fn push_tab_stack_menu_scope(

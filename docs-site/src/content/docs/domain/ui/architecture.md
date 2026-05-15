@@ -184,6 +184,15 @@ Landed slice status as of 2026-05-15:
   while keeping workspace mutation in editor/app command owners, and
   `domain/ui/ui_runtime/src/input/hit_test.rs` guards preview child hit
   precedence.
+- `IV2-status-and-viewport-arbitration` now carries formed viewport
+  status-region, metric-priority, overflow, and input-arbitration records in
+  `domain/ui/ui_definition/src/interaction.rs`. Viewport status overlays are
+  horizontal scroll-owned regions from
+  `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::viewport_status_overlay`,
+  and
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::viewport_surface_interaction_model`
+  forms viewport options/tools popup contracts plus status fallback
+  arbitration.
 - App production viewport input remains app-owned. The guard is
   `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`.
 

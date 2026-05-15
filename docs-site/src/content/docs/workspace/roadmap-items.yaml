@@ -965,8 +965,8 @@ items:
     IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration.
   current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2
     contract layer, not as a pile of isolated cosmetic fixes.
-  current_call: Ready-next only after the Interaction V2 contract/migration spine leads; route long-term popup, scroll,
-    chrome, docking, and status overflow decisions through WR-025, consuming only landed slices.
+  current_call: Ready-next after the named Interaction V2 contract/migration spine leads; consume landed popup, scroll,
+    chrome, docking, and status overflow slices instead of defining local policy.
   main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming
     those contracts or as explicitly bounded compatibility evidence.
   first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant named Interaction
@@ -1028,18 +1028,18 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: Remaining retained UI migration slices after code-bearing IV2-menu-stack, IV2-scroll-ownership,
-    IV2-menu-sizing, IV2-chrome-slots, and IV2-dock-drop-zones guard slices landed; next work should consume those
-    contracts for WR-024 shell polish or define the remaining status/viewport arbitration slice before implementation.
+  next_evidence: Named retained UI migration slices landed for IV2-menu-stack, IV2-scroll-ownership, IV2-menu-sizing,
+    IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration; next work should consume those
+    contracts for WR-024 shell polish rather than add local interaction policy.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
   current_call: Accepted architecture gate with runtime-backed slices implemented for IV2-menu-stack, IV2-scroll-ownership,
-    IV2-menu-sizing, IV2-chrome-slots, and IV2-dock-drop-zones. WR-024 shell polish may consume only those landed
-    contracts, while status/viewport arbitration remains WR-025-gated.
-  first_move: Use the landed generic menu-stack, scroll-ownership, menu-sizing, chrome-slot, and dock/drop-zone spine
-    before WR-024 touches popup dismissal, focus return, popup layering, submenu anchoring, viewport wheel fallback,
-    popup clamp, item fill, tab/workspace close and active-indicator placement, or tab reorder/drop-zone precedence;
-    define status/viewport arbitration before status or viewport-input polish.
+    IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration. WR-024 shell polish
+    may consume those landed contracts.
+  first_move: Use the landed generic menu-stack, scroll-ownership, menu-sizing, chrome-slot, dock/drop-zone, and
+    status/viewport arbitration spine before WR-024 touches popup dismissal, focus return, popup layering, submenu
+    anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and active-indicator placement,
+    tab reorder/drop-zone precedence, or status/viewport-input polish.
   diagram_call:
   - retained UI first
   - named interaction slices

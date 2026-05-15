@@ -61,7 +61,8 @@ ECS-driven UI, or changing retained UI execution strategy.
 
 2026-05-15 boundary update: WR-025 now provides the first code-bearing
 `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`,
-`IV2-chrome-slots`, and `IV2-dock-drop-zones` slices through
+`IV2-chrome-slots`, `IV2-dock-drop-zones`, and
+`IV2-status-and-viewport-arbitration` slices through
 `domain/ui/ui_definition/src/interaction.rs`,
 `domain/ui/ui_definition/src/validate.rs::validate_menu`,
 `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`,
@@ -74,8 +75,9 @@ WR-024 may consume those landed contracts for popup layer behavior,
 outside-dismiss, focus return, Escape dismissal, Switch Type submenu anchoring,
 wheel boundary ownership, menu item fill, popup clamp, scroll fallback, and
 tab/workspace close, label/drag, active-indicator slot placement, and tab
-reorder versus split-preview drop-zone precedence. Status overflow and
-viewport arbitration remain WR-025-gated.
+reorder versus split-preview drop-zone precedence. It may also consume the
+formed viewport status overflow and scene-input fallback arbitration records
+before changing FPS/frame-time status display behavior.
 
 ## Interaction V2 Slice Dependencies
 

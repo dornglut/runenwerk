@@ -51,6 +51,7 @@ pub struct FormedInteractionModel {
     pub menu_scopes: Vec<FormedMenuStackScope>,
     pub menu_sizing: Vec<FormedMenuSizing>,
     pub scroll_owners: Vec<FormedScrollOwner>,
+    pub viewport_status_regions: Vec<FormedViewportStatusRegion>,
 }
 
 impl FormedInteractionModel {
@@ -60,6 +61,8 @@ impl FormedInteractionModel {
         self.menu_scopes.extend(other.menu_scopes);
         self.menu_sizing.extend(other.menu_sizing);
         self.scroll_owners.extend(other.scroll_owners);
+        self.viewport_status_regions
+            .extend(other.viewport_status_regions);
     }
 
     pub fn push_chrome_slot(&mut self, slot: FormedChromeSlot) {
@@ -80,6 +83,10 @@ impl FormedInteractionModel {
 
     pub fn push_scroll_owner(&mut self, owner: FormedScrollOwner) {
         self.scroll_owners.push(owner);
+    }
+
+    pub fn push_viewport_status_region(&mut self, region: FormedViewportStatusRegion) {
+        self.viewport_status_regions.push(region);
     }
 }
 
@@ -176,6 +183,49 @@ pub struct FormedScrollOwner {
     pub boundary: UiScrollBoundaryPolicyDefinition,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormedViewportStatusRegion {
+    pub status_widget_id: WidgetId,
+    pub viewport_canvas_widget_id: WidgetId,
+    pub viewport_surface_widget_id: WidgetId,
+    pub overflow: UiStatusOverflowPolicyDefinition,
+    pub input_arbitration: UiViewportInputArbitrationPolicyDefinition,
+    pub metrics: Vec<FormedViewportStatusMetric>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormedViewportStatusMetric {
+    pub widget_id: WidgetId,
+    pub kind: UiViewportStatusMetricKindDefinition,
+    pub priority: UiViewportStatusMetricPriorityDefinition,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiStatusOverflowPolicyDefinition {
+    #[default]
+    SingleRowHorizontalScroll,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiViewportInputArbitrationPolicyDefinition {
+    #[default]
+    UiOwnsStatusBeforeViewportFallback,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiViewportStatusMetricKindDefinition {
+    Details,
+    FrameRate,
+    FrameTime,
+    OverlayStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiViewportStatusMetricPriorityDefinition {
+    Essential,
+    Supplemental,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UiMenuItemWidthDefinition {
     #[default]
@@ -194,4 +244,33 @@ pub struct UiMenuSizingDefinition {
     pub item_width: UiMenuItemWidthDefinition,
     #[serde(default)]
     pub overflow: UiMenuOverflowDefinition,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interaction_model_extends_viewport_status_regions() {
+        let mut base = FormedInteractionModel::default();
+        let mut incoming = FormedInteractionModel::default();
+        incoming.push_viewport_status_region(FormedViewportStatusRegion {
+            status_widget_id: WidgetId(1),
+            viewport_canvas_widget_id: WidgetId(2),
+            viewport_surface_widget_id: WidgetId(3),
+            overflow: UiStatusOverflowPolicyDefinition::SingleRowHorizontalScroll,
+            input_arbitration:
+                UiViewportInputArbitrationPolicyDefinition::UiOwnsStatusBeforeViewportFallback,
+            metrics: vec![FormedViewportStatusMetric {
+                widget_id: WidgetId(4),
+                kind: UiViewportStatusMetricKindDefinition::FrameRate,
+                priority: UiViewportStatusMetricPriorityDefinition::Essential,
+            }],
+        });
+
+        base.extend(incoming);
+
+        assert_eq!(base.viewport_status_regions.len(), 1);
+        assert_eq!(base.viewport_status_regions[0].metrics.len(), 1);
+    }
 }

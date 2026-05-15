@@ -547,10 +547,12 @@ Interaction V2 now has an accepted ADR and needs retained-UI migration slices.
     `IV2-status-and-viewport-arbitration`;
   - code-bearing retained slices landed on 2026-05-15 for
     `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`,
-    `IV2-chrome-slots`, and `IV2-dock-drop-zones`;
+    `IV2-chrome-slots`, `IV2-dock-drop-zones`, and
+    `IV2-status-and-viewport-arbitration`;
     `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`
-    adapts toolbar/tab-stack menu scopes, sizing records, structural tab chrome
-    slots, and dock/drop-zone records, while
+    adapts toolbar/tab-stack/viewport menu scopes, sizing records, structural
+    tab chrome slots, dock/drop-zone records, and viewport status/input
+    arbitration records, while
     `domain/editor/editor_shell/src/composition/toolbar_definition.rs::project_workspace_close_buttons`
     adapts workspace chrome slots and
     `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`
@@ -625,7 +627,7 @@ Exit criteria:
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
 - The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
 - UI execution strategy is closed for M1 through M7 and M3.5/M3.6: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution remains deferred and may not enter self-authoring as a first-time decision.
-- ADR 0009 makes Interaction V2 the shared editor UI behavior contract before further popup, scroll, chrome, docking, status-overflow, and viewport-input work. The required spine is definition vocabulary, validation rule, `FormedInteractionModel`, retained UI formation adapter, `ui_runtime` enforcement, and editor/app guard. The `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, and `IV2-dock-drop-zones` runtime-backed slices are implemented; downstream implementation must still consume named contract slices: `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration`.
+- ADR 0009 makes Interaction V2 the shared editor UI behavior contract before further popup, scroll, chrome, docking, status-overflow, and viewport-input work. The required spine is definition vocabulary, validation rule, `FormedInteractionModel`, retained UI formation adapter, `ui_runtime` enforcement, and editor/app guard. The `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration` runtime-backed slices are implemented; downstream implementation must consume the named contract slice it depends on instead of defining local policy.
 - Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
 - `python3 tools/docs/validate_docs.py` passes.
 

@@ -96,17 +96,17 @@ and must be consumed as a contract by downstream retained UI work.
 
 As of 2026-05-15, code-bearing retained slices have landed for
 `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`,
-`IV2-chrome-slots`, and `IV2-dock-drop-zones`. The owning implementation
-entry points are
+`IV2-chrome-slots`, `IV2-dock-drop-zones`, and
+`IV2-status-and-viewport-arbitration`. The owning implementation entry points
+are
 `domain/ui/ui_definition/src/interaction.rs`,
 `domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`,
 `domain/ui/ui_runtime/src/input/hit_test.rs`,
 `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`,
 `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`, and
-the toolbar/tab-stack/dock-drop adapters in
-`domain/editor/editor_shell/src/composition/`. The remaining status/viewport
-arbitration slice is still design-gated before WR-024 shell polish can depend
-on it.
+the toolbar/tab-stack/dock-drop/status adapters in
+`domain/editor/editor_shell/src/composition/`. WR-024 shell polish must still
+cite the named Interaction V2 slice it consumes.
 
 ## Scope Boundary
 

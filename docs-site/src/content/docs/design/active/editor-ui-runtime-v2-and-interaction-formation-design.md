@@ -197,11 +197,23 @@ without recreating the same policy in several layers.
   workspace mutation in the editor/app command path, and
   `domain/ui/ui_runtime/src/input/hit_test.rs` covers preview overlay child hit
   precedence.
+- `IV2-status-and-viewport-arbitration` has its first code-bearing retained
+  slice. `domain/ui/ui_definition/src/interaction.rs` defines formed viewport
+  status-region, overflow, metric-priority, and input-arbitration records.
+  `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::viewport_status_overlay`
+  emits a horizontal scroll-owned status region for details, FPS/frame-time,
+  and overlay status lines.
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::viewport_surface_interaction_model`
+  maps viewport options/tools popups plus status regions into formed menu,
+  scroll, status, and viewport-fallback contracts, while
+  `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::viewport_status_arbitration_is_formed_before_scene_fallback`
+  guards scene input fallback against status/chrome widgets.
 
-The viewport tools/options/details popup adapters and status/viewport
-arbitration remain separate WR-025 slices. WR-024 may consume only the landed
-menu-stack, scroll-ownership, menu-sizing, chrome-slot, and dock/drop-zone
-behaviors until the remaining status/viewport slice exists.
+All named WR-025 Interaction V2 retained slices now have code-bearing contract
+spines. WR-024 may consume the landed menu-stack, scroll-ownership,
+menu-sizing, chrome-slot, dock/drop-zone, and status/viewport arbitration
+behaviors, but any larger execution target change still needs a separate
+accepted design or ADR.
 
 ## Strangler Migration
 

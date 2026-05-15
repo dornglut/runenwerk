@@ -608,6 +608,29 @@ fn production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownersh
 }
 
 #[test]
+fn viewport_status_arbitration_is_formed_before_scene_fallback() {
+    let shell_builder =
+        include_str!("../../../domain/editor/editor_shell/src/composition/build_editor_shell.rs");
+    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+
+    assert!(
+        shell_builder.contains("viewport_surface_interaction_model(frame_model)"),
+        "shell projection must form viewport popup/status arbitration records before app input fallback",
+    );
+    assert!(
+        shell_builder.contains(
+            "UiViewportInputArbitrationPolicyDefinition::UiOwnsStatusBeforeViewportFallback"
+        ),
+        "status records must declare UI ownership before viewport fallback",
+    );
+    assert!(
+        input_bridge.contains("viewport_scene_binding_for_widget")
+            && input_bridge.contains("binding.host_widget_id == widget_id"),
+        "viewport input fallback must still accept only the scene embed binding, not status/chrome widgets",
+    );
+}
+
+#[test]
 fn production_picking_routes_only_through_viewport_scene_region() {
     let picking = include_str!("../src/runtime/systems/picking.rs");
 

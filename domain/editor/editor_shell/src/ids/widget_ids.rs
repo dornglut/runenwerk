@@ -101,6 +101,8 @@ pub const VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID: WidgetId = WidgetId(89);
 pub const VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID: WidgetId = WidgetId(90);
 pub const VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID: WidgetId = WidgetId(91);
 pub const VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID: WidgetId = WidgetId(92);
+pub const VIEWPORT_STATUS_CONTENT_WIDGET_ID: WidgetId = WidgetId(93);
+pub const VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID: WidgetId = WidgetId(94);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);

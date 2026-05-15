@@ -1,7 +1,9 @@
 //! File: domain/editor/editor_shell/src/composition/build_viewport_panel.rs
 //! Purpose: Compose viewport panel widgets.
 
-use crate::{UiNode, button_selected, hstack_with_policies, label, vscroll, vstack_with_policies};
+use crate::{
+    UiNode, button_selected, hscroll, hstack_with_policies, label, vscroll, vstack_with_policies,
+};
 use editor_viewport::{ViewportDebugStage, ViewportSurfacePresentationSlot};
 use ui_definition::{
     AuthoredUiTemplate, UiDefinitionContext, form_retained_ui, normalize_authored_template,
@@ -18,14 +20,15 @@ use crate::{
     VIEWPORT_DETAILS_PANEL_WIDGET_ID, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID,
     VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
-    VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
-    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_LABEL_WIDGET_ID,
-    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID,
-    VIEWPORT_SURFACE_EMBED_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
-    VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID, VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID,
-    VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID, VIEWPORT_TOOLS_MENU_WIDGET_ID, ViewportViewModel,
-    viewport_debug_stage_button_widget_id, viewport_embed_slot_for,
-    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
+    VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
+    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
+    VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
+    VIEWPORT_STATUS_CONTENT_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID, VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_WIDGET_ID, ViewportViewModel, viewport_debug_stage_button_widget_id,
+    viewport_embed_slot_for, viewport_product_button_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 
 use super::surface_control_polish::{compact_surface_action_button, compact_surface_toggle};
@@ -389,7 +392,7 @@ fn viewport_status_overlay(
         }
         if !view_model.overlay_status_lines.is_empty() {
             overlay_items.push(label(
-                scope.widget_id(crate::WidgetId(90_100)),
+                scope.widget_id(VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID),
                 view_model
                     .overlay_status_lines
                     .iter()
@@ -406,11 +409,15 @@ fn viewport_status_overlay(
                 scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
                 transparent_panel_theme(theme, 0.50),
             )),
-            vec![hstack_with_policies(
+            vec![hscroll(
                 scope.widget_id(VIEWPORT_STATUS_WIDGET_ID),
-                theme.spacing.sm,
-                vec![SizePolicy::Auto; overlay_items.len()],
-                overlay_items,
+                transparent_panel_theme(theme, 0.0),
+                vec![hstack_with_policies(
+                    scope.widget_id(VIEWPORT_STATUS_CONTENT_WIDGET_ID),
+                    theme.spacing.sm,
+                    vec![SizePolicy::Auto; overlay_items.len()],
+                    overlay_items,
+                )],
             )],
         )
     })
@@ -715,5 +722,13 @@ mod tests {
         let panel = find_node(&visible, VIEWPORT_DETAILS_PANEL_WIDGET_ID)
             .expect("status overlay should exist for generic overlay lines");
         assert!(format!("{:?}", panel).contains("Procgen overlay: 2 region(s)"));
+        let status = find_node(&visible, VIEWPORT_STATUS_WIDGET_ID)
+            .expect("status overlay should own a status scroll region");
+        assert!(matches!(
+            &status.kind,
+            UiNodeKind::Scroll(scroll) if scroll.axes == ui_tree::ScrollAxes::Horizontal
+        ));
+        assert!(find_node(&visible, VIEWPORT_STATUS_CONTENT_WIDGET_ID).is_some());
+        assert!(find_node(&visible, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID).is_some());
     }
 }
