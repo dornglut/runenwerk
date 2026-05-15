@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-15
 ---
 
 # Workspace Roadmap Index
@@ -74,6 +74,8 @@ Operational execution checklist:
   - [reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md](../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md)
 - Runtime product job RPJ7A cache policy closeout evidence:
   - [reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md](../reports/closeouts/runtime-product-job-rpj7a-cache-policy/closeout.md)
+- WR-007 multiplayer replication Phase 1-3 closeout evidence:
+  - [reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md](../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md)
 - Editor final end-to-end implementation roadmap:
   - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - Runenwerk Draw rendering foundation roadmap:
@@ -113,8 +115,8 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Current implementation candidates are `WR-018` rendered-world V1, `WR-025`
-  UI Runtime V2 interaction formation, and `WR-007` focused net hardening.
+- Current implementation candidates are `WR-018` rendered-world V1 and `WR-025`
+  UI Runtime V2 interaction formation.
 - `WR-018` is the P0 editor product slice: keep all editor SDF primitive
   rendering and picking on one extracted viewport scene packet before material,
   prefab, or terrain production work expands.
@@ -124,12 +126,12 @@ Operational execution checklist:
 - `WR-024` is ready-next behind `WR-025`: keep viewport statistics, popup
   contrast, scrollable popup content, submenu anchoring, close affordances, and
   active indicators as retained-UI implementation slices under Interaction V2.
-- `WR-007` is the current L1 net candidate after the completed WR-006 Draw GPU
-  proof and promotion slice; keep it scoped to ACK/baseline hardening and delta
-  lifecycle rules.
+- `WR-007` is completed evidence; the next net implementation phase is Phase 4
+  standard ECS component extraction and apply, and it should not start until it
+  is selected as a fresh roadmap slice.
 - Use the roadmap decision register to compare same-gate, same-level candidates;
   blocker gates and owning roadmap order still win before score.
-- Keep editor/UI cross-doc sequencing aligned with shipped behavior while these
+- Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   current candidates land.
 - Keep render SDF/GPU work on the completed product-selection and derived
   GPU-residency contracts.

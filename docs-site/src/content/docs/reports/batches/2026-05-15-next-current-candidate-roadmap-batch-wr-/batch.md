@@ -24,7 +24,7 @@ Closeout status: completed
 
 - 2026-05-15 WR-025 established the Interaction V2 migration spine and guardrail contract while keeping retained UI first, WR-024 downstream, and alternate UI execution targets deferred behind a separate ADR/design.
 - 2026-05-15 WR-018 aligned rendered-world V1 scene and GPU-picking packet decode for the editor SDF primitive set and added shader-slot contract tests.
-- 2026-05-15 WR-007 hardened net ACK/baseline validation and delta lifecycle normalization in engine_net; Phase 3 engine bridge baseline convergence remains deferred because engine/src and engine/tests were outside the approved write scope.
+- 2026-05-15 WR-007 hardened net ACK/baseline validation and delta lifecycle normalization in engine_net; the follow-up WR-007 bridge convergence closeout completed Phase 3 after this batch and is recorded in reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md.
 
 ## Tooling Hardening
 

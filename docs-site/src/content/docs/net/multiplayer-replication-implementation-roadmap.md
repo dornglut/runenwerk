@@ -5,7 +5,7 @@ status: active
 owner: net
 layer: net
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-15
 related_designs:
   - ../design/active/net-authoritative-replication-protocol.md
   - ../design/active/net-prediction-reconciliation-boundary.md
@@ -16,6 +16,8 @@ related_designs:
   - ../design/active/net-declarative-replication-authoring.md
   - ../design/active/net-transport-lanes-delivery.md
   - ../design/active/net-diagnostics-inspection.md
+related_reports:
+  - ../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md
 ---
 
 # Multiplayer Replication Implementation Roadmap
@@ -50,15 +52,19 @@ Implemented substrate:
 - client-side cursor and baseline validation in `ClientReplicationRuntime`;
 - server-side per-connection full/delta choice in
   `AuthoritativeServerRuntime`;
+- server-side ACK validation for stale, future, unsent, and pruned snapshot
+  cursors through `SnapshotAckOutcome` and `SnapshotAckRejection`;
+- delta lifecycle normalization where despawn wins over same-delta or late
+  stale upsert/remove actions;
 - engine net plugin work queues, tick-buffer input flow, prediction
-  replay, replication checkpoints, and diagnostics resources;
+  replay, replication checkpoints, validated ACK bridge behavior, and
+  diagnostics resources;
 - `engine_net_quic` QUIC runtime adapter;
 - `engine_history` replay/checkpoint/validation substrate;
 - declarative metadata macros for component/entity descriptors.
 
 Partial contracts:
 
-- ACK validation does not yet reject unsent future cursors everywhere.
 - Declarative metadata does not yet remove the need for low-level drivers
   in normal gameplay.
 - Standard component/resource extraction and apply are partial.
@@ -102,6 +108,9 @@ Completion criteria:
 
 ## Phase 1: ACK and Baseline Hardening
 
+Status: complete as of 2026-05-15. See
+[WR-007 closeout](../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md).
+
 Goal: make ACK handling durable and adversarial.
 
 Tasks:
@@ -123,6 +132,9 @@ Linked design:
 - [Authoritative replication protocol](../design/active/net-authoritative-replication-protocol.md)
 
 ## Phase 2: Delta Lifecycle Contract
+
+Status: complete as of 2026-05-15. See
+[WR-007 closeout](../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md).
 
 Goal: define and enforce entity lifecycle edge cases in deltas.
 
@@ -147,6 +159,9 @@ Linked design:
 - [Authoritative replication protocol](../design/active/net-authoritative-replication-protocol.md)
 
 ## Phase 3: Engine Bridge Baseline Convergence
+
+Status: complete as of 2026-05-15. See
+[WR-007 closeout](../reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md).
 
 Goal: align lower-level `engine_net` runtime contracts and engine plugin
 checkpoint behavior.

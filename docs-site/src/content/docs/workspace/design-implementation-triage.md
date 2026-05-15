@@ -181,9 +181,9 @@ The current code-facing answer is:
 2. Keep `WR-024` editor shell polish ready-next behind `WR-025`; polish may
    proceed only as a retained-UI slice consuming Interaction V2 contracts or as
    explicitly bounded compatibility evidence.
-3. Treat `WR-007` as the current L1 net hardening candidate after the completed
-   WR-006 Draw GPU proof and promotion slice.
-4. Treat `WR-001` and `WR-006` as completed evidence, not selectable
+3. Treat `WR-007` as completed evidence; Phase 4 standard ECS extraction/apply
+   is the next net phase, but only after a fresh roadmap slice selects it.
+4. Treat `WR-001`, `WR-006`, and `WR-007` as completed evidence, not selectable
    implementation batches.
 5. Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
    until roadmap evidence explicitly reactivates one of them.

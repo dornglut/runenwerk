@@ -56,9 +56,6 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
   only as retained-UI implementation slices consuming Interaction V2 contracts
   or as explicitly bounded compatibility evidence (source:
   `design/active/editor-shell-menu-and-tab-chrome-polish-design.md`).
-- [ ] `WR-007`: Continue the focused L1 net hardening candidate for
-  ACK/baseline and delta lifecycle only, without broadening replication scope
-  (source: `net/multiplayer-replication-implementation-roadmap.md`).
 - [ ] Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
   unless fresh roadmap evidence reactivates one of them (source:
   `workspace/roadmap-items.yaml`).
@@ -79,8 +76,8 @@ multi-track baseline for bounded `WR-001` through `WR-005` slices.
 
 Remaining near-term blockers:
 
-- `WR-007`: ACK/baseline hardening and delta lifecycle rules are the current
-  L1 implementation candidate after WR-006.
+- `WR-007`: complete; next net work is Phase 4 standard ECS component
+  extraction/apply, but it needs a fresh roadmap slice before implementation.
 - `WR-018`: multi-entity SDF packet rendering, shader packet use, and picking
   consistency need code and tests before material, prefab, or terrain work
   expands.
@@ -118,6 +115,13 @@ Remaining near-term blockers:
 ## Completed Baselines (Do Not Reopen Without Reason)
 
 - [x] Complete Runenwerk Draw rendering foundation DRF1-DRF5. Status: implemented and focused-validated as of 2026-05-15; Draw forms preview/final CPU tile products, caches app-derived tile payloads, bridges product surfaces through public render APIs, requests GPU ink proof flows, compares GPU captures against CPU reference output with strict texture diff thresholds, promotes only matching tile generations, rejects stale GPU output, and keeps CPU current or last-good fallback authoritative on GPU validation failure (source: `apps/runenwerk-draw/roadmap.md` and `reports/batches/2026-05-15-next-current-candidate-roadmap-batch-wr-/batch.md`).
+- [x] Complete WR-007 multiplayer replication Phase 1-3. Status: implemented
+  and focused-validated as of 2026-05-15; `engine_net` rejects stale, future,
+  unsent, and pruned snapshot ACKs before baseline mutation, normalizes delta
+  lifecycle actions so despawn wins, and the engine net plugin routes ACK
+  baseline changes through validated checkpoint methods (source:
+  `net/multiplayer-replication-implementation-roadmap.md` and
+  `reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md`).
 - [x] Complete the Runenwerk editor MVP critical path and acceptance gate. Status: automated and manual/UI verified; the source checklist is complete (source: `apps/runenwerk-editor/execution-priority-checklist.md`).
 - [x] Complete SDF-first execution Phase 6D: procgen bake, rollback, persistence, and runtime preview reload classification. Status: implemented and focused-validated as of 2026-05-14; `domain/procgen` forms offline bake outcomes with operation records, formed field-preview products, product descriptors, changed regions, explanations, and rollback evidence; `runenwerk_editor` publishes accepted bakes through product barriers, restores last-good bake products on rollback, persists app-owned bake archives, and classifies procgen graph reloads as live `ProcgenPreview` products while worker pools, renderer rebuilds, GPU upload, caves, stamps, and scatter remain deferred (source: `workspace/sdf-first-execution-roadmap.md` and `reports/closeouts/sdf-first-execution-phase-6d/closeout.md`).
 - [x] Complete SDF-first execution Phase 6C: first concrete procgen terrain/material CPU preview. Status: implemented and focused-validated as of 2026-05-13; `domain/procgen` forms deterministic scalar-distance and material-channel `world_sdf::FieldPreviewProduct` payloads from bounded procgen documents, product publication uses formed preview descriptors instead of the Phase 6B generic field-candidate descriptor, query snapshots publish only after product publication, and editor preview surfaces expose sample counts, distance ranges, material masks, and diagnostics while renderer rebuilds, GPU upload, worker pools, caves, stamps, and scatter remain deferred (source: `workspace/sdf-first-execution-roadmap.md` and `reports/closeouts/sdf-first-execution-phase-6c/closeout.md`).
