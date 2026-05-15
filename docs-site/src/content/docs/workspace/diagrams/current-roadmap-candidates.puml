@@ -31,12 +31,9 @@ package "Immediate Dependency Context" {
 package "Current Implementation Candidates" {
   component "WR-018 Rendered World V1\nstate=current_candidate\nscore=3.0 V5 B2\ncall=multi-entity SDF packet\nrender/picking consistency" as RENDERWORLD <<candidate>>
 
-  component "WR-025 UI Runtime V2 interaction formation\nstate=current_candidate\nscore=4.8 V5 B2\ncall=retained UI first\nnamed interaction slices" as UIV2 <<candidate>>
-
 }
 
 RENDER -down-> RENDERWORLD : dependency context
 UIGUARDS -down-> RENDERWORLD : dependency context
-UIGUARDS -down-> UIV2 : dependency context
 
 @enduml

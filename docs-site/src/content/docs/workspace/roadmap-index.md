@@ -115,17 +115,17 @@ Operational execution checklist:
 
 ## Current Focus
 
-- Current implementation candidates are `WR-018` rendered-world V1 and `WR-025`
-  UI Runtime V2 interaction formation.
+- Current implementation candidate is `WR-018` rendered-world V1.
 - `WR-018` is the P0 editor product slice: keep all editor SDF primitive
   rendering and picking on one extracted viewport scene packet before material,
   prefab, or terrain production work expands.
-- `WR-025` is the P0 UI architecture guardrail slice: establish the Interaction
-  V2 contract/migration spine before more local popup, scroll, chrome, docking,
-  or viewport-input polish accumulates.
-- `WR-024` is ready-next behind `WR-025`: keep viewport statistics, popup
+- `WR-025` is completed evidence for the named Interaction V2 retained-slice
+  catalog: menu stack, scroll ownership, menu sizing, chrome slots,
+  dock/drop-zones, and status/viewport arbitration.
+- `WR-024` is ready-next after `WR-025`: keep viewport statistics, popup
   contrast, scrollable popup content, submenu anchoring, close affordances, and
-  active indicators as retained-UI implementation slices under Interaction V2.
+  active indicators as retained-UI implementation slices that consume the
+  landed Interaction V2 contracts.
 - `WR-007` is completed evidence; the next net implementation phase is Phase 4
   standard ECS component extraction and apply, and it should not start until it
   is selected as a fresh roadmap slice.

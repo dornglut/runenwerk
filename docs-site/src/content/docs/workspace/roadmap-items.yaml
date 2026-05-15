@@ -988,7 +988,7 @@ items:
   lane: Architecture guardrail
   dependency_level: L1
   gate: Accepted architecture gate
-  planning_state: current_candidate
+  planning_state: completed
   priority: P0
   value: 5
   blocker: 2
@@ -1028,18 +1028,18 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: Named retained UI migration slices landed for IV2-menu-stack, IV2-scroll-ownership, IV2-menu-sizing,
-    IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration; next work should consume those
-    contracts for WR-024 shell polish rather than add local interaction policy.
+  next_evidence: 2026-05-15 WR-025 batches landed named retained UI migration slices for IV2-menu-stack,
+    IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and
+    IV2-status-and-viewport-arbitration. Next retained UI polish should consume those contracts rather than add local
+    interaction policy.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
-  current_call: Accepted architecture gate with runtime-backed slices implemented for IV2-menu-stack, IV2-scroll-ownership,
-    IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration. WR-024 shell polish
-    may consume those landed contracts.
-  first_move: Use the landed generic menu-stack, scroll-ownership, menu-sizing, chrome-slot, dock/drop-zone, and
-    status/viewport arbitration spine before WR-024 touches popup dismissal, focus return, popup layering, submenu
-    anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and active-indicator placement,
-    tab reorder/drop-zone precedence, or status/viewport-input polish.
+  current_call: Completed through the 2026-05-15 WR-025 batches. Do not reopen this architecture gate unless a new
+    retained UI regression needs a named Interaction V2 contract or a future execution target has an accepted ADR/design.
+  first_move: For follow-up retained UI polish, consume the landed generic menu-stack, scroll-ownership, menu-sizing,
+    chrome-slot, dock/drop-zone, and status/viewport arbitration spine before changing popup dismissal, focus return,
+    popup layering, submenu anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and
+    active-indicator placement, tab reorder/drop-zone precedence, or status/viewport-input behavior.
   diagram_call:
   - retained UI first
   - named interaction slices
