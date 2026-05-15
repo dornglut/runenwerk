@@ -8,14 +8,14 @@ canonical: true
 last_reviewed: 2026-05-12
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
-  - ../../design/active/ui-definition-formation-foundation-design.md
-  - ../../design/active/editor-workspace-document-mode-panel-architecture.md
+  - ../../design/implemented/ui-definition-formation-foundation-design.md
+  - ../../design/implemented/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/active/editor-native-multi-window-presentation-design.md
   - ../../design/active/workspace-viewport-expression-upgrade-design.md
-  - ../../design/active/render-product-surface-foundation-bundle-design.md
-  - ../../design/active/viewport-dynamic-product-target-allocation-design.md
-  - ../../design/active/editor-self-authoring-and-final-ui-design.md
+  - ../../design/implemented/render-product-surface-foundation-bundle-design.md
+  - ../../design/implemented/viewport-dynamic-product-target-allocation-design.md
+  - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
   - ../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
@@ -593,7 +593,7 @@ Interaction V2 now has an accepted ADR and needs retained-UI migration slices.
   - implementation starts after rendered-world V1 and field visualizer product routing are stable;
   - source-backed `MaterialGraphDocument` is material truth, not canvas state.
 - UI Designer
-  - not missing: it is the already-promoted self-authoring path in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`;
+  - not missing: it is the already-promoted self-authoring path in `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`;
   - roadmap wording should continue to call this UI Designer / self-authoring so the feature is visible to product planning.
 - SDF Prefabs
   - active V2-gated design: `docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md`;
@@ -737,7 +737,7 @@ Purpose: introduce the first full UI definition framework before M3.6 and M4, in
 
 Owning design:
 
-- `docs-site/src/content/docs/design/active/ui-definition-formation-foundation-design.md`
+- `docs-site/src/content/docs/design/implemented/ui-definition-formation-foundation-design.md`
 
 Rationale:
 
@@ -805,7 +805,7 @@ Status: complete as of 2026-05-06 for the self-authoring document lifecycle and 
 
 Owning design:
 
-- `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`
+- `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`
 
 Rationale:
 
@@ -864,7 +864,7 @@ Owning roadmap:
 Owning design:
 
 - `docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md`
-- `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`
+- `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`
 
 Status: complete as of 2026-05-08. Explicit viewport instance identity, persisted restore metadata and runtime settings, lifecycle-before-frame-submit sync, viewport-scoped product targets, per-viewport render jobs, shader containment cleanup, viewport-keyed camera/debug/root commands, viewport-local camera input, duplicate settings copy, and closed-surface cleanup are implemented. Further viewport producer breadth or polish belongs to later product milestones, not M3.7 migration work.
 

@@ -7,7 +7,7 @@ layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-07
 related_designs:
-  - ./render-product-surface-foundation-bundle-design.md
+  - ../implemented/render-product-surface-foundation-bundle-design.md
   - ./editor-asset-pipeline-and-content-workflow-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md

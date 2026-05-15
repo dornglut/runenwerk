@@ -1,4 +1,5 @@
 use super::extract::{SystemParam, SystemParamError};
+use super::param_metadata::{ParamSlotMetadata, param_slot_metadata_for_descriptors};
 use super::plan_report::RuntimePlanReport;
 use anyhow::{Result, anyhow};
 use scheduler::access::{AccessKey, SystemAccess};
@@ -20,20 +21,6 @@ pub type BarrierHandler = Box<dyn Fn(&ExecutionBarrier, &mut World) -> Result<()
 struct RegisteredBarrierHandler {
     kind: BarrierKind,
     handler: BarrierHandler,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ParamSlotId {
-    pub system_id: SystemId,
-    pub slot_index: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParamSlotMetadata {
-    pub id: ParamSlotId,
-    pub kind: &'static str,
-    pub label: &'static str,
-    pub type_name: &'static str,
 }
 
 pub trait SystemOutput {
@@ -745,22 +732,10 @@ impl Runtime {
             .iter()
             .find(|system| system.id() == system_id)?;
 
-        Some(
-            system
-                .param_slots()
-                .iter()
-                .enumerate()
-                .map(|(slot_index, slot)| ParamSlotMetadata {
-                    id: ParamSlotId {
-                        system_id,
-                        slot_index,
-                    },
-                    kind: slot.kind,
-                    label: slot.label,
-                    type_name: slot.type_name,
-                })
-                .collect(),
-        )
+        Some(param_slot_metadata_for_descriptors(
+            system_id,
+            system.param_slots(),
+        ))
     }
 
     pub fn run_schedule<L: ScheduleLabel>(&mut self, world: &mut World) -> Result<()> {

@@ -1,11 +1,11 @@
 ---
 title: Foundation Vocabulary Crates
 description: Design direction for Runenwerk foundation vocabulary crates and their implementation order.
-status: active
+status: implemented
 owner: foundation
 layer: foundation
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-16
 related_adrs: []
 ---
 
@@ -265,7 +265,7 @@ Schema describes reusable shapes and value contracts. It must not become a seria
 
 Status: complete.
 
-The accepted command design lives at `docs-site/src/content/docs/design/active/foundation-commands-design.md`. Phase 1 and Phase 2 are implemented at `foundation/commands`; Phase 3 and Phase 4 are implemented in `domain/editor/editor_scene`. Phase 5 found no repeated proposal rejection pattern that justifies new shared helper vocabulary.
+The accepted command design lives at `docs-site/src/content/docs/design/implemented/foundation-commands-design.md`. Phase 1 and Phase 2 are implemented at `foundation/commands`; Phase 3 and Phase 4 are implemented in `domain/editor/editor_scene`. Phase 5 found no repeated proposal rejection pattern that justifies new shared helper vocabulary.
 
 ```text
 CommandDescriptor uses schema for parameters.

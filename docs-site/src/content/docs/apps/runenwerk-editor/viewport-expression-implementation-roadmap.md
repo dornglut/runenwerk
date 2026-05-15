@@ -8,8 +8,8 @@ canonical: true
 last_reviewed: 2026-05-08
 related_designs:
   - ../../design/active/workspace-viewport-expression-upgrade-design.md
-  - ../../design/active/render-product-surface-foundation-bundle-design.md
-  - ../../design/active/viewport-dynamic-product-target-allocation-design.md
+  - ../../design/implemented/render-product-surface-foundation-bundle-design.md
+  - ../../design/implemented/viewport-dynamic-product-target-allocation-design.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/active/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../../design/active/field-visualizer-product-workflow-design.md
@@ -40,7 +40,7 @@ The final system has no fullscreen viewport masking as its containment model, no
 
 Phasing is allowed only to keep patches reviewable. Each phase must move the code toward the final contract and must not add another bridge that becomes a second architecture.
 
-If the render foundation update is active, V5 and V6 should be executed through `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md` so dynamic targets are allocated, written, sampled, inspected, and proven as one end-to-end render surface capability.
+If the render foundation update is active, V5 and V6 should be executed through `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md` so dynamic targets are allocated, written, sampled, inspected, and proven as one end-to-end render surface capability.
 
 ## Doctrine Alignment
 
@@ -390,7 +390,7 @@ Purpose: remove shared static GPU product resources.
 
 Owning detailed design:
 
-- `docs-site/src/content/docs/design/active/viewport-dynamic-product-target-allocation-design.md`
+- `docs-site/src/content/docs/design/implemented/viewport-dynamic-product-target-allocation-design.md`
 
 Implementation targets:
 

@@ -7,9 +7,9 @@ layer: domain
 canonical: true
 last_reviewed: 2026-05-15
 related:
-  - ./ui-definition-formation-foundation-design.md
-  - ./editor-self-authoring-and-final-ui-design.md
-  - ./editor-workspace-document-mode-panel-architecture.md
+  - ../implemented/ui-definition-formation-foundation-design.md
+  - ../implemented/editor-self-authoring-and-final-ui-design.md
+  - ../implemented/editor-workspace-document-mode-panel-architecture.md
 ---
 
 # Editor / UI / Workspace / Tool-Surface Architecture
@@ -856,7 +856,7 @@ architecture must therefore preserve both truths:
   state or provider behavior into definition data.
 
 The concrete self-authoring and final editor UI target is defined in
-`docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+`docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 
 ---
 

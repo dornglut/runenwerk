@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-16
 related_adrs:
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
 related_designs:
@@ -13,6 +13,7 @@ related_designs:
   - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./sdf-product-renderer-and-gpu-residency-design.md
   - ./execution-fabric-and-product-jobs-design.md
+  - ../active/sdf-procedural-animation-and-animated-models-design.md
 supersedes:
   - ../deferred/sdf-world-production-slice-design.md
 ---
@@ -155,13 +156,13 @@ Every future capability track must define:
 - validation tests;
 - relationship to multiplayer/replay authority when relevant.
 
-## Deferred Detail Drafts
+## Capability Detail Designs
 
-Detailed future-system drafts remain useful as deferred design seeds, but they
-are not implementation instructions until their gates are resolved:
+Detailed future-system drafts and active follow-up designs remain useful, but
+they are not implementation instructions until their gates are resolved:
 
 - `../active/sdf-prefab-composition-system-design.md`
-- `../deferred/sdf-character-animation-system-design.md`
+- `../active/sdf-procedural-animation-and-animated-models-design.md`
 - `../deferred/field-vegetation-system-design.md`
 - `../deferred/day-night-atmosphere-system-design.md`
 - `../deferred/water-wetness-field-system-design.md`

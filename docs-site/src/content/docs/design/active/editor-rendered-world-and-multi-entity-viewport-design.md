@@ -7,7 +7,7 @@ layer: app-runtime / engine-render
 canonical: true
 last_reviewed: 2026-05-15
 related_designs:
-  - ./render-product-surface-foundation-bundle-design.md
+  - ../implemented/render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md
   - ../accepted/sdf-first-production-capability-map.md
 related_roadmaps:

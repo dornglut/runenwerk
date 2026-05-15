@@ -152,13 +152,13 @@ It only closes the initial ratification migration enough to move to schema desig
 After this document and the diagnostics completion gate are green, start the design for:
 
 ```text
-docs-site/src/content/docs/design/active/foundation-schema-design.md
+docs-site/src/content/docs/design/implemented/foundation-schema-design.md
 ```
 
 Then design:
 
 ```text
-docs-site/src/content/docs/design/active/foundation-commands-design.md
+docs-site/src/content/docs/design/implemented/foundation-commands-design.md
 ```
 
 Do not implement either crate before the design doc is reviewed against current repository boundaries.

@@ -18,6 +18,7 @@ pub use commands::{BatchCommands, Commands, DeferredCommand};
 pub use component::{Component, ComponentState, Resource, StatefulComponent};
 pub use ecs_macros::{
     Bundle, Component, Reflect, ReflectComponent, ReflectResource, Resource, StatefulComponent,
+    SystemParam,
 };
 pub use entity::{Entity, EntityAllocator};
 pub use errors::{CommandError, EntityError, QueryError, ResourceError, SpatialIndexError};
@@ -29,12 +30,12 @@ pub use query::{
 pub use reflect::*;
 pub use system::{
     BroadcastReader, BroadcastReaderState, BroadcastWriter, ConfiguredSystem, IntoSystem,
-    IntoSystemConfigs, IntoSystemSetKey, ParamSlotId, ParamSlotMetadata, Res, ResMut, ResView,
-    Runtime, RuntimePlanBarrierReport, RuntimePlanConflictReport, RuntimePlanDiagnosticReport,
-    RuntimePlanPhaseReport, RuntimePlanReport, RuntimePlanStageReport, RuntimePlanSystemReport,
-    RuntimePlanWaveReport, SystemConfigExt, SystemId, SystemParam, SystemParamError,
-    TickBufferDrainer, TickBufferReader, TickBufferWriter, WorkQueueDrainer, WorkQueueReader,
-    WorkQueueWriter,
+    IntoSystemConfigs, IntoSystemSetKey, ParamSlotDescriptor, ParamSlotId, ParamSlotMetadata, Res,
+    ResMut, ResView, Runtime, RuntimePlanBarrierReport, RuntimePlanConflictReport,
+    RuntimePlanDiagnosticReport, RuntimePlanPhaseReport, RuntimePlanReport, RuntimePlanStageReport,
+    RuntimePlanSystemReport, RuntimePlanWaveReport, SystemConfigExt, SystemId, SystemParam,
+    SystemParamError, TickBufferDrainer, TickBufferReader, TickBufferWriter, WorkQueueDrainer,
+    WorkQueueReader, WorkQueueWriter,
 };
 pub use world::{
     BroadcastDiagnosticsSnapshot, BroadcastKey, BroadcastLifetime, BroadcastObserverNotification,

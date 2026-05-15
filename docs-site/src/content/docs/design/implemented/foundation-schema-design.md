@@ -1,11 +1,11 @@
 ---
 title: Foundation Schema
 description: Design direction for the Runenwerk foundation schema vocabulary crate.
-status: active
+status: implemented
 owner: foundation
 layer: foundation
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-16
 related_adrs: []
 ---
 
@@ -1575,7 +1575,7 @@ Deferred questions:
 
 ## Final recommendation
 
-Keep `docs-site/src/content/docs/design/active/foundation-schema-design.md` as the active phase roadmap for `foundation/schema`.
+Keep `docs-site/src/content/docs/design/implemented/foundation-schema-design.md` as the active phase roadmap for `foundation/schema`.
 
 Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 

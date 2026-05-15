@@ -8,7 +8,7 @@ canonical: true
 last_reviewed: 2026-05-15
 related:
   - ../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
-  - ../../design/active/ui-definition-formation-foundation-design.md
+  - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../design/deferred/ui-model-multiple-execution-strategies-design.md
 ---
 

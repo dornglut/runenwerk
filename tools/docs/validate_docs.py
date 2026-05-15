@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 import sys
+import tomllib
 import urllib.parse
 
 DOCS_ROOT = Path("docs-site/src/content/docs")
@@ -46,6 +47,32 @@ STALE_PATTERNS = {
 }
 
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+ACTIVE_DESIGN_COMPLETION_PATTERNS = [
+    re.compile(r"^Status:\s*(?:complete|implemented)\b", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"\bThis design (?:is|was) implemented\b", re.IGNORECASE),
+    re.compile(r"\bimplementation is at validated closeout-candidate\b", re.IGNORECASE),
+    re.compile(r"^Status after .* closeout:\s*complete\b", re.IGNORECASE | re.MULTILINE),
+]
+ALLOWED_ACTIVE_LIFECYCLE_EXCEPTIONS = {"active_phase_evidence"}
+DOMAIN_MAP_REQUIRED_MARKERS = {
+    "foundation/id_macros",
+    "foundation/schema",
+    "foundation/commands",
+    "domain/asset",
+    "domain/product",
+    "domain/procgen",
+    "domain/drawing",
+    "apps/runenwerk_runtime_preview",
+}
+DESIGN_STATUS_BY_DIR = {
+    "active": "active",
+    "accepted": "accepted",
+    "implemented": "implemented",
+    "deferred": "deferred",
+    "superseded": "superseded",
+    "rejected": "rejected",
+    "archived": "archived",
+}
 
 def contains_stale_pattern(text: str, stale: str) -> bool:
     if stale == "docs/design/":
@@ -65,6 +92,13 @@ def extract_status(text: str) -> str | None:
     frontmatter = text.split("\n---\n", 1)[0]
     match = re.search(r"^status:\s*(\w+)\s*$", frontmatter, re.MULTILINE)
     return match.group(1) if match else None
+
+def extract_frontmatter_value(text: str, key: str) -> str | None:
+    if not has_frontmatter(text):
+        return None
+    frontmatter = text.split("\n---\n", 1)[0]
+    match = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", frontmatter, re.MULTILINE)
+    return match.group(1).strip().strip("\"'") if match else None
 
 def is_valid_docs_filename(path: Path) -> bool:
     name = path.name
@@ -132,6 +166,138 @@ def validate_design_lifecycle_indexes(errors: list[str]) -> None:
                     f"design lifecycle index {readme} does not link sibling document: {sibling.name}"
                 )
 
+def validate_design_lifecycle_status(path: Path, text: str, errors: list[str]) -> None:
+    if path.name == "README.md":
+        return
+    try:
+        lifecycle_dir = path.relative_to(DOCS_ROOT / "design").parts[0]
+    except ValueError:
+        return
+    expected = DESIGN_STATUS_BY_DIR.get(lifecycle_dir)
+    if expected is None:
+        return
+    status = extract_status(text)
+    if status != expected:
+        errors.append(
+            f"design lifecycle status mismatch in {path}: folder '{lifecycle_dir}' requires status '{expected}', found '{status}'"
+        )
+
+def validate_active_design_lifecycle_claims(path: Path, text: str, errors: list[str]) -> None:
+    active_root = DOCS_ROOT / "design" / "active"
+    if path.parent != active_root or path.name == "README.md":
+        return
+    lifecycle_exception = extract_frontmatter_value(text, "lifecycle_exception")
+    has_completion_claim = any(pattern.search(text) for pattern in ACTIVE_DESIGN_COMPLETION_PATTERNS)
+    if not has_completion_claim:
+        return
+    if lifecycle_exception in ALLOWED_ACTIVE_LIFECYCLE_EXCEPTIONS:
+        return
+    errors.append(
+        f"active design contains implemented/completed lifecycle claim without allowed lifecycle_exception: {path}"
+    )
+
+def load_workspace_members(errors: list[str]) -> list[str]:
+    cargo_toml = REPO_ROOT / "Cargo.toml"
+    try:
+        data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"could not parse {cargo_toml}: {error}")
+        return []
+    members = data.get("workspace", {}).get("members", [])
+    if not isinstance(members, list):
+        errors.append("Cargo.toml workspace.members must be a list")
+        return []
+    return [member for member in members if isinstance(member, str)]
+
+def validate_crate_docs_coverage(errors: list[str]) -> None:
+    members = load_workspace_members(errors)
+    status_path = DOCS_ROOT / "workspace" / "crate-docs-status.md"
+    try:
+        status_text = status_path.read_text(encoding="utf-8")
+    except OSError as error:
+        errors.append(f"could not read crate docs status: {error}")
+        return
+    grouped_prefixes = {
+        "domain/ui/": "`domain/ui/*`",
+        "domain/editor/": "`domain/editor/*`",
+    }
+    for member in members:
+        grouped_marker = next(
+            (marker for prefix, marker in grouped_prefixes.items() if member.startswith(prefix)),
+            None,
+        )
+        if grouped_marker is not None:
+            if grouped_marker not in status_text:
+                errors.append(f"missing grouped crate-doc coverage marker {grouped_marker} for {member}")
+            continue
+        if f"`{member}`" not in status_text:
+            errors.append(f"missing crate-doc coverage for workspace member: {member}")
+
+def validate_domain_map_alignment(errors: list[str]) -> None:
+    domain_map = DOCS_ROOT / "guidelines" / "domain-map.md"
+    try:
+        text = domain_map.read_text(encoding="utf-8")
+    except OSError as error:
+        errors.append(f"could not read canonical domain map: {error}")
+        return
+    for marker in sorted(DOMAIN_MAP_REQUIRED_MARKERS):
+        if marker not in text:
+            errors.append(f"canonical domain map missing current workspace marker: {marker}")
+    if "domain/id_macros" in text:
+        errors.append("canonical domain map references stale domain/id_macros path; use foundation/id_macros")
+
+def batch_index_current_proposals(index_text: str) -> set[str]:
+    match = re.search(
+        r"## Current Proposal(?P<section>.*?)(?:\n## |\Z)",
+        index_text,
+        re.DOTALL,
+    )
+    if not match:
+        return set()
+    return set(re.findall(r"20\d{2}-[a-z0-9][a-z0-9-]*", match.group("section")))
+
+def validate_batch_manifests(errors: list[str]) -> None:
+    batch_root = DOCS_ROOT / "reports" / "batches"
+    if not batch_root.exists():
+        return
+    index_path = batch_root / "README.md"
+    try:
+        index_text = index_path.read_text(encoding="utf-8")
+    except OSError:
+        errors.append(f"missing batch report index: {index_path}")
+        index_text = ""
+    current_proposals = batch_index_current_proposals(index_text)
+    for manifest_path in sorted(batch_root.rglob("batch.toml")):
+        try:
+            manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError) as error:
+            errors.append(f"could not parse batch manifest {manifest_path}: {error}")
+            continue
+        batch_id = str(manifest.get("id", ""))
+        approval_state = str(manifest.get("approval_state", ""))
+        integration_status = str(manifest.get("integration_status", "not_started"))
+        closeout_status = str(manifest.get("closeout_status", "not_started"))
+        for item in manifest.get("items", []):
+            prompt_path = str(item.get("prompt_path", ""))
+            if re.match(r"^[A-Za-z]:", prompt_path) or prompt_path.startswith(("/", "\\")):
+                errors.append(f"absolute batch prompt_path in {manifest_path}: {prompt_path}")
+        report_path = manifest_path.with_name("batch.md")
+        if integration_status == "merged" and closeout_status == "completed":
+            if not report_path.exists():
+                errors.append(f"completed batch is missing rendered batch.md report: {manifest_path}")
+            continue
+        if (
+            approval_state == "proposed"
+            and integration_status == "not_started"
+            and closeout_status == "not_started"
+            and batch_id in current_proposals
+        ):
+            continue
+        errors.append(
+            f"stale or unindexed active-looking batch state in {manifest_path}: "
+            f"approval_state={approval_state}, integration_status={integration_status}, closeout_status={closeout_status}"
+        )
+
 def main() -> int:
     errors: list[str] = []
 
@@ -140,10 +306,15 @@ def main() -> int:
         return report(errors)
 
     validate_design_lifecycle_indexes(errors)
+    validate_crate_docs_coverage(errors)
+    validate_domain_map_alignment(errors)
+    validate_batch_manifests(errors)
 
     for path in DOCS_ROOT.rglob("*"):
         if path.is_file() and path.suffix in {".md", ".mdx"}:
             text = path.read_text(encoding="utf-8")
+            validate_design_lifecycle_status(path, text, errors)
+            validate_active_design_lifecycle_claims(path, text, errors)
 
             if path.name == "readme.md":
                 errors.append(f"docs-site landing pages must use README.md, not readme.md: {path}")

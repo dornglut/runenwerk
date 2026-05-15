@@ -10,8 +10,8 @@ related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../../../../design/active/editor-native-multi-window-presentation-design.md
   - ../../../../design/active/render-fragment-data-driven-maturity-design.md
-  - ../../../../design/active/render-product-surface-foundation-bundle-design.md
-  - ../../../../design/active/viewport-dynamic-product-target-allocation-design.md
+  - ../../../../design/implemented/render-product-surface-foundation-bundle-design.md
+  - ../../../../design/implemented/viewport-dynamic-product-target-allocation-design.md
 related_roadmaps:
   - ../../../../workspace/sdf-first-execution-roadmap.md
 ---
@@ -110,7 +110,7 @@ After this roadmap, the render system should cleanly support:
 
 ## Active Bundle
 
-The next large render update should be the [Render Product Surface Foundation Bundle](../../../../design/active/render-product-surface-foundation-bundle-design.md).
+The next large render update should be the [Render Product Surface Foundation Bundle](../../../../design/implemented/render-product-surface-foundation-bundle-design.md).
 
 That bundle intentionally pulls together binding model closeout, dynamic target allocation, target aliases, prepared render views, history retention, UI sampling, inspection, and proof workloads. It is the no-compromise path for editor viewports and future product preview surfaces; implementing only dynamic allocation without dynamic write targets would leave another bridge.
 
@@ -940,7 +940,7 @@ Fragments and hot reload feel like first-class extensions of the architecture.
 # Recommended Concrete Order of Attack
 
 ## Immediate next steps
-1. **Render Product Surface Foundation Bundle** from `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`
+1. **Render Product Surface Foundation Bundle** from `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`
 2. **R6 — Boids feature proof** as a bundle proof workload
 3. **R7 — Rebuild SDF renderer on new path** as a bundle proof workload
 

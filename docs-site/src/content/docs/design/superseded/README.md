@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-16
 ---
 
 # Superseded Designs
@@ -41,5 +41,6 @@ No superseded app/tooling design documents are currently tracked in this folder.
 - [Adaptive Field Product System Design](adaptive-field-product-system-design.md)
 - [Open World Product Streaming System Design](open-world-product-streaming-system-design.md)
 - [Field Product Diagnostics System Design](field-product-diagnostics-system-design.md)
+- [SDF Character Animation System Design](sdf-character-animation-system-design.md)
 - [Draft Design Open Questions Index](runenwerk-draft-open-questions-index.md)
 - [Runenwerk Design Diagram Index](runenwerk-design-diagram-index.md)

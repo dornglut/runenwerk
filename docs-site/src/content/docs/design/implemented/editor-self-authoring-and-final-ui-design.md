@@ -1,11 +1,11 @@
 ---
 title: Editor Self-Authoring and UI Workspace Design
 description: Now-track product and architecture design for Runenwerk editor/UI self-authoring, UI workspace, layout design, styling, creation and management flows.
-status: active
+status: implemented
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-16
 related:
   - ./ui-definition-formation-foundation-design.md
   - ./editor-ui-workspace-tool-surface-architecture.md

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-16
 ---
 
 # Active Designs
@@ -18,11 +18,8 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 
 ### Foundation
 
-- [Foundation Commands](foundation-commands-design.md)
 - [Foundation Ratification Phase 5 Evaluation](foundation-ratification-phase5-evaluation.md)
 - [Foundation Ratification](foundation-ratification-design.md)
-- [Foundation Schema](foundation-schema-design.md)
-- [Foundation Vocabulary Crates](foundation-vocabulary-crates-design.md)
 
 ### Editor Domain
 
@@ -30,22 +27,16 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Editor Native Multi-Window Presentation Design](editor-native-multi-window-presentation-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
 - [Editor Rendered World And Multi Entity Viewport Design](editor-rendered-world-and-multi-entity-viewport-design.md)
-- [Editor Self-Authoring and UI Workspace Design](editor-self-authoring-and-final-ui-design.md)
 - [Editor Shell Menu And Tab Chrome Polish Design](editor-shell-menu-and-tab-chrome-polish-design.md)
 - [Editor UI Runtime V2 And Interaction Formation Design](editor-ui-runtime-v2-and-interaction-formation-design.md)
 - [Editor UI Popup Adornment Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
-- [Runenwerk Editor Workspace-Document-Mode-Panel Architecture](editor-workspace-document-mode-panel-architecture.md)
-- [UI Definition Formation Framework Design](ui-definition-formation-foundation-design.md)
-- [Workspace Identity Contract and Migration Map](workspace-identity-contract-and-migration-map.md)
 
 ### Engine Runtime
 
 - [ECS Parallel System Execution Design](ecs-parallel-system-execution-design.md)
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Design](engine-game-runtime-editor-ecs-scripting-hot-reload-design.md)
 - [Render Fragment Data-Driven Maturity Design](render-fragment-data-driven-maturity-design.md)
-- [Render Product Surface Foundation Bundle Design](render-product-surface-foundation-bundle-design.md)
-- [Viewport Dynamic Product Target Allocation Design](viewport-dynamic-product-target-allocation-design.md)
 
 ### Gameplay
 
@@ -75,5 +66,6 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
 - [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
 - [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
+- [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)

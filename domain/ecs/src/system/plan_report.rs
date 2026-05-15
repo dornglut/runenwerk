@@ -4,7 +4,7 @@ use scheduler::plan::{
 };
 use scheduler::system::{RegisteredSystem, SystemId};
 
-use super::runtime::{ParamSlotId, ParamSlotMetadata};
+use super::param_metadata::{ParamSlotMetadata, param_slot_metadata_for_descriptors};
 use crate::World;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,20 +190,7 @@ fn system_report_for_index(
         system_index,
         system_id,
         name: system.name().to_string(),
-        param_slots: system
-            .param_slots()
-            .iter()
-            .enumerate()
-            .map(|(slot_index, slot)| ParamSlotMetadata {
-                id: ParamSlotId {
-                    system_id,
-                    slot_index,
-                },
-                kind: slot.kind,
-                label: slot.label,
-                type_name: slot.type_name,
-            })
-            .collect(),
+        param_slots: param_slot_metadata_for_descriptors(system_id, system.param_slots()),
     })
 }
 

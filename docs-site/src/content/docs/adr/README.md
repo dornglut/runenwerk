@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-16
 ---
 
 # ADR Index
@@ -33,4 +33,5 @@ Architectural decision records capture long-term decisions, rejected alternative
 
 ## Proposed ADRs
 
+- [Animated SDF Lowering and Purpose-Specific Products](proposed/animated-sdf-lowering-and-purpose-specific-products.md)
 - [Graph Substrate Canvas Boundary](proposed/graph-substrate-canvas-boundary.md)

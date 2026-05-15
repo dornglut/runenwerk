@@ -7,7 +7,7 @@ layer: foundation
 canonical: true
 last_reviewed: 2026-05-05
 related:
-  - ../../design/active/foundation-schema-design.md
+  - ../../design/implemented/foundation-schema-design.md
 ---
 
 # Schema

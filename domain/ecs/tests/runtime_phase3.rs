@@ -7,6 +7,7 @@ use scheduler::ScheduleLabel;
 use scheduler::access::{AccessDomain, ConflictKind};
 use scheduler::label::SystemSet;
 use scheduler::plan::{BarrierKind, ExecutionPhaseKind};
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -60,6 +61,70 @@ struct TargetEntity(Entity);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct Step(u32);
+
+#[derive(ecs::SystemParam)]
+struct CounterParamGroup {
+    step: Res<Step>,
+    seen: ResMut<SeenCount>,
+}
+
+#[derive(ecs::SystemParam)]
+struct GenericParamGroup<T: Resource> {
+    value: Res<T>,
+    seen: ResMut<SeenCount>,
+}
+
+struct LifetimeMarkerParam<'a>(PhantomData<&'a ()>);
+
+impl<'world, 'a> SystemParam<'world> for LifetimeMarkerParam<'a> {
+    type State = ();
+
+    fn init_state(_world: &mut World) -> Result<Self::State, SystemParamError> {
+        Ok(())
+    }
+
+    fn access(_state: &Self::State) -> QueryAccess {
+        QueryAccess::default()
+    }
+
+    unsafe fn extract(
+        _state: &'world mut Self::State,
+        _world: *mut World,
+        _commands: *mut Commands,
+    ) -> Result<Self, SystemParamError> {
+        Ok(Self(PhantomData))
+    }
+}
+
+#[derive(ecs::SystemParam)]
+struct LifetimeCollisionParamGroup<'w> {
+    marker: LifetimeMarkerParam<'w>,
+    step: Res<Step>,
+    seen: ResMut<SeenCount>,
+}
+
+#[derive(ecs::SystemParam)]
+struct InnerParamGroup {
+    step: Res<Step>,
+}
+
+#[derive(ecs::SystemParam)]
+struct OuterParamGroup {
+    inner: InnerParamGroup,
+    seen: ResMut<SeenCount>,
+}
+
+#[derive(ecs::SystemParam)]
+struct InvalidQueueParamGroup {
+    reader: WorkQueueReader<DamageEvent>,
+    drainer: WorkQueueDrainer<DamageEvent>,
+}
+
+#[derive(ecs::SystemParam)]
+struct DuplicateWriterParamGroup {
+    first: WorkQueueWriter<DamageEvent>,
+    second: WorkQueueWriter<DamageEvent>,
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Component, ecs::Resource)]
 struct SpawnGate(bool);
@@ -285,6 +350,173 @@ fn duplicate_write_intents_in_single_system_are_allowed() {
 }
 
 #[test]
+fn derived_named_param_group_executes_and_reports_named_children() {
+    fn use_group(mut group: CounterParamGroup) {
+        group.seen.0 = group.step.0.saturating_add(1);
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Step(41));
+    world.insert_resource(SeenCount(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, use_group);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 42);
+
+    let system_id = runtime.scheduler().systems()[0].id();
+    let slots = runtime.param_slots_for_system(system_id).unwrap();
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].kind, "param_group");
+    assert!(slots[0].type_name.contains("CounterParamGroup"));
+    assert_eq!(slots[0].id.path.as_slice(), [0]);
+    assert_eq!(slots[0].children.len(), 2);
+    assert_eq!(slots[0].children[0].name, Some("step"));
+    assert_eq!(slots[0].children[0].kind, "res");
+    assert_eq!(slots[0].children[0].id.path.as_slice(), [0, 0]);
+    assert_eq!(slots[0].children[1].name, Some("seen"));
+    assert_eq!(slots[0].children[1].kind, "res_mut");
+    assert_eq!(slots[0].children[1].id.path.as_slice(), [0, 1]);
+}
+
+#[test]
+fn generic_named_param_group_executes_and_reports_named_children() {
+    fn use_generic_group(mut group: GenericParamGroup<Step>) {
+        group.seen.0 = group.value.0.saturating_add(1);
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Step(41));
+    world.insert_resource(SeenCount(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, use_generic_group);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 42);
+
+    let system_id = runtime.scheduler().systems()[0].id();
+    let slots = runtime.param_slots_for_system(system_id).unwrap();
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].kind, "param_group");
+    assert!(slots[0].type_name.contains("GenericParamGroup"));
+    assert_eq!(slots[0].children[0].name, Some("value"));
+    assert_eq!(slots[0].children[0].kind, "res");
+    assert_eq!(slots[0].children[1].name, Some("seen"));
+    assert_eq!(slots[0].children[1].kind, "res_mut");
+}
+
+#[test]
+fn derive_handles_user_lifetime_named_w() {
+    fn use_lifetime_group(mut group: LifetimeCollisionParamGroup<'static>) {
+        let _ = &group.marker;
+        group.seen.0 = group.step.0.saturating_add(1);
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Step(41));
+    world.insert_resource(SeenCount(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, use_lifetime_group);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 42);
+}
+
+#[test]
+fn nested_param_group_reports_recursive_child_paths() {
+    fn use_nested_group(mut group: OuterParamGroup) {
+        group.seen.0 = group.inner.step.0.saturating_add(2);
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Step(40));
+    world.insert_resource(SeenCount(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, use_nested_group);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 42);
+
+    let report = runtime
+        .plan_report_for::<Update>()
+        .expect("update plan report should exist");
+    let slot = &report.stages[0].systems[0].param_slots[0];
+    assert_eq!(slot.kind, "param_group");
+    assert_eq!(slot.name, None);
+    assert_eq!(slot.id.path.as_slice(), [0]);
+    assert_eq!(slot.children[0].name, Some("inner"));
+    assert_eq!(slot.children[0].kind, "param_group");
+    assert_eq!(slot.children[0].id.path.as_slice(), [0, 0]);
+    assert_eq!(slot.children[0].children[0].name, Some("step"));
+    assert_eq!(slot.children[0].children[0].id.path.as_slice(), [0, 0, 0]);
+    assert_eq!(slot.children[1].name, Some("seen"));
+    assert_eq!(slot.children[1].id.path.as_slice(), [0, 1]);
+}
+
+#[test]
+fn tuple_param_group_reports_indexed_children_and_executes() {
+    fn use_tuple_group(mut group: (Res<Step>, ResMut<SeenCount>)) {
+        group.1.0 = group.0.0.saturating_add(3);
+    }
+
+    let mut world = World::new();
+    world.insert_resource(Step(39));
+    world.insert_resource(SeenCount(0));
+
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, use_tuple_group);
+    runtime.run_schedule::<Update>(&mut world).unwrap();
+
+    assert_eq!(world.resource::<SeenCount>().unwrap().0, 42);
+
+    let system_id = runtime.scheduler().systems()[0].id();
+    let slots = runtime.param_slots_for_system(system_id).unwrap();
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].kind, "tuple");
+    assert_eq!(slots[0].children.len(), 2);
+    assert_eq!(slots[0].children[0].name, Some("0"));
+    assert_eq!(slots[0].children[0].id.path.as_slice(), [0, 0]);
+    assert_eq!(slots[0].children[1].name, Some("1"));
+    assert_eq!(slots[0].children[1].id.path.as_slice(), [0, 1]);
+}
+
+#[test]
+fn grouped_mixed_intent_params_in_single_system_are_rejected() {
+    fn invalid_group(group: InvalidQueueParamGroup) {
+        let _ = (&group.reader, &group.drainer);
+    }
+
+    let mut world = World::new();
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, invalid_group);
+
+    let err = runtime
+        .run_schedule::<Update>(&mut world)
+        .expect_err("mixed queue reader/drainer group should fail registration");
+    let message = format!("{err:#}");
+    assert!(message.contains("conflicting param access"), "{message}");
+}
+
+#[test]
+fn grouped_duplicate_write_intents_in_single_system_are_allowed() {
+    fn duplicate_group(group: DuplicateWriterParamGroup) {
+        let _ = (&group.first, &group.second);
+    }
+
+    let mut world = World::new();
+    let mut runtime = Runtime::new();
+    runtime.add_systems::<Update, _, _>(&mut world, duplicate_group);
+
+    runtime
+        .run_schedule::<Update>(&mut world)
+        .expect("duplicate write intents inside a group should be deduped");
+}
+
+#[test]
 fn system_ids_and_param_slot_ids_are_stable_and_skip_failed_registration() {
     fn valid_a(_step: Res<Step>) {}
     fn invalid(_reader: WorkQueueReader<DamageEvent>, _drainer: WorkQueueDrainer<DamageEvent>) {}
@@ -320,14 +552,14 @@ fn system_ids_and_param_slot_ids_are_stable_and_skip_failed_registration() {
     let first_slots = runtime.param_slots_for_system(first_id).unwrap();
     assert_eq!(first_slots.len(), 1);
     assert_eq!(first_slots[0].id.system_id.as_raw(), first_id.as_raw());
-    assert_eq!(first_slots[0].id.slot_index, 0);
+    assert_eq!(first_slots[0].id.path.as_slice(), [0]);
     assert_eq!(first_slots[0].kind, "res");
 
     let second_id = runtime.scheduler().systems()[1].id();
     let second_slots = runtime.param_slots_for_system(second_id).unwrap();
     assert_eq!(second_slots.len(), 2);
-    assert_eq!(second_slots[0].id.slot_index, 0);
-    assert_eq!(second_slots[1].id.slot_index, 1);
+    assert_eq!(second_slots[0].id.path.as_slice(), [0]);
+    assert_eq!(second_slots[1].id.path.as_slice(), [1]);
     assert_eq!(second_slots[0].kind, "res");
     assert_eq!(second_slots[1].kind, "broadcast_reader");
 }
@@ -367,10 +599,10 @@ fn runtime_plan_report_exposes_system_slots_and_product_barriers() {
     assert_eq!(producer.param_slots.len(), 2);
     assert_eq!(producer.param_slots[0].kind, "res");
     assert_eq!(producer.param_slots[0].id.system_id, producer.system_id);
-    assert_eq!(producer.param_slots[0].id.slot_index, 0);
+    assert_eq!(producer.param_slots[0].id.path.as_slice(), [0]);
     assert_eq!(producer.param_slots[1].kind, "broadcast_writer");
     assert_eq!(producer.param_slots[1].id.system_id, producer.system_id);
-    assert_eq!(producer.param_slots[1].id.slot_index, 1);
+    assert_eq!(producer.param_slots[1].id.path.as_slice(), [1]);
 
     let consumer = &report.stages[1].systems[0];
     assert_eq!(consumer.system_id.as_raw(), 1);

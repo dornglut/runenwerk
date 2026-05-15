@@ -43,8 +43,8 @@ Renderer output is derived product data. It is not UI authority.
 
 ## Formation / Source Model
 
-- [UI Definition Formation Framework Design](../../design/active/ui-definition-formation-foundation-design.md)
-- [Editor Self-Authoring and UI Workspace Design](../../design/active/editor-self-authoring-and-final-ui-design.md)
+- [UI Definition Formation Framework Design](../../design/implemented/ui-definition-formation-foundation-design.md)
+- [Editor Self-Authoring and UI Workspace Design](../../design/implemented/editor-self-authoring-and-final-ui-design.md)
 
 ## Interaction / Runtime
 
@@ -55,7 +55,7 @@ Renderer output is derived product data. It is not UI authority.
 ## Shell / Workspace / Tool Surfaces
 
 - [Editor UI Workspace Tool Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
-- [Editor Workspace Document Mode Panel Architecture](../../design/active/editor-workspace-document-mode-panel-architecture.md)
+- [Editor Workspace Document Mode Panel Architecture](../../design/implemented/editor-workspace-document-mode-panel-architecture.md)
 
 ## Deferred Execution Targets
 

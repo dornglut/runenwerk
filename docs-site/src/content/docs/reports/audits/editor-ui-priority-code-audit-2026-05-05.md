@@ -13,10 +13,10 @@ related:
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../domain/ui/roadmap.md
   - ../../domain/ui/architecture.md
-  - ../../design/active/editor-self-authoring-and-final-ui-design.md
-  - ../../design/active/editor-workspace-document-mode-panel-architecture.md
+  - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
+  - ../../design/implemented/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
-  - ../../design/active/workspace-identity-contract-and-migration-map.md
+  - ../../design/implemented/workspace-identity-contract-and-migration-map.md
 ---
 
 # Editor UI Priority Code Audit 2026-05-05
@@ -36,9 +36,9 @@ Plan sources audited:
 - `docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md`
 - `docs-site/src/content/docs/domain/ui/roadmap.md`
 - `docs-site/src/content/docs/domain/ui/architecture.md`
-- `docs-site/src/content/docs/design/active/editor-workspace-document-mode-panel-architecture.md`
+- `docs-site/src/content/docs/design/implemented/editor-workspace-document-mode-panel-architecture.md`
 - `docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md`
-- `docs-site/src/content/docs/design/active/workspace-identity-contract-and-migration-map.md`
+- `docs-site/src/content/docs/design/implemented/workspace-identity-contract-and-migration-map.md`
 - `docs-site/src/content/docs/design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md`
 
 Code areas audited:
@@ -185,7 +185,7 @@ Gap: this migration should be tracked as a Now dependency with provider migratio
 - Scripting boundary work remains design-level. No language-neutral script runtime crate or adapter implementation was found.
 - Runtime UI is still overlay/template-driven; world-space and screen-projected attachment bindings remain design-level.
 - Constrained in-game editors and Editor Design/self-authoring are tracked but not implementation-started.
-- UI/editor self-authoring is architecturally planned in `docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` as authored editor-definition groundwork and in `docs-site/src/content/docs/design/active/editor-workspace-document-mode-panel-architecture.md` as the `Editor Design` workspace. The concrete target design now lives in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+- UI/editor self-authoring is architecturally planned in `docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` as authored editor-definition groundwork and in `docs-site/src/content/docs/design/implemented/editor-workspace-document-mode-panel-architecture.md` as the `Editor Design` workspace. The concrete target design now lives in `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 
 Gap: these should remain visible in Now for planning, but they should not be ordered ahead of document/provider/mode/docking closure. UI/editor self-authoring now has a target design, but it remains implementation-gated until the prerequisite editor/UI foundations are closed.
 
@@ -214,7 +214,7 @@ Gap: these should remain visible in Now for planning, but they should not be ord
 7. Guard and docs drift control for all editor/UI seams.
 8. Scene-authoring breadth: rotate/scale, create/delete/duplicate, and richer inspector/component authoring.
 9. Boundary-gated tracking: scripting, world-space UI attachment, constrained in-game editors, and Editor Design/self-authoring.
-10. Keep `design/active/editor-self-authoring-and-final-ui-design.md` aligned as the target design while implementation remains gated behind the prerequisite editor/UI foundations.
+10. Keep `design/implemented/editor-self-authoring-and-final-ui-design.md` aligned as the target design while implementation remains gated behind the prerequisite editor/UI foundations.
 
 ## Validation
 

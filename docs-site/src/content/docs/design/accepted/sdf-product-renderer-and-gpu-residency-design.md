@@ -12,7 +12,7 @@ related_adrs:
 related_designs:
   - ./sdf-first-field-world-platform-design.md
   - ./field-product-contracts-diagnostics-and-residency-design.md
-  - ../active/render-product-surface-foundation-bundle-design.md
+  - ../implemented/render-product-surface-foundation-bundle-design.md
   - ../active/render-fragment-data-driven-maturity-design.md
 supersedes:
   - ../superseded/sdf-product-renderer-architecture.md

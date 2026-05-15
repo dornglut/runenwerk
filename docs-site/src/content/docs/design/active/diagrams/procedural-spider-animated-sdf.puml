@@ -1,0 +1,70 @@
+@startuml
+title Procedural Spider Animated SDF
+
+package "Spider Intent" {
+  [Chase Prey]
+  [Guard Nest]
+  [Flee Threat]
+}
+
+package "Planner / Motor" {
+  [Body Height]
+  [Terrain Tilt]
+  [Abdomen Counterbalance]
+  [Head Tracking]
+  [Gait Phase Oscillators]
+}
+
+package "Leg Solver" {
+  [Terrain Foot Probes]
+  [Step Timing]
+  [Foot Locking]
+  [Failed Step Recovery]
+}
+
+package "SDF Model" {
+  [Thorax Field]
+  [Abdomen Field]
+  [Head Field]
+  [Leg Segment Fields]
+  [Joint Blend Zones]
+  [Hair / Noise Field]
+}
+
+package "Runtime Fields" {
+  [Render Field]
+  [Physics Field]
+  [Gameplay Field]
+  [VFX Field]
+}
+
+package "Interaction" {
+  [Web Sockets]
+  [Bite Volume]
+  [Leg Contact Events]
+  [Nest Influence Field]
+}
+
+[Chase Prey] --> [Body Height]
+[Guard Nest] --> [Head Tracking]
+[Flee Threat] --> [Step Timing]
+
+[Body Height] --> [Gait Phase Oscillators]
+[Terrain Tilt] --> [Terrain Foot Probes]
+[Abdomen Counterbalance] --> [Leg Segment Fields]
+[Head Tracking] --> [Head Field]
+
+[Gait Phase Oscillators] --> [Leg Segment Fields]
+[Terrain Foot Probes] --> [Foot Locking]
+[Foot Locking] --> [Leg Contact Events]
+
+[Thorax Field] --> [Joint Blend Zones]
+[Leg Segment Fields] --> [Joint Blend Zones]
+[Head Field] --> [Bite Volume]
+[Abdomen Field] --> [Web Sockets]
+
+[Joint Blend Zones] --> [Render Field]
+[Leg Segment Fields] --> [Physics Field]
+[Bite Volume] --> [Gameplay Field]
+[Leg Contact Events] --> [VFX Field]
+@enduml

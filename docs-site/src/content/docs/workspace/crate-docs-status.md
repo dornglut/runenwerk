@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-16
 ---
 
 # Crate Documentation Status
@@ -40,6 +40,8 @@ Status labels:
 | `spatial` | `domain/spatial` | thin | [`../domain/spatial/README.md`](../domain/spatial/README.md) |
 | `spatial_index` | `domain/spatial_index` | thin | [`../domain/spatial-index/README.md`](../domain/spatial-index/README.md) |
 | `chunking` | `domain/chunking` | thin | [`../domain/chunking/README.md`](../domain/chunking/README.md) |
+| `asset` | `domain/asset` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
+| `product` | `domain/product` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
 | `sdf` | `domain/sdf` | current | [`../domain/sdf/README.md`](../domain/sdf/README.md) |
 | `world_ops` | `domain/world_ops` | thin | [`../domain/world-ops/README.md`](../domain/world-ops/README.md) |
 | `world_sdf` | `domain/world_sdf` | thin | [`../domain/world-sdf/README.md`](../domain/world-sdf/README.md) |
@@ -71,6 +73,7 @@ Status labels:
 | --- | --- | --- | --- |
 | `runenwerk_editor` | `apps/runenwerk_editor` | current | [`../apps/runenwerk-editor/current-architecture.md`](../apps/runenwerk-editor/current-architecture.md) |
 | `runenwerk_draw` | `apps/runenwerk_draw` | current | [`../apps/runenwerk-draw/README.md`](../apps/runenwerk-draw/README.md) |
+| `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | current | [`../reports/closeouts/m5-runtime-preview/closeout.md`](../reports/closeouts/m5-runtime-preview/closeout.md) |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | current | [`../adapters/godot-chunking-addon/README.md`](../adapters/godot-chunking-addon/README.md) |
 | `native_tablet_input` | `adapters/native_tablet_input` | current | [`../adapters/native-tablet-input/README.md`](../adapters/native-tablet-input/README.md) |
 

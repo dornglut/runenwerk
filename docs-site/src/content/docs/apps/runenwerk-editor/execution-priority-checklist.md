@@ -13,8 +13,8 @@ related:
   - ./roadmap.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../domain/ui/roadmap.md
-  - ../../design/active/editor-self-authoring-and-final-ui-design.md
-  - ../../design/active/editor-workspace-document-mode-panel-architecture.md
+  - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
+  - ../../design/implemented/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md

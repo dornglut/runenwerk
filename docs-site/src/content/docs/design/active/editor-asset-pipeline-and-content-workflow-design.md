@@ -14,9 +14,9 @@ related_designs:
   - ./sdf-prefab-composition-system-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
-  - ./editor-workspace-document-mode-panel-architecture.md
+  - ../implemented/editor-workspace-document-mode-panel-architecture.md
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./editor-self-authoring-and-final-ui-design.md
+  - ../implemented/editor-self-authoring-and-final-ui-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md

@@ -1,11 +1,11 @@
 ---
 title: Runenwerk Editor Workspace-Document-Mode-Panel Architecture
 description: Repository-grounded architecture for task workspaces, document tabs, interaction modes, reusable panels, and context providers.
-status: active
+status: implemented
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-16
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
   - ./editor-self-authoring-and-final-ui-design.md
@@ -253,7 +253,7 @@ Scripting remains language-neutral at the contract level; Rhai is the first conc
 - Modes: layout-edit, ui-layout-edit, command-bind, create/manage, style-edit, validation, preview.
 
 This remains a later-phase track and aligns with authored editor-definition groundwork in
-`docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` (Phase E) and the concrete self-authoring/final UI target in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+`docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md` (Phase E) and the concrete self-authoring/final UI target in `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 
 The dedicated self-authoring design now exists and covers:
 

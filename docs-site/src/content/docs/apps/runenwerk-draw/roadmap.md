@@ -9,7 +9,7 @@ last_reviewed: 2026-05-15
 related_designs:
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
   - ../../design/active/drawing-domain-crate-design.md
-  - ../../design/active/render-product-surface-foundation-bundle-design.md
+  - ../../design/implemented/render-product-surface-foundation-bundle-design.md
 related_roadmaps:
   - ../../engine/plugins/render/docs/roadmap.md
   - ../../workspace/roadmap-index.md

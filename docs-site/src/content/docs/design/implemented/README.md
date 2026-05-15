@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-16
 ---
 
 # Implemented Designs
@@ -19,19 +19,25 @@ checked against code, tests, closeout evidence, and known drift.
 
 ### Foundation
 
-No implemented foundation design documents are currently tracked in this folder.
+- [Foundation Commands](foundation-commands-design.md)
+- [Foundation Schema](foundation-schema-design.md)
+- [Foundation Vocabulary Crates](foundation-vocabulary-crates-design.md)
 
 ### Editor Domain
 
+- [Editor Self-Authoring and UI Workspace Design](editor-self-authoring-and-final-ui-design.md)
 - [Surface Workflow Contract Redesign](surface-workflow-contract-redesign.md)
+- [Runenwerk Editor Workspace-Document-Mode-Panel Architecture](editor-workspace-document-mode-panel-architecture.md)
+- [Workspace Identity Contract and Migration Map](workspace-identity-contract-and-migration-map.md)
 
 ### UI Domain
 
-No implemented UI-domain design documents are currently tracked in this folder.
+- [UI Definition Formation Framework Design](ui-definition-formation-foundation-design.md)
 
 ### Engine Runtime
 
-No implemented engine-runtime design documents are currently tracked in this folder.
+- [Render Product Surface Foundation Bundle Design](render-product-surface-foundation-bundle-design.md)
+- [Viewport Dynamic Product Target Allocation Design](viewport-dynamic-product-target-allocation-design.md)
 
 ### App / Tooling
 

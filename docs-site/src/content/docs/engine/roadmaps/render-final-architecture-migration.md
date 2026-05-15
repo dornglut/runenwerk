@@ -8,7 +8,7 @@ canonical: true
 last_reviewed: 2026-05-07
 related_designs:
   - ../design/active/editor-native-multi-window-presentation-design.md
-  - ../design/active/render-product-surface-foundation-bundle-design.md
+  - ../design/implemented/render-product-surface-foundation-bundle-design.md
 ---
 
 # Render Final Architecture Migration Roadmap
@@ -35,7 +35,7 @@ This roadmap is the implementation contract for the final render architecture:
   - renderer-owned dynamic target cache allocation and target-alias execution remain deferred until the render product surface foundation bundle lands.
 - Phase 9 cleanup/docs/cutoff hardening remains in progress.
 
-The active implementation plan for the next large render update is `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`. That bundle pulls the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.
+The active implementation plan for the next large render update is `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`. That bundle pulls the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.
 
 Native OS multi-window and multi-swapchain presentation is specified separately in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`.
 

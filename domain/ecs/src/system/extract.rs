@@ -23,11 +23,7 @@ pub trait SystemParam<'w>: Sized {
     fn access(state: &Self::State) -> QueryAccess;
     fn slot_descriptor() -> ParamSlotDescriptor {
         let type_name = std::any::type_name::<Self>();
-        ParamSlotDescriptor {
-            kind: "unknown",
-            label: type_name,
-            type_name,
-        }
+        ParamSlotDescriptor::leaf("unknown", type_name, type_name)
     }
 
     /// `State` must be lifetime-independent for all `'w` implementations of the same

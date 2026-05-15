@@ -5,6 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
+lifecycle_exception: active_phase_evidence
 last_reviewed: 2026-05-14
 related_docs:
   - ../../guidelines/runenwerk-architecture.md
@@ -18,8 +19,8 @@ related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./editor-ui-workspace-tool-surface-architecture.md
   - ./render-fragment-data-driven-maturity-design.md
-  - ./viewport-dynamic-product-target-allocation-design.md
-  - ./render-product-surface-foundation-bundle-design.md
+  - ../implemented/viewport-dynamic-product-target-allocation-design.md
+  - ../implemented/render-product-surface-foundation-bundle-design.md
   - ./native-tablet-input-and-latency-contract.md
 related_roadmaps:
   - ../../apps/runenwerk-draw/roadmap.md
@@ -33,6 +34,11 @@ Active design. This document records the target architecture for Runenwerk
 drawing product surfaces. The first pure `domain/drawing` crate, stylus input
 contracts, native tablet packet normalization proof, and focused
 `runenwerk_draw` app shell now exist. The first deterministic CPU ink tile
+
+Lifecycle note: this document remains active because the broader drawing,
+natural-media, composition, and comic-layout platform is not fully implemented.
+Implementation status notes below are phase evidence for completed slices, not
+a claim that the complete platform design belongs in `implemented/`.
 formation path also exists and is visible in `runenwerk_draw` through product
 publication and query snapshot barriers. Live preview now uses the same
 domain-owned CPU rasterizer as committed ink, and the app preserves last-good

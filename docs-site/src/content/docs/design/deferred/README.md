@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-16
 ---
 
 # Deferred Designs
@@ -40,7 +40,6 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### SDF-First Capability Detail Drafts
 
 - [SDF World Production Slice Design](sdf-world-production-slice-design.md)
-- [SDF Character Animation System Design](sdf-character-animation-system-design.md)
 - [Field Vegetation System Design](field-vegetation-system-design.md)
 - [Day Night Atmosphere System Design](day-night-atmosphere-system-design.md)
 - [Water Wetness Field System Design](water-wetness-field-system-design.md)
@@ -54,3 +53,4 @@ Promoted out of deferred:
 
 - [SDF Prefab Composition System Design](../active/sdf-prefab-composition-system-design.md) is active, but V2-gated behind
   rendered-world V1 and source-backed asset identity.
+- [SDF Procedural Animation and Animated Models Design](../active/sdf-procedural-animation-and-animated-models-design.md) is active and supersedes the older SDF character animation draft.

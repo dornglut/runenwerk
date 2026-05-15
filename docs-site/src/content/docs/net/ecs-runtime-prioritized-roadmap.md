@@ -31,7 +31,9 @@ support SDF-first formed products.
 2026-05-14 WR-002 added an ECS-owned runtime plan report API so product-job
 diagnostics can inspect deterministic system IDs, param slots, waves,
 publication barriers, and conflicts without depending on scheduler internals as
-their primary reporting surface.
+their primary reporting surface. 2026-05-16 ECS named param groups extended this
+surface with nested path-based param-slot IDs and named child descriptors for
+grouped `SystemParam` diagnostics.
 
 Reason:
 
@@ -112,6 +114,7 @@ Checklist:
 
 - [x] add stable system IDs separate from type-name strings.
 - [x] expose stable param-slot IDs for diagnostic tooling and stream cursor tracking.
+- [x] expose nested path IDs and named children for grouped `SystemParam` diagnostics.
 - [x] keep deterministic registration and plan reporting.
 
 Current scope note: system and param-slot IDs are first-class runtime diagnostics
@@ -119,8 +122,8 @@ surfaces. Richer external identity for every scheduler access key remains constr
 TypeId-backed domains, so conflict ordering uses deterministic registration order rather
 than human-readable names as canonical identity. `Runtime::plan_report_for`
 is the ECS-owned reporting surface for product-job diagnostics that need
-stable registration order, wave/barrier placement, param-slot metadata, and
-conflict labels.
+stable registration order, wave/barrier placement, nested param-slot metadata,
+and conflict labels.
 
 ### F4. Add first-class work-queue/stream conflict semantics to scheduler
 

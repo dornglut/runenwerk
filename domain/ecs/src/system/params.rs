@@ -337,11 +337,7 @@ where
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "query",
-            label: "Query",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf("query", "Query", std::any::type_name::<Self>())
     }
 
     unsafe fn extract(
@@ -368,11 +364,11 @@ where
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "query_orphaned",
-            label: "QueryOrphaned",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "query_orphaned",
+            "QueryOrphaned",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -399,11 +395,7 @@ impl<'w, T: Resource> SystemParam<'w> for Res<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "res",
-            label: "Res",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf("res", "Res", std::any::type_name::<Self>())
     }
 
     unsafe fn extract(
@@ -430,11 +422,7 @@ impl<'w, T: Resource> SystemParam<'w> for ResMut<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "res_mut",
-            label: "ResMut",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf("res_mut", "ResMut", std::any::type_name::<Self>())
     }
 
     unsafe fn extract(
@@ -460,11 +448,7 @@ impl<'w> SystemParam<'w> for Commands {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "commands",
-            label: "Commands",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf("commands", "Commands", std::any::type_name::<Self>())
     }
 
     unsafe fn extract(
@@ -499,11 +483,19 @@ macro_rules! impl_tuple_system_param {
             }
 
             fn slot_descriptor() -> ParamSlotDescriptor {
-                ParamSlotDescriptor {
-                    kind: "tuple",
-                    label: "Tuple",
-                    type_name: std::any::type_name::<Self>(),
-                }
+                ParamSlotDescriptor::group(
+                    "tuple",
+                    "Tuple",
+                    std::any::type_name::<Self>(),
+                    vec![
+                        $(
+                            ParamSlotDescriptor::named_child(
+                                stringify!($index),
+                                $param::slot_descriptor(),
+                            ),
+                        )+
+                    ],
+                )
             }
 
             unsafe fn extract(
@@ -554,11 +546,11 @@ impl<'w, T: 'static> SystemParam<'w> for BroadcastReader<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "broadcast_reader",
-            label: "BroadcastReader",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "broadcast_reader",
+            "BroadcastReader",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -587,11 +579,11 @@ impl<'w, T: 'static> SystemParam<'w> for BroadcastWriter<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "broadcast_writer",
-            label: "BroadcastWriter",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "broadcast_writer",
+            "BroadcastWriter",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -617,11 +609,11 @@ impl<'w, T: 'static> SystemParam<'w> for WorkQueueReader<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "work_queue_reader",
-            label: "WorkQueueReader",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "work_queue_reader",
+            "WorkQueueReader",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -647,11 +639,11 @@ impl<'w, T: 'static> SystemParam<'w> for WorkQueueWriter<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "work_queue_writer",
-            label: "WorkQueueWriter",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "work_queue_writer",
+            "WorkQueueWriter",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -677,11 +669,11 @@ impl<'w, T: 'static> SystemParam<'w> for WorkQueueDrainer<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "work_queue_drainer",
-            label: "WorkQueueDrainer",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "work_queue_drainer",
+            "WorkQueueDrainer",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -707,11 +699,11 @@ impl<'w, T: 'static> SystemParam<'w> for TickBufferReader<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "tick_buffer_reader",
-            label: "TickBufferReader",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "tick_buffer_reader",
+            "TickBufferReader",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -737,11 +729,11 @@ impl<'w, T: 'static> SystemParam<'w> for TickBufferWriter<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "tick_buffer_writer",
-            label: "TickBufferWriter",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "tick_buffer_writer",
+            "TickBufferWriter",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(
@@ -767,11 +759,11 @@ impl<'w, T: 'static> SystemParam<'w> for TickBufferDrainer<T> {
     }
 
     fn slot_descriptor() -> ParamSlotDescriptor {
-        ParamSlotDescriptor {
-            kind: "tick_buffer_drainer",
-            label: "TickBufferDrainer",
-            type_name: std::any::type_name::<Self>(),
-        }
+        ParamSlotDescriptor::leaf(
+            "tick_buffer_drainer",
+            "TickBufferDrainer",
+            std::any::type_name::<Self>(),
+        )
     }
 
     unsafe fn extract(

@@ -23,9 +23,47 @@ impl SystemId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamSlotDescriptor {
+    pub name: Option<&'static str>,
     pub kind: &'static str,
     pub label: &'static str,
     pub type_name: &'static str,
+    pub children: Vec<ParamSlotDescriptor>,
+}
+
+impl ParamSlotDescriptor {
+    pub fn leaf(kind: &'static str, label: &'static str, type_name: &'static str) -> Self {
+        Self {
+            name: None,
+            kind,
+            label,
+            type_name,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn group(
+        kind: &'static str,
+        label: &'static str,
+        type_name: &'static str,
+        children: Vec<ParamSlotDescriptor>,
+    ) -> Self {
+        Self {
+            name: None,
+            kind,
+            label,
+            type_name,
+            children,
+        }
+    }
+
+    pub fn with_name(mut self, name: &'static str) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    pub fn named_child(name: &'static str, descriptor: ParamSlotDescriptor) -> Self {
+        descriptor.with_name(name)
+    }
 }
 
 pub struct RegisteredSystem<C> {

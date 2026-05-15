@@ -5,10 +5,11 @@ status: active
 owner: workspace
 layer: domain / engine-runtime
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-16
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/sdf-first-field-world-platform-design.md
+  - ./sdf-procedural-animation-and-animated-models-design.md
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
 ---
 
@@ -170,8 +171,8 @@ Characteristics:
 - interaction emitters
 - changing bounds
 
-Animated character prefabs are further specified in the deferred
-[SDF Character Animation System Design](../deferred/sdf-character-animation-system-design.md).
+Animated character prefabs are further specified in the active
+[SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md).
 
 ## Field Emitter Prefabs
 

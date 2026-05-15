@@ -5,11 +5,11 @@ status: deferred
 owner: workspace
 layer: domain / engine-runtime
 canonical: false
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-16
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
+  - ../active/sdf-procedural-animation-and-animated-models-design.md
   - ./sdf-physics-collision-system-design.md
-  - ./sdf-character-animation-system-design.md
 ---
 
 # Field Influence AI System Design

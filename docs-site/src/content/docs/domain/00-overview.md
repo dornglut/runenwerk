@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-16
 ---
 
 # Domain Layer Overview
@@ -35,6 +35,7 @@ Domain crates must not depend on:
 | ECS | `domain/ecs`, `domain/ecs_macros` | [`ecs/00-overview.md`](./ecs/00-overview.md), [`ecs/README.md`](./ecs/README.md), [`ecs-macros/README.md`](./ecs-macros/README.md) |
 | Scheduler | `domain/scheduler` | [`scheduler/README.md`](./scheduler/README.md), [`scheduler/design-goals.md`](./scheduler/design-goals.md) |
 | Scene | `domain/scene` | [`scene/README.md`](./scene/README.md) |
+| Asset and product contracts | `domain/asset`, `domain/product` | Workspace-level current-state contract summaries live in [`../workspace/sdf-first-execution-roadmap.md`](../workspace/sdf-first-execution-roadmap.md), [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md), and [`../design/accepted/sdf-first-production-capability-map.md`](../design/accepted/sdf-first-production-capability-map.md) until deeper crate guides are written. |
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
 | SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
 | Materials and textures | `domain/material_graph`, `domain/texture` | [`material-graph/README.md`](./material-graph/README.md), [`texture/README.md`](./texture/README.md) |
@@ -49,10 +50,9 @@ Domain crates must not depend on:
 These areas are roadmap-level intent, not implemented workspace members.
 Do not add crate metadata for them until their implementation milestone lands.
 
-- procedural generation code;
 - particles and VFX;
 - physics and collision authoring;
-- animation and procedural motion;
+- animation and procedural motion, with active architecture tracked in [`../design/active/sdf-procedural-animation-and-animated-models-design.md`](../design/active/sdf-procedural-animation-and-animated-models-design.md);
 - simulation/world processes;
 - gameplay graph orchestration after narrower gameplay event/action/state/quest contracts exist.
 
@@ -91,6 +91,7 @@ Start here when working in the domain layer:
 - ECS advanced guide: [`ecs/advanced-guide.md`](./ecs/advanced-guide.md)
 - Scheduler: [`scheduler/README.md`](./scheduler/README.md)
 - Geometry: [`geometry/README.md`](./geometry/README.md)
+- Asset/product contracts: [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md)
 - SDF: [`sdf/index.md`](./sdf/index.md)
 - Material graph: [`material-graph/README.md`](./material-graph/README.md)
 - Texture: [`texture/README.md`](./texture/README.md)
@@ -112,6 +113,8 @@ The following domain areas still need deeper crate-level usage and architecture 
 - `domain/spatial`
 - `domain/spatial_index`
 - `domain/chunking`
+- `domain/asset`
+- `domain/product`
 - `domain/world_ops`
 - `domain/world_sdf`
 - `domain/editor/editor_core`

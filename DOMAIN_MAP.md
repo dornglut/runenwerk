@@ -12,6 +12,8 @@ Workspace boundaries               -> docs-site/src/content/docs/guidelines/arch
 SDF-first field-product decision   -> docs-site/src/content/docs/adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
 SDF-first platform architecture    -> docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md
 Field product target contracts     -> docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
+Animated SDF procedural animation  -> docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md
+Animated SDF lowering ADR          -> docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md
 Dependency direction               -> DEPENDENCY_RULES.md
 AI-assisted contribution rules     -> AI_GUIDE.md
 Terminology                        -> GLOSSARY.md
@@ -36,6 +38,7 @@ Geometry primitives/queries         -> domain/geometry
 Asset identity/catalog/import contracts -> domain/asset
 Shared field-product contracts          -> domain/product
 SDF fields/queries                  -> domain/sdf
+Animated SDF semantic model/lowering -> active design until accepted owner crates exist
 Graph substrate                     -> domain/graph
 Texture product descriptors         -> domain/texture
 Material graph semantics            -> domain/material_graph

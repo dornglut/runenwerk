@@ -1,11 +1,11 @@
 ---
 title: Foundation Commands
 description: Design direction for a foundation-level command vocabulary crate.
-status: active
+status: implemented
 owner: foundation
 layer: foundation
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-16
 related_adrs: []
 ---
 
@@ -1324,7 +1324,7 @@ Status: complete.
 Create and review:
 
 ```text
-docs-site/src/content/docs/design/active/foundation-commands-design.md
+docs-site/src/content/docs/design/implemented/foundation-commands-design.md
 ```
 
 No code.
@@ -1555,7 +1555,7 @@ python3 tools/docs/validate_docs.py
 
 ## Final recommendation
 
-Keep `docs-site/src/content/docs/design/active/foundation-commands-design.md` as the active phase roadmap for `foundation/commands`.
+Keep `docs-site/src/content/docs/design/implemented/foundation-commands-design.md` as the active phase roadmap for `foundation/commands`.
 
 Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 are complete.
 

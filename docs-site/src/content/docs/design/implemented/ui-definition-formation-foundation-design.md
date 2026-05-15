@@ -1,11 +1,11 @@
 ---
 title: UI Definition Formation Framework Design
 description: M3.5 design for execution-neutral UI definitions, RON-authored templates, slots, embeds, retained UI formation, and editor UI template migration.
-status: active
+status: implemented
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-16
 related:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md

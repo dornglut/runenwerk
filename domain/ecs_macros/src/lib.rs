@@ -1,7 +1,10 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::{format_ident, quote};
-use syn::{Data, DataEnum, DataStruct, DeriveInput, Fields, Ident, parse_macro_input};
+use syn::{
+    Data, DataEnum, DataStruct, DeriveInput, Fields, Ident, Lifetime, parse_macro_input,
+    parse_quote,
+};
 
 fn ecs_crate_path() -> proc_macro2::TokenStream {
     match crate_name("ecs") {
@@ -51,6 +54,131 @@ pub fn resource_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {
         impl #impl_generics #ecs::Resource for #name #ty_generics #where_clause {}
     })
+}
+
+#[proc_macro_derive(SystemParam)]
+pub fn system_param_derive(input: TokenStream) -> TokenStream {
+    let ecs = ecs_crate_path();
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    let generics = input.generics;
+    let Data::Struct(data) = input.data else {
+        return TokenStream::from(quote! {
+            compile_error!("SystemParam derive only supports structs with named fields");
+        });
+    };
+    let Fields::Named(fields) = data.fields else {
+        return TokenStream::from(quote! {
+            compile_error!("SystemParam derive only supports structs with named fields");
+        });
+    };
+    if fields.named.is_empty() {
+        return TokenStream::from(quote! {
+            compile_error!("SystemParam derive requires at least one named field");
+        });
+    }
+
+    let fields = fields.named.into_iter().collect::<Vec<_>>();
+    let field_idents = fields
+        .iter()
+        .map(|field| field.ident.as_ref().expect("named field"))
+        .collect::<Vec<_>>();
+    let field_names = field_idents
+        .iter()
+        .map(|field_ident| field_ident.to_string())
+        .collect::<Vec<_>>();
+    let field_types = fields.iter().map(|field| &field.ty).collect::<Vec<_>>();
+    let state_indices = (0..fields.len()).map(syn::Index::from).collect::<Vec<_>>();
+
+    let system_param_lifetime = fresh_system_param_lifetime(&generics);
+    let mut impl_generics = generics.clone();
+    impl_generics
+        .params
+        .insert(0, parse_quote!(#system_param_lifetime));
+    let where_clause = impl_generics.make_where_clause();
+    for field_ty in &field_types {
+        where_clause
+            .predicates
+            .push(parse_quote!(#field_ty: #ecs::SystemParam<#system_param_lifetime>));
+    }
+    let (impl_generics, _, where_clause) = impl_generics.split_for_impl();
+    let (_, ty_generics, _) = generics.split_for_impl();
+    let group_label = name.to_string();
+
+    TokenStream::from(quote! {
+        impl #impl_generics #ecs::SystemParam<#system_param_lifetime> for #name #ty_generics #where_clause {
+            type State = (
+                #(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::State,)*
+            );
+
+            fn init_state(world: &mut #ecs::World) -> Result<Self::State, #ecs::SystemParamError> {
+                Ok((
+                    #(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::init_state(world)?,)*
+                ))
+            }
+
+            fn access(state: &Self::State) -> #ecs::QueryAccess {
+                let mut access = #ecs::QueryAccess::default();
+                #(
+                    access.extend(<#field_types as #ecs::SystemParam<#system_param_lifetime>>::access(&state.#state_indices));
+                )*
+                access
+            }
+
+            fn slot_descriptor() -> #ecs::ParamSlotDescriptor {
+                #ecs::ParamSlotDescriptor::group(
+                    "param_group",
+                    #group_label,
+                    ::std::any::type_name::<Self>(),
+                    vec![
+                        #(
+                            #ecs::ParamSlotDescriptor::named_child(
+                                #field_names,
+                                <#field_types as #ecs::SystemParam<#system_param_lifetime>>::slot_descriptor(),
+                            ),
+                        )*
+                    ],
+                )
+            }
+
+            unsafe fn extract(
+                state: &#system_param_lifetime mut Self::State,
+                world: *mut #ecs::World,
+                commands: *mut #ecs::Commands,
+            ) -> Result<Self, #ecs::SystemParamError> {
+                Ok(Self {
+                    #(
+                        #field_idents: unsafe {
+                            <#field_types as #ecs::SystemParam<#system_param_lifetime>>::extract(
+                                &mut state.#state_indices,
+                                world,
+                                commands,
+                            )?
+                        },
+                    )*
+                })
+            }
+        }
+    })
+}
+
+fn fresh_system_param_lifetime(generics: &syn::Generics) -> Lifetime {
+    let base = "__ecs_system_param_w";
+    let mut candidate = base.to_string();
+    let mut suffix = 0;
+
+    while generics.params.iter().any(|param| {
+        matches!(
+            param,
+            syn::GenericParam::Lifetime(lifetime)
+                if lifetime.lifetime.ident.to_string() == candidate
+        )
+    }) {
+        suffix += 1;
+        candidate = format!("{base}_{suffix}");
+    }
+
+    Lifetime::new(&format!("'{candidate}"), proc_macro2::Span::call_site())
 }
 
 #[proc_macro_derive(Bundle)]

@@ -7,9 +7,9 @@ layer: app
 canonical: true
 last_reviewed: 2026-05-07
 related_designs:
-  - ./editor-workspace-document-mode-panel-architecture.md
+  - ../implemented/editor-workspace-document-mode-panel-architecture.md
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./render-product-surface-foundation-bundle-design.md
+  - ../implemented/render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md

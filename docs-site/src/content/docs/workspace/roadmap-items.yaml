@@ -193,19 +193,27 @@ items:
   write_scopes:
   - docs-site/src/content/docs/design
   - docs-site/src/content/docs/reports
+  - docs-site/src/content/docs/guidelines/domain-map.md
+  - docs-site/src/content/docs/workspace
+  - docs-site/src/content/docs/domain/00-overview.md
+  - tools/docs/validate_docs.py
   validations:
   - task docs:validate
-  next_evidence: 2026-05-14 surface workflow design moved to implemented lifecycle; more candidates remain.
-  current_decision: Useful now when documentation capacity is available.
-  current_call: Can be done now as documentation work. The 2026-05-14 parallel batch moved the surface workflow contract redesign
-    to implemented lifecycle; more candidates remain.
-  first_move: Review active designs that already say implemented, then promote or move them according to design/README.md.
+  next_evidence: 2026-05-16 docs governance milestone moved implemented active designs into implemented lifecycle,
+    aligned canonical ownership maps with workspace truth, indexed preserved batch artifacts, and hardened docs validation
+    against lifecycle drift, missing crate coverage, stale prompt paths, and stale active-looking batches.
+  current_decision: Keep as an always-available docs governance support lane; the current no-shortcuts cleanup milestone
+    is complete and future drift should fail through task docs:validate.
+  current_call: Use only for future lifecycle drift or source-of-truth cleanup. Current validation now rejects active
+    designs that claim implementation without an explicit phase-evidence marker and rejects missing crate-doc coverage.
+  first_move: Run task docs:validate, then inspect any reported governance drift before moving or rewriting docs.
   diagram_call:
-  - promote implemented active docs
-  - after code-truth review
+  - implemented lifecycle promoted
+  - strict docs validation
   ddd_owner: workspace documentation
   adr_requirement: No ADR; follow documentation lifecycle policy.
-  fitness_function_requirement: Docs validation and link checks.
+  fitness_function_requirement: Strict docs validation, link checks, crate-doc coverage, batch manifest checks, and lifecycle
+    status checks.
   ownership_mode: Enabling documentation cleanup.
 - id: WR-006
   title: Runenwerk Draw DRF4 through DRF5

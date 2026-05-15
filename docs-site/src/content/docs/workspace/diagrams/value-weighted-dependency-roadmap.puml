@@ -61,7 +61,7 @@ package "Level 0 - Completed / Support Substrate" {
 
   component "WR-004 UI/editor guards\nstate=support_only\nscore=7.5 gate=always-on guard\nV4 B1\ncall=structural routing,\ncapability gates, docs sync" as UIGUARDS <<support_only>>
 
-  component "WR-005 Design lifecycle cleanup\nstate=support_only\nscore=4.0 gate=docs now\nV3 B1\ncall=promote implemented active docs\nafter code-truth review" as DOCS <<support_only>>
+  component "WR-005 Design lifecycle cleanup\nstate=support_only\nscore=4.0 gate=docs now\nV3 B1\ncall=implemented lifecycle promoted\nstrict docs validation" as DOCS <<support_only>>
 
 }
 

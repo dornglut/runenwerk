@@ -1,11 +1,11 @@
 ---
 title: Render Product Surface Foundation Bundle Design
 description: No-compromise render update bundle for dynamic product surfaces, target aliases, prepared render views, history retention, inspection, and proof workloads.
-status: active
+status: implemented
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-16
 related_designs:
   - ./editor-native-multi-window-presentation-design.md
   - ./render-fragment-data-driven-maturity-design.md

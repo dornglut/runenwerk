@@ -1,11 +1,11 @@
 ---
 title: Viewport Dynamic Product Target Allocation Design
 description: V5 implementation design for replacing shared static viewport render products with viewport-scoped dynamic product targets.
-status: active
+status: implemented
 owner: editor
 layer: engine
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-16
 related_designs:
   - ./render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md
@@ -24,7 +24,7 @@ Implemented V5/V6 cutover design for the viewport expression architecture roadma
 
 V5 made viewport product ownership real by replacing shared static scene, picking, and overlay render resources with viewport-scoped dynamic targets. V6 made the scene, picking, and overlay producer render every `ViewportRenderJob` into those targets through prepared render views and flow invocations.
 
-This design was implemented as part of `docs-site/src/content/docs/design/active/render-product-surface-foundation-bundle-design.md`. Dynamic targets are allocated, writable pass attachments, sampleable UI resources when descriptors allow it, and scoped by viewport/product/slot ownership.
+This design was implemented as part of `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`. Dynamic targets are allocated, writable pass attachments, sampleable UI resources when descriptors allow it, and scoped by viewport/product/slot ownership.
 
 ## Goal
 

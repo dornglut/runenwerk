@@ -8,16 +8,16 @@ canonical: true
 last_reviewed: 2026-05-15
 related:
   - ./architecture.md
-  - ../../design/active/ui-definition-formation-foundation-design.md
+  - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
-  - ../../design/active/editor-self-authoring-and-final-ui-design.md
+  - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
   - ../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../design/active/editor-ui-popup-adornment-drop-preview-contract.md
   - ../../design/active/editor-shell-menu-and-tab-chrome-polish-design.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/deferred/ui-model-multiple-execution-strategies-design.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
-  - ../../design/active/workspace-identity-contract-and-migration-map.md
+  - ../../design/implemented/workspace-identity-contract-and-migration-map.md
 ---
 
 # Runenwerk UI Substrate and Surface Roadmap
@@ -125,7 +125,7 @@ Status: M3.5 implemented and validated as of 2026-05-06.
 
 Owning design:
 
-- `docs-site/src/content/docs/design/active/ui-definition-formation-foundation-design.md`
+- `docs-site/src/content/docs/design/implemented/ui-definition-formation-foundation-design.md`
 
 Decision:
 
@@ -245,7 +245,7 @@ chrome, status, or viewport-input policy in app or shell code.
 - [x] Migrate retained UI slices to Interaction V2 contracts. Status: complete for the named WR-025 retained-slice catalog with code-bearing slices and doctrine-repair evidence landed for `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration`. `domain/ui/ui_definition/src/interaction.rs`, `domain/ui/ui_definition/src/form.rs::form_retained_ui`, `domain/ui/ui_definition/src/validate.rs::validate_menu`, `domain/ui/ui_tree/src/tree/node.rs::PopupDismissPolicy`, `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`, `domain/ui/ui_runtime/src/input/hit_test.rs`, `domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`, `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`, `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`, `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`, `domain/editor/editor_shell/src/composition/build_editor_shell.rs::viewport_surface_interaction_model`, `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::viewport_status_overlay`, and `domain/editor/editor_shell/src/composition/toolbar_definition.rs::project_workspace_close_buttons` now carry the generic menu-stack, focus-return, popup-layer, Escape-dismiss, scroll-boundary ownership, menu sizing, chrome slot, dock/drop-zone invalid-target, status overflow, and viewport input-arbitration spine. Completion evidence is closed by `docs-site/src/content/docs/reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md`, including behavior tests for invalid dock/drop candidate exclusion and viewport status dispatch rejection.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
-- [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+- [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 - [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-08.
 

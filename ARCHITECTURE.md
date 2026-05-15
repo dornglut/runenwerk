@@ -113,3 +113,8 @@ The accepted SDF-first architecture starts at:
 - `docs-site/src/content/docs/adr/accepted/0008-adopt-sdf-first-field-product-architecture.md`
 - `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`
 - `docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md`
+
+Active SDF-first character and procedural animation architecture is tracked in:
+
+- `docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md`
+- `docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md`

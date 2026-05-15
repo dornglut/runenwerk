@@ -75,3 +75,5 @@ Workflow validation completed from this repaired state:
 - WR-024 remains downstream retained shell polish and may only consume the repaired WR-025 contracts.
 - WR-018 remains the next roadmap proposal after this repair is committed and the continuation batch is regenerated from the repaired head.
 - The known Draw clippy full-gate blocker remains a separate hygiene slice; this closeout does not hide it with an allow.
+
+Post-closeout update, 2026-05-16: the Draw clippy gate blocker was resolved in the separate gate-hygiene slice by making grouped ECS system params first-class enough for Draw frame submission to avoid a local lint allow.

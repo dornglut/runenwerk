@@ -8,7 +8,7 @@ canonical: true
 last_reviewed: 2026-05-15
 related_designs:
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
-  - ./render-product-surface-foundation-bundle-design.md
+  - ../implemented/render-product-surface-foundation-bundle-design.md
   - ../accepted/sdf-first-field-world-platform-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md

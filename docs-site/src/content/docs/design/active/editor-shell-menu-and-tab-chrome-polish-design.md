@@ -9,7 +9,7 @@ last_reviewed: 2026-05-15
 related_designs:
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
   - ./editor-ui-popup-adornment-drop-preview-contract.md
-  - ./editor-self-authoring-and-final-ui-design.md
+  - ../implemented/editor-self-authoring-and-final-ui-design.md
 related_adrs:
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
 related_roadmaps:

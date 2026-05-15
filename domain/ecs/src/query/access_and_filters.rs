@@ -206,7 +206,11 @@ impl QueryAccess {
         self.deferred_structural_mutation = true;
     }
 
-    pub(crate) fn extend(&mut self, other: Self) {
+    /// Extends this access set with another access set.
+    ///
+    /// Composite `SystemParam` implementations use this as the canonical way to
+    /// preserve child access semantics while reporting one grouped parameter.
+    pub fn extend(&mut self, other: Self) {
         for access in other.component_reads {
             push_unique_access(&mut self.component_reads, access);
         }

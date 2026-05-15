@@ -7,8 +7,8 @@ layer: domain
 canonical: true
 last_reviewed: 2026-05-15
 related:
-  - ./ui-definition-formation-foundation-design.md
-  - ./editor-self-authoring-and-final-ui-design.md
+  - ../implemented/ui-definition-formation-foundation-design.md
+  - ../implemented/editor-self-authoring-and-final-ui-design.md
   - ./editor-shell-menu-and-tab-chrome-polish-design.md
   - ./editor-ui-popup-adornment-drop-preview-contract.md
   - ../deferred/ui-model-multiple-execution-strategies-design.md

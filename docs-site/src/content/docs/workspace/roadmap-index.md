@@ -46,6 +46,8 @@ Operational execution checklist:
   - [workspace/roadmap-items.yaml](./roadmap-items.yaml)
 - Workspace roadmap scorecard and decision register:
   - [workspace/roadmap-decision-register.md](./roadmap-decision-register.md)
+- Documentation governance cleanup closeout:
+  - [reports/closeouts/docs-governance-cleanup-2026-05-16/closeout.md](../reports/closeouts/docs-governance-cleanup-2026-05-16/closeout.md)
 - Current value-weighted dependency roadmap:
   - [workspace/design-implementation-triage.md](./design-implementation-triage.md)
 - SDF-first cross-track execution order:
@@ -87,7 +89,7 @@ Operational execution checklist:
 - Editor/UI/workspace long-horizon architecture:
   - [design/active/editor-ui-workspace-tool-surface-architecture.md](../design/active/editor-ui-workspace-tool-surface-architecture.md)
 - Editor self-authoring and UI workspace design:
-  - [design/active/editor-self-authoring-and-final-ui-design.md](../design/active/editor-self-authoring-and-final-ui-design.md)
+  - [design/implemented/editor-self-authoring-and-final-ui-design.md](../design/implemented/editor-self-authoring-and-final-ui-design.md)
 - Editor asset pipeline and content workflow design:
   - [design/active/editor-asset-pipeline-and-content-workflow-design.md](../design/active/editor-asset-pipeline-and-content-workflow-design.md)
 - Editor procedural content and simulation workflow plan:
@@ -99,7 +101,7 @@ Operational execution checklist:
 - SDF-first production capability map:
   - [design/accepted/sdf-first-production-capability-map.md](../design/accepted/sdf-first-production-capability-map.md)
 - Workspace identity contract and migration map:
-  - [design/active/workspace-identity-contract-and-migration-map.md](../design/active/workspace-identity-contract-and-migration-map.md)
+  - [design/implemented/workspace-identity-contract-and-migration-map.md](../design/implemented/workspace-identity-contract-and-migration-map.md)
 - Viewport backend closeout evidence:
   - [reports/closeouts/viewport-backend-cleanup/phase-1-plan.md](../reports/closeouts/viewport-backend-cleanup/phase-1-plan.md)
 - Surface workflow contract closeout evidence:
@@ -211,6 +213,11 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   engine runtime cache policy is metadata-only, and Draw has an in-memory
   committed-tile cache proof that stages cache hits through the normal product
   and query barriers without submitting a new runtime job;
+- docs governance cleanup is complete for the 2026-05-16 milestone:
+  implemented active designs were promoted into `design/implemented`, canonical
+  maps were realigned, preserved batch artifacts were indexed, and
+  `task docs:validate` now fails on lifecycle, crate-coverage, domain-map, and
+  batch-manifest drift;
 - workspace structural identity and routing contracts are implemented and
   guard-tested;
 - UI substrate crates and `ui_surface` contracts are implemented and integrated

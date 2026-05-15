@@ -10,7 +10,7 @@ related:
   - ../../domain/ui/roadmap.md
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../reports/closeouts/surface-workflow-contract-redesign/closeout.md
-  - ../active/ui-definition-formation-foundation-design.md
+  - ../implemented/ui-definition-formation-foundation-design.md
 ---
 
 # Surface Workflow Contract Redesign

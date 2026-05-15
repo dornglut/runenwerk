@@ -5,6 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
+lifecycle_exception: active_phase_evidence
 last_reviewed: 2026-05-09
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
@@ -13,7 +14,7 @@ related_designs:
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ./workspace-viewport-expression-upgrade-design.md
   - ./editor-ui-workspace-tool-surface-architecture.md
-  - ./editor-workspace-document-mode-panel-architecture.md
+  - ../implemented/editor-workspace-document-mode-panel-architecture.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
@@ -26,6 +27,13 @@ related:
 ---
 
 # Editor Procedural Content and Simulation Workflow Plan
+
+## Lifecycle Note
+
+This document remains active because it coordinates multiple unfinished
+procedural, material, physics, animation, VFX, and simulation tracks. Status
+notes for P1 and descriptor-first closeouts are phase evidence only; they do
+not mean the full workflow plan is implemented.
 
 ## Purpose
 

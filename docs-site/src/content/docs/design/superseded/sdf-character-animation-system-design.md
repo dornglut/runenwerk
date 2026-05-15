@@ -1,12 +1,14 @@
 ---
 title: SDF Character Animation System Design
-description: Deferred detail draft for SDF-first character modelling, rigging, animation, products, and runtime handoff.
-status: deferred
+description: Superseded draft for SDF-first character modelling, rigging, animation, products, and runtime handoff.
+status: superseded
 owner: workspace
-layer: domain / engine-runtime
+layer: cross-domain
 canonical: false
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-16
+replaced_by: ../active/sdf-procedural-animation-and-animated-models-design.md
 related_designs:
+  - ../active/sdf-procedural-animation-and-animated-models-design.md
   - ../accepted/sdf-first-production-capability-map.md
   - ../active/sdf-prefab-composition-system-design.md
 ---
@@ -15,12 +17,12 @@ related_designs:
 
 ## Status
 
-Deferred detail draft.
+Superseded draft.
 
-The accepted long-term capability map is
-`../accepted/sdf-first-production-capability-map.md`. Reactivate this document
-only after prefab composition, rig/pose ownership, and collision/render product
-contracts are accepted.
+Replaced by
+[`../active/sdf-procedural-animation-and-animated-models-design.md`](../active/sdf-procedural-animation-and-animated-models-design.md).
+That active design broadens this draft into the current procedural-animation,
+semantic-SDF, purpose-specific product, and scheduler-aware lowering authority.
 
 This document defines character modelling and animation for an SDF-first engine.
 
