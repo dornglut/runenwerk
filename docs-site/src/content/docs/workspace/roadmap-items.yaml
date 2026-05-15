@@ -557,8 +557,8 @@ items:
   fitness_function_requirement: Product boundary and dependency-direction checks required.
   ownership_mode: Discovery until domain owners exist.
 - id: WR-015
-  title: SDF prefab, character, vegetation, atmosphere, water, VFX, and influence AI drafts
-  diagram_title: SDF detail drafts
+  title: SDF character, vegetation, atmosphere, water, VFX, and influence AI drafts
+  diagram_title: Remaining SDF detail drafts
   alias: SDFDETAIL
   lane: Deferred
   dependency_level: L4
@@ -581,12 +581,13 @@ items:
   - docs-site/src/content/docs/design/deferred
   validations:
   - task docs:validate
-  next_evidence: Active design, ADR, or roadmap promotion.
-  current_decision: Keep deferred until product ownership and handoff contracts are promoted.
-  why_not_ready: These are explicitly deferred detail drafts. Reactivate only after the relevant product ownership, renderer/runtime
-    handoff, query policy, and authority contracts are promoted.
+  next_evidence: Active design, ADR, or roadmap promotion. SDF prefab composition has moved to WR-022 and is no longer part
+    of this deferred bucket.
+  current_decision: Keep remaining deferred drafts until product ownership and handoff contracts are promoted.
+  why_not_ready: These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership,
+    renderer/runtime handoff, query policy, and authority contracts are promoted.
   diagram_call:
-  - prefab, character, vegetation,
+  - character, vegetation,
   - atmosphere, water, VFX, AI
   ddd_owner: deferred SDF product domains
   adr_requirement: Promotion requires accepted design or ADR.
@@ -667,6 +668,363 @@ items:
   adr_requirement: Accepted gameplay design/ADR required before implementation.
   fitness_function_requirement: Gameplay dependency-direction and editor boundary checks required.
   ownership_mode: Deferred stream-aligned product work.
+- id: WR-018
+  title: Rendered World V1
+  diagram_title: Rendered World V1
+  alias: RENDERWORLD
+  lane: Core delivery
+  dependency_level: L1
+  gate: Current candidate
+  planning_state: current_candidate
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 3.0
+  rice: SDF-first editor world reach
+  kano: Basic
+  dependencies:
+  - WR-003
+  - WR-004
+  write_scopes:
+  - apps/runenwerk_editor/src/runtime
+  - assets/shaders
+  - docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+  validations:
+  - cargo check -p runenwerk_editor
+  - cargo test -p runenwerk_editor viewport
+  - task docs:validate
+  next_evidence: Multi-entity SDF primitive extraction, scene-product shader packet use, and picking consistency tests.
+  current_decision: Make all editor SDF primitive entities render through one extracted scene packet before material, prefab,
+    or terrain production work expands.
+  current_call: Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers
+    on the same extracted packet.
+  first_move: Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry.
+  diagram_call:
+  - multi-entity SDF packet
+  - render/picking consistency
+  ddd_owner: apps/runenwerk_editor runtime with render product-surface support
+  adr_requirement: No new ADR while implementation stays inside editor viewport projection contracts.
+  fitness_function_requirement: Renderer packet ordering, picking consistency, viewport statistics, and shader serialization checks.
+  ownership_mode: Stream-aligned editor work with render enabling support.
+- id: WR-019
+  title: Field Visualizer product workflow
+  diagram_title: Field Visualizer workflow
+  alias: FIELDVIS
+  lane: Product workflow
+  dependency_level: L2
+  gate: After rendered-world V1
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.4
+  rice: Product debug workflow after viewport packet stability
+  kano: Performance
+  dependencies:
+  - WR-018
+  - WR-003
+  write_scopes:
+  - apps/runenwerk_editor
+  - domain/editor
+  - docs-site/src/content/docs/design/active
+  validations:
+  - cargo test -p runenwerk_editor viewport
+  - cargo test -p engine render_product_selection
+  next_evidence: Selected FieldPreviewProduct route, product kind/channel/slice/ramp controls, and unavailable-product diagnostics.
+  current_decision: Build field visualization as viewport product selection, not as a parallel viewer.
+  current_call: Plan immediately after rendered-world V1 stabilizes the packet/product handoff.
+  main_blocker: Rendered-world V1 must first prove the viewport packet/product handoff and product target selection path.
+  first_move: Implement from field-visualizer-product-workflow-design.md using existing viewport product target state.
+  diagram_call:
+  - product-backed field debug
+  - no parallel viewer path
+  ddd_owner: apps/runenwerk_editor viewport workflow with engine render product contracts
+  adr_requirement: No ADR unless field products become authoritative domain truth in the editor shell.
+  fitness_function_requirement: Product selection, unavailable diagnostics, and session persistence tests.
+  ownership_mode: Stream-aligned editor workflow with render/product enabling support.
+- id: WR-020
+  title: Source-backed Asset Core
+  diagram_title: Source-backed Asset Core
+  alias: ASSETCORE
+  lane: Core support
+  dependency_level: L1
+  gate: Supporting now
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.9
+  rice: Stable asset identity before material and prefab implementation
+  kano: Basic
+  dependencies:
+  - WR-018
+  write_scopes:
+  - apps/runenwerk_editor
+  - domain/editor
+  - docs-site/src/content/docs/design/active
+  validations:
+  - cargo test -p runenwerk_editor asset
+  - cargo test -p runenwerk_editor catalog
+  - task docs:validate
+  next_evidence: Project catalog descriptors, deterministic import jobs, diagnostics, and prior-valid artifact preservation.
+  current_decision: Stabilize source descriptors for SDF graph, field product, material graph/material, UI definition, and prefab
+    descriptors before broad external import work.
+  current_call: Supporting foundation for Field Visualizer, Material Lab, and prefab V2.
+  main_blocker: Source identity must wait for rendered-world product usage evidence and avoid reopening broad external import scope.
+  first_move: Continue from editor-asset-pipeline-and-content-workflow-design.md and preserve current reference-artifact boundaries.
+  diagram_call:
+  - deterministic import
+  - prior-valid artifacts
+  ddd_owner: apps/runenwerk_editor asset workflow with domain/editor contracts
+  adr_requirement: ADR only if source/catalog ownership crosses into engine runtime.
+  fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, and diagnostics tests.
+  ownership_mode: Enabling platform support for editor product workflows.
+- id: WR-021
+  title: Material Lab and material preview products
+  diagram_title: Material Lab
+  alias: MATLAB
+  lane: Product workflow
+  dependency_level: L3
+  gate: After rendered-world V1 and Field Visualizer
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: Material authoring after render/product handoff stabilizes
+  kano: Performance
+  dependencies:
+  - WR-018
+  - WR-019
+  - WR-020
+  write_scopes:
+  - apps/runenwerk_editor
+  - domain/editor
+  - domain/material_graph
+  - docs-site/src/content/docs/design/active
+  validations:
+  - cargo test -p material_graph
+  - cargo test -p runenwerk_editor material
+  - cargo test -p runenwerk_editor viewport
+  - task docs:validate
+  next_evidence: Source-backed MaterialGraphDocument, lowering/ratification, preview product, diagnostics, and render handoff.
+  current_decision: Promote Material Lab now, but implement it after multi-entity viewport and field visualization stabilize.
+  current_call: Do not make canvas state material truth; material source documents own material state.
+  main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset identity evidence.
+  first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands.
+  diagram_call:
+  - source-backed material graph
+  - preview product handoff
+  ddd_owner: apps/runenwerk_editor material workflow with domain/editor material document ownership
+  adr_requirement: ADR only if material graph ownership moves into a new domain crate.
+  fitness_function_requirement: Material document round trip, lowering diagnostics, preview product, and render handoff tests.
+  ownership_mode: Stream-aligned material tooling after render/product foundation.
+- id: WR-022
+  title: SDF Prefab V2
+  diagram_title: SDF Prefab V2
+  alias: PREFABV2
+  lane: Product workflow
+  dependency_level: L3
+  gate: V2 gated
+  planning_state: ready_next
+  priority: P2
+  value: 4
+  blocker: 3
+  tc: 2
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.8
+  rice: Runtime prefab instancing after rendered-world and asset identity stabilize
+  kano: Exciter
+  dependencies:
+  - WR-018
+  - WR-020
+  write_scopes:
+  - docs-site/src/content/docs/design/active
+  - apps/runenwerk_editor
+  - domain
+  validations:
+  - task docs:validate
+  - cargo test -p runenwerk_editor prefab
+  next_evidence: Source/catalog prefab identity, descriptor diagnostics, and approved runtime instancing sequence.
+  current_decision: Keep prefab composition active as design and catalog identity now; runtime instancing waits for V2 gates.
+  current_call: Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable.
+  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity, and accepted product ownership.
+  first_move: Continue from sdf-prefab-composition-system-design.md and source-backed asset core evidence.
+  diagram_call:
+  - active design now
+  - runtime instancing V2
+  ddd_owner: future SDF prefab product owner with editor asset workflow support
+  adr_requirement: Accepted design or ADR required before runtime prefab instancing starts.
+  fitness_function_requirement: Descriptor round trip, product ownership, and render/collision separation checks.
+  ownership_mode: Planned product workflow gated by asset identity and rendered-world foundation.
+- id: WR-023
+  title: ECS Parallel Execution
+  diagram_title: ECS Parallel Execution
+  alias: ECSPAR
+  lane: Core support
+  dependency_level: L3
+  gate: Design first
+  planning_state: ready_next
+  priority: P2
+  value: 3
+  blocker: 2
+  tc: 3
+  rr_oe: 5
+  du: 3
+  effort: 13
+  confidence: 0.5
+  expected_score: 0.5
+  rice: Parallel execution only after deterministic system contract acceptance
+  kano: Performance
+  dependencies:
+  - WR-002
+  write_scopes:
+  - domain/ecs
+  - engine/src/runtime
+  - docs-site/src/content/docs/design/active
+  validations:
+  - cargo test -p ecs
+  - cargo test -p scheduler
+  next_evidence: Accepted design for Send + Sync system constraints, access sharding, per-wave command queues, deterministic
+    merges, and blocked-parallelism diagnostics.
+  current_decision: Keep ECS execution serial during rendered-world V1; harden product jobs as the active multithreaded path.
+  current_call: Design now, implement later after diagnostics and deterministic merge policy are accepted.
+  main_blocker: Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics, and serial equivalence tests.
+  first_move: Continue from ecs-parallel-system-execution-design.md and engine runtime product-job executor evidence.
+  diagram_call:
+  - ECS remains serial now
+  - deterministic parallel design
+  ddd_owner: domain/ecs with engine runtime scheduler support
+  adr_requirement: ADR required before public ECS parallel APIs or default parallel execution.
+  fitness_function_requirement: Parallel-plan diagnostics, blocked-wave reporting, deterministic merge, and serial equivalence tests.
+  ownership_mode: Complicated-subsystem design work before implementation.
+- id: WR-024
+  title: Editor Shell Polish
+  diagram_title: Editor Shell Polish
+  alias: SHELLPOLISH
+  lane: Guardrail
+  dependency_level: L1
+  gate: After Interaction V2 contract spine
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 1
+  tc: 4
+  rr_oe: 3
+  du: 4
+  effort: 3
+  confidence: 0.8
+  expected_score: 4.0
+  rice: Immediate viewport usability and menu clarity
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-025
+  write_scopes:
+  - apps/runenwerk_editor/src/shell
+  - domain/editor/editor_shell
+  - domain/ui/ui_runtime
+  validations:
+  - cargo test -p editor_shell
+  - cargo test -p ui_runtime layout_popup
+  - cargo test -p runenwerk_editor viewport
+  next_evidence: Viewport FPS statistics, centralized popup contrast, scrollable popup content, switch-type submenu anchoring,
+    left close affordances, and fixed active indicator slot tests.
+  current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2
+    contract layer, not as a pile of isolated cosmetic fixes.
+  current_call: Ready-next only after the Interaction V2 contract/migration spine leads; route long-term popup, scroll,
+    chrome, docking, and status overflow decisions through WR-025.
+  main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming
+    those contracts or as explicitly bounded compatibility evidence.
+  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant Interaction V2 contract
+    slice is defined, or keep changes explicitly compatibility-scoped.
+  diagram_call:
+  - FPS stats
+  - contrast, scroll, tab chrome
+  ddd_owner: domain/editor/editor_shell with domain/ui runtime layout support
+  adr_requirement: No ADR for narrow retained UI chrome/layout polish; WR-025 owns accepted ADR 0009 for durable interaction
+    formation.
+  fitness_function_requirement: Popup layout, submenu anchor, active indicator, statistics projection, and Interaction V2
+    guard tests.
+  ownership_mode: Stream-aligned editor shell guardrail work.
+- id: WR-025
+  title: UI Runtime V2 and interaction formation
+  diagram_title: UI Runtime V2 interaction formation
+  alias: UIV2
+  lane: Architecture guardrail
+  dependency_level: L1
+  gate: Accepted architecture gate
+  planning_state: current_candidate
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 3
+  confidence: 0.8
+  expected_score: 4.8
+  rice: Prevent repeated editor UI contract regressions
+  kano: Basic
+  dependencies:
+  - WR-004
+  write_scopes:
+  - docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
+  - docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md
+  - docs-site/src/content/docs/design/active/editor-ui-popup-adornment-drop-preview-contract.md
+  - docs-site/src/content/docs/design/deferred/ui-model-multiple-execution-strategies-design.md
+  - docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md
+  - docs-site/src/content/docs/domain/ui/README.md
+  - docs-site/src/content/docs/domain/ui/architecture.md
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  next_evidence: Accepted ADR 0009, active Interaction V2 design, roadmap row, and subordinate polish-design link.
+  current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
+    while keeping retained UI as the first execution target and renderer output as derived product data.
+  current_call: Accepted architecture gate now; no compiled-reactive UI, ECS UI, external UI framework adoption, or runtime
+    behavior change in this documentation slice.
+  first_move: Keep docs and roadmap source aligned with accepted ADR 0009, then migrate retained UI slices through the active
+    Interaction V2 design.
+  diagram_call:
+  - retained UI first
+  - interaction contracts
+  ddd_owner: domain/ui with domain/editor/editor_shell and runenwerk_editor adapters
+  adr_requirement: Accepted ADR 0009 is in force for Interaction V2. Any alternate UI execution target still requires a
+    separate accepted ADR or active design before code.
+  fitness_function_requirement: Definition validation, ui_runtime, editor_shell, and app guard tests for popup/menu layer
+    order, scroll clipping, wheel ownership and boundary propagation, outside-dismiss, focus return, split-border precedence,
+    dock-drag/drop-zone precedence, radial/menu hit testing where applicable, viewport input arbitration, and screenshot
+    or primitive-order visual/frame-order regressions.
+  ownership_mode: Complicated-subsystem domain UI architecture with stream-aligned editor shell migration.
 edges:
 - source: WR-002
   target: WR-001
@@ -722,3 +1080,45 @@ edges:
 - source: WR-004
   target: WR-016
   label: retained UI path remains default
+- source: WR-003
+  target: WR-018
+  label: render product-surface support
+- source: WR-004
+  target: WR-018
+  label: editor projection guards
+- source: WR-018
+  target: WR-019
+  label: viewport packet/product handoff
+- source: WR-003
+  target: WR-019
+  label: product target selection
+- source: WR-018
+  target: WR-020
+  label: source identity for rendered products
+- source: WR-018
+  target: WR-021
+  label: preview render handoff
+- source: WR-019
+  target: WR-021
+  label: debug product controls
+- source: WR-020
+  target: WR-021
+  label: material document identity
+- source: WR-018
+  target: WR-022
+  label: prefab render foundation
+- source: WR-020
+  target: WR-022
+  label: prefab source identity
+- source: WR-002
+  target: WR-023
+  label: ECS scheduler substrate
+- source: WR-004
+  target: WR-024
+  label: retained UI guardrails
+- source: WR-004
+  target: WR-025
+  label: UI guard substrate
+- source: WR-025
+  target: WR-024
+  label: interaction contract spine

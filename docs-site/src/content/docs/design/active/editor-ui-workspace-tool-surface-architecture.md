@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-06
+last_reviewed: 2026-05-15
 related:
   - ./ui-definition-formation-foundation-design.md
   - ./editor-self-authoring-and-final-ui-design.md
@@ -15,7 +15,12 @@ related:
 # Editor / UI / Workspace / Tool-Surface Architecture
 
 ## Status
-Draft for implementation
+
+Active architecture baseline. The host/editor shell still owns runtime
+composition, routing, and command execution, but authored editor/UI definitions
+already exist for UI, layout, theme, menu, shortcut, binding, catalog, panel,
+and tool-surface documents. The self-authoring/UI Designer path is a promoted
+capability, not a distant future stage.
 
 ## Purpose
 Define the long-term architecture for Runenwerk’s editor, UI, workspace, docking, tab-hosting, and tool-surface framework.
@@ -26,7 +31,8 @@ This document is not a visual polish plan and not a short-term panel refactor. I
 - power runtime/debug tooling
 - host many specialized tool surfaces inside one editor workspace
 - host and manage dockable, tabbed tool-surface workflows cleanly
-- remain evolvable toward authored editor-definition workflows later
+- host source-backed authored editor/UI definitions without moving app IO,
+  provider behavior, runtime state, or command execution into `domain/ui`
 
 This architecture must correspond to Runenwerk’s nine-layer doctrine and avoid making the editor shell the semantic center of the system.
 
@@ -34,19 +40,26 @@ This architecture must correspond to Runenwerk’s nine-layer doctrine and avoid
 
 ## Strategic Decision
 
-Runenwerk should first become a **modular host editor and reusable UI/tooling framework**.
+Runenwerk is a **modular host editor and reusable UI/tooling framework** with a
+source-backed authoring path for editor/UI definitions.
 
-Later, it should evolve toward an **editor-construction platform** where the main editor can author workspace, docking/tab-hosting, tool-surface, and editor-definition content that can eventually be packaged into standalone editors or specialized tools.
+The durable rule is:
 
-### The core rule
+```text
+Authored UI / editor definitions
+  -> validation / normalization
+  -> formed interaction contracts
+  -> formed retained UI product
+  -> ui_runtime enforcement
+  -> render/product-surface output
+```
 
-### Now
-**Code defines the editor.**
+The code-owned host/editor shell still owns runtime composition, app IO,
+provider behavior, provider state, and command execution. Authored definitions
+may configure and replace allowed products only through validation,
+compatibility checks, formed products, and ratified shell/app command paths.
 
-### Later
-**The editor can define editors.**
-
-This is the intended evolution path.
+Renderer output is derived product data. It must not become UI authority.
 
 ---
 
@@ -76,13 +89,13 @@ The architecture must:
 - preserve a strict split between observation, local interaction/session state, commands, and ratified mutations
 - keep shell/workspace concerns separate from tool semantics
 - support embedded products/surfaces such as viewport outputs and future field/atlas/volume views
-- remain definition-ready for later authored editor/workspace/tool-definition architecture
+- preserve source-backed authored editor/workspace/tool-definition architecture
 
 The architecture should leave room for later:
 - draggable tabs and tab reordering/reassignment
 - docking/floating windows
 - saved workspaces
-- authored editor definitions
+- authored editor definitions and compatibility-gated replacement
 - packaging/export of specialized editors
 
 ---
@@ -90,14 +103,13 @@ The architecture should leave room for later:
 ## Explicit Non-Goals For The First Major Version
 
 The first major version should not try to fully solve:
-- authored editor-definition content
-- no-code editor-builder workflows
 - standalone editor packaging/export
 - full docking/floating-window productization
 - complete styling/animation/effects system
 - all possible tool surfaces at once
 
-The first major version should prove the framework, not finish the entire meta-editor vision.
+The first major version should prove the framework and the promoted
+self-authoring path, not finish the entire editor-construction platform.
 
 ---
 
@@ -265,7 +277,7 @@ Runenwerk should be architected to support:
 - editor
 - in-game UI
 - runtime/debug tools
-- future authored editor-definition workflows
+- source-backed authored editor-definition workflows
 - future standalone/specialized editor packaging compatibility
 
 ### Implementation target for the first serious framework version
@@ -466,17 +478,24 @@ Rejected because Runenwerk should prefer explicit, typed, auditable contracts ov
 
 ### Decision
 
-Keep the retained tree UI plus tool-surface/canvas hybrid, and add a UI definition formation framework above `domain/ui` before starting visual editor self-authoring.
+Keep the retained tree UI plus tool-surface/canvas hybrid as the production
+execution target, and keep the UI definition formation framework above
+`domain/ui` as source/IR.
 
-The definition layer is source/IR, not retained UI in disguise. M3.5 forms into retained UI because that is the current accepted execution path. If a future active design or accepted ADR adds compiled-reactive or ECS-driven execution, those should be additional formation targets from the normalized definition model.
+The definition layer is not retained UI in disguise. It validates and
+normalizes authored definitions, forms interaction contracts, and forms retained
+UI products for the current runtime. If a future active design or accepted ADR
+adds compiled-reactive or ECS-driven execution, those must be additional
+formation targets from the normalized definition model plus formed interaction
+contracts.
 
-The planned split is:
+The current split is:
 
-- `domain/ui/*`: retained UI tree/runtime, layout, input, focus/capture, widgets, popovers, menus, theme tokens, and render-data contracts.
-- planned `domain/ui/ui_definition`: general authored UI templates, slots, repeaters, embeds, menus, availability, validation, normalization, execution-neutral source/IR, and formation into concrete UI products.
-- `domain/editor/editor_shell`: active editor workspace, panel/tab/tool-surface instance state, shell projection, and routing.
-- planned `domain/editor/editor_definition`: editor-specific toolbar, workspace catalogs, command route ids, availability descriptors, editor menus, shell chrome bindings, provider surface template bindings, and later authored layout definitions.
-- `apps/runenwerk_editor`: concrete provider registry, file IO, runtime integration, and preview/app instantiation.
+- `domain/ui/*`: retained UI tree/runtime, layout, input, focus/capture, widgets, popovers, menus, theme tokens, generic UI definition formation, interaction contracts, and render-data contracts.
+- `domain/ui/ui_definition`: general authored UI templates, slots, repeaters, embeds, menus, availability, validation, normalization, execution-neutral source/IR, source maps, and formation into concrete UI products.
+- `domain/editor/editor_shell`: active editor workspace, panel/tab/tool-surface instance state, shell projection, shell routing, and Strangler adapters while formed contracts replace older local composition.
+- `domain/editor/editor_definition`: editor-specific toolbar, workspace catalogs, command route ids, availability descriptors, editor menus, shell chrome bindings, provider surface template bindings, and authored layout definitions.
+- `apps/runenwerk_editor`: concrete provider registry, provider state, file/project IO, runtime integration, activation policy, and preview/app instantiation.
 
 ### Options Considered
 
@@ -495,7 +514,7 @@ The planned split is:
 - dropdown/popover primitives: generic anchored popup nodes and renderer-respected overlay layer ordering now belong in `domain/ui`/render integration; authored menu/popover definitions still need first-class UI definition syntax and formation instead of shell-specific composition;
 - disabled/unavailable feature representation: formed products should carry availability/diagnostic state without routing fake or unavailable commands;
 - missing custom workspace catalog: editor definition should own the catalog, not the shell runtime enum alone;
-- self-authoring: M3.6 should edit the same definition families, not invent a second editor-only UI model.
+- self-authoring: the promoted UI Designer path edits the same definition families, not a second editor-only UI model.
 - future UI execution strategies: compiled-reactive or ECS-driven UI should consume the same normalized UI definitions through separate formation targets, rather than requiring authored template rewrites.
 
 ### Boundary Rules
@@ -504,7 +523,7 @@ The planned split is:
 - Do not persist `WidgetId`, focus/capture ids, `PanelInstanceId`, `ToolSurfaceInstanceId`, or ECS entity ids as authored UI/editor ids.
 - Do not encode retained `UiNodeKind`, ECS components, or compiled update functions in authored UI source.
 - Preserve explicit command and ratification boundaries; formed UI may expose route slots, but execution remains with the owning editor/app/domain command path.
-- Do not start visual M3.6 self-authoring until the M3.5 definition framework owns menus, workspace catalogs, unavailable item representation, and template migration seams.
+- Keep self-authoring on the same source-backed definition families. It may configure and replace allowed products, but it must not own app IO, provider behavior, runtime state, or command execution.
 
 ---
 
@@ -821,45 +840,35 @@ Do not force ordinary controls to depend on heavy tool-surface infrastructure.
 
 ---
 
-## Editor Host vs Future Authored Editor Definitions
+## Editor Host And Authored Editor Definitions
 
-## Stage 1 — Modular hardcoded host editor
-The main editor is assembled in code.
+The main editor is still runtime-composed by code-owned host/editor shell
+systems, but authored editor definitions are already live inputs. The current
+architecture must therefore preserve both truths:
 
-This stage should provide:
-- reusable UI substrate
-- reusable workspace composition
-- reusable tool-surface framework
-- definition-ready seams
+- code-owned host/editor shell owns runtime composition, provider wiring,
+  command execution, app IO, and compatibility-gated activation;
+- authored definitions own source-backed UI/layout/theme/menu/shortcut/catalog
+  documents that validate, normalize, and form allowed products;
+- self-authoring/UI Designer edits those definition families through explicit
+  shell/app commands and apply/rollback boundaries;
+- packaging/export remains later product breadth, not a reason to move runtime
+  state or provider behavior into definition data.
 
-## Stage 2 — Definition-ready seams
-Even while the host editor is code-defined, the architecture should prepare explicit future seams for:
-- workspace definitions
-- panel host definitions
-- dock host and tab-stack definitions
-- panel/tool-surface definitions
-- command binding definitions
-- presentation/product binding definitions
-- theme definitions
-- packaging/export definitions
-
-## Stage 3 — Authored editor-definition architecture
-Later, these definitions become authored content that can be created/edited inside Runenwerk.
-
-The concrete self-authoring and final editor UI target is defined in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
-
-### Principle
-Do not build Stage 3 now. But do not block it with Stage 1 decisions.
+The concrete self-authoring and final editor UI target is defined in
+`docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
 
 ---
 
 ## Future Editor-Definition Formation Path
 
-When Runenwerk later supports authored editor/workspace/tool definitions, those definitions should not be treated as automatically executable merely because they exist.
+Authored editor/workspace/tool definitions must not be treated as automatically
+executable merely because they exist.
 
-They should eventually follow the same governing formation logic as other authored platform content.
+They follow the same governing formation logic as other authored platform
+content.
 
-### Expected future path
+### Formation path
 `Authored -> Normalized -> Formed -> Instantiated`
 
 Possible interpretation:
@@ -869,7 +878,11 @@ Possible interpretation:
 - **Instantiated**: active editor/workspace/tool runtime instances
 
 ### Rule
-The first framework version does not need to implement this pipeline, but the architecture must avoid collapsing future editor-definition formation into opaque host-only code.
+
+Definition activation must pass through validation, compatibility checks,
+formed products, and ratified host/app command paths. The architecture must
+avoid collapsing editor-definition formation into opaque host-only code or into
+definition-owned runtime execution.
 
 ---
 

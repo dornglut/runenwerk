@@ -160,7 +160,7 @@ Every future capability track must define:
 Detailed future-system drafts remain useful as deferred design seeds, but they
 are not implementation instructions until their gates are resolved:
 
-- `../deferred/sdf-prefab-composition-system-design.md`
+- `../active/sdf-prefab-composition-system-design.md`
 - `../deferred/sdf-character-animation-system-design.md`
 - `../deferred/field-vegetation-system-design.md`
 - `../deferred/day-night-atmosphere-system-design.md`

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-05-15
 ---
 
 # Proposed ADRs

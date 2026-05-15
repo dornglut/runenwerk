@@ -40,7 +40,6 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### SDF-First Capability Detail Drafts
 
 - [SDF World Production Slice Design](sdf-world-production-slice-design.md)
-- [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
 - [SDF Character Animation System Design](sdf-character-animation-system-design.md)
 - [Field Vegetation System Design](field-vegetation-system-design.md)
 - [Day Night Atmosphere System Design](day-night-atmosphere-system-design.md)
@@ -50,3 +49,8 @@ Use this folder for designs that remain valid but are intentionally postponed.
 - [Procgen Field Product System Design](procgen-field-product-system-design.md)
 - [Field VFX Particles System Design](field-vfx-particles-system-design.md)
 - [Fluid Snow Erosion World Processes System Design](fluid-snow-erosion-world-processes-system-design.md)
+
+Promoted out of deferred:
+
+- [SDF Prefab Composition System Design](../active/sdf-prefab-composition-system-design.md) is active, but V2-gated behind
+  rendered-world V1 and source-backed asset identity.

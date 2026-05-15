@@ -6,6 +6,15 @@ import urllib.parse
 
 DOCS_ROOT = Path("docs-site/src/content/docs")
 REPO_ROOT = Path(".")
+DESIGN_LIFECYCLE_DIRS = {
+    "active",
+    "accepted",
+    "implemented",
+    "deferred",
+    "superseded",
+    "rejected",
+    "archived",
+}
 ALLOWED_STATUS = {
     "draft",
     "active",
@@ -93,12 +102,44 @@ def repo_path_exists(path_text: str) -> bool:
         return True
     return (REPO_ROOT / path_text).exists()
 
+def validate_design_lifecycle_indexes(errors: list[str]) -> None:
+    design_root = DOCS_ROOT / "design"
+    for directory_name in sorted(DESIGN_LIFECYCLE_DIRS):
+        directory = design_root / directory_name
+        if not directory.exists():
+            continue
+        sibling_docs = sorted(
+            path for path in directory.glob("*.md") if path.name != "README.md"
+        )
+        if not sibling_docs:
+            continue
+
+        readme = directory / "README.md"
+        if not readme.exists():
+            errors.append(f"missing design lifecycle index: {readme}")
+            continue
+
+        text = readme.read_text(encoding="utf-8")
+        linked_targets: set[Path] = set()
+        for match in MARKDOWN_LINK.finditer(text):
+            for candidate in link_candidates(readme, match.group(1)):
+                if candidate.exists():
+                    linked_targets.add(candidate)
+
+        for sibling in sibling_docs:
+            if sibling.resolve() not in linked_targets:
+                errors.append(
+                    f"design lifecycle index {readme} does not link sibling document: {sibling.name}"
+                )
+
 def main() -> int:
     errors: list[str] = []
 
     if not DOCS_ROOT.exists():
         errors.append(f"missing docs root: {DOCS_ROOT}")
         return report(errors)
+
+    validate_design_lifecycle_indexes(errors)
 
     for path in DOCS_ROOT.rglob("*"):
         if path.is_file() and path.suffix in {".md", ".mdx"}:

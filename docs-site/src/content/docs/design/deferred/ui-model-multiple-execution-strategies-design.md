@@ -8,6 +8,8 @@ canonical: true
 last_reviewed: 2026-05-04
 related:
   - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ../active/editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
 ---
@@ -52,15 +54,17 @@ Do not infer from this document that the repository should immediately add:
 
 ## Current Accepted Working Model
 
-The current editor/UI implementation should continue to grow through the retained UI substrate and tool-surface architecture:
+The current editor/UI implementation should continue to grow through the
+retained UI substrate, Interaction V2 formation, and tool-surface architecture.
+Retained UI remains the production execution target:
 
 ```text
-Workspace/editor state
-  -> observation frames and view models
-  -> retained UI tree/widgets
-  -> ui_runtime layout/input/output
-  -> ui_render_data frame/primitives
-  -> engine render integration
+Authored UI / editor definitions
+  -> validation / normalization
+  -> formed interaction contracts
+  -> formed retained UI product
+  -> ui_runtime enforcement
+  -> render/product-surface output
 ```
 
 This path is already in production editor flows and is guard-tested.
@@ -98,6 +102,10 @@ If this design becomes active, the hard rules should be:
 - editor workspace semantics do not become required for ordinary game HUD/menu UI;
 - ECS-driven UI must not become a backdoor for editor/domain mutation outside command and ratification boundaries;
 - compiled reactive UI must not directly own engine/runtime authority.
+- compiled-reactive UI and ECS-driven UI must consume normalized UI definitions
+  plus formed interaction contracts;
+- no execution target may replace authored UI identity, source maps, command
+  ratification, or the rule that renderer output is derived product data.
 
 ## Open Questions
 

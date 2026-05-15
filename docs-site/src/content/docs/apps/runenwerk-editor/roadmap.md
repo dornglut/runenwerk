@@ -16,11 +16,13 @@ related_designs:
   - ../../design/active/render-product-surface-foundation-bundle-design.md
   - ../../design/active/viewport-dynamic-product-target-allocation-design.md
   - ../../design/active/editor-self-authoring-and-final-ui-design.md
+  - ../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
   - ../../design/active/editor-asset-pipeline-and-content-workflow-design.md
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ../../design/active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related_adrs:
+  - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../adr/accepted/0007-external-runtime-preview-process.md
 related_roadmaps:
   - ../../workspace/sdf-first-execution-roadmap.md
@@ -530,8 +532,17 @@ Exit criteria:
 
 ### Design First Gates
 
-These items were easy to miss in the compressed roadmap. They are real future tracks, but they need design or ADR work before implementation:
+These items were easy to miss in the compressed roadmap. They are real future
+tracks; some still need design or ADR work before implementation, while
+Interaction V2 now has an accepted ADR and needs retained-UI migration slices.
 
+- UI Runtime V2 and interaction formation
+  - active design: `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`;
+  - accepted ADR: `docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md`;
+  - retain the current retained UI execution target while adding `FormedInteractionModel` for popup stack, scroll ownership, focus, menu sizing, chrome slots, docking zones, and status overflow;
+  - renderer/product-surface output remains derived data, not UI authority;
+  - do this before more local shell/menu/chrome patches accumulate;
+  - editor shell polish is a retained-UI implementation slice after the relevant Interaction V2 contract, not the owner of durable popup, scroll, focus, docking, or viewport-input policy.
 - compiled-reactive UI execution
   - promote only through a new active design or accepted ADR;
   - define the first surface that needs it, the formation product, scheduling model, invalidation model, debug/source-map story, and guard tests;
@@ -553,6 +564,23 @@ These items were easy to miss in the compressed roadmap. They are real future tr
   - wait for package metadata, trust policy, compatibility ranges, migration diagnostics, and rollback semantics.
 - gameplay graph ATR/ECS lowering
   - implement only after narrower gameplay event, action, state, quest, authority, and source-map contracts exist.
+- rendered-world V1
+  - active design: `docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md`;
+  - first implementation is multi-entity SDF primitive viewport rendering from `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::extract_viewport_scene_render_packet`;
+  - terrain, materials, prefabs, and streaming remain later product tracks.
+- Field Visualizer
+  - active design: `docs-site/src/content/docs/design/active/field-visualizer-product-workflow-design.md`;
+  - implement as viewport product selection and controls, not as a separate viewer.
+- Material Lab
+  - active design: `docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md`;
+  - implementation starts after rendered-world V1 and field visualizer product routing are stable;
+  - source-backed `MaterialGraphDocument` is material truth, not canvas state.
+- UI Designer
+  - not missing: it is the already-promoted self-authoring path in `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`;
+  - roadmap wording should continue to call this UI Designer / self-authoring so the feature is visible to product planning.
+- SDF Prefabs
+  - active V2-gated design: `docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md`;
+  - prefab runtime instancing waits for rendered-world V1 and source-backed prefab descriptor identity.
 
 ### What Was Missing Or Under-Specified
 
@@ -561,6 +589,10 @@ These items were easy to miss in the compressed roadmap. They are real future tr
 - Compiler-inspired UI and ECS-driven UI plans were mentioned as deferred, but not positioned in the future order. They are now design-first gates after retained UI, assets, runtime preview, and concrete need exist.
 - Native OS menus/shortcuts and external marketplace workflows were listed as future work, but their prerequisites were vague. They are now tied to active definition consumption and package metadata.
 - Payload ECS enums were listed as deferred, but the trigger condition was not explicit. They now wait for concrete payload-backed reflected fields.
+- Material Lab was present as provider stubs but not roadmap-visible as a product track. It is now explicit and gated behind rendered-world V1 plus field visualizer routing.
+- UI Designer looked missing because the roadmap used self-authoring language. It is now identified as the same promoted path, not a separate missing feature.
+- SDF prefabs were grouped with deferred SDF detail drafts. The design is now active, but implementation remains V2-gated behind rendered-world V1 and source-backed asset identity.
+- Repeated editor UI polish issues were listed as individual bugs. Accepted ADR 0009 and Interaction V2 now turn popup, scroll, focus, menu sizing, chrome, docking, and status overflow into shared contracts.
 
 ## Milestones
 
@@ -574,6 +606,7 @@ Exit criteria:
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
 - The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
 - UI execution strategy is closed for M1 through M7 and M3.5/M3.6: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution remains deferred and may not enter self-authoring as a first-time decision.
+- ADR 0009 makes Interaction V2 the shared editor UI behavior contract before further popup, scroll, chrome, docking, and viewport-input work.
 - Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
 - `python3 tools/docs/validate_docs.py` passes.
 

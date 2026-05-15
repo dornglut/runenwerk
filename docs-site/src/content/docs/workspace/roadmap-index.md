@@ -113,16 +113,24 @@ Operational execution checklist:
 
 ## Current Focus
 
-- SDF-first Phase 6D / M6.2C is complete: procgen now has offline bake
-  outcomes, last-good rollback, app-owned bake archive persistence, and live
-  procgen graph reload classification on the completed Phase 6A-6C substrate.
-- With Phase 6D closed, keep any further M6.2 procgen code scoped to bounded
-  region terrain/material generation through `domain/procgen`; near-term
-  product-job follow-ups should resume from the runtime product job roadmap.
+- Current implementation candidates are `WR-018` rendered-world V1, `WR-025`
+  UI Runtime V2 interaction formation, and `WR-007` focused net hardening.
+- `WR-018` is the P0 editor product slice: keep all editor SDF primitive
+  rendering and picking on one extracted viewport scene packet before material,
+  prefab, or terrain production work expands.
+- `WR-025` is the P0 UI architecture guardrail slice: establish the Interaction
+  V2 contract/migration spine before more local popup, scroll, chrome, docking,
+  or viewport-input polish accumulates.
+- `WR-024` is ready-next behind `WR-025`: keep viewport statistics, popup
+  contrast, scrollable popup content, submenu anchoring, close affordances, and
+  active indicators as retained-UI implementation slices under Interaction V2.
+- `WR-007` is the current L1 net candidate after the completed WR-006 Draw GPU
+  proof and promotion slice; keep it scoped to ACK/baseline hardening and delta
+  lifecycle rules.
 - Use the roadmap decision register to compare same-gate, same-level candidates;
   blocker gates and owning roadmap order still win before score.
-- Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
-  execution substrate lands.
+- Keep editor/UI cross-doc sequencing aligned with shipped behavior while these
+  current candidates land.
 - Keep render SDF/GPU work on the completed product-selection and derived
   GPU-residency contracts.
 
@@ -188,6 +196,11 @@ When domain roadmaps and workspace index notes diverge, the owning domain roadma
   bakes through product barriers, restores last-good bake products on rollback,
   persists app-owned bake archives, and classifies procgen graph reloads as
   live `ProcgenPreview` products;
+- Runenwerk Draw DRF1-DRF5 is complete: Draw forms preview/final CPU tile
+  products, bridges product surfaces through public render APIs, validates GPU
+  ink proof captures against CPU reference output, promotes only matching tile
+  generations, rejects stale GPU output, and keeps CPU current or last-good
+  fallback authoritative on GPU validation failure;
 - runtime product job RPJ4-RPJ7A is complete for local execution substrate:
   Draw responsiveness uses immediate stroke feedback plus async tile jobs,
   product cache identity is typed and lineage-derived, Draw preview/final tile

@@ -10,6 +10,8 @@ related:
   - ../../apps/runenwerk-editor/current-architecture.md
   - ../../apps/runenwerk-editor/execution-priority-checklist.md
   - ./editor-ui-workspace-tool-surface-architecture.md
+  - ./editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../implemented/surface-workflow-contract-redesign.md
 ---
 
@@ -27,6 +29,11 @@ The retained UI historically used one `PopupNode` for too many concepts:
 This causes regressions where a close button behaves like menu chrome, a drop preview changes spacing when it should only preview insertion, or an overlay competes with scrollbars and sibling panel headings.
 
 The long-term fix is to split those concepts in the UI contract instead of continuing to encode them as style variants of one popup node.
+
+This document is supporting contract evidence under ADR 0009. It may name
+retained-node migration slices, but Interaction V2 owns the durable popup,
+scroll, focus, docking-zone, radial/menu hit-testing, and viewport-input
+arbitration architecture.
 
 ## Target Concepts
 

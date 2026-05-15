@@ -142,6 +142,8 @@ class RoadmapItem(StrictModel):
     def validate_expected_score(self) -> RoadmapItem:
         if abs(self.score - self.expected_score) > 0.05:
             raise ValueError(f"{self.id} expected_score={self.expected_score:.1f} does not match computed {self.score:.1f}")
+        if self.planning_state == "ready_next" and not self.main_blocker.strip():
+            raise ValueError(f"{self.id} ready_next items must set main_blocker")
         return self
 
     @computed_field

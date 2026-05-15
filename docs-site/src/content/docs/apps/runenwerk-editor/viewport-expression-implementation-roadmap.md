@@ -11,6 +11,8 @@ related_designs:
   - ../../design/active/render-product-surface-foundation-bundle-design.md
   - ../../design/active/viewport-dynamic-product-target-allocation-design.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+  - ../../design/active/field-visualizer-product-workflow-design.md
 related:
   - ./current-architecture.md
   - ./roadmap.md
@@ -66,16 +68,18 @@ Implemented foundation state:
 - `apps/runenwerk_editor/src/runtime/viewport/product_targets.rs::ViewportProductTargetRegistryResource` maps every viewport/product/slot tuple to a dynamic target record.
 - `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs::ViewportRenderJobResource` publishes one prepared view and one prepared flow invocation per viewport without cloning the render flow.
 - `domain/ui/ui_render_data/src/primitives/viewport_surface_embed.rs::ViewportSurfaceBindingSource` is dynamic-texture-only; the old flow-resource embed bridge has been removed.
-- `assets/shaders/editor_viewport_scene_product.wgsl` renders a viewport-local product and no longer contains multi-rectangle containment.
+- `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::extract_viewport_scene_render_packet` now extracts all editor SDF primitive entities into a stable per-viewport scene packet for rendered-world V1.
+- `assets/shaders/editor_viewport_scene_product.wgsl` renders a viewport-local multi-entity SDF primitive product and no longer contains multi-rectangle containment.
+- `assets/shaders/editor_viewport_picking_product.wgsl` consumes the same primitive packet layout for picking-id product output.
 
 Remaining work is no longer migration cleanup. The planned non-viewport surface
 workflow follow-up has landed, reusable viewport options now use retained toggle
 controls, and the viewport product catalog exposes descriptor rows for field,
 atlas, volume slice, brickmap debug, and history color products. Products whose
 runtime producers are not implemented are visible but marked unavailable. Product
-maturity now moves to the integrated UI/editor/asset foundation: active catalog
-consumption, real SDF/field asset producers, field-product formation, and
-concrete history/temporal buffers rather than descriptor plumbing.
+maturity now moves to Field Visualizer and Material Lab product producers through
+the same viewport product routing rather than descriptor plumbing or parallel
+viewer paths.
 
 ## Final Architecture
 

@@ -5,13 +5,18 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-15
 related:
   - ./architecture.md
   - ../../design/active/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../design/active/editor-self-authoring-and-final-ui-design.md
+  - ../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ../../design/active/editor-ui-popup-adornment-drop-preview-contract.md
+  - ../../design/active/editor-shell-menu-and-tab-chrome-polish-design.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/deferred/ui-model-multiple-execution-strategies-design.md
+  - ../../adr/accepted/0009-ui-interaction-formation-v2.md
   - ../../design/active/workspace-identity-contract-and-migration-map.md
 ---
 
@@ -31,10 +36,11 @@ Implemented and in use:
 - `ui_surface` exists with definition/mount/observation/session/presentation/intent/ratification contracts;
 - shell/runtime integration routes core editor flows through prepared `SurfacePresentationModel`, typed `SurfaceIntent`, and host-side ratification adapters;
 - retained UI node and runtime interaction support exists for reusable controls including text input, numeric input, toggle, tabs, select, table, tree, scroll, split, and viewport embed;
-- runtime viewport routing is structural-first with one explicit bootstrap-only single-viewport seam;
+- runtime viewport routing is structural-first. The normal viewport migration path is closed; one compatibility-only bootstrap seam remains in `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`, through private helpers `select_viewport_id_with_bootstrap_policy` and `bootstrap_single_viewport_id`, before first projection artifacts exist. New viewport/product work must use structural viewport binding, not bootstrap selection;
 - architecture guard tests enforce no `first_frame()` routing fallback and no `ViewportId(0)` synthesis;
 - viewport semantic slot taxonomy remains in `editor_viewport`, with opaque renderer-facing payload slots in `ui_render_data`.
 - `ui_definition` exists with authored templates, validation, normalization, retained formation, route/embed products, and checked-in editor UI fixtures; broader workspace profile catalogs/default layouts, unavailable feature representation, and custom workspace catalog behavior still need follow-up hardening.
+- ADR 0009 makes Interaction V2 the accepted architecture for popup stack, scroll ownership, focus, menu sizing, chrome slot, docking-zone, and status overflow contracts. Current runtime execution is still retained UI.
 
 Evidence in code:
 
@@ -79,17 +85,21 @@ Remaining:
 
 ### Phase 4 - Viewport/Embed/Render-Data Seam Consolidation
 
-Status: largely complete, guard-hardened, and still active.
+Status: complete for normal viewport migration, guard-hardened, and active only
+for compatibility preservation.
 
 Completed:
 
 - semantic slot ownership is in `editor_viewport`;
 - renderer-facing payload ownership is in `ui_render_data`;
-- structural binding adapters are active in `runenwerk_editor` runtime seams.
+- structural binding adapters are active in `runenwerk_editor` runtime seams;
+- `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::populate_viewport_layout_map_from_shell_tree` scans structural `ViewportSurfaceEmbed` nodes;
+- `apps/runenwerk_editor/src/runtime/systems/viewport_lifecycle.rs::sync_viewport_instances_system` syncs explicit viewport instances from workspace state.
 
 Remaining:
 
-- preserve this boundary while expanding multi-surface coverage and docking/tab behavior.
+- preserve the one compatibility-only bootstrap seam in `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`;
+- do not use bootstrap selection for new viewport/product work.
 
 ### Phase 5 - Control Semantics Hardening
 
@@ -155,13 +165,44 @@ Non-goals:
 
 - moving editor workspace profiles, panel/tab/tool-surface semantics, shell routing policy, provider execution, or app IO into `domain/ui/ui_definition`;
 - app provider registries, file IO, or runtime instantiation;
-- visual editor self-authoring implementation and user-authored document lifecycle inside M3.5; those move to the M3.6 UI self-authoring workspace after this framework is active;
+- visual editor self-authoring implementation and user-authored document lifecycle inside M3.5; those moved to the promoted M3.6 UI self-authoring workspace after this framework became active;
 - baking retained `UiNodeKind`, runtime `WidgetId`, concrete shell commands, or ECS component/entity layout into authored UI templates;
 - ECS entities as authored UI/editor identities.
 
 Milestone placement:
 
 - the app roadmap inserts this as M3.5 before the promoted M3.6 UI self-authoring workspace and before the integrated M4 UI/editor/asset foundation so new asset/procedural/editor-design workspace work does not add more hard-coded toolbar, menu, workspace, shell chrome, and provider surface structure.
+
+### Phase 8 - UI Runtime V2 Interaction Formation
+
+Status: accepted architecture as of ADR 0009 on 2026-05-15. Runtime
+implementation remains retained UI first and migrates by Strangler slices.
+
+Owning design:
+
+- `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`
+- `docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md`
+
+Decision:
+
+- keep retained UI as the first execution target;
+- insert `FormedInteractionModel` between normalized UI definitions and retained UI products;
+- solve popup stack, scroll ownership, focus scope, menu sizing, dock/drop-zone, chrome slot, and status overflow behavior as shared contracts instead of surface-local patches;
+- keep compiled-reactive and ECS-driven UI deferred until a separate accepted ADR or active design promotes a concrete target;
+- keep renderer output as derived product data, not UI authority.
+
+Required Interaction V2 validation coverage:
+
+- popup/menu layer order;
+- scroll clipping;
+- wheel ownership and boundary propagation;
+- outside-dismiss behavior;
+- focus return;
+- split-border precedence over tab and chrome hits;
+- dock-drag/drop-zone precedence;
+- radial/menu hit testing where applicable;
+- viewport input receives wheel/pointer input only after UI explicitly declines ownership;
+- screenshot or primitive-order harness coverage for visual/frame-order regressions where normal unit tests are insufficient.
 
 ## Current Now Tasks
 
@@ -172,9 +213,12 @@ Milestone placement:
 - [x] Complete active UI/editor definition consumption before adding more hard-coded editor surfaces. Status: implemented as of 2026-05-09 for M4A-M4D. Active templates/editor bindings feed the shell frame, command bindings resolve authored route ids to app-owned known commands, shortcuts and menus dispatch through that command spine, active toolbar/menu definitions can replace checked-in fixture menu items, and panel/tool-surface registries drive future shell creation/switch choices without mutating existing workspace state.
 - [x] Broaden reusable control adoption in editor surfaces. Status: implemented as of 2026-05-09 for the M4E cleanup. `editor_shell` now owns shared retained surface fixture helpers, shared compact reusable-control polish, and self-authoring control-panel composition; app providers supply DTOs/actions/routes instead of direct reusable-control construction.
 - [x] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: updated as of 2026-05-09; guard coverage rejects direct app-provider reusable-control construction while preserving existing `ui_definition` behavior-isolation and surface-routing checks.
-- [ ] Keep future UI execution strategies design-gated. Status: active/open; compiled-reactive UI and ECS-driven UI remain future formation targets only after a new active design or accepted ADR identifies the concrete surface, formation product, invalidation/debug model, and command/ratification boundaries.
+- [ ] Keep future UI execution strategies design-gated. Status: active/open; compiled-reactive UI and ECS-driven UI remain future formation targets only after a new active design or accepted ADR identifies the concrete surface, formation product, invalidation/debug model, and command/ratification boundaries. Any future target must consume normalized definitions plus formed interaction contracts.
+- [ ] Migrate retained UI slices to Interaction V2 contracts. Status: accepted/current; ADR 0009 owns the long-term contract decision and `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md` owns the migration plan for popup stack, scroll ownership, focus, menu sizing, chrome slots, docking zones, and status overflow. The retained UI path remains the first target.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
+- [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/active/editor-self-authoring-and-final-ui-design.md`.
+- [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, or viewport-input contracts.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-08.
 
 ## Non-Goals for This Track

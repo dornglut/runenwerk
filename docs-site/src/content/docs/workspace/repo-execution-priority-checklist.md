@@ -46,12 +46,24 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Now (Current Cross-Repo Priorities)
 
-- [ ] `WR-001`: Continue post-Phase 6D product-job follow-ups only when fresh runtime product-job evidence exists. Status: 2026-05-15 WR-001 completed the DRF3 preview/final product-surface bridge, and WR-006 completed the dependent DRF4-DRF5 GPU proof, promotion, stale rejection, and CPU fallback slice. Do not reopen procgen bake/rollback unless validation regresses or an owning roadmap accepts a new procgen slice (source: `workspace/sdf-first-execution-roadmap.md`, `engine/roadmaps/runtime-product-job-executor-roadmap.md`, and `apps/runenwerk-draw/roadmap.md`).
-- [ ] `WR-002`: Continue ECS runtime convergence open foundation checklist items (`F1`-`F4`) as inputs to the SDF-first execution fabric. Status: 2026-05-14 parallel batch completed the M5 consumer lag/backpressure diagnostics slice for ECS broadcast consumers; F2 lifecycle/finalization and F3 deterministic registration/plan reporting remain open (source: `workspace/sdf-first-execution-roadmap.md` and `net/ecs-runtime-prioritized-roadmap.md`).
-- [ ] `WR-003`: Execute render immediate remaining phases only through product-selection and derived GPU-residency contracts. Status: 2026-05-14 parallel batch tightened prepared render product selection so one prepared view cannot be owned by two producers; R4/R6/R7 code-truth audit found current proofs on the compiled flow path, so later render work remains contract-following support rather than renderer-owned world truth (source: `workspace/sdf-first-execution-roadmap.md` and `engine/plugins/render/docs/roadmap.md`).
-- [ ] `WR-004`: Preserve and extend UI/editor guard coverage for structural routing, capability gating, and seam ownership. Status: 2026-05-14 parallel batch added entity-table and SDF operation surface routing/capability guard coverage; keep this always-on while editor surface work lands (source: `domain/ui/roadmap.md` and `workspace/roadmap-index.md`).
-- [ ] `WR-005`: Keep editor/UI cross-doc sequencing aligned with shipped behavior. Status: 2026-05-14 parallel batch moved the implemented surface workflow contract redesign from active to implemented lifecycle and updated inbound links; more design lifecycle cleanup remains available when docs capacity exists (source: `domain/ui/roadmap.md`, `workspace/roadmap-index.md`, and `design/implemented/surface-workflow-contract-redesign.md`).
-- [ ] Keep architecture guards and docs synchronized while these tracks land (source: `workspace/roadmap-index.md`).
+- [ ] `WR-018`: Implement rendered-world V1 by keeping all editor SDF primitive
+  rendering and picking on one extracted viewport scene packet (source:
+  `design/active/editor-rendered-world-and-multi-entity-viewport-design.md`).
+- [ ] `WR-025`: Lead UI Runtime V2 interaction formation before more local
+  popup, scroll, chrome, docking, or viewport-input polish accumulates (source:
+  `adr/accepted/0009-ui-interaction-formation-v2.md`).
+- [ ] `WR-024`: Keep editor shell polish ready-next behind `WR-025`; land it
+  only as retained-UI implementation slices consuming Interaction V2 contracts
+  or as explicitly bounded compatibility evidence (source:
+  `design/active/editor-shell-menu-and-tab-chrome-polish-design.md`).
+- [ ] `WR-007`: Continue the focused L1 net hardening candidate for
+  ACK/baseline and delta lifecycle only, without broadening replication scope
+  (source: `net/multiplayer-replication-implementation-roadmap.md`).
+- [ ] Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
+  unless fresh roadmap evidence reactivates one of them (source:
+  `workspace/roadmap-items.yaml`).
+- [ ] Keep architecture guards and docs synchronized while current candidates
+  land (source: `workspace/roadmap-index.md`).
 
 ## Latest Parallel Batch Closeout
 
@@ -69,6 +81,12 @@ Remaining near-term blockers:
 
 - `WR-007`: ACK/baseline hardening and delta lifecycle rules are the current
   L1 implementation candidate after WR-006.
+- `WR-018`: multi-entity SDF packet rendering, shader packet use, and picking
+  consistency need code and tests before material, prefab, or terrain work
+  expands.
+- `WR-024`: viewport statistics, popup contrast, scroll behavior, submenu
+  anchoring, close affordances, and active indicator slots wait on the WR-025
+  contract/migration spine before becoming durable shell/layout work.
 - `WR-002`: F2 runtime-owned frame finalization and F3 deterministic plan
   reporting remain open.
 - `WR-008`: product acceptance remains hardware-blocked even though its WR-006

@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-10
+last_reviewed: 2026-05-15
 ---
 
 # UI Substrate Architecture
@@ -41,7 +41,13 @@ As of the audited repository state:
 - Prior fallback seams removed:
   - no `first_frame()`-based routing in editor runtime systems
   - no `ViewportId(0)` fallback in shell viewport adapter
-- The runtime still has an explicit bootstrap-only single-viewport selection seam before first structural binding exists.
+- The normal viewport migration path is closed. The runtime still has one
+  compatibility-only bootstrap selection seam in
+  `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`
+  before first structural projection artifacts exist; private helpers
+  `select_viewport_id_with_bootstrap_policy` and `bootstrap_single_viewport_id`
+  require exactly one observed viewport and are not a path for new
+  viewport/product work.
 - Substrate output now has baseline snapshot tests and a lightweight gallery harness example (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
 
 ## Current Crate Map
@@ -150,7 +156,10 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
 
 1. Viewport semantic-to-render payload slot mapping is intentionally adapter-based and must remain centralized; avoid introducing parallel semantic taxonomies in runtime or renderer layers.
 2. Existing shell surfaces still rely primarily on button/label primitives; newer reusable controls (`TextInput`, `Toggle`, `NumericInput`, `Tabs`) are present but not yet broadly adopted.
-3. Bootstrap single-viewport routing exists before first structural tool-surface binding generation.
+3. The compatibility-only bootstrap single-viewport seam exists in
+   `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`
+   before first structural tool-surface binding generation. New viewport and
+   product work must use structural viewport binding.
 
 ## Target Ownership Model
 Target ownership (partially implemented):
@@ -195,6 +204,7 @@ The migration direction should remain dependency-aware and incremental:
 - [Runenwerk Architecture Doctrine](../../guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](../../guidelines/module-structure-guidelines.md)
 - [UI Definition Formation Framework Design](../../design/active/ui-definition-formation-foundation-design.md)
+- [ADR 0009: UI Interaction Formation V2](../../adr/accepted/0009-ui-interaction-formation-v2.md)
 - [Editor / UI / Workspace / Tool-Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
 - [Viewport Expression Upgrade Design](../../design/active/workspace-viewport-expression-upgrade-design.md)
 - [Workspace Identity Contract and Migration Map](../../design/active/workspace-identity-contract-and-migration-map.md)

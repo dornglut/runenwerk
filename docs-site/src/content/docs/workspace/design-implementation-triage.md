@@ -111,6 +111,8 @@ Blocker weight:
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
 | WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Ready for the next focused net hardening batch focused on ACK/baseline and delta lifecycle only, without broadening replication scope. | Start from net/multiplayer-replication-implementation-roadmap.md Phase 1-3 ACK/baseline hardening, keeping the write scope to net and domain/ecs. |
+| WR-018 | Rendered World V1 | P0 | V5 | B2 | 3.0 | Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers on the same extracted packet. | Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry. |
+| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS UI, external UI framework adoption, or runtime behavior change in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then migrate retained UI slices through the active Interaction V2 design. |
 
 ## Support Only
 
@@ -128,6 +130,12 @@ Blocker weight:
 | WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B3 | 1.0 | Code work can continue after the WR-006 dependency, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
 | WR-009 | Native multi-window editor presentation | P2 | V3 | B3 | 0.7 | Design is active, but it should not preempt current product-surface and post-6D work. | Runtime window state and render surface handling are still singleton-shaped; second-window productization needs window-scoped runtime, input, UI frame, and swapchain ownership. |
 | WR-010 | Render fragment and data-driven maturity R10 | P2 | V3 | B3 | 0.7 | Keep queued after render surface, ergonomics, persistence, and inspection follow-ups. | Fragment assets and hot reload need stable target aliases, prepared flow invocations, diagnostics, and a product priority. |
+| WR-019 | Field Visualizer product workflow | P1 | V4 | B2 | 2.4 | Plan immediately after rendered-world V1 stabilizes the packet/product handoff. | Rendered-world V1 must first prove the viewport packet/product handoff and product target selection path. |
+| WR-020 | Source-backed Asset Core | P0 | V5 | B3 | 1.9 | Supporting foundation for Field Visualizer, Material Lab, and prefab V2. | Source identity must wait for rendered-world product usage evidence and avoid reopening broad external import scope. |
+| WR-021 | Material Lab and material preview products | P1 | V4 | B2 | 0.9 | Do not make canvas state material truth; material source documents own material state. | Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset identity evidence. |
+| WR-022 | SDF Prefab V2 | P2 | V4 | B3 | 0.8 | Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable. | Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity, and accepted product ownership. |
+| WR-023 | ECS Parallel Execution | P2 | V3 | B2 | 0.5 | Design now, implement later after diagnostics and deterministic merge policy are accepted. | Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics, and serial equivalence tests. |
+| WR-024 | Editor Shell Polish | P0 | V4 | B1 | 4.0 | Ready-next only after the Interaction V2 contract/migration spine leads; route long-term popup, scroll, chrome, docking, and status overflow decisions through WR-025. | Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming those contracts or as explicitly bounded compatibility evidence. |
 
 ## Completed Evidence
 
@@ -144,7 +152,7 @@ Blocker weight:
 | WR-012 | General semantic graph implementation | P2 | V3 | B4 | 0.2 | The policy is active, but implementation must start from one concrete owning domain and one formed product target, not a broad graph platform. |
 | WR-013 | Scripting and runtime gameplay bridge | P2 | V3 | B4 | 0.3 | It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai can be the first adapter only after the domain contract exists. |
 | WR-014 | Particles, physics, animation, and world-process product tracks | P3 | V3 | B4 | 0.2 | Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query snapshot/publication barrier substrate. |
-| WR-015 | SDF prefab, character, vegetation, atmosphere, water, VFX, and influence AI drafts | P3 | V2 | B5 | 0.2 | These are explicitly deferred detail drafts. Reactivate only after the relevant product ownership, renderer/runtime handoff, query policy, and authority contracts are promoted. |
+| WR-015 | SDF character, vegetation, atmosphere, water, VFX, and influence AI drafts | P3 | V2 | B5 | 0.2 | These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership, renderer/runtime handoff, query policy, and authority contracts are promoted. |
 | WR-016 | Compiled-reactive UI and ECS-driven UI execution strategies | P3 | V2 | B5 | 0.1 | The current retained UI path is the active implementation. Alternative execution strategies require a new active design or accepted ADR before code. |
 | WR-017 | Gameplay actions, powers, runtime, and power editor | P3 | V2 | B5 | 0.2 | These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and domain contract sequence. |
 <!-- END GENERATED ROADMAP STATUS -->
@@ -168,17 +176,22 @@ clear record of any implementation drift.
 
 The current code-facing answer is:
 
-1. Treat SDF-first Phase 6D as complete unless validation regresses.
-2. Treat `WR-001` as completed evidence, not as a selectable implementation
-   batch.
-3. Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
+1. Treat `WR-018` rendered-world V1 and `WR-025` UI Runtime V2 interaction
+   formation as the P0 editor current candidates.
+2. Keep `WR-024` editor shell polish ready-next behind `WR-025`; polish may
+   proceed only as a retained-UI slice consuming Interaction V2 contracts or as
+   explicitly bounded compatibility evidence.
+3. Treat `WR-007` as the current L1 net hardening candidate after the completed
+   WR-006 Draw GPU proof and promotion slice.
+4. Treat `WR-001` and `WR-006` as completed evidence, not selectable
+   implementation batches.
+5. Keep `WR-002`, `WR-003`, `WR-004`, and `WR-005` as support-only tracks
    until roadmap evidence explicitly reactivates one of them.
-4. Treat `WR-006` as completed Draw GPU proof and promotion evidence.
-5. Use `WR-007` as the current implementation candidate for the next focused
-   net hardening batch.
 6. Keep `WR-008` code-reachable but product-acceptance-blocked until hardware
    validation evidence exists.
-7. Keep gameplay graph, particles, physics, animation, world processes, alternate UI execution, and deferred SDF capability detail drafts behind their owning contract gates.
+7. Keep gameplay graph, particles, physics, animation, world processes,
+   alternate UI execution, and deferred SDF capability detail drafts behind
+   their owning contract gates.
 
 After completing any phased implementation, run the phase completion drift-check
 routine before starting the next phase.

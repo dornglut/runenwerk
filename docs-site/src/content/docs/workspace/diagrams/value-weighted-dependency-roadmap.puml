@@ -72,6 +72,14 @@ package "Level 1 - Depends On Current Stabilization" {
 
   component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
 
+  component "WR-018 Rendered World V1\nstate=current_candidate\nscore=3.0 gate=current candidate\nV5 B2\ncall=multi-entity SDF packet\nrender/picking consistency" as RENDERWORLD <<V5>>
+
+  component "WR-020 Source-backed Asset Core\nstate=ready_next\nscore=1.9 gate=supporting now\nV5 B3\ncall=deterministic import\nprior-valid artifacts" as ASSETCORE <<V5>>
+
+  component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
+
+  component "WR-025 UI Runtime V2 interaction formation\nstate=current_candidate\nscore=4.8 gate=accepted architecture gate\nV5 B2\ncall=retained UI first\ninteraction contracts" as UIV2 <<V5>>
+
 }
 
 package "Level 2 - Productization / Contract-Gated" {
@@ -83,6 +91,8 @@ package "Level 2 - Productization / Contract-Gated" {
 
   component "WR-012 Concrete semantic graph\nstate=blocked_deferred\nscore=0.2 gate=domain contract gate\nV3 B4\ncall=one owning domain,\none formed product target" as SEMGRAPH <<V3>>
 
+  component "WR-019 Field Visualizer workflow\nstate=ready_next\nscore=2.4 gate=after rendered-world v1\nV4 B2\ncall=product-backed field debug\nno parallel viewer path" as FIELDVIS <<V4>>
+
 }
 
 package "Level 3 - Downstream Domain Tracks" {
@@ -90,10 +100,16 @@ package "Level 3 - Downstream Domain Tracks" {
 
   component "WR-014 Particles / physics / animation / world processes\nstate=blocked_deferred\nscore=0.2 gate=product contract gate\nV3 B4\ncall=formed product contracts\nand product substrate first" as M6FUTURE <<V3>>
 
+  component "WR-021 Material Lab\nstate=ready_next\nscore=0.9 gate=after rendered-world v1 and field visualizer\nV4 B2\ncall=source-backed material graph\npreview product handoff" as MATLAB <<V4>>
+
+  component "WR-022 SDF Prefab V2\nstate=ready_next\nscore=0.8 gate=v2 gated\nV4 B3\ncall=active design now\nruntime instancing V2" as PREFABV2 <<V4>>
+
+  component "WR-023 ECS Parallel Execution\nstate=ready_next\nscore=0.5 gate=design first\nV3 B2\ncall=ECS remains serial now\ndeterministic parallel design" as ECSPAR <<V3>>
+
 }
 
 package "Level 4 - Deferred Policy Tracks" {
-  component "WR-015 SDF detail drafts\nstate=blocked_deferred\nscore=0.2 gate=policy deferred\nV2 B5\ncall=prefab, character, vegetation,\natmosphere, water, VFX, AI" as SDFDETAIL <<V2>>
+  component "WR-015 Remaining SDF detail drafts\nstate=blocked_deferred\nscore=0.2 gate=policy deferred\nV2 B5\ncall=character, vegetation,\natmosphere, water, VFX, AI" as SDFDETAIL <<V2>>
 
   component "WR-016 Alternate UI execution\nstate=blocked_deferred\nscore=0.1 gate=policy deferred\nV2 B5\ncall=compiled-reactive or ECS-driven\nonly after ADR/design promotion" as UIALT <<V2>>
 
@@ -119,5 +135,19 @@ RENDER -down-> WINDOW : render surface foundation
 RENDER -down-> FRAGMENTS : aliases / invocations / inspection
 GAMEPLAY -down-> POWERS : narrower gameplay contracts
 UIGUARDS -down-> UIALT : retained UI path remains default
+RENDER -down-> RENDERWORLD : render product-surface support
+UIGUARDS -down-> RENDERWORLD : editor projection guards
+RENDERWORLD -down-> FIELDVIS : viewport packet/product handoff
+RENDER -down-> FIELDVIS : product target selection
+RENDERWORLD -down-> ASSETCORE : source identity for rendered products
+RENDERWORLD -down-> MATLAB : preview render handoff
+FIELDVIS -down-> MATLAB : debug product controls
+ASSETCORE -down-> MATLAB : material document identity
+RENDERWORLD -down-> PREFABV2 : prefab render foundation
+ASSETCORE -down-> PREFABV2 : prefab source identity
+ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
+UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
+UIGUARDS -down-> UIV2 : UI guard substrate
+UIV2 -down-> SHELLPOLISH : interaction contract spine
 
 @enduml

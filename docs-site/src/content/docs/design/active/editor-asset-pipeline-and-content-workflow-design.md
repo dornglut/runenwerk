@@ -8,6 +8,10 @@ canonical: true
 last_reviewed: 2026-05-09
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
+  - ./editor-rendered-world-and-multi-entity-viewport-design.md
+  - ./field-visualizer-product-workflow-design.md
+  - ./material-lab-and-material-preview-design.md
+  - ./sdf-prefab-composition-system-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
   - ./gameplay-graph-atr-ir-and-ecs-lowering-design.md
   - ./editor-workspace-document-mode-panel-architecture.md
@@ -60,6 +64,9 @@ Implemented today:
 
 Remaining gaps after M4:
 
+- Source-backed Asset Core is the next asset foundation slice: project catalog load/save, source descriptors, deterministic import jobs, diagnostics, and prior-valid artifact preservation for SDF graph, field product, material graph/material, UI definition, and prefab descriptors.
+- Prefabs get source/catalog/design identity through `docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md`; runtime prefab instancing remains V2-gated behind rendered-world V1 and source-backed asset identity.
+- Material Lab sources are explicit material graph documents from `docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md`; canvas state must remain a projection.
 - no project-owned data hot reload stream or runtime preview application of changed asset/product revisions;
 - no persisted asset catalog file load/save loop or project-owned cache garbage collection workflow;
 - no complete `world_sdf` artifact/cache bridge into runtime chunk/page stores;

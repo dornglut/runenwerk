@@ -9,7 +9,7 @@ last_reviewed: 2026-05-12
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/field-product-contracts-diagnostics-and-residency-design.md
-  - ./sdf-prefab-composition-system-design.md
+  - ../active/sdf-prefab-composition-system-design.md
   - ./sdf-character-animation-system-design.md
   - ./water-wetness-field-system-design.md
 ---

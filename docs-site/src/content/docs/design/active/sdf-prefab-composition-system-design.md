@@ -1,26 +1,35 @@
 ---
 title: SDF Prefab Composition System Design
-description: Deferred detail draft for reusable SDF-first prefab composition, placement, products, and diagnostics.
-status: deferred
+description: Active V2-gated design for reusable SDF-first prefab composition, placement, products, and diagnostics.
+status: active
 owner: workspace
 layer: domain / engine-runtime
-canonical: false
-last_reviewed: 2026-05-12
+canonical: true
+last_reviewed: 2026-05-15
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
   - ../accepted/sdf-first-field-world-platform-design.md
+  - ./editor-rendered-world-and-multi-entity-viewport-design.md
 ---
 
 # SDF Prefab Composition System Design
 
 ## Status
 
-Deferred detail draft.
+Active V2-gated design.
 
 The accepted long-term capability map is
-`../accepted/sdf-first-production-capability-map.md`. Reactivate this document
-only after an owning prefab/product boundary and SDF composition substrate are
-accepted.
+`../accepted/sdf-first-production-capability-map.md`.
+
+Implementation remains gated behind:
+
+- rendered-world V1 in `./editor-rendered-world-and-multi-entity-viewport-design.md`;
+- source-backed asset identity for prefab descriptors;
+- product ownership for render, field, material, collision, and diagnostic outputs.
+
+This document is active so prefab identity and product boundaries can shape the
+roadmap, but runtime prefab instancing is not part of the rendered-world V1
+implementation slice.
 
 This document defines prefab composition for an SDF-first engine.
 
@@ -161,7 +170,8 @@ Characteristics:
 - interaction emitters
 - changing bounds
 
-Animated character prefabs are further specified in `sdf-character-animation-system-design.md`.
+Animated character prefabs are further specified in the deferred
+[SDF Character Animation System Design](../deferred/sdf-character-animation-system-design.md).
 
 ## Field Emitter Prefabs
 

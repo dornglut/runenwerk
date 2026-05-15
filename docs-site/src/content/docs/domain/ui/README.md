@@ -5,26 +5,70 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-04-29
+last_reviewed: 2026-05-15
 ---
 
 # UI Domain
 
-`domain/ui/*` owns reusable, engine-agnostic UI substrate contracts and retained runtime layers.
+`domain/ui/*` owns reusable, engine-agnostic UI substrate contracts, authored
+UI definition/formation contracts, retained runtime layers, and renderer-facing
+UI frame products.
 
-## Current Docs
+Runenwerk UI is source-backed, formation-driven, interaction-contract-first,
+and currently retained-UI-backed:
+
+```text
+Authored UI / editor definitions
+  -> validation / normalization
+  -> formed interaction contracts
+  -> formed retained UI product
+  -> ui_runtime enforcement
+  -> render/product-surface output
+```
+
+Renderer output is derived product data. It is not UI authority.
+
+## Source Of Truth Order
+
+1. Accepted ADRs win.
+2. Active UI design docs define target architecture.
+3. `docs/domain/ui/architecture.md` records current code truth.
+4. `docs/domain/ui/roadmap.md` records execution sequencing.
+5. Narrow polish docs are supporting evidence only.
+
+## Current UI Truth
 
 - [Current Architecture](./architecture.md)
 - [Roadmap](./roadmap.md)
 
-## Related Design Docs
+## Formation / Source Model
+
+- [UI Definition Formation Framework Design](../../design/active/ui-definition-formation-foundation-design.md)
+- [Editor Self-Authoring and UI Workspace Design](../../design/active/editor-self-authoring-and-final-ui-design.md)
+
+## Interaction / Runtime
+
+- [Editor UI Runtime V2 and Interaction Formation Design](../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md)
+- [ADR 0009: UI Interaction Formation V2](../../adr/accepted/0009-ui-interaction-formation-v2.md)
+- [Editor UI Popup, Adornment, And Drop Preview Contract](../../design/active/editor-ui-popup-adornment-drop-preview-contract.md)
+
+## Shell / Workspace / Tool Surfaces
 
 - [Editor UI Workspace Tool Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
-- [Workspace Identity Contract and Migration Map](../../design/active/workspace-identity-contract-and-migration-map.md)
-- [Viewport Expression Upgrade Design](../../design/active/workspace-viewport-expression-upgrade-design.md)
+- [Editor Workspace Document Mode Panel Architecture](../../design/active/editor-workspace-document-mode-panel-architecture.md)
+
+## Deferred Execution Targets
+
+- [UI Model Multiple Execution Strategies Design](../../design/deferred/ui-model-multiple-execution-strategies-design.md)
 
 ## Scope Boundary
 
-`domain/ui` owns substrate/runtime contracts (`ui_tree`, `ui_runtime`, `ui_widgets`, `ui_surface`).
+`domain/ui` owns substrate/runtime contracts (`ui_tree`, `ui_runtime`,
+`ui_widgets`, `ui_surface`) and generic UI definition formation. It does not
+own editor-shell workspace semantics, app runtime wiring, provider behavior,
+app IO, renderer execution policy, or concrete command execution.
 
-`domain/ui` does not own editor-shell workspace semantics, app runtime wiring, or renderer execution policy.
+Authored UI definitions must not persist runtime `WidgetId`, ECS entity ids,
+app IO, provider state, provider behavior, or command execution. Editor command
+semantics stay in editor/app owners and enter UI products only through explicit
+route slots and ratified command paths.

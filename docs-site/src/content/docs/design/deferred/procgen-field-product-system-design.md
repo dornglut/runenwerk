@@ -8,7 +8,7 @@ canonical: false
 last_reviewed: 2026-05-12
 related_designs:
   - ../accepted/sdf-first-production-capability-map.md
-  - ./sdf-prefab-composition-system-design.md
+  - ../active/sdf-prefab-composition-system-design.md
   - ./field-vegetation-system-design.md
 ---
 
