@@ -7,12 +7,13 @@ use ecs::{
 use engine_net::replication::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 use engine_net::*;
 use engine_sim::SimulationTick;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 
 // engine/src/plugins/net/resources.rs
 
 const NETWORK_MESSAGE_QUEUE_CAPACITY: usize = 4_096;
+const MAX_TRACKED_SENT_BASELINE_CURSORS: usize = 256;
 const TICK_BUFFER_PROVENANCE_DOMAIN_SERVER: u32 = 1;
 const TICK_BUFFER_PROVENANCE_DOMAIN_OWNER: u32 = 2;
 
@@ -527,13 +528,14 @@ pub struct RoundTripMetrics {
     pub samples: u64,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionBaselineCheckpoint {
     pub last_ack_cursor: SnapshotCursor,
     pub last_sent_cursor: SnapshotCursor,
     pub last_full_snapshot_cursor: SnapshotCursor,
     pub last_full_snapshot_tick: SimulationTick,
     pub needs_full_resync: bool,
+    pub sent_cursors: BTreeSet<SnapshotCursor>,
 }
 
 impl Default for ConnectionBaselineCheckpoint {
@@ -544,7 +546,82 @@ impl Default for ConnectionBaselineCheckpoint {
             last_full_snapshot_cursor: SnapshotCursor::default(),
             last_full_snapshot_tick: SimulationTick::default(),
             needs_full_resync: true,
+            sent_cursors: BTreeSet::new(),
         }
+    }
+}
+
+impl ConnectionBaselineCheckpoint {
+    pub fn mark_snapshot_sent(
+        &mut self,
+        cursor: SnapshotCursor,
+        tick: SimulationTick,
+        sent_full_snapshot: bool,
+    ) {
+        if cursor.0 >= self.last_sent_cursor.0 {
+            self.last_sent_cursor = cursor;
+        }
+        self.sent_cursors.insert(cursor);
+        while self.sent_cursors.len() > MAX_TRACKED_SENT_BASELINE_CURSORS {
+            let Some(oldest_cursor) = self.sent_cursors.first().copied() else {
+                break;
+            };
+            self.sent_cursors.remove(&oldest_cursor);
+        }
+        if sent_full_snapshot {
+            self.last_full_snapshot_cursor = cursor;
+            self.last_full_snapshot_tick = tick;
+            self.needs_full_resync = false;
+        }
+    }
+
+    pub fn mark_snapshot_acknowledged(
+        &mut self,
+        cursor: SnapshotCursor,
+        baseline_available: bool,
+    ) -> SnapshotAckOutcome {
+        let outcome = self.validate_snapshot_ack(cursor, baseline_available);
+        if matches!(outcome, SnapshotAckOutcome::Accepted { .. }) {
+            self.last_ack_cursor = cursor;
+            self.needs_full_resync = false;
+        }
+        outcome
+    }
+
+    fn validate_snapshot_ack(
+        &self,
+        cursor: SnapshotCursor,
+        baseline_available: bool,
+    ) -> SnapshotAckOutcome {
+        if self.last_ack_cursor.0 != 0 && cursor <= self.last_ack_cursor {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::StaleCursor {
+                    last_acknowledged: self.last_ack_cursor,
+                },
+            };
+        }
+        if self.last_sent_cursor.0 != 0 && cursor > self.last_sent_cursor {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::FutureCursor {
+                    latest_cursor: self.last_sent_cursor,
+                },
+            };
+        }
+        if !self.sent_cursors.contains(&cursor) {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::UnsentCursor,
+            };
+        }
+        if !baseline_available {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::PrunedCursor,
+            };
+        }
+        SnapshotAckOutcome::Accepted { cursor }
     }
 }
 
@@ -661,6 +738,7 @@ pub struct ReplicationDiagnostics {
     pub emitted_snapshots: u64,
     pub applied_snapshots: u64,
     pub acked: u64,
+    pub rejected_acks: u64,
     pub lagged: u64,
 }
 
@@ -688,4 +766,71 @@ pub struct NetDiagnosticsView {
     pub acked_snapshots: u64,
     pub lagged_inputs: u64,
     pub corrected_predictions: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checkpoint_accepts_only_sent_and_available_baselines() {
+        let mut checkpoint = ConnectionBaselineCheckpoint::default();
+        checkpoint.mark_snapshot_sent(SnapshotCursor(1), SimulationTick(1), true);
+
+        assert_eq!(
+            checkpoint.mark_snapshot_acknowledged(SnapshotCursor(1), true),
+            SnapshotAckOutcome::Accepted {
+                cursor: SnapshotCursor(1)
+            }
+        );
+        assert_eq!(checkpoint.last_ack_cursor, SnapshotCursor(1));
+        assert!(!checkpoint.needs_full_resync);
+    }
+
+    #[test]
+    fn checkpoint_rejects_stale_future_unsent_and_pruned_acks() {
+        let mut checkpoint = ConnectionBaselineCheckpoint::default();
+        checkpoint.mark_snapshot_sent(SnapshotCursor(1), SimulationTick(1), true);
+        checkpoint.mark_snapshot_sent(SnapshotCursor(3), SimulationTick(3), false);
+        assert_eq!(
+            checkpoint.mark_snapshot_acknowledged(SnapshotCursor(1), true),
+            SnapshotAckOutcome::Accepted {
+                cursor: SnapshotCursor(1)
+            }
+        );
+
+        assert_eq!(
+            checkpoint.mark_snapshot_acknowledged(SnapshotCursor(1), true),
+            SnapshotAckOutcome::Rejected {
+                cursor: SnapshotCursor(1),
+                reason: SnapshotAckRejection::StaleCursor {
+                    last_acknowledged: SnapshotCursor(1)
+                }
+            }
+        );
+        assert_eq!(
+            checkpoint.mark_snapshot_acknowledged(SnapshotCursor(99), false),
+            SnapshotAckOutcome::Rejected {
+                cursor: SnapshotCursor(99),
+                reason: SnapshotAckRejection::FutureCursor {
+                    latest_cursor: SnapshotCursor(3)
+                }
+            }
+        );
+        assert_eq!(
+            checkpoint.mark_snapshot_acknowledged(SnapshotCursor(2), false),
+            SnapshotAckOutcome::Rejected {
+                cursor: SnapshotCursor(2),
+                reason: SnapshotAckRejection::UnsentCursor
+            }
+        );
+        checkpoint.mark_snapshot_sent(SnapshotCursor(4), SimulationTick(4), false);
+        assert_eq!(
+            checkpoint.mark_snapshot_acknowledged(SnapshotCursor(4), false),
+            SnapshotAckOutcome::Rejected {
+                cursor: SnapshotCursor(4),
+                reason: SnapshotAckRejection::PrunedCursor
+            }
+        );
+    }
 }

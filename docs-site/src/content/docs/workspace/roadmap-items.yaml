@@ -257,8 +257,8 @@ items:
   alias: NET
   lane: Core delivery
   dependency_level: L1
-  gate: Ready next
-  planning_state: current_candidate
+  gate: Completed
+  planning_state: completed
   priority: P1
   value: 4
   blocker: 2
@@ -274,21 +274,27 @@ items:
   - WR-001
   write_scopes:
   - net
+  - engine/src/plugins/net
+  - engine/tests/network_plugins
   - domain/ecs
   validations:
+  - cargo test -p engine_net
+  - cargo test -p engine --test network_plugins
   - cargo test -p ecs
   - cargo test -p scheduler
-  next_evidence: ACK/baseline hardening and delta lifecycle tests.
-  current_decision: Current L1 implementation candidate after WR-006 completed the Draw GPU proof and promotion
-    slice.
-  current_call: Ready for the next focused net hardening batch focused on ACK/baseline and delta lifecycle only, without
-    broadening replication scope.
-  first_move: Start from net/multiplayer-replication-implementation-roadmap.md Phase 1-3 ACK/baseline hardening,
-    keeping the write scope to net and domain/ecs.
-  main_blocker: ACK/baseline hardening and delta lifecycle rules need tests and code evidence before broader declarative replication.
+  next_evidence: 2026-05-15 Phase 1-3 landed ACK/baseline hardening, delta lifecycle normalization, and engine
+    bridge baseline convergence with focused engine_net and engine plugin tests.
+  current_decision: Phase 1-3 is complete; future replication work should build on the accepted ACK/baseline outcome
+    contract and engine bridge checkpoint behavior instead of reopening ad hoc baseline mutation.
+  current_call: Completed through the 2026-05-15 WR-007 batches. Do not broaden replication scope until the next
+    roadmap row has fresh declarative replication or ECS component extraction evidence.
+  first_move: Use net/multiplayer-replication-implementation-roadmap.md and the 2026-05-15 batch closeouts for follow-up
+    context.
+  main_blocker: Complete; future work should preserve the single ACK/baseline outcome contract across engine_net
+    runtimes and engine plugin checkpoints.
   diagram_call:
-  - ACK hardening, delta lifecycle,
-  - bridge convergence
+  - ACK hardening complete
+  - bridge convergence complete
   ddd_owner: net replication with ECS authority metadata
   adr_requirement: No new ADR for Phase 1-3 hardening unless authority ownership changes.
   fitness_function_requirement: Replication lifecycle tests and ECS authority diagnostics.

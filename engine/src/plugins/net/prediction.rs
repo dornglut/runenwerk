@@ -170,12 +170,7 @@ where
 
             {
                 let checkpoint = state.checkpoints.entry(connection_id).or_default();
-                checkpoint.last_sent_cursor = cursor;
-                if send_full {
-                    checkpoint.last_full_snapshot_cursor = cursor;
-                    checkpoint.last_full_snapshot_tick = tick;
-                    checkpoint.needs_full_resync = false;
-                }
+                checkpoint.mark_snapshot_sent(cursor, tick, send_full);
             }
             world_streaming_updates.push((connection_id, SyncCursor(cursor.0), send_full));
 

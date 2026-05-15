@@ -68,7 +68,7 @@ package "Level 0 - Completed / Support Substrate" {
 package "Level 1 - Depends On Current Stabilization" {
   component "WR-006 Draw DRF4-DRF5\nstate=completed\nscore=2.2 gate=completed\nV4 B2\ncall=GPU proof landed\nGPU promotion, CPU fallback landed" as DRAW <<completed>>
 
-  component "WR-007 Net replication Phase 1-3\nstate=current_candidate\nscore=1.4 gate=ready next\nV4 B2\ncall=ACK hardening, delta lifecycle,\nbridge convergence" as NET <<V4>>
+  component "WR-007 Net replication Phase 1-3\nstate=completed\nscore=1.4 gate=completed\nV4 B2\ncall=ACK hardening complete\nbridge convergence complete" as NET <<completed>>
 
   component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
 

@@ -459,19 +459,38 @@ where
         if let ClientMessage::Ack(ack) = &message
             && let Some(connection_id) = connection_id
         {
-            if let Ok(state) =
+            let ack_outcome = if let Ok(state) =
                 world.resource_mut::<ServerSnapshotReplicationState<TDriver::Snapshot>>()
             {
+                let baseline_available = state
+                    .snapshot_history_per_connection
+                    .get(&connection_id)
+                    .is_some_and(|history| history.contains_key(&ack.cursor));
                 let checkpoint = state.checkpoints.entry(connection_id).or_default();
-                checkpoint.last_ack_cursor = ack.cursor;
-                checkpoint.needs_full_resync = false;
-            }
-            if let Ok(streaming_interest) = world.resource_mut::<NetStreamingStateResource>() {
-                streaming_interest
-                    .mark_snapshot_acknowledged(connection_id, SyncCursor(ack.cursor.0));
-            }
-            if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
-                diagnostics.acked = diagnostics.acked.saturating_add(1);
+                checkpoint.mark_snapshot_acknowledged(ack.cursor, baseline_available)
+            } else {
+                SnapshotAckOutcome::Rejected {
+                    cursor: ack.cursor,
+                    reason: SnapshotAckRejection::UnsentCursor,
+                }
+            };
+            match ack_outcome {
+                SnapshotAckOutcome::Accepted { .. } => {
+                    if let Ok(streaming_interest) =
+                        world.resource_mut::<NetStreamingStateResource>()
+                    {
+                        streaming_interest
+                            .mark_snapshot_acknowledged(connection_id, SyncCursor(ack.cursor.0));
+                    }
+                    if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
+                        diagnostics.acked = diagnostics.acked.saturating_add(1);
+                    }
+                }
+                SnapshotAckOutcome::Rejected { .. } => {
+                    if let Ok(diagnostics) = world.resource_mut::<ReplicationDiagnostics>() {
+                        diagnostics.rejected_acks = diagnostics.rejected_acks.saturating_add(1);
+                    }
+                }
             }
         }
 

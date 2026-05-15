@@ -110,7 +110,6 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Ready for the next focused net hardening batch focused on ACK/baseline and delta lifecycle only, without broadening replication scope. | Start from net/multiplayer-replication-implementation-roadmap.md Phase 1-3 ACK/baseline hardening, keeping the write scope to net and domain/ecs. |
 | WR-018 | Rendered World V1 | P0 | V5 | B2 | 3.0 | Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers on the same extracted packet. | Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry. |
 | WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption, retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then define retained UI migration slices through the Interaction V2 spine before WR-024 consumes them. |
 
@@ -143,6 +142,7 @@ Blocker weight:
 |---|---|---:|---:|---:|---:|---|---|
 | WR-001 | Post-Phase 6D product-job and Draw cache follow-up | P0 | V5 | B2 | 4.8 | DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not reopen procgen bake/rollback. | 2026-05-15 DRF3 preview/final product-surface bridge landed and WR-006 completed DRF4/DRF5 GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job evidence before reactivation. |
 | WR-006 | Runenwerk Draw DRF4 through DRF5 | P1 | V4 | B2 | 2.2 | DRF4 and DRF5 are complete; keep CPU tile formation canonical while future Draw work builds on validated GPU promotion/fallback. | 2026-05-15 WR-006 landed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public render-flow/product-surface APIs; validation passed with cargo test -p runenwerk_draw and cargo test -p engine. |
+| WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Phase 1-3 is complete; future replication work should build on the accepted ACK/baseline outcome contract and engine bridge checkpoint behavior instead of reopening ad hoc baseline mutation. | 2026-05-15 Phase 1-3 landed ACK/baseline hardening, delta lifecycle normalization, and engine bridge baseline convergence with focused engine_net and engine plugin tests. |
 
 ## Blocked Or Deferred
 

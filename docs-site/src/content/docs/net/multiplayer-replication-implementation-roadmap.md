@@ -165,6 +165,16 @@ Completion criteria:
 - tests cover engine plugin and `engine_net` runtime behavior;
 - docs no longer describe fields absent from the current owning layer.
 
+2026-05-15 implementation evidence:
+
+- `engine_net` owns ACK validation outcomes and rejection vocabulary through
+  `SnapshotAckOutcome` and `SnapshotAckRejection`;
+- the engine net plugin routes ACKs through
+  `ConnectionBaselineCheckpoint::mark_snapshot_acknowledged` and mutates
+  `last_ack_cursor` only after accepted ACKs;
+- engine plugin tests cover rejected future ACKs so forged cursors cannot become
+  delta baselines.
+
 Linked design:
 
 - [Engine net plugin runtime bridge](../design/active/net-plugin-runtime-bridge.md)

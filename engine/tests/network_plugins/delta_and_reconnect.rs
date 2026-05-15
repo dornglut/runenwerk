@@ -131,6 +131,87 @@ fn server_delta_snapshot_applies_cleanly_on_client() {
 }
 
 #[test]
+fn server_rejects_future_snapshot_ack_without_mutating_baseline() {
+    let mut server = App::headless();
+    server.add_plugins(default_plugins());
+    server.add_plugins((ScenePlugin, NetworkServerPlugin));
+
+    enqueue_server_inbox(
+        server.world_mut(),
+        ClientMessage::Hello(Hello {
+            protocol: ProtocolVersion::new(1, 1, 1),
+            transport: TransportKind::Quic,
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    enqueue_server_inbox(
+        server.world_mut(),
+        ClientMessage::JoinRequest(engine_net::JoinRequest {
+            protocol: ProtocolVersion::new(1, 1, 1),
+            server_id: "srv-local".to_string(),
+            ticket: "ticket-1".to_string(),
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    let server = server.run_for_frames(1).expect("join handshake should run");
+
+    let mut server = server
+        .run_for_ticks(1)
+        .expect("first server replication tick should run");
+    enqueue_server_inbox_from(
+        server.world_mut(),
+        Some(ConnectionId(1)),
+        ClientMessage::Ack(Ack {
+            cursor: SnapshotCursor(99),
+            last_received_tick: SimulationTick(99),
+        }),
+    )
+    .expect("server inbox enqueue should succeed");
+    let server = server
+        .run_for_frames(1)
+        .expect("future ack processing frame should run");
+
+    let diagnostics = server.world().resource::<ReplicationDiagnostics>().unwrap();
+    assert_eq!(diagnostics.acked, 0);
+    assert_eq!(diagnostics.rejected_acks, 1);
+
+    let replication = server.world().resource::<ServerSnapshotState>().unwrap();
+    let checkpoint = replication
+        .checkpoints
+        .get(&ConnectionId(1))
+        .expect("connection checkpoint should exist");
+    assert_eq!(checkpoint.last_ack_cursor, SnapshotCursor::default());
+
+    let server = server
+        .run_for_ticks(2)
+        .expect("second server replication tick should run");
+    let outbound = server.world().resource::<NetworkOutboundQueue>().unwrap();
+    assert!(outbound.server_messages().iter().any(|message| {
+        matches!(
+            message,
+            OutboundServerMessage::ToConnection {
+                connection_id,
+                message: ServerMessage::Snapshot(snapshot),
+            } if *connection_id == ConnectionId(1)
+                && snapshot.cursor == SnapshotCursor(2)
+                && snapshot.last_applied == SnapshotCursor::default()
+        )
+    }));
+    assert!(
+        !outbound.server_messages().iter().any(|message| {
+            matches!(
+                message,
+                OutboundServerMessage::ToConnection {
+                    connection_id,
+                    message: ServerMessage::DeltaSnapshot(snapshot),
+                } if *connection_id == ConnectionId(1) && snapshot.base == SnapshotCursor(99)
+            )
+        }),
+        "rejected future ACK must not become a delta baseline"
+    );
+}
+
+#[test]
 fn server_tracks_lagged_input_frames_in_replication_diagnostics() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
