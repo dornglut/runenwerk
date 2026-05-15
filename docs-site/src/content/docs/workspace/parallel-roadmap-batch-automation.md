@@ -89,11 +89,17 @@ Use the structured proposer when the batch should be generated from current
 roadmap rows:
 
 ```text
+task batch:kickoff -- --next
 task batch:propose -- --goal "<goal>" --scope L0 --out docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 task batch:approve -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 task batch:prepare -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 task batch:scope-check -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 ```
+
+Use `batch:kickoff -- --next` for the normal one-line Codex start. It selects
+only `planning_state=current_candidate` items, writes the proposed manifest, and
+prints the exact follow-up commands. Use `batch:propose` directly only when the
+coordinator needs a custom goal, scope, output path, or discovery flag.
 
 ## Execution Shape
 
@@ -132,12 +138,20 @@ When the user discusses or proposes a new design:
 1. run architecture governance review;
 2. identify owner, bounded context, dependency direction, ADR need, and
    migration shape;
-3. place the design in the correct lifecycle folder;
-4. add or update roadmap decision-register scoring only when the design has a
+3. run `task roadmap:intake -- --idea "<idea>"` to create a review proposal;
+4. place the design in the correct lifecycle folder;
+5. add or update roadmap decision-register scoring only when the design has a
    concrete implementation candidate;
-5. update the dependency roadmap diagram if the design changes topology;
-6. keep it behind `B5` or discovery gates until an accepted design, ADR, or
+6. update the dependency roadmap diagram if the design changes topology;
+7. keep it behind `B5` or discovery gates until an accepted design, ADR, or
    owning roadmap promotes it.
+
+Accepted intake proposals are applied with:
+
+```text
+task roadmap:apply-intake -- --proposal docs-site/src/content/docs/reports/roadmap-intake/<id>/proposal.yaml
+task roadmap:promote -- --id WR-XXX --state current_candidate --evidence "<accepted evidence>"
+```
 
 ## Automation Boundary
 

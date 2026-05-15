@@ -32,6 +32,8 @@ Use the workflow kickoff helper when starting a new AI-assisted task:
 
 ```sh
 task --list
+task batch:kickoff -- --next
+task roadmap:intake -- --idea "<design or change idea>"
 task ai:architecture-governance -- --task "<decision>" --scope "<crate/files/subsystem>"
 task ai:parallel-roadmap-batch -- --task "<batch goal>" --scope "<roadmap rows or docs>"
 task ai:implementation -- --task "<task>" --scope "<crate/files/subsystem>"
@@ -67,6 +69,26 @@ The lower-level prompt generator remains available at `uv run python tools/workf
 
 The historical `tools/docs/add_agent_workflow_docs.sh` entrypoint is also non-mutating. It exists only for compatibility and validates docs instead of regenerating workflow pages.
 
+For new Codex threads, prefer one-line command prompts:
+
+```text
+Run task batch:kickoff -- --next and follow the generated workflow.
+```
+
+```text
+Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+```
+
+`batch:kickoff` creates the proposed batch from current `planning_state=current_candidate`
+items and prints the exact approve, prepare, validate, worker prompt, scope-check,
+and closeout commands. It does not approve implementation unless `--approve` is
+explicitly passed.
+
+`roadmap:intake` creates a review proposal for new ideas. It does not edit
+`roadmap-items.yaml`; accepted proposals are applied with
+`task roadmap:apply-intake -- --proposal <proposal.yaml>`, then rendered and
+validated.
+
 Use workflow commands to automate Codex prompt, checklist, and gate setup, not
 blind mutation. A typical architecture-sensitive flow is:
 
@@ -80,6 +102,7 @@ task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap>"
 A typical parallel roadmap batch flow is:
 
 ```sh
+task batch:kickoff -- --next
 task roadmap:validate
 task batch:propose -- --goal "<batch goal>" --scope L0 --out docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml
 task batch:approve -- --batch docs-site/src/content/docs/reports/batches/<date>-<slug>/batch.toml

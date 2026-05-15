@@ -6,11 +6,15 @@ from pathlib import Path
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
 from generate_roadmap_docs import render_current_candidates_roadmap, render_dependency_roadmap, render_outputs
 from parallel_batch import (
+    app as batch_app,
     batch_execution_state,
     build_manifest,
+    default_kickoff_goal,
+    kickoff_next_step_lines,
     run_host_batch_validation,
     run_official_batch_validation,
     refresh_base_manifest,
@@ -33,6 +37,16 @@ from roadmap_state import (
     validate_existing_write_scope_paths,
     validate_write_scopes,
     write_schema_files,
+)
+from roadmap_intake import (
+    apply_intake_proposal,
+    build_intake_proposal,
+    load_intake_proposal,
+    proposal_to_yaml_data,
+    roadmap_data_with_promotion,
+    roadmap_data_with_proposal,
+    validate_intake_item_scopes,
+    write_intake_proposal,
 )
 
 
@@ -238,6 +252,71 @@ def test_batch_manifest_and_worker_prompt() -> None:
     prompt = render_worker_prompt(manifest, roadmap.items[0], manifest.items[0])
     assert prompt.startswith("---\ntitle: Worker Prompt WR-001")
     assert "roadmap-items.yaml" in prompt
+
+
+def test_batch_kickoff_defaults_to_current_candidates() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    selected = select_batch_candidates(roadmap)
+    manifest = build_manifest("batch-test", default_kickoff_goal(selected), selected, Path("reports/batch-test"))
+
+    assert [item.id for item in selected] == ["WR-001"]
+    assert manifest.goal == "Next current-candidate roadmap batch: WR-001 WR-001 title"
+    assert kickoff_next_step_lines(Path("reports/batch-test/batch.toml"), manifest) == [
+        "task batch:approve -- --batch reports/batch-test/batch.toml",
+        "task batch:prepare -- --batch reports/batch-test/batch.toml",
+        "task batch:validate -- --batch reports/batch-test/batch.toml",
+        "task batch:worker-prompt -- --batch reports/batch-test/batch.toml --item WR-001",
+        "task batch:scope-check -- --batch reports/batch-test/batch.toml",
+        "task batch:closeout -- --batch reports/batch-test/batch.toml --write",
+    ]
+
+
+def test_batch_kickoff_writes_manifest_from_cli() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        source = root / "roadmap.yaml"
+        source.write_text(yaml.safe_dump(valid_state(), sort_keys=False), encoding="utf-8")
+        out = root / "batch.toml"
+
+        result = CliRunner().invoke(
+            batch_app,
+            [
+                "kickoff",
+                "--next",
+                "--source",
+                str(source),
+                "--out",
+                str(out),
+                "--batch-id",
+                "batch-test",
+                "--goal",
+                "test goal",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        manifest = load_batch_manifest(out)
+        assert manifest.id == "batch-test"
+        assert manifest.goal == "test goal"
+        assert manifest.approval_state == "proposed"
+        assert [item.id for item in manifest.items] == ["WR-001"]
+        assert "task batch:approve" in result.output
+
+
+def test_batch_kickoff_rejects_when_no_current_candidates() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        state = valid_state()
+        for candidate in state["items"]:
+            candidate["planning_state"] = "support_only"
+            candidate["blocker"] = 2
+            candidate["gate"] = "Supporting now"
+        source = Path(temp_dir) / "roadmap.yaml"
+        source.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+        result = CliRunner().invoke(batch_app, ["kickoff", "--next", "--source", str(source)])
+
+        assert result.exit_code != 0
+        assert "no current_candidate items are eligible" in result.output
 
 
 def test_flat_worktree_path_avoids_batch_id_nesting() -> None:
@@ -526,3 +605,124 @@ def test_refresh_base_still_rejects_dirty_in_scope_changes_with_discard(
         )
 
     assert removed == []
+
+
+def test_intake_proposal_generation_does_not_mutate_roadmap_source() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        source = root / "roadmap.yaml"
+        original = yaml.safe_dump(valid_state(), sort_keys=False)
+        source.write_text(original, encoding="utf-8")
+        roadmap = load_roadmap(source)
+        proposal = build_intake_proposal(roadmap, idea="Add deterministic terrain brush workflow", owner="tools/workflow")
+
+        write_intake_proposal(proposal, root / "intake")
+
+        assert source.read_text(encoding="utf-8") == original
+        loaded = load_intake_proposal(root / "intake" / "proposal.yaml")
+        assert loaded.item.id == "WR-003"
+        assert loaded.item.planning_state == "blocked_deferred"
+        assert (root / "intake" / "proposal.md").exists()
+
+
+def test_apply_intake_inserts_new_roadmap_item() -> None:
+    state = valid_state()
+    roadmap = RoadmapState.model_validate(state)
+    proposal = build_intake_proposal(roadmap, idea="Add deterministic terrain brush workflow")
+
+    updated = roadmap_data_with_proposal(state, proposal)
+    updated_roadmap = RoadmapState.model_validate(updated)
+
+    assert [item.id for item in updated_roadmap.items][-1] == "WR-003"
+    assert updated_roadmap.items[-1].planning_state == "blocked_deferred"
+
+
+def test_apply_intake_rejects_missing_dependencies() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        state = valid_state()
+        source = root / "roadmap.yaml"
+        source.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        proposal = build_intake_proposal(RoadmapState.model_validate(state), idea="Add feature")
+        broken_item = proposal.item.model_copy(update={"dependencies": ["WR-999"]})
+        broken = proposal.model_copy(update={"item": broken_item})
+        proposal_path = root / "proposal.yaml"
+        proposal_path.write_text(yaml.safe_dump(proposal_to_yaml_data(broken), sort_keys=False), encoding="utf-8")
+
+        with pytest.raises(WorkflowError, match="unknown dependency WR-999"):
+            apply_intake_proposal(proposal_path, source=source, skip_checks=True)
+
+
+def test_apply_intake_rejects_invalid_write_scopes() -> None:
+    proposal = build_intake_proposal(
+        RoadmapState.model_validate(valid_state()),
+        idea="Add feature",
+        owner="missing/path",
+    )
+
+    assert validate_intake_item_scopes(proposal.item) == [
+        "write-scope path missing: WR-003:missing/path does not exist"
+    ]
+
+
+def test_apply_intake_rejects_stale_score_math() -> None:
+    data = proposal_to_yaml_data(build_intake_proposal(RoadmapState.model_validate(valid_state()), idea="Add feature"))
+    data["item"]["expected_score"] = 9.9
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        proposal_path = Path(temp_dir) / "proposal.yaml"
+        proposal_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+        with pytest.raises(WorkflowError, match="expected_score"):
+            load_intake_proposal(proposal_path)
+
+
+def test_promote_rejects_current_candidate_when_dependency_is_not_context() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "ready_next"
+    state["items"][1]["blocker"] = 2
+    state["items"][1]["gate"] = "Ready next"
+    state["items"][1]["planning_state"] = "ready_next"
+
+    with pytest.raises(WorkflowError, match="dependencies are not completed/support context"):
+        roadmap_data_with_promotion(
+            state,
+            item_id="WR-002",
+            state="current_candidate",
+            evidence="Ready after review.",
+        )
+
+
+def test_promote_rejects_current_candidate_above_b2_gate() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][1]["planning_state"] = "ready_next"
+    state["items"][1]["blocker"] = 3
+    state["items"][1]["gate"] = "Ready next"
+
+    with pytest.raises(WorkflowError, match="above the B2 implementation gate"):
+        roadmap_data_with_promotion(
+            state,
+            item_id="WR-002",
+            state="current_candidate",
+            evidence="Ready after review.",
+        )
+
+
+def test_promote_updates_existing_item_with_evidence() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][1]["planning_state"] = "ready_next"
+    state["items"][1]["blocker"] = 2
+    state["items"][1]["gate"] = "Ready next"
+
+    updated = roadmap_data_with_promotion(
+        state,
+        item_id="WR-002",
+        state="current_candidate",
+        evidence="Ready after review.",
+    )
+    roadmap = RoadmapState.model_validate(updated)
+
+    assert roadmap.by_id["WR-002"].planning_state == "current_candidate"
+    assert roadmap.by_id["WR-002"].current_decision == "Ready after review."

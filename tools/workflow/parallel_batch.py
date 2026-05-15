@@ -93,6 +93,59 @@ def propose(
 
 
 @app.command()
+def kickoff(
+    next: bool = typer.Option(False, "--next", help="Select all current roadmap candidates."),
+    scope: str = typer.Option("<level/items>", help="Dependency level or comma-separated WR IDs."),
+    goal: str | None = typer.Option(None, help="Batch goal. Defaults to selected roadmap IDs."),
+    out: Path | None = typer.Option(None, help="Batch manifest path."),
+    batch_id: str | None = typer.Option(None, help="Stable batch id."),
+    approve: bool = typer.Option(False, help="Approve the generated batch immediately."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+) -> None:
+    if not next and scope == "<level/items>":
+        console.print("[red]batch kickoff failed[/red]")
+        console.print("- use --next or provide --scope")
+        raise typer.Exit(1)
+
+    roadmap = load_roadmap(source)
+    level_from_scope, item_ids = parse_scope_selector(scope)
+    try:
+        selected = select_batch_candidates(
+            roadmap,
+            level=None if next else level_from_scope,
+            item_ids=() if next else item_ids,
+        )
+    except WorkflowError as error:
+        console.print("[red]batch kickoff failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+    if not selected:
+        console.print("[red]batch kickoff failed[/red]")
+        console.print("- no current_candidate items are eligible for implementation")
+        raise typer.Exit(1)
+
+    conflicts = validate_write_scopes(selected)
+    if conflicts:
+        console.print("[red]batch kickoff failed[/red]")
+        for conflict in conflicts:
+            console.print(f"- write-scope conflict: {conflict}")
+        raise typer.Exit(1)
+
+    resolved_goal = goal or default_kickoff_goal(selected)
+    resolved_id = batch_id or default_batch_id(resolved_goal)
+    batch_path = out or DEFAULT_BATCH_ROOT / resolved_id / "batch.toml"
+    manifest = build_manifest(resolved_id, resolved_goal, selected, batch_path.parent)
+    if approve:
+        manifest = manifest.model_copy(update={"approval_state": "approved"})
+    batch_path.parent.mkdir(parents=True, exist_ok=True)
+    batch_path.write_text(render_batch_manifest(manifest), encoding="utf-8", newline="\n")
+
+    console.print(f"[green]wrote batch kickoff:[/green] {repo_path(batch_path)}")
+    print_kickoff_next_steps(batch_path, manifest)
+
+
+@app.command()
 def approve(
     batch: Path = typer.Option(..., help="Batch manifest path."),
     source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
@@ -498,6 +551,34 @@ def default_batch_id(goal: str) -> str:
     today = dt.date.today().isoformat()
     slug = re.sub(r"[^a-z0-9]+", "-", goal.lower()).strip("-")[:40] or "roadmap-batch"
     return f"{today}-{slug}"
+
+
+def default_kickoff_goal(items: list[RoadmapItem]) -> str:
+    ids = ", ".join(item.id for item in items)
+    if len(items) == 1:
+        return f"Next current-candidate roadmap batch: {items[0].id} {items[0].title}"
+    return f"Next current-candidate roadmap batch: {ids}"
+
+
+def print_kickoff_next_steps(batch_path: Path, manifest: BatchManifest) -> None:
+    console.print("")
+    console.print("[bold]Next commands[/bold]")
+    for line in kickoff_next_step_lines(batch_path, manifest):
+        console.print(line, soft_wrap=True)
+
+
+def kickoff_next_step_lines(batch_path: Path, manifest: BatchManifest) -> list[str]:
+    batch_arg = repo_path(batch_path)
+    lines: list[str] = []
+    if manifest.approval_state != "approved":
+        lines.append(f"task batch:approve -- --batch {batch_arg}")
+    lines.append(f"task batch:prepare -- --batch {batch_arg}")
+    lines.append(f"task batch:validate -- --batch {batch_arg}")
+    for item in manifest.items:
+        lines.append(f"task batch:worker-prompt -- --batch {batch_arg} --item {item.id}")
+    lines.append(f"task batch:scope-check -- --batch {batch_arg}")
+    lines.append(f"task batch:closeout -- --batch {batch_arg} --write")
+    return lines
 
 
 def batch_execution_state(
