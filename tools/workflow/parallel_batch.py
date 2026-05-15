@@ -882,23 +882,26 @@ def branch_is_ancestor(branch: str, target: str) -> bool:
 
 
 def path_matches_ref(worktree: Path, ref: str, path: str) -> bool:
-    ref_has_path = subprocess.run(
-        ["git", "-C", str(worktree), "cat-file", "-e", f"{ref}:{path}"],
-        stdout=subprocess.DEVNULL,
+    ref_blob = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "--verify", f"{ref}:{path}"],
+        text=True,
+        stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-    ).returncode == 0
+    )
+    ref_has_path = ref_blob.returncode == 0
     worktree_path = worktree / path
     if not worktree_path.exists():
         return not ref_has_path
     if not worktree_path.is_file() or not ref_has_path:
         return False
-    ref_bytes = subprocess.run(
-        ["git", "-C", str(worktree), "show", f"{ref}:{path}"],
+    worktree_blob = subprocess.run(
+        ["git", "-C", str(worktree), "hash-object", f"--path={path}", str(worktree_path)],
+        text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         check=True,
-    ).stdout
-    return worktree_path.read_bytes() == ref_bytes
+    ).stdout.strip()
+    return worktree_blob == ref_blob.stdout.strip()
 
 
 def remove_worker_worktree_if_present(worktree: Path) -> None:

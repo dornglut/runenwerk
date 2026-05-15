@@ -18,6 +18,7 @@ from parallel_batch import (
     default_kickoff_goal,
     finalize_batch_manifest,
     kickoff_next_step_lines,
+    path_matches_ref,
     render_batch_report,
     run_host_batch_validation,
     run_official_batch_validation,
@@ -598,6 +599,22 @@ def test_finalize_refuses_unmerged_worker_commits(monkeypatch: pytest.MonkeyPatc
     assert batch_finalization_errors(manifest, "main") == [
         "WR-001: worker branch codex/batch-test-wr-001 has commits not integrated into main"
     ]
+
+
+def test_path_matches_ref_respects_git_text_normalization() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        repo = Path(temp_dir)
+        subprocess.run(["git", "init"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+        (repo / ".gitattributes").write_text("*.md text\n", encoding="utf-8", newline="\n")
+        (repo / "note.md").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        subprocess.run(["git", "add", ".gitattributes", "note.md"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-m", "seed"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+
+        (repo / "note.md").write_text("one\ntwo\n", encoding="utf-8", newline="\r\n")
+
+        assert path_matches_ref(repo, "HEAD", "note.md")
 
 
 def test_finalize_cleans_integrated_worktrees_and_branches(monkeypatch: pytest.MonkeyPatch) -> None:
