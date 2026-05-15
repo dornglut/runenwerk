@@ -35,5 +35,5 @@ Integrated into: main@712d77c2015672158702d5d3af36aeefa1458be8
 - Branch: `codex/2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025-4-wr-025`
 - Worktree: `not prepared`
 - Status: `integrated`
-- Roadmap outcome: `slice_landed_item_still_current`
+- Roadmap outcome: `roadmap_completed`
 - Write scopes: `domain/ui/ui_definition`, `domain/ui/ui_runtime`, `domain/editor/editor_shell`, `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`, `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`, `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md`, `docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md`, `docs-site/src/content/docs/domain/ui/README.md`, `docs-site/src/content/docs/domain/ui/architecture.md`, `docs-site/src/content/docs/domain/ui/roadmap.md`, `docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md`, `docs-site/src/content/docs/workspace/roadmap-items.yaml`

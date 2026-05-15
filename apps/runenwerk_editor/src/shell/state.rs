@@ -1,12 +1,12 @@
 use editor_shell::{
     ActiveTabDragVisualState, ActiveTabStackPopupMenu, BODY_CONSOLE_SPLIT_WIDGET_ID,
-    CENTER_RIGHT_SPLIT_WIDGET_ID, DockDropCandidate, DockSplitSide, DockingInteractionVisualState,
-    DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
-    PanelHostId, PanelInstanceId, SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId,
-    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarMenuKind, UiRuntime,
-    UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation,
-    WorkspaceProfileId, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
-    default_workspace_profile_registry, reduce_workspace,
+    CENTER_RIGHT_SPLIT_WIDGET_ID, DockDropCandidate, DockDropCandidateState, DockSplitSide,
+    DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
+    MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId, SCENE_WORKSPACE_PROFILE_ID,
+    ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId,
+    ToolSurfaceKind, ToolbarMenuKind, UiRuntime, UiTree, WidgetId, WorkspaceId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId, WorkspaceSplitAxis,
+    WorkspaceState, WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -526,15 +526,25 @@ impl RunenwerkEditorShellState {
         let active_side = drag
             .preview_candidates
             .iter()
-            .find(|candidate| candidate.active)
+            .find(|candidate| candidate.state.is_active())
             .map(|candidate| candidate.side)
             .or(session.drop_candidate_cycle_side)
-            .unwrap_or(drag.preview_candidates[0].side);
+            .or_else(|| {
+                drag.preview_candidates
+                    .iter()
+                    .find(|candidate| candidate.state.is_selectable())
+                    .map(|candidate| candidate.side)
+            });
+        let Some(active_side) = active_side else {
+            return false;
+        };
         let same_side_indices = drag
             .preview_candidates
             .iter()
             .enumerate()
-            .filter_map(|(index, candidate)| (candidate.side == active_side).then_some(index))
+            .filter_map(|(index, candidate)| {
+                (candidate.state.is_selectable() && candidate.side == active_side).then_some(index)
+            })
             .collect::<Vec<_>>();
         if same_side_indices.is_empty() {
             return false;
@@ -544,7 +554,9 @@ impl RunenwerkEditorShellState {
         let active_index =
             same_side_indices[session.drop_candidate_cycle_index % same_side_indices.len()];
         for (index, candidate) in drag.preview_candidates.iter_mut().enumerate() {
-            candidate.active = index == active_index;
+            if candidate.state.is_selectable() {
+                candidate.state = DockDropCandidateState::selectable(index == active_index);
+            }
         }
         drag.preview_target = Some(drag.preview_candidates[active_index].target);
         true
@@ -738,5 +750,89 @@ fn split_kind_axis(kind: WorkspaceSplitKind) -> WorkspaceSplitAxis {
         WorkspaceSplitKind::BodyConsole => WorkspaceSplitAxis::Vertical,
         WorkspaceSplitKind::LeftRight => WorkspaceSplitAxis::Horizontal,
         WorkspaceSplitKind::CenterRight => WorkspaceSplitAxis::Vertical,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tab_drag_candidate_cycling_skips_invalid_drop_candidates() {
+        let mut shell_state = RunenwerkEditorShellState::new();
+        let panel_instance_id = PanelInstanceId::try_from_raw(1).unwrap();
+        let source_tab_stack_id = TabStackId::try_from_raw(2).unwrap();
+        let active_target = DockingPreviewDropTarget::SplitIntoRoot {
+            side: DockSplitSide::Left,
+        };
+        let next_target = DockingPreviewDropTarget::SplitIntoRoot {
+            side: DockSplitSide::Right,
+        };
+
+        shell_state.tab_drag_session = Some(TabDragSession {
+            panel_instance_id,
+            source_tab_stack_id,
+            pointer_down: UiPoint::new(10.0, 10.0),
+            projection_epoch: 1,
+            active: true,
+            drop_candidate_cycle_index: 0,
+            drop_candidate_cycle_side: Some(DockSplitSide::Left),
+        });
+        shell_state.docking_visual_state.active_tab_drag = Some(ActiveTabDragVisualState {
+            panel_instance_id,
+            source_tab_stack_id,
+            preview_target: Some(active_target),
+            preview_candidates: vec![
+                DockDropCandidate {
+                    target: DockingPreviewDropTarget::SplitIntoArea {
+                        target_tab_stack_id: source_tab_stack_id,
+                        side: DockSplitSide::Left,
+                    },
+                    scope: editor_shell::DockDropScope::Area,
+                    side: DockSplitSide::Left,
+                    anchor_widget_id: WidgetId(10),
+                    state: DockDropCandidateState::Invalid {
+                        reason: editor_shell::DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea,
+                    },
+                },
+                DockDropCandidate {
+                    target: active_target,
+                    scope: editor_shell::DockDropScope::Workspace,
+                    side: DockSplitSide::Left,
+                    anchor_widget_id: WidgetId(11),
+                    state: DockDropCandidateState::Active,
+                },
+                DockDropCandidate {
+                    target: next_target,
+                    scope: editor_shell::DockDropScope::Workspace,
+                    side: DockSplitSide::Left,
+                    anchor_widget_id: WidgetId(12),
+                    state: DockDropCandidateState::Candidate,
+                },
+            ],
+        });
+
+        assert!(shell_state.cycle_active_tab_drag_preview_candidate());
+
+        let drag = shell_state
+            .docking_visual_state
+            .active_tab_drag
+            .as_ref()
+            .expect("tab drag visual state should remain active");
+        assert_eq!(drag.preview_target, Some(next_target));
+        assert!(matches!(
+            drag.preview_candidates[0].state,
+            DockDropCandidateState::Invalid {
+                reason: editor_shell::DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea
+            }
+        ));
+        assert_eq!(
+            drag.preview_candidates[1].state,
+            DockDropCandidateState::Candidate
+        );
+        assert_eq!(
+            drag.preview_candidates[2].state,
+            DockDropCandidateState::Active
+        );
     }
 }

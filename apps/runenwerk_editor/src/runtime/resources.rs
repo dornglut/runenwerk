@@ -393,7 +393,7 @@ impl EditorViewportPrimitiveInstance {
             ),
             EditorPrimitiveKind::Plane => vec3(
                 self.box_half_extents.x.max(0.05),
-                self.box_half_extents.y.min(0.05).max(0.01),
+                self.box_half_extents.y.clamp(0.01, 0.05),
                 self.box_half_extents.z.max(0.05),
             ),
         }
@@ -1061,8 +1061,10 @@ mod tests {
         let mut sphere = EditorPrimitive::default();
         sphere.set_kind(EditorPrimitiveKind::Sphere);
         sphere.sphere_radius = 1.25;
-        let mut box_primitive = EditorPrimitive::default();
-        box_primitive.box_half_extents = Vec3Value::new(0.25, 0.5, 0.75);
+        let box_primitive = EditorPrimitive {
+            box_half_extents: Vec3Value::new(0.25, 0.5, 0.75),
+            ..Default::default()
+        };
 
         let packet = EditorViewportSceneRenderPacket::from_primitives([
             EditorViewportPrimitiveInstance::from_transform_and_primitive(

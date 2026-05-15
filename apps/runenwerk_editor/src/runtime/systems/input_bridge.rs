@@ -1488,6 +1488,32 @@ mod tests {
     }
 
     #[test]
+    fn viewport_pointer_route_rejects_viewport_status_dispatch_target() {
+        let shell_state = seeded_shell_state_with_projection();
+        let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);
+        let bindings = seeded_bindings(&shell_state, ViewportId(5), viewport_bounds);
+        let dispatch = editor_shell::UiInputDispatchResult {
+            target: Some(viewport_chrome_widget_id(
+                &shell_state,
+                editor_shell::VIEWPORT_STATUS_WIDGET_ID,
+            )),
+            response: InputResponse::handled(),
+        };
+
+        let route = viewport_pointer_route(
+            &shell_state,
+            &bindings,
+            &dispatch,
+            UiPoint::new(220.0, 300.0),
+        );
+
+        assert!(
+            route.is_none(),
+            "viewport status must not fall back into scene interaction routing",
+        );
+    }
+
+    #[test]
     fn viewport_capture_validation_is_tool_surface_scoped() {
         let mut shell_state = seeded_shell_state_with_projection();
         let viewport_bounds = UiRect::new(100.0, 80.0, 900.0, 560.0);

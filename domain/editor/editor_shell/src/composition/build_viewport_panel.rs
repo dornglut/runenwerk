@@ -11,7 +11,10 @@ use ui_definition::{
 use ui_layout::SizePolicy;
 use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
-use ui_tree::{PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, RadialMenuNode, UiNodeKind};
+use ui_tree::{
+    PopupAlign, PopupDismissPolicy, PopupFlipPolicy, PopupNode, PopupSide, RadialMenuNode,
+    UiNodeKind,
+};
 
 use crate::{
     PanelInstanceId, SurfaceWidgetScope, ToolSurfaceInstanceId, VIEWPORT_BODY_WIDGET_ID,
@@ -189,10 +192,13 @@ fn viewport_chrome_overlay(
 
     UiNode::with_children(
         scope.widget_id(VIEWPORT_CHROME_WIDGET_ID),
-        UiNodeKind::Popup(PopupNode::anchored_top_start(
-            scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
-            transparent_panel_theme(theme, 0.0),
-        )),
+        UiNodeKind::Popup(
+            PopupNode::anchored_top_start(
+                scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
+                transparent_panel_theme(theme, 0.0),
+            )
+            .with_dismiss_policy(PopupDismissPolicy::None),
+        ),
         vec![chrome],
     )
 }
@@ -405,10 +411,13 @@ fn viewport_status_overlay(
         }
         UiNode::with_children(
             scope.widget_id(VIEWPORT_DETAILS_PANEL_WIDGET_ID),
-            UiNodeKind::Popup(PopupNode::anchored_inside_bottom_start(
-                scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
-                transparent_panel_theme(theme, 0.50),
-            )),
+            UiNodeKind::Popup(
+                PopupNode::anchored_inside_bottom_start(
+                    scope.widget_id(VIEWPORT_CANVAS_WIDGET_ID),
+                    transparent_panel_theme(theme, 0.50),
+                )
+                .with_dismiss_policy(PopupDismissPolicy::None),
+            ),
             vec![hscroll(
                 scope.widget_id(VIEWPORT_STATUS_WIDGET_ID),
                 transparent_panel_theme(theme, 0.0),

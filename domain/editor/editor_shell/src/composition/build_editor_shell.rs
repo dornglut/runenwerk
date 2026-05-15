@@ -186,12 +186,43 @@ pub enum DockDropScope {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockDropInvalidTargetReason {
+    SourceOnlyTabCannotSplitOwnArea,
+    SourceOnlyTabCannotSplitOwnHost,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockDropCandidateState {
+    Candidate,
+    Active,
+    Invalid { reason: DockDropInvalidTargetReason },
+}
+
+impl DockDropCandidateState {
+    pub fn is_active(self) -> bool {
+        matches!(self, Self::Active)
+    }
+
+    pub fn is_selectable(self) -> bool {
+        matches!(self, Self::Candidate | Self::Active)
+    }
+
+    pub fn selectable(active: bool) -> Self {
+        if active {
+            Self::Active
+        } else {
+            Self::Candidate
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DockDropCandidate {
     pub target: DockingPreviewDropTarget,
     pub scope: DockDropScope,
     pub side: crate::DockSplitSide,
     pub anchor_widget_id: WidgetId,
-    pub active: bool,
+    pub state: DockDropCandidateState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -820,7 +851,7 @@ fn dock_drop_zone_interaction_model(
                 kind: UiDockDropZoneKindDefinition::TabReorder,
                 scope: UiDockDropScopeDefinition::Area,
                 side: None,
-                state: dock_drop_zone_state(active),
+                state: dock_drop_zone_state(DockDropCandidateState::selectable(active)),
                 priority: TAB_REORDER_DROP_PRIORITY,
                 preview_only: false,
             });
@@ -834,7 +865,7 @@ fn dock_drop_zone_interaction_model(
             kind: UiDockDropZoneKindDefinition::SplitInsertion,
             scope: dock_drop_scope_definition(candidate.scope),
             side: Some(dock_drop_side_definition(candidate.side)),
-            state: dock_drop_zone_state(candidate.active),
+            state: dock_drop_zone_state(candidate.state),
             priority: dock_drop_priority(candidate.scope),
             preview_only: true,
         });
@@ -859,11 +890,11 @@ fn dock_drop_zone_interaction_model(
     model
 }
 
-fn dock_drop_zone_state(active: bool) -> UiDockDropZoneStateDefinition {
-    if active {
-        UiDockDropZoneStateDefinition::Active
-    } else {
-        UiDockDropZoneStateDefinition::Candidate
+fn dock_drop_zone_state(state: DockDropCandidateState) -> UiDockDropZoneStateDefinition {
+    match state {
+        DockDropCandidateState::Candidate => UiDockDropZoneStateDefinition::Candidate,
+        DockDropCandidateState::Active => UiDockDropZoneStateDefinition::Active,
+        DockDropCandidateState::Invalid { .. } => UiDockDropZoneStateDefinition::Invalid,
     }
 }
 
@@ -1337,7 +1368,9 @@ fn build_dock_split_preview_overlays(
 fn build_dock_split_preview_overlay(candidate: DockDropCandidate, theme: &ThemeTokens) -> UiNode {
     let anchor_widget_id = candidate.anchor_widget_id;
     let popup_side = dock_preview_side(candidate.side);
-    let thickness = if candidate.active {
+    let active = candidate.state.is_active();
+    let invalid = matches!(candidate.state, DockDropCandidateState::Invalid { .. });
+    let thickness = if active {
         match popup_side {
             PopupSide::Left | PopupSide::Right => (theme.spacing.lg * 6.0).clamp(80.0, 132.0),
             PopupSide::Top | PopupSide::Bottom => (theme.spacing.xl * 1.20).clamp(28.0, 42.0),
@@ -1345,18 +1378,35 @@ fn build_dock_split_preview_overlay(candidate: DockDropCandidate, theme: &ThemeT
     } else {
         (theme.spacing.md * 0.45).clamp(4.0, 10.0)
     };
-    let opacity = if candidate.active { 0.34 } else { 0.12 };
-    let border_opacity = if candidate.active { 0.92 } else { 0.38 };
+    let opacity = if active {
+        0.34
+    } else if invalid {
+        0.18
+    } else {
+        0.12
+    };
+    let border_opacity = if active {
+        0.92
+    } else if invalid {
+        0.72
+    } else {
+        0.38
+    };
     let mut preview_theme = theme.clone();
+    let preview_color = if invalid {
+        theme.status_error
+    } else {
+        theme.accent
+    };
     preview_theme.background_panel =
-        UiColor::new(theme.accent.r, theme.accent.g, theme.accent.b, opacity);
+        UiColor::new(preview_color.r, preview_color.g, preview_color.b, opacity);
     preview_theme.border = UiColor::new(
-        theme.accent.r,
-        theme.accent.g,
-        theme.accent.b,
+        preview_color.r,
+        preview_color.g,
+        preview_color.b,
         border_opacity,
     );
-    preview_theme.border_width = if candidate.active {
+    preview_theme.border_width = if active {
         theme.border_width.max(1.75)
     } else {
         theme.border_width.max(1.0)
@@ -1365,7 +1415,7 @@ fn build_dock_split_preview_overlay(candidate: DockDropCandidate, theme: &ThemeT
     preview_theme.radius.md = theme.radius.sm.min(4.0);
     preview_theme.radius.lg = theme.radius.sm.min(4.0);
     let mut children = Vec::new();
-    if candidate.active {
+    if active {
         let mut text_style = compact_shell_text_style(theme);
         text_style.color = [
             theme.foreground.r,
@@ -1386,7 +1436,7 @@ fn build_dock_split_preview_overlay(candidate: DockDropCandidate, theme: &ThemeT
         children,
     );
     if let UiNodeKind::Panel(panel) = &mut preview_panel.kind {
-        panel.padding = if candidate.active {
+        panel.padding = if active {
             UiInsets::new(
                 theme.spacing.xs,
                 theme.spacing.sm,

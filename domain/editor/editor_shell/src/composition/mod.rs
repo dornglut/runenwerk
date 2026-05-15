@@ -15,7 +15,8 @@ pub mod toolbar_definition;
 
 pub use build_console_panel::build_console_panel;
 pub use build_editor_shell::{
-    ActiveTabDragVisualState, DockDropCandidate, DockDropScope, DockingInteractionVisualState,
+    ActiveTabDragVisualState, DockDropCandidate, DockDropCandidateState,
+    DockDropInvalidTargetReason, DockDropScope, DockingInteractionVisualState,
     DockingPreviewDropTarget, EditorShellBuildResult, RoutedShellAction, ShellProjectionArtifacts,
     build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
 };

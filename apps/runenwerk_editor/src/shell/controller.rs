@@ -1,11 +1,12 @@
 use editor_shell::{
     BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockDropCandidate,
-    DockDropScope, DockSplitSide, DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId,
-    ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame,
-    SurfaceCommandProposal, TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID,
-    TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID,
-    TabDropDestination, ToolSurfaceKind, ToolSurfaceMount, UiInputOutcome, UiInteractionResults,
-    UiTree, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+    DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope, DockSplitSide,
+    DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId, ProjectedTabStackSlot,
+    ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
+    TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
+    TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination,
+    ToolSurfaceKind, ToolSurfaceMount, UiInputOutcome, UiInteractionResults, UiTree,
+    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
@@ -49,6 +50,15 @@ struct ResolvedTabDropPreview {
     target: Option<DockingPreviewDropTarget>,
     candidates: Vec<DockDropCandidate>,
     active_side: Option<DockSplitSide>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TabDropPreviewRequest {
+    pointer_position: ui_math::UiPoint,
+    source_tab_stack_id: Option<editor_shell::TabStackId>,
+    explicit_float: bool,
+    cycle_index: usize,
+    cycle_side: Option<DockSplitSide>,
 }
 
 pub struct RunenwerkEditorShellController;
@@ -809,14 +819,21 @@ impl RunenwerkEditorShellController {
                 if became_active || shell_state.docking_visual_state().active_tab_drag.is_some() {
                     suppress_tab_activation = true;
                     let (cycle_index, cycle_side) = shell_state.tab_drag_drop_candidate_cycle();
+                    let source_tab_stack_id = shell_state
+                        .docking_visual_state()
+                        .active_tab_drag
+                        .map(|drag| drag.source_tab_stack_id);
                     let preview = resolve_tab_drop_preview_target(
                         projection_artifacts,
                         tree,
                         layouts,
-                        pointer.position,
-                        pointer.modifiers.alt,
-                        cycle_index,
-                        cycle_side,
+                        TabDropPreviewRequest {
+                            pointer_position: pointer.position,
+                            source_tab_stack_id,
+                            explicit_float: pointer.modifiers.alt,
+                            cycle_index,
+                            cycle_side,
+                        },
                     );
                     shell_state.set_tab_drag_preview(
                         preview.target,
@@ -841,10 +858,16 @@ impl RunenwerkEditorShellController {
                     projection_artifacts,
                     tree,
                     layouts,
-                    pointer.position,
-                    pointer.modifiers.alt,
-                    cycle_index,
-                    cycle_side,
+                    TabDropPreviewRequest {
+                        pointer_position: pointer.position,
+                        source_tab_stack_id: shell_state
+                            .docking_visual_state()
+                            .active_tab_drag
+                            .map(|drag| drag.source_tab_stack_id),
+                        explicit_float: pointer.modifiers.alt,
+                        cycle_index,
+                        cycle_side,
+                    },
                 );
                 shell_state.set_tab_drag_preview(
                     preview.target,
@@ -1234,8 +1257,13 @@ impl RunenwerkEditorShellController {
 
         let candidate =
             resolve_split_resize_target(pointer.position, layouts, projection_artifacts)?;
-        if tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some()
-            && split_resize_distance(pointer.position, layouts, candidate) > 3.0
+        let split_distance = split_resize_distance(pointer.position, layouts, candidate);
+        if tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some() {
+            if split_distance > 3.0 {
+                return None;
+            }
+        } else if routed_action_widget_at_pointer(projection_artifacts, layouts, pointer.position)
+            .is_some()
         {
             return None;
         }
@@ -1439,6 +1467,35 @@ fn split_resize_distance(
     }
 }
 
+fn routed_action_widget_at_pointer(
+    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
+    layouts: &ComputedLayoutMap,
+    cursor: ui_math::UiPoint,
+) -> Option<WidgetId> {
+    projection_artifacts
+        .widget_actions_by_id
+        .keys()
+        .copied()
+        .filter(|widget_id| {
+            layouts
+                .get(widget_id)
+                .is_some_and(|layout| layout.bounds.contains(cursor))
+        })
+        .min_by(|left, right| {
+            let left_bounds = layouts
+                .get(left)
+                .expect("filtered routed widget should have layout")
+                .bounds;
+            let right_bounds = layouts
+                .get(right)
+                .expect("filtered routed widget should have layout")
+                .bounds;
+            let left_area = left_bounds.width * left_bounds.height;
+            let right_area = right_bounds.width * right_bounds.height;
+            left_area.total_cmp(&right_area)
+        })
+}
+
 fn split_fraction_from_pointer(
     axis: WorkspaceSplitAxis,
     bounds: ui_math::UiRect,
@@ -1532,6 +1589,44 @@ fn consumed_pointer_outcome(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_dock_drop_candidate_does_not_resolve_commit_target() {
+        let source_tab_stack_id = editor_shell::TabStackId::try_from_raw(7).unwrap();
+        let invalid_target = DockingPreviewDropTarget::SplitIntoArea {
+            target_tab_stack_id: source_tab_stack_id,
+            side: DockSplitSide::Left,
+        };
+
+        let resolved = activate_dock_drop_candidate(
+            vec![DockDropCandidate {
+                target: invalid_target,
+                scope: DockDropScope::Area,
+                side: DockSplitSide::Left,
+                anchor_widget_id: WidgetId(99),
+                state: DockDropCandidateState::Invalid {
+                    reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea,
+                },
+            }],
+            0,
+            None,
+        );
+
+        assert_eq!(resolved.target, None);
+        assert_eq!(resolved.active_side, None);
+        assert_eq!(resolved.candidates[0].target, invalid_target);
+        assert!(matches!(
+            resolved.candidates[0].state,
+            DockDropCandidateState::Invalid {
+                reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea
+            }
+        ));
+    }
+}
+
 fn consumed_keyboard_outcome(changed_layout: bool) -> UiInputOutcome {
     UiInputOutcome {
         dispatch: editor_shell::UiInputDispatchResult {
@@ -1601,13 +1696,23 @@ fn resolve_tab_drop_preview_target(
     projection_artifacts: &editor_shell::ShellProjectionArtifacts,
     tree: &UiTree,
     layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-    explicit_float: bool,
-    cycle_index: usize,
-    cycle_side: Option<DockSplitSide>,
+    request: TabDropPreviewRequest,
 ) -> ResolvedTabDropPreview {
-    if let Some(route) =
-        tab_insertion_route_at_pointer(projection_artifacts, tree, layouts, pointer_position)
+    if let Some(route) = tab_insertion_route_at_pointer(
+        projection_artifacts,
+        tree,
+        layouts,
+        request.pointer_position,
+    ) {
+        return ResolvedTabDropPreview {
+            target: Some(map_projected_tab_drop_target(route)),
+            candidates: Vec::new(),
+            active_side: None,
+        };
+    }
+
+    if request.explicit_float
+        && let Some(route) = new_floating_host_route_at_pointer(layouts, request.pointer_position)
     {
         return ResolvedTabDropPreview {
             target: Some(map_projected_tab_drop_target(route)),
@@ -1616,19 +1721,14 @@ fn resolve_tab_drop_preview_target(
         };
     }
 
-    if explicit_float
-        && let Some(route) = new_floating_host_route_at_pointer(layouts, pointer_position)
-    {
-        return ResolvedTabDropPreview {
-            target: Some(map_projected_tab_drop_target(route)),
-            candidates: Vec::new(),
-            active_side: None,
-        };
-    }
-
-    let candidates = collect_dock_drop_candidates(projection_artifacts, layouts, pointer_position);
+    let candidates = collect_dock_drop_candidates(
+        projection_artifacts,
+        layouts,
+        request.pointer_position,
+        request.source_tab_stack_id,
+    );
     if !candidates.is_empty() {
-        return activate_dock_drop_candidate(candidates, cycle_index, cycle_side);
+        return activate_dock_drop_candidate(candidates, request.cycle_index, request.cycle_side);
     }
 
     ResolvedTabDropPreview {
@@ -1707,6 +1807,7 @@ fn collect_dock_drop_candidates(
     projection_artifacts: &editor_shell::ShellProjectionArtifacts,
     layouts: &ComputedLayoutMap,
     pointer_position: ui_math::UiPoint,
+    source_tab_stack_id: Option<editor_shell::TabStackId>,
 ) -> Vec<DockDropCandidate> {
     let mut candidates = Vec::new();
     candidates.extend(area_dock_drop_candidates(
@@ -1720,7 +1821,15 @@ fn collect_dock_drop_candidates(
         pointer_position,
     ));
     candidates.extend(workspace_dock_drop_candidate(layouts, pointer_position));
+    let source_context = source_tab_stack_id.and_then(|tab_stack_id| {
+        source_dock_drag_context(&projection_artifacts.workspace, tab_stack_id)
+    });
     rank_dock_drop_candidates(candidates)
+        .into_iter()
+        .map(|candidate| {
+            classify_dock_drop_candidate(candidate, source_tab_stack_id, source_context.as_ref())
+        })
+        .collect()
 }
 
 fn area_dock_drop_candidates(
@@ -1743,7 +1852,7 @@ fn area_dock_drop_candidates(
                     scope: DockDropScope::Area,
                     side,
                     anchor_widget_id,
-                    active: false,
+                    state: DockDropCandidateState::Candidate,
                 },
                 edge_distance: dock_split_side_priority(container.bounds, pointer_position, side),
                 anchor_area: container.bounds.width * container.bounds.height,
@@ -1774,7 +1883,7 @@ fn group_dock_drop_candidates(
                     scope: DockDropScope::Group,
                     side,
                     anchor_widget_id: target.widget_id,
-                    active: false,
+                    state: DockDropCandidateState::Candidate,
                 },
                 edge_distance: dock_split_side_priority(layout.bounds, pointer_position, side),
                 anchor_area: layout.bounds.width * layout.bounds.height,
@@ -1804,12 +1913,111 @@ fn workspace_dock_drop_candidate(
             scope: DockDropScope::Workspace,
             side,
             anchor_widget_id: BODY_ROOT_WIDGET_ID,
-            active: false,
+            state: DockDropCandidateState::Candidate,
         },
         edge_distance: dock_split_side_priority(layout.bounds, pointer_position, side),
         anchor_area: layout.bounds.width * layout.bounds.height,
         pointer_inside_anchor: layout.bounds.contains(pointer_position),
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SourceDockDragContext {
+    tab_count: usize,
+    ancestor_split_hosts: Vec<PanelHostId>,
+}
+
+fn source_dock_drag_context(
+    projection: &editor_shell::WorkspaceProjectionArtifact,
+    source_tab_stack_id: editor_shell::TabStackId,
+) -> Option<SourceDockDragContext> {
+    source_dock_drag_context_in_host(&projection.root_host, source_tab_stack_id, &mut Vec::new())
+        .or_else(|| {
+            projection
+                .floating_hosts
+                .iter()
+                .find(|host| host.tab_stack.tab_stack_id == source_tab_stack_id)
+                .map(|host| SourceDockDragContext {
+                    tab_count: host.tab_stack.tabs.len(),
+                    ancestor_split_hosts: Vec::new(),
+                })
+        })
+}
+
+fn source_dock_drag_context_in_host(
+    host: &ProjectedWorkspaceHostSlot,
+    source_tab_stack_id: editor_shell::TabStackId,
+    ancestors: &mut Vec<PanelHostId>,
+) -> Option<SourceDockDragContext> {
+    match host {
+        ProjectedWorkspaceHostSlot::Split {
+            host_id,
+            first_child,
+            second_child,
+            ..
+        } => {
+            ancestors.push(*host_id);
+            let found =
+                source_dock_drag_context_in_host(first_child, source_tab_stack_id, ancestors)
+                    .or_else(|| {
+                        source_dock_drag_context_in_host(
+                            second_child,
+                            source_tab_stack_id,
+                            ancestors,
+                        )
+                    });
+            ancestors.pop();
+            found
+        }
+        ProjectedWorkspaceHostSlot::TabStack { tab_stack, .. }
+            if tab_stack.tab_stack_id == source_tab_stack_id =>
+        {
+            Some(SourceDockDragContext {
+                tab_count: tab_stack.tabs.len(),
+                ancestor_split_hosts: ancestors.clone(),
+            })
+        }
+        ProjectedWorkspaceHostSlot::TabStack { .. }
+        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => None,
+    }
+}
+
+fn classify_dock_drop_candidate(
+    mut candidate: DockDropCandidate,
+    source_tab_stack_id: Option<editor_shell::TabStackId>,
+    source_context: Option<&SourceDockDragContext>,
+) -> DockDropCandidate {
+    let Some(source_tab_stack_id) = source_tab_stack_id else {
+        return candidate;
+    };
+    let Some(source_context) = source_context else {
+        return candidate;
+    };
+    if source_context.tab_count > 1 {
+        return candidate;
+    }
+
+    let reason = match candidate.target {
+        DockingPreviewDropTarget::SplitIntoArea {
+            target_tab_stack_id,
+            ..
+        } if target_tab_stack_id == source_tab_stack_id => {
+            Some(DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea)
+        }
+        DockingPreviewDropTarget::SplitIntoHost { target_host_id, .. }
+            if source_context
+                .ancestor_split_hosts
+                .contains(&target_host_id) =>
+        {
+            Some(DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnHost)
+        }
+        _ => None,
+    };
+
+    if let Some(reason) = reason {
+        candidate.state = DockDropCandidateState::Invalid { reason };
+    }
+    candidate
 }
 
 fn rank_dock_drop_candidates(
@@ -1866,18 +2074,35 @@ fn activate_dock_drop_candidate(
     cycle_index: usize,
     cycle_side: Option<DockSplitSide>,
 ) -> ResolvedTabDropPreview {
-    let default_side = candidates[0].side;
-    let active_side =
-        cycle_side.filter(|side| candidates.iter().any(|candidate| candidate.side == *side));
+    let Some(default_side) = candidates
+        .iter()
+        .find(|candidate| candidate.state.is_selectable())
+        .map(|candidate| candidate.side)
+    else {
+        return ResolvedTabDropPreview {
+            target: None,
+            candidates,
+            active_side: None,
+        };
+    };
+    let active_side = cycle_side.filter(|side| {
+        candidates
+            .iter()
+            .any(|candidate| candidate.state.is_selectable() && candidate.side == *side)
+    });
     let active_side = active_side.unwrap_or(default_side);
     let same_side_indices = candidates
         .iter()
         .enumerate()
-        .filter_map(|(index, candidate)| (candidate.side == active_side).then_some(index))
+        .filter_map(|(index, candidate)| {
+            (candidate.state.is_selectable() && candidate.side == active_side).then_some(index)
+        })
         .collect::<Vec<_>>();
     let active_index = same_side_indices[cycle_index % same_side_indices.len()];
     for (index, candidate) in candidates.iter_mut().enumerate() {
-        candidate.active = index == active_index;
+        if candidate.state.is_selectable() {
+            candidate.state = DockDropCandidateState::selectable(index == active_index);
+        }
     }
     ResolvedTabDropPreview {
         target: Some(candidates[active_index].target),

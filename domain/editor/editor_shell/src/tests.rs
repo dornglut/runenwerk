@@ -9,30 +9,30 @@ use ui_math::{Axis, UiRect};
 use ui_theme::ThemeTokens;
 
 use crate::{
-    ActiveTabDragVisualState, ActiveTabStackPopupMenu, DockDropCandidate, DockDropScope,
-    DockingInteractionVisualState, DockingPreviewDropTarget,
-    ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel,
-    EntityTableComponentFilter, EntityTableHierarchyFilter, EntityTableSurfaceAction,
-    InspectorSurfaceAction, OutlinerSurfaceAction, PanelInstanceId, PanelKind,
-    ResolvedSurfaceFrame, RoutedShellAction, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
-    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
-    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
-    UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
-    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
-    build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
-    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
-    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
-    surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
-    tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
-    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_list_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
-    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
-    tool_surface_kind_definition_key, toolbar_workspace_active_indicator_widget_id,
-    toolbar_workspace_chrome_widget_id, toolbar_workspace_close_widget_id,
-    workspace_split_host_widget_id,
+    ActiveTabDragVisualState, ActiveTabStackPopupMenu, DockDropCandidate, DockDropCandidateState,
+    DockDropInvalidTargetReason, DockDropScope, DockingInteractionVisualState,
+    DockingPreviewDropTarget, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
+    ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel, EntityTableComponentFilter,
+    EntityTableHierarchyFilter, EntityTableSurfaceAction, InspectorSurfaceAction,
+    OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction,
+    ShellCommand, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
+    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
+    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
+    ViewportSurfaceAction, ViewportViewModel, WidgetId, WorkspaceIdentityAllocator,
+    WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame,
+    build_editor_shell_frame_with_docking_visual_state, build_entity_table_panel,
+    build_viewport_panel, dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
+    dock_split_preview_panel_widget_id, label, map_interactions_to_shell_commands,
+    panel_kind_definition_key, reduce_workspace, surface_widget_id, tab_active_indicator_widget_id,
+    tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
+    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tool_surface_definition_id, tool_surface_kind_definition_key,
+    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
+    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -1609,7 +1609,7 @@ fn dock_split_preview_projects_side_slice_without_consuming_layout() {
                 scope: DockDropScope::Area,
                 side: crate::DockSplitSide::Left,
                 anchor_widget_id,
-                active: true,
+                state: DockDropCandidateState::Active,
             }],
         }),
         active_split_border_widget: None,
@@ -1667,6 +1667,54 @@ fn dock_split_preview_projects_side_slice_without_consuming_layout() {
 }
 
 #[test]
+fn invalid_dock_split_preview_forms_invalid_drop_zone_without_active_target() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let anchor_widget_id = tab_stack_container_widget_id(viewport_stack);
+    let preview_target = DockingPreviewDropTarget::SplitIntoArea {
+        target_tab_stack_id: viewport_stack,
+        side: crate::DockSplitSide::Left,
+    };
+    let docking_visual_state = DockingInteractionVisualState {
+        active_tab_drag: Some(ActiveTabDragVisualState {
+            panel_instance_id: viewport_panel,
+            source_tab_stack_id: viewport_stack,
+            preview_target: None,
+            preview_candidates: vec![DockDropCandidate {
+                target: preview_target,
+                scope: DockDropScope::Area,
+                side: crate::DockSplitSide::Left,
+                anchor_widget_id,
+                state: DockDropCandidateState::Invalid {
+                    reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea,
+                },
+            }],
+        }),
+        active_split_border_widget: None,
+    };
+    let build = build_editor_shell_frame_with_docking_visual_state(
+        &frame_model,
+        &ThemeTokens::default(),
+        &workspace,
+        Some(&docking_visual_state),
+    );
+
+    assert!(ui_tree_contains_widget(
+        &build.tree.root,
+        dock_split_preview_overlay_widget_id(anchor_widget_id)
+    ));
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        dock_split_preview_overlay_widget_id(anchor_widget_id),
+        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
+        ui_definition::UiDockDropZoneStateDefinition::Invalid,
+        10,
+    );
+}
+
+#[test]
 fn dock_root_split_preview_spans_target_root_edge() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
@@ -1687,7 +1735,7 @@ fn dock_root_split_preview_spans_target_root_edge() {
                 scope: DockDropScope::Workspace,
                 side: crate::DockSplitSide::Bottom,
                 anchor_widget_id,
-                active: true,
+                state: DockDropCandidateState::Active,
             }],
         }),
         active_split_border_widget: None,
@@ -1785,7 +1833,7 @@ fn dock_scope_previews_render_all_candidates_and_active_label() {
                     scope: DockDropScope::Area,
                     side: crate::DockSplitSide::Right,
                     anchor_widget_id: area_anchor,
-                    active: false,
+                    state: DockDropCandidateState::Candidate,
                 },
                 DockDropCandidate {
                     target: DockingPreviewDropTarget::SplitIntoHost {
@@ -1795,7 +1843,7 @@ fn dock_scope_previews_render_all_candidates_and_active_label() {
                     scope: DockDropScope::Group,
                     side: crate::DockSplitSide::Right,
                     anchor_widget_id: group_anchor,
-                    active: true,
+                    state: DockDropCandidateState::Active,
                 },
                 DockDropCandidate {
                     target: DockingPreviewDropTarget::SplitIntoRoot {
@@ -1804,7 +1852,7 @@ fn dock_scope_previews_render_all_candidates_and_active_label() {
                     scope: DockDropScope::Workspace,
                     side: crate::DockSplitSide::Right,
                     anchor_widget_id: workspace_anchor,
-                    active: false,
+                    state: DockDropCandidateState::Candidate,
                 },
             ],
         }),

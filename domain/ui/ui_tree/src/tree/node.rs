@@ -156,6 +156,7 @@ impl OverlayAdornmentNode {
 pub struct PopupNode {
     pub anchor: WidgetId,
     pub placement: PopupPlacement,
+    pub dismiss_policy: PopupDismissPolicy,
     pub layer_order: u32,
     pub padding: UiInsets,
     pub gap: f32,
@@ -203,6 +204,12 @@ pub enum PopupFlipPolicy {
     FlipToFit,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PopupDismissPolicy {
+    None,
+    OutsidePointerDown,
+}
+
 impl PopupNode {
     pub fn anchored_outside(
         anchor: WidgetId,
@@ -218,6 +225,7 @@ impl PopupNode {
                 align,
                 flip_policy,
             },
+            dismiss_policy: PopupDismissPolicy::OutsidePointerDown,
             layer_order: 2,
             padding: UiInsets::all(theme.spacing.xs),
             gap: theme.spacing.xs,
@@ -231,6 +239,7 @@ impl PopupNode {
         Self {
             anchor,
             placement: PopupPlacement::BottomStart,
+            dismiss_policy: PopupDismissPolicy::OutsidePointerDown,
             layer_order: 2,
             padding: UiInsets::all(theme.spacing.xs),
             gap: theme.spacing.xs,
@@ -244,6 +253,7 @@ impl PopupNode {
         Self {
             anchor,
             placement: PopupPlacement::TopStart,
+            dismiss_policy: PopupDismissPolicy::OutsidePointerDown,
             layer_order: 1,
             padding: UiInsets::all(theme.spacing.xs),
             gap: theme.spacing.xs,
@@ -257,6 +267,7 @@ impl PopupNode {
         Self {
             anchor,
             placement: PopupPlacement::RightStart,
+            dismiss_policy: PopupDismissPolicy::OutsidePointerDown,
             layer_order: 2,
             padding: UiInsets::all(theme.spacing.xs),
             gap: theme.spacing.xs,
@@ -270,6 +281,7 @@ impl PopupNode {
         Self {
             anchor,
             placement: PopupPlacement::InsideTopEnd,
+            dismiss_policy: PopupDismissPolicy::OutsidePointerDown,
             layer_order: 0,
             padding: UiInsets::all(0.0),
             gap: 0.0,
@@ -283,6 +295,7 @@ impl PopupNode {
         Self {
             anchor,
             placement: PopupPlacement::InsideBottomStart,
+            dismiss_policy: PopupDismissPolicy::OutsidePointerDown,
             layer_order: 1,
             padding: UiInsets::all(theme.spacing.xs),
             gap: theme.spacing.xs,
@@ -290,6 +303,11 @@ impl PopupNode {
             min_size: UiSize::new(120.0, 0.0),
             theme,
         }
+    }
+
+    pub fn with_dismiss_policy(mut self, dismiss_policy: PopupDismissPolicy) -> Self {
+        self.dismiss_policy = dismiss_policy;
+        self
     }
 }
 

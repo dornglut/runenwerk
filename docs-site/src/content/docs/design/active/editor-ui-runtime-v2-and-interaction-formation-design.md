@@ -191,29 +191,43 @@ without recreating the same policy in several layers.
 - `IV2-dock-drop-zones` has its first code-bearing retained slice.
   `domain/ui/ui_definition/src/interaction.rs` defines formed dock/drop-zone
   records for tab reorder, split insertion, and floating-host targets with
-  scope, side, active/candidate state, priority, and preview-only policy.
+  scope, side, active/candidate/invalid state, priority, and preview-only
+  policy.
   `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`
-  adapts current tab-drag preview state into formed drop zones while keeping
-  workspace mutation in the editor/app command path, and
-  `domain/ui/ui_runtime/src/input/hit_test.rs` covers preview overlay child hit
-  precedence.
+  adapts current tab-drag preview state into formed drop zones and maps
+  editor-owned `DockDropCandidateState::Invalid` values to the generic
+  `UiDockDropZoneStateDefinition::Invalid` contract while keeping workspace
+  mutation in the editor/app command path. `apps/runenwerk_editor/src/shell/controller.rs`
+  forms source-only same-area and same-host split candidates as invalid and
+  excludes them from commit target resolution, while
+  `apps/runenwerk_editor/src/shell/state.rs::cycle_active_tab_drag_preview_candidate`
+  skips invalid candidates during cycling. `domain/ui/ui_runtime/src/input/hit_test.rs`
+  covers preview overlay child hit precedence.
 - `IV2-status-and-viewport-arbitration` has its first code-bearing retained
   slice. `domain/ui/ui_definition/src/interaction.rs` defines formed viewport
   status-region, overflow, metric-priority, and input-arbitration records.
   `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::viewport_status_overlay`
   emits a horizontal scroll-owned status region for details, FPS/frame-time,
-  and overlay status lines.
+  and overlay status lines. Persistent viewport chrome/status overlays use
+  `PopupDismissPolicy::None` so they can share anchored-popup layout without
+  joining the dismissible menu stack.
   `domain/editor/editor_shell/src/composition/build_editor_shell.rs::viewport_surface_interaction_model`
   maps viewport options/tools popups plus status regions into formed menu,
   scroll, status, and viewport-fallback contracts, while
+  `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs::viewport_pointer_route_rejects_viewport_status_dispatch_target`
+  and `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`
+  prove status/chrome dispatch targets cannot route into scene fallback and
+  viewport wheel input is delivered only after UI declines ownership. The
+  source-string guard in
   `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::viewport_status_arbitration_is_formed_before_scene_fallback`
-  guards scene input fallback against status/chrome widgets.
+  remains a broad regression guard, not the primary proof.
 
 All named WR-025 Interaction V2 retained slices now have code-bearing contract
-spines. WR-024 may consume the landed menu-stack, scroll-ownership,
-menu-sizing, chrome-slot, dock/drop-zone, and status/viewport arbitration
-behaviors, but any larger execution target change still needs a separate
-accepted design or ADR.
+spines plus doctrine-repair behavior evidence recorded in
+`docs-site/src/content/docs/reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md`.
+WR-024 may consume the landed menu-stack, scroll-ownership, menu-sizing,
+chrome-slot, dock/drop-zone, and status/viewport arbitration behaviors, but any
+larger execution target change still needs a separate accepted design or ADR.
 
 ## Strangler Migration
 
@@ -247,14 +261,16 @@ Phase 4 - Docking
 - Make tab-strip reorder zones suppress split previews.
 - Represent split previews through semantic drop zones and preview-only state.
 - Exit only after split-border precedence, tab reorder precedence, invalid
-  targets, and preview-only state are covered.
+  targets, candidate cycling, commit-target exclusion, and preview-only state
+  are covered.
 
 Phase 5 - Metrics And Status
 
 - Project FPS/frame time from an always-on runtime/editor metric source.
 - Apply explicit overflow policy to viewport statistics/details/status bars.
-- Exit only after status overflow cannot steal viewport input and app guards
-  prove viewport arbitration remains fail-closed.
+- Exit only after status overflow cannot steal viewport input, persistent
+  status/chrome overlays are not treated as dismissible menu-stack popups, and
+  app guards prove viewport arbitration remains fail-closed.
 
 ## Deferred Execution Targets
 

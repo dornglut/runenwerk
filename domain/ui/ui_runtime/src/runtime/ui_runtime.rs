@@ -10,9 +10,9 @@ use ui_render_data::UiFrame;
 use ui_text::FontAtlasSource;
 
 use crate::{
-    ComputedLayoutMap, UiInputDispatchResult, UiInputOutcome, UiInteraction, UiInteractionResults,
-    UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId, build_ui_frame,
-    compute_tree_layout, dispatch_pointer_event,
+    ComputedLayoutMap, PopupDismissPolicy, UiInputDispatchResult, UiInputOutcome, UiInteraction,
+    UiInteractionResults, UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId,
+    build_ui_frame, compute_tree_layout, dispatch_pointer_event,
 };
 
 #[derive(Debug, Default)]
@@ -359,6 +359,9 @@ fn topmost_popup_scope(tree: &UiTree, layouts: &ComputedLayoutMap) -> Option<(Wi
             let UiNodeKind::Popup(popup) = &node.kind else {
                 return None;
             };
+            if !matches!(popup.dismiss_policy, PopupDismissPolicy::OutsidePointerDown) {
+                return None;
+            }
             layouts.contains_key(&node.id).then_some((
                 popup.layer_order,
                 tree_order,
@@ -1125,6 +1128,73 @@ mod tests {
                     FocusTargetId(anchor_id.0),
                 ))),
             "dismissal should report focus return to the popup anchor",
+        );
+    }
+
+    #[test]
+    fn non_dismissable_popup_does_not_join_popup_dismiss_stack() {
+        let theme = ThemeTokens::default();
+        let text_style = TextStyle::default();
+        let anchor_id = WidgetId(41);
+        let popup_id = WidgetId(42);
+        let item_id = WidgetId(43);
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![
+                UiNode::new(
+                    anchor_id,
+                    UiNodeKind::Button(ButtonNode::new(
+                        "Anchor",
+                        text_style.clone(),
+                        theme.clone(),
+                    )),
+                ),
+                UiNode::with_children(
+                    popup_id,
+                    UiNodeKind::Popup(
+                        PopupNode::anchored_bottom_start(anchor_id, theme.clone())
+                            .with_dismiss_policy(PopupDismissPolicy::None),
+                    ),
+                    vec![UiNode::new(
+                        item_id,
+                        UiNodeKind::Button(ButtonNode::new("Overlay item", text_style, theme)),
+                    )],
+                ),
+            ],
+        ));
+        let bounds = UiRect::new(0.0, 0.0, 320.0, 220.0);
+        let mut runtime = UiRuntime::new();
+        runtime.set_focused_widget(Some(item_id));
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: UiPoint::new(
+                    bounds.x + bounds.width - 4.0,
+                    bounds.y + bounds.height - 4.0,
+                ),
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+
+        assert_ne!(outcome.dispatch.target, Some(popup_id));
+        assert!(
+            !outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::PopupDismissRequested {
+                    popup: popup_id,
+                    focus_return: Some(anchor_id),
+                }),
+            "non-dismissable anchored overlays must not consume outside pointer down",
         );
     }
 

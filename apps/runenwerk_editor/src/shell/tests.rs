@@ -3,7 +3,8 @@ use editor_core::{
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_shell::{
-    BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, DockDropScope,
+    BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
+    DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope,
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
     EditorDomainMutation, EntityTableComponentFilter, EntityTableHierarchyFilter,
     EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
@@ -3908,6 +3909,96 @@ fn drag_drop_tab_to_float_creates_editor_managed_floating_host() {
 }
 
 #[test]
+fn own_only_tab_area_drop_forms_invalid_candidate_without_committing() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let (_, console_stack_id) =
+        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Console);
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let artifacts = shell_state
+        .last_projection_artifacts()
+        .expect("projection artifacts should exist")
+        .clone();
+    let source_widget = tab_widget_for_panel(
+        &artifacts,
+        shell_state.workspace_state(),
+        PanelKind::Console,
+    );
+    let tree = shell_state
+        .last_tree()
+        .expect("shell tree should exist")
+        .clone();
+    let layouts = shell_state.runtime().compute_layout(&tree, bounds);
+    let source_position = center_of_widget(&layouts, source_widget);
+    let activation_position = UiPoint::new(source_position.x + 32.0, source_position.y + 4.0);
+    let console_bounds = layouts
+        .get(&editor_shell::tab_stack_container_widget_id(
+            console_stack_id,
+        ))
+        .expect("console stack layout should exist")
+        .bounds;
+    let own_area_edge_position = UiPoint::new(
+        console_bounds.x + console_bounds.width - 4.0,
+        console_bounds.y + console_bounds.height * 0.5,
+    );
+
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Down,
+        source_position,
+        Some(PointerButton::Primary),
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Move,
+        activation_position,
+        None,
+    );
+    dispatch_pointer(
+        &mut app,
+        &mut shell_state,
+        bounds,
+        &theme,
+        PointerEventKind::Move,
+        own_area_edge_position,
+        None,
+    );
+
+    let drag_visual = shell_state
+        .docking_visual_state()
+        .active_tab_drag
+        .expect("own area edge should retain tab drag evidence");
+    let invalid_area_target = editor_shell::DockingPreviewDropTarget::SplitIntoArea {
+        target_tab_stack_id: console_stack_id,
+        side: editor_shell::DockSplitSide::Right,
+    };
+    assert_ne!(
+        drag_visual.preview_target,
+        Some(invalid_area_target),
+        "invalid own-area candidate must not become the active commit target",
+    );
+    assert!(drag_visual.preview_candidates.iter().any(|candidate| {
+        matches!(
+            candidate.state,
+            DockDropCandidateState::Invalid {
+                reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea
+            }
+        ) && candidate.target == invalid_area_target
+    }));
+}
+
+#[test]
 fn right_edge_tab_drop_creates_resizable_workspace_split() {
     drag_console_tab_to_middle_right_edge_creates_split(PanelKind::Inspector, -6.0);
 }
@@ -4014,7 +4105,7 @@ fn parent_right_edge_tab_drop_creates_spanning_workspace_split() {
     let active_scope = drag_visual
         .preview_candidates
         .iter()
-        .find(|candidate| candidate.active)
+        .find(|candidate| candidate.state.is_active())
         .map(|candidate| candidate.scope);
     assert_eq!(active_scope, Some(DockDropScope::Group));
     dispatch_pointer(
@@ -4262,7 +4353,7 @@ fn root_left_tab_drop_creates_workspace_tall_split() {
     let active_scope = drag_visual
         .preview_candidates
         .iter()
-        .find(|candidate| candidate.active)
+        .find(|candidate| candidate.state.is_active())
         .map(|candidate| candidate.scope);
     assert_eq!(active_scope, Some(DockDropScope::Workspace));
     dispatch_pointer(
@@ -5538,7 +5629,7 @@ fn active_dock_scope(shell_state: &RunenwerkEditorShellState) -> Option<DockDrop
         .active_tab_drag?
         .preview_candidates
         .into_iter()
-        .find(|candidate| candidate.active)
+        .find(|candidate| candidate.state.is_active())
         .map(|candidate| candidate.scope)
 }
 
@@ -5549,14 +5640,14 @@ fn active_dock_side_candidate_count(shell_state: &RunenwerkEditorShellState) -> 
     let Some(active_side) = drag
         .preview_candidates
         .iter()
-        .find(|candidate| candidate.active)
+        .find(|candidate| candidate.state.is_active())
         .map(|candidate| candidate.side)
     else {
         return 0;
     };
     drag.preview_candidates
         .iter()
-        .filter(|candidate| candidate.side == active_side)
+        .filter(|candidate| candidate.state.is_selectable() && candidate.side == active_side)
         .count()
 }
 

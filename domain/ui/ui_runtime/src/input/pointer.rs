@@ -7,9 +7,9 @@ use ui_input::{
 };
 
 use crate::{
-    ComputedLayoutMap, ScrollInputPolicy, UiInputDispatchResult, UiInputOutcome, UiInteraction,
-    UiInteractionResults, UiInvalidation, UiNodeKind, UiRuntimeState, UiTree, WidgetId,
-    hit_test_widget,
+    ComputedLayoutMap, PopupDismissPolicy, ScrollInputPolicy, UiInputDispatchResult,
+    UiInputOutcome, UiInteraction, UiInteractionResults, UiInvalidation, UiNodeKind,
+    UiRuntimeState, UiTree, WidgetId, hit_test_widget,
     output::build_ui_frame::{
         ScrollbarGeometry, scrollbar_geometries, scrollbar_geometry_for_axis,
     },
@@ -519,6 +519,9 @@ fn popup_stack_scopes(tree: &UiTree, layouts: &ComputedLayoutMap) -> Vec<PopupSt
             let UiNodeKind::Popup(popup) = &node.kind else {
                 return None;
             };
+            if !matches!(popup.dismiss_policy, PopupDismissPolicy::OutsidePointerDown) {
+                return None;
+            }
             layouts.contains_key(&node.id).then_some(PopupStackScope {
                 popup: node.id,
                 anchor: popup.anchor,
