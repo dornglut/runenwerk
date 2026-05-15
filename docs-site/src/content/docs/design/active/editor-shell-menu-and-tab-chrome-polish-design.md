@@ -60,8 +60,8 @@ viewport arbitration app-local UI truth, accepting compiled-reactive or
 ECS-driven UI, or changing retained UI execution strategy.
 
 2026-05-15 boundary update: WR-025 now provides the first code-bearing
-`IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, and
-`IV2-chrome-slots` slices through
+`IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`,
+`IV2-chrome-slots`, and `IV2-dock-drop-zones` slices through
 `domain/ui/ui_definition/src/interaction.rs`,
 `domain/ui/ui_definition/src/validate.rs::validate_menu`,
 `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`,
@@ -73,9 +73,9 @@ toolbar/tab-stack adapters in
 WR-024 may consume those landed contracts for popup layer behavior,
 outside-dismiss, focus return, Escape dismissal, Switch Type submenu anchoring,
 wheel boundary ownership, menu item fill, popup clamp, scroll fallback, and
-tab/workspace close, label/drag, and active-indicator slot placement.
-Docking/drop-zone precedence, status overflow, and viewport arbitration remain
-WR-025-gated.
+tab/workspace close, label/drag, active-indicator slot placement, and tab
+reorder versus split-preview drop-zone precedence. Status overflow and
+viewport arbitration remain WR-025-gated.
 
 ## Interaction V2 Slice Dependencies
 

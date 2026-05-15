@@ -24,7 +24,7 @@ use crate::{
     dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
     map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
     tab_active_indicator_widget_id, tab_chrome_widget_id, tab_close_button_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
+    tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
     tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
     tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
     tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
@@ -1537,6 +1537,56 @@ fn locked_tab_plus_menu_shows_all_kinds_but_routes_only_locked_kind() {
 }
 
 #[test]
+fn tab_reorder_drop_slots_are_formed_with_higher_priority_than_split_previews() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let docking_visual_state = DockingInteractionVisualState {
+        active_tab_drag: Some(ActiveTabDragVisualState {
+            panel_instance_id: viewport_panel,
+            source_tab_stack_id: viewport_stack,
+            preview_target: Some(DockingPreviewDropTarget::TabStack {
+                tab_stack_id: viewport_stack,
+                insert_index: 1,
+            }),
+            preview_candidates: Vec::new(),
+        }),
+        active_split_border_widget: None,
+    };
+    let build = build_editor_shell_frame_with_docking_visual_state(
+        &frame_model,
+        &ThemeTokens::default(),
+        &workspace,
+        Some(&docking_visual_state),
+    );
+    let active_zone = tab_drop_zone_widget_id(viewport_stack, 1);
+
+    assert!(ui_tree_contains_widget(&build.tree.root, active_zone));
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        active_zone,
+        ui_definition::UiDockDropZoneKindDefinition::TabReorder,
+        ui_definition::UiDockDropZoneStateDefinition::Active,
+        0,
+    );
+    let formed = build
+        .projection_artifacts
+        .interaction_model
+        .dock_drop_zones
+        .iter()
+        .find(|zone| zone.zone_widget_id == active_zone)
+        .expect("active tab reorder drop zone should be formed");
+    assert_eq!(
+        formed.anchor_widget_id,
+        crate::tab_strip_widget_id(viewport_stack)
+    );
+    assert_eq!(formed.scope, ui_definition::UiDockDropScopeDefinition::Area);
+    assert_eq!(formed.side, None);
+    assert!(!formed.preview_only);
+}
+
+#[test]
 fn dock_split_preview_projects_side_slice_without_consuming_layout() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
@@ -1573,6 +1623,30 @@ fn dock_split_preview_projects_side_slice_without_consuming_layout() {
         &build.tree.root,
         dock_split_preview_overlay_widget_id(anchor_widget_id)
     ));
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        dock_split_preview_overlay_widget_id(anchor_widget_id),
+        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
+        ui_definition::UiDockDropZoneStateDefinition::Active,
+        10,
+    );
+    let formed_preview = build
+        .projection_artifacts
+        .interaction_model
+        .dock_drop_zones
+        .iter()
+        .find(|zone| zone.zone_widget_id == dock_split_preview_overlay_widget_id(anchor_widget_id))
+        .expect("active split preview zone should be formed");
+    assert_eq!(formed_preview.anchor_widget_id, anchor_widget_id);
+    assert_eq!(
+        formed_preview.scope,
+        ui_definition::UiDockDropScopeDefinition::Area
+    );
+    assert_eq!(
+        formed_preview.side,
+        Some(ui_definition::UiDockDropSideDefinition::Left)
+    );
+    assert!(formed_preview.preview_only);
 
     let bounds = UiRect::new(0.0, 0.0, 960.0, 640.0);
     let layouts = ui_runtime::compute_tree_layout(
@@ -1649,6 +1723,41 @@ fn dock_root_split_preview_spans_target_root_edge() {
 }
 
 #[test]
+fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
+    let workspace = sample_workspace_state();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let frame_model = frame_model_for_workspace(&workspace);
+    let docking_visual_state = DockingInteractionVisualState {
+        active_tab_drag: Some(ActiveTabDragVisualState {
+            panel_instance_id: viewport_panel,
+            source_tab_stack_id: viewport_stack,
+            preview_target: Some(DockingPreviewDropTarget::NewFloatingHost),
+            preview_candidates: Vec::new(),
+        }),
+        active_split_border_widget: None,
+    };
+    let build = build_editor_shell_frame_with_docking_visual_state(
+        &frame_model,
+        &ThemeTokens::default(),
+        &workspace,
+        Some(&docking_visual_state),
+    );
+
+    assert!(ui_tree_contains_widget(
+        &build.tree.root,
+        crate::FLOATING_DROP_ZONE_WIDGET_ID
+    ));
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        crate::FLOATING_DROP_ZONE_WIDGET_ID,
+        ui_definition::UiDockDropZoneKindDefinition::FloatingHost,
+        ui_definition::UiDockDropZoneStateDefinition::Active,
+        40,
+    );
+}
+
+#[test]
 fn dock_scope_previews_render_all_candidates_and_active_label() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
@@ -1721,6 +1830,27 @@ fn dock_scope_previews_render_all_candidates_and_active_label() {
         &build.tree.root,
         dock_split_preview_label_widget_id(area_anchor)
     ));
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        dock_split_preview_overlay_widget_id(area_anchor),
+        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
+        ui_definition::UiDockDropZoneStateDefinition::Candidate,
+        10,
+    );
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        dock_split_preview_overlay_widget_id(group_anchor),
+        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
+        ui_definition::UiDockDropZoneStateDefinition::Active,
+        20,
+    );
+    assert_dock_drop_zone(
+        &build.projection_artifacts.interaction_model,
+        dock_split_preview_overlay_widget_id(workspace_anchor),
+        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
+        ui_definition::UiDockDropZoneStateDefinition::Candidate,
+        30,
+    );
 }
 
 #[test]
@@ -2007,6 +2137,25 @@ fn assert_horizontal_slot_order(
     assert!(
         label.x + label.width <= active_indicator.x,
         "label slot should not overlap active indicator slot: label={label:?}, active={active_indicator:?}",
+    );
+}
+
+fn assert_dock_drop_zone(
+    model: &ui_definition::FormedInteractionModel,
+    zone_widget_id: WidgetId,
+    kind: ui_definition::UiDockDropZoneKindDefinition,
+    state: ui_definition::UiDockDropZoneStateDefinition,
+    priority: u16,
+) {
+    assert!(
+        model.dock_drop_zones.iter().any(|zone| {
+            zone.zone_widget_id == zone_widget_id
+                && zone.kind == kind
+                && zone.state == state
+                && zone.priority == priority
+        }),
+        "expected dock/drop zone {kind:?} {state:?} priority {priority} for {zone_widget_id:?}; zones: {:?}",
+        model.dock_drop_zones,
     );
 }
 

@@ -47,6 +47,7 @@ pub struct UiMenuStackScopeDefinition {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FormedInteractionModel {
     pub chrome_slots: Vec<FormedChromeSlot>,
+    pub dock_drop_zones: Vec<FormedDockDropZone>,
     pub menu_scopes: Vec<FormedMenuStackScope>,
     pub menu_sizing: Vec<FormedMenuSizing>,
     pub scroll_owners: Vec<FormedScrollOwner>,
@@ -55,6 +56,7 @@ pub struct FormedInteractionModel {
 impl FormedInteractionModel {
     pub fn extend(&mut self, other: FormedInteractionModel) {
         self.chrome_slots.extend(other.chrome_slots);
+        self.dock_drop_zones.extend(other.dock_drop_zones);
         self.menu_scopes.extend(other.menu_scopes);
         self.menu_sizing.extend(other.menu_sizing);
         self.scroll_owners.extend(other.scroll_owners);
@@ -62,6 +64,10 @@ impl FormedInteractionModel {
 
     pub fn push_chrome_slot(&mut self, slot: FormedChromeSlot) {
         self.chrome_slots.push(slot);
+    }
+
+    pub fn push_dock_drop_zone(&mut self, zone: FormedDockDropZone) {
+        self.dock_drop_zones.push(zone);
     }
 
     pub fn push_menu_scope(&mut self, scope: FormedMenuStackScope) {
@@ -102,6 +108,47 @@ pub enum UiChromeSlotInputPolicyDefinition {
     Activate,
     Command,
     Drag,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormedDockDropZone {
+    pub zone_widget_id: WidgetId,
+    pub anchor_widget_id: WidgetId,
+    pub kind: UiDockDropZoneKindDefinition,
+    pub scope: UiDockDropScopeDefinition,
+    pub side: Option<UiDockDropSideDefinition>,
+    pub state: UiDockDropZoneStateDefinition,
+    pub priority: u16,
+    pub preview_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiDockDropZoneKindDefinition {
+    TabReorder,
+    SplitInsertion,
+    FloatingHost,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiDockDropScopeDefinition {
+    Area,
+    Group,
+    Workspace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiDockDropSideDefinition {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiDockDropZoneStateDefinition {
+    Candidate,
+    Active,
+    Invalid,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

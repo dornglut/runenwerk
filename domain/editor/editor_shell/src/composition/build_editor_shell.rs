@@ -4,10 +4,11 @@
 use std::collections::BTreeMap;
 
 use ui_definition::{
-    FormedChromeSlot, FormedInteractionModel, FormedMenuSizing, FormedMenuStackScope,
-    FormedScrollOwner, FormedUiRoute, UiChromeSlotInputPolicyDefinition,
-    UiChromeSlotKindDefinition, UiMenuDismissPolicyDefinition, UiMenuItemWidthDefinition,
-    UiMenuOverflowDefinition, UiScrollBoundaryPolicyDefinition,
+    FormedChromeSlot, FormedDockDropZone, FormedInteractionModel, FormedMenuSizing,
+    FormedMenuStackScope, FormedScrollOwner, FormedUiRoute, UiChromeSlotInputPolicyDefinition,
+    UiChromeSlotKindDefinition, UiDockDropScopeDefinition, UiDockDropSideDefinition,
+    UiDockDropZoneKindDefinition, UiDockDropZoneStateDefinition, UiMenuDismissPolicyDefinition,
+    UiMenuItemWidthDefinition, UiMenuOverflowDefinition, UiScrollBoundaryPolicyDefinition,
 };
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets};
@@ -197,6 +198,12 @@ pub struct DockingInteractionVisualState {
     pub active_split_border_widget: Option<WidgetId>,
 }
 
+const TAB_REORDER_DROP_PRIORITY: u16 = 0;
+const AREA_SPLIT_DROP_PRIORITY: u16 = 10;
+const GROUP_SPLIT_DROP_PRIORITY: u16 = 20;
+const WORKSPACE_SPLIT_DROP_PRIORITY: u16 = 30;
+const FLOATING_HOST_DROP_PRIORITY: u16 = 40;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShellProjectionArtifacts {
     pub projection_epoch: u64,
@@ -249,6 +256,10 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         interaction_model.extend(popup.interaction_model.clone());
     }
     interaction_model.extend(tab_stack_chrome_interaction_model(&workspace_projection));
+    interaction_model.extend(dock_drop_zone_interaction_model(
+        &workspace_projection,
+        docking_visual_state,
+    ));
     interaction_model.extend(tab_stack_popup_interaction_model(frame_model));
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
         frame_model,
@@ -768,6 +779,106 @@ fn push_chrome_slots(
         input_policy: UiChromeSlotInputPolicyDefinition::None,
         order: 2,
     });
+}
+
+fn dock_drop_zone_interaction_model(
+    workspace_projection: &WorkspaceProjectionArtifact,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+) -> FormedInteractionModel {
+    let Some(active_drag) = docking_visual_state.and_then(|value| value.active_tab_drag.as_ref())
+    else {
+        return FormedInteractionModel::default();
+    };
+
+    let mut model = FormedInteractionModel::default();
+    for stack in projected_tab_stacks_for_routes(workspace_projection) {
+        for drop_slot in &stack.drop_slots {
+            let active = active_drag.preview_target.is_some_and(|target| {
+                matches!(
+                    target,
+                    DockingPreviewDropTarget::TabStack {
+                        tab_stack_id,
+                        insert_index
+                    } if tab_stack_id == stack.tab_stack_id
+                        && insert_index == drop_slot.insert_index
+                )
+            });
+            model.push_dock_drop_zone(FormedDockDropZone {
+                zone_widget_id: drop_slot.widget_id,
+                anchor_widget_id: stack.tab_strip_widget_id,
+                kind: UiDockDropZoneKindDefinition::TabReorder,
+                scope: UiDockDropScopeDefinition::Area,
+                side: None,
+                state: dock_drop_zone_state(active),
+                priority: TAB_REORDER_DROP_PRIORITY,
+                preview_only: false,
+            });
+        }
+    }
+
+    for candidate in &active_drag.preview_candidates {
+        model.push_dock_drop_zone(FormedDockDropZone {
+            zone_widget_id: dock_split_preview_overlay_widget_id(candidate.anchor_widget_id),
+            anchor_widget_id: candidate.anchor_widget_id,
+            kind: UiDockDropZoneKindDefinition::SplitInsertion,
+            scope: dock_drop_scope_definition(candidate.scope),
+            side: Some(dock_drop_side_definition(candidate.side)),
+            state: dock_drop_zone_state(candidate.active),
+            priority: dock_drop_priority(candidate.scope),
+            preview_only: true,
+        });
+    }
+
+    if active_drag
+        .preview_target
+        .is_some_and(|target| matches!(target, DockingPreviewDropTarget::NewFloatingHost))
+    {
+        model.push_dock_drop_zone(FormedDockDropZone {
+            zone_widget_id: FLOATING_DROP_ZONE_WIDGET_ID,
+            anchor_widget_id: BODY_ROOT_WIDGET_ID,
+            kind: UiDockDropZoneKindDefinition::FloatingHost,
+            scope: UiDockDropScopeDefinition::Workspace,
+            side: Some(UiDockDropSideDefinition::Right),
+            state: UiDockDropZoneStateDefinition::Active,
+            priority: FLOATING_HOST_DROP_PRIORITY,
+            preview_only: false,
+        });
+    }
+
+    model
+}
+
+fn dock_drop_zone_state(active: bool) -> UiDockDropZoneStateDefinition {
+    if active {
+        UiDockDropZoneStateDefinition::Active
+    } else {
+        UiDockDropZoneStateDefinition::Candidate
+    }
+}
+
+fn dock_drop_priority(scope: DockDropScope) -> u16 {
+    match scope {
+        DockDropScope::Area => AREA_SPLIT_DROP_PRIORITY,
+        DockDropScope::Group => GROUP_SPLIT_DROP_PRIORITY,
+        DockDropScope::Workspace => WORKSPACE_SPLIT_DROP_PRIORITY,
+    }
+}
+
+fn dock_drop_scope_definition(scope: DockDropScope) -> UiDockDropScopeDefinition {
+    match scope {
+        DockDropScope::Area => UiDockDropScopeDefinition::Area,
+        DockDropScope::Group => UiDockDropScopeDefinition::Group,
+        DockDropScope::Workspace => UiDockDropScopeDefinition::Workspace,
+    }
+}
+
+fn dock_drop_side_definition(side: crate::DockSplitSide) -> UiDockDropSideDefinition {
+    match side {
+        crate::DockSplitSide::Left => UiDockDropSideDefinition::Left,
+        crate::DockSplitSide::Right => UiDockDropSideDefinition::Right,
+        crate::DockSplitSide::Top => UiDockDropSideDefinition::Top,
+        crate::DockSplitSide::Bottom => UiDockDropSideDefinition::Bottom,
+    }
 }
 
 fn push_tab_stack_menu_scope(

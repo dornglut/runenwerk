@@ -188,11 +188,20 @@ without recreating the same policy in several layers.
   now emit structural tab/workspace chrome slot rows instead of close/indicator
   overlay adornments, and `domain/ui/ui_runtime/src/input/hit_test.rs` covers
   child slot hit precedence.
+- `IV2-dock-drop-zones` has its first code-bearing retained slice.
+  `domain/ui/ui_definition/src/interaction.rs` defines formed dock/drop-zone
+  records for tab reorder, split insertion, and floating-host targets with
+  scope, side, active/candidate state, priority, and preview-only policy.
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`
+  adapts current tab-drag preview state into formed drop zones while keeping
+  workspace mutation in the editor/app command path, and
+  `domain/ui/ui_runtime/src/input/hit_test.rs` covers preview overlay child hit
+  precedence.
 
-The viewport tools/options/details popup adapters, dock/drop-zone policy, and
-status/viewport arbitration remain separate WR-025 slices. WR-024 may consume
-only the landed menu-stack, scroll-ownership, menu-sizing, and chrome-slot
-behaviors until those later slices exist.
+The viewport tools/options/details popup adapters and status/viewport
+arbitration remain separate WR-025 slices. WR-024 may consume only the landed
+menu-stack, scroll-ownership, menu-sizing, chrome-slot, and dock/drop-zone
+behaviors until the remaining status/viewport slice exists.
 
 ## Strangler Migration
 

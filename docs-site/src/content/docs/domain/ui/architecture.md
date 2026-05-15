@@ -177,6 +177,13 @@ Landed slice status as of 2026-05-15:
   `domain/editor/editor_shell/src/composition/toolbar_definition.rs::project_workspace_close_buttons`,
   while `domain/ui/ui_runtime/src/input/hit_test.rs` guards structural child
   hit precedence.
+- `IV2-dock-drop-zones` now carries formed dock/drop-zone records in
+  `domain/ui/ui_definition/src/interaction.rs`. The editor shell publishes tab
+  reorder, split-insertion, and floating-host drop zones from
+  `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`
+  while keeping workspace mutation in editor/app command owners, and
+  `domain/ui/ui_runtime/src/input/hit_test.rs` guards preview child hit
+  precedence.
 - App production viewport input remains app-owned. The guard is
   `apps/runenwerk_editor/tests/viewport_architecture_guards.rs::production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership`.
 

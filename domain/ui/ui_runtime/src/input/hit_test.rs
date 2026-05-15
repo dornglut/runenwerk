@@ -127,7 +127,8 @@ fn combine_clip(
 mod tests {
     use super::*;
     use crate::{
-        ButtonNode, PopupNode, RadialMenuNode, StackNode, UiRuntimeState, compute_tree_layout,
+        ButtonNode, OverlayAdornmentNode, PopupNode, PopupSide, RadialMenuNode, StackNode,
+        UiRuntimeState, compute_tree_layout,
     };
     use ui_layout::SizePolicy;
     use ui_math::{UiPoint, UiRect, UiSize};
@@ -380,5 +381,55 @@ mod tests {
         );
         assert!(close.x + close.width <= label.x);
         assert!(label.x + label.width <= indicator.x);
+    }
+
+    #[test]
+    fn overlay_adornment_preview_child_wins_hit_testing_over_anchor() {
+        let theme = ThemeTokens::default();
+        let anchor_id = WidgetId(2);
+        let overlay_id = WidgetId(3);
+        let preview_id = WidgetId(4);
+        let text_style = theme.body_small_text_style(FontId(1));
+        let mut anchor = ButtonNode::new("Area", text_style.clone(), theme.clone());
+        anchor.min_size = UiSize::new(120.0, 80.0);
+        let mut preview = ButtonNode::new("Drop", text_style, theme.clone());
+        preview.fill_width = true;
+        let tree = UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(crate::PanelNode::new(theme)),
+            vec![
+                UiNode::new(anchor_id, UiNodeKind::Button(anchor)),
+                UiNode::with_children(
+                    overlay_id,
+                    UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_edge(
+                        anchor_id,
+                        PopupSide::Left,
+                        24.0,
+                    )),
+                    vec![UiNode::new(preview_id, UiNodeKind::Button(preview))],
+                ),
+            ],
+        ));
+        let layouts = compute_tree_layout(
+            &tree,
+            UiRect::new(0.0, 0.0, 180.0, 120.0),
+            &UiRuntimeState::default(),
+        );
+        let preview_bounds = layouts
+            .get(&preview_id)
+            .expect("preview child should have layout")
+            .bounds;
+
+        assert_eq!(
+            hit_test_widget(
+                &tree,
+                &layouts,
+                UiPoint::new(
+                    preview_bounds.x + preview_bounds.width * 0.5,
+                    preview_bounds.y + preview_bounds.height * 0.5,
+                )
+            ),
+            Some(preview_id)
+        );
     }
 }
