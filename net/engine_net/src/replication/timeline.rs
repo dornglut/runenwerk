@@ -118,6 +118,7 @@ pub fn apply_delta_payload(
     base: &SnapshotPayload,
     delta: &DeltaSnapshotPayload,
 ) -> SnapshotPayload {
+    let delta = normalize_delta_payload(delta);
     let mut spawns = base.spawns.clone();
     let mut despawns = base.despawns.clone();
     let mut upserts = base.upserts.clone();
@@ -134,6 +135,9 @@ pub fn apply_delta_payload(
         }
     }
     for item in &delta.despawns {
+        spawns.retain(|spawn| spawn.net_entity_id != item.net_entity_id);
+        upserts.retain(|upsert| upsert.net_entity_id != item.net_entity_id);
+        removes.retain(|remove| remove.net_entity_id != item.net_entity_id);
         if !despawns
             .iter()
             .any(|e| e.net_entity_id == item.net_entity_id)
@@ -142,6 +146,12 @@ pub fn apply_delta_payload(
         }
     }
     for item in &delta.upserts {
+        if despawns
+            .iter()
+            .any(|despawn| despawn.net_entity_id == item.net_entity_id)
+        {
+            continue;
+        }
         if let Some(existing) = upserts.iter_mut().find(|e| {
             e.net_entity_id == item.net_entity_id && e.component_name == item.component_name
         }) {
@@ -151,6 +161,12 @@ pub fn apply_delta_payload(
         }
     }
     for item in &delta.removes {
+        if despawns
+            .iter()
+            .any(|despawn| despawn.net_entity_id == item.net_entity_id)
+        {
+            continue;
+        }
         if !removes.iter().any(|e| {
             e.net_entity_id == item.net_entity_id && e.component_name == item.component_name
         }) {
@@ -163,6 +179,42 @@ pub fn apply_delta_payload(
         despawns,
         upserts,
         removes,
+    }
+}
+
+pub fn normalize_delta_payload(delta: &DeltaSnapshotPayload) -> DeltaSnapshotPayload {
+    let despawned = delta
+        .despawns
+        .iter()
+        .map(|entry| entry.net_entity_id)
+        .collect::<BTreeSet<_>>();
+    let mut emitted_despawns = BTreeSet::new();
+
+    DeltaSnapshotPayload {
+        spawns: delta
+            .spawns
+            .iter()
+            .filter(|entry| !despawned.contains(&entry.net_entity_id))
+            .cloned()
+            .collect(),
+        despawns: delta
+            .despawns
+            .iter()
+            .filter(|entry| emitted_despawns.insert(entry.net_entity_id))
+            .cloned()
+            .collect(),
+        upserts: delta
+            .upserts
+            .iter()
+            .filter(|entry| !despawned.contains(&entry.net_entity_id))
+            .cloned()
+            .collect(),
+        removes: delta
+            .removes
+            .iter()
+            .filter(|entry| !despawned.contains(&entry.net_entity_id))
+            .cloned()
+            .collect(),
     }
 }
 
@@ -221,7 +273,7 @@ fn build_delta_payload(base: &SnapshotPayload, current: &SnapshotPayload) -> Del
         }
     }
 
-    delta
+    normalize_delta_payload(&delta)
 }
 
 fn collect_entity_ids_from_full(payload: &SnapshotPayload) -> Vec<NetworkEntityId> {
@@ -260,8 +312,11 @@ fn collect_entity_ids_from_delta(payload: &DeltaSnapshotPayload) -> Vec<NetworkE
 
 #[cfg(test)]
 mod tests {
-    use super::{SnapshotCursor, SnapshotTimeline, apply_delta_payload};
-    use crate::protocol::{ComponentUpsert, DeltaSnapshotPayload, SnapshotPayload};
+    use super::{SnapshotCursor, SnapshotTimeline, apply_delta_payload, normalize_delta_payload};
+    use crate::protocol::{
+        ComponentRemove, ComponentUpsert, DeltaSnapshotPayload, EntityDespawn, EntitySpawn,
+        SnapshotPayload,
+    };
     use engine_sim::{NetEntityId, SimulationTick};
 
     #[test]
@@ -316,6 +371,83 @@ mod tests {
         };
         let merged = apply_delta_payload(&base, &delta);
         assert_eq!(merged.upserts[0].payload, vec![80]);
+    }
+
+    #[test]
+    fn delta_despawn_removes_existing_component_state() {
+        let base = SnapshotPayload {
+            spawns: vec![EntitySpawn {
+                net_entity_id: NetEntityId(9),
+                prefab: Some("Actor".to_string()),
+            }],
+            upserts: vec![ComponentUpsert {
+                net_entity_id: NetEntityId(9),
+                component_name: "Health".to_string(),
+                payload: vec![100],
+            }],
+            ..SnapshotPayload::default()
+        };
+        let delta = DeltaSnapshotPayload {
+            despawns: vec![EntityDespawn {
+                net_entity_id: NetEntityId(9),
+            }],
+            upserts: vec![ComponentUpsert {
+                net_entity_id: NetEntityId(9),
+                component_name: "Health".to_string(),
+                payload: vec![0],
+            }],
+            removes: vec![ComponentRemove {
+                net_entity_id: NetEntityId(9),
+                component_name: "Health".to_string(),
+            }],
+            ..DeltaSnapshotPayload::default()
+        };
+
+        let merged = apply_delta_payload(&base, &delta);
+
+        assert!(merged.spawns.is_empty());
+        assert!(merged.upserts.is_empty());
+        assert!(merged.removes.is_empty());
+        assert_eq!(
+            merged.despawns,
+            vec![EntityDespawn {
+                net_entity_id: NetEntityId(9)
+            }]
+        );
+    }
+
+    #[test]
+    fn normalize_delta_payload_makes_same_delta_despawn_win() {
+        let payload = DeltaSnapshotPayload {
+            spawns: vec![EntitySpawn {
+                net_entity_id: NetEntityId(12),
+                prefab: Some("Projectile".to_string()),
+            }],
+            despawns: vec![EntityDespawn {
+                net_entity_id: NetEntityId(12),
+            }],
+            upserts: vec![ComponentUpsert {
+                net_entity_id: NetEntityId(12),
+                component_name: "Transform".to_string(),
+                payload: vec![1],
+            }],
+            removes: vec![ComponentRemove {
+                net_entity_id: NetEntityId(12),
+                component_name: "Transform".to_string(),
+            }],
+        };
+
+        let normalized = normalize_delta_payload(&payload);
+
+        assert!(normalized.spawns.is_empty());
+        assert_eq!(
+            normalized.despawns,
+            vec![EntityDespawn {
+                net_entity_id: NetEntityId(12)
+            }]
+        );
+        assert!(normalized.upserts.is_empty());
+        assert!(normalized.removes.is_empty());
     }
 
     #[test]

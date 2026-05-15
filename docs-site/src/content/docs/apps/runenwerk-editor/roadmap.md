@@ -540,9 +540,10 @@ Interaction V2 now has an accepted ADR and needs retained-UI migration slices.
   - active design: `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`;
   - accepted ADR: `docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md`;
   - retain the current retained UI execution target while adding `FormedInteractionModel` for popup stack, scroll ownership, focus, menu sizing, chrome slots, docking zones, and status overflow;
+  - use the migration spine `definition vocabulary -> validation rule -> FormedInteractionModel record -> retained UI formation adapter -> ui_runtime enforcement -> editor/app guard` before retained UI implementation slices;
   - renderer/product-surface output remains derived data, not UI authority;
   - do this before more local shell/menu/chrome patches accumulate;
-  - editor shell polish is a retained-UI implementation slice after the relevant Interaction V2 contract, not the owner of durable popup, scroll, focus, docking, or viewport-input policy.
+  - editor shell polish is a retained-UI implementation slice after the relevant Interaction V2 contract, or bounded compatibility evidence; it is not the owner of durable popup, scroll, focus, docking, status-overflow, or viewport-input policy.
 - compiled-reactive UI execution
   - promote only through a new active design or accepted ADR;
   - define the first surface that needs it, the formation product, scheduling model, invalidation model, debug/source-map story, and guard tests;
@@ -593,6 +594,10 @@ Interaction V2 now has an accepted ADR and needs retained-UI migration slices.
 - UI Designer looked missing because the roadmap used self-authoring language. It is now identified as the same promoted path, not a separate missing feature.
 - SDF prefabs were grouped with deferred SDF detail drafts. The design is now active, but implementation remains V2-gated behind rendered-world V1 and source-backed asset identity.
 - Repeated editor UI polish issues were listed as individual bugs. Accepted ADR 0009 and Interaction V2 now turn popup, scroll, focus, menu sizing, chrome, docking, and status overflow into shared contracts.
+- Editor shell polish is now explicitly behind Interaction V2. It may consume
+  defined retained-UI contract slices or provide compatibility evidence, but it
+  may not define long-term popup, scroll, focus, docking, status, or viewport
+  input policy on its own.
 
 ## Milestones
 
@@ -606,7 +611,7 @@ Exit criteria:
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
 - The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
 - UI execution strategy is closed for M1 through M7 and M3.5/M3.6: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution remains deferred and may not enter self-authoring as a first-time decision.
-- ADR 0009 makes Interaction V2 the shared editor UI behavior contract before further popup, scroll, chrome, docking, and viewport-input work.
+- ADR 0009 makes Interaction V2 the shared editor UI behavior contract before further popup, scroll, chrome, docking, status-overflow, and viewport-input work. The required spine is definition vocabulary, validation rule, `FormedInteractionModel`, retained UI formation adapter, `ui_runtime` enforcement, and editor/app guard.
 - Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
 - `python3 tools/docs/validate_docs.py` passes.
 

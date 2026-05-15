@@ -549,7 +549,13 @@ def render_batch_report(manifest: BatchManifest) -> str:
 
 def default_batch_id(goal: str) -> str:
     today = dt.date.today().isoformat()
-    slug = re.sub(r"[^a-z0-9]+", "-", goal.lower()).strip("-")[:40] or "roadmap-batch"
+    base_slug = re.sub(r"[^a-z0-9]+", "-", goal.lower()).strip("-") or "roadmap-batch"
+    item_suffix = "-".join(dict.fromkeys(re.findall(r"\bwr-\d+\b", goal.lower())))
+    slug = base_slug[:40].strip("-") or "roadmap-batch"
+    if item_suffix and item_suffix not in slug:
+        if slug.endswith("wr"):
+            slug = slug[:-2].strip("-") or "roadmap-batch"
+        slug = f"{slug}-{item_suffix}"
     return f"{today}-{slug}"
 
 

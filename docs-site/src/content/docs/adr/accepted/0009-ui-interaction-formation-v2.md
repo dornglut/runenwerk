@@ -108,6 +108,36 @@ ratification boundaries intact. Compatibility adapters are allowed only as
 explicit migration code; they must not become a second interaction
 architecture.
 
+Each slice must define the same migration spine before implementation:
+
+```text
+definition vocabulary
+  -> validation rule
+  -> FormedInteractionModel record
+  -> retained UI formation adapter
+  -> ui_runtime enforcement
+  -> editor/app guard
+```
+
+The old retained path may remain during migration only behind named
+compatibility adapters. Those adapters must identify the target formed contract
+and the guard that prevents the old behavior from expanding.
+
+## Dependent Work Policy
+
+Editor shell polish is downstream implementation evidence, not the durable
+owner of interaction policy. Work such as popup contrast, scrollable menus,
+Switch Type submenu anchoring, tab close placement, active indicators, docking
+previews, or viewport statistics may proceed only as:
+
+- a retained UI slice consuming an already defined Interaction V2 contract; or
+- explicit compatibility evidence that records the old behavior while the
+  target contract is being formed.
+
+It must not introduce a second popup policy, app-local viewport arbitration
+truth, compiled-reactive UI, ECS-driven UI, an external UI framework, or
+renderer-owned UI semantics.
+
 ## Non-Decisions
 
 This ADR does not:

@@ -1,11 +1,12 @@
 use crate::protocol::{DeltaSnapshot, InputFrame, Snapshot, SnapshotPayload};
 use crate::replication::interest::{InterestContext, InterestPolicy, allows_replication};
 use crate::replication::{
-    LaneRouteTrace, ReplicationProfilePreset, ReplicationStats, SnapshotCursor, SnapshotTimeline,
+    LaneRouteTrace, ReplicationProfilePreset, ReplicationStats, SnapshotAckOutcome,
+    SnapshotAckRejection, SnapshotCursor, SnapshotTimeline,
 };
 use crate::transport::{ConnectionId, TransportLane, lane_for_profile};
 use engine_sim::{NetEntityId, SimulationTick};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub type InputValidationHook =
     Box<dyn Fn(ConnectionId, &InputFrame) -> Result<(), String> + Send + Sync + 'static>;
@@ -31,10 +32,11 @@ impl ServerSnapshotMessage {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct ConnectionReplicationState {
     last_acknowledged: Option<SnapshotCursor>,
     force_full_snapshot: bool,
+    sent_cursors: BTreeSet<SnapshotCursor>,
 }
 
 #[derive(Default)]
@@ -100,10 +102,71 @@ impl AuthoritativeServerRuntime {
         Ok(delta)
     }
 
-    pub fn mark_acknowledged(&mut self, connection_id: ConnectionId, cursor: SnapshotCursor) {
+    pub fn mark_acknowledged(
+        &mut self,
+        connection_id: ConnectionId,
+        cursor: SnapshotCursor,
+    ) -> SnapshotAckOutcome {
+        let outcome = self.validate_snapshot_ack(connection_id, cursor);
+        match outcome {
+            SnapshotAckOutcome::Accepted { .. } => {
+                let state = self.connection_state.entry(connection_id).or_default();
+                state.last_acknowledged = Some(cursor);
+                state.force_full_snapshot = false;
+                self.stats.record_snapshot_ack_accepted();
+            }
+            SnapshotAckOutcome::Rejected { .. } => {
+                self.stats.record_snapshot_ack_rejected();
+            }
+        }
+        outcome
+    }
+
+    fn validate_snapshot_ack(
+        &self,
+        connection_id: ConnectionId,
+        cursor: SnapshotCursor,
+    ) -> SnapshotAckOutcome {
+        let Some(state) = self.connection_state.get(&connection_id) else {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::UnsentCursor,
+            };
+        };
+        if let Some(last_acknowledged) = state.last_acknowledged
+            && cursor <= last_acknowledged
+        {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::StaleCursor { last_acknowledged },
+            };
+        }
+        if let Some(latest_cursor) = self.latest_cursor()
+            && cursor > latest_cursor
+        {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::FutureCursor { latest_cursor },
+            };
+        }
+        if !state.sent_cursors.contains(&cursor) {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::UnsentCursor,
+            };
+        }
+        if !self.timeline.contains_cursor(cursor) {
+            return SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::PrunedCursor,
+            };
+        }
+        SnapshotAckOutcome::Accepted { cursor }
+    }
+
+    fn record_sent_cursor(&mut self, connection_id: ConnectionId, cursor: SnapshotCursor) {
         let state = self.connection_state.entry(connection_id).or_default();
-        state.last_acknowledged = Some(cursor);
-        state.force_full_snapshot = false;
+        state.sent_cursors.insert(cursor);
     }
 
     pub fn mark_reconnect(&mut self, connection_id: ConnectionId) {
@@ -124,6 +187,7 @@ impl AuthoritativeServerRuntime {
 
         if !force_full_snapshot && let Some(base_cursor) = last_acknowledged {
             if let Some(delta) = self.build_delta_snapshot(tick, base_cursor, payload)? {
+                self.record_sent_cursor(connection_id, delta.cursor);
                 return Ok(ServerSnapshotMessage::Delta(delta));
             }
             self.queue_full_resync(
@@ -138,11 +202,16 @@ impl AuthoritativeServerRuntime {
         let snapshot = self.build_full_snapshot(tick, payload.clone())?;
         let state = self.connection_state.entry(connection_id).or_default();
         state.force_full_snapshot = false;
+        state.sent_cursors.insert(snapshot.cursor);
         Ok(ServerSnapshotMessage::Full(snapshot))
     }
 
     pub fn latest_cursor(&self) -> Option<SnapshotCursor> {
         self.timeline.latest_cursor()
+    }
+
+    pub fn prune_snapshots_before(&mut self, min_cursor: SnapshotCursor) {
+        self.timeline.prune_before(min_cursor);
     }
 
     pub fn queue_full_resync(&mut self, connection_id: ConnectionId, reason: impl Into<String>) {
@@ -238,7 +307,9 @@ pub fn should_send_to_connection(
 mod tests {
     use super::{AuthoritativeServerRuntime, ServerSnapshotMessage};
     use crate::protocol::{ComponentUpsert, SnapshotPayload};
-    use crate::replication::{ReplicationProfilePreset, SnapshotCursor};
+    use crate::replication::{
+        ReplicationProfilePreset, SnapshotAckOutcome, SnapshotAckRejection, SnapshotCursor,
+    };
     use crate::transport::ConnectionId;
     use engine_sim::{NetEntityId, SimulationTick};
 
@@ -261,7 +332,12 @@ mod tests {
             ServerSnapshotMessage::Full(snapshot) => snapshot.cursor,
             ServerSnapshotMessage::Delta(_) => panic!("first snapshot should be full"),
         };
-        runtime.mark_acknowledged(connection, full_cursor);
+        assert_eq!(
+            runtime.mark_acknowledged(connection, full_cursor),
+            SnapshotAckOutcome::Accepted {
+                cursor: full_cursor
+            }
+        );
 
         let second = SnapshotPayload {
             upserts: vec![ComponentUpsert {
@@ -281,17 +357,132 @@ mod tests {
     }
 
     #[test]
-    fn missing_baseline_requests_full_resync() {
+    fn missing_accepted_baseline_requests_full_resync() {
         let mut runtime = AuthoritativeServerRuntime::default();
         let connection = ConnectionId(7);
-        runtime.mark_acknowledged(connection, SnapshotCursor(99));
         let payload = SnapshotPayload::default();
+        let full = runtime
+            .build_snapshot_for_connection(connection, SimulationTick(1), &payload)
+            .expect("initial full snapshot should build");
+        let cursor = full.cursor();
+        assert_eq!(
+            runtime.mark_acknowledged(connection, cursor),
+            SnapshotAckOutcome::Accepted { cursor }
+        );
+        runtime.prune_snapshots_before(SnapshotCursor(cursor.0 + 1));
         let message = runtime
             .build_snapshot_for_connection(connection, SimulationTick(10), &payload)
             .expect("fallback full snapshot should build");
         assert!(matches!(message, ServerSnapshotMessage::Full(_)));
         let requests = runtime.take_full_resync_requests();
         assert_eq!(requests.len(), 1);
+    }
+
+    #[test]
+    fn future_ack_is_rejected_without_poisoning_baseline() {
+        let mut runtime = AuthoritativeServerRuntime::default();
+        let connection = ConnectionId(4);
+        let payload = SnapshotPayload {
+            upserts: vec![ComponentUpsert {
+                net_entity_id: NetEntityId(11),
+                component_name: "Health".to_string(),
+                payload: vec![100],
+            }],
+            ..SnapshotPayload::default()
+        };
+        let first = runtime
+            .build_snapshot_for_connection(connection, SimulationTick(1), &payload)
+            .expect("first full snapshot should build");
+        let first_cursor = first.cursor();
+
+        assert_eq!(
+            runtime.mark_acknowledged(connection, SnapshotCursor(99)),
+            SnapshotAckOutcome::Rejected {
+                cursor: SnapshotCursor(99),
+                reason: SnapshotAckRejection::FutureCursor {
+                    latest_cursor: first_cursor
+                }
+            }
+        );
+        assert_eq!(
+            runtime.mark_acknowledged(connection, first_cursor),
+            SnapshotAckOutcome::Accepted {
+                cursor: first_cursor
+            }
+        );
+
+        let next = runtime
+            .build_snapshot_for_connection(connection, SimulationTick(2), &payload)
+            .expect("second snapshot should build");
+        assert!(matches!(
+            next,
+            ServerSnapshotMessage::Delta(delta) if delta.base == first_cursor
+        ));
+    }
+
+    #[test]
+    fn unsent_ack_is_rejected_per_connection() {
+        let mut runtime = AuthoritativeServerRuntime::default();
+        let first_connection = ConnectionId(1);
+        let second_connection = ConnectionId(2);
+        let payload = SnapshotPayload::default();
+        let first = runtime
+            .build_snapshot_for_connection(first_connection, SimulationTick(1), &payload)
+            .expect("snapshot should build");
+        let cursor = first.cursor();
+
+        assert_eq!(
+            runtime.mark_acknowledged(second_connection, cursor),
+            SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::UnsentCursor
+            }
+        );
+    }
+
+    #[test]
+    fn stale_ack_is_rejected() {
+        let mut runtime = AuthoritativeServerRuntime::default();
+        let connection = ConnectionId(3);
+        let payload = SnapshotPayload::default();
+        let first = runtime
+            .build_snapshot_for_connection(connection, SimulationTick(1), &payload)
+            .expect("snapshot should build");
+        let cursor = first.cursor();
+
+        assert_eq!(
+            runtime.mark_acknowledged(connection, cursor),
+            SnapshotAckOutcome::Accepted { cursor }
+        );
+        assert_eq!(
+            runtime.mark_acknowledged(connection, cursor),
+            SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::StaleCursor {
+                    last_acknowledged: cursor
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn pruned_ack_is_rejected() {
+        let mut runtime = AuthoritativeServerRuntime::default();
+        let connection = ConnectionId(5);
+        let payload = SnapshotPayload::default();
+        let first = runtime
+            .build_snapshot_for_connection(connection, SimulationTick(1), &payload)
+            .expect("snapshot should build");
+        let cursor = first.cursor();
+        runtime.prune_snapshots_before(SnapshotCursor(cursor.0 + 1));
+
+        assert_eq!(
+            runtime.mark_acknowledged(connection, cursor),
+            SnapshotAckOutcome::Rejected {
+                cursor,
+                reason: SnapshotAckRejection::PrunedCursor
+            }
+        );
     }
 
     #[test]

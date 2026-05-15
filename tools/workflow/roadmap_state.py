@@ -444,13 +444,41 @@ def write_schema_files(check: bool = False) -> list[str]:
 
 
 def validate_changed_paths(paths: list[str], scopes: list[str]) -> list[str]:
-    normalized_scopes = [normalize_repo_path(scope) for scope in scopes]
+    normalized_scopes = normalized_write_scopes_with_generated_outputs(scopes)
     violations: list[str] = []
     for path in paths:
         normalized = normalize_repo_path(path)
         if not any(path_within_scope(normalized, scope) for scope in normalized_scopes):
             violations.append(normalized)
     return violations
+
+
+def normalized_write_scopes_with_generated_outputs(scopes: list[str]) -> list[str]:
+    normalized_scopes = [normalize_repo_path(scope) for scope in scopes]
+    roadmap_source_scope = normalize_repo_path(str(ROADMAP_SOURCE.relative_to(REPO_ROOT)))
+    if roadmap_source_scope in normalized_scopes:
+        normalized_scopes.extend(
+            path
+            for path in roadmap_generated_output_paths()
+            if path not in normalized_scopes
+        )
+    return normalized_scopes
+
+
+def roadmap_generated_output_paths() -> list[str]:
+    try:
+        data = yaml.safe_load(ROADMAP_SOURCE.read_text(encoding="utf-8")) or {}
+    except OSError:
+        return []
+    render = data.get("render")
+    if not isinstance(render, dict):
+        return []
+    outputs: list[str] = []
+    for key in ("decision_register", "dependency_roadmap", "current_candidates_roadmap", "triage"):
+        value = render.get(key)
+        if isinstance(value, str):
+            outputs.append(normalize_repo_path(value))
+    return outputs
 
 
 def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
@@ -466,6 +494,7 @@ def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
     ]
     changed: list[str] = []
     seen: set[str] = set()
+    status_entries: list[tuple[str, str]] = []
 
     for status_command in status_commands:
         status_completed = subprocess.run(
@@ -476,11 +505,10 @@ def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
             check=True,
         )
         for line in status_completed.stdout.splitlines():
-            for raw_path in porcelain_status_paths(line):
+            for status_code, raw_path in porcelain_status_entries(line):
                 path = normalize_repo_path(raw_path)
-                if path and path not in seen:
-                    changed.append(path)
-                    seen.add(path)
+                if path:
+                    status_entries.append((status_code, path))
 
     for command in commands:
         completed = subprocess.run(
@@ -495,7 +523,18 @@ def changed_files_for_worktree(worktree: Path, base_sha: str) -> list[str]:
             if path and path not in seen:
                 changed.append(path)
                 seen.add(path)
+    for status_code, path in status_entries:
+        if path and path not in seen and status_needs_status_only_fallback(status_code):
+            changed.append(path)
+            seen.add(path)
     return changed
+
+
+def porcelain_status_entries(line: str) -> list[tuple[str, str]]:
+    if len(line) < 4:
+        return []
+    status_code = line[:2]
+    return [(status_code, path) for path in porcelain_status_paths(line)]
 
 
 def porcelain_status_paths(line: str) -> list[str]:
@@ -507,6 +546,10 @@ def porcelain_status_paths(line: str) -> list[str]:
     if " -> " in raw_path:
         return [part.strip().strip('"') for part in raw_path.split(" -> ", maxsplit=1)]
     return [raw_path.strip('"')]
+
+
+def status_needs_status_only_fallback(status_code: str) -> bool:
+    return status_code == "??" or any(marker in status_code for marker in ("A", "D", "R", "C", "U"))
 
 
 def validate_puml_files() -> int:

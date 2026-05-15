@@ -2,7 +2,9 @@ use crate::protocol::{
     ComponentRemove, ComponentUpsert, DeltaSnapshot, DeltaSnapshotPayload, EntityDespawn,
     EntitySpawn, Snapshot, SnapshotPayload, decode_delta_payload, decode_snapshot_payload,
 };
-use crate::replication::{ReplicationStats, SnapshotCursor, apply_delta_payload};
+use crate::replication::{
+    ReplicationStats, SnapshotCursor, apply_delta_payload, normalize_delta_payload,
+};
 use crate::simulation::NetworkEntityId;
 use engine_sim::SimulationTick;
 use std::collections::BTreeMap;
@@ -113,12 +115,17 @@ impl ClientReplicationRuntime {
         let delta_payload: DeltaSnapshotPayload = decode_delta_payload(&delta.payload)
             .map_err(|err| ClientApplyError::DecodeError(err.to_string()))?;
         let merged = apply_delta_payload(base, &delta_payload);
+        let normalized_delta = normalize_delta_payload(&delta_payload);
         self.stats.record_delta_snapshot(delta.payload.len());
         self.snapshots.insert(delta.cursor, merged.clone());
         self.last_tick = Some(delta.tick);
         self.last_cursor = Some(delta.cursor);
         self.needs_full_resync = false;
-        Ok(build_apply_plan(delta.tick, delta.cursor, &merged))
+        Ok(build_delta_apply_plan(
+            delta.tick,
+            delta.cursor,
+            &normalized_delta,
+        ))
     }
 
     pub fn set_entity_mapping(&mut self, net: NetworkEntityId, ecs_entity: u64) {
@@ -175,11 +182,37 @@ fn build_apply_plan(
     }
 }
 
+fn build_delta_apply_plan(
+    tick: SimulationTick,
+    cursor: SnapshotCursor,
+    payload: &DeltaSnapshotPayload,
+) -> ClientApplyPlan {
+    let mut actions = Vec::new();
+    for spawn in &payload.spawns {
+        actions.push(ClientApplyAction::Spawn(spawn.clone()));
+    }
+    for despawn in &payload.despawns {
+        actions.push(ClientApplyAction::Despawn(despawn.clone()));
+    }
+    for upsert in &payload.upserts {
+        actions.push(ClientApplyAction::Upsert(upsert.clone()));
+    }
+    for remove in &payload.removes {
+        actions.push(ClientApplyAction::Remove(remove.clone()));
+    }
+    ClientApplyPlan {
+        tick,
+        cursor,
+        actions,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ClientApplyAction, ClientApplyError, ClientReplicationRuntime};
     use crate::protocol::{
-        ComponentUpsert, DeltaSnapshot, DeltaSnapshotPayload, Snapshot, SnapshotPayload,
+        ComponentRemove, ComponentUpsert, DeltaSnapshot, DeltaSnapshotPayload, EntityDespawn,
+        EntitySpawn, Snapshot, SnapshotPayload,
     };
     use crate::replication::SnapshotCursor;
     use engine_sim::{NetEntityId, SimulationTick};
@@ -224,10 +257,72 @@ mod tests {
         let plan = runtime
             .apply_delta_snapshot(&delta_snapshot)
             .expect("delta apply should succeed");
+        assert_eq!(plan.actions.len(), 1);
         assert!(matches!(
-            plan.actions.last(),
+            plan.actions.first(),
             Some(ClientApplyAction::Upsert(upsert)) if upsert.payload == vec![80]
         ));
+    }
+
+    #[test]
+    fn delta_apply_plan_emits_only_incoming_lifecycle_actions() {
+        let mut runtime = ClientReplicationRuntime::default();
+        let full_payload = SnapshotPayload {
+            spawns: vec![EntitySpawn {
+                net_entity_id: NetEntityId(5),
+                prefab: Some("Actor".to_string()),
+            }],
+            upserts: vec![ComponentUpsert {
+                net_entity_id: NetEntityId(5),
+                component_name: "Health".to_string(),
+                payload: vec![100],
+            }],
+            ..SnapshotPayload::default()
+        };
+        let full_snapshot = Snapshot {
+            tick: SimulationTick(1),
+            cursor: SnapshotCursor(1),
+            last_applied: SnapshotCursor(0),
+            entity_ids: vec![NetEntityId(5)],
+            payload: postcard::to_allocvec(&full_payload).expect("full payload should encode"),
+        };
+        runtime
+            .apply_full_snapshot(&full_snapshot)
+            .expect("full snapshot should apply");
+
+        let delta_payload = DeltaSnapshotPayload {
+            despawns: vec![EntityDespawn {
+                net_entity_id: NetEntityId(5),
+            }],
+            upserts: vec![ComponentUpsert {
+                net_entity_id: NetEntityId(5),
+                component_name: "Health".to_string(),
+                payload: vec![0],
+            }],
+            removes: vec![ComponentRemove {
+                net_entity_id: NetEntityId(5),
+                component_name: "Health".to_string(),
+            }],
+            ..DeltaSnapshotPayload::default()
+        };
+        let delta_snapshot = DeltaSnapshot {
+            tick: SimulationTick(2),
+            base: SnapshotCursor(1),
+            cursor: SnapshotCursor(2),
+            entity_ids: vec![NetEntityId(5)],
+            payload: postcard::to_allocvec(&delta_payload).expect("delta payload should encode"),
+        };
+
+        let plan = runtime
+            .apply_delta_snapshot(&delta_snapshot)
+            .expect("delta should apply");
+
+        assert_eq!(
+            plan.actions,
+            vec![ClientApplyAction::Despawn(EntityDespawn {
+                net_entity_id: NetEntityId(5)
+            })]
+        );
     }
 
     #[test]

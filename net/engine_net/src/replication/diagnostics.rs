@@ -54,6 +54,29 @@ pub struct EntityMapTrace {
     pub event: NetEntityMapEvent,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SnapshotAckRejection {
+    StaleCursor {
+        last_acknowledged: crate::replication::SnapshotCursor,
+    },
+    FutureCursor {
+        latest_cursor: crate::replication::SnapshotCursor,
+    },
+    UnsentCursor,
+    PrunedCursor,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SnapshotAckOutcome {
+    Accepted {
+        cursor: crate::replication::SnapshotCursor,
+    },
+    Rejected {
+        cursor: crate::replication::SnapshotCursor,
+        reason: SnapshotAckRejection,
+    },
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ReplicationStats {
     pub full_snapshots_built: u64,
@@ -62,6 +85,8 @@ pub struct ReplicationStats {
     pub delta_snapshot_bytes: u64,
     pub resync_requests: u64,
     pub stale_snapshots_dropped: u64,
+    pub snapshot_acks_accepted: u64,
+    pub snapshot_acks_rejected: u64,
 }
 
 impl ReplicationStats {
@@ -81,6 +106,14 @@ impl ReplicationStats {
 
     pub fn record_stale_snapshot_drop(&mut self) {
         self.stale_snapshots_dropped = self.stale_snapshots_dropped.saturating_add(1);
+    }
+
+    pub fn record_snapshot_ack_accepted(&mut self) {
+        self.snapshot_acks_accepted = self.snapshot_acks_accepted.saturating_add(1);
+    }
+
+    pub fn record_snapshot_ack_rejected(&mut self) {
+        self.snapshot_acks_rejected = self.snapshot_acks_rejected.saturating_add(1);
     }
 }
 
@@ -148,11 +181,15 @@ mod tests {
         stats.record_delta_snapshot(8);
         stats.record_resync_request();
         stats.record_stale_snapshot_drop();
+        stats.record_snapshot_ack_accepted();
+        stats.record_snapshot_ack_rejected();
         assert_eq!(stats.full_snapshots_built, 1);
         assert_eq!(stats.delta_snapshots_built, 1);
         assert_eq!(stats.full_snapshot_bytes, 12);
         assert_eq!(stats.delta_snapshot_bytes, 8);
         assert_eq!(stats.resync_requests, 1);
         assert_eq!(stats.stale_snapshots_dropped, 1);
+        assert_eq!(stats.snapshot_acks_accepted, 1);
+        assert_eq!(stats.snapshot_acks_rejected, 1);
     }
 }

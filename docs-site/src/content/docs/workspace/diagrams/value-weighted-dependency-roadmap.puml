@@ -135,6 +135,7 @@ RENDER -down-> WINDOW : render surface foundation
 RENDER -down-> FRAGMENTS : aliases / invocations / inspection
 GAMEPLAY -down-> POWERS : narrower gameplay contracts
 UIGUARDS -down-> UIALT : retained UI path remains default
+UIV2 -down-> UIALT : formed interaction contracts first
 RENDER -down-> RENDERWORLD : render product-surface support
 UIGUARDS -down-> RENDERWORLD : editor projection guards
 RENDERWORLD -down-> FIELDVIS : viewport packet/product handoff

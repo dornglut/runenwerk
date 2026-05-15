@@ -8,8 +8,8 @@ pub mod profile;
 pub mod timeline;
 
 pub use diagnostics::{
-    DeltaDebugDump, EntityMapTrace, LaneRouteTrace, ReplicationStats, SnapshotDebugDump,
-    delta_debug_dump, snapshot_debug_dump,
+    DeltaDebugDump, EntityMapTrace, LaneRouteTrace, ReplicationStats, SnapshotAckOutcome,
+    SnapshotAckRejection, SnapshotDebugDump, delta_debug_dump, snapshot_debug_dump,
 };
 pub use driver::{InputDriver, ReplicationDriver, SnapshotApplyDriver};
 pub use extraction::{ReplicationExtractionFilter, extract_replication_deltas};
@@ -25,4 +25,6 @@ pub use profile::{
     BandwidthPriority, PredictionMode, Reliability, ReplicationDirection, ReplicationProfile,
     ReplicationProfilePreset,
 };
-pub use timeline::{SnapshotCursor, SnapshotTimeline, apply_delta_payload};
+pub use timeline::{
+    SnapshotCursor, SnapshotTimeline, apply_delta_payload, normalize_delta_payload,
+};

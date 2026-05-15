@@ -35,6 +35,25 @@ retained-node migration slices, but Interaction V2 owns the durable popup,
 scroll, focus, docking-zone, radial/menu hit-testing, and viewport-input
 arbitration architecture.
 
+## Role In Interaction V2
+
+This document names the retained-node concepts that Interaction V2 must form
+and enforce. It does not independently authorize runtime behavior changes.
+
+Before any phase below is implemented, the owning Interaction V2 slice must
+define:
+
+- the `FormedInteractionModel` concept that distinguishes `MenuPopup`,
+  `OverlayAdornment`, `DockDropPreview`, or `RadialMenu`;
+- the validation rule that prevents the concept from being encoded as a generic
+  popup style variant;
+- the retained formation adapter that maps the formed concept into `ui_tree`
+  nodes without persisting runtime `WidgetId` or editor command semantics;
+- the `ui_runtime` enforcement rule for layer order, clipping, hit testing,
+  outside-dismiss, focus return, or pointer capture;
+- the editor/app guard that proves viewport input, split borders, scrollbars,
+  and sibling panels do not receive events after UI ownership is claimed.
+
 ## Target Concepts
 
 ### MenuPopup

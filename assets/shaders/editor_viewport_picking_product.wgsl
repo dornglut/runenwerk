@@ -59,6 +59,30 @@ fn sdf_capsule(sample_pos: vec3<f32>, center: vec3<f32>, radius: f32, half_heigh
     return length(q - closest) - radius;
 }
 
+fn sdf_cylinder(sample_pos: vec3<f32>, center: vec3<f32>, radius: f32, half_height: f32) -> f32 {
+    let local = sample_pos - center;
+    let d = vec2<f32>(
+        length(local.xz) - radius,
+        abs(local.y) - half_height,
+    );
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0, 0.0)));
+}
+
+fn sdf_torus(sample_pos: vec3<f32>, center: vec3<f32>, major_radius: f32, minor_radius: f32) -> f32 {
+    let local = sample_pos - center;
+    let q = vec2<f32>(length(local.xz) - major_radius, local.y);
+    return length(q) - minor_radius;
+}
+
+fn sdf_plane_slab(sample_pos: vec3<f32>, center: vec3<f32>, half_extents: vec3<f32>) -> f32 {
+    let slab_extents = vec3<f32>(
+        max(half_extents.x, 0.05),
+        max(min(half_extents.y, 0.05), 0.01),
+        max(half_extents.z, 0.05),
+    );
+    return sdf_box(sample_pos, center, slab_extents);
+}
+
 fn primitive_count() -> u32 {
     return min(u.primitive_flags.y, MAX_PRIMITIVES);
 }
@@ -80,6 +104,29 @@ fn sdf_primitive_slot(sample_pos: vec3<f32>, primitive_index: u32) -> f32 {
             center,
             max(params_b.x, 0.05),
             max(params_b.y, 0.05),
+        );
+    }
+
+    if primitive_kind == 3u {
+        return sdf_cylinder(
+            sample_pos,
+            center,
+            max(params_b.x, 0.05),
+            max(params_b.y, 0.05),
+        );
+    }
+
+    if primitive_kind == 4u {
+        let major_radius = max(params_a.w * 1.5, 0.05);
+        let minor_radius = max(params_a.w * 0.5, 0.05);
+        return sdf_torus(sample_pos, center, major_radius, minor_radius);
+    }
+
+    if primitive_kind == 5u {
+        return sdf_plane_slab(
+            sample_pos,
+            center,
+            max(params_a.xyz, vec3<f32>(0.05, 0.05, 0.05)),
         );
     }
 

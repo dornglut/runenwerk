@@ -20,6 +20,13 @@ related:
 
 Deferred design. Do not implement a Svelte-like compiled reactive path or an ECS-driven UI path from this document until an active design or accepted ADR upgrades the decision.
 
+ADR 0009 and the active Interaction V2 design do not reactivate this document.
+They add an execution-neutral interaction formation layer for the retained UI
+path first. Any alternate target must remain behind WR-016-style policy
+deferral until a separate design or ADR names the concrete surface, formation
+product, scheduling/invalidation model, source-map/debug story, command and
+ratification boundaries, and regression guards.
+
 ## Purpose
 
 Record the unresolved UI execution-strategy idea without making it current architecture.
@@ -106,6 +113,9 @@ If this design becomes active, the hard rules should be:
   plus formed interaction contracts;
 - no execution target may replace authored UI identity, source maps, command
   ratification, or the rule that renderer output is derived product data.
+- alternate targets must consume `FormedInteractionModel`; they may not bypass
+  popup stack, scroll ownership, focus, docking/drop-zone, viewport input, or
+  status overflow contracts by reinterpreting raw authored definitions directly.
 
 ## Open Questions
 

@@ -13,6 +13,7 @@ from parallel_batch import (
     app as batch_app,
     batch_execution_state,
     build_manifest,
+    default_batch_id,
     default_kickoff_goal,
     kickoff_next_step_lines,
     run_host_batch_validation,
@@ -369,6 +370,30 @@ def test_scope_enforcement_rejects_out_of_scope_paths() -> None:
     assert violations == ["engine/src/lib.rs"]
 
 
+def test_scope_enforcement_allows_generated_roadmap_outputs_for_roadmap_source() -> None:
+    violations = validate_changed_paths(
+        [
+            "docs-site/src/content/docs/workspace/roadmap-decision-register.md",
+            "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml",
+            "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml",
+            "docs-site/src/content/docs/workspace/design-implementation-triage.md",
+            "docs-site/src/content/docs/workspace/other.md",
+        ],
+        ["docs-site/src/content/docs/workspace/roadmap-items.yaml"],
+    )
+
+    assert violations == ["docs-site/src/content/docs/workspace/other.md"]
+
+
+def test_default_batch_id_keeps_roadmap_item_ids_after_slug_truncation() -> None:
+    draw_id = default_batch_id("Next current-candidate roadmap batch: WR-006 Runenwerk Draw DRF4 through DRF5")
+    multi_id = default_batch_id("Next current-candidate roadmap batch: WR-025, WR-018, WR-007")
+
+    assert draw_id.endswith("next-current-candidate-roadmap-batch-wr-006")
+    assert multi_id.endswith("next-current-candidate-roadmap-batch-wr-025-wr-018-wr-007")
+    assert draw_id != multi_id
+
+
 def test_changed_files_for_worktree_includes_dirty_staged_and_untracked_files() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         worktree = Path(temp_dir)
@@ -411,6 +436,20 @@ def test_changed_files_for_worktree_keeps_standard_status_long_path_warnings(
     monkeypatch.setattr("roadmap_state.subprocess.run", fake_run)
 
     assert changed_files_for_worktree(Path("worker"), "base") == ["too/long/cache/file.cache"]
+
+
+def test_changed_files_for_worktree_ignores_status_only_modified_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(command: list[str], **_kwargs) -> subprocess.CompletedProcess[str]:
+        stdout = ""
+        if "status" in command:
+            stdout = " M docs/generated.md\n"
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr("roadmap_state.subprocess.run", fake_run)
+
+    assert changed_files_for_worktree(Path("worker"), "base") == []
 
 
 def test_batch_validation_rejects_dirty_out_of_scope_worktree(monkeypatch: pytest.MonkeyPatch) -> None:

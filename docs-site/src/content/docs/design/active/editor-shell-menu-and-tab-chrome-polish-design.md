@@ -36,6 +36,29 @@ corresponding WR-025 Interaction V2 contract slice is defined. Work from this
 document is valid only as a retained-UI implementation slice that consumes
 Interaction V2 contracts, or as explicitly bounded compatibility evidence.
 
+## WR-024 Entry Boundary
+
+WR-024 may use this document only after the relevant Interaction V2 slice names
+the definition vocabulary, `FormedInteractionModel` output, retained formation
+adapter, runtime enforcement point, shell adapter, app boundary, and regression
+guard.
+
+Valid WR-024 work is limited to retained UI implementation and compatibility
+proofs for:
+
+- popup/menu contrast and scrollable popup content after popup stack, menu
+  sizing, scroll ownership, outside-dismiss, and focus-return contracts exist;
+- Switch Type submenu anchoring after parent/child menu scope and anchor
+  stability are formed contracts;
+- tab/workspace close and active indicators after structural chrome slots are
+  formed contracts;
+- viewport FPS/frame-time display after status overflow and viewport input
+  arbitration are formed contracts.
+
+Invalid WR-024 work includes defining a new popup policy in shell code, making
+viewport arbitration app-local UI truth, accepting compiled-reactive or
+ECS-driven UI, or changing retained UI execution strategy.
+
 ## Decisions
 
 Owning code paths:

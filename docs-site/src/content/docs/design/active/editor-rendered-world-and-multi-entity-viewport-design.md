@@ -55,7 +55,7 @@ V1 packet contents:
 
 - stable `editor_core::EntityId`;
 - local translation and safe scale;
-- SDF primitive kind and normalized primitive parameters;
+- current editor SDF primitive kind (`Box`, `Sphere`, `Capsule`, `Cylinder`, `Torus`, and bounded `Plane`) and normalized primitive parameters;
 - selected and hovered flags for viewport feedback;
 - bounded primitive slots for the current uniform-only render-flow path.
 
@@ -66,6 +66,7 @@ The V1 GPU packet is intentionally uniform-backed because prepared render invoca
 - `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::extract_viewport_scene_render_packet` is the canonical V1 scene extraction helper.
 - Scene packet ordering is sorted by stable editor entity id.
 - Rendering and GPU picking products consume the same packet layout.
+- Rendering and GPU picking products decode the same editor primitive kind set from that layout.
 - CPU picking uses the same extracted packet shape, not an independent runtime scan with different primitive normalization.
 - `EditorViewportRenderState::has_primitive` means "scene packet has at least one renderable primitive".
 - Viewport render jobs remain per viewport and target-local.

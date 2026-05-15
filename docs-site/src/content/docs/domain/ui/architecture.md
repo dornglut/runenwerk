@@ -95,6 +95,47 @@ Applying an editor-owned definition into the live editor is outside
 products, but the app/editor activation seam decides whether an applied editor
 definition actually changes live shell/runtime resources.
 
+## Interaction Formation Ownership
+
+ADR 0009 adds an accepted interaction formation layer between normalized UI
+definitions and retained UI products. That layer is execution-neutral contract
+data, not a second runtime:
+
+```text
+NormalizedUiTemplate
+  -> FormedInteractionModel
+  -> FormedRetainedUiProduct
+  -> ui_runtime enforcement
+```
+
+Ownership is split intentionally:
+
+- `domain/ui/ui_definition` owns generic interaction vocabulary, validation,
+  normalization, source maps, and formed interaction outputs;
+- `domain/ui/ui_runtime` owns retained enforcement for layout, clipping, hit
+  testing, focus, scroll ownership, input ownership, and frame output;
+- `domain/editor/editor_definition` owns editor-specific descriptors that refer
+  to generic contracts without making editor commands generic UI semantics;
+- `domain/editor/editor_shell` owns shell composition and compatibility
+  adapters from current shell state into formed contracts;
+- `apps/runenwerk_editor` owns viewport arbitration, runtime integration, app
+  IO, fixture loading, and concrete command execution.
+
+The migration guardrail for every Interaction V2 slice is:
+
+```text
+definition vocabulary
+  -> validation rule
+  -> FormedInteractionModel record
+  -> retained UI formation adapter
+  -> ui_runtime enforcement
+  -> editor/app guard
+```
+
+Shell polish and popup/adornment/drop-preview documents can supply migration
+evidence, but they do not move long-term popup, scroll, focus, docking, chrome,
+status, or viewport-input ownership out of this UI/editor/app split.
+
 Related non-`domain/ui` owners currently in the runtime path:
 
 - `domain/editor/editor_shell`

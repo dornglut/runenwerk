@@ -614,21 +614,25 @@ items:
   kano: Neutral
   dependencies:
   - WR-004
+  - WR-025
   write_scopes:
   - domain/ui
   - docs-site/src/content/docs/design/deferred
   validations:
   - task docs:validate
-  next_evidence: Accepted ADR or active design changing the retained UI default.
-  current_decision: Keep deferred; retained UI remains the active implementation path.
+  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target,
+    formation product, invalidation/debug model, command boundary, and guard suite.
+  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract
+    layer for retained UI first, not permission to implement alternate execution.
   why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new
-    active design or accepted ADR before code.
+    active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts.
   diagram_call:
   - compiled-reactive or ECS-driven
   - only after ADR/design promotion
   ddd_owner: domain/ui
-  adr_requirement: Accepted ADR required to change UI execution default.
-  fitness_function_requirement: UI boundary fitness functions required before implementation.
+  adr_requirement: Accepted ADR required to change UI execution default after Interaction V2 contracts exist.
+  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and
+    Interaction V2 contract consumption checks required before implementation.
   ownership_mode: Deferred architecture exploration.
 - id: WR-017
   title: Gameplay actions, powers, runtime, and power editor
@@ -951,8 +955,8 @@ items:
   - cargo test -p editor_shell
   - cargo test -p ui_runtime layout_popup
   - cargo test -p runenwerk_editor viewport
-  next_evidence: Viewport FPS statistics, centralized popup contrast, scrollable popup content, switch-type submenu anchoring,
-    left close affordances, and fixed active indicator slot tests.
+  next_evidence: Retained-UI slice evidence after the relevant Interaction V2 contracts exist for popup stack, scroll
+    ownership, menu sizing, focus return, chrome slots, status overflow, and viewport input arbitration.
   current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2
     contract layer, not as a pile of isolated cosmetic fixes.
   current_call: Ready-next only after the Interaction V2 contract/migration spine leads; route long-term popup, scroll,
@@ -960,7 +964,8 @@ items:
   main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming
     those contracts or as explicitly bounded compatibility evidence.
   first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant Interaction V2 contract
-    slice is defined, or keep changes explicitly compatibility-scoped.
+    slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep changes
+    explicitly compatibility-scoped.
   diagram_call:
   - FPS stats
   - contrast, scroll, tab chrome
@@ -1007,13 +1012,15 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: Accepted ADR 0009, active Interaction V2 design, roadmap row, and subordinate polish-design link.
+  next_evidence: Accepted ADR 0009, active Interaction V2 design, roadmap row, subordinate polish-design link, and explicit
+    migration spine from definition vocabulary through validation, formed model, retained adapter, runtime enforcement,
+    and editor/app guards.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
-  current_call: Accepted architecture gate now; no compiled-reactive UI, ECS UI, external UI framework adoption, or runtime
-    behavior change in this documentation slice.
-  first_move: Keep docs and roadmap source aligned with accepted ADR 0009, then migrate retained UI slices through the active
-    Interaction V2 design.
+  current_call: Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption,
+    retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice.
+  first_move: Keep docs and roadmap source aligned with accepted ADR 0009, then define retained UI migration slices through
+    the Interaction V2 spine before WR-024 consumes them.
   diagram_call:
   - retained UI first
   - interaction contracts
@@ -1080,6 +1087,9 @@ edges:
 - source: WR-004
   target: WR-016
   label: retained UI path remains default
+- source: WR-025
+  target: WR-016
+  label: formed interaction contracts first
 - source: WR-003
   target: WR-018
   label: render product-surface support

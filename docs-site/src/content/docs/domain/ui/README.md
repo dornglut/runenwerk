@@ -61,6 +61,26 @@ Renderer output is derived product data. It is not UI authority.
 
 - [UI Model Multiple Execution Strategies Design](../../design/deferred/ui-model-multiple-execution-strategies-design.md)
 
+## Interaction V2 Migration Spine
+
+ADR 0009 makes Interaction V2 the shared guardrail for popup stack, scroll
+ownership, focus, menu sizing, chrome slots, docking/drop-zone, status overflow,
+and viewport input arbitration.
+
+Every retained UI migration slice should flow through:
+
+```text
+definition vocabulary
+  -> validation rule
+  -> FormedInteractionModel record
+  -> retained UI formation adapter
+  -> ui_runtime enforcement
+  -> editor/app guard
+```
+
+Narrow shell polish docs are supporting evidence. They do not own long-term UI
+policy and cannot promote alternate execution targets.
+
 ## Scope Boundary
 
 `domain/ui` owns substrate/runtime contracts (`ui_tree`, `ui_runtime`,

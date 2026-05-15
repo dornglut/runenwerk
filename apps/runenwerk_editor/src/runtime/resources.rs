@@ -391,12 +391,52 @@ impl EditorViewportPrimitiveInstance {
                 self.sphere_radius.max(0.05) * 0.5,
                 self.sphere_radius.max(0.05) * 2.0,
             ),
-            EditorPrimitiveKind::Plane => self.box_half_extents.to_glam(),
+            EditorPrimitiveKind::Plane => vec3(
+                self.box_half_extents.x.max(0.05),
+                self.box_half_extents.y.min(0.05).max(0.01),
+                self.box_half_extents.z.max(0.05),
+            ),
         }
     }
 
     pub fn entity_id_low_u32(self) -> u32 {
         u32::try_from(self.entity_id.0).unwrap_or(u32::MAX)
+    }
+
+    pub fn shader_slot_transform(self) -> [f32; 4] {
+        [
+            self.translation.x,
+            self.translation.y,
+            self.translation.z,
+            0.0,
+        ]
+    }
+
+    pub fn shader_slot_params_a(self) -> [f32; 4] {
+        [
+            self.box_half_extents.x.max(0.05),
+            self.box_half_extents.y.max(0.05),
+            self.box_half_extents.z.max(0.05),
+            self.sphere_radius.max(0.05),
+        ]
+    }
+
+    pub fn shader_slot_params_b(self) -> [f32; 4] {
+        [
+            self.capsule_radius.max(0.05),
+            self.capsule_half_height.max(0.05),
+            0.0,
+            0.0,
+        ]
+    }
+
+    pub fn shader_slot_flags(self) -> [u32; 4] {
+        [
+            self.primitive_kind.as_u32(),
+            self.entity_id_low_u32(),
+            u32::from(self.selected),
+            u32::from(self.hovered),
+        ]
     }
 }
 
@@ -829,30 +869,10 @@ impl EditorViewportRenderState {
             .take(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES)
             .enumerate()
         {
-            primitive_slot_transforms[index] = [
-                primitive.translation.x,
-                primitive.translation.y,
-                primitive.translation.z,
-                0.0,
-            ];
-            primitive_slot_params_a[index] = [
-                primitive.box_half_extents.x.max(0.05),
-                primitive.box_half_extents.y.max(0.05),
-                primitive.box_half_extents.z.max(0.05),
-                primitive.sphere_radius.max(0.05),
-            ];
-            primitive_slot_params_b[index] = [
-                primitive.capsule_radius.max(0.05),
-                primitive.capsule_half_height.max(0.05),
-                0.0,
-                0.0,
-            ];
-            primitive_slot_flags[index] = [
-                primitive.primitive_kind.as_u32(),
-                primitive.entity_id_low_u32(),
-                u32::from(primitive.selected),
-                u32::from(primitive.hovered),
-            ];
+            primitive_slot_transforms[index] = primitive.shader_slot_transform();
+            primitive_slot_params_a[index] = primitive.shader_slot_params_a();
+            primitive_slot_params_b[index] = primitive.shader_slot_params_b();
+            primitive_slot_flags[index] = primitive.shader_slot_flags();
         }
         let primitive_count = self
             .scene_packet
@@ -1071,5 +1091,80 @@ mod tests {
         assert_eq!(uniform.primitive_slot_transforms[0], [-1.0, 0.0, 0.0, 0.0]);
         assert_eq!(uniform.primitive_slot_params_a[0], [0.25, 0.5, 0.75, 0.6]);
         assert_eq!(uniform.primitive_slot_params_a[1][3], 1.25);
+    }
+
+    #[test]
+    fn scene_packet_truncates_to_uniform_slot_capacity() {
+        let primitives = (0..EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES + 2).map(|index| {
+            EditorViewportPrimitiveInstance::from_transform_and_primitive(
+                editor_core::EntityId(index as u64),
+                LocalTransform::from_translation(Vec3Value::new(index as f32, 0.0, 0.0)),
+                EditorPrimitive::default(),
+                false,
+                false,
+            )
+        });
+
+        let packet = EditorViewportSceneRenderPacket::from_primitives(primitives);
+        let mut state = EditorViewportRenderState::default();
+        state.set_scene_packet(packet);
+        let uniform = state.compose_scene_product_uniform((1280, 720));
+
+        assert_eq!(
+            state.scene_packet.len(),
+            EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES
+        );
+        assert_eq!(
+            uniform.primitive_flags[1],
+            EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES as u32
+        );
+        assert_eq!(
+            uniform.primitive_slot_flags[EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES - 1][1],
+            (EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES - 1) as u32
+        );
+    }
+
+    #[test]
+    fn primitive_slot_helpers_define_the_shader_packet_contract() {
+        let mut primitive = EditorPrimitive::default();
+        primitive.set_kind(EditorPrimitiveKind::Cylinder);
+        primitive.capsule_radius = 0.45;
+        primitive.capsule_half_height = 1.25;
+        let instance = EditorViewportPrimitiveInstance::from_transform_and_primitive(
+            editor_core::EntityId(42),
+            LocalTransform::from_translation(Vec3Value::new(1.0, 2.0, 3.0)),
+            primitive,
+            true,
+            true,
+        );
+
+        assert_eq!(instance.shader_slot_transform(), [1.0, 2.0, 3.0, 0.0]);
+        assert_eq!(instance.shader_slot_params_b(), [0.45, 1.25, 0.0, 0.0]);
+        assert_eq!(instance.shader_slot_flags(), [3, 42, 1, 1]);
+    }
+
+    #[test]
+    fn scene_and_picking_shaders_decode_all_editor_primitive_kinds() {
+        let scene_shader =
+            include_str!("../../../../assets/shaders/editor_viewport_scene_product.wgsl");
+        let picking_shader =
+            include_str!("../../../../assets/shaders/editor_viewport_picking_product.wgsl");
+        for shader in [scene_shader, picking_shader] {
+            assert_shader_supports_primitive(shader, EditorPrimitiveKind::Sphere);
+            assert_shader_supports_primitive(shader, EditorPrimitiveKind::Capsule);
+            assert_shader_supports_primitive(shader, EditorPrimitiveKind::Cylinder);
+            assert_shader_supports_primitive(shader, EditorPrimitiveKind::Torus);
+            assert_shader_supports_primitive(shader, EditorPrimitiveKind::Plane);
+            assert!(shader.contains("return sdf_box("));
+        }
+    }
+
+    fn assert_shader_supports_primitive(shader: &str, kind: EditorPrimitiveKind) {
+        let branch = format!("primitive_kind == {}u", kind.as_u32());
+        assert!(
+            shader.contains(&branch),
+            "shader must decode {:?} packet slots with branch {branch}",
+            kind
+        );
     }
 }

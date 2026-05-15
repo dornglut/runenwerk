@@ -112,7 +112,7 @@ Blocker weight:
 |---|---|---:|---:|---:|---:|---|---|
 | WR-007 | Multiplayer replication Phase 1 to Phase 3 | P1 | V4 | B2 | 1.4 | Ready for the next focused net hardening batch focused on ACK/baseline and delta lifecycle only, without broadening replication scope. | Start from net/multiplayer-replication-implementation-roadmap.md Phase 1-3 ACK/baseline hardening, keeping the write scope to net and domain/ecs. |
 | WR-018 | Rendered World V1 | P0 | V5 | B2 | 3.0 | Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers on the same extracted packet. | Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry. |
-| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS UI, external UI framework adoption, or runtime behavior change in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then migrate retained UI slices through the active Interaction V2 design. |
+| WR-025 | UI Runtime V2 and interaction formation | P0 | V5 | B2 | 4.8 | Accepted architecture gate now; no compiled-reactive UI, ECS-driven UI, external UI framework adoption, retained runtime behavior change, or WR-024 shell polish implementation in this documentation slice. | Keep docs and roadmap source aligned with accepted ADR 0009, then define retained UI migration slices through the Interaction V2 spine before WR-024 consumes them. |
 
 ## Support Only
 
@@ -153,7 +153,7 @@ Blocker weight:
 | WR-013 | Scripting and runtime gameplay bridge | P2 | V3 | B4 | 0.3 | It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai can be the first adapter only after the domain contract exists. |
 | WR-014 | Particles, physics, animation, and world-process product tracks | P3 | V3 | B4 | 0.2 | Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query snapshot/publication barrier substrate. |
 | WR-015 | SDF character, vegetation, atmosphere, water, VFX, and influence AI drafts | P3 | V2 | B5 | 0.2 | These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership, renderer/runtime handoff, query policy, and authority contracts are promoted. |
-| WR-016 | Compiled-reactive UI and ECS-driven UI execution strategies | P3 | V2 | B5 | 0.1 | The current retained UI path is the active implementation. Alternative execution strategies require a new active design or accepted ADR before code. |
+| WR-016 | Compiled-reactive UI and ECS-driven UI execution strategies | P3 | V2 | B5 | 0.1 | The current retained UI path is the active implementation. Alternative execution strategies require a new active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts. |
 | WR-017 | Gameplay actions, powers, runtime, and power editor | P3 | V2 | B5 | 0.2 | These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and domain contract sequence. |
 <!-- END GENERATED ROADMAP STATUS -->
 ## Design Lifecycle Cleanup Findings
