@@ -23,13 +23,15 @@ pub use observation::*;
 pub use runtime::*;
 pub use surface_provider::*;
 pub use surfaces::{
+    AssetBrowserRowViewModel, AssetBrowserViewModel, AssetDetailViewModel, AssetSurfaceAction,
     EditorDefinitionSurfaceAction, EntityTableComponentFilter, EntityTableComponentFilterItem,
     EntityTableDomainMutation, EntityTableFilter, EntityTableHierarchyFilter, EntityTableQuery,
     EntityTableSessionMutation, EntityTableSort, EntityTableSurfaceAction,
-    InspectorFieldControlKind, InspectorFieldEditIntent, InspectorSessionMutation,
-    InspectorSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction,
-    SdfOperationDomainMutation, SdfOperationSessionMutation, SdfOperationSurfaceAction,
-    ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction,
+    ImportInspectorViewModel, InspectorFieldControlKind, InspectorFieldEditIntent,
+    InspectorSessionMutation, InspectorSurfaceAction, OutlinerDomainMutation,
+    OutlinerSurfaceAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
+    SdfOperationSurfaceAction, ViewportDomainMutation, ViewportSessionMutation,
+    ViewportSurfaceAction,
 };
 pub use view_models::*;
 pub use workspace::{

@@ -2,9 +2,10 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use editor_persistence::{
-    PROJECT_FILE_VERSION_V1, PROJECT_FILE_VERSION_V2, ProjectFileV1, ProjectFileV2, SceneFileV2,
-    SceneLoadResult, SceneMigrationPath, decode_ron, decode_scene_file_with_migration,
-    encode_ron_pretty, form_scene_for_runtime, migrate_project_file_v1_to_v2, normalize_scene_file,
+    PROJECT_FILE_VERSION_V1, PROJECT_FILE_VERSION_V2, PROJECT_FILE_VERSION_V3, ProjectFileV1,
+    ProjectFileV2, ProjectFileV3, SceneFileV2, SceneLoadResult, SceneMigrationPath, decode_ron,
+    decode_scene_file_with_migration, encode_ron_pretty, form_scene_for_runtime,
+    migrate_project_file_v1_to_v3, migrate_project_file_v2_to_v3, normalize_scene_file,
 };
 
 use crate::editor_runtime::RunenwerkEditorRuntime;
@@ -77,8 +78,8 @@ fn classification_message(class: editor_core::MigrationFailureClass) -> &'static
     }
 }
 
-pub fn write_project_file(path: &Path, project: &ProjectFileV2) -> Result<()> {
-    let ron = encode_ron_pretty(project).context("failed to encode ProjectFileV2 as RON")?;
+pub fn write_project_file(path: &Path, project: &ProjectFileV3) -> Result<()> {
+    let ron = encode_ron_pretty(project).context("failed to encode ProjectFileV3 as RON")?;
     std::fs::write(path, ron)
         .with_context(|| format!("failed to write project file: {}", path.display()))
 }
@@ -88,7 +89,7 @@ struct ProjectFileVersionProbe {
     version: u32,
 }
 
-pub fn read_project_file(path: &Path) -> Result<ProjectFileV2> {
+pub fn read_project_file(path: &Path) -> Result<ProjectFileV3> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read project file: {}", path.display()))?;
     let probe: ProjectFileVersionProbe =
@@ -97,10 +98,15 @@ pub fn read_project_file(path: &Path) -> Result<ProjectFileV2> {
         PROJECT_FILE_VERSION_V1 => {
             let project: ProjectFileV1 =
                 decode_ron(&source).context("failed to decode ProjectFileV1 from RON")?;
-            Ok(migrate_project_file_v1_to_v2(project))
+            Ok(migrate_project_file_v1_to_v3(project))
         }
         PROJECT_FILE_VERSION_V2 => {
-            decode_ron(&source).context("failed to decode ProjectFileV2 from RON")
+            let project: ProjectFileV2 =
+                decode_ron(&source).context("failed to decode ProjectFileV2 from RON")?;
+            Ok(migrate_project_file_v2_to_v3(project))
+        }
+        PROJECT_FILE_VERSION_V3 => {
+            decode_ron(&source).context("failed to decode ProjectFileV3 from RON")
         }
         version => anyhow::bail!("unsupported project file version: {version}"),
     }

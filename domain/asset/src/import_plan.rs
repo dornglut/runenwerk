@@ -232,7 +232,7 @@ pub fn deterministic_cache_key(
         source.asset_id.raw(),
         source.source_id.raw(),
         importer,
-        settings.stable_kind_label(),
+        settings.stable_cache_key_component(),
         asset_kind_label(expected_artifact_kind),
         hash
     ))
@@ -242,8 +242,8 @@ pub fn deterministic_cache_key(
 mod tests {
     use super::*;
     use crate::{
-        AssetKind, FieldProductResolution, ImportSettings, SourceHash, asset_id, asset_source_id,
-        import_job_id,
+        AssetKind, FieldProductResolution, ImportSettings, SourceHash, TextureImportColorSpace,
+        TextureImportCompression, asset_id, asset_source_id, import_job_id,
     };
 
     #[test]
@@ -323,6 +323,158 @@ mod tests {
         assert_ne!(
             deterministic_cache_key(&source, &settings, AssetKind::FormedFieldProduct),
             deterministic_cache_key(&source, &settings, AssetKind::WorldSdfChunkPageArtifact)
+        );
+    }
+
+    #[test]
+    fn import_settings_parameters_participate_in_import_plan_cache_key() {
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(2),
+            asset_id(1),
+            AssetKind::SdfGraph,
+            "assets/fields/test.ron",
+        )
+        .with_hash(SourceHash::new("sha256", "abc"));
+
+        assert_ne!(
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::SdfGraph {
+                    resolution: FieldProductResolution::new(64, 64, 1)
+                },
+                AssetKind::FormedFieldProduct
+            ),
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::SdfGraph {
+                    resolution: FieldProductResolution::new(128, 64, 1)
+                },
+                AssetKind::FormedFieldProduct
+            )
+        );
+    }
+
+    #[test]
+    fn texture_settings_parameters_participate_in_import_plan_cache_key() {
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(3),
+            asset_id(2),
+            AssetKind::Texture2D,
+            "assets/textures/albedo.png",
+        )
+        .with_hash(SourceHash::new("sha256", "abc"));
+
+        assert_ne!(
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::Texture2D {
+                    color_space: TextureImportColorSpace::Srgb,
+                    compression: TextureImportCompression::Uncompressed,
+                },
+                AssetKind::Texture2D
+            ),
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::Texture2D {
+                    color_space: TextureImportColorSpace::Srgb,
+                    compression: TextureImportCompression::Bc7,
+                },
+                AssetKind::Texture2D
+            )
+        );
+    }
+
+    #[test]
+    fn source_hash_participates_in_import_plan_cache_key() {
+        let base = AssetSourceDescriptor::new(
+            asset_source_id(2),
+            asset_id(1),
+            AssetKind::Scene,
+            "assets/scenes/test.ron",
+        );
+        let first = base.clone().with_hash(SourceHash::new("sha256", "abc"));
+        let second = base.with_hash(SourceHash::new("sha256", "def"));
+
+        assert_ne!(
+            deterministic_cache_key(&first, &ImportSettings::Scene, AssetKind::Scene),
+            deterministic_cache_key(&second, &ImportSettings::Scene, AssetKind::Scene)
+        );
+    }
+
+    #[test]
+    fn source_id_participates_in_import_plan_cache_key() {
+        let first = AssetSourceDescriptor::new(
+            asset_source_id(2),
+            asset_id(1),
+            AssetKind::Scene,
+            "assets/scenes/test.ron",
+        );
+        let second = AssetSourceDescriptor::new(
+            asset_source_id(3),
+            asset_id(1),
+            AssetKind::Scene,
+            "assets/scenes/test.ron",
+        );
+
+        assert_ne!(
+            deterministic_cache_key(&first, &ImportSettings::Scene, AssetKind::Scene),
+            deterministic_cache_key(&second, &ImportSettings::Scene, AssetKind::Scene)
+        );
+    }
+
+    #[test]
+    fn foreign_export_format_participates_in_import_plan_cache_key() {
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(5),
+            asset_id(4),
+            AssetKind::ForeignMeshReferenceSource,
+            "assets/mesh.blend",
+        );
+
+        assert_ne!(
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::ForeignBlend {
+                    blender_executable: None,
+                    export_format: "glb".to_string(),
+                },
+                AssetKind::ForeignMeshReferenceArtifact
+            ),
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::ForeignBlend {
+                    blender_executable: None,
+                    export_format: "gltf".to_string(),
+                },
+                AssetKind::ForeignMeshReferenceArtifact
+            )
+        );
+    }
+
+    #[test]
+    fn raw_ron_schema_hint_participates_in_import_plan_cache_key() {
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(6),
+            asset_id(5),
+            AssetKind::Graph,
+            "assets/graph.ron",
+        );
+
+        assert_ne!(
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::RawRon {
+                    schema_hint: Some("graph".to_string()),
+                },
+                AssetKind::Graph
+            ),
+            deterministic_cache_key(
+                &source,
+                &ImportSettings::RawRon {
+                    schema_hint: Some("alternate_graph".to_string()),
+                },
+                AssetKind::Graph
+            )
         );
     }
 }

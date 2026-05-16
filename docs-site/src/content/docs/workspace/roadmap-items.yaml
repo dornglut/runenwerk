@@ -875,10 +875,10 @@ items:
   lane: Core support
   dependency_level: L2
   gate: After asset core contracts
-  planning_state: ready_next
+  planning_state: completed
   priority: P1
   value: 4
-  blocker: 3
+  blocker: 2
   tc: 3
   rr_oe: 4
   du: 4
@@ -891,21 +891,27 @@ items:
   - WR-020
   write_scopes:
   - apps/runenwerk_editor/src/asset_pipeline
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/providers
   - domain/editor
   - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
   - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-026-source-backed-asset-editor-adapters/plan.md
   validations:
   - cargo test -p runenwerk_editor asset
   - cargo test -p runenwerk_editor catalog
   - task docs:validate
-  next_evidence: App-owned project catalog load/save, deterministic import job orchestration, diagnostics surfacing, and prior-valid
-    artifact preservation through domain/asset contracts.
-  current_decision: Keep editor asset pipeline code as adapter/workflow wiring over domain/asset contracts, not the source
-    of semantic asset truth.
-  current_call: Ready-next only after the WR-020 closeout; do not implement in the WR-020 thread. Adapter outputs feed later
-    renderer consumers but do not move asset truth into renderer code.
-  main_blocker: Explicit user direction excludes WR-026 from this objective. Editor adapter load/save, import orchestration,
-    diagnostics surfacing, and prior-valid artifact UI need a separate selected roadmap slice.
+  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+    after implementation and validation.
+  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+    after implementation and validation.
+  current_call: Ready-next only after the WR-020 closeout; implement only through the accepted WR-026 contract with expanded
+    adapter, provider, shell dispatch, app state, and closeout write scopes. Adapter outputs feed later renderer consumers
+    but do not move asset truth into renderer code.
+  main_blocker: Explicit WR-026 execution direction and accepted implementation contract are now present; remaining gate is
+    roadmap promotion plus rendered and validated write-scope evidence before product code changes.
   first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app
     state; keep renderer-facing consumers aligned with engine/roadmaps/fully-featured-renderer-roadmap.md.
   diagram_call:

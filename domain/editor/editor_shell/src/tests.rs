@@ -9,31 +9,86 @@ use ui_math::{Axis, UiRect};
 use ui_theme::ThemeTokens;
 
 use crate::{
-    ActiveTabDragVisualState, ActiveTabStackPopupMenu, DockDropCandidate, DockDropCandidateState,
+    ActiveTabDragVisualState, ActiveTabStackPopupMenu, AssetBrowserRowViewModel,
+    AssetBrowserViewModel, AssetSurfaceAction, DockDropCandidate, DockDropCandidateState,
     DockDropInvalidTargetReason, DockDropScope, DockingInteractionVisualState,
     DockingPreviewDropTarget, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
     ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel, EntityTableComponentFilter,
-    EntityTableHierarchyFilter, EntityTableSurfaceAction, InspectorSurfaceAction,
-    OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction,
-    ShellCommand, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
-    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
-    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
-    ViewportSurfaceAction, ViewportViewModel, WidgetId, WorkspaceIdentityAllocator,
-    WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame,
-    build_editor_shell_frame_with_docking_visual_state, build_entity_table_panel,
-    build_viewport_panel, dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
-    dock_split_preview_panel_widget_id, label, map_interactions_to_shell_commands,
-    panel_kind_definition_key, reduce_workspace, surface_widget_id, tab_active_indicator_widget_id,
-    tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
-    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
-    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
-    tool_surface_definition_id, tool_surface_kind_definition_key,
-    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
-    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    EntityTableHierarchyFilter, EntityTableSurfaceAction, ImportInspectorViewModel,
+    InspectorSurfaceAction, OutlinerSurfaceAction, PanelInstanceId, PanelKind,
+    ResolvedSurfaceFrame, RoutedShellAction, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
+    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
+    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
+    UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
+    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
+    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
+    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
+    surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
+    tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_list_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
+    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
+    tool_surface_kind_definition_key, toolbar_workspace_active_indicator_widget_id,
+    toolbar_workspace_chrome_widget_id, toolbar_workspace_close_widget_id,
+    workspace_split_host_widget_id,
 };
+
+#[test]
+fn asset_surface_contracts_use_typed_asset_ids_and_epoch_commands() {
+    let asset_id = asset::asset_id(11);
+    let source_id = asset::asset_source_id(12);
+    let artifact_id = asset::asset_artifact_id(13);
+    let browser = AssetBrowserViewModel {
+        rows: vec![AssetBrowserRowViewModel {
+            asset_id,
+            display_name: "Field".to_string(),
+            stable_name: "field".to_string(),
+            kind: asset::AssetKind::SdfGraph,
+            source_id: Some(source_id),
+            artifact_count: 1,
+            is_selected: true,
+            is_dirty: false,
+            has_prior_valid_preservation: true,
+        }],
+        selected: Some(crate::AssetDetailViewModel {
+            asset_id,
+            display_name: "Field".to_string(),
+            stable_name: "field".to_string(),
+            kind: asset::AssetKind::SdfGraph,
+            source_id: Some(source_id),
+            artifact_ids: vec![artifact_id],
+            source_lines: Vec::new(),
+            artifact_lines: Vec::new(),
+            dependency_lines: Vec::new(),
+        }),
+        catalog_status_lines: Vec::new(),
+        dirty_asset_count: 0,
+    };
+    let inspector = ImportInspectorViewModel {
+        selected_asset_id: Some(asset_id),
+        pending_dirty_asset_ids: vec![asset_id],
+        plan_lines: Vec::new(),
+        diagnostic_lines: Vec::new(),
+        prior_valid_lines: Vec::new(),
+        catalog_status_lines: Vec::new(),
+    };
+    let command = ShellCommand::ReimportAsset {
+        asset_id,
+        projection_epoch: 7,
+    };
+
+    assert_eq!(browser.rows[0].source_id, Some(source_id));
+    assert_eq!(inspector.pending_dirty_asset_ids, vec![asset_id]);
+    assert_eq!(command.projection_epoch(), Some(7));
+    assert_eq!(
+        SurfaceLocalAction::Asset(AssetSurfaceAction::SelectAsset { asset_id }),
+        SurfaceLocalAction::Asset(AssetSurfaceAction::SelectAsset { asset_id })
+    );
+}
 
 #[test]
 fn toolbar_omits_global_transform_tool_buttons() {

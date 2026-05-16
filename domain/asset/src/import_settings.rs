@@ -130,6 +130,103 @@ impl ImportSettings {
         }
     }
 
+    pub fn stable_cache_key_component(&self) -> String {
+        match self {
+            Self::SdfGraph { resolution } => {
+                format!(
+                    "sdf_graph:resolution={}",
+                    field_resolution_component(resolution)
+                )
+            }
+            Self::SdfBrushLayer { resolution } => {
+                format!(
+                    "sdf_brush_layer:resolution={}",
+                    field_resolution_component(resolution)
+                )
+            }
+            Self::FieldWorldDefinition { resolution } => {
+                format!(
+                    "field_world_definition:resolution={}",
+                    field_resolution_component(resolution)
+                )
+            }
+            Self::WorldSdfProduct {
+                resolution,
+                scale_band,
+            } => {
+                format!(
+                    "world_sdf_product:resolution={}:scale_band={}",
+                    field_resolution_component(resolution),
+                    scale_band
+                )
+            }
+            Self::FieldProductDescriptor { scale_band } => {
+                format!("field_product_descriptor:scale_band={scale_band}")
+            }
+            Self::MaterialGraph { lowering_target } => {
+                format!("material_graph:lowering_target={lowering_target}")
+            }
+            Self::Material { product_target } => {
+                format!("material:product_target={product_target}")
+            }
+            Self::Prefab { descriptor_profile } => {
+                format!("prefab:descriptor_profile={descriptor_profile}")
+            }
+            Self::ProceduralTexture {
+                resolution,
+                color_space,
+            } => {
+                format!(
+                    "procedural_texture:resolution={}:color_space={}",
+                    texture_resolution_component(resolution),
+                    color_space_component(*color_space)
+                )
+            }
+            Self::Texture2D {
+                color_space,
+                compression,
+            } => {
+                format!(
+                    "texture_2d:color_space={}:compression={}",
+                    color_space_component(*color_space),
+                    compression_component(*compression)
+                )
+            }
+            Self::Texture3DVolume {
+                resolution,
+                color_space,
+                compression,
+            } => {
+                format!(
+                    "texture_3d_volume:resolution={}:color_space={}:compression={}",
+                    texture_resolution_component(resolution),
+                    color_space_component(*color_space),
+                    compression_component(*compression)
+                )
+            }
+            Self::ForeignBlend {
+                blender_executable,
+                export_format,
+            } => {
+                format!(
+                    "foreign_blend:blender_executable={}:export_format={}",
+                    option_string_component(blender_executable.as_deref()),
+                    export_format
+                )
+            }
+            Self::ForeignGltf => "foreign_gltf".to_string(),
+            Self::Scene => "scene".to_string(),
+            Self::Shader => "shader".to_string(),
+            Self::UiDefinition => "ui_definition".to_string(),
+            Self::RawRon { schema_hint } => {
+                format!(
+                    "raw_ron:schema_hint={}",
+                    option_string_component(schema_hint.as_deref())
+                )
+            }
+        }
+    }
+
     pub const fn supports_source_kind(&self, kind: AssetKind) -> bool {
         matches!(
             (self, kind),
@@ -210,4 +307,39 @@ impl ImportSettings {
                 | (Self::RawRon { .. }, AssetKind::EditorDefinition)
         )
     }
+}
+
+fn field_resolution_component(resolution: &FieldProductResolution) -> String {
+    format!(
+        "{}x{}x{}",
+        resolution.width, resolution.height, resolution.depth
+    )
+}
+
+fn texture_resolution_component(resolution: &TextureProductResolution) -> String {
+    format!(
+        "{}x{}x{}",
+        resolution.width, resolution.height, resolution.depth
+    )
+}
+
+const fn color_space_component(color_space: TextureImportColorSpace) -> &'static str {
+    match color_space {
+        TextureImportColorSpace::Linear => "linear",
+        TextureImportColorSpace::Srgb => "srgb",
+        TextureImportColorSpace::Data => "data",
+    }
+}
+
+const fn compression_component(compression: TextureImportCompression) -> &'static str {
+    match compression {
+        TextureImportCompression::Uncompressed => "uncompressed",
+        TextureImportCompression::Bc5 => "bc5",
+        TextureImportCompression::Bc7 => "bc7",
+        TextureImportCompression::Astc => "astc",
+    }
+}
+
+fn option_string_component(value: Option<&str>) -> String {
+    value.unwrap_or("none").to_string()
 }

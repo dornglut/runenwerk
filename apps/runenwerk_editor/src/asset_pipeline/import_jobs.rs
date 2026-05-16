@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use asset::{
-    ArtifactPayloadKind, ArtifactValidity, AssetArtifactDescriptor, AssetDiagnosticCode,
+    ArtifactPayloadKind, AssetArtifactDescriptor, AssetArtifactId, AssetDiagnosticCode,
     AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetKind, AssetSourceDescriptor, ImportPlan,
-    ImportSettings, asset_artifact_id,
+    ImportSettings, try_preserve_prior_valid_artifact,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +26,7 @@ pub fn run_import_job(
     plan: &ImportPlan,
     project_root: &Path,
     cache_root: &Path,
+    artifact_id: AssetArtifactId,
     previous_valid_artifact: Option<&AssetArtifactDescriptor>,
 ) -> Result<ImportJobOutcome> {
     if source.asset_id != plan.asset_id || source.source_id != plan.source_id {
@@ -66,7 +67,7 @@ pub fn run_import_job(
         .context("import plan must declare at least one expected artifact")?;
     let artifact_path = artifact_path_for_cache_key(project_root, cache_root, plan);
     let artifact = AssetArtifactDescriptor::new(
-        asset_artifact_id(plan.job_id.raw()),
+        artifact_id,
         plan.asset_id,
         expected.kind,
         payload_kind_for_import(expected.kind),
@@ -87,10 +88,13 @@ fn failed_import_outcome(
     diagnostic: AssetDiagnosticRecord,
 ) -> ImportJobOutcome {
     if let Some(previous) = previous_valid_artifact {
-        let artifact = previous
-            .clone()
-            .with_validity(ArtifactValidity::FailedPreserved)
-            .with_diagnostic(diagnostic.clone());
+        let Ok(artifact) = try_preserve_prior_valid_artifact(previous, diagnostic.clone()) else {
+            return ImportJobOutcome {
+                status: ImportJobStatus::Failed,
+                artifact: None,
+                diagnostics: vec![diagnostic],
+            };
+        };
         ImportJobOutcome {
             status: ImportJobStatus::FailedPreserved,
             artifact: Some(artifact),
@@ -192,8 +196,8 @@ fn project_relative_path(project_root: &Path, path: &Path) -> String {
 mod tests {
     use super::*;
     use asset::{
-        ArtifactCacheKey, FieldProductResolution, ImportSettings, SourceHash, asset_id,
-        asset_source_id, import_job_id,
+        ArtifactCacheKey, ArtifactValidity, FieldProductResolution, ImportSettings, SourceHash,
+        asset_artifact_id, asset_id, asset_source_id, import_job_id,
     };
 
     #[test]
@@ -225,8 +229,15 @@ mod tests {
         )
         .with_artifact_path("assets/.cache/previous.artifact.ron");
 
-        let outcome = run_import_job(&source, &plan, &root, &root.join(".cache"), Some(&previous))
-            .expect("missing source should report a controlled import failure");
+        let outcome = run_import_job(
+            &source,
+            &plan,
+            &root,
+            &root.join(".cache"),
+            asset_artifact_id(3),
+            Some(&previous),
+        )
+        .expect("missing source should report a controlled import failure");
 
         assert_eq!(outcome.status, ImportJobStatus::FailedPreserved);
         assert_eq!(
@@ -273,8 +284,15 @@ mod tests {
         )
         .with_artifact_path("assets/.cache/previous.glb");
 
-        let outcome = run_import_job(&source, &plan, &root, &root.join(".cache"), Some(&previous))
-            .expect("missing Blender tool should be a controlled import diagnostic");
+        let outcome = run_import_job(
+            &source,
+            &plan,
+            &root,
+            &root.join(".cache"),
+            asset_artifact_id(7),
+            Some(&previous),
+        )
+        .expect("missing Blender tool should be a controlled import diagnostic");
 
         assert_eq!(outcome.status, ImportJobStatus::FailedPreserved);
         assert_eq!(

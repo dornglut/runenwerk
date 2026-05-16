@@ -10,12 +10,13 @@ use ui_definition::NormalizedUiTemplate;
 use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 
 use crate::{
-    EditorDefinitionSurfaceAction, EntityTableDomainMutation, EntityTableSessionMutation,
-    EntityTableSurfaceAction, InspectorSessionMutation, InspectorSurfaceAction,
-    OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId, PanelKind, RoutedShellAction,
-    SdfOperationDomainMutation, SdfOperationSessionMutation, SdfOperationSurfaceAction,
-    StructuralCommandTarget, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel,
-    UiNode, ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WidgetId,
+    AssetSurfaceAction, EditorDefinitionSurfaceAction, EntityTableDomainMutation,
+    EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
+    InspectorSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId,
+    PanelKind, RoutedShellAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
+    SdfOperationSurfaceAction, StructuralCommandTarget, TabStackId, ToolSurfaceInstanceId,
+    ToolSurfaceKind, ToolbarViewModel, UiNode, ViewportDomainMutation, ViewportSessionMutation,
+    ViewportSurfaceAction, WidgetId,
 };
 
 #[id]
@@ -159,6 +160,7 @@ impl SurfacePresentationArtifact {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceLocalAction {
+    Asset(AssetSurfaceAction),
     Outliner(OutlinerSurfaceAction),
     EntityTable(EntityTableSurfaceAction),
     Inspector(InspectorSurfaceAction),

@@ -154,6 +154,36 @@ fn dispatch_shell_command_updates_active_tool() {
 }
 
 #[test]
+fn stale_asset_shell_command_fails_closed() {
+    let mut app = RunenwerkEditorApp::new();
+    let asset_id = asset::asset_id(1);
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(asset::AssetRecord::new(
+            asset_id,
+            "field",
+            "Field",
+            asset::AssetKind::SdfGraph,
+        ));
+
+    dispatch_shell_command(
+        &mut app,
+        None,
+        ShellCommand::SelectAsset {
+            asset_id,
+            projection_epoch: 1,
+        },
+        None,
+        None,
+        None,
+        Some(2),
+    )
+    .expect("stale asset command should fail closed without error");
+
+    assert_eq!(app.asset_catalog_runtime().selected_asset_id(), None);
+}
+
+#[test]
 fn dispatch_shell_command_applies_and_rolls_back_selected_editor_definition() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use editor_core::{DocumentKind, EditorMutationError, EntityId, RealityVersion};
 use editor_inspector::InspectorValue;
 use editor_shell::{
-    ConsoleViewModel, ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
+    AssetSurfaceAction, ConsoleViewModel, ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
     ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID, ENTITY_TABLE_LIST_WIDGET_ID,
     ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID,
     ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID, EditorDefinitionSurfaceAction,
@@ -1493,7 +1493,7 @@ mod tests {
     use super::*;
     use asset::{
         ArtifactCacheKey, ArtifactPayloadKind, AssetArtifactDescriptor, AssetKind, AssetRecord,
-        asset_artifact_id, asset_id,
+        AssetSourceDescriptor, SourceHash, asset_artifact_id, asset_id, asset_source_id,
     };
     use editor_shell::{
         LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, TabStackId, ToolSurfaceInstanceId,
@@ -1678,6 +1678,19 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(22).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(22).unwrap(),
+            tool_surface_kind,
+            surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
+    fn asset_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            workspace_profile_id: editor_shell::FIELD_WORLD_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::NoActiveDocument,
+            panel_instance_id: PanelInstanceId::try_from_raw(30).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(30).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(30).unwrap(),
             tool_surface_kind,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
@@ -1988,6 +2001,115 @@ mod tests {
         assert_eq!(frame.provider_id, Some(TEXTURE_VIEWER_PROVIDER_ID));
         assert!(provider_frame_text(&frame).contains("preview descriptor: product=42"));
         assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn asset_browser_projects_typed_rows_and_epoch_routes() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(80);
+        let source_id = asset_source_id(81);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(
+                AssetRecord::new(asset_id, "field", "Field", AssetKind::SdfGraph)
+                    .with_primary_source(source_id),
+            );
+        app.asset_catalog_runtime_mut().catalog_mut().insert_source(
+            AssetSourceDescriptor::new(
+                source_id,
+                asset_id,
+                AssetKind::SdfGraph,
+                "assets/field.ron",
+            )
+            .with_hash(SourceHash::new("sha256", "abc")),
+        );
+        let request = asset_request(ToolSurfaceKind::AssetBrowser);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(ASSET_BROWSER_PROVIDER_ID));
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("asset 80 Field"));
+        assert!(!frame.routes.is_empty());
+
+        let proposal = registry
+            .map_action(
+                &SurfaceProviderDispatchContext {
+                    projection_epoch: 55,
+                    _marker: std::marker::PhantomData,
+                },
+                &request,
+                ASSET_BROWSER_PROVIDER_ID,
+                SurfaceLocalAction::Asset(AssetSurfaceAction::SelectAsset { asset_id }),
+            )
+            .expect("asset action should map")
+            .expect("asset action should produce shell command");
+        assert!(matches!(
+            proposal,
+            SurfaceCommandProposal::Shell(ShellCommand::SelectAsset {
+                asset_id: mapped,
+                projection_epoch: 55,
+            }) if mapped == asset_id
+        ));
+    }
+
+    #[test]
+    fn import_inspector_surfaces_prior_valid_and_routes_reimport() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(90);
+        let artifact_id = asset_artifact_id(91);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "field",
+                "Field",
+                AssetKind::FormedFieldProduct,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    artifact_id,
+                    asset_id,
+                    AssetKind::FormedFieldProduct,
+                    ArtifactPayloadKind::FormedFieldProduct {
+                        product_id: "field".to_string(),
+                    },
+                    ArtifactCacheKey::new("field"),
+                )
+                .with_artifact_path(".runenwerk/artifacts/field.ron")
+                .with_validity(asset::ArtifactValidity::FailedPreserved)
+                .with_diagnostic(asset::AssetDiagnosticRecord::error(
+                    asset::AssetDiagnosticCode::SourceMissing,
+                    "source missing",
+                )),
+            );
+        app.asset_catalog_runtime_mut().select_asset(Some(asset_id));
+        app.asset_catalog_runtime_mut().mark_asset_dirty(asset_id);
+        let request = asset_request(ToolSurfaceKind::ImportInspector);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.provider_id, Some(IMPORT_INSPECTOR_PROVIDER_ID));
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("preserved artifact 91"));
+        assert!(!frame.routes.is_empty());
     }
 
     #[test]

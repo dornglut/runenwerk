@@ -8,6 +8,7 @@ publish = false
 ignored = ["id"]
 
 [dependencies]
+asset.workspace = true
 editor_core.workspace = true
 editor_definition.workspace = true
 editor_scene.workspace = true

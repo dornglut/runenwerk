@@ -72,6 +72,26 @@ pub enum ShellCommand {
     SaveScene,
     LoadScene,
     ToggleDebugLogs,
+    SelectAsset {
+        asset_id: asset::AssetId,
+        projection_epoch: u64,
+    },
+    LoadAssetCatalog {
+        projection_epoch: u64,
+    },
+    SaveAssetCatalog {
+        projection_epoch: u64,
+    },
+    ReimportAsset {
+        asset_id: asset::AssetId,
+        projection_epoch: u64,
+    },
+    ReimportSelectedAsset {
+        projection_epoch: u64,
+    },
+    ClearAssetDiagnostics {
+        projection_epoch: u64,
+    },
     SetTabStackActivePanel {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
@@ -222,6 +242,16 @@ impl ShellCommand {
             | Self::LockTabStackAreaType {
                 projection_epoch, ..
             }
+            | Self::SelectAsset {
+                projection_epoch, ..
+            }
+            | Self::LoadAssetCatalog { projection_epoch }
+            | Self::SaveAssetCatalog { projection_epoch }
+            | Self::ReimportAsset {
+                projection_epoch, ..
+            }
+            | Self::ReimportSelectedAsset { projection_epoch }
+            | Self::ClearAssetDiagnostics { projection_epoch }
             | Self::ApplySurfaceSessionMutation {
                 projection_epoch, ..
             }

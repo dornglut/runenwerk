@@ -1,5 +1,6 @@
 mod console;
 mod facade;
+mod project_loading;
 mod sdf_operations;
 mod state;
 

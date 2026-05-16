@@ -232,6 +232,52 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 }
             ));
         }
+        ShellCommand::SelectAsset {
+            asset_id,
+            projection_epoch: _,
+        } => {
+            app.asset_catalog_runtime_mut().select_asset(Some(asset_id));
+            app.append_console_line(format!("[asset] selected asset {}", asset_id.raw()));
+        }
+        ShellCommand::LoadAssetCatalog {
+            projection_epoch: _,
+        } => {
+            app.load_asset_project_catalog().map_err(|error| {
+                app.append_console_error(format!("[asset] catalog load failed: {error}"));
+                EditorMutationError::runtime_rejected("asset catalog load failed")
+            })?;
+        }
+        ShellCommand::SaveAssetCatalog {
+            projection_epoch: _,
+        } => {
+            app.save_asset_project_catalog().map_err(|error| {
+                app.append_console_error(format!("[asset] catalog save failed: {error}"));
+                EditorMutationError::runtime_rejected("asset catalog save failed")
+            })?;
+        }
+        ShellCommand::ReimportAsset {
+            asset_id,
+            projection_epoch: _,
+        } => {
+            app.reimport_asset(asset_id).map_err(|error| {
+                app.append_console_error(format!("[asset] reimport failed: {error}"));
+                EditorMutationError::runtime_rejected("asset reimport failed")
+            })?;
+        }
+        ShellCommand::ReimportSelectedAsset {
+            projection_epoch: _,
+        } => {
+            app.reimport_selected_asset().map_err(|error| {
+                app.append_console_error(format!("[asset] selected reimport failed: {error}"));
+                EditorMutationError::runtime_rejected("asset selected reimport failed")
+            })?;
+        }
+        ShellCommand::ClearAssetDiagnostics {
+            projection_epoch: _,
+        } => {
+            app.asset_catalog_runtime_mut().clear_diagnostics();
+            app.append_console_line("[asset] diagnostics cleared");
+        }
         ShellCommand::ApplySelectedEditorDefinition => {
             let shell_state =
                 shell_state
@@ -923,6 +969,12 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::SaveScene => "SaveScene",
         ShellCommand::LoadScene => "LoadScene",
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
+        ShellCommand::SelectAsset { .. } => "SelectAsset",
+        ShellCommand::LoadAssetCatalog { .. } => "LoadAssetCatalog",
+        ShellCommand::SaveAssetCatalog { .. } => "SaveAssetCatalog",
+        ShellCommand::ReimportAsset { .. } => "ReimportAsset",
+        ShellCommand::ReimportSelectedAsset { .. } => "ReimportSelectedAsset",
+        ShellCommand::ClearAssetDiagnostics { .. } => "ClearAssetDiagnostics",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
         ShellCommand::SwitchPanelToolSurfaceKind { .. } => "SwitchPanelToolSurfaceKind",

@@ -16,6 +16,8 @@ pub const ASSET_CATALOG_DUPLICATE_ID_CODE: DiagnosticCode =
     DiagnosticCode::from_static_unchecked("asset.catalog.duplicate_id");
 pub const ASSET_IMPORT_TOOL_MISSING_CODE: DiagnosticCode =
     DiagnosticCode::from_static_unchecked("asset.import.tool_missing");
+pub const ASSET_IMPORT_PROFILE_REJECTED_CODE: DiagnosticCode =
+    DiagnosticCode::from_static_unchecked("asset.import.profile_rejected");
 pub const ASSET_RATIFICATION_REJECTED_CODE: DiagnosticCode =
     DiagnosticCode::from_static_unchecked("asset.ratification.rejected");
 
@@ -37,6 +39,7 @@ pub enum AssetDiagnosticCode {
     ArtifactKindMismatch,
     CatalogDuplicateId,
     ImportToolMissing,
+    ImportProfileRejected,
     RatificationRejected,
 }
 
@@ -49,6 +52,7 @@ impl AssetDiagnosticCode {
             Self::ArtifactKindMismatch => ASSET_ARTIFACT_KIND_MISMATCH_CODE,
             Self::CatalogDuplicateId => ASSET_CATALOG_DUPLICATE_ID_CODE,
             Self::ImportToolMissing => ASSET_IMPORT_TOOL_MISSING_CODE,
+            Self::ImportProfileRejected => ASSET_IMPORT_PROFILE_REJECTED_CODE,
             Self::RatificationRejected => ASSET_RATIFICATION_REJECTED_CODE,
         }
     }

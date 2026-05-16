@@ -7,6 +7,9 @@ use asset::{
 use editor_preview::{
     ReloadDecision, ReloadStatus, ReloadSubject, RuntimeProductKind, RuntimeProductRef,
 };
+use editor_shell::{
+    AssetBrowserRowViewModel, AssetBrowserViewModel, AssetDetailViewModel, ImportInspectorViewModel,
+};
 use product::{
     ProductAuthorityClass, ProductFamily, ProductQueryPolicy, ProductResidency, ProductScaleBand,
 };
@@ -41,6 +44,13 @@ impl AssetCatalogRuntime {
         self.dirty_assets.clear();
     }
 
+    pub fn publish_catalog_update(&mut self, catalog: AssetCatalog, clean_asset: Option<AssetId>) {
+        self.catalog = catalog;
+        if let Some(asset_id) = clean_asset {
+            self.dirty_assets.remove(&asset_id);
+        }
+    }
+
     pub fn diagnostics(&self) -> &[AssetDiagnosticRecord] {
         &self.diagnostics
     }
@@ -59,6 +69,10 @@ impl AssetCatalogRuntime {
 
     pub fn dirty_assets(&self) -> impl Iterator<Item = AssetId> + '_ {
         self.dirty_assets.iter().copied()
+    }
+
+    pub fn clear_asset_dirty(&mut self, asset_id: AssetId) {
+        self.dirty_assets.remove(&asset_id);
     }
 
     pub fn classify_dirty_assets_for_reload(&mut self) -> Vec<ReloadStatus> {
@@ -181,6 +195,99 @@ impl AssetCatalogRuntime {
             lines.push("No catalog assets".to_string());
         }
         lines
+    }
+
+    pub fn asset_browser_view_model(
+        &self,
+        catalog_status_lines: Vec<String>,
+    ) -> AssetBrowserViewModel {
+        let rows = self
+            .catalog
+            .assets()
+            .map(|record| {
+                let has_prior_valid_preservation = record
+                    .artifact_ids
+                    .iter()
+                    .filter_map(|artifact_id| self.catalog.artifact(*artifact_id))
+                    .any(|artifact| artifact.validity.preserves_prior_valid());
+                AssetBrowserRowViewModel {
+                    asset_id: record.asset_id,
+                    display_name: record.display_name.clone(),
+                    stable_name: record.stable_name.clone(),
+                    kind: record.kind,
+                    source_id: record.primary_source_id,
+                    artifact_count: record.artifact_ids.len(),
+                    is_selected: Some(record.asset_id) == self.selected_asset_id,
+                    is_dirty: self.dirty_assets.contains(&record.asset_id),
+                    has_prior_valid_preservation,
+                }
+            })
+            .collect();
+        AssetBrowserViewModel {
+            rows,
+            selected: self.selected_asset_detail(),
+            catalog_status_lines,
+            dirty_asset_count: self.dirty_assets.len(),
+        }
+    }
+
+    pub fn import_inspector_view_model(
+        &self,
+        catalog_status_lines: Vec<String>,
+    ) -> ImportInspectorViewModel {
+        let prior_valid_lines = self
+            .catalog
+            .artifacts
+            .values()
+            .filter(|artifact| artifact.validity.preserves_prior_valid())
+            .map(|artifact| {
+                format!(
+                    "preserved artifact {} asset={} kind={:?} cache={}",
+                    artifact.artifact_id.raw(),
+                    artifact.asset_id.raw(),
+                    artifact.kind,
+                    artifact.cache_key.as_str()
+                )
+            })
+            .collect::<Vec<_>>();
+        let plan_lines = self.selected_asset_id.map_or_else(
+            || vec!["No selected asset".to_string()],
+            |asset_id| {
+                self.catalog.asset(asset_id).map_or_else(
+                    || vec![format!("selected asset {} is missing", asset_id.raw())],
+                    |record| {
+                        let source_line = record
+                            .primary_source_id
+                            .and_then(|source_id| self.catalog.source(source_id))
+                            .map(|source| {
+                                format!(
+                                    "source {} {:?} {}",
+                                    source.source_id.raw(),
+                                    source.kind,
+                                    source.relative_path
+                                )
+                            })
+                            .unwrap_or_else(|| "source: none".to_string());
+                        vec![
+                            format!(
+                                "selected asset {} [{}] {:?}",
+                                record.display_name, record.stable_name, record.kind
+                            ),
+                            source_line,
+                            format!("artifacts: {}", record.artifact_ids.len()),
+                        ]
+                    },
+                )
+            },
+        );
+        ImportInspectorViewModel {
+            selected_asset_id: self.selected_asset_id,
+            pending_dirty_asset_ids: self.dirty_assets.iter().copied().collect(),
+            plan_lines,
+            diagnostic_lines: self.import_diagnostic_lines(),
+            prior_valid_lines,
+            catalog_status_lines,
+        }
     }
 
     pub fn import_diagnostic_lines(&self) -> Vec<String> {
@@ -367,6 +474,62 @@ impl AssetCatalogRuntime {
             lines.push("No SDF brush layer assets".to_string());
         }
         lines
+    }
+
+    fn selected_asset_detail(&self) -> Option<AssetDetailViewModel> {
+        let asset_id = self.selected_asset_id?;
+        let record = self.catalog.asset(asset_id)?;
+        let source_lines = self
+            .catalog
+            .sources
+            .values()
+            .filter(|source| source.asset_id == asset_id)
+            .map(|source| {
+                format!(
+                    "source {} {:?} {} hash={}",
+                    source.source_id.raw(),
+                    source.kind,
+                    source.relative_path,
+                    source
+                        .source_hash
+                        .as_ref()
+                        .map(|hash| format!("{}:{}", hash.algorithm, hash.value))
+                        .unwrap_or_else(|| "unhashed".to_string())
+                )
+            })
+            .collect::<Vec<_>>();
+        let artifact_lines = record
+            .artifact_ids
+            .iter()
+            .filter_map(|artifact_id| self.catalog.artifact(*artifact_id))
+            .map(|artifact| {
+                format!(
+                    "artifact {} {:?} validity={:?} cache={}",
+                    artifact.artifact_id.raw(),
+                    artifact.kind,
+                    artifact.validity,
+                    artifact.cache_key.as_str()
+                )
+            })
+            .collect::<Vec<_>>();
+        let dependency_lines = self
+            .catalog
+            .dependency_graph
+            .dependency_edges()
+            .filter(|(source_asset_id, _)| *source_asset_id == asset_id)
+            .map(|(_, depends_on)| format!("depends on asset {}", depends_on.raw()))
+            .collect::<Vec<_>>();
+        Some(AssetDetailViewModel {
+            asset_id: record.asset_id,
+            display_name: record.display_name.clone(),
+            stable_name: record.stable_name.clone(),
+            kind: record.kind,
+            source_id: record.primary_source_id,
+            artifact_ids: record.artifact_ids.clone(),
+            source_lines,
+            artifact_lines,
+            dependency_lines,
+        })
     }
 
     pub fn has_stale_field_product(&self) -> bool {

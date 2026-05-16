@@ -8,7 +8,9 @@ use editor_shell::WorkspaceState;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::{
-    AssetCatalogRuntime, EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry,
+    AssetCatalogRuntime, EditorAssetProjectSession, EditorFieldProductPublication,
+    EditorFieldProductPublicationJournalEntry, ImportJobStatus, catalog_with_import_artifact,
+    execute_import_for_asset, load_project_catalog, save_project_catalog,
 };
 use crate::runtime::procgen::ProcgenRuntimeState;
 use crate::runtime::viewport::{
@@ -31,6 +33,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) surface_provider_registry: Arc<EditorSurfaceProviderRegistry>,
     pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
+    pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
     pub(crate) field_product_publication_journal: Vec<EditorFieldProductPublicationJournalEntry>,
@@ -62,6 +65,7 @@ impl RunenwerkEditorApp {
             surface_provider_registry: Arc::new(EditorSurfaceProviderRegistry::runenwerk_default()),
             pending_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
+            asset_project_session: None,
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
             pending_field_product_publications: Vec::new(),
             field_product_publication_journal: Vec::new(),
@@ -195,6 +199,137 @@ impl RunenwerkEditorApp {
 
     pub fn asset_catalog_runtime_mut(&mut self) -> &mut AssetCatalogRuntime {
         &mut self.asset_catalog_runtime
+    }
+
+    pub fn asset_project_session(&self) -> Option<&EditorAssetProjectSession> {
+        self.asset_project_session.as_ref()
+    }
+
+    pub fn asset_project_session_mut(&mut self) -> Option<&mut EditorAssetProjectSession> {
+        self.asset_project_session.as_mut()
+    }
+
+    pub fn set_asset_project_session(&mut self, session: EditorAssetProjectSession) {
+        self.asset_project_session = Some(session);
+    }
+
+    pub fn asset_catalog_status_lines(&self) -> Vec<String> {
+        self.asset_project_session
+            .as_ref()
+            .map(EditorAssetProjectSession::status_lines)
+            .unwrap_or_else(|| {
+                vec![
+                    "No asset project session".to_string(),
+                    "Load a project file before catalog IO or import execution".to_string(),
+                ]
+            })
+    }
+
+    pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<()> {
+        let Some(session) = self.asset_project_session.as_mut() else {
+            self.record_missing_asset_project_session("load catalog");
+            return Ok(());
+        };
+        let outcome = load_project_catalog(session)?;
+        if let Some(catalog) = outcome.accepted_catalog {
+            self.asset_catalog_runtime.replace_catalog(catalog);
+            if let Some(session) = self.asset_project_session.as_mut() {
+                session.set_catalog_load_status("accepted");
+            }
+        } else {
+            for diagnostic in outcome.diagnostics {
+                self.asset_catalog_runtime.record_diagnostic(diagnostic);
+            }
+            if let Some(session) = self.asset_project_session.as_mut() {
+                session.set_catalog_load_status("rejected; previous catalog preserved");
+            }
+        }
+        Ok(())
+    }
+
+    pub fn save_asset_project_catalog(&mut self) -> anyhow::Result<()> {
+        let Some(session) = self.asset_project_session.as_ref() else {
+            self.record_missing_asset_project_session("save catalog");
+            return Ok(());
+        };
+        let diagnostics = save_project_catalog(session, self.asset_catalog_runtime.catalog())?;
+        if diagnostics.is_empty() {
+            if let Some(session) = self.asset_project_session.as_mut() {
+                session.set_catalog_save_status("written");
+            }
+        } else {
+            for diagnostic in diagnostics {
+                self.asset_catalog_runtime.record_diagnostic(diagnostic);
+            }
+            if let Some(session) = self.asset_project_session.as_mut() {
+                session.set_catalog_save_status("rejected; invalid catalog not written");
+            }
+        }
+        Ok(())
+    }
+
+    pub fn reimport_selected_asset(&mut self) -> anyhow::Result<()> {
+        let Some(asset_id) = self.asset_catalog_runtime.selected_asset_id() else {
+            self.asset_catalog_runtime
+                .record_diagnostic(asset::AssetDiagnosticRecord::error(
+                    asset::AssetDiagnosticCode::RatificationRejected,
+                    "no selected asset to reimport",
+                ));
+            return Ok(());
+        };
+        self.reimport_asset(asset_id)
+    }
+
+    pub fn reimport_asset(&mut self, asset_id: asset::AssetId) -> anyhow::Result<()> {
+        if self.asset_project_session.is_none() {
+            self.record_missing_asset_project_session("reimport asset");
+            return Ok(());
+        }
+        let catalog_snapshot = self.asset_catalog_runtime.catalog().clone();
+        let outcome = {
+            let session = self
+                .asset_project_session
+                .as_mut()
+                .expect("asset project session checked above");
+            execute_import_for_asset(&catalog_snapshot, session, asset_id)
+        };
+        for diagnostic in &outcome.diagnostics {
+            self.asset_catalog_runtime
+                .record_diagnostic(diagnostic.clone());
+        }
+        if let Some(artifact) = outcome.artifact.clone() {
+            match catalog_with_import_artifact(&catalog_snapshot, artifact.clone()) {
+                Ok(catalog) => {
+                    self.asset_catalog_runtime
+                        .publish_catalog_update(catalog, Some(asset_id));
+                    let status = self
+                        .asset_catalog_runtime
+                        .classify_artifact_reload(&artifact);
+                    self.asset_catalog_runtime.record_reload_status(status);
+                }
+                Err(diagnostics) => {
+                    for diagnostic in diagnostics {
+                        self.asset_catalog_runtime.record_diagnostic(diagnostic);
+                    }
+                }
+            }
+        }
+        if let Some(session) = self.asset_project_session.as_mut() {
+            session.set_import_status(match outcome.status {
+                ImportJobStatus::Imported => "imported",
+                ImportJobStatus::Failed => "failed",
+                ImportJobStatus::FailedPreserved => "failed; prior valid artifact preserved",
+            });
+        }
+        Ok(())
+    }
+
+    fn record_missing_asset_project_session(&mut self, action: &'static str) {
+        self.asset_catalog_runtime
+            .record_diagnostic(asset::AssetDiagnosticRecord::error(
+                asset::AssetDiagnosticCode::RatificationRejected,
+                format!("cannot {action}: no asset project session is active"),
+            ));
     }
 
     pub fn sdf_operation_workspace(&self) -> &SdfOperationWorkspaceState {
