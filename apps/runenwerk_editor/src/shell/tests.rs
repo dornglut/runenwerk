@@ -1,5 +1,6 @@
 use editor_core::{
-    ChangeOrigin, ComponentTypeId, EntityId, SelectionTarget, SessionChangeKind, WorkflowEventKind,
+    ChangeOrigin, ComponentTypeId, EntityId, RealityVersion, SelectionTarget, SessionChangeKind,
+    WorkflowEventKind,
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_shell::{
@@ -12,15 +13,18 @@ use editor_shell::{
     OutlinerDomainMutation, PanelKind, SCENE_WORKSPACE_PROFILE_ID, ShellCommand,
     StructuralCommandTarget, SurfaceLocalAction, SurfaceProviderAvailability, SurfaceProviderId,
     SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, UiInteraction,
-    UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation,
-    WorkspaceSplitAxis, build_editor_shell_frame, map_interactions_to_shell_commands,
-    surface_widget_id, tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id,
-    tab_strip_scroll_widget_id, workspace_split_host_widget_id,
+    UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation,
+    ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis,
+    build_editor_shell_frame, map_interactions_to_shell_commands, surface_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id, tab_strip_scroll_widget_id,
+    viewport_field_component_button_widget_id, workspace_split_host_widget_id,
 };
 use editor_viewport::{
-    ArtifactObservationFrame, ExpressionProductId, ProducerHealth, ProductAvailabilityState,
-    ViewportDebugStage, ViewportHitResult, ViewportId, ViewportPresentationState,
+    ArtifactObservationFrame, ExpressionDimensions, ExpressionProductId, ProducerHealth,
+    ProductAvailabilityState, ViewportDebugStage, ViewportFieldVisualizerColorRamp,
+    ViewportFieldVisualizerComponent, ViewportFieldVisualizerSettingsPatch, ViewportHitResult,
+    ViewportId, ViewportPresentationState,
 };
 use engine::plugins::render::UiFontAtlasResource;
 use ui_input::{
@@ -38,9 +42,9 @@ use crate::editor_runtime::select_single_entity;
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRecord, ToolSurfaceRuntimeBindingRegistryResource,
-    ViewportArtifactObservationResource, ViewportInstanceRegistryResource,
+    VOLUME_SLICE_PRODUCT_ID, ViewportArtifactObservationResource, ViewportInstanceRegistryResource,
     ViewportPresentationStateResource, ViewportRenderStateCommand,
-    ViewportRenderStateCommandQueueResource,
+    ViewportRenderStateCommandQueueResource, initial_product_descriptors,
 };
 use crate::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellController, RunenwerkEditorShellState,
@@ -2316,6 +2320,169 @@ fn dispatch_shell_command_enqueues_viewport_state_commands_for_bound_viewport() 
 }
 
 #[test]
+fn dispatch_shell_command_updates_viewport_field_visualizer_settings_without_changing_product() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut viewport_presentations = ViewportPresentationStateResource::default();
+    let requested_viewport = ViewportId(1);
+    let rebound_viewport = ViewportId(2);
+    let selected_product = ExpressionProductId(6);
+    let target = StructuralCommandTarget {
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
+    };
+    let tool_surface_bindings = test_tool_surface_binding_registry(
+        target.active_tool_surface.unwrap(),
+        target.panel_instance_id,
+        target.tab_stack_id,
+        rebound_viewport,
+    );
+    viewport_presentations.upsert_state(ViewportPresentationState::new(
+        rebound_viewport,
+        selected_product,
+    ));
+    dispatch_shell_command(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::PatchFieldVisualizerSettings {
+                viewport_id: rebound_viewport,
+                patch: ViewportFieldVisualizerSettingsPatch::SetComponent(
+                    ViewportFieldVisualizerComponent::Magnitude,
+                ),
+            }),
+            0,
+        ),
+        Some(&mut viewport_presentations),
+        None,
+        Some(&tool_surface_bindings),
+        None,
+    )
+    .expect("bound field visualizer settings command should dispatch");
+
+    let state = viewport_presentations
+        .state_for(rebound_viewport)
+        .expect("rebound viewport presentation should exist");
+    assert_eq!(state.selected_primary_product_id, selected_product);
+    assert_eq!(
+        state.field_visualizer_settings.component,
+        ViewportFieldVisualizerComponent::Magnitude
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::PatchFieldVisualizerSettings {
+                viewport_id: rebound_viewport,
+                patch: ViewportFieldVisualizerSettingsPatch::SetColorRamp(
+                    ViewportFieldVisualizerColorRamp::Heat,
+                ),
+            }),
+            0,
+        ),
+        Some(&mut viewport_presentations),
+        None,
+        Some(&tool_surface_bindings),
+        None,
+    )
+    .expect("second field visualizer patch should merge with current state");
+
+    let merged = viewport_presentations
+        .state_for(rebound_viewport)
+        .map(|state| state.field_visualizer_settings)
+        .expect("rebound viewport presentation should exist");
+    assert_eq!(
+        merged.component,
+        ViewportFieldVisualizerComponent::Magnitude
+    );
+    assert_eq!(merged.color_ramp, ViewportFieldVisualizerColorRamp::Heat);
+
+    dispatch_shell_command(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::PatchFieldVisualizerSettings {
+                viewport_id: requested_viewport,
+                patch: ViewportFieldVisualizerSettingsPatch::SetComponent(
+                    ViewportFieldVisualizerComponent::Auto,
+                ),
+            }),
+            0,
+        ),
+        Some(&mut viewport_presentations),
+        None,
+        Some(&tool_surface_bindings),
+        None,
+    )
+    .expect("stale field visualizer command should fail closed");
+
+    assert_eq!(
+        viewport_presentations
+            .state_for(rebound_viewport)
+            .map(|state| state.field_visualizer_settings),
+        Some(merged)
+    );
+}
+
+#[test]
+fn dispatch_shell_command_clamps_field_visualizer_slice_step_to_selected_product_metadata() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut viewport_presentations = ViewportPresentationStateResource::default();
+    let mut viewport_observations = ViewportArtifactObservationResource::default();
+    let rebound_viewport = ViewportId(2);
+    let target = StructuralCommandTarget {
+        panel_instance_id: editor_shell::PanelInstanceId::try_from_raw(1).unwrap(),
+        active_tool_surface: Some(editor_shell::ToolSurfaceInstanceId::try_from_raw(1).unwrap()),
+        tab_stack_id: editor_shell::TabStackId::try_from_raw(1).unwrap(),
+    };
+    let tool_surface_bindings = test_tool_surface_binding_registry(
+        target.active_tool_surface.unwrap(),
+        target.panel_instance_id,
+        target.tab_stack_id,
+        rebound_viewport,
+    );
+    viewport_presentations.upsert_state(ViewportPresentationState::new(
+        rebound_viewport,
+        VOLUME_SLICE_PRODUCT_ID,
+    ));
+
+    let mut frame = ArtifactObservationFrame::new(rebound_viewport, RealityVersion(1));
+    frame.available_products =
+        initial_product_descriptors(ExpressionDimensions::new(64, 64), RealityVersion(1));
+    frame.selected_primary_product_id = Some(VOLUME_SLICE_PRODUCT_ID);
+    viewport_observations.upsert_frame(frame);
+
+    dispatch_shell_command(
+        &mut app,
+        None,
+        editor_domain_command(
+            target,
+            EditorDomainMutation::Viewport(ViewportDomainMutation::PatchFieldVisualizerSettings {
+                viewport_id: rebound_viewport,
+                patch: ViewportFieldVisualizerSettingsPatch::StepSliceIndex(1),
+            }),
+            0,
+        ),
+        Some(&mut viewport_presentations),
+        Some(&viewport_observations),
+        Some(&tool_surface_bindings),
+        None,
+    )
+    .expect("field visualizer patch should apply selected product slice bounds");
+
+    assert_eq!(
+        viewport_presentations
+            .state_for(rebound_viewport)
+            .map(|state| state.field_visualizer_settings.slice_index),
+        Some(0)
+    );
+}
+
+#[test]
 fn dispatch_shell_command_toggles_viewport_details_visibility() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();
@@ -2492,6 +2659,64 @@ fn provider_local_viewport_details_toggle_uses_routed_surface_instance() {
             .map(|session| session.viewport_details_visible),
         Some(true)
     );
+}
+
+#[test]
+fn provider_local_viewport_field_controls_are_routed_actions() {
+    let app = RunenwerkEditorApp::new();
+    let shell_state = RunenwerkEditorShellState::new();
+    let viewport_surface = surface_id_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
+    let mut viewport_instances = ViewportInstanceRegistryResource::default();
+    viewport_instances.sync_from_workspace_state(shell_state.workspace_state());
+    let viewport_id = viewport_instances
+        .viewport_for_tool_surface(viewport_surface)
+        .expect("viewport surface should have runtime viewport identity");
+
+    let frame_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.surface_provider_registry(),
+        &ThemeTokens::default(),
+        None,
+        None,
+        Some(&viewport_instances),
+    );
+    let frame = frame_model
+        .surface(viewport_surface)
+        .expect("viewport surface should resolve");
+    let route = frame
+        .routes
+        .get(&surface_widget_id(
+            viewport_surface,
+            viewport_field_component_button_widget_id(1),
+        ))
+        .expect("field component control should have a route");
+    assert!(matches!(
+        &route.action,
+        SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
+            viewport_id: routed_viewport,
+            patch,
+        }) if *routed_viewport == viewport_id
+            && *patch == ViewportFieldVisualizerSettingsPatch::SetComponent(
+                ViewportFieldVisualizerComponent::X
+            )
+    ));
+
+    let route = frame
+        .routes
+        .get(&surface_widget_id(
+            viewport_surface,
+            VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
+        ))
+        .expect("field slice increment control should have a route");
+    assert!(matches!(
+        &route.action,
+        SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
+            viewport_id: routed_viewport,
+            patch,
+        }) if *routed_viewport == viewport_id
+            && *patch == ViewportFieldVisualizerSettingsPatch::StepSliceIndex(1)
+    ));
 }
 
 #[test]

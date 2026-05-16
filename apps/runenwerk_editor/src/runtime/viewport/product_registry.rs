@@ -106,6 +106,7 @@ pub fn initial_product_descriptors(
                 channel_label: Some("depth".to_string()),
                 layer_label: None,
                 slice_label: None,
+                slice_count: None,
             }),
         ),
         ExpressionProductDescriptor::new(

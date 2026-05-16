@@ -91,7 +91,7 @@ package "Level 2 - Productization / Contract-Gated" {
 
   component "WR-011 Gameplay Graph ATR IR\nstate=blocked_deferred\nscore=0.3 gate=domain contract gate\nV4 B4\ncall=first compiler and ECS lowering\nafter gameplay contracts" as GAMEPLAY <<V4>>
 
-  component "WR-019 Field Visualizer workflow\nstate=ready_next\nscore=2.4 gate=after rendered-world v1\nV4 B2\ncall=product-backed field debug\nno parallel viewer path" as FIELDVIS <<V4>>
+  component "WR-019 Field Visualizer workflow\nstate=completed\nscore=2.4 gate=after rendered-world v1\nV4 B2\ncall=product-backed field debug\nno parallel viewer path" as FIELDVIS <<completed>>
 
   component "WR-026 Asset editor adapters\nstate=ready_next\nscore=2.4 gate=after asset core contracts\nV4 B3\ncall=editor adapter wiring\nprior-valid artifacts" as ASSETADAPT <<V4>>
 

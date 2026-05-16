@@ -2,7 +2,9 @@
 //! Purpose: Viewport shell view model.
 
 use editor_core::EntityId;
-use editor_viewport::{ExpressionProductId, ViewportDebugStage, ViewportId};
+use editor_viewport::{
+    ExpressionProductId, ViewportDebugStage, ViewportFieldVisualizerSettings, ViewportId,
+};
 use ui_math::UiPoint;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +28,7 @@ pub struct ViewportViewModel {
     pub tool_radial_anchor_position: Option<UiPoint>,
     pub debug_stage: ViewportDebugStage,
     pub root_background_opaque: bool,
+    pub field_visualizer_settings: ViewportFieldVisualizerSettings,
     pub selected_entity: Option<EntityId>,
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,
@@ -48,6 +51,7 @@ impl Default for ViewportViewModel {
             tool_radial_anchor_position: None,
             debug_stage: ViewportDebugStage::Scene,
             root_background_opaque: false,
+            field_visualizer_settings: ViewportFieldVisualizerSettings::default(),
             selected_entity: None,
             hovered_entity: None,
             drag_in_progress: false,

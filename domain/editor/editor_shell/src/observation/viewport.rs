@@ -4,7 +4,7 @@
 use editor_core::EntityId;
 use editor_viewport::{
     ExpressionFreshness, ExpressionProductId, ExpressionProductKind, ProducerHealth,
-    ProductAvailabilityState, ViewportDebugStage, ViewportId,
+    ProductAvailabilityState, ViewportDebugStage, ViewportFieldVisualizerSettings, ViewportId,
 };
 use ui_math::UiPoint;
 
@@ -35,6 +35,7 @@ pub struct ViewportObservationFrame {
     pub tool_radial_anchor_position: Option<UiPoint>,
     pub debug_stage: ViewportDebugStage,
     pub root_background_opaque: bool,
+    pub field_visualizer_settings: ViewportFieldVisualizerSettings,
     pub selected_entity: Option<EntityId>,
     pub hovered_entity: Option<EntityId>,
     pub drag_in_progress: bool,

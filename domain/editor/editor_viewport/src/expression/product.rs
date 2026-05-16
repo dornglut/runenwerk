@@ -1,6 +1,8 @@
 //! File: domain/editor/editor_viewport/src/expression/product.rs
 //! Purpose: Typed viewport expression product contracts.
 
+use std::num::NonZeroU32;
+
 use editor_core::RealityVersion;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -71,6 +73,7 @@ pub struct ExpressionChannelLayerSliceMetadata {
     pub channel_label: Option<String>,
     pub layer_label: Option<String>,
     pub slice_label: Option<String>,
+    pub slice_count: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -53,6 +53,10 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             .workspace_state()
             .tool_surface(request.tool_surface_instance_id)
             .and_then(|surface| surface.viewport_settings);
+        let field_visualizer_settings = products
+            .map(|products| products.field_visualizer_settings)
+            .or_else(|| viewport_settings.map(|settings| settings.field_visualizer_settings))
+            .unwrap_or_default();
         let frame = build_viewport_observation_frame(
             products,
             session.viewport_details_visible,
@@ -68,6 +72,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             viewport_settings
                 .map(|settings| settings.root_background_opaque)
                 .unwrap_or(false),
+            field_visualizer_settings,
             context.app.runtime().selected_entity(),
             session.viewport_interaction_state.drag_in_progress(),
             tool_state,
@@ -175,6 +180,109 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                         ViewportSurfaceAction::SetDebugStage {
                             viewport_id,
                             debug_stage,
+                        },
+                    )),
+                );
+            }
+            for (index, component) in editor_viewport::ViewportFieldVisualizerComponent::ALL
+                .into_iter()
+                .enumerate()
+            {
+                routes.insert(
+                    surface_widget_id(
+                        request.tool_surface_instance_id,
+                        viewport_field_component_button_widget_id(index),
+                    ),
+                    SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                        ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                            viewport_id,
+                            patch:
+                                editor_viewport::ViewportFieldVisualizerSettingsPatch::SetComponent(
+                                    component,
+                                ),
+                        },
+                    )),
+                );
+            }
+            routes.insert(
+                surface_widget_id(
+                    request.tool_surface_instance_id,
+                    VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
+                ),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                    ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                        viewport_id,
+                        patch:
+                            editor_viewport::ViewportFieldVisualizerSettingsPatch::StepSliceIndex(
+                                -1,
+                            ),
+                    },
+                )),
+            );
+            routes.insert(
+                surface_widget_id(
+                    request.tool_surface_instance_id,
+                    VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID,
+                ),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                    ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                        viewport_id,
+                        patch: editor_viewport::ViewportFieldVisualizerSettingsPatch::SetSliceIndex(
+                            0,
+                        ),
+                    },
+                )),
+            );
+            routes.insert(
+                surface_widget_id(
+                    request.tool_surface_instance_id,
+                    VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
+                ),
+                SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                    ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                        viewport_id,
+                        patch: editor_viewport::ViewportFieldVisualizerSettingsPatch::StepSliceIndex(
+                            1,
+                        ),
+                    },
+                )),
+            );
+            for (index, color_ramp) in editor_viewport::ViewportFieldVisualizerColorRamp::ALL
+                .into_iter()
+                .enumerate()
+            {
+                routes.insert(
+                    surface_widget_id(
+                        request.tool_surface_instance_id,
+                        viewport_field_color_ramp_button_widget_id(index),
+                    ),
+                    SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                        ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                            viewport_id,
+                            patch:
+                                editor_viewport::ViewportFieldVisualizerSettingsPatch::SetColorRamp(
+                                    color_ramp,
+                                ),
+                        },
+                    )),
+                );
+            }
+            for (index, debug_mode) in editor_viewport::ViewportFieldVisualizerDebugMode::ALL
+                .into_iter()
+                .enumerate()
+            {
+                routes.insert(
+                    surface_widget_id(
+                        request.tool_surface_instance_id,
+                        viewport_field_debug_mode_button_widget_id(index),
+                    ),
+                    SurfaceLocalRoute::new(SurfaceLocalAction::Viewport(
+                        ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                            viewport_id,
+                            patch:
+                                editor_viewport::ViewportFieldVisualizerSettingsPatch::SetDebugMode(
+                                    debug_mode,
+                                ),
                         },
                     )),
                 );
@@ -291,6 +399,16 @@ impl EditorSurfaceProvider for SceneViewportProvider {
                     viewport_id,
                     enabled,
                 }),
+            ))),
+            SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
+                viewport_id,
+                patch,
+            }) => Ok(Some(editor_domain_proposal(
+                request,
+                context.projection_epoch,
+                EditorDomainMutation::Viewport(
+                    ViewportDomainMutation::PatchFieldVisualizerSettings { viewport_id, patch },
+                ),
             ))),
             _ => Ok(None),
         }

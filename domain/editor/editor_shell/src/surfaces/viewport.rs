@@ -1,7 +1,9 @@
 //! File: domain/editor/editor_shell/src/surfaces/viewport.rs
 //! Purpose: Viewport surface workflow contracts.
 
-use editor_viewport::{ExpressionProductId, ViewportDebugStage, ViewportId};
+use editor_viewport::{
+    ExpressionProductId, ViewportDebugStage, ViewportFieldVisualizerSettingsPatch, ViewportId,
+};
 use ui_math::UiPoint;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +31,10 @@ pub enum ViewportSurfaceAction {
     SetRootBackgroundOpaque {
         viewport_id: ViewportId,
         enabled: bool,
+    },
+    PatchFieldVisualizerSettings {
+        viewport_id: ViewportId,
+        patch: ViewportFieldVisualizerSettingsPatch,
     },
 }
 
@@ -62,5 +68,9 @@ pub enum ViewportDomainMutation {
     SetRootBackgroundOpaque {
         viewport_id: ViewportId,
         enabled: bool,
+    },
+    PatchFieldVisualizerSettings {
+        viewport_id: ViewportId,
+        patch: ViewportFieldVisualizerSettingsPatch,
     },
 }

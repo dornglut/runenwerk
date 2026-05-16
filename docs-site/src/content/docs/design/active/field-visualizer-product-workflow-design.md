@@ -5,7 +5,7 @@ status: active
 owner: apps/runenwerk_editor
 layer: app-runtime / editor-ui
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-16
 related_designs:
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
@@ -26,11 +26,15 @@ The field visualizer is a viewport product workflow, not a separate viewer.
 
 Owning code paths:
 
+- `domain/editor/editor_viewport/src/expression/field_visualizer.rs`
 - `apps/runenwerk_editor/src/runtime/viewport/product_registry.rs`
 - `apps/runenwerk_editor/src/runtime/viewport/product_targets.rs`
 - `apps/runenwerk_editor/src/runtime/viewport/presentation_resolver.rs`
+- `apps/runenwerk_editor/src/shell/providers/scene/viewport.rs`
 - `apps/runenwerk_editor/src/shell/providers/field_product_viewer.rs`
+- `apps/runenwerk_editor/src/shell/dispatch/viewport.rs`
 - `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::viewport_options_popup`
+- `domain/editor/editor_shell/src/workspace/persisted.rs`
 
 ## Product Kinds
 
@@ -47,16 +51,20 @@ Each product exposes availability, producer health, dimensions, format, freshnes
 
 ## Controls
 
-V1 controls belong in viewport/session state:
+V1 controls belong in viewport-owned presentation settings and round-trip
+through persisted tool-surface viewport settings:
 
-- product kind;
-- channel or component selection;
-- slice index for volume products;
-- color ramp;
-- debug mode;
+- `component`: `Auto`, `X`, `Y`, `Z`, `W`, `Magnitude`;
+- `slice_index`: `u32`, default `0`;
+- `color_ramp`: `Grayscale`, `Heat`, `DivergingSigned`;
+- `debug_mode`: `Values`, `Availability`, `Freshness`;
 - unavailable-product diagnostics.
 
-Controls must not duplicate product target identity. They select or parameterize the product that the viewport already presents.
+Controls must not duplicate product target identity. Product descriptors and
+target records keep stable product identity; field visualizer settings
+parameterize presentation and producer behavior for the product that the
+viewport already presents. The Field Product Viewer surface remains
+diagnostics/status-only and does not select viewport products directly.
 
 ## Non Goals
 
@@ -70,5 +78,9 @@ Required coverage:
 
 - product selection maps to the correct `ViewportSurfacePresentationSlot`;
 - unavailable products stay visible with diagnostics;
-- visualizer session state persists per tool surface;
+- visualizer presentation settings persist per viewport/tool surface;
+- viewport option controls route through provider actions, shell dispatch, and
+  runtime presentation state rather than local-only UI state;
+- changing component, slice, ramp, or debug mode updates presentation settings
+  without changing product target identity;
 - field products use the same dynamic target registry as scene color, picking ids, and overlay.

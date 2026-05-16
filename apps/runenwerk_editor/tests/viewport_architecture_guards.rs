@@ -20,9 +20,9 @@ use runenwerk_editor::runtime::viewport::{
     SurfaceDefinitionRegistryResource, ToolSurfaceRuntimeBindingRecord,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
-    ViewportPresentationStateResource, ViewportProductRegistryResource, ViewportSurfaceHandle,
-    ViewportSurfaceSetResource, ViewportSurfaceSlot, build_surface_binding_registry,
-    initial_product_descriptors,
+    ViewportPresentationStateResource, ViewportProductRegistryResource,
+    ViewportRuntimeSettingsHydrationResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
+    ViewportSurfaceSlot, build_surface_binding_registry, initial_product_descriptors,
 };
 use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource};
 
@@ -113,6 +113,7 @@ fn runtime_viewport_resources_start_empty_before_bootstrap() {
     );
     assert!(ViewportProductRegistryResource::default().is_empty());
     assert!(ViewportPresentationStateResource::default().is_empty());
+    assert!(ViewportRuntimeSettingsHydrationResource::default().is_empty());
     assert!(ViewportArtifactObservationResource::default().is_empty());
     assert!(ViewportPickingResultsResource::default().is_empty());
 }

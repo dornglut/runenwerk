@@ -30,10 +30,11 @@ use crate::runtime::viewport::{
     ViewportPresentationStateResource, ViewportProductRegistryResource,
     ViewportProductTargetRegistryResource, ViewportRenderJobResource,
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
-    ViewportSurfaceSetResource, apply_viewport_render_state_commands_system,
-    prepare_viewport_render_product_selections_system, publish_viewport_query_snapshots_at_barrier,
-    summarize_viewport_gpu_residency_system, sync_viewport_presentation_products_system,
-    sync_viewport_product_targets_system, sync_viewport_render_jobs_system,
+    ViewportRuntimeSettingsHydrationResource, ViewportSurfaceSetResource,
+    apply_viewport_render_state_commands_system, prepare_viewport_render_product_selections_system,
+    publish_viewport_query_snapshots_at_barrier, summarize_viewport_gpu_residency_system,
+    sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
+    sync_viewport_render_jobs_system,
 };
 
 pub struct EditorAppPlugin;
@@ -100,6 +101,7 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportProductRegistryResource>();
         app.init_resource::<ViewportProductTargetRegistryResource>();
         app.init_resource::<ViewportPresentationStateResource>();
+        app.init_resource::<ViewportRuntimeSettingsHydrationResource>();
         app.init_resource::<ViewportArtifactObservationResource>();
         app.init_resource::<ViewportRenderJobResource>();
         app.init_resource::<ViewportRenderStateResource>();

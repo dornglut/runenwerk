@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-15'
+  last_reviewed: '2026-05-16'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -41,13 +41,13 @@ items:
   - cargo test -p runenwerk_draw --test app_shell
   - cargo test -p engine
   next_evidence: 2026-05-15 DRF3 preview/final product-surface bridge landed through docs-site/src/content/docs/reports/batches/2026-05-14-wr-001-product-job-draw-bridge/batch.toml
-    and WR-006 completed DRF4/DRF5 GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job
-    evidence before reactivation.
-  current_decision: DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and
-    do not reopen procgen bake/rollback.
-  current_call: Continue only if the next bounded slice has fresh product-job evidence. The 2026-05-15 WR-001 batch
-    bridged preview and final Draw tile surfaces through existing render APIs, and WR-006 has since completed
-    the dependent GPU proof and promotion slice.
+    and WR-006 completed DRF4/DRF5 GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job evidence
+    before reactivation.
+  current_decision: DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not
+    reopen procgen bake/rollback.
+  current_call: Continue only if the next bounded slice has fresh product-job evidence. The 2026-05-15 WR-001 batch bridged
+    preview and final Draw tile surfaces through existing render APIs, and WR-006 has since completed the dependent GPU proof
+    and promotion slice.
   first_move: Continue from runtime-product-job-executor-roadmap.md, runenwerk-draw/roadmap.md, and sdf-first-execution-roadmap.md.
   diagram_call:
   - DRF3 bridge landed
@@ -82,8 +82,8 @@ items:
   validations:
   - cargo test -p ecs
   - cargo test -p scheduler
-  next_evidence: 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed
-    and F2 lifecycle/finalization remains.
+  next_evidence: 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed and F2 lifecycle/finalization
+    remains.
   current_decision: Continue only where lifecycle/finalization unblocks product jobs or diagnostics.
   current_call: Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 pilot
     landed M5 consumer lag/backpressure diagnostics and F3 plan reporting; F2 remains open.
@@ -122,14 +122,13 @@ items:
   validations:
   - cargo test -p engine render_product_selection
   - cargo test -p engine
-  next_evidence: 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source
-    residency invalidation, and conflict rejection for selected source state.
+  next_evidence: 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source residency invalidation,
+    and conflict rejection for selected source state.
   current_decision: Continue as contract-following support, not renderer-owned world truth.
-  current_call: Implement only as contract-following FR-1 follow-up from the fully featured renderer roadmap, not as
-    renderer-owned world truth. The 2026-05-14 pilot added prepared-view ownership guards plus selected-source residency
-    derivation and invalidation.
-  first_move: Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md,
-    engine/roadmaps/fully-featured-renderer-roadmap.md, and render-product-surface-foundation-bundle-design.md.
+  current_call: Implement only as contract-following FR-1 follow-up from the fully featured renderer roadmap, not as renderer-owned
+    world truth. The 2026-05-14 pilot added prepared-view ownership guards plus selected-source residency derivation and invalidation.
+  first_move: Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md, engine/roadmaps/fully-featured-renderer-roadmap.md,
+    and render-product-surface-foundation-bundle-design.md.
   diagram_call:
   - product selection and
   - runtime-derived residency only
@@ -204,13 +203,13 @@ items:
   - tools/docs/validate_docs.py
   validations:
   - task docs:validate
-  next_evidence: 2026-05-16 docs governance milestone moved implemented active designs into implemented lifecycle,
-    aligned canonical ownership maps with workspace truth, indexed preserved batch artifacts, and hardened docs validation
-    against lifecycle drift, missing crate coverage, stale prompt paths, and stale active-looking batches.
-  current_decision: Keep as an always-available docs governance support lane; the current no-shortcuts cleanup milestone
-    is complete and future drift should fail through task docs:validate.
-  current_call: Use only for future lifecycle drift or source-of-truth cleanup. Current validation now rejects active
-    designs that claim implementation without an explicit phase-evidence marker and rejects missing crate-doc coverage.
+  next_evidence: 2026-05-16 docs governance milestone moved implemented active designs into implemented lifecycle, aligned
+    canonical ownership maps with workspace truth, indexed preserved batch artifacts, and hardened docs validation against
+    lifecycle drift, missing crate coverage, stale prompt paths, and stale active-looking batches.
+  current_decision: Keep as an always-available docs governance support lane; the current no-shortcuts cleanup milestone is
+    complete and future drift should fail through task docs:validate.
+  current_call: Use only for future lifecycle drift or source-of-truth cleanup. Current validation now rejects active designs
+    that claim implementation without an explicit phase-evidence marker and rejects missing crate-doc coverage.
   first_move: Run task docs:validate, then inspect any reported governance drift before moving or rewriting docs.
   diagram_call:
   - implemented lifecycle promoted
@@ -249,12 +248,12 @@ items:
   validations:
   - cargo test -p runenwerk_draw
   - cargo test -p engine
-  next_evidence: 2026-05-15 WR-006 landed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public
-    render-flow/product-surface APIs; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-006-draw-drf4-drf5/closeout.md.
-  current_decision: DRF4 and DRF5 are complete; keep CPU tile formation canonical while future Draw work builds
-    on validated GPU promotion/fallback.
-  current_call: Completed through the 2026-05-15 WR-006 batch. Do not reopen this slice unless GPU validation
-    or CPU fallback evidence regresses.
+  next_evidence: 2026-05-15 WR-006 landed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public render-flow/product-surface
+    APIs; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-006-draw-drf4-drf5/closeout.md.
+  current_decision: DRF4 and DRF5 are complete; keep CPU tile formation canonical while future Draw work builds on validated
+    GPU promotion/fallback.
+  current_call: Completed through the 2026-05-15 WR-006 batch. Do not reopen this slice unless GPU validation or CPU fallback
+    evidence regresses.
   first_move: Use apps/runenwerk-draw/roadmap.md and the 2026-05-15 WR-006 batch closeout for follow-up context.
   main_blocker: Complete; future Draw work should preserve CPU truth and public render-flow/product-surface boundaries.
   diagram_call:
@@ -296,16 +295,15 @@ items:
   - cargo test -p engine --test network_plugins
   - cargo test -p ecs
   - cargo test -p scheduler
-  next_evidence: 2026-05-15 Phase 1-3 landed ACK/baseline hardening, delta lifecycle normalization, and engine
-    bridge baseline convergence; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md.
-  current_decision: Phase 1-3 is complete; future replication work should build on the accepted ACK/baseline outcome
-    contract and engine bridge checkpoint behavior instead of reopening ad hoc baseline mutation.
-  current_call: Completed through the 2026-05-15 WR-007 batches. Do not broaden replication scope until the next
-    roadmap row has fresh declarative replication or ECS component extraction evidence.
-  first_move: Use net/multiplayer-replication-implementation-roadmap.md and the 2026-05-15 batch closeouts for follow-up
-    context.
-  main_blocker: Complete; future work should preserve the single ACK/baseline outcome contract across engine_net
-    runtimes and engine plugin checkpoints.
+  next_evidence: 2026-05-15 Phase 1-3 landed ACK/baseline hardening, delta lifecycle normalization, and engine bridge baseline
+    convergence; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md.
+  current_decision: Phase 1-3 is complete; future replication work should build on the accepted ACK/baseline outcome contract
+    and engine bridge checkpoint behavior instead of reopening ad hoc baseline mutation.
+  current_call: Completed through the 2026-05-15 WR-007 batches. Do not broaden replication scope until the next roadmap row
+    has fresh declarative replication or ECS component extraction evidence.
+  first_move: Use net/multiplayer-replication-implementation-roadmap.md and the 2026-05-15 batch closeouts for follow-up context.
+  main_blocker: Complete; future work should preserve the single ACK/baseline outcome contract across engine_net runtimes
+    and engine plugin checkpoints.
   diagram_call:
   - ACK hardening complete
   - bridge convergence complete
@@ -418,8 +416,7 @@ items:
   - cargo test -p engine
   next_evidence: Stable aliases, prepared flow invocation, hot reload, diagnostics, and inspection evidence.
   current_decision: Queue as FR-7 after render surface, ergonomics, persistence, and inspection priorities.
-  current_call: Keep queued after render surface, ergonomics, persistence, inspection, and product-surface follow-ups in
-    engine/roadmaps/fully-featured-renderer-roadmap.md.
+  current_call: Keep queued after render surface, ergonomics, persistence, inspection, and product-surface follow-ups in engine/roadmaps/fully-featured-renderer-roadmap.md.
   main_blocker: Fragment assets and hot reload need stable target aliases, prepared flow invocations, diagnostics, and a product
     priority.
   diagram_call:
@@ -502,14 +499,14 @@ items:
   validations:
   - cargo test -p graph
   - task docs:validate
-  next_evidence: 2026-05-16 ADR 0010 accepted the graph substrate/canvas boundary and preserved the former draft
-    rationale; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-012-neutral-graph-substrate-boundary/closeout.md.
-  current_decision: Graph substrate policy is complete; future semantic graph work must start from one concrete owning
-    domain and one formed product target, not a broad graph platform.
-  current_call: Completed policy gate. Use domain/graph as structural support only; do not reopen it as a semantic graph
-    runtime or editor canvas authority.
-  first_move: For future semantic graph work, choose a concrete owning domain and consume ADR 0010 instead of changing
-    domain/graph ownership.
+  next_evidence: 2026-05-16 ADR 0010 accepted the graph substrate/canvas boundary and preserved the former draft rationale;
+    closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-012-neutral-graph-substrate-boundary/closeout.md.
+  current_decision: Graph substrate policy is complete; future semantic graph work must start from one concrete owning domain
+    and one formed product target, not a broad graph platform.
+  current_call: Completed policy gate. Use domain/graph as structural support only; do not reopen it as a semantic graph runtime
+    or editor canvas authority.
+  first_move: For future semantic graph work, choose a concrete owning domain and consume ADR 0010 instead of changing domain/graph
+    ownership.
   diagram_call:
   - graph substrate accepted
   - semantic meaning stays domain-owned
@@ -662,10 +659,10 @@ items:
   - docs-site/src/content/docs/design/deferred
   validations:
   - task docs:validate
-  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target,
-    formation product, invalidation/debug model, command boundary, and guard suite.
-  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract
-    layer for retained UI first, not permission to implement alternate execution.
+  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target, formation
+    product, invalidation/debug model, command boundary, and guard suite.
+  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract layer
+    for retained UI first, not permission to implement alternate execution.
   why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new
     active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts.
   diagram_call:
@@ -673,8 +670,8 @@ items:
   - only after ADR/design promotion
   ddd_owner: domain/ui
   adr_requirement: Accepted ADR required to change UI execution default after Interaction V2 contracts exist.
-  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and
-    Interaction V2 contract consumption checks required before implementation.
+  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and Interaction
+    V2 contract consumption checks required before implementation.
   ownership_mode: Deferred architecture exploration.
 - id: WR-017
   title: Gameplay actions, powers, runtime, and power editor
@@ -749,12 +746,12 @@ items:
   - task roadmap:check
   - task docs:validate
   next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md.
-    Multi-entity SDF primitive extraction, scene-product shader packet use, CPU picking from the render-state packet,
-    picking shader packet decode, and viewport render-job uniform override tests are implemented and validated.
+    Multi-entity SDF primitive extraction, scene-product shader packet use, CPU picking from the render-state packet, picking
+    shader packet decode, and viewport render-job uniform override tests are implemented and validated.
   current_decision: All editor SDF primitive entities now render and pick through one app-runtime extracted viewport scene
     packet before material, prefab, terrain, or field visualization production work expands.
-  current_call: Completed through the 2026-05-16 WR-018 rendered-world V1 closeout. Do not reopen this slice unless
-    storage-buffer packet expansion or a later product producer requires a new bounded render-flow contract.
+  current_call: Completed through the 2026-05-16 WR-018 rendered-world V1 closeout. Do not reopen this slice unless storage-buffer
+    packet expansion or a later product producer requires a new bounded render-flow contract.
   first_move: For follow-up viewport product work, consume EditorViewportSceneRenderPacket and the viewport product target
     registry instead of adding another scene extraction or parallel viewer path.
   diagram_call:
@@ -762,7 +759,8 @@ items:
   - render/picking consistency
   ddd_owner: apps/runenwerk_editor runtime with render product-surface support
   adr_requirement: No new ADR while implementation stays inside editor viewport projection contracts.
-  fitness_function_requirement: Renderer packet ordering, picking consistency, viewport statistics, and shader serialization checks.
+  fitness_function_requirement: Renderer packet ordering, picking consistency, viewport statistics, and shader serialization
+    checks.
   ownership_mode: Stream-aligned editor work with render enabling support.
 - id: WR-019
   title: Field Visualizer product workflow
@@ -771,7 +769,7 @@ items:
   lane: Product workflow
   dependency_level: L2
   gate: After rendered-world V1
-  planning_state: ready_next
+  planning_state: completed
   priority: P1
   value: 4
   blocker: 2
@@ -791,13 +789,18 @@ items:
   - domain/editor
   - docs-site/src/content/docs/design/active
   - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md
   validations:
   - cargo test -p runenwerk_editor viewport
   - cargo test -p engine render_product_selection
-  next_evidence: Selected FieldPreviewProduct route, product kind/channel/slice/ramp controls, and unavailable-product diagnostics.
-  current_decision: Build field visualization as viewport product selection, not as a parallel viewer.
-  current_call: Plan immediately after rendered-world V1 stabilizes the packet/product handoff; this is the first FR-2
-    product-producer follow-up in the fully featured renderer roadmap.
+  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md.
+    Viewport-owned field visualizer settings, granular patch actions, product-aware slice bounds, routed controls, persisted
+    hydration, stable product target identity, and strict diagnostics are implemented and validated.
+  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md.
+    Viewport-owned field visualizer settings, granular patch actions, product-aware slice bounds, routed controls, persisted
+    hydration, stable product target identity, and strict diagnostics are implemented and validated.
+  current_call: Plan immediately after rendered-world V1 stabilizes the packet/product handoff; this is the first FR-2 product-producer
+    follow-up in the fully featured renderer roadmap.
   main_blocker: Rendered-world V1 must first prove the viewport packet/product handoff and product target selection path.
   first_move: Implement from field-visualizer-product-workflow-design.md using existing viewport product target state and
     the FR-2 sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
@@ -841,17 +844,16 @@ items:
   - task roadmap:check
   - task docs:validate
   next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md.
-    Domain-owned project catalog descriptors, importer-aware source descriptors, deterministic import plans, dependency
-    graph contracts, diagnostics, ratification, and prior-valid artifact preservation are implemented and validated in
-    domain/asset. WR-026 editor adapters remain downstream.
-  current_decision: Source-backed asset semantic truth now lives in domain/asset for SDF graph, field product, material
-    graph/material, UI definition, and prefab descriptor families before broad external import work or editor adapter
-    expansion.
-  current_call: Completed through the 2026-05-16 WR-020 source-backed asset core closeout. Do not reopen this slice for
-    editor app load/save, import orchestration, diagnostics UI, or provider wiring; that remains WR-026 adapter work.
+    Domain-owned project catalog descriptors, importer-aware source descriptors, deterministic import plans, dependency graph
+    contracts, diagnostics, ratification, and prior-valid artifact preservation are implemented and validated in domain/asset.
+    WR-026 editor adapters remain downstream.
+  current_decision: Source-backed asset semantic truth now lives in domain/asset for SDF graph, field product, material graph/material,
+    UI definition, and prefab descriptor families before broad external import work or editor adapter expansion.
+  current_call: Completed through the 2026-05-16 WR-020 source-backed asset core closeout. Do not reopen this slice for editor
+    app load/save, import orchestration, diagnostics UI, or provider wiring; that remains WR-026 adapter work.
   main_blocker: Completed core contract. Follow-up editor adapter implementation requires a separate selected roadmap slice.
-  first_move: For WR-026 or later consumers, use the landed domain/asset project catalog descriptor, source/import-plan,
-    dependency, ratification, diagnostics, and prior-valid preservation APIs instead of adding semantic asset truth in apps.
+  first_move: For WR-026 or later consumers, use the landed domain/asset project catalog descriptor, source/import-plan, dependency,
+    ratification, diagnostics, and prior-valid preservation APIs instead of adding semantic asset truth in apps.
   diagram_call:
   - deterministic import
   - domain-owned asset truth
@@ -863,7 +865,8 @@ items:
     reason: Source-backed asset work must follow the active asset pipeline ownership design.
   ddd_owner: domain/asset with editor adapters as consumers
   adr_requirement: ADR only if source/catalog ownership moves out of domain/asset or into engine runtime.
-  fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, ratification, and diagnostics tests.
+  fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, ratification, and
+    diagnostics tests.
   ownership_mode: Enabling platform support for editor product workflows.
 - id: WR-026
   title: Source-backed Asset Editor Adapters
@@ -895,12 +898,12 @@ items:
   - cargo test -p runenwerk_editor asset
   - cargo test -p runenwerk_editor catalog
   - task docs:validate
-  next_evidence: App-owned project catalog load/save, deterministic import job orchestration, diagnostics surfacing, and
-    prior-valid artifact preservation through domain/asset contracts.
+  next_evidence: App-owned project catalog load/save, deterministic import job orchestration, diagnostics surfacing, and prior-valid
+    artifact preservation through domain/asset contracts.
   current_decision: Keep editor asset pipeline code as adapter/workflow wiring over domain/asset contracts, not the source
     of semantic asset truth.
-  current_call: Ready-next only after the WR-020 closeout; do not implement in the WR-020 thread. Adapter outputs feed
-    later renderer consumers but do not move asset truth into renderer code.
+  current_call: Ready-next only after the WR-020 closeout; do not implement in the WR-020 thread. Adapter outputs feed later
+    renderer consumers but do not move asset truth into renderer code.
   main_blocker: Explicit user direction excludes WR-026 from this objective. Editor adapter load/save, import orchestration,
     diagnostics surfacing, and prior-valid artifact UI need a separate selected roadmap slice.
   first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app
@@ -916,7 +919,8 @@ items:
     reason: Editor adapters must follow the active asset pipeline ownership design.
   ddd_owner: apps/runenwerk_editor asset workflow adapting domain/asset contracts
   adr_requirement: No ADR for adapter wiring; ADR required if editor app becomes asset semantic owner.
-  fitness_function_requirement: Catalog round trip, deterministic job orchestration, failed import preservation, and diagnostics tests.
+  fitness_function_requirement: Catalog round trip, deterministic job orchestration, failed import preservation, and diagnostics
+    tests.
   ownership_mode: Stream-aligned editor workflow over domain/asset platform contracts.
 - id: WR-021
   title: Material Lab and material preview products
@@ -953,13 +957,14 @@ items:
   - cargo test -p runenwerk_editor viewport
   - task docs:validate
   next_evidence: Source-backed MaterialGraphDocument, lowering/ratification, preview product, diagnostics, and render handoff.
-  current_decision: Promote Material Lab now as the FR-4 material preview/product handoff track, but implement it after
-    multi-entity viewport and field visualization stabilize.
-  current_call: Do not make canvas state material truth; material source documents own material state and renderer code
-    consumes prepared preview/material products only.
-  main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset adapter evidence.
-  first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands, using
-    FR-4 sequencing from engine/roadmaps/fully-featured-renderer-roadmap.md.
+  current_decision: Promote Material Lab now as the FR-4 material preview/product handoff track, but implement it after multi-entity
+    viewport and field visualization stabilize.
+  current_call: Do not make canvas state material truth; material source documents own material state and renderer code consumes
+    prepared preview/material products only.
+  main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset adapter
+    evidence.
+  first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands, using FR-4
+    sequencing from engine/roadmaps/fully-featured-renderer-roadmap.md.
   diagram_call:
   - source-backed material graph
   - preview product handoff
@@ -999,11 +1004,12 @@ items:
   - cargo test -p runenwerk_editor prefab
   next_evidence: Source/catalog prefab identity, descriptor diagnostics, and approved runtime instancing sequence.
   current_decision: Keep prefab composition active as design and catalog identity now; runtime instancing waits for V2 gates.
-  current_call: Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are
-    stable; prefab renderer handoff must consume the fully featured renderer roadmap instead of adding a parallel scene path.
-  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted product ownership.
-  first_move: Continue from sdf-prefab-composition-system-design.md, source-backed asset core plus adapter evidence, and
-    FR-4/FR-6 renderer handoff sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
+  current_call: Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable;
+    prefab renderer handoff must consume the fully featured renderer roadmap instead of adding a parallel scene path.
+  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted
+    product ownership.
+  first_move: Continue from sdf-prefab-composition-system-design.md, source-backed asset core plus adapter evidence, and FR-4/FR-6
+    renderer handoff sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
   diagram_call:
   - active design now
   - runtime instancing V2
@@ -1049,7 +1055,8 @@ items:
     merges, and blocked-parallelism diagnostics.
   current_decision: Keep ECS execution serial during rendered-world V1; harden product jobs as the active multithreaded path.
   current_call: Design now, implement later after diagnostics and deterministic merge policy are accepted.
-  main_blocker: Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics, and serial equivalence tests.
+  main_blocker: Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics,
+    and serial equivalence tests.
   first_move: Continue from ecs-parallel-system-execution-design.md and engine runtime product-job executor evidence.
   diagram_call:
   - ECS remains serial now
@@ -1062,7 +1069,8 @@ items:
     reason: Public ECS parallel APIs or default parallel execution require an accepted deterministic merge design.
   ddd_owner: domain/ecs with engine runtime scheduler support
   adr_requirement: ADR required before public ECS parallel APIs or default parallel execution.
-  fitness_function_requirement: Parallel-plan diagnostics, blocked-wave reporting, deterministic merge, and serial equivalence tests.
+  fitness_function_requirement: Parallel-plan diagnostics, blocked-wave reporting, deterministic merge, and serial equivalence
+    tests.
   ownership_mode: Complicated-subsystem design work before implementation.
 - id: WR-024
   title: Editor Shell Polish
@@ -1094,17 +1102,17 @@ items:
   - cargo test -p editor_shell
   - cargo test -p ui_runtime layout_popup
   - cargo test -p runenwerk_editor viewport
-  next_evidence: Retained-UI slice evidence after the relevant named Interaction V2 contracts exist for IV2-menu-stack,
-    IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration.
-  current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2
-    contract layer, not as a pile of isolated cosmetic fixes.
-  current_call: Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome,
-    docking, and status overflow slices instead of defining local policy.
+  next_evidence: Retained-UI slice evidence after the relevant named Interaction V2 contracts exist for IV2-menu-stack, IV2-scroll-ownership,
+    IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration.
+  current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2 contract
+    layer, not as a pile of isolated cosmetic fixes.
+  current_call: Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome, docking,
+    and status overflow slices instead of defining local policy.
   main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming
     those contracts or as explicitly bounded compatibility evidence.
-  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant named Interaction
-    V2 slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep
-    changes explicitly compatibility-scoped.
+  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant named Interaction V2
+    slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep changes
+    explicitly compatibility-scoped.
   diagram_call:
   - FPS stats
   - contrast, scroll, tab chrome
@@ -1164,26 +1172,26 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: 2026-05-15 WR-025 batches landed named retained UI migration slices for IV2-menu-stack,
-    IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and
-    IV2-status-and-viewport-arbitration. The 2026-05-15 WR-025 doctrine repair adds explicit invalid dock/drop target
-    semantics, non-dismissible viewport chrome/status popup policy, and behavior guards for viewport status dispatch.
-    Next retained UI polish should consume those contracts rather than add local interaction policy.
+  next_evidence: 2026-05-15 WR-025 batches landed named retained UI migration slices for IV2-menu-stack, IV2-scroll-ownership,
+    IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration. The 2026-05-15 WR-025
+    doctrine repair adds explicit invalid dock/drop target semantics, non-dismissible viewport chrome/status popup policy,
+    and behavior guards for viewport status dispatch. Next retained UI polish should consume those contracts rather than add
+    local interaction policy.
   current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
     while keeping retained UI as the first execution target and renderer output as derived product data.
-  current_call: Completed through the 2026-05-15 WR-025 batches and doctrine repair closeout. Do not reopen this
-    architecture gate unless a new retained UI regression needs a named Interaction V2 contract or a future execution
-    target has an accepted ADR/design.
-  first_move: For follow-up retained UI polish, consume the landed generic menu-stack, scroll-ownership, menu-sizing,
-    chrome-slot, dock/drop-zone, and status/viewport arbitration spine before changing popup dismissal, focus return,
-    popup layering, submenu anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and
-    active-indicator placement, tab reorder/drop-zone precedence, or status/viewport-input behavior.
+  current_call: Completed through the 2026-05-15 WR-025 batches and doctrine repair closeout. Do not reopen this architecture
+    gate unless a new retained UI regression needs a named Interaction V2 contract or a future execution target has an accepted
+    ADR/design.
+  first_move: For follow-up retained UI polish, consume the landed generic menu-stack, scroll-ownership, menu-sizing, chrome-slot,
+    dock/drop-zone, and status/viewport arbitration spine before changing popup dismissal, focus return, popup layering, submenu
+    anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and active-indicator placement, tab reorder/drop-zone
+    precedence, or status/viewport-input behavior.
   diagram_call:
   - retained UI first
   - named interaction slices
   ddd_owner: domain/ui with domain/editor/editor_shell and runenwerk_editor adapters
-  adr_requirement: Accepted ADR 0009 is in force for Interaction V2. Any alternate UI execution target still requires a
-    separate accepted ADR or active design before code.
+  adr_requirement: Accepted ADR 0009 is in force for Interaction V2. Any alternate UI execution target still requires a separate
+    accepted ADR or active design before code.
   fitness_function_requirement: Definition validation, ui_runtime, editor_shell, and app guard tests for popup/menu layer
     order, scroll clipping, wheel ownership and boundary propagation, outside-dismiss, focus return, split-border precedence,
     dock-drag/drop-zone precedence and invalid-target exclusion, radial/menu hit testing where applicable, viewport status

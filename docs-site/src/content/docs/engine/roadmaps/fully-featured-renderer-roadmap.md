@@ -178,7 +178,8 @@ first.
 
 - `WR-003` remains the support-only render contract track for FR-1 and shared
   renderer enabling work.
-- `WR-019` implements Field Visualizer product routing as part of FR-2.
+- `WR-019` implements viewport-owned Field Visualizer product routing and
+  presentation settings as part of FR-2.
 - `WR-026` implements editor asset adapters that feed source-backed renderer
   consumers; it does not move asset truth into renderer code.
 - `WR-021` implements Material Lab and material preview products as part of
