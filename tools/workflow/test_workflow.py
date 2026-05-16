@@ -36,6 +36,7 @@ from roadmap_state import (
     RoadmapState,
     WorkflowError,
     changed_files_for_worktree,
+    document_frontmatter_status,
     load_batch_manifest,
     load_roadmap,
     render_batch_manifest,
@@ -125,6 +126,16 @@ def item(
     }
 
 
+def decision_gate(path: str, required_status: str = "accepted") -> dict:
+    return {
+        "kind": "adr",
+        "path": path,
+        "required_status": required_status,
+        "applies_to": "implementation",
+        "reason": "Test decision gate.",
+    }
+
+
 def test_a_wsjf_score_is_computed() -> None:
     roadmap = RoadmapState.model_validate(valid_state())
     assert roadmap.items[0].score == 2.7
@@ -180,6 +191,48 @@ def test_explicit_completed_or_support_only_items_are_rejected() -> None:
         select_batch_candidates(roadmap, item_ids=("WR-001",))
     with pytest.raises(WorkflowError, match="planning_state 'support_only' is not current_candidate"):
         select_batch_candidates(roadmap, item_ids=("WR-002",))
+
+
+def test_unmet_decision_gate_excludes_and_rejects_current_candidate() -> None:
+    state = valid_state()
+    state["items"][0]["decision_gates"] = [
+        decision_gate("docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md")
+    ]
+    roadmap = RoadmapState.model_validate(state)
+
+    assert select_batch_candidates(roadmap, level="L0") == []
+    with pytest.raises(WorkflowError, match="decision gate unmet"):
+        select_batch_candidates(roadmap, item_ids=("WR-001",))
+
+
+def test_accepted_decision_gate_allows_current_candidate() -> None:
+    state = valid_state()
+    state["items"][0]["decision_gates"] = [
+        decision_gate("docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md")
+    ]
+    roadmap = RoadmapState.model_validate(state)
+
+    assert [item.id for item in select_batch_candidates(roadmap, level="L0")] == ["WR-001"]
+
+
+def test_document_frontmatter_status_handles_crlf(tmp_path: Path) -> None:
+    doc = tmp_path / "adr.md"
+    doc.write_text("---\r\nstatus: accepted\r\n---\r\n# ADR\r\n", encoding="utf-8", newline="")
+
+    assert document_frontmatter_status(doc) == "accepted"
+
+
+def test_ready_next_rows_may_carry_future_implementation_gates() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "ready_next"
+    state["items"][0]["decision_gates"] = [
+        decision_gate("docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md")
+    ]
+    roadmap = RoadmapState.model_validate(state)
+
+    assert [item.id for item in select_batch_candidates(roadmap, item_ids=("WR-001",), include_discovery=True)] == [
+        "WR-001"
+    ]
 
 
 def test_invalid_planning_state_is_rejected() -> None:
@@ -1053,6 +1106,25 @@ def test_promote_rejects_current_candidate_above_b2_gate() -> None:
     state["items"][1]["gate"] = "Ready next"
 
     with pytest.raises(WorkflowError, match="above the B2 implementation gate"):
+        roadmap_data_with_promotion(
+            state,
+            item_id="WR-002",
+            state="current_candidate",
+            evidence="Ready after review.",
+        )
+
+
+def test_promote_rejects_current_candidate_with_unmet_decision_gate() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][1]["planning_state"] = "ready_next"
+    state["items"][1]["blocker"] = 2
+    state["items"][1]["gate"] = "Ready next"
+    state["items"][1]["decision_gates"] = [
+        decision_gate("docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md")
+    ]
+
+    with pytest.raises(WorkflowError, match="does not match required"):
         roadmap_data_with_promotion(
             state,
             item_id="WR-002",

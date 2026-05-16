@@ -1,5 +1,49 @@
 {
   "$defs": {
+    "DecisionGate": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "default": "implementation",
+          "enum": [
+            "implementation",
+            "discovery"
+          ],
+          "title": "Applies To",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "adr",
+            "design",
+            "roadmap",
+            "doc"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "required_status": {
+          "title": "Required Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "required_status",
+        "reason"
+      ],
+      "title": "DecisionGate",
+      "type": "object"
+    },
     "RenderTargets": {
       "additionalProperties": false,
       "properties": {
@@ -86,6 +130,13 @@
         "ddd_owner": {
           "title": "Ddd Owner",
           "type": "string"
+        },
+        "decision_gates": {
+          "items": {
+            "$ref": "#/$defs/DecisionGate"
+          },
+          "title": "Decision Gates",
+          "type": "array"
         },
         "dependencies": {
           "items": {

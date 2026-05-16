@@ -117,4 +117,5 @@ The accepted SDF-first architecture starts at:
 Active SDF-first character and procedural animation architecture is tracked in:
 
 - `docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md`
+- `docs-site/src/content/docs/adr/accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md`
 - `docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md`

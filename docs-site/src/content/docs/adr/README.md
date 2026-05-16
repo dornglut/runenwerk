@@ -30,8 +30,9 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0007: External Runtime Preview Process](accepted/0007-external-runtime-preview-process.md)
 - [0008: Adopt SDF-First Field Product Architecture](accepted/0008-adopt-sdf-first-field-product-architecture.md)
 - [0009: UI Interaction Formation V2](accepted/0009-ui-interaction-formation-v2.md)
+- [0010: Graph Substrate Canvas Boundary](accepted/0010-graph-substrate-canvas-boundary.md)
+- [0011: Animated SDF Authoring Graphs Lower Before Runtime](accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md)
 
 ## Proposed ADRs
 
 - [Animated SDF Lowering and Purpose-Specific Products](proposed/animated-sdf-lowering-and-purpose-specific-products.md)
-- [Graph Substrate Canvas Boundary](proposed/graph-substrate-canvas-boundary.md)

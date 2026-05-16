@@ -28,6 +28,7 @@ from roadmap_state import (
     RoadmapState,
     StrictModel,
     WorkflowError,
+    decision_gate_errors,
     load_roadmap,
     load_yaml,
     normalize_repo_path,
@@ -340,6 +341,10 @@ def roadmap_data_with_promotion(data: dict, *, item_id: str, state: PlanningStat
             raise WorkflowError(
                 f"{item_id}: dependencies are not completed/support context: {', '.join(invalid_dependencies)}"
             )
+        target_item = RoadmapItem.model_validate(target)
+        gate_errors = decision_gate_errors(target_item, applies_to="implementation")
+        if gate_errors:
+            raise WorkflowError("\n".join(gate_errors))
 
     updated_items: list[dict] = []
     for item in items:

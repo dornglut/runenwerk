@@ -63,6 +63,8 @@ package "Level 0 - Completed / Support Substrate" {
 
   component "WR-005 Design lifecycle cleanup\nstate=support_only\nscore=4.0 gate=docs now\nV3 B1\ncall=implemented lifecycle promoted\nstrict docs validation" as DOCS <<support_only>>
 
+  component "WR-012 Neutral graph substrate\nstate=completed\nscore=1.8 gate=completed\nV3 B2\ncall=graph substrate accepted\nsemantic meaning stays domain-owned" as SEMGRAPH <<completed>>
+
 }
 
 package "Level 1 - Depends On Current Stabilization" {
@@ -74,7 +76,7 @@ package "Level 1 - Depends On Current Stabilization" {
 
   component "WR-018 Rendered World V1\nstate=current_candidate\nscore=3.0 gate=current candidate\nV5 B2\ncall=multi-entity SDF packet\nrender/picking consistency" as RENDERWORLD <<V5>>
 
-  component "WR-020 Source-backed Asset Core\nstate=ready_next\nscore=1.9 gate=supporting now\nV5 B3\ncall=deterministic import\nprior-valid artifacts" as ASSETCORE <<V5>>
+  component "WR-020 Source-backed Asset Core\nstate=ready_next\nscore=1.9 gate=supporting now\nV5 B3\ncall=deterministic import\ndomain-owned asset truth" as ASSETCORE <<V5>>
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
@@ -89,9 +91,9 @@ package "Level 2 - Productization / Contract-Gated" {
 
   component "WR-011 Gameplay Graph ATR IR\nstate=blocked_deferred\nscore=0.3 gate=domain contract gate\nV4 B4\ncall=first compiler and ECS lowering\nafter gameplay contracts" as GAMEPLAY <<V4>>
 
-  component "WR-012 Concrete semantic graph\nstate=blocked_deferred\nscore=0.2 gate=domain contract gate\nV3 B4\ncall=one owning domain,\none formed product target" as SEMGRAPH <<V3>>
-
   component "WR-019 Field Visualizer workflow\nstate=ready_next\nscore=2.4 gate=after rendered-world v1\nV4 B2\ncall=product-backed field debug\nno parallel viewer path" as FIELDVIS <<V4>>
+
+  component "WR-026 Asset editor adapters\nstate=ready_next\nscore=2.4 gate=after asset core contracts\nV4 B3\ncall=editor adapter wiring\nprior-valid artifacts" as ASSETADAPT <<V4>>
 
 }
 
@@ -141,11 +143,12 @@ UIGUARDS -down-> RENDERWORLD : editor projection guards
 RENDERWORLD -down-> FIELDVIS : viewport packet/product handoff
 RENDER -down-> FIELDVIS : product target selection
 RENDERWORLD -down-> ASSETCORE : source identity for rendered products
+ASSETCORE -down-> ASSETADAPT : domain asset contracts before app adapters
 RENDERWORLD -down-> MATLAB : preview render handoff
 FIELDVIS -down-> MATLAB : debug product controls
-ASSETCORE -down-> MATLAB : material document identity
+ASSETADAPT -down-> MATLAB : material document adapter identity
 RENDERWORLD -down-> PREFABV2 : prefab render foundation
-ASSETCORE -down-> PREFABV2 : prefab source identity
+ASSETADAPT -down-> PREFABV2 : prefab source adapter identity
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 UIGUARDS -down-> UIV2 : UI guard substrate

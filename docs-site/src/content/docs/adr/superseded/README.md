@@ -10,4 +10,4 @@ last_reviewed: 2026-04-28
 
 # Superseded ADRs
 
-No superseded ADRs are currently tracked in this folder.
+- [Proposed Graph Substrate Canvas Boundary](proposed-graph-substrate-canvas-boundary.md)

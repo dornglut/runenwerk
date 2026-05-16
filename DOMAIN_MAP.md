@@ -13,7 +13,8 @@ SDF-first field-product decision   -> docs-site/src/content/docs/adr/accepted/00
 SDF-first platform architecture    -> docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md
 Field product target contracts     -> docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
 Animated SDF procedural animation  -> docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md
-Animated SDF lowering ADR          -> docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md
+Animated SDF lowering invariant    -> docs-site/src/content/docs/adr/accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md
+Animated SDF broader proposal      -> docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md
 Dependency direction               -> DEPENDENCY_RULES.md
 AI-assisted contribution rules     -> AI_GUIDE.md
 Terminology                        -> GLOSSARY.md

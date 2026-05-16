@@ -10,6 +10,7 @@ related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
   - ../../adr/accepted/0008-adopt-sdf-first-field-product-architecture.md
+  - ../../adr/accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md
   - ../../adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
@@ -32,7 +33,7 @@ Active cross-domain architecture design.
 
 This document supersedes the older deferred SDF character animation draft and refines it into a broader procedural-animation, semantic-SDF, product-lowering, and scheduler-aware runtime design. It does not create a new crate or declare animation/physics/rendering domains implemented.
 
-Implementation remains gated behind accepted ownership, product, scheduler, and validation decisions. The umbrella proposed ADR for this design is [`../../adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md`](../../adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md).
+Implementation remains gated behind accepted ownership, product, scheduler, and validation decisions. ADR 0011 accepts the narrow rule that animated SDF authoring graphs lower before runtime hot paths consume them; the umbrella proposed ADR remains preserved context for broader product-family decisions.
 
 ## 0. Five-Pass Revision Summary
 

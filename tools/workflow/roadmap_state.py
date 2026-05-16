@@ -40,6 +40,8 @@ Priority = Literal["P0", "P1", "P2", "P3"]
 ApprovalState = Literal["proposed", "approved", "rejected"]
 BatchItemStatus = Literal["proposed", "approved", "running", "slice_completed", "integrated", "roadmap_closed", "rejected"]
 RoadmapOutcome = Literal["unknown", "roadmap_completed", "slice_landed_item_still_current", "deferred_followup_required"]
+DecisionGateKind = Literal["adr", "design", "roadmap", "doc"]
+DecisionGateAppliesTo = Literal["implementation", "discovery"]
 
 
 class WorkflowError(ValueError):
@@ -76,6 +78,29 @@ class RoadmapEdge(StrictModel):
         return value
 
 
+class DecisionGate(StrictModel):
+    kind: DecisionGateKind
+    path: str
+    required_status: str
+    applies_to: DecisionGateAppliesTo = "implementation"
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        normalized = value.replace("\\", "/").strip().strip("/")
+        if not normalized:
+            raise ValueError("decision gate path must not be empty")
+        return normalized
+
+    @field_validator("required_status", "reason")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("decision gate text fields must not be empty")
+        return value.strip()
+
+
 class RoadmapItem(StrictModel):
     id: str
     title: str
@@ -106,6 +131,7 @@ class RoadmapItem(StrictModel):
     main_blocker: str = ""
     why_not_ready: str = ""
     diagram_call: list[str] = Field(default_factory=list)
+    decision_gates: list[DecisionGate] = Field(default_factory=list)
     ddd_owner: str
     adr_requirement: str
     fitness_function_requirement: str
@@ -163,7 +189,12 @@ class RoadmapItem(StrictModel):
 
     @property
     def can_enter_implementation_batch(self) -> bool:
-        return self.planning_state == "current_candidate" and self.blocker <= 2 and not self.is_policy_deferred
+        return (
+            self.planning_state == "current_candidate"
+            and self.blocker <= 2
+            and not self.is_policy_deferred
+            and not decision_gate_errors(self, applies_to="implementation")
+        )
 
     @property
     def can_enter_discovery_batch(self) -> bool:
@@ -372,7 +403,53 @@ def batch_ineligibility_reason(item: RoadmapItem, *, include_discovery: bool = F
         return f"{item.blocker_label} is above the B2 implementation gate"
     if item.is_policy_deferred:
         return f"planning_state {item.planning_state!r} is policy-deferred"
+    gate_errors = decision_gate_errors(item, applies_to="implementation")
+    if gate_errors:
+        return f"decision gate unmet: {gate_errors[0]}"
     return None
+
+
+def decision_gate_errors(item: RoadmapItem, *, applies_to: DecisionGateAppliesTo) -> list[str]:
+    errors: list[str] = []
+    for gate in item.decision_gates:
+        if gate.applies_to != applies_to:
+            continue
+        errors.extend(decision_gate_status_errors(item, gate))
+    return errors
+
+
+def decision_gate_status_errors(item: RoadmapItem, gate: DecisionGate) -> list[str]:
+    path = REPO_ROOT / gate.path
+    if not path.exists():
+        return [f"{item.id}: {gate.kind} gate missing {gate.path} ({gate.reason})"]
+    status = document_frontmatter_status(path)
+    if status is None:
+        return [f"{item.id}: {gate.kind} gate {gate.path} has no frontmatter status ({gate.reason})"]
+    if status.lower() != gate.required_status.lower():
+        return [
+            f"{item.id}: {gate.kind} gate {gate.path} status {status!r} "
+            f"does not match required {gate.required_status!r} ({gate.reason})"
+        ]
+    return []
+
+
+def document_frontmatter_status(path: Path) -> str | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    try:
+        end = next(index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---")
+    except StopIteration:
+        return None
+    frontmatter = yaml.safe_load("\n".join(lines[1:end])) or {}
+    if not isinstance(frontmatter, dict):
+        return None
+    status = frontmatter.get("status")
+    return str(status).strip() if status is not None else None
 
 
 def validate_write_scopes(items: list[RoadmapItem] | list[BatchItem]) -> list[str]:
@@ -483,6 +560,14 @@ def validate_completion_evidence(items: list[RoadmapItem]) -> list[str]:
             errors.append(
                 f"{item.id}: completed items must reference closeout evidence, batch evidence, or explicit implementation evidence"
             )
+    return errors
+
+
+def validate_current_candidate_decision_gates(items: list[RoadmapItem]) -> list[str]:
+    errors: list[str] = []
+    for item in items:
+        if item.planning_state == "current_candidate":
+            errors.extend(decision_gate_errors(item, applies_to="implementation"))
     return errors
 
 
@@ -703,8 +788,9 @@ def validate(source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML sour
     conflicts = validate_write_scopes([item for item in roadmap.items if item.can_enter_implementation_batch])
     missing_scope_paths = validate_existing_write_scope_paths([item for item in roadmap.items if item.can_enter_implementation_batch])
     completion_errors = validate_completion_evidence(roadmap.items)
+    gate_errors = validate_current_candidate_decision_gates(roadmap.items)
     current_doc_errors = validate_completed_items_not_current_in_docs(roadmap.items)
-    if conflicts or missing_scope_paths or completion_errors or current_doc_errors:
+    if conflicts or missing_scope_paths or completion_errors or gate_errors or current_doc_errors:
         console.print("[red]roadmap validation failed[/red]")
         for conflict in conflicts:
             console.print(f"- write-scope conflict: {conflict}")
@@ -712,6 +798,8 @@ def validate(source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML sour
             console.print(f"- write-scope path missing: {missing_scope_path}")
         for completion_error in completion_errors:
             console.print(f"- completion evidence missing: {completion_error}")
+        for gate_error in gate_errors:
+            console.print(f"- decision gate unmet: {gate_error}")
         for current_doc_error in current_doc_errors:
             console.print(f"- stale current-work doc: {current_doc_error}")
         raise typer.Exit(1)

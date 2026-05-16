@@ -15,7 +15,7 @@ related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./workspace-viewport-expression-upgrade-design.md
 related_adrs:
-  - ../../adr/proposed/graph-substrate-canvas-boundary.md
+  - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
 ---
 
 # Semantic Graph IR and Compilation Design

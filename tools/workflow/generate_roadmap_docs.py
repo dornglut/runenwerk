@@ -14,7 +14,16 @@ import re
 import typer
 from rich.console import Console
 
-from roadmap_state import REPO_ROOT, ROADMAP_SOURCE, RoadmapItem, RoadmapState, WorkflowError, load_roadmap, repo_path
+from roadmap_state import (
+    REPO_ROOT,
+    ROADMAP_SOURCE,
+    RoadmapItem,
+    RoadmapState,
+    WorkflowError,
+    load_roadmap,
+    repo_path,
+    select_batch_candidates,
+)
 
 
 TRIAGE_BEGIN = "<!-- BEGIN GENERATED ROADMAP STATUS -->"
@@ -239,7 +248,7 @@ def component_stereotype(item: RoadmapItem) -> str:
 
 
 def render_current_candidates_roadmap(roadmap: RoadmapState) -> str:
-    candidates = [item for item in roadmap.items if item.can_enter_implementation_batch]
+    candidates = select_batch_candidates(roadmap)
     candidate_ids = {item.id for item in candidates}
     dependency_ids = {dependency for item in candidates for dependency in item.dependencies}
     dependencies = [item for item in roadmap.items if item.id in dependency_ids and item.id not in candidate_ids]

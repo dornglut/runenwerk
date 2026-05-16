@@ -7,7 +7,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-05-09
 related_docs:
-  - ../../adr/proposed/graph-substrate-canvas-boundary.md
+  - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
 ---
 
 # Graph Domain

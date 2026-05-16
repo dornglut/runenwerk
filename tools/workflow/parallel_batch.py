@@ -543,9 +543,15 @@ def render_worker_prompt(manifest: BatchManifest, item: RoadmapItem, batch_item:
         f"- Fitness function requirement: {item.fitness_function_requirement}",
         f"- Ownership mode: {item.ownership_mode}",
         "",
-        "## Write Scope",
-        "",
     ]
+    if item.decision_gates:
+        lines.extend(["Decision gates:", ""])
+        lines.extend(
+            f"- {gate.kind} `{gate.path}` must have status `{gate.required_status}` before {gate.applies_to}: {gate.reason}"
+            for gate in item.decision_gates
+        )
+        lines.append("")
+    lines.extend(["## Write Scope", ""])
     lines.extend(f"- {scope}" for scope in batch_item.write_scopes)
     lines.extend(["", "## Validation", ""])
     lines.extend(f"- {validation}" for validation in batch_item.validations)

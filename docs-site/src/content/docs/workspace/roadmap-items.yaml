@@ -456,45 +456,64 @@ items:
   diagram_call:
   - first compiler and ECS lowering
   - after gameplay contracts
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Gameplay graph lowering requires accepted gameplay contract ownership before implementation.
   ddd_owner: future domain/gameplay
   adr_requirement: ADR or accepted design required before implementation.
   fitness_function_requirement: Dependency-direction and gameplay lowering fitness functions required.
   ownership_mode: Complicated subsystem not yet owned.
 - id: WR-012
-  title: General semantic graph implementation
-  diagram_title: Concrete semantic graph
+  title: Neutral graph substrate boundary
+  diagram_title: Neutral graph substrate
   alias: SEMGRAPH
-  lane: Contract
-  dependency_level: L2
-  gate: Domain contract gate
-  planning_state: blocked_deferred
+  lane: Core support
+  dependency_level: L0
+  gate: Completed
+  planning_state: completed
   priority: P2
   value: 3
-  blocker: 4
-  tc: 1
+  blocker: 2
+  tc: 2
   rr_oe: 3
   du: 3
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.2
+  effort: 5
+  confidence: 0.8
+  expected_score: 1.8
   rice: N/A
   kano: Neutral
   dependencies: []
   write_scopes:
-  - domain
+  - domain/graph
+  - docs-site/src/content/docs/adr
+  - docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md
   validations:
-  - cargo check --workspace
-  next_evidence: One owning domain and one formed product target.
-  current_decision: Do not build a broad graph platform first.
-  why_not_ready: The policy is active, but implementation must start from one concrete owning domain and one formed product
-    target, not a broad graph platform.
+  - cargo test -p graph
+  - task docs:validate
+  next_evidence: 2026-05-16 ADR 0010 accepted the graph substrate/canvas boundary and preserved the former draft
+    rationale; domain/graph remains the implemented structural substrate only.
+  current_decision: Graph substrate policy is complete; future semantic graph work must start from one concrete owning
+    domain and one formed product target, not a broad graph platform.
+  current_call: Completed policy gate. Use domain/graph as structural support only; do not reopen it as a semantic graph
+    runtime or editor canvas authority.
+  first_move: For future semantic graph work, choose a concrete owning domain and consume ADR 0010 instead of changing
+    domain/graph ownership.
   diagram_call:
-  - one owning domain,
-  - one formed product target
-  ddd_owner: unassigned concrete domain
-  adr_requirement: ADR or accepted design required before implementation.
-  fitness_function_requirement: Ownership and dependency-direction checks required.
-  ownership_mode: Discovery until a domain owner exists.
+  - graph substrate accepted
+  - semantic meaning stays domain-owned
+  decision_gates:
+  - kind: adr
+    path: docs-site/src/content/docs/adr/accepted/0010-graph-substrate-canvas-boundary.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Neutral graph substrate ownership must stay accepted before semantic graph work depends on it.
+  ddd_owner: domain/graph as neutral substrate; concrete semantic domains own meaning
+  adr_requirement: Accepted ADR 0010 is in force; new ADR/design required only if graph substrate ownership changes.
+  fitness_function_requirement: Graph validation/traversal tests and dependency-direction checks.
+  ownership_mode: Complicated-subsystem support owned by domain graph maintainers.
 - id: WR-013
   title: Scripting and runtime gameplay bridge
   diagram_title: Scripting/runtime bridge
@@ -771,7 +790,7 @@ items:
   fitness_function_requirement: Product selection, unavailable diagnostics, and session persistence tests.
   ownership_mode: Stream-aligned editor workflow with render/product enabling support.
 - id: WR-020
-  title: Source-backed Asset Core
+  title: Source-backed Asset Core Contracts
   diagram_title: Source-backed Asset Core
   alias: ASSETCORE
   lane: Core support
@@ -792,26 +811,84 @@ items:
   dependencies:
   - WR-018
   write_scopes:
-  - apps/runenwerk_editor
+  - domain/asset
+  - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+  validations:
+  - cargo test -p asset
+  - task docs:validate
+  next_evidence: Domain-owned project catalog descriptors, deterministic import plans, dependency graph contracts, diagnostics,
+    ratification, and prior-valid artifact preservation.
+  current_decision: Stabilize source descriptors for SDF graph, field product, material graph/material, UI definition, and
+    prefab descriptors in domain/asset before broad external import work or editor adapter expansion.
+  current_call: Supporting foundation for Field Visualizer, Material Lab, and prefab V2. Editor app wiring is downstream
+    WR-026 adapter work, not semantic asset truth.
+  main_blocker: Source identity must wait for rendered-world product usage evidence and avoid reopening broad external import
+    scope; domain/asset contracts must land before editor adapters expand.
+  first_move: Continue from editor-asset-pipeline-and-content-workflow-design.md by hardening domain/asset descriptors,
+    import plans, dependency contracts, diagnostics, and preservation semantics.
+  diagram_call:
+  - deterministic import
+  - domain-owned asset truth
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Source-backed asset work must follow the active asset pipeline ownership design.
+  ddd_owner: domain/asset with editor adapters as consumers
+  adr_requirement: ADR only if source/catalog ownership moves out of domain/asset or into engine runtime.
+  fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, ratification, and diagnostics tests.
+  ownership_mode: Enabling platform support for editor product workflows.
+- id: WR-026
+  title: Source-backed Asset Editor Adapters
+  diagram_title: Asset editor adapters
+  alias: ASSETADAPT
+  lane: Core support
+  dependency_level: L2
+  gate: After asset core contracts
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 3
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.4
+  rice: Editor catalog workflow after domain asset identity stabilizes
+  kano: Basic
+  dependencies:
+  - WR-020
+  write_scopes:
+  - apps/runenwerk_editor/src/asset_pipeline
   - domain/editor
-  - docs-site/src/content/docs/design/active
+  - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
   validations:
   - cargo test -p runenwerk_editor asset
   - cargo test -p runenwerk_editor catalog
   - task docs:validate
-  next_evidence: Project catalog descriptors, deterministic import jobs, diagnostics, and prior-valid artifact preservation.
-  current_decision: Stabilize source descriptors for SDF graph, field product, material graph/material, UI definition, and prefab
-    descriptors before broad external import work.
-  current_call: Supporting foundation for Field Visualizer, Material Lab, and prefab V2.
-  main_blocker: Source identity must wait for rendered-world product usage evidence and avoid reopening broad external import scope.
-  first_move: Continue from editor-asset-pipeline-and-content-workflow-design.md and preserve current reference-artifact boundaries.
+  next_evidence: App-owned project catalog load/save, deterministic import job orchestration, diagnostics surfacing, and
+    prior-valid artifact preservation through domain/asset contracts.
+  current_decision: Keep editor asset pipeline code as adapter/workflow wiring over domain/asset contracts, not the source
+    of semantic asset truth.
+  current_call: Implement only after WR-020 lands the domain-owned source/catalog contracts.
+  main_blocker: Editor adapters must wait for domain/asset descriptor, import-plan, dependency, diagnostics, and ratification
+    contracts to stabilize.
+  first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app state.
   diagram_call:
-  - deterministic import
+  - editor adapter wiring
   - prior-valid artifacts
-  ddd_owner: apps/runenwerk_editor asset workflow with domain/editor contracts
-  adr_requirement: ADR only if source/catalog ownership crosses into engine runtime.
-  fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, and diagnostics tests.
-  ownership_mode: Enabling platform support for editor product workflows.
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Editor adapters must follow the active asset pipeline ownership design.
+  ddd_owner: apps/runenwerk_editor asset workflow adapting domain/asset contracts
+  adr_requirement: No ADR for adapter wiring; ADR required if editor app becomes asset semantic owner.
+  fitness_function_requirement: Catalog round trip, deterministic job orchestration, failed import preservation, and diagnostics tests.
+  ownership_mode: Stream-aligned editor workflow over domain/asset platform contracts.
 - id: WR-021
   title: Material Lab and material preview products
   diagram_title: Material Lab
@@ -834,7 +911,7 @@ items:
   dependencies:
   - WR-018
   - WR-019
-  - WR-020
+  - WR-026
   write_scopes:
   - apps/runenwerk_editor
   - domain/editor
@@ -848,7 +925,7 @@ items:
   next_evidence: Source-backed MaterialGraphDocument, lowering/ratification, preview product, diagnostics, and render handoff.
   current_decision: Promote Material Lab now, but implement it after multi-entity viewport and field visualization stabilize.
   current_call: Do not make canvas state material truth; material source documents own material state.
-  main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset identity evidence.
+  main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset adapter evidence.
   first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands.
   diagram_call:
   - source-backed material graph
@@ -878,7 +955,7 @@ items:
   kano: Exciter
   dependencies:
   - WR-018
-  - WR-020
+  - WR-026
   write_scopes:
   - docs-site/src/content/docs/design/active
   - apps/runenwerk_editor
@@ -889,11 +966,17 @@ items:
   next_evidence: Source/catalog prefab identity, descriptor diagnostics, and approved runtime instancing sequence.
   current_decision: Keep prefab composition active as design and catalog identity now; runtime instancing waits for V2 gates.
   current_call: Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable.
-  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity, and accepted product ownership.
-  first_move: Continue from sdf-prefab-composition-system-design.md and source-backed asset core evidence.
+  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted product ownership.
+  first_move: Continue from sdf-prefab-composition-system-design.md and source-backed asset core plus adapter evidence.
   diagram_call:
   - active design now
   - runtime instancing V2
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime prefab instancing requires accepted prefab product ownership.
   ddd_owner: future SDF prefab product owner with editor asset workflow support
   adr_requirement: Accepted design or ADR required before runtime prefab instancing starts.
   fitness_function_requirement: Descriptor round trip, product ownership, and render/collision separation checks.
@@ -935,6 +1018,12 @@ items:
   diagram_call:
   - ECS remains serial now
   - deterministic parallel design
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ecs-parallel-system-execution-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Public ECS parallel APIs or default parallel execution require an accepted deterministic merge design.
   ddd_owner: domain/ecs with engine runtime scheduler support
   adr_requirement: ADR required before public ECS parallel APIs or default parallel execution.
   fitness_function_requirement: Parallel-plan diagnostics, blocked-wave reporting, deterministic merge, and serial equivalence tests.
@@ -1137,21 +1226,24 @@ edges:
 - source: WR-018
   target: WR-020
   label: source identity for rendered products
+- source: WR-020
+  target: WR-026
+  label: domain asset contracts before app adapters
 - source: WR-018
   target: WR-021
   label: preview render handoff
 - source: WR-019
   target: WR-021
   label: debug product controls
-- source: WR-020
+- source: WR-026
   target: WR-021
-  label: material document identity
+  label: material document adapter identity
 - source: WR-018
   target: WR-022
   label: prefab render foundation
-- source: WR-020
+- source: WR-026
   target: WR-022
-  label: prefab source identity
+  label: prefab source adapter identity
 - source: WR-002
   target: WR-023
   label: ECS scheduler substrate

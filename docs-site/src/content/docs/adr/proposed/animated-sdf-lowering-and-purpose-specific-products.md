@@ -15,6 +15,7 @@ related_adrs:
   - ../accepted/0004-separate-description-from-execution.md
   - ../accepted/0005-projections-are-derived-state.md
   - ../accepted/0008-adopt-sdf-first-field-product-architecture.md
+  - ../accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md
 ---
 
 # ADR: Animated SDF Lowering and Purpose-Specific Products
@@ -22,6 +23,11 @@ related_adrs:
 ## Status
 
 Draft / proposed.
+
+The narrow runtime-boundary invariant from this proposal is accepted in
+[`../accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md`](../accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md).
+This document remains as preserved broader context for still-open animated SDF
+product-family decisions.
 
 ## Context
 
