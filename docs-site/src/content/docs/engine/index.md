@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-16
 ---
 
 # Engine Docs Index
@@ -37,6 +37,8 @@ Navigation hub for crate-level engine documentation.
   - render flow planning/validation benchmark guide
 - [`roadmaps/render-final-architecture-migration.md`](roadmaps/render-final-architecture-migration.md)
   - staged migration contract for final render architecture cutover
+- [`roadmaps/fully-featured-renderer-roadmap.md`](roadmaps/fully-featured-renderer-roadmap.md)
+  - canonical long-term renderer and editor product-surface roadmap
 
 ## Plugin-Specific Docs
 

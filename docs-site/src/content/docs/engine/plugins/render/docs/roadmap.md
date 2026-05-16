@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-16
 related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../../../../design/active/editor-native-multi-window-presentation-design.md
@@ -13,12 +13,19 @@ related_designs:
   - ../../../../design/implemented/render-product-surface-foundation-bundle-design.md
   - ../../../../design/implemented/viewport-dynamic-product-target-allocation-design.md
 related_roadmaps:
+  - ../../../roadmaps/fully-featured-renderer-roadmap.md
   - ../../../../workspace/sdf-first-execution-roadmap.md
 ---
 
 # Render Remaining Features Roadmap
 
 Concrete implementation roadmap for the remaining render features after the hard cutover.
+
+For long-term renderer sequencing across engine and editor product-surface
+work, use
+[Fully Featured Renderer Roadmap](../../../roadmaps/fully-featured-renderer-roadmap.md)
+as the canonical landing page. This document keeps the detailed render-plugin
+R-phase implementation notes.
 
 This document assumes the hard cutover is complete:
 

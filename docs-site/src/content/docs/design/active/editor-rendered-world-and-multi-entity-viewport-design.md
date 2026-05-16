@@ -11,6 +11,7 @@ related_designs:
   - ./workspace-viewport-expression-upgrade-design.md
   - ../accepted/sdf-first-production-capability-map.md
 related_roadmaps:
+  - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../apps/runenwerk-editor/viewport-expression-implementation-roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
@@ -63,6 +64,11 @@ V1 packet contents:
 - bounded primitive slots for the current uniform-only render-flow path, with explicit overflow metadata when extraction omits primitives past the slot cap.
 
 The V1 GPU packet is intentionally uniform-backed because prepared render invocations currently support per-invocation uniform overrides, not per-invocation storage-buffer overrides. A later render-flow extension may replace the bounded uniform slots with storage buffers without changing scene extraction ownership.
+
+Long-term renderer sequencing for storage-buffer scene packets, depth/product
+outputs, SDF/world rendering, material previews, fragments, and production
+inspection is tracked in
+[Fully Featured Renderer Roadmap](../../engine/roadmaps/fully-featured-renderer-roadmap.md).
 
 ## Invariants
 

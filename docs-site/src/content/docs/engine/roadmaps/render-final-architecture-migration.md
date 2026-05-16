@@ -5,10 +5,12 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-16
 related_designs:
-  - ../design/active/editor-native-multi-window-presentation-design.md
-  - ../design/implemented/render-product-surface-foundation-bundle-design.md
+  - ../../design/active/editor-native-multi-window-presentation-design.md
+  - ../../design/implemented/render-product-surface-foundation-bundle-design.md
+related_roadmaps:
+  - ./fully-featured-renderer-roadmap.md
 ---
 
 # Render Final Architecture Migration Roadmap
@@ -19,6 +21,11 @@ This roadmap is the implementation contract for the final render architecture:
 - compiler-shaped
 - renderer-executed
 - feature/plugin-extensible
+
+It is the foundation cutover plan, not the full renderer capability roadmap.
+For long-term sequencing across SDF/world rendering, editor viewport products,
+materials, fragments, history, and production inspection, use
+[Fully Featured Renderer Roadmap](./fully-featured-renderer-roadmap.md).
 
 ## Non-goals
 

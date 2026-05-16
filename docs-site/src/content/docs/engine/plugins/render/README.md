@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-16
 ---
 
 # Render Plugin
@@ -52,4 +52,5 @@ Render runtime orchestration for the engine runtime path.
 - GPU params: [../../../docs/reference/plugins/render/gpu-params-guide.md](../../reference/plugins/render/gpu-params-guide.md)
 - Public API reference: [../../../docs/reference/plugins/render/public-api-reference.md](../../reference/plugins/render/public-api-reference.md)
 - Render target architecture: [../../../docs/reference/plugins/render/render-target-architecture.md](../../reference/plugins/render/render-target-architecture.md)
+- Fully featured renderer roadmap: [../../../docs/roadmaps/fully-featured-renderer-roadmap.md](../../roadmaps/fully-featured-renderer-roadmap.md)
 - Final migration roadmap: [../../../docs/roadmaps/render-final-architecture-migration.md](../../roadmaps/render-final-architecture-migration.md)

@@ -13,6 +13,8 @@ related_designs:
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
   - ../../design/active/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../../design/active/field-visualizer-product-workflow-design.md
+related_roadmaps:
+  - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
 related:
   - ./current-architecture.md
   - ./roadmap.md
@@ -80,6 +82,11 @@ runtime producers are not implemented are visible but marked unavailable. Produc
 maturity now moves to Field Visualizer and Material Lab product producers through
 the same viewport product routing rather than descriptor plumbing or parallel
 viewer paths.
+
+Long-term renderer capability sequencing for product producers, storage-buffer
+scene packets, SDF/world rendering, materials, temporal history, fragments, and
+inspection is tracked in
+[Fully Featured Renderer Roadmap](../../engine/roadmaps/fully-featured-renderer-roadmap.md).
 
 ## Final Architecture
 

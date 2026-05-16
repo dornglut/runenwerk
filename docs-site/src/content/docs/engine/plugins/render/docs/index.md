@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-16
 ---
 
 # Render Documentation Index
@@ -16,4 +16,5 @@ last_reviewed: 2026-04-27
 - Public API reference: [../../../../docs/reference/plugins/render/public-api-reference.md](../../../reference/plugins/render/public-api-reference.md)
 - Architecture summary: [../../../../docs/reference/plugins/render/architecture.md](../../../reference/plugins/render/architecture.md)
 - Target architecture: [../../../../docs/reference/plugins/render/render-target-architecture.md](../../../reference/plugins/render/render-target-architecture.md)
+- Fully featured renderer roadmap: [../../../../docs/roadmaps/fully-featured-renderer-roadmap.md](../../../roadmaps/fully-featured-renderer-roadmap.md)
 - Final architecture migration roadmap: [../../../../docs/roadmaps/render-final-architecture-migration.md](../../../roadmaps/render-final-architecture-migration.md)

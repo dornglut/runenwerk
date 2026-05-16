@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-16
 ---
 
 # Workspace Roadmap Index
@@ -32,6 +32,7 @@ Operational execution checklist:
 - [workspace/sdf-first-execution-roadmap.md](./sdf-first-execution-roadmap.md)
 - [workspace/repo-execution-priority-checklist.md](./repo-execution-priority-checklist.md)
 - [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
+- [engine/roadmaps/fully-featured-renderer-roadmap.md](../engine/roadmaps/fully-featured-renderer-roadmap.md)
 - [apps/runenwerk-editor/roadmap.md](../apps/runenwerk-editor/roadmap.md)
 - [apps/runenwerk-draw/roadmap.md](../apps/runenwerk-draw/roadmap.md)
 - [reports/audits/editor-ui-priority-code-audit-2026-05-05.md](../reports/audits/editor-ui-priority-code-audit-2026-05-05.md)
@@ -72,6 +73,8 @@ Operational execution checklist:
   - [reports/closeouts/sdf-first-execution-phase-6d/closeout.md](../reports/closeouts/sdf-first-execution-phase-6d/closeout.md)
 - Runtime product job executor roadmap:
   - [engine/roadmaps/runtime-product-job-executor-roadmap.md](../engine/roadmaps/runtime-product-job-executor-roadmap.md)
+- Fully featured renderer roadmap:
+  - [engine/roadmaps/fully-featured-renderer-roadmap.md](../engine/roadmaps/fully-featured-renderer-roadmap.md)
 - Runtime product job RPJ4-RPJ6 closeout evidence:
   - [reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md](../reports/closeouts/runtime-product-job-rpj4-rpj6/closeout.md)
 - Runtime product job RPJ7A cache policy closeout evidence:
@@ -146,13 +149,17 @@ Operational execution checklist:
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the
   current candidates land.
 - Keep render SDF/GPU work on the completed product-selection and derived
-  GPU-residency contracts.
+  GPU-residency contracts, with long-term renderer capability sequencing in
+  [engine/roadmaps/fully-featured-renderer-roadmap.md](../engine/roadmaps/fully-featured-renderer-roadmap.md).
 
 ## Other Tracked Work
 
 - Treat the Runenwerk Draw rendering foundation as a Next app/render track after
   the current SDF-first Now items are stable. Its owning sequence is
   [apps/runenwerk-draw/roadmap.md](../apps/runenwerk-draw/roadmap.md).
+- Treat fully featured renderer work as a coordinated engine/editor track, not
+  a single mega-ticket. Its canonical sequencing is
+  [engine/roadmaps/fully-featured-renderer-roadmap.md](../engine/roadmaps/fully-featured-renderer-roadmap.md).
 - Sequence gameplay graph, particles, physics, animation, and simulation domains
   after each owning design can consume product jobs, query snapshots,
   publication barriers, and diagnostics.
