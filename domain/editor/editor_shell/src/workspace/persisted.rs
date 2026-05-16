@@ -4,7 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use editor_viewport::{
-    ExpressionProductId, ViewportCameraSettings, ViewportDebugStage, ViewportId,
+    ExpressionProductId, ViewportCameraSettings, ViewportDebugStage,
+    ViewportFieldVisualizerColorRamp, ViewportFieldVisualizerComponent,
+    ViewportFieldVisualizerDebugMode, ViewportFieldVisualizerSettings, ViewportId,
     ViewportRuntimeSettings,
 };
 use serde::{Deserialize, Serialize};
@@ -294,6 +296,8 @@ pub struct PersistedViewportSettingsV1 {
     pub root_background_opaque: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_primary_product_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field_visualizer: Option<PersistedViewportFieldVisualizerSettingsV1>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -313,6 +317,48 @@ pub enum PersistedViewportDebugStageV1 {
     ViewportUvGradient,
     PrimitiveAvailability,
     PickingHitMiss,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedViewportFieldVisualizerSettingsV1 {
+    #[serde(default)]
+    pub component: PersistedViewportFieldVisualizerComponentV1,
+    #[serde(default)]
+    pub slice_index: u32,
+    #[serde(default)]
+    pub color_ramp: PersistedViewportFieldVisualizerColorRampV1,
+    #[serde(default)]
+    pub debug_mode: PersistedViewportFieldVisualizerDebugModeV1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(try_from = "String", into = "String")]
+pub enum PersistedViewportFieldVisualizerComponentV1 {
+    #[default]
+    Auto,
+    X,
+    Y,
+    Z,
+    W,
+    Magnitude,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(try_from = "String", into = "String")]
+pub enum PersistedViewportFieldVisualizerColorRampV1 {
+    #[default]
+    Grayscale,
+    Heat,
+    DivergingSigned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(try_from = "String", into = "String")]
+pub enum PersistedViewportFieldVisualizerDebugModeV1 {
+    #[default]
+    Values,
+    Availability,
+    Freshness,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -879,6 +925,9 @@ fn persisted_viewport_settings(settings: ViewportRuntimeSettings) -> PersistedVi
         debug_stage: persisted_viewport_debug_stage(settings.debug_stage),
         root_background_opaque: settings.root_background_opaque,
         selected_primary_product_id: settings.selected_primary_product_id.map(|id| id.0),
+        field_visualizer: Some(persisted_viewport_field_visualizer_settings(
+            settings.field_visualizer_settings,
+        )),
     }
 }
 
@@ -914,7 +963,123 @@ fn workspace_viewport_settings(
         debug_stage: workspace_viewport_debug_stage(settings.debug_stage),
         root_background_opaque: settings.root_background_opaque,
         selected_primary_product_id,
+        field_visualizer_settings: settings
+            .field_visualizer
+            .map(workspace_viewport_field_visualizer_settings)
+            .unwrap_or_default(),
     })
+}
+
+fn persisted_viewport_field_visualizer_settings(
+    settings: ViewportFieldVisualizerSettings,
+) -> PersistedViewportFieldVisualizerSettingsV1 {
+    PersistedViewportFieldVisualizerSettingsV1 {
+        component: persisted_viewport_field_visualizer_component(settings.component),
+        slice_index: settings.slice_index,
+        color_ramp: persisted_viewport_field_visualizer_color_ramp(settings.color_ramp),
+        debug_mode: persisted_viewport_field_visualizer_debug_mode(settings.debug_mode),
+    }
+}
+
+fn workspace_viewport_field_visualizer_settings(
+    settings: PersistedViewportFieldVisualizerSettingsV1,
+) -> ViewportFieldVisualizerSettings {
+    ViewportFieldVisualizerSettings {
+        component: workspace_viewport_field_visualizer_component(settings.component),
+        slice_index: settings.slice_index,
+        color_ramp: workspace_viewport_field_visualizer_color_ramp(settings.color_ramp),
+        debug_mode: workspace_viewport_field_visualizer_debug_mode(settings.debug_mode),
+    }
+}
+
+fn persisted_viewport_field_visualizer_component(
+    component: ViewportFieldVisualizerComponent,
+) -> PersistedViewportFieldVisualizerComponentV1 {
+    match component {
+        ViewportFieldVisualizerComponent::Auto => PersistedViewportFieldVisualizerComponentV1::Auto,
+        ViewportFieldVisualizerComponent::X => PersistedViewportFieldVisualizerComponentV1::X,
+        ViewportFieldVisualizerComponent::Y => PersistedViewportFieldVisualizerComponentV1::Y,
+        ViewportFieldVisualizerComponent::Z => PersistedViewportFieldVisualizerComponentV1::Z,
+        ViewportFieldVisualizerComponent::W => PersistedViewportFieldVisualizerComponentV1::W,
+        ViewportFieldVisualizerComponent::Magnitude => {
+            PersistedViewportFieldVisualizerComponentV1::Magnitude
+        }
+    }
+}
+
+fn workspace_viewport_field_visualizer_component(
+    component: PersistedViewportFieldVisualizerComponentV1,
+) -> ViewportFieldVisualizerComponent {
+    match component {
+        PersistedViewportFieldVisualizerComponentV1::Auto => ViewportFieldVisualizerComponent::Auto,
+        PersistedViewportFieldVisualizerComponentV1::X => ViewportFieldVisualizerComponent::X,
+        PersistedViewportFieldVisualizerComponentV1::Y => ViewportFieldVisualizerComponent::Y,
+        PersistedViewportFieldVisualizerComponentV1::Z => ViewportFieldVisualizerComponent::Z,
+        PersistedViewportFieldVisualizerComponentV1::W => ViewportFieldVisualizerComponent::W,
+        PersistedViewportFieldVisualizerComponentV1::Magnitude => {
+            ViewportFieldVisualizerComponent::Magnitude
+        }
+    }
+}
+
+fn persisted_viewport_field_visualizer_color_ramp(
+    color_ramp: ViewportFieldVisualizerColorRamp,
+) -> PersistedViewportFieldVisualizerColorRampV1 {
+    match color_ramp {
+        ViewportFieldVisualizerColorRamp::Grayscale => {
+            PersistedViewportFieldVisualizerColorRampV1::Grayscale
+        }
+        ViewportFieldVisualizerColorRamp::Heat => PersistedViewportFieldVisualizerColorRampV1::Heat,
+        ViewportFieldVisualizerColorRamp::DivergingSigned => {
+            PersistedViewportFieldVisualizerColorRampV1::DivergingSigned
+        }
+    }
+}
+
+fn workspace_viewport_field_visualizer_color_ramp(
+    color_ramp: PersistedViewportFieldVisualizerColorRampV1,
+) -> ViewportFieldVisualizerColorRamp {
+    match color_ramp {
+        PersistedViewportFieldVisualizerColorRampV1::Grayscale => {
+            ViewportFieldVisualizerColorRamp::Grayscale
+        }
+        PersistedViewportFieldVisualizerColorRampV1::Heat => ViewportFieldVisualizerColorRamp::Heat,
+        PersistedViewportFieldVisualizerColorRampV1::DivergingSigned => {
+            ViewportFieldVisualizerColorRamp::DivergingSigned
+        }
+    }
+}
+
+fn persisted_viewport_field_visualizer_debug_mode(
+    debug_mode: ViewportFieldVisualizerDebugMode,
+) -> PersistedViewportFieldVisualizerDebugModeV1 {
+    match debug_mode {
+        ViewportFieldVisualizerDebugMode::Values => {
+            PersistedViewportFieldVisualizerDebugModeV1::Values
+        }
+        ViewportFieldVisualizerDebugMode::Availability => {
+            PersistedViewportFieldVisualizerDebugModeV1::Availability
+        }
+        ViewportFieldVisualizerDebugMode::Freshness => {
+            PersistedViewportFieldVisualizerDebugModeV1::Freshness
+        }
+    }
+}
+
+fn workspace_viewport_field_visualizer_debug_mode(
+    debug_mode: PersistedViewportFieldVisualizerDebugModeV1,
+) -> ViewportFieldVisualizerDebugMode {
+    match debug_mode {
+        PersistedViewportFieldVisualizerDebugModeV1::Values => {
+            ViewportFieldVisualizerDebugMode::Values
+        }
+        PersistedViewportFieldVisualizerDebugModeV1::Availability => {
+            ViewportFieldVisualizerDebugMode::Availability
+        }
+        PersistedViewportFieldVisualizerDebugModeV1::Freshness => {
+            ViewportFieldVisualizerDebugMode::Freshness
+        }
+    }
 }
 
 fn persisted_viewport_debug_stage(stage: ViewportDebugStage) -> PersistedViewportDebugStageV1 {
@@ -966,6 +1131,89 @@ impl TryFrom<String> for PersistedViewportDebugStageV1 {
             "primitive_availability" => Ok(Self::PrimitiveAvailability),
             "picking_hit_miss" => Ok(Self::PickingHitMiss),
             other => Err(format!("unsupported viewport debug stage: {other}")),
+        }
+    }
+}
+
+impl From<PersistedViewportFieldVisualizerComponentV1> for String {
+    fn from(value: PersistedViewportFieldVisualizerComponentV1) -> Self {
+        match value {
+            PersistedViewportFieldVisualizerComponentV1::Auto => "auto".to_string(),
+            PersistedViewportFieldVisualizerComponentV1::X => "x".to_string(),
+            PersistedViewportFieldVisualizerComponentV1::Y => "y".to_string(),
+            PersistedViewportFieldVisualizerComponentV1::Z => "z".to_string(),
+            PersistedViewportFieldVisualizerComponentV1::W => "w".to_string(),
+            PersistedViewportFieldVisualizerComponentV1::Magnitude => "magnitude".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedViewportFieldVisualizerComponentV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "auto" => Ok(Self::Auto),
+            "x" => Ok(Self::X),
+            "y" => Ok(Self::Y),
+            "z" => Ok(Self::Z),
+            "w" => Ok(Self::W),
+            "magnitude" => Ok(Self::Magnitude),
+            other => Err(format!(
+                "unsupported viewport field visualizer component: {other}"
+            )),
+        }
+    }
+}
+
+impl From<PersistedViewportFieldVisualizerColorRampV1> for String {
+    fn from(value: PersistedViewportFieldVisualizerColorRampV1) -> Self {
+        match value {
+            PersistedViewportFieldVisualizerColorRampV1::Grayscale => "grayscale".to_string(),
+            PersistedViewportFieldVisualizerColorRampV1::Heat => "heat".to_string(),
+            PersistedViewportFieldVisualizerColorRampV1::DivergingSigned => {
+                "diverging_signed".to_string()
+            }
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedViewportFieldVisualizerColorRampV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "grayscale" => Ok(Self::Grayscale),
+            "heat" => Ok(Self::Heat),
+            "diverging_signed" => Ok(Self::DivergingSigned),
+            other => Err(format!(
+                "unsupported viewport field visualizer color ramp: {other}"
+            )),
+        }
+    }
+}
+
+impl From<PersistedViewportFieldVisualizerDebugModeV1> for String {
+    fn from(value: PersistedViewportFieldVisualizerDebugModeV1) -> Self {
+        match value {
+            PersistedViewportFieldVisualizerDebugModeV1::Values => "values".to_string(),
+            PersistedViewportFieldVisualizerDebugModeV1::Availability => "availability".to_string(),
+            PersistedViewportFieldVisualizerDebugModeV1::Freshness => "freshness".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PersistedViewportFieldVisualizerDebugModeV1 {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "values" => Ok(Self::Values),
+            "availability" => Ok(Self::Availability),
+            "freshness" => Ok(Self::Freshness),
+            other => Err(format!(
+                "unsupported viewport field visualizer debug mode: {other}"
+            )),
         }
     }
 }
@@ -1738,6 +1986,11 @@ mod tests {
             debug_stage: ViewportDebugStage::PrimitiveAvailability,
             root_background_opaque: true,
             selected_primary_product_id: Some(ExpressionProductId(2)),
+            field_visualizer_settings: ViewportFieldVisualizerSettings::default()
+                .with_component(ViewportFieldVisualizerComponent::Magnitude)
+                .with_slice_index(8)
+                .with_color_ramp(ViewportFieldVisualizerColorRamp::Heat)
+                .with_debug_mode(ViewportFieldVisualizerDebugMode::Freshness),
         }
     }
 
@@ -1901,10 +2154,66 @@ mod tests {
                 .map(|settings| settings.debug_stage),
             Some(PersistedViewportDebugStageV1::PrimitiveAvailability)
         );
+        assert_eq!(
+            persisted
+                .tool_surfaces
+                .iter()
+                .find(|surface| surface.id == viewport_surface.raw())
+                .and_then(|surface| surface.viewport_settings.as_ref())
+                .and_then(|settings| settings.field_visualizer)
+                .map(|settings| (
+                    settings.component,
+                    settings.slice_index,
+                    settings.color_ramp,
+                    settings.debug_mode
+                )),
+            Some((
+                PersistedViewportFieldVisualizerComponentV1::Magnitude,
+                8,
+                PersistedViewportFieldVisualizerColorRampV1::Heat,
+                PersistedViewportFieldVisualizerDebugModeV1::Freshness
+            ))
+        );
         let restored =
             WorkspaceState::from_persisted_v3(persisted).expect("v3 state should decode");
 
         assert_eq!(workspace, restored);
+    }
+
+    #[test]
+    fn persisted_v3_defaults_legacy_viewport_field_visualizer_settings() {
+        let mut workspace = bootstrap_workspace();
+        let viewport_surface = workspace
+            .tool_surfaces_by_id
+            .values()
+            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .map(|surface| surface.id)
+            .expect("bootstrap workspace should contain a viewport surface");
+        workspace
+            .tool_surfaces_by_id
+            .get_mut(&viewport_surface)
+            .expect("viewport surface should exist")
+            .viewport_settings = Some(test_viewport_settings());
+
+        let mut persisted = workspace.to_persisted_v3();
+        let settings = persisted
+            .tool_surfaces
+            .iter_mut()
+            .find(|surface| surface.id == viewport_surface.raw())
+            .and_then(|surface| surface.viewport_settings.as_mut())
+            .expect("persisted viewport settings should exist");
+        settings.field_visualizer = None;
+
+        let restored =
+            WorkspaceState::from_persisted_v3(persisted).expect("legacy v3 settings should decode");
+
+        assert_eq!(
+            restored
+                .tool_surface(viewport_surface)
+                .and_then(|surface| surface.viewport_settings)
+                .map(|settings| settings.field_visualizer_settings),
+            Some(ViewportFieldVisualizerSettings::default())
+        );
     }
 
     #[test]

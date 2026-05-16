@@ -65,6 +65,7 @@ pub fn seed_viewport_runtime_contracts_system(
         frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
         frame.selected_overlay_product_ids =
             presentation_state.selected_overlay_product_ids.clone();
+        frame.field_visualizer_settings = presentation_state.field_visualizer_settings;
 
         for descriptor in &descriptors {
             frame

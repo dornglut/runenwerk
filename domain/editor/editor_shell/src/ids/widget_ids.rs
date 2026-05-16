@@ -103,6 +103,9 @@ pub const VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID: WidgetId = WidgetId(91);
 pub const VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID: WidgetId = WidgetId(92);
 pub const VIEWPORT_STATUS_CONTENT_WIDGET_ID: WidgetId = WidgetId(93);
 pub const VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID: WidgetId = WidgetId(94);
+pub const VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID: WidgetId = WidgetId(95);
+pub const VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID: WidgetId = WidgetId(96);
+pub const VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID: WidgetId = WidgetId(97);
 
 pub const INSPECTOR_PANEL_WIDGET_ID: WidgetId = WidgetId(50);
 pub const INSPECTOR_TITLE_WIDGET_ID: WidgetId = WidgetId(51);
@@ -131,6 +134,9 @@ pub const INSPECTOR_FIELD_FOCUS_WIDGET_ID_BASE: u64 = 15_000;
 pub const VIEWPORT_PRODUCT_BUTTON_WIDGET_ID_BASE: u64 = 30_000;
 pub const VIEWPORT_DEBUG_STAGE_BUTTON_WIDGET_ID_BASE: u64 = 31_000;
 pub const VIEWPORT_TOOL_RADIAL_ITEM_WIDGET_ID_BASE: u64 = 32_000;
+pub const VIEWPORT_FIELD_COMPONENT_BUTTON_WIDGET_ID_BASE: u64 = 33_000;
+pub const VIEWPORT_FIELD_COLOR_RAMP_BUTTON_WIDGET_ID_BASE: u64 = 34_000;
+pub const VIEWPORT_FIELD_DEBUG_MODE_BUTTON_WIDGET_ID_BASE: u64 = 35_000;
 pub const ENTITY_TABLE_ROW_WIDGET_ID_BASE: u64 = 40_000;
 pub const ENTITY_TABLE_SORT_BUTTON_WIDGET_ID_BASE: u64 = 41_000;
 pub const TAB_STRIP_WIDGET_ID_BASE: u64 = 1_000_000;
@@ -211,6 +217,18 @@ pub fn viewport_debug_stage_button_widget_id(index: usize) -> WidgetId {
 
 pub fn viewport_tool_radial_item_widget_id(index: usize) -> WidgetId {
     WidgetId(VIEWPORT_TOOL_RADIAL_ITEM_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn viewport_field_component_button_widget_id(index: usize) -> WidgetId {
+    WidgetId(VIEWPORT_FIELD_COMPONENT_BUTTON_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn viewport_field_color_ramp_button_widget_id(index: usize) -> WidgetId {
+    WidgetId(VIEWPORT_FIELD_COLOR_RAMP_BUTTON_WIDGET_ID_BASE + index as u64)
+}
+
+pub fn viewport_field_debug_mode_button_widget_id(index: usize) -> WidgetId {
+    WidgetId(VIEWPORT_FIELD_DEBUG_MODE_BUTTON_WIDGET_ID_BASE + index as u64)
 }
 
 pub fn entity_table_row_widget_id(index: usize) -> WidgetId {

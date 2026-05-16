@@ -6,7 +6,8 @@ use editor_shell::{
     StructuralCommandTarget, ToolSurfaceKind, ViewportDomainMutation, ViewportSessionMutation,
 };
 use editor_viewport::{
-    ArtifactObservationFrame, ExpressionProductId, ViewportId, ViewportPresentationState,
+    ArtifactObservationFrame, ExpressionProductId, ViewportFieldVisualizerSettingsPatch,
+    ViewportId, ViewportPresentationState,
 };
 use ui_surface::{
     ObservationFrame, RatificationAdapter, RatificationDispatchError, RatificationOutcome,
@@ -196,7 +197,67 @@ pub(crate) fn dispatch_domain_mutation(
             });
             Ok(())
         }
+        ViewportDomainMutation::PatchFieldVisualizerSettings { viewport_id, patch } => {
+            dispatch_patch_field_visualizer_settings(
+                app,
+                shell_state,
+                target,
+                viewport_id,
+                patch,
+                viewport_presentations,
+                viewport_observations,
+                tool_surface_bindings,
+            )
+        }
     }
+}
+
+fn dispatch_patch_field_visualizer_settings(
+    app: &mut RunenwerkEditorApp,
+    shell_state: Option<&RunenwerkEditorShellState>,
+    target: StructuralCommandTarget,
+    viewport_id: ViewportId,
+    patch: ViewportFieldVisualizerSettingsPatch,
+    viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+    viewport_observations: Option<&ViewportArtifactObservationResource>,
+    tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+) -> Result<(), EditorMutationError> {
+    let Some(resolved_viewport_id) = resolve_viewport_state_command_target(
+        app,
+        shell_state,
+        tool_surface_bindings,
+        target,
+        viewport_id,
+        "field visualizer settings",
+    ) else {
+        return Ok(());
+    };
+    let Some(viewport_presentations) = viewport_presentations else {
+        app.append_console_line(
+            "[viewport] field visualizer patch ignored (missing presentation state)".to_string(),
+        );
+        return Ok(());
+    };
+    let mut state = viewport_presentations
+        .state_for(resolved_viewport_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            crate::runtime::viewport::initial_presentation_state(resolved_viewport_id)
+        });
+    let slice_count = viewport_observations
+        .and_then(|observations| observations.frame_for(resolved_viewport_id))
+        .and_then(|frame| {
+            frame
+                .available_products
+                .iter()
+                .find(|descriptor| descriptor.id == state.selected_primary_product_id)
+                .and_then(|descriptor| descriptor.channel_layer_slice.as_ref())
+                .and_then(|metadata| metadata.slice_count)
+        });
+    let settings = patch.apply_to(state.field_visualizer_settings, slice_count);
+    state.set_field_visualizer_settings(settings);
+    viewport_presentations.upsert_state(state);
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

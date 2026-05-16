@@ -1,6 +1,8 @@
 //! File: apps/runenwerk_editor/src/runtime/viewport/producer_volume.rs
 //! Purpose: Volume and history debug preview descriptor helpers for editor viewports.
 
+use std::num::NonZeroU32;
+
 use editor_viewport::{ExpressionChannelLayerSliceMetadata, ExpressionPresentationHints};
 
 pub const ATLAS_DEBUG_PRODUCER: &str = "editor.viewport.atlas_debug_producer";
@@ -21,6 +23,7 @@ pub fn atlas_debug_metadata() -> ExpressionChannelLayerSliceMetadata {
         channel_label: None,
         layer_label: Some("atlas_debug".to_string()),
         slice_label: None,
+        slice_count: None,
     }
 }
 
@@ -29,6 +32,7 @@ pub fn volume_slice_debug_metadata() -> ExpressionChannelLayerSliceMetadata {
         channel_label: None,
         layer_label: Some("volume_debug".to_string()),
         slice_label: Some("z=0".to_string()),
+        slice_count: NonZeroU32::new(1),
     }
 }
 
@@ -37,6 +41,7 @@ pub fn brickmap_debug_metadata() -> ExpressionChannelLayerSliceMetadata {
         channel_label: Some("occupancy_debug".to_string()),
         layer_label: Some("brickmap".to_string()),
         slice_label: None,
+        slice_count: None,
     }
 }
 
@@ -45,5 +50,6 @@ pub fn history_color_debug_metadata() -> ExpressionChannelLayerSliceMetadata {
         channel_label: Some("color_debug".to_string()),
         layer_label: Some("history".to_string()),
         slice_label: Some("previous".to_string()),
+        slice_count: None,
     }
 }

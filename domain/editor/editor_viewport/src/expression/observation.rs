@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use editor_core::RealityVersion;
 
-use crate::{ExpressionProductDescriptor, ExpressionProductId, ViewportId};
+use crate::{
+    ExpressionProductDescriptor, ExpressionProductId, ViewportFieldVisualizerSettings, ViewportId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProductAvailabilityState {
@@ -27,6 +29,7 @@ pub struct ArtifactObservationFrame {
     pub available_products: Vec<ExpressionProductDescriptor>,
     pub selected_primary_product_id: Option<ExpressionProductId>,
     pub selected_overlay_product_ids: Vec<ExpressionProductId>,
+    pub field_visualizer_settings: ViewportFieldVisualizerSettings,
     pub availability_by_product: BTreeMap<ExpressionProductId, ProductAvailabilityState>,
     pub producer_health_by_product: BTreeMap<ExpressionProductId, ProducerHealth>,
 }
@@ -39,6 +42,7 @@ impl ArtifactObservationFrame {
             available_products: Vec::new(),
             selected_primary_product_id: None,
             selected_overlay_product_ids: Vec::new(),
+            field_visualizer_settings: ViewportFieldVisualizerSettings::default(),
             availability_by_product: BTreeMap::new(),
             producer_health_by_product: BTreeMap::new(),
         }
@@ -59,6 +63,10 @@ mod tests {
         assert_eq!(
             frame.selected_primary_product_id,
             Some(ExpressionProductId(12))
+        );
+        assert_eq!(
+            frame.field_visualizer_settings,
+            ViewportFieldVisualizerSettings::default()
         );
     }
 }

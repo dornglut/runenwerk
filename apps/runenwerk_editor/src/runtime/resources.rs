@@ -4,7 +4,9 @@ use editor_core::EntityId;
 use editor_shell::{
     ToolSurfaceInstanceId, WorkspaceIdentityAllocator, form_workspace_state_from_definition,
 };
-use editor_viewport::{ViewportCameraSettings, ViewportId, ViewportRuntimeSettings};
+use editor_viewport::{
+    ViewportCameraSettings, ViewportFieldVisualizerSettings, ViewportId, ViewportRuntimeSettings,
+};
 use engine::plugins::render::{GpuParams, GpuUniform};
 use glam::{Vec3, vec3};
 use scene::{LocalTransform, Vec3Value};
@@ -641,12 +643,14 @@ impl EditorViewportRenderState {
     pub fn viewport_settings(
         &self,
         selected_primary_product_id: Option<editor_viewport::ExpressionProductId>,
+        field_visualizer_settings: ViewportFieldVisualizerSettings,
     ) -> ViewportRuntimeSettings {
         ViewportRuntimeSettings {
             camera: self.camera_settings,
             debug_stage: self.debug_stage,
             root_background_opaque: self.root_background_opaque,
             selected_primary_product_id,
+            field_visualizer_settings,
         }
     }
 

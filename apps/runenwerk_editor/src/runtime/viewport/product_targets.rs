@@ -303,6 +303,7 @@ fn build_artifact_observation_frame(
     frame.available_products = descriptors.to_vec();
     frame.selected_primary_product_id = Some(presentation_state.selected_primary_product_id);
     frame.selected_overlay_product_ids = presentation_state.selected_overlay_product_ids.clone();
+    frame.field_visualizer_settings = presentation_state.field_visualizer_settings;
 
     for descriptor in descriptors {
         let target_record =
@@ -685,6 +686,39 @@ mod tests {
                 .get(&HISTORY_COLOR_PRODUCT_ID)
                 .copied(),
             Some(ProducerHealth::Healthy)
+        );
+    }
+
+    #[test]
+    fn field_visualizer_settings_do_not_parameterize_dynamic_target_identity() {
+        let descriptor = descriptor(
+            SCALAR_FIELD_PRODUCT_ID,
+            ExpressionProductKind::ScalarField2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+        let before =
+            product_target_record_for_descriptor(ViewportId(1), &descriptor).expect("target");
+        let mut presentation_state = initial_presentation_state(ViewportId(1));
+        presentation_state.set_field_visualizer_settings(
+            editor_viewport::ViewportFieldVisualizerSettings::default()
+                .with_component(editor_viewport::ViewportFieldVisualizerComponent::Magnitude)
+                .with_slice_index(9)
+                .with_color_ramp(editor_viewport::ViewportFieldVisualizerColorRamp::Heat)
+                .with_debug_mode(editor_viewport::ViewportFieldVisualizerDebugMode::Freshness),
+        );
+        let frame =
+            build_artifact_observation_frame(&[descriptor], &presentation_state, RealityVersion(1));
+        let after = product_target_record_for_descriptor(
+            ViewportId(1),
+            frame.available_products.first().expect("descriptor"),
+        )
+        .expect("target");
+
+        assert_eq!(before.key, after.key);
+        assert_eq!(before.target_id, after.target_id);
+        assert_eq!(
+            frame.field_visualizer_settings,
+            presentation_state.field_visualizer_settings
         );
     }
 

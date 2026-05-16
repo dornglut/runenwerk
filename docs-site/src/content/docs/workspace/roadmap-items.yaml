@@ -769,7 +769,7 @@ items:
   lane: Product workflow
   dependency_level: L2
   gate: After rendered-world V1
-  planning_state: current_candidate
+  planning_state: completed
   priority: P1
   value: 4
   blocker: 2
@@ -789,15 +789,16 @@ items:
   - domain/editor
   - docs-site/src/content/docs/design/active
   - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md
   validations:
   - cargo test -p runenwerk_editor viewport
   - cargo test -p engine render_product_selection
-  next_evidence: 'docs-site/src/content/docs/reports/implementation-plans/wr-019-field-visualizer-product-workflow/plan.md;
-    readiness: contract states WR-019 can carry a bounded implementation contract after WR-018 completion, PM-SDF-OW-001 active
-    link, and active Field Visualizer design evidence'
-  current_decision: 'docs-site/src/content/docs/reports/implementation-plans/wr-019-field-visualizer-product-workflow/plan.md;
-    readiness: contract states WR-019 can carry a bounded implementation contract after WR-018 completion, PM-SDF-OW-001 active
-    link, and active Field Visualizer design evidence'
+  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md.
+    Viewport-owned field visualizer settings, granular patch actions, product-aware slice bounds, routed controls, persisted
+    hydration, stable product target identity, and strict diagnostics are implemented and validated.
+  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md.
+    Viewport-owned field visualizer settings, granular patch actions, product-aware slice bounds, routed controls, persisted
+    hydration, stable product target identity, and strict diagnostics are implemented and validated.
   current_call: Plan immediately after rendered-world V1 stabilizes the packet/product handoff; this is the first FR-2 product-producer
     follow-up in the fully featured renderer roadmap.
   main_blocker: Rendered-world V1 must first prove the viewport packet/product handoff and product target selection path.

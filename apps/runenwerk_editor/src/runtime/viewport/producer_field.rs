@@ -19,6 +19,7 @@ pub fn scalar_field_debug_metadata() -> ExpressionChannelLayerSliceMetadata {
         channel_label: Some("scalar_debug_rgba".to_string()),
         layer_label: Some("field".to_string()),
         slice_label: None,
+        slice_count: None,
     }
 }
 
@@ -27,5 +28,6 @@ pub fn vector_field_debug_metadata() -> ExpressionChannelLayerSliceMetadata {
         channel_label: Some("vector_debug_rgba".to_string()),
         layer_label: Some("field".to_string()),
         slice_label: None,
+        slice_count: None,
     }
 }

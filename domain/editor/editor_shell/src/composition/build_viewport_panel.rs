@@ -4,7 +4,10 @@
 use crate::{
     UiNode, button_selected, hscroll, hstack_with_policies, label, vscroll, vstack_with_policies,
 };
-use editor_viewport::{ViewportDebugStage, ViewportSurfacePresentationSlot};
+use editor_viewport::{
+    ViewportDebugStage, ViewportFieldVisualizerColorRamp, ViewportFieldVisualizerComponent,
+    ViewportFieldVisualizerDebugMode, ViewportSurfacePresentationSlot,
+};
 use ui_definition::{
     AuthoredUiTemplate, UiDefinitionContext, form_retained_ui, normalize_authored_template,
 };
@@ -21,17 +24,20 @@ use crate::{
     VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID,
     VIEWPORT_CHROME_CONTENT_WIDGET_ID, VIEWPORT_CHROME_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID,
     VIEWPORT_DETAILS_PANEL_WIDGET_ID, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID,
-    VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
-    VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATUS_CONTENT_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID,
+    VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
+    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_LABEL_WIDGET_ID,
+    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_STATUS_CONTENT_WIDGET_ID,
+    VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID, VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_WIDGET_ID, ViewportViewModel, viewport_debug_stage_button_widget_id,
-    viewport_embed_slot_for, viewport_product_button_widget_id,
-    viewport_tool_radial_item_widget_id,
+    viewport_embed_slot_for, viewport_field_color_ramp_button_widget_id,
+    viewport_field_component_button_widget_id, viewport_field_debug_mode_button_widget_id,
+    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
 };
 
 use super::surface_control_polish::{compact_surface_action_button, compact_surface_toggle};
@@ -325,6 +331,64 @@ fn viewport_options_popup(
                     theme,
                 ));
             }
+            let field_settings = view_model.field_visualizer_settings;
+            for (index, component) in ViewportFieldVisualizerComponent::ALL
+                .into_iter()
+                .enumerate()
+            {
+                items.push(compact_surface_action_button(
+                    scope.widget_id(viewport_field_component_button_widget_id(index)),
+                    format!("Field {}", component.display_label()),
+                    field_settings.component == component,
+                    true,
+                    theme,
+                ));
+            }
+            items.push(compact_surface_action_button(
+                scope.widget_id(VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID),
+                "Slice -",
+                false,
+                field_settings.slice_index > 0,
+                theme,
+            ));
+            items.push(compact_surface_action_button(
+                scope.widget_id(VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID),
+                format!("Slice {}", field_settings.slice_index),
+                field_settings.slice_index == 0,
+                field_settings.slice_index > 0,
+                theme,
+            ));
+            items.push(compact_surface_action_button(
+                scope.widget_id(VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID),
+                "Slice +",
+                false,
+                true,
+                theme,
+            ));
+            for (index, color_ramp) in ViewportFieldVisualizerColorRamp::ALL
+                .into_iter()
+                .enumerate()
+            {
+                items.push(compact_surface_action_button(
+                    scope.widget_id(viewport_field_color_ramp_button_widget_id(index)),
+                    format!("Ramp {}", color_ramp.display_label()),
+                    field_settings.color_ramp == color_ramp,
+                    true,
+                    theme,
+                ));
+            }
+            for (index, debug_mode) in ViewportFieldVisualizerDebugMode::ALL
+                .into_iter()
+                .enumerate()
+            {
+                items.push(compact_surface_action_button(
+                    scope.widget_id(viewport_field_debug_mode_button_widget_id(index)),
+                    format!("Field Debug {}", debug_mode.display_label()),
+                    field_settings.debug_mode == debug_mode,
+                    true,
+                    theme,
+                ));
+            }
         }
         for (index, choice) in view_model.product_choices.iter().enumerate() {
             items.push(compact_surface_action_button(
@@ -564,6 +628,90 @@ mod tests {
             &unavailable_product.kind,
             UiNodeKind::Button(button)
                 if button.label == "Product Volume Slice" && !button.selected && !button.enabled
+        ));
+    }
+
+    #[test]
+    fn viewport_options_menu_projects_field_visualizer_controls() {
+        let theme = ThemeTokens::default();
+        let field_settings = editor_viewport::ViewportFieldVisualizerSettings::default()
+            .with_component(editor_viewport::ViewportFieldVisualizerComponent::Magnitude)
+            .with_slice_index(3)
+            .with_color_ramp(editor_viewport::ViewportFieldVisualizerColorRamp::Heat)
+            .with_debug_mode(editor_viewport::ViewportFieldVisualizerDebugMode::Freshness);
+        let visible_model = ViewportViewModel {
+            options_menu_open: true,
+            viewport_id: Some(editor_viewport::ViewportId(4)),
+            field_visualizer_settings: field_settings,
+            ..Default::default()
+        };
+        let visible = build_viewport_panel(
+            &visible_model,
+            &theme,
+            PanelInstanceId::try_from_raw(1).unwrap(),
+            None,
+        );
+
+        let component = find_node(
+            &visible,
+            viewport_field_component_button_widget_id(
+                editor_viewport::ViewportFieldVisualizerComponent::ALL
+                    .iter()
+                    .position(|component| {
+                        *component == editor_viewport::ViewportFieldVisualizerComponent::Magnitude
+                    })
+                    .unwrap(),
+            ),
+        )
+        .expect("field component button should exist");
+        assert!(matches!(
+            &component.kind,
+            UiNodeKind::Button(button)
+                if button.label == "Field Magnitude" && button.selected && button.enabled
+        ));
+
+        let slice_reset = find_node(&visible, VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID)
+            .expect("field slice reset button should exist");
+        assert!(matches!(
+            &slice_reset.kind,
+            UiNodeKind::Button(button)
+                if button.label == "Slice 3" && !button.selected && button.enabled
+        ));
+
+        let ramp = find_node(
+            &visible,
+            viewport_field_color_ramp_button_widget_id(
+                editor_viewport::ViewportFieldVisualizerColorRamp::ALL
+                    .iter()
+                    .position(|color_ramp| {
+                        *color_ramp == editor_viewport::ViewportFieldVisualizerColorRamp::Heat
+                    })
+                    .unwrap(),
+            ),
+        )
+        .expect("field ramp button should exist");
+        assert!(matches!(
+            &ramp.kind,
+            UiNodeKind::Button(button)
+                if button.label == "Ramp Heat" && button.selected && button.enabled
+        ));
+
+        let debug_mode = find_node(
+            &visible,
+            viewport_field_debug_mode_button_widget_id(
+                editor_viewport::ViewportFieldVisualizerDebugMode::ALL
+                    .iter()
+                    .position(|debug_mode| {
+                        *debug_mode == editor_viewport::ViewportFieldVisualizerDebugMode::Freshness
+                    })
+                    .unwrap(),
+            ),
+        )
+        .expect("field debug mode button should exist");
+        assert!(matches!(
+            &debug_mode.kind,
+            UiNodeKind::Button(button)
+                if button.label == "Field Debug Freshness" && button.selected && button.enabled
         ));
     }
 

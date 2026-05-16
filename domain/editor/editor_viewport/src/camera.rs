@@ -1,7 +1,7 @@
 //! File: domain/editor/editor_viewport/src/camera.rs
 //! Purpose: Viewport-owned camera, debug, and retained runtime settings.
 
-use crate::ExpressionProductId;
+use crate::{ExpressionProductId, ViewportFieldVisualizerSettings};
 use ui_math::{UiPoint, UiVector};
 
 const DEFAULT_CAMERA_DISTANCE: f32 = 6.403_124_3;
@@ -152,6 +152,7 @@ pub struct ViewportRuntimeSettings {
     pub debug_stage: ViewportDebugStage,
     pub root_background_opaque: bool,
     pub selected_primary_product_id: Option<ExpressionProductId>,
+    pub field_visualizer_settings: ViewportFieldVisualizerSettings,
 }
 
 impl Default for ViewportRuntimeSettings {
@@ -161,6 +162,7 @@ impl Default for ViewportRuntimeSettings {
             debug_stage: ViewportDebugStage::Scene,
             root_background_opaque: false,
             selected_primary_product_id: None,
+            field_visualizer_settings: ViewportFieldVisualizerSettings::default(),
         }
     }
 }
