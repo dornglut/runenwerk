@@ -32,6 +32,41 @@ tasks:
       - uv run python tools/workflow/roadmap_state.py schema --check
       - uv run python tools/workflow/generate_roadmap_docs.py check
 
+  production:validate:
+    desc: Validate structured production tracks.
+    cmds:
+      - uv run python tools/workflow/production_state.py validate
+
+  production:render:
+    desc: Render generated production track Markdown and PlantUML from YAML.
+    cmds:
+      - uv run python tools/workflow/generate_production_docs.py render
+
+  production:check:
+    desc: Check production generated files and schema are in sync.
+    cmds:
+      - uv run python tools/workflow/production_state.py schema --check
+      - uv run python tools/workflow/generate_production_docs.py check
+
+  production:schema:
+    desc: Render generated production track JSON Schema.
+    cmds:
+      - uv run python tools/workflow/production_state.py schema
+
+  production:plan:
+    desc: Print a production milestone to WR implementation-contract prompt and readiness report.
+    cmds:
+      - uv run python tools/workflow/production_plan.py plan {{.CLI_ARGS}}
+
+  planning:validate:
+    desc: Validate roadmap, production tracks, generated docs, and docs-site links.
+    cmds:
+      - task roadmap:validate
+      - task roadmap:check
+      - task production:validate
+      - task production:check
+      - task docs:validate
+
   roadmap:intake:
     desc: Create a roadmap intake proposal for a new design or change idea.
     cmds:
@@ -179,6 +214,8 @@ tasks:
       - task repo:hygiene
       - task roadmap:validate
       - task roadmap:check
+      - task production:validate
+      - task production:check
       - task puml:validate
       - task docs:validate
       - task python:test

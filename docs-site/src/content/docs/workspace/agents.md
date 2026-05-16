@@ -108,6 +108,15 @@ user approval before spawning or coordinating workers.
 Use `docs-site/src/content/docs/workspace/roadmap-items.yaml` as the structured
 roadmap source and `task roadmap:render` to update
 generated roadmap tables and PUML after roadmap evidence changes.
+Use `docs-site/src/content/docs/workspace/production-tracks.yaml` as the
+structured long-term production planning source. Production tracks guide
+sequencing and outcome selection; the WR roadmap still governs implementation
+eligibility, dependency legality, validation, and closeout evidence. Run
+`task production:render`, `task production:validate`, and
+`task production:check` after production-track evidence changes.
+For substantial production-track work, start with
+`task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"` to produce
+the readiness report and implementation-contract prompt before code changes.
 
 Treat workflow output as prompt/checklist/gate automation. It does not replace repository inspection, accepted ADR/design gates, validation, or human/agent judgment.
 

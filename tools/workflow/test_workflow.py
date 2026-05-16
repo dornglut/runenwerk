@@ -9,6 +9,7 @@ import yaml
 from typer.testing import CliRunner
 
 from generate_roadmap_docs import render_current_candidates_roadmap, render_dependency_roadmap, render_outputs
+from generate_production_docs import stale_outputs as stale_production_outputs
 from parallel_batch import (
     app as batch_app,
     batch_finalization_errors,
@@ -30,6 +31,15 @@ from parallel_batch import (
     write_validation_result,
     worktree_path_for_item,
 )
+from production_state import ProductionPlanningState, validate_design_gates, validate_roadmap_links
+from production_plan import (
+    ProductionPlanContext,
+    app as production_plan_app,
+    classify_plan_action,
+    default_contract_path,
+    resolve_plan_context,
+    write_contract_scaffold,
+)
 from roadmap_state import (
     REPO_ROOT,
     BatchManifest,
@@ -39,6 +49,7 @@ from roadmap_state import (
     document_frontmatter_status,
     load_batch_manifest,
     load_roadmap,
+    repo_path,
     render_batch_manifest,
     select_batch_candidates,
     validate_batch_against_roadmap,
@@ -136,6 +147,111 @@ def decision_gate(path: str, required_status: str = "accepted") -> dict:
     }
 
 
+def valid_production_state() -> dict:
+    return {
+        "version": 1,
+        "production": {"title": "Test Production Tracks", "last_reviewed": "2026-05-16", "owner": "workspace"},
+        "render": {
+            "production_index": "production-index.md",
+            "milestone_register": "production-register.md",
+            "track_roadmap": "production-roadmap.puml",
+        },
+        "tracks": [
+            {
+                "id": "PT-TEST",
+                "title": "Test production track",
+                "state": "active",
+                "owner": "workspace",
+                "strategic_goal": "Prove the production planning model.",
+                "success_criteria": ["The fixture validates."],
+                "milestones": [
+                    production_milestone("PM-TEST-001", roadmap_links=["WR-001"]),
+                    production_milestone(
+                        "PM-TEST-002",
+                        kind="design",
+                        state="active",
+                        dependencies=["PM-TEST-001"],
+                        roadmap_links=["WR-002"],
+                    ),
+                ],
+            }
+        ],
+    }
+
+
+def production_milestone(
+    milestone_id: str,
+    *,
+    kind: str = "implementation",
+    state: str = "active",
+    dependencies: list[str] | None = None,
+    roadmap_links: list[str] | None = None,
+    design_gates: list[dict] | None = None,
+) -> dict:
+    return {
+        "id": milestone_id,
+        "title": f"{milestone_id} title",
+        "kind": kind,
+        "state": state,
+        "goal": "Milestone goal.",
+        "outcome": "Milestone outcome.",
+        "dependencies": dependencies or [],
+        "roadmap_links": roadmap_links or [],
+        "design_gates": design_gates or [],
+        "evidence_gates": [],
+        "acceptance_criteria": ["Acceptance criterion."],
+    }
+
+
+def production_design_gate(path: str, required_status: str = "accepted") -> dict:
+    return {
+        "kind": "design",
+        "path": path,
+        "required_status": required_status,
+        "reason": "Test production decision gate.",
+    }
+
+
+def production_plan_context(
+    *,
+    roadmap_item_id: str = "WR-001",
+    roadmap_state: str = "current_candidate",
+    production_gate: dict | None = None,
+) -> ProductionPlanContext:
+    roadmap_data = valid_state()
+    for roadmap_item in roadmap_data["items"]:
+        if roadmap_item["id"] == roadmap_item_id:
+            roadmap_item["planning_state"] = roadmap_state
+            if roadmap_state == "ready_next":
+                roadmap_item["main_blocker"] = "Needs promotion evidence."
+            if roadmap_state == "completed":
+                roadmap_item["write_scopes"].append(
+                    "docs-site/src/content/docs/reports/closeouts/sdf-first-execution-phase-1/closeout.md"
+                )
+                roadmap_item["next_evidence"] = (
+                    "docs-site/src/content/docs/reports/closeouts/sdf-first-execution-phase-1/closeout.md"
+                )
+    roadmap = RoadmapState.model_validate(roadmap_data)
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["roadmap_links"] = [roadmap_item_id]
+    if production_gate:
+        production_data["tracks"][0]["milestones"][0]["design_gates"] = [production_gate]
+    planning = ProductionPlanningState.model_validate(production_data)
+    track = planning.tracks[0]
+    milestone = track.milestones[0]
+    return ProductionPlanContext(
+        planning=planning,
+        roadmap=roadmap,
+        track=track,
+        milestone=milestone,
+        roadmap_item=roadmap.by_id[roadmap_item_id],
+    )
+
+
+def write_yaml(path: Path, data: dict) -> None:
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8", newline="\n")
+
+
 def test_a_wsjf_score_is_computed() -> None:
     roadmap = RoadmapState.model_validate(valid_state())
     assert roadmap.items[0].score == 2.7
@@ -213,6 +329,199 @@ def test_accepted_decision_gate_allows_current_candidate() -> None:
     roadmap = RoadmapState.model_validate(state)
 
     assert [item.id for item in select_batch_candidates(roadmap, level="L0")] == ["WR-001"]
+
+
+def test_valid_production_track_fixture_passes() -> None:
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    assert validate_roadmap_links(planning) == []
+    assert validate_design_gates(planning) == []
+
+
+def test_duplicate_production_track_ids_are_rejected() -> None:
+    state = valid_production_state()
+    duplicate = dict(state["tracks"][0])
+    duplicate["milestones"] = [production_milestone("PM-OTHER-001", roadmap_links=["WR-001"])]
+    state["tracks"].append(duplicate)
+
+    with pytest.raises(ValueError, match="duplicate production track ids"):
+        ProductionPlanningState.model_validate(state)
+
+
+def test_duplicate_production_milestone_ids_are_rejected() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"].append(production_milestone("PM-TEST-001", roadmap_links=["WR-001"]))
+
+    with pytest.raises(ValueError, match="duplicate production milestone ids"):
+        ProductionPlanningState.model_validate(state)
+
+
+def test_missing_production_milestone_dependency_is_rejected() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"][0]["dependencies"] = ["PM-TEST-999"]
+
+    with pytest.raises(ValueError, match="unknown milestone dependency"):
+        ProductionPlanningState.model_validate(state)
+
+
+def test_production_milestone_dependency_cycle_is_rejected() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"][0]["dependencies"] = ["PM-TEST-002"]
+
+    with pytest.raises(ValueError, match="production milestone dependency cycle"):
+        ProductionPlanningState.model_validate(state)
+
+
+def test_missing_wr_roadmap_link_is_rejected() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"][0]["roadmap_links"] = ["WR-999"]
+    planning = ProductionPlanningState.model_validate(state)
+
+    assert validate_roadmap_links(planning) == ["PM-TEST-001: unknown roadmap link WR-999"]
+
+
+def test_active_implementation_milestone_with_unmet_design_gate_fails() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"][0]["design_gates"] = [
+        production_design_gate("docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md")
+    ]
+    planning = ProductionPlanningState.model_validate(state)
+
+    errors = validate_design_gates(planning)
+    assert errors
+    assert "does not match required 'accepted'" in errors[0]
+
+
+def test_active_design_milestone_may_resolve_unmet_design_gate() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"][1]["design_gates"] = [
+        production_design_gate("docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md")
+    ]
+    planning = ProductionPlanningState.model_validate(state)
+
+    assert validate_design_gates(planning) == []
+
+
+def test_generated_production_docs_stale_check_detects_difference(tmp_path: Path) -> None:
+    generated = tmp_path / "production-track-index.md"
+    generated.write_text("old\n", encoding="utf-8")
+
+    assert stale_production_outputs({generated: "new\n"})
+
+
+def test_non_open_world_production_track_validates() -> None:
+    state = valid_production_state()
+    state["tracks"][0]["id"] = "PT-DRAW"
+    state["tracks"][0]["title"] = "Drawing production track"
+    state["tracks"][0]["strategic_goal"] = "Prove drawing workflow production planning."
+    state["tracks"][0]["milestones"] = [
+        production_milestone("PM-DRAW-001", roadmap_links=["WR-001"])
+    ]
+    planning = ProductionPlanningState.model_validate(state)
+
+    assert validate_roadmap_links(planning) == []
+    assert validate_design_gates(planning) == []
+
+
+def test_production_plan_valid_link_prints_expected_contract_path() -> None:
+    result = CliRunner().invoke(
+        production_plan_app,
+        ["plan", "--milestone", "PM-SDF-OW-001", "--roadmap", "WR-019"],
+    )
+
+    assert result.exit_code == 0
+    assert "docs-site/src/content/docs/reports/implementation-plans/wr-019-field-visualizer-product-workflow/plan.md" in result.stdout
+    assert "Next action: write_promotion_contract" in result.stdout
+
+
+def test_production_plan_unlinked_wr_fails(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    with pytest.raises(WorkflowError, match="not linked"):
+        resolve_plan_context("PM-TEST-001", "WR-002", production_source=production_path, roadmap_source=roadmap_path)
+
+
+def test_production_plan_unknown_milestone_fails(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    with pytest.raises(WorkflowError, match="not present in production tracks"):
+        resolve_plan_context("PM-TEST-999", "WR-001", production_source=production_path, roadmap_source=roadmap_path)
+
+
+def test_production_plan_unknown_wr_fails(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    with pytest.raises(WorkflowError, match="not present in roadmap source"):
+        resolve_plan_context("PM-TEST-001", "WR-999", production_source=production_path, roadmap_source=roadmap_path)
+
+
+def test_ready_next_row_classifies_as_promotion_contract() -> None:
+    context = production_plan_context(roadmap_state="ready_next")
+
+    assert classify_plan_action(context) == "write_promotion_contract"
+
+
+def test_current_candidate_row_classifies_as_implementation_contract() -> None:
+    context = production_plan_context(roadmap_state="current_candidate")
+
+    assert classify_plan_action(context) == "write_implementation_contract"
+
+
+def test_unmet_gate_classifies_as_design_first() -> None:
+    context = production_plan_context(
+        roadmap_state="current_candidate",
+        production_gate=production_design_gate(
+            "docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md"
+        ),
+    )
+
+    assert classify_plan_action(context) == "design_first"
+
+
+def test_completed_row_classifies_as_already_completed() -> None:
+    context = production_plan_context(roadmap_state="completed")
+
+    assert classify_plan_action(context) == "already_completed"
+
+
+def test_production_plan_default_command_does_not_write_scaffold(tmp_path: Path) -> None:
+    target = tmp_path / "plan.md"
+    result = CliRunner().invoke(
+        production_plan_app,
+        ["plan", "--milestone", "PM-SDF-OW-001", "--roadmap", "WR-019", "--out", str(target)],
+    )
+
+    assert result.exit_code == 0
+    assert not target.exists()
+
+
+def test_write_scaffold_writes_and_refuses_overwrite(tmp_path: Path) -> None:
+    context = production_plan_context()
+    target = tmp_path / "plan.md"
+
+    write_contract_scaffold(context, "write_implementation_contract", target)
+
+    assert target.exists()
+    with pytest.raises(WorkflowError, match="already exists"):
+        write_contract_scaffold(context, "write_implementation_contract", target)
+    write_contract_scaffold(context, "write_implementation_contract", target, force=True)
+
+
+def test_default_contract_path_uses_wr_id_and_title_slug() -> None:
+    context = production_plan_context()
+
+    assert repo_path(default_contract_path(context.roadmap_item)).endswith(
+        "docs-site/src/content/docs/reports/implementation-plans/wr-001-wr-001-title/plan.md"
+    )
 
 
 def test_document_frontmatter_status_handles_crlf(tmp_path: Path) -> None:

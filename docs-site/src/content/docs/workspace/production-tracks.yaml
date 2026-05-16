@@ -1,0 +1,238 @@
+version: 1
+production:
+  title: Runenwerk Production Tracks
+  last_reviewed: "2026-05-16"
+  owner: workspace
+render:
+  production_index: docs-site/src/content/docs/workspace/production-track-index.md
+  milestone_register: docs-site/src/content/docs/workspace/production-milestone-register.md
+  track_roadmap: docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+tracks:
+  - id: PT-SDF-OW
+    title: SDF-first open-world playable vertical
+    state: active
+    owner: workspace
+    strategic_goal: Prove the SDF-first field-world architecture through a playable, visible, inspectable open world.
+    success_criteria:
+      - Player movement, world rendering, strict query products, diagnostics, and content products are integrated through production contracts.
+      - Deferred world capabilities move through design gates before implementation, not through one-off prototype shortcuts.
+      - The track remains extensible for caves, multiplayer, richer simulation, advanced VFX, and gameplay systems.
+    milestones:
+      - id: PM-SDF-OW-001
+        title: Production product spine
+        kind: implementation
+        state: active
+        goal: Establish the product-backed editor and runtime spine needed before richer world capabilities are implemented.
+        outcome: Field visualization, source-backed asset adapters, material preview products, and renderer handoff are planned and executed through WR roadmap rows.
+        dependencies: []
+        roadmap_links:
+          - WR-019
+          - WR-026
+          - WR-021
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-first-production-capability-map.md
+            required_status: accepted
+            reason: Production planning must preserve the accepted SDF-first capability map.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/field-visualizer-product-workflow-design.md
+            required_status: active
+            reason: Field visualization must remain a viewport product workflow.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+            required_status: active
+            reason: Asset adapters must consume domain asset contracts instead of becoming semantic truth.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+            required_status: active
+            reason: Material preview work must keep material documents as source truth.
+        evidence_gates: []
+        acceptance_criteria:
+          - Product debug, asset catalog adapters, material preview products, and renderer handoff are validated through their WR closeouts.
+          - No product workflow adds a parallel viewer, asset truth store, or renderer-owned semantic source.
+      - id: PM-SDF-OW-002
+        title: Open world substrate design
+        kind: design
+        state: active
+        goal: Promote the world-substrate design required for endless SDF terrain, material fields, collision queries, streaming, and diagnostics.
+        outcome: Owning designs identify product formats, mutation paths, residency, strict query behavior, and diagnostics before implementation.
+        dependencies:
+          - PM-SDF-OW-001
+        roadmap_links:
+          - WR-001
+          - WR-014
+          - WR-015
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md
+            required_status: accepted
+            reason: World substrate work must follow the accepted SDF-first architecture.
+          - kind: design
+            path: docs-site/src/content/docs/design/deferred/sdf-world-production-slice-design.md
+            required_status: accepted
+            reason: The deferred production slice must be reworked into accepted implementation guidance before substrate implementation expands.
+        evidence_gates: []
+        acceptance_criteria:
+          - Terrain, material, collision/query, render, diagnostics, and streaming ownership are accepted before execution.
+          - The design preserves future caves, interiors, multiplayer authority, and world-process simulation.
+      - id: PM-SDF-OW-003
+        title: Playable SDF character
+        kind: design
+        state: designing
+        goal: Define the production character contract for a controllable SDF player moving on strict world query products.
+        outcome: Character body, pose, motion, collision, render, interaction emitters, and diagnostics have accepted ownership and product boundaries.
+        dependencies:
+          - PM-SDF-OW-002
+        roadmap_links:
+          - WR-014
+          - WR-015
+          - WR-022
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md
+            required_status: accepted
+            reason: Player character implementation requires accepted animated spatial entity product ownership.
+          - kind: design
+            path: docs-site/src/content/docs/design/deferred/sdf-physics-collision-system-design.md
+            required_status: accepted
+            reason: Player movement must consume strict collision/query products.
+        evidence_gates: []
+        acceptance_criteria:
+          - The player can walk, idle, and run using SDF-aware motion and strict query products.
+          - Footstep, trample, wetness, and diagnostics hooks are explicit products or events, not renderer side effects.
+      - id: PM-SDF-OW-004
+        title: Atmosphere and material response
+        kind: design
+        state: designing
+        goal: Define time, celestial, fog, exposure, material response, and diagnostic products for day/night production identity.
+        outcome: Day/night becomes a world/render product family, not a renderer color shortcut.
+        dependencies:
+          - PM-SDF-OW-002
+        roadmap_links:
+          - WR-014
+          - WR-015
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/deferred/day-night-atmosphere-system-design.md
+            required_status: accepted
+            reason: Day/night implementation requires accepted product and schedule ownership.
+        evidence_gates: []
+        acceptance_criteria:
+          - Time, celestial, atmosphere, material response, and diagnostics products are accepted.
+          - Future gameplay schedules and multiplayer authority remain possible.
+      - id: PM-SDF-OW-005
+        title: Vegetation field interaction
+        kind: design
+        state: designing
+        goal: Define grass and reed products for density, wind, trample, recovery, LOD, water response, and diagnostics.
+        outcome: Vegetation is planned as deterministic field products rather than per-blade authored state.
+        dependencies:
+          - PM-SDF-OW-003
+          - PM-SDF-OW-004
+        roadmap_links:
+          - WR-014
+          - WR-015
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/deferred/field-vegetation-system-design.md
+            required_status: accepted
+            reason: Vegetation implementation requires accepted field-product contracts.
+        evidence_gates: []
+        acceptance_criteria:
+          - Grass responds to player motion and wind through products with visible diagnostics.
+          - Near, mid, and far LOD behavior remains stable and inspectable.
+      - id: PM-SDF-OW-006
+        title: SDF prefab production set
+        kind: design
+        state: designing
+        goal: Define source-backed SDF prefab production for trees, rocks, ruins, riverbanks, props, placement, collision, render, and diagnostics.
+        outcome: Prefabs become reusable field compositions with product outputs rather than mesh-centric object bundles.
+        dependencies:
+          - PM-SDF-OW-002
+        roadmap_links:
+          - WR-022
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md
+            required_status: accepted
+            reason: Runtime prefab instancing requires accepted prefab product ownership.
+        evidence_gates: []
+        acceptance_criteria:
+          - Trees, rocks, and ruins have source identity, placement rules, render products, collision/query products, and diagnostics.
+          - Procedural placement and authored placement can share the same product contract.
+      - id: PM-SDF-OW-007
+        title: Water and wetness fields
+        kind: design
+        state: designing
+        goal: Define rivers, lakes, flow, wetness, shoreline response, query products, and diagnostics without requiring full fluid simulation.
+        outcome: Water is a field product family with explicit interaction and render handoff.
+        dependencies:
+          - PM-SDF-OW-004
+          - PM-SDF-OW-006
+        roadmap_links:
+          - WR-014
+          - WR-015
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/deferred/water-wetness-field-system-design.md
+            required_status: accepted
+            reason: Water implementation requires accepted wetness, flow, query, and render product contracts.
+        evidence_gates: []
+        acceptance_criteria:
+          - Rivers, lakes, wet shorelines, simple query products, and diagnostics are accepted.
+          - Future fluids and erosion remain compatible with the field-product model.
+      - id: PM-SDF-OW-008
+        title: Enemy and influence AI proof
+        kind: design
+        state: designing
+        goal: Define SDF enemy, basic animation, threat/perception influence, and simple AI integration over field products.
+        outcome: Enemy behavior uses explicit gameplay/influence contracts without requiring the full gameplay graph first.
+        dependencies:
+          - PM-SDF-OW-003
+          - PM-SDF-OW-006
+        roadmap_links:
+          - WR-011
+          - WR-014
+          - WR-015
+          - WR-022
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/deferred/field-influence-ai-system-design.md
+            required_status: accepted
+            reason: Enemy implementation requires accepted influence/perception query contracts.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
+            required_status: accepted
+            reason: Any gameplay-graph integration must wait for accepted gameplay lowering contracts.
+        evidence_gates: []
+        acceptance_criteria:
+          - Enemies emit and consume explicit influence/perception products.
+          - Basic enemy behavior does not create hidden renderer or gameplay graph authority.
+      - id: PM-SDF-OW-009
+        title: Production hardening and playable evidence
+        kind: hardening
+        state: designing
+        goal: Validate the integrated playable vertical through performance, residency, diagnostics, hot reload, and closeout evidence.
+        outcome: The first production vertical is complete only when the combined acceptance criteria are observed and documented.
+        dependencies:
+          - PM-SDF-OW-005
+          - PM-SDF-OW-007
+          - PM-SDF-OW-008
+        roadmap_links:
+          - WR-018
+          - WR-019
+          - WR-021
+          - WR-022
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
+            required_status: accepted
+            reason: Hardening must use accepted diagnostics, residency, fallback, and freshness rules.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/execution-fabric-and-product-jobs-design.md
+            required_status: accepted
+            reason: Integrated production execution must use accepted product-job and barrier rules.
+        evidence_gates: []
+        acceptance_criteria:
+          - A player can move through an SDF field, observe day/night, affect vegetation, approach prefabs, see water/wetness, encounter enemies, and inspect diagnostics.
+          - LOD, freshness, fallback, residency, and product-lineage diagnostics are stable enough for continued production.

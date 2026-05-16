@@ -28,6 +28,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - [New Design Intake](./new-design-intake.md)
 - [Parallel Roadmap Batch](./parallel-roadmap-batch.md)
 - [Phase Completion Drift Check](./phase-completion-drift-check.md)
+- [Production Implementation Contract](./production-implementation-contract.md)
 - [Roadmap Milestone Kickoff](./roadmap-milestone-kickoff.md)
 
 ## Rules

@@ -21,10 +21,19 @@ legend right
   Context nodes are direct dependencies and are not selectable here.
 endlegend
 
-package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+package "Immediate Dependency Context" {
+  component "WR-003 Render contract follow-ups\nstate=support_only\nV4 B2" as RENDER <<context>>
+
+  component "WR-018 Rendered World V1\nstate=completed\nV5 B2" as RENDERWORLD <<context>>
 
 }
 
+package "Current Implementation Candidates" {
+  component "WR-019 Field Visualizer workflow\nstate=current_candidate\nscore=2.4 V4 B2\ncall=product-backed field debug\nno parallel viewer path" as FIELDVIS <<candidate>>
+
+}
+
+RENDERWORLD -down-> FIELDVIS : dependency context
+RENDER -down-> FIELDVIS : dependency context
 
 @enduml

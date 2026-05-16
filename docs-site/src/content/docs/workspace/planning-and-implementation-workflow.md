@@ -34,12 +34,16 @@ Use the workflow kickoff helper when starting a new AI-assisted task:
 task --list
 task batch:kickoff -- --next
 task roadmap:intake -- --idea "<design or change idea>"
+task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
+task production:validate
+task production:check
 task ai:architecture-governance -- --task "<decision>" --scope "<crate/files/subsystem>"
 task ai:parallel-roadmap-batch -- --task "<batch goal>" --scope "<roadmap rows or docs>"
 task ai:implementation -- --task "<task>" --scope "<crate/files/subsystem>"
 task ai:closeout -- --task "<completed phase>" --roadmap "<owning roadmap/design path>"
 task roadmap:validate
 task roadmap:check
+task planning:validate
 task puml:validate
 task batch:propose -- --goal "<batch goal>" --scope "L0"
 task docs:validate
@@ -60,6 +64,15 @@ Validation commands execute checks:
   dependencies, gates, and write-scope overlap.
 - `task roadmap:check` rejects stale generated roadmap Markdown
   and PUML.
+- `task production:validate` checks `production-tracks.yaml` structure,
+  milestone dependencies, design gates, evidence gates, and WR links.
+- `task production:check` rejects stale generated production Markdown,
+  PUML, and JSON Schema.
+- `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` prints a
+  readiness report and reusable implementation-contract prompt for one
+  production milestone and WR row.
+- `task planning:validate` runs the roadmap, production, and docs planning
+  gates together.
 - `task puml:validate` validates workspace PlantUML diagrams with PlantUML.
 
 There is no repository-managed remote CI. Run `task ci:local` explicitly before
@@ -79,6 +92,14 @@ Run task batch:kickoff -- --next and follow the generated workflow.
 Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
 ```
 
+```text
+Run task planning:validate before changing production or roadmap planning state.
+```
+
+```text
+Run task production:plan -- --milestone PM-SDF-OW-001 --roadmap WR-019 before writing a substantial production implementation contract.
+```
+
 `batch:kickoff` creates the proposed batch from current `planning_state=current_candidate`
 items and prints the exact approve, prepare, validate, worker prompt, scope-check,
 and closeout commands. It does not approve implementation unless `--approve` is
@@ -88,6 +109,16 @@ explicitly passed.
 `roadmap-items.yaml`; accepted proposals are applied with
 `task roadmap:apply-intake -- --proposal <proposal.yaml>`, then rendered and
 validated.
+
+Production tracks are the long-term sequencing layer. Review
+`production-tracks.yaml` before choosing roadmap rows for broad product work.
+If the relevant production milestone is `designing`, do the design or ADR work
+first. If it is `ready_next` or `active`, use its WR links to inspect the legal
+roadmap execution rows. The production track guides direction; the WR roadmap
+still governs implementation eligibility.
+Use `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` as the
+normal bridge from production intent to a durable implementation contract. The
+command is read-only unless `--write-scaffold` is explicitly passed.
 
 Codex CLI `/goal` is execution persistence, not roadmap authority. Use it only
 after there is a written execution contract from a plan, batch, accepted design,
@@ -138,6 +169,10 @@ Runenwerk work usually falls into one of four shapes:
 
 Choose the shape explicitly so AI-assisted work does not drift from a small answer into a broad refactor, from a plan into unapproved implementation, or from implementation into undocumented architecture.
 
+For long-term product sequencing, first identify the production track and
+milestone in `production-tracks.yaml`. Then decide whether the next step is
+design work, WR roadmap intake/promotion, bounded implementation, or closeout.
+
 ## Start Every Task
 
 Before changing files:
@@ -157,6 +192,8 @@ Preserve unrelated dirty work. If a dirty file is relevant, inspect its current 
 |---|---|---|
 | Investigation | The goal is to understand current state, find gaps, or compare options without editing. | `AGENTS.md`, owning docs, current code/tests |
 | Planning or design | The goal is to decide architecture, ownership, API shape, phase sequence, or whether a refactor is justified. | `docs-site/src/content/docs/design/`, `docs-site/src/content/docs/workspace/documentation-structure.md`, prompt templates |
+| Production track planning | The goal is to choose or update long-term product outcomes before selecting WR execution rows. | `docs-site/src/content/docs/workspace/production-track-planning-model.md`, `docs-site/src/content/docs/workspace/production-tracks.yaml` |
+| Production implementation contract | The goal is to turn one production milestone and WR row into a reviewed work package before code changes. | `docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md`, `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` |
 | Bounded implementation | The goal is to make a scoped code/docs change and verify it. | `docs-site/src/content/docs/workspace/prompt-templates/implementation-batch.md`, relevant routine docs |
 | Roadmap milestone | The goal is to implement a named phase from an accepted roadmap or design. | `docs-site/src/content/docs/workspace/prompt-templates/roadmap-milestone-kickoff.md`, owning roadmap/design |
 | Code refactor | The goal is behavior-preserving cleanup, boundary repair, naming, or API ergonomics. | `docs-site/src/content/docs/workspace/routines/code-refactor-routine.md` |

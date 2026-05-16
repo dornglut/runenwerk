@@ -1,0 +1,68 @@
+@startuml
+title Runenwerk Production Tracks
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+skinparam component {
+  BackgroundColor<<active>> #FFF2CC
+  BorderColor<<active>> #AA7700
+  BackgroundColor<<ready_next>> #DDEEFF
+  BorderColor<<ready_next>> #004488
+  BackgroundColor<<designing>> #EFE6FF
+  BorderColor<<designing>> #6741A3
+  BackgroundColor<<blocked>> #F4F4F4
+  BorderColor<<blocked>> #777777
+  BackgroundColor<<deferred>> #EEEEEE
+  BorderColor<<deferred>> #666666
+  FontColor<<deferred>> #666666
+  BackgroundColor<<completed>> #DFF3DF
+  BorderColor<<completed>> #267326
+}
+
+legend right
+  <b>Production Tracks</b>
+  Milestones express coherent long-term outcomes.
+  WR links remain the legal implementation graph.
+  Designing milestones resolve architecture before implementation.
+endlegend
+
+package "PT-SDF-OW SDF-first open-world playable vertical" {
+  component "PM-SDF-OW-001 Production product spine\nkind=implementation\nstate=active\nWR=WR-019, WR-026, WR-021" as PM_SDF_OW_001 <<active>>
+
+  component "PM-SDF-OW-002 Open world substrate design\nkind=design\nstate=active\nWR=WR-001, WR-014, WR-015" as PM_SDF_OW_002 <<active>>
+
+  component "PM-SDF-OW-003 Playable SDF character\nkind=design\nstate=designing\nWR=WR-014, WR-015, WR-022" as PM_SDF_OW_003 <<designing>>
+
+  component "PM-SDF-OW-004 Atmosphere and material response\nkind=design\nstate=designing\nWR=WR-014, WR-015" as PM_SDF_OW_004 <<designing>>
+
+  component "PM-SDF-OW-005 Vegetation field interaction\nkind=design\nstate=designing\nWR=WR-014, WR-015" as PM_SDF_OW_005 <<designing>>
+
+  component "PM-SDF-OW-006 SDF prefab production set\nkind=design\nstate=designing\nWR=WR-022" as PM_SDF_OW_006 <<designing>>
+
+  component "PM-SDF-OW-007 Water and wetness fields\nkind=design\nstate=designing\nWR=WR-014, WR-015" as PM_SDF_OW_007 <<designing>>
+
+  component "PM-SDF-OW-008 Enemy and influence AI proof\nkind=design\nstate=designing\nWR=WR-011, WR-014, WR-015, WR-022" as PM_SDF_OW_008 <<designing>>
+
+  component "PM-SDF-OW-009 Production hardening and playable evidence\nkind=hardening\nstate=designing\nWR=WR-018, WR-019, WR-021, WR-022" as PM_SDF_OW_009 <<designing>>
+
+}
+
+PM_SDF_OW_001 -down-> PM_SDF_OW_002 : production prerequisite
+PM_SDF_OW_002 -down-> PM_SDF_OW_003 : production prerequisite
+PM_SDF_OW_002 -down-> PM_SDF_OW_004 : production prerequisite
+PM_SDF_OW_003 -down-> PM_SDF_OW_005 : production prerequisite
+PM_SDF_OW_004 -down-> PM_SDF_OW_005 : production prerequisite
+PM_SDF_OW_002 -down-> PM_SDF_OW_006 : production prerequisite
+PM_SDF_OW_004 -down-> PM_SDF_OW_007 : production prerequisite
+PM_SDF_OW_006 -down-> PM_SDF_OW_007 : production prerequisite
+PM_SDF_OW_003 -down-> PM_SDF_OW_008 : production prerequisite
+PM_SDF_OW_006 -down-> PM_SDF_OW_008 : production prerequisite
+PM_SDF_OW_005 -down-> PM_SDF_OW_009 : production prerequisite
+PM_SDF_OW_007 -down-> PM_SDF_OW_009 : production prerequisite
+PM_SDF_OW_008 -down-> PM_SDF_OW_009 : production prerequisite
+
+@enduml

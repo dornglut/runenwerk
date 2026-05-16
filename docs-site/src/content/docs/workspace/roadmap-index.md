@@ -20,9 +20,15 @@ Operational execution checklist:
 
 - [workspace/architecture-governance-review.md](./architecture-governance-review.md)
 - [workspace/parallel-roadmap-batch-automation.md](./parallel-roadmap-batch-automation.md)
+- [workspace/production-track-planning-model.md](./production-track-planning-model.md)
+- [workspace/production-tracks.yaml](./production-tracks.yaml)
+- [workspace/production-track-index.md](./production-track-index.md)
+- [workspace/production-milestone-register.md](./production-milestone-register.md)
 - [workspace/roadmap-items.yaml](./roadmap-items.yaml)
+- [workspace/schemas/production-tracks.schema.json](./schemas/production-tracks.schema.json)
 - [workspace/schemas/roadmap-items.schema.json](./schemas/roadmap-items.schema.json)
 - [workspace/schemas/batch-manifest.schema.json](./schemas/batch-manifest.schema.json)
+- [workspace/diagrams/production-track-roadmap.puml](./diagrams/production-track-roadmap.puml)
 - [workspace/diagrams/codex-roadmap-orchestration-target.puml](./diagrams/codex-roadmap-orchestration-target.puml)
 - [workspace/diagrams/parallel-roadmap-batch-automation.puml](./diagrams/parallel-roadmap-batch-automation.puml)
 - [workspace/diagrams/design-intake-roadmap-automation.puml](./diagrams/design-intake-roadmap-automation.puml)
@@ -43,6 +49,14 @@ Operational execution checklist:
   - [workspace/architecture-governance-review.md](./architecture-governance-review.md)
 - Workspace planning method and scorecard policy:
   - [workspace/planning-methods.md](./planning-methods.md)
+- Production track planning model:
+  - [workspace/production-track-planning-model.md](./production-track-planning-model.md)
+- Structured production track source:
+  - [workspace/production-tracks.yaml](./production-tracks.yaml)
+- Generated production track index:
+  - [workspace/production-track-index.md](./production-track-index.md)
+- Generated production milestone register:
+  - [workspace/production-milestone-register.md](./production-milestone-register.md)
 - Structured workspace roadmap source:
   - [workspace/roadmap-items.yaml](./roadmap-items.yaml)
 - Workspace roadmap scorecard and decision register:

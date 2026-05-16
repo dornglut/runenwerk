@@ -1,0 +1,30 @@
+id = "2026-05-16-next-current-candidate-roadmap-batch-wr-019"
+goal = "Next current-candidate roadmap batch: WR-019 Field Visualizer product workflow"
+approval_state = "approved"
+base_branch = "main"
+base_sha = "68a14bab12114c5080a804e109483b542bb6ecda"
+execution_mode = "worktree"
+integration_risk = "isolated worktrees"
+integration_status = "not_started"
+closeout_status = "not_started"
+integrated_target = ""
+integrated_sha = ""
+validation_results = []
+roadmap_evidence_updates = []
+tooling_hardening = []
+
+[[items]]
+id = "WR-019"
+title = "Field Visualizer product workflow"
+lane = "Product workflow"
+dependency_level = "L2"
+gate = "After rendered-world V1"
+score = 2.4
+branch = "codex/2026-05-16-next-current-candidate-roadmap-batch-wr-019-wr-019"
+worktree = "C:/Users/joshi/Projekte/Runenwerk-worktrees/2026-05-16-next-current-candidate-roadmap-batch-wr-019/WR-019"
+worktree_cleanup = ""
+prompt_path = "docs-site/src/content/docs/reports/batches/2026-05-16-next-current-candidate-roadmap-batch-wr-019/prompts/wr-019.md"
+status = "approved"
+roadmap_outcome = "unknown"
+write_scopes = ["apps/runenwerk_editor", "domain/editor", "docs-site/src/content/docs/design/active", "docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md"]
+validations = ["cargo test -p runenwerk_editor viewport", "cargo test -p engine render_product_selection"]
