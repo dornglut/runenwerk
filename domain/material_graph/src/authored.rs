@@ -2,10 +2,12 @@
 //! Purpose: Authored material graph document contracts.
 
 use graph::GraphDefinition;
+use serde::{Deserialize, Serialize};
 
 use crate::MaterialGraphDocumentId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MaterialOutputTarget {
     PbrPreview,
     FieldMaterialChannel,

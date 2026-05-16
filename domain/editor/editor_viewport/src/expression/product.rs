@@ -21,6 +21,7 @@ pub enum ExpressionProductKind {
     VolumeSlice2D,
     BrickmapDebug2D,
     HistoryColor2D,
+    MaterialPreview2D,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -33,6 +34,7 @@ pub enum ExpressionSourceRealityClass {
     DerivedAsset,
     DerivedVolume,
     DerivedHistory,
+    DerivedMaterial,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -143,9 +145,36 @@ mod tests {
             ExpressionProductKind::VolumeSlice2D,
             ExpressionProductKind::BrickmapDebug2D,
             ExpressionProductKind::HistoryColor2D,
+            ExpressionProductKind::MaterialPreview2D,
         ];
 
-        assert_eq!(future_products.len(), 6);
+        assert_eq!(future_products.len(), 7);
+    }
+
+    #[test]
+    fn material_preview_descriptor_uses_derived_material_reality_class() {
+        let descriptor = ExpressionProductDescriptor::new(
+            ExpressionProductId(42),
+            ExpressionProductKind::MaterialPreview2D,
+            ExpressionDimensions::new(512, 512),
+            ExpressionFormat::Rgba8Unorm,
+            "material.preview",
+            ExpressionSourceRealityClass::DerivedMaterial,
+            RealityVersion(3),
+            ExpressionFreshness::Current,
+            ExpressionPresentationHints {
+                srgb: true,
+                premultiplied_alpha: false,
+                y_flipped: false,
+            },
+            None,
+        );
+
+        assert_eq!(descriptor.kind, ExpressionProductKind::MaterialPreview2D);
+        assert_eq!(
+            descriptor.source_reality_class,
+            ExpressionSourceRealityClass::DerivedMaterial
+        );
     }
 
     #[test]

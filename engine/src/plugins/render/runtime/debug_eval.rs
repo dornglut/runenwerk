@@ -583,6 +583,46 @@ mod tests {
     }
 
     #[test]
+    fn material_handoff_feature_resource_reaches_material_render_feature_contribution() {
+        let mut world = test_world();
+        world.insert_resource(PreparedMaterialFeatureResource {
+            status: FeatureContributionStatus::Ready,
+            fallback_policy: FeatureFallbackPolicy::ReuseLastGood,
+            payload: PreparedMaterialFeatureContribution {
+                instances: vec![PreparedMaterialInstanceInput {
+                    material_instance_id: "material.product.42".to_string(),
+                    specialization_key_fragment: "material.first_slice.render_material".to_string(),
+                    parameter_blob: b"roughness:Scalar".to_vec(),
+                }],
+            },
+        });
+
+        let contributions = frame_prepare::build_frame_feature_contributions(
+            &world,
+            "world".to_string(),
+            "overlay".to_string(),
+            &[],
+        );
+
+        let material = contributions
+            .feature(&MATERIAL_RENDER_FEATURE_ID)
+            .expect("material contribution should be published");
+        assert_eq!(material.status, FeatureContributionStatus::Ready);
+        assert_eq!(
+            material.fallback_policy,
+            FeatureFallbackPolicy::SkipFeaturePasses
+        );
+        let PreparedFeaturePayload::Material(payload) = &material.payload else {
+            panic!("material feature should carry material payload");
+        };
+        assert_eq!(payload.instances.len(), 1);
+        assert_eq!(
+            payload.instances[0].specialization_key_fragment,
+            "material.first_slice.render_material"
+        );
+    }
+
+    #[test]
     fn prepare_inserts_missing_gate_for_execution_referenced_feature_without_payload() {
         let world = test_world();
         let execution_feature_ids = vec![CUSTOM_FEATURE_ID];

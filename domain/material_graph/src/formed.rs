@@ -114,6 +114,17 @@ impl FormedMaterialProduct {
             cache_key,
         }
     }
+
+    pub fn with_product_id(mut self, product_id: MaterialProductId) -> Self {
+        self.product_id = product_id;
+        self.product_core = material_product_core(
+            self.product_id,
+            self.source_document_id,
+            self.output_target,
+            &self.cache_key,
+        );
+        self
+    }
 }
 
 fn material_product_core(

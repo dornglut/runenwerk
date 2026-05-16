@@ -12,28 +12,28 @@ use editor_shell::{
     EntityTableSurfaceAction, EntityTableViewModel, InspectorFieldControlKind,
     InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
     InspectorObservedTarget, InspectorSessionMutation, InspectorSurfaceAction,
-    InspectorTargetViewModel, InspectorViewModel, OUTLINER_LIST_WIDGET_ID, ObservationConsumerKind,
-    ObservationFrameMetadata, ObservationSourceReality, OutlinerDomainMutation,
-    OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerSurfaceAction,
-    OutlinerViewModel, ResolvedSurfaceFrame, ShellCommand, SurfaceCommandProposal,
-    SurfaceDocumentContext, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
-    SurfacePresentationArtifactKind, SurfaceProviderAvailability, SurfaceProviderDescriptor,
-    SurfaceProviderDiagnostic, SurfaceProviderId, SurfaceProviderPriority, SurfaceProviderRequest,
-    SurfaceRouteTable, SurfaceSessionMutation, ToolSurfaceKind, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-    VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
-    VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
-    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
-    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
-    ViewportDomainMutation, ViewportObservationFrame, ViewportProductChoiceViewModel,
-    ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportViewModel,
-    build_console_panel, build_entity_table_panel, build_inspector_panel, build_outliner_panel,
-    build_self_authoring_control_panel, build_viewport_panel, editor_domain_proposal,
-    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
-    surface_session_proposal, surface_widget_id, tool_surface_capability_set,
-    tool_surface_definition_id, viewport_debug_stage_button_widget_id,
-    viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
-    viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
-    viewport_tool_radial_item_widget_id,
+    InspectorTargetViewModel, InspectorViewModel, MaterialSurfaceAction, OUTLINER_LIST_WIDGET_ID,
+    ObservationConsumerKind, ObservationFrameMetadata, ObservationSourceReality,
+    OutlinerDomainMutation, OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel,
+    OutlinerSurfaceAction, OutlinerViewModel, ResolvedSurfaceFrame, ShellCommand,
+    SurfaceCommandProposal, SurfaceDocumentContext, SurfaceLocalAction, SurfaceLocalRoute,
+    SurfacePresentationArtifact, SurfacePresentationArtifactKind, SurfaceProviderAvailability,
+    SurfaceProviderDescriptor, SurfaceProviderDiagnostic, SurfaceProviderId,
+    SurfaceProviderPriority, SurfaceProviderRequest, SurfaceRouteTable, SurfaceSessionMutation,
+    ToolSurfaceKind, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID,
+    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
+    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
+    ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
+    ViewportSurfaceAction, ViewportViewModel, build_console_panel, build_entity_table_panel,
+    build_inspector_panel, build_outliner_panel, build_self_authoring_control_panel,
+    build_viewport_panel, editor_domain_proposal, entity_table_sort_button_widget_id,
+    inspector_field_focus_widget_id, inspector_field_widget_id, surface_session_proposal,
+    surface_widget_id, tool_surface_capability_set, tool_surface_definition_id,
+    viewport_debug_stage_button_widget_id, viewport_field_color_ramp_button_widget_id,
+    viewport_field_component_button_widget_id, viewport_field_debug_mode_button_widget_id,
+    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState,
@@ -1894,7 +1894,7 @@ mod tests {
     }
 
     #[test]
-    fn material_graph_canvas_provider_resolves_descriptor_surface_without_routes() {
+    fn material_graph_canvas_provider_resolves_descriptor_surface_with_material_routes() {
         let registry = EditorSurfaceProviderRegistry::runenwerk_default();
         let app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
@@ -1910,8 +1910,41 @@ mod tests {
         assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
         assert_eq!(frame.provider_id, Some(MATERIAL_GRAPH_CANVAS_PROVIDER_ID));
         assert_eq!(frame.title, "Material Graph Canvas");
-        assert!(provider_frame_text(&frame).contains("canvas state is not material truth"));
-        assert!(frame.routes.is_empty());
+        assert!(
+            provider_frame_text(&frame).contains("domain/material_graph remains material truth")
+        );
+        assert!(!frame.routes.is_empty());
+    }
+
+    #[test]
+    fn material_provider_actions_map_to_epoch_carrying_shell_commands() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let asset_id = asset_id(101);
+        let request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+        let dispatch_context = SurfaceProviderDispatchContext {
+            projection_epoch: 77,
+            _marker: std::marker::PhantomData,
+        };
+
+        let proposal = registry
+            .map_action(
+                &dispatch_context,
+                &request,
+                MATERIAL_GRAPH_CANVAS_PROVIDER_ID,
+                SurfaceLocalAction::Material(MaterialSurfaceAction::BuildMaterialPreview {
+                    asset_id,
+                }),
+            )
+            .expect("material action should map")
+            .expect("material action should produce shell command");
+
+        assert!(matches!(
+            proposal,
+            SurfaceCommandProposal::Shell(ShellCommand::BuildMaterialPreview {
+                asset_id: mapped,
+                projection_epoch: 77,
+            }) if mapped == asset_id
+        ));
     }
 
     #[test]

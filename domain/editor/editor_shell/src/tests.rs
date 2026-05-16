@@ -15,13 +15,14 @@ use crate::{
     DockingPreviewDropTarget, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
     ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel, EntityTableComponentFilter,
     EntityTableHierarchyFilter, EntityTableSurfaceAction, ImportInspectorViewModel,
-    InspectorSurfaceAction, OutlinerSurfaceAction, PanelInstanceId, PanelKind,
-    ResolvedSurfaceFrame, RoutedShellAction, ShellCommand, SurfaceLocalAction, SurfaceLocalRoute,
-    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
-    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
-    UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
-    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    InspectorSurfaceAction, MaterialGraphCanvasViewModel, MaterialGraphSourceRowViewModel,
+    MaterialPreviewViewModel, MaterialSurfaceAction, OutlinerSurfaceAction, PanelInstanceId,
+    PanelKind, ResolvedSurfaceFrame, RoutedShellAction, ShellCommand, SurfaceLocalAction,
+    SurfaceLocalRoute, SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId,
+    SurfaceRouteTable, TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel,
+    ToolbarViewModel, UiInteraction, UiInteractionResults, ViewportSurfaceAction,
+    ViewportViewModel, WidgetId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis,
+    WorkspaceState, build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
     build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
     dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
     map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
@@ -87,6 +88,50 @@ fn asset_surface_contracts_use_typed_asset_ids_and_epoch_commands() {
     assert_eq!(
         SurfaceLocalAction::Asset(AssetSurfaceAction::SelectAsset { asset_id }),
         SurfaceLocalAction::Asset(AssetSurfaceAction::SelectAsset { asset_id })
+    );
+}
+
+#[test]
+fn material_surface_contracts_use_typed_ids_and_epoch_commands() {
+    let asset_id = asset::asset_id(21);
+    let source_id = asset::asset_source_id(22);
+    let artifact_id = asset::asset_artifact_id(23);
+    let product_id = material_graph::MaterialProductId::new(24);
+    let canvas = MaterialGraphCanvasViewModel {
+        rows: vec![MaterialGraphSourceRowViewModel {
+            asset_id,
+            display_name: "Rock".to_string(),
+            stable_name: "rock".to_string(),
+            source_id: Some(source_id),
+            artifact_count: 1,
+            is_selected: true,
+            has_prior_valid_preservation: false,
+        }],
+        selected: None,
+        catalog_status_lines: Vec::new(),
+        diagnostic_lines: Vec::new(),
+    };
+    let preview = MaterialPreviewViewModel {
+        selected_asset_id: Some(asset_id),
+        active_product_id: Some(product_id),
+        artifact_id: Some(artifact_id),
+        viewport_product_id: Some(editor_viewport::ExpressionProductId(25)),
+        specialization_fragment: Some("material.first_slice.render_material".to_string()),
+        prepared_parameter_blob_bytes: 16,
+        preview_status_lines: Vec::new(),
+        diagnostic_lines: Vec::new(),
+    };
+    let command = ShellCommand::BuildMaterialPreview {
+        asset_id,
+        projection_epoch: 9,
+    };
+
+    assert_eq!(canvas.rows[0].source_id, Some(source_id));
+    assert_eq!(preview.active_product_id, Some(product_id));
+    assert_eq!(command.projection_epoch(), Some(9));
+    assert_eq!(
+        SurfaceLocalAction::Material(MaterialSurfaceAction::BuildMaterialPreview { asset_id }),
+        SurfaceLocalAction::Material(MaterialSurfaceAction::BuildMaterialPreview { asset_id })
     );
 }
 

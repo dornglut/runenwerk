@@ -13,6 +13,7 @@ editor_core.workspace = true
 editor_definition.workspace = true
 editor_scene.workspace = true
 editor_viewport.workspace = true
+material_graph.workspace = true
 ui_input.workspace = true
 ui_definition.workspace = true
 ui_layout.workspace = true

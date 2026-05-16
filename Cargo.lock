@@ -848,6 +848,7 @@ dependencies = [
  "editor_viewport",
  "id",
  "id_macros",
+ "material_graph",
  "ratification",
  "ron",
  "serde",
@@ -1725,6 +1726,7 @@ dependencies = [
  "graph",
  "product",
  "ratification",
+ "serde",
 ]
 
 [[package]]

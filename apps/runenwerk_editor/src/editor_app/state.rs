@@ -12,6 +12,10 @@ use crate::asset_pipeline::{
     EditorFieldProductPublicationJournalEntry, ImportJobStatus, catalog_with_import_artifact,
     execute_import_for_asset, load_project_catalog, save_project_catalog,
 };
+use crate::material_lab::{
+    EditorMaterialPreviewPublication, EditorMaterialPreviewPublicationJournalEntry,
+    MaterialLabRuntime,
+};
 use crate::runtime::procgen::ProcgenRuntimeState;
 use crate::runtime::viewport::{
     EditorViewportGpuResidencyJournalEntry, EditorViewportGpuResidencySummary,
@@ -34,9 +38,13 @@ pub struct RunenwerkEditorApp {
     pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
+    pub(crate) material_lab_runtime: MaterialLabRuntime,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
     pub(crate) field_product_publication_journal: Vec<EditorFieldProductPublicationJournalEntry>,
+    pub(crate) pending_material_preview_publications: Vec<EditorMaterialPreviewPublication>,
+    pub(crate) material_preview_publication_journal:
+        Vec<EditorMaterialPreviewPublicationJournalEntry>,
     pub(crate) viewport_query_snapshot_journal: Vec<EditorViewportQuerySnapshotJournalEntry>,
     pub(crate) last_viewport_query_snapshot_summary: Option<EditorViewportQuerySnapshotSummary>,
     pub(crate) viewport_render_selection_journal: Vec<EditorViewportRenderSelectionJournalEntry>,
@@ -66,9 +74,12 @@ impl RunenwerkEditorApp {
             pending_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
+            material_lab_runtime: MaterialLabRuntime::default(),
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
             pending_field_product_publications: Vec::new(),
             field_product_publication_journal: Vec::new(),
+            pending_material_preview_publications: Vec::new(),
+            material_preview_publication_journal: Vec::new(),
             viewport_query_snapshot_journal: Vec::new(),
             last_viewport_query_snapshot_summary: None,
             viewport_render_selection_journal: Vec::new(),
@@ -213,6 +224,14 @@ impl RunenwerkEditorApp {
         self.asset_project_session = Some(session);
     }
 
+    pub fn material_lab_runtime(&self) -> &MaterialLabRuntime {
+        &self.material_lab_runtime
+    }
+
+    pub fn material_lab_runtime_mut(&mut self) -> &mut MaterialLabRuntime {
+        &mut self.material_lab_runtime
+    }
+
     pub fn asset_catalog_status_lines(&self) -> Vec<String> {
         self.asset_project_session
             .as_ref()
@@ -324,7 +343,7 @@ impl RunenwerkEditorApp {
         Ok(())
     }
 
-    fn record_missing_asset_project_session(&mut self, action: &'static str) {
+    pub(crate) fn record_missing_asset_project_session(&mut self, action: &'static str) {
         self.asset_catalog_runtime
             .record_diagnostic(asset::AssetDiagnosticRecord::error(
                 asset::AssetDiagnosticCode::RatificationRejected,
@@ -352,6 +371,36 @@ impl RunenwerkEditorApp {
 
     pub fn pending_field_product_publication_count(&self) -> usize {
         self.pending_field_product_publications.len()
+    }
+
+    pub fn queue_material_preview_publication(
+        &mut self,
+        publication: EditorMaterialPreviewPublication,
+    ) {
+        self.pending_material_preview_publications.push(publication);
+    }
+
+    pub fn take_pending_material_preview_publications(
+        &mut self,
+    ) -> Vec<EditorMaterialPreviewPublication> {
+        std::mem::take(&mut self.pending_material_preview_publications)
+    }
+
+    pub fn pending_material_preview_publication_count(&self) -> usize {
+        self.pending_material_preview_publications.len()
+    }
+
+    pub fn material_preview_publication_journal(
+        &self,
+    ) -> &[EditorMaterialPreviewPublicationJournalEntry] {
+        &self.material_preview_publication_journal
+    }
+
+    pub fn record_material_preview_publication(
+        &mut self,
+        entry: EditorMaterialPreviewPublicationJournalEntry,
+    ) {
+        self.material_preview_publication_journal.push(entry);
     }
 
     pub fn field_product_publication_journal(

@@ -4,6 +4,7 @@ pub mod editor_features;
 pub mod editor_panels;
 pub mod editor_runtime;
 pub mod editor_tools_state;
+pub mod material_lab;
 pub mod persistence;
 pub mod runtime;
 pub mod shell;

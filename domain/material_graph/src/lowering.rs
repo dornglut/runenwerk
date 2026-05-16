@@ -1,6 +1,8 @@
 //! File: domain/material_graph/src/lowering.rs
 //! Purpose: Deterministic lowering from ratified material graph documents to formed product descriptors.
 
+use graph::{CyclePolicy, PortDirection};
+
 use crate::{
     FormedMaterialProduct, MaterialCacheKey, MaterialGraphDocument,
     MaterialGraphRatificationReport, MaterialNodeCatalog, MaterialOutputTarget,
@@ -78,7 +80,28 @@ fn deterministic_cache_key(document: &MaterialGraphDocument) -> MaterialCacheKey
         .graph
         .nodes
         .iter()
-        .map(|node| format!("{}:{}:{}", node.id.raw(), node.name, node.ports.len()))
+        .map(|node| {
+            let mut port_parts = node
+                .ports
+                .iter()
+                .map(|port| {
+                    format!(
+                        "{}:{}:{}:{}",
+                        port.id.raw(),
+                        port.name,
+                        port_direction_label(port.direction),
+                        port.port_type.raw()
+                    )
+                })
+                .collect::<Vec<_>>();
+            port_parts.sort();
+            format!(
+                "{}:{}:ports=[{}]",
+                node.id.raw(),
+                node.name,
+                port_parts.join("|")
+            )
+        })
         .collect::<Vec<_>>();
     node_parts.sort();
     let mut edge_parts = document
@@ -96,12 +119,37 @@ fn deterministic_cache_key(document: &MaterialGraphDocument) -> MaterialCacheKey
         .collect::<Vec<_>>();
     edge_parts.sort();
     MaterialCacheKey::new(format!(
-        "material-graph-{}-{}-nodes:{}-edges:{}",
+        "material-graph-v1-document={}:graph={}:graph_name={}:cycle={}:target={}:nodes={}:edges={}",
         document.document_id.raw(),
         document.graph.id.raw(),
+        document.graph.name,
+        cycle_policy_label(document.graph.cycle_policy),
+        output_target_label(document.output_target),
         node_parts.join(","),
-        edge_parts.join(",")
+        edge_parts.join(","),
     ))
+}
+
+fn output_target_label(output_target: MaterialOutputTarget) -> &'static str {
+    match output_target {
+        MaterialOutputTarget::PbrPreview => "pbr_preview",
+        MaterialOutputTarget::FieldMaterialChannel => "field_material_channel",
+        MaterialOutputTarget::RenderMaterial => "render_material",
+    }
+}
+
+fn cycle_policy_label(policy: CyclePolicy) -> &'static str {
+    match policy {
+        CyclePolicy::AllowDirectedCycles => "allow_directed_cycles",
+        CyclePolicy::RejectDirectedCycles => "reject_directed_cycles",
+    }
+}
+
+fn port_direction_label(direction: PortDirection) -> &'static str {
+    match direction {
+        PortDirection::Input => "input",
+        PortDirection::Output => "output",
+    }
 }
 
 #[cfg(test)]
@@ -207,5 +255,57 @@ mod tests {
             .expect("valid graph should form");
 
         assert_eq!(first.cache_key, second.cache_key);
+    }
+
+    #[test]
+    fn cache_key_changes_when_output_target_changes() {
+        let pbr_preview = MaterialGraphDocument::new(
+            crate::MaterialGraphDocumentId::new(9),
+            "deterministic",
+            pbr_graph(),
+            MaterialOutputTarget::PbrPreview,
+        );
+        let render_material = MaterialGraphDocument::new(
+            crate::MaterialGraphDocumentId::new(9),
+            "deterministic",
+            pbr_graph(),
+            MaterialOutputTarget::RenderMaterial,
+        );
+
+        let first = lower_material_graph(&pbr_preview, &MaterialNodeCatalog::first_slice())
+            .product
+            .expect("valid graph should form");
+        let second = lower_material_graph(&render_material, &MaterialNodeCatalog::first_slice())
+            .product
+            .expect("valid graph should form");
+
+        assert_ne!(first.cache_key, second.cache_key);
+    }
+
+    #[test]
+    fn cache_key_changes_when_port_contract_changes() {
+        let base = MaterialGraphDocument::new(
+            crate::MaterialGraphDocumentId::new(9),
+            "deterministic",
+            pbr_graph(),
+            MaterialOutputTarget::PbrPreview,
+        );
+        let mut changed_graph = pbr_graph();
+        changed_graph.nodes[0].ports[0].name = "albedo".to_string();
+        let changed = MaterialGraphDocument::new(
+            crate::MaterialGraphDocumentId::new(9),
+            "deterministic",
+            changed_graph,
+            MaterialOutputTarget::PbrPreview,
+        );
+
+        let first = lower_material_graph(&base, &MaterialNodeCatalog::first_slice())
+            .product
+            .expect("valid graph should form");
+        let second = lower_material_graph(&changed, &MaterialNodeCatalog::first_slice())
+            .product
+            .expect("valid graph should form");
+
+        assert_ne!(first.cache_key, second.cache_key);
     }
 }

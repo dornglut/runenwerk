@@ -25,6 +25,7 @@ use crate::runtime::viewport::{
     ViewportRenderStateResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
     ViewportSurfaceSlot, build_surface_binding_registry, ensure_editor_main_surface_set,
     expression_dimensions_for_bounds, initial_presentation_state, initial_product_descriptors,
+    material_preview_descriptor,
 };
 
 pub const VIEWPORT_DYNAMIC_TARGET_NAMESPACE: &str = "runenwerk.editor.viewport";
@@ -230,7 +231,15 @@ pub fn sync_viewport_presentation_products_system(
     for viewport_id in &canonical_viewport_ids {
         let product_dimensions =
             product_dimensions_for_viewport(*viewport_id, &viewport_render_states);
-        let descriptors = initial_product_descriptors(product_dimensions, source_version);
+        let mut descriptors = initial_product_descriptors(product_dimensions, source_version);
+        if let Some(material_preview) = host.app.material_lab_runtime().active_preview() {
+            descriptors.push(material_preview_descriptor(
+                material_preview.viewport_product_id,
+                product_dimensions,
+                source_version,
+                material_preview.product.specialization_fragment.0.clone(),
+            ));
+        }
         viewport_products_registry.update_viewport_descriptors(*viewport_id, descriptors.clone());
 
         let mut presentation_state = viewport_presentations
@@ -441,6 +450,10 @@ fn product_target_slots(
             ViewportSurfacePresentationSlot::Primary,
             ViewportSurfaceSlot::HistoryColor,
         )),
+        ExpressionProductKind::MaterialPreview2D => Some((
+            ViewportSurfacePresentationSlot::Primary,
+            ViewportSurfaceSlot::PrimaryColor,
+        )),
         ExpressionProductKind::Depth2D | ExpressionProductKind::Diagnostics2D => None,
     }
 }
@@ -517,7 +530,8 @@ fn usage_for_descriptor(descriptor: &ExpressionProductDescriptor) -> RenderTextu
         | ExpressionProductKind::Atlas2D
         | ExpressionProductKind::VolumeSlice2D
         | ExpressionProductKind::BrickmapDebug2D
-        | ExpressionProductKind::HistoryColor2D => RenderTextureTargetUsage {
+        | ExpressionProductKind::HistoryColor2D
+        | ExpressionProductKind::MaterialPreview2D => RenderTextureTargetUsage {
             color_attachment: false,
             depth_attachment: false,
             sampled: true,
@@ -686,6 +700,53 @@ mod tests {
                 .get(&HISTORY_COLOR_PRODUCT_ID)
                 .copied(),
             Some(ProducerHealth::Healthy)
+        );
+    }
+
+    #[test]
+    fn material_preview_products_are_selectable_primary_targets() {
+        let descriptor = descriptor(
+            ExpressionProductId(12),
+            ExpressionProductKind::MaterialPreview2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+
+        let target = product_target_record_for_descriptor(ViewportId(1), &descriptor)
+            .expect("material preview should map to a primary target");
+
+        assert_eq!(
+            target.key.presentation_slot,
+            ViewportSurfacePresentationSlot::Primary
+        );
+        assert_eq!(target.surface_slot, ViewportSurfaceSlot::PrimaryColor);
+        assert!(target.ui_sampleable);
+    }
+
+    #[test]
+    fn material_viewport_preview_selection_publishes_through_presentation_state() {
+        let material_product_id = ExpressionProductId(12);
+        let material_descriptor = material_preview_descriptor(
+            material_product_id,
+            ExpressionDimensions::new(320, 200),
+            RealityVersion(2),
+            "material.first_slice.render_material".to_string(),
+        );
+        let mut presentation_state = initial_presentation_state(ViewportId(1));
+        presentation_state.select_primary_product(material_product_id);
+
+        let frame = build_artifact_observation_frame(
+            &[material_descriptor],
+            &presentation_state,
+            RealityVersion(2),
+        );
+
+        assert_eq!(frame.selected_primary_product_id, Some(material_product_id));
+        assert_eq!(
+            frame
+                .availability_by_product
+                .get(&material_product_id)
+                .copied(),
+            Some(ProductAvailabilityState::Available)
         );
     }
 

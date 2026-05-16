@@ -935,7 +935,7 @@ items:
   lane: Product workflow
   dependency_level: L3
   gate: After rendered-world V1 and Field Visualizer
-  planning_state: ready_next
+  planning_state: completed
   priority: P1
   value: 4
   blocker: 2
@@ -952,19 +952,29 @@ items:
   - WR-019
   - WR-026
   write_scopes:
+  - Cargo.lock
   - apps/runenwerk_editor
+  - domain/asset
   - domain/editor
   - domain/material_graph
+  - engine/src/plugins/render
   - docs-site/src/content/docs/design/active
   - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-021-material-lab-and-material-preview-products/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md
   validations:
   - cargo test -p material_graph
   - cargo test -p runenwerk_editor material
   - cargo test -p runenwerk_editor viewport
   - task docs:validate
-  next_evidence: Source-backed MaterialGraphDocument, lowering/ratification, preview product, diagnostics, and render handoff.
-  current_decision: Promote Material Lab now as the FR-4 material preview/product handoff track, but implement it after multi-entity
-    viewport and field visualization stabilize.
+  next_evidence: Completed WR-021 implementation in the prepared batch worktree with source-backed material graph persistence,
+    typed material lowering recipes, catalog-backed material artifacts, viewport material preview selection, prior-valid preservation,
+    epoch-guarded material shell commands, and renderer PreparedMaterialFeatureResource handoff to MATERIAL_RENDER_FEATURE_ID;
+    closeout recorded at docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md.
+  current_decision: Completed WR-021 implementation in the prepared batch worktree with source-backed material graph persistence,
+    typed material lowering recipes, catalog-backed material artifacts, viewport material preview selection, prior-valid preservation,
+    epoch-guarded material shell commands, and renderer PreparedMaterialFeatureResource handoff to MATERIAL_RENDER_FEATURE_ID;
+    closeout recorded at docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md.
   current_call: Do not make canvas state material truth; material source documents own material state and renderer code consumes
     prepared preview/material products only.
   main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset adapter

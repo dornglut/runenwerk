@@ -28,10 +28,12 @@ pub use surfaces::{
     EntityTableDomainMutation, EntityTableFilter, EntityTableHierarchyFilter, EntityTableQuery,
     EntityTableSessionMutation, EntityTableSort, EntityTableSurfaceAction,
     ImportInspectorViewModel, InspectorFieldControlKind, InspectorFieldEditIntent,
-    InspectorSessionMutation, InspectorSurfaceAction, OutlinerDomainMutation,
-    OutlinerSurfaceAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
-    SdfOperationSurfaceAction, ViewportDomainMutation, ViewportSessionMutation,
-    ViewportSurfaceAction,
+    InspectorSessionMutation, InspectorSurfaceAction, MaterialGraphCanvasViewModel,
+    MaterialGraphSourceDetailViewModel, MaterialGraphSourceRowViewModel,
+    MaterialInspectorViewModel, MaterialPreviewViewModel, MaterialSurfaceAction,
+    OutlinerDomainMutation, OutlinerSurfaceAction, SdfOperationDomainMutation,
+    SdfOperationSessionMutation, SdfOperationSurfaceAction, ViewportDomainMutation,
+    ViewportSessionMutation, ViewportSurfaceAction,
 };
 pub use view_models::*;
 pub use workspace::{

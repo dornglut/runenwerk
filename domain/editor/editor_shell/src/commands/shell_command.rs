@@ -92,6 +92,20 @@ pub enum ShellCommand {
     ClearAssetDiagnostics {
         projection_epoch: u64,
     },
+    SelectMaterialAsset {
+        asset_id: asset::AssetId,
+        projection_epoch: u64,
+    },
+    BuildMaterialPreview {
+        asset_id: asset::AssetId,
+        projection_epoch: u64,
+    },
+    BuildSelectedMaterialPreview {
+        projection_epoch: u64,
+    },
+    ClearMaterialDiagnostics {
+        projection_epoch: u64,
+    },
     SetTabStackActivePanel {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
@@ -252,6 +266,14 @@ impl ShellCommand {
             }
             | Self::ReimportSelectedAsset { projection_epoch }
             | Self::ClearAssetDiagnostics { projection_epoch }
+            | Self::SelectMaterialAsset {
+                projection_epoch, ..
+            }
+            | Self::BuildMaterialPreview {
+                projection_epoch, ..
+            }
+            | Self::BuildSelectedMaterialPreview { projection_epoch }
+            | Self::ClearMaterialDiagnostics { projection_epoch }
             | Self::ApplySurfaceSessionMutation {
                 projection_epoch, ..
             }

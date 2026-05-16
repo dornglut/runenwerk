@@ -200,6 +200,30 @@ pub fn initial_product_descriptors(
     ]
 }
 
+pub fn material_preview_descriptor(
+    product_id: ExpressionProductId,
+    dimensions: ExpressionDimensions,
+    source_version: RealityVersion,
+    specialization_fragment: String,
+) -> ExpressionProductDescriptor {
+    ExpressionProductDescriptor::new(
+        product_id,
+        ExpressionProductKind::MaterialPreview2D,
+        dimensions,
+        ExpressionFormat::Rgba8Unorm,
+        format!("editor.material_lab.preview:{specialization_fragment}"),
+        ExpressionSourceRealityClass::DerivedMaterial,
+        source_version,
+        ExpressionFreshness::Current,
+        ExpressionPresentationHints {
+            srgb: true,
+            premultiplied_alpha: false,
+            y_flipped: false,
+        },
+        None,
+    )
+}
+
 #[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ViewportProductRegistryResource {
     descriptors_by_viewport: BTreeMap<ViewportId, Vec<ExpressionProductDescriptor>>,
@@ -353,6 +377,24 @@ mod tests {
         assert!(kinds.contains(&ExpressionProductKind::VolumeSlice2D));
         assert!(kinds.contains(&ExpressionProductKind::BrickmapDebug2D));
         assert!(kinds.contains(&ExpressionProductKind::HistoryColor2D));
+    }
+
+    #[test]
+    fn material_preview_descriptor_is_a_selectable_material_product() {
+        let descriptor = material_preview_descriptor(
+            ExpressionProductId(42),
+            ExpressionDimensions::new(320, 200),
+            RealityVersion(7),
+            "material.first_slice.render_material".to_string(),
+        );
+
+        assert_eq!(descriptor.kind, ExpressionProductKind::MaterialPreview2D);
+        assert_eq!(
+            descriptor.source_reality_class,
+            ExpressionSourceRealityClass::DerivedMaterial
+        );
+        assert_eq!(descriptor.id, ExpressionProductId(42));
+        assert!(descriptor.producer_label.contains("material.first_slice"));
     }
 
     #[test]

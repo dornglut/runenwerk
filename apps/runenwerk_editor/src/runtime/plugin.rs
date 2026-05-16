@@ -10,6 +10,7 @@ use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt};
 use engine::{BarrierKind, ExecutionBarrier, SystemSetKey};
 
 use crate::asset_pipeline::publish_pending_field_product_publications;
+use crate::material_lab::publish_pending_material_preview_publications;
 use crate::runtime::procgen::{
     publish_procgen_products_at_barrier, publish_procgen_query_snapshots_at_barrier,
     sync_procgen_viewport_overlay_system,
@@ -19,7 +20,8 @@ use crate::runtime::resources::{
     RuntimePreviewProcessResource,
 };
 use crate::runtime::systems::{
-    bootstrap_editor_demo_system, dispatch_editor_input_system, produce_editor_picking_system,
+    bootstrap_editor_demo_system, dispatch_editor_input_system,
+    prepare_material_preview_render_resource_system, produce_editor_picking_system,
     seed_viewport_runtime_contracts_system, submit_editor_frame_system,
     sync_viewport_instances_system,
 };
@@ -51,6 +53,7 @@ pub enum EditorRuntimeSet {
     ViewportProductTargets,
     ViewportRenderJobs,
     ViewportRenderProductSelection,
+    MaterialPreviewRenderHandoff,
     ViewportGpuResidencySummary,
 }
 
@@ -84,6 +87,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             }
             Self::ViewportRenderProductSelection => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::ViewportRenderProductSelection",
+            ),
+            Self::MaterialPreviewRenderHandoff => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::MaterialPreviewRenderHandoff",
             ),
             Self::ViewportGpuResidencySummary => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::ViewportGpuResidencySummary",
@@ -125,6 +131,10 @@ impl Plugin for EditorAppPlugin {
         app.add_barrier_handler(
             BarrierKind::ProductPublication,
             publish_procgen_products_at_barrier,
+        );
+        app.add_barrier_handler(
+            BarrierKind::ProductPublication,
+            publish_editor_material_preview_products_at_barrier,
         );
         app.add_barrier_handler(
             BarrierKind::QuerySnapshotPublication,
@@ -216,6 +226,13 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             RenderPrepare,
+            prepare_material_preview_render_resource_system
+                .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .after(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
             summarize_viewport_gpu_residency_system
                 .in_set(EditorRuntimeSet::ViewportGpuResidencySummary)
                 .after(RenderRuntimeSet::GpuResidency)
@@ -238,6 +255,26 @@ fn publish_editor_field_products_at_barrier(
     };
 
     publish_pending_field_product_publications(&mut host.app, &mut publications, barrier);
+
+    world.insert_resource(publications);
+    world.insert_resource(host);
+    Ok(())
+}
+
+fn publish_editor_material_preview_products_at_barrier(
+    barrier: &ExecutionBarrier,
+    world: &mut World,
+) -> anyhow::Result<()> {
+    let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
+        return Ok(());
+    };
+    let Some(mut publications) = world.remove_resource::<ProductPublicationRuntimeResource>()
+    else {
+        world.insert_resource(host);
+        return Ok(());
+    };
+
+    publish_pending_material_preview_publications(&mut host.app, &mut publications, barrier);
 
     world.insert_resource(publications);
     world.insert_resource(host);

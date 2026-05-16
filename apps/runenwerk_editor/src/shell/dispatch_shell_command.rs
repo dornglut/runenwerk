@@ -278,6 +278,36 @@ pub fn dispatch_shell_command_with_viewport_commands(
             app.asset_catalog_runtime_mut().clear_diagnostics();
             app.append_console_line("[asset] diagnostics cleared");
         }
+        ShellCommand::SelectMaterialAsset {
+            asset_id,
+            projection_epoch: _,
+        } => {
+            app.select_material_asset(asset_id);
+        }
+        ShellCommand::BuildMaterialPreview {
+            asset_id,
+            projection_epoch: _,
+        } => {
+            app.rebuild_material_preview(asset_id).map_err(|error| {
+                app.append_console_error(format!("[material] preview build failed: {error}"));
+                EditorMutationError::runtime_rejected("material preview build failed")
+            })?;
+        }
+        ShellCommand::BuildSelectedMaterialPreview {
+            projection_epoch: _,
+        } => {
+            app.rebuild_selected_material_preview().map_err(|error| {
+                app.append_console_error(format!(
+                    "[material] selected preview build failed: {error}"
+                ));
+                EditorMutationError::runtime_rejected("selected material preview build failed")
+            })?;
+        }
+        ShellCommand::ClearMaterialDiagnostics {
+            projection_epoch: _,
+        } => {
+            app.clear_material_diagnostics();
+        }
         ShellCommand::ApplySelectedEditorDefinition => {
             let shell_state =
                 shell_state
@@ -975,6 +1005,10 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ReimportAsset { .. } => "ReimportAsset",
         ShellCommand::ReimportSelectedAsset { .. } => "ReimportSelectedAsset",
         ShellCommand::ClearAssetDiagnostics { .. } => "ClearAssetDiagnostics",
+        ShellCommand::SelectMaterialAsset { .. } => "SelectMaterialAsset",
+        ShellCommand::BuildMaterialPreview { .. } => "BuildMaterialPreview",
+        ShellCommand::BuildSelectedMaterialPreview { .. } => "BuildSelectedMaterialPreview",
+        ShellCommand::ClearMaterialDiagnostics { .. } => "ClearMaterialDiagnostics",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
         ShellCommand::SwitchPanelToolSurfaceKind { .. } => "SwitchPanelToolSurfaceKind",
@@ -1583,6 +1617,45 @@ mod tests {
             layout_template_version: None,
             last_saved_at_unix_seconds: None,
         }
+    }
+
+    #[test]
+    fn material_epoch_stale_shell_commands_do_not_mutate_material_workflow_state() {
+        let mut app = RunenwerkEditorApp::new();
+        let asset_id = asset::asset_id(21);
+        app.material_lab_runtime_mut()
+            .record_diagnostic(asset::AssetDiagnosticRecord::error(
+                asset::AssetDiagnosticCode::RatificationRejected,
+                "existing diagnostic",
+            ));
+
+        for command in [
+            ShellCommand::SelectMaterialAsset {
+                asset_id,
+                projection_epoch: 1,
+            },
+            ShellCommand::BuildMaterialPreview {
+                asset_id,
+                projection_epoch: 1,
+            },
+            ShellCommand::BuildSelectedMaterialPreview {
+                projection_epoch: 1,
+            },
+            ShellCommand::ClearMaterialDiagnostics {
+                projection_epoch: 1,
+            },
+        ] {
+            dispatch_shell_command(&mut app, None, command, None, None, None, Some(2))
+                .expect("stale material command should fail closed");
+        }
+
+        assert_eq!(
+            app.material_lab_runtime().selected_material_asset_id(),
+            None
+        );
+        assert!(app.material_lab_runtime().active_preview().is_none());
+        assert_eq!(app.material_lab_runtime().diagnostics().len(), 1);
+        assert_eq!(app.pending_material_preview_publication_count(), 0);
     }
 
     #[test]

@@ -12,11 +12,11 @@ use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 use crate::{
     AssetSurfaceAction, EditorDefinitionSurfaceAction, EntityTableDomainMutation,
     EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
-    InspectorSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId,
-    PanelKind, RoutedShellAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
-    SdfOperationSurfaceAction, StructuralCommandTarget, TabStackId, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolbarViewModel, UiNode, ViewportDomainMutation, ViewportSessionMutation,
-    ViewportSurfaceAction, WidgetId,
+    InspectorSurfaceAction, MaterialSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction,
+    PanelInstanceId, PanelKind, RoutedShellAction, SdfOperationDomainMutation,
+    SdfOperationSessionMutation, SdfOperationSurfaceAction, StructuralCommandTarget, TabStackId,
+    ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarViewModel, UiNode, ViewportDomainMutation,
+    ViewportSessionMutation, ViewportSurfaceAction, WidgetId,
 };
 
 #[id]
@@ -161,6 +161,7 @@ impl SurfacePresentationArtifact {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceLocalAction {
     Asset(AssetSurfaceAction),
+    Material(MaterialSurfaceAction),
     Outliner(OutlinerSurfaceAction),
     EntityTable(EntityTableSurfaceAction),
     Inspector(InspectorSurfaceAction),

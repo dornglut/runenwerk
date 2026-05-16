@@ -8,3 +8,4 @@ publish = false
 graph = { path = "../graph" }
 product.workspace = true
 ratification = { path = "../../foundation/ratification" }
+serde = { version = "1.0.228", features = ["derive"] }

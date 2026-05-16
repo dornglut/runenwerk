@@ -74,6 +74,7 @@ impl AssetKind {
             Self::FormedFieldProduct
                 | Self::WorldSdfChunkPageArtifact
                 | Self::ClipmapBrickmapProduct
+                | Self::Material
                 | Self::ProceduralMaterial
                 | Self::ProceduralTexture
                 | Self::Texture2D
@@ -95,5 +96,10 @@ mod tests {
         assert!(AssetKind::ForeignMeshReferenceArtifact.is_foreign_reference());
         assert!(!AssetKind::ForeignMeshReferenceSource.is_primary_world_authoring());
         assert!(AssetKind::SdfGraph.is_primary_world_authoring());
+    }
+
+    #[test]
+    fn material_artifacts_are_formed_products_for_preview_publication() {
+        assert!(AssetKind::Material.is_formed_product());
     }
 }

@@ -102,7 +102,7 @@ package "Level 3 - Downstream Domain Tracks" {
 
   component "WR-014 Particles / physics / animation / world processes\nstate=blocked_deferred\nscore=0.2 gate=product contract gate\nV3 B4\ncall=formed product contracts\nand product substrate first" as M6FUTURE <<V3>>
 
-  component "WR-021 Material Lab\nstate=ready_next\nscore=0.9 gate=after rendered-world v1 and field visualizer\nV4 B2\ncall=source-backed material graph\npreview product handoff" as MATLAB <<V4>>
+  component "WR-021 Material Lab\nstate=completed\nscore=0.9 gate=after rendered-world v1 and field visualizer\nV4 B2\ncall=source-backed material graph\npreview product handoff" as MATLAB <<completed>>
 
   component "WR-022 SDF Prefab V2\nstate=ready_next\nscore=0.8 gate=v2 gated\nV4 B3\ncall=active design now\nruntime instancing V2" as PREFABV2 <<V4>>
 

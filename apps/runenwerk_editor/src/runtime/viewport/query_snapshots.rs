@@ -259,6 +259,7 @@ fn product_authority(source_reality_class: ExpressionSourceRealityClass) -> Prod
         | ExpressionSourceRealityClass::DerivedField
         | ExpressionSourceRealityClass::DerivedAsset
         | ExpressionSourceRealityClass::DerivedVolume
+        | ExpressionSourceRealityClass::DerivedMaterial
         | ExpressionSourceRealityClass::DerivedHistory => {
             ProductAuthorityClass::DeterministicDerived
         }
@@ -513,5 +514,13 @@ mod tests {
             diagnostic.code == FieldProductDiagnosticCode::GenerationMismatch
         }));
         assert_eq!(app.console_lines().len(), console_count);
+    }
+
+    #[test]
+    fn derived_material_products_are_deterministic_derived_authority() {
+        assert_eq!(
+            product_authority(ExpressionSourceRealityClass::DerivedMaterial),
+            ProductAuthorityClass::DeterministicDerived
+        );
     }
 }
