@@ -141,9 +141,12 @@ Implementation validation completed on 2026-05-16:
 
 Closeout validation after roadmap/production evidence updates:
 
-- Pending final `task docs:validate`, `task roadmap:render`, `task roadmap:validate`,
-  `task roadmap:check`, `task production:validate`, and `task production:check`
-  on the integrated root checkout.
+- `task docs:validate` passed on the integrated root checkout.
+- `task roadmap:render` completed and refreshed generated roadmap docs.
+- `task roadmap:validate` passed: 26 items, 34 edges.
+- `task roadmap:check` passed: schema and rendered roadmap docs are in sync.
+- `task production:validate` passed: 1 track, 9 milestones.
+- `task production:check` passed: schema and generated production docs are in sync.
 
 ## Deferred Work
 
