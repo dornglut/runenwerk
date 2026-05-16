@@ -27,6 +27,18 @@ pub enum ArtifactValidity {
     Rejected,
 }
 
+impl ArtifactValidity {
+    pub const fn preserves_prior_valid(self) -> bool {
+        matches!(self, Self::FailedPreserved)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssetArtifactPreservationError {
+    PreviousArtifactNotValid,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ArtifactPayloadKind {
@@ -119,5 +131,80 @@ impl AssetArtifactDescriptor {
     pub fn with_diagnostic(mut self, diagnostic: AssetDiagnosticRecord) -> Self {
         self.diagnostics.push(diagnostic);
         self
+    }
+}
+
+pub fn preserve_prior_valid_artifact(
+    previous: &AssetArtifactDescriptor,
+    diagnostic: AssetDiagnosticRecord,
+) -> AssetArtifactDescriptor {
+    try_preserve_prior_valid_artifact(previous, diagnostic)
+        .expect("prior-valid artifact preservation requires a valid previous artifact")
+}
+
+pub fn try_preserve_prior_valid_artifact(
+    previous: &AssetArtifactDescriptor,
+    diagnostic: AssetDiagnosticRecord,
+) -> Result<AssetArtifactDescriptor, AssetArtifactPreservationError> {
+    if previous.validity != ArtifactValidity::Valid {
+        return Err(AssetArtifactPreservationError::PreviousArtifactNotValid);
+    }
+    Ok(previous
+        .clone()
+        .with_validity(ArtifactValidity::FailedPreserved)
+        .with_diagnostic(diagnostic))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AssetDiagnosticCode, AssetDiagnosticRecord, asset_artifact_id, asset_id};
+
+    #[test]
+    fn preserve_prior_valid_artifact_keeps_identity_and_attaches_diagnostic() {
+        let previous = AssetArtifactDescriptor::new(
+            asset_artifact_id(7),
+            asset_id(2),
+            AssetKind::FormedFieldProduct,
+            ArtifactPayloadKind::FormedFieldProduct {
+                product_id: "previous".to_string(),
+            },
+            ArtifactCacheKey::new("previous"),
+        )
+        .with_artifact_path(".runenwerk/artifacts/previous.ron");
+        let diagnostic = AssetDiagnosticRecord::error(
+            AssetDiagnosticCode::SourceMissing,
+            "source file is missing",
+        );
+
+        let preserved = preserve_prior_valid_artifact(&previous, diagnostic);
+
+        assert_eq!(preserved.artifact_id, previous.artifact_id);
+        assert_eq!(preserved.validity, ArtifactValidity::FailedPreserved);
+        assert!(preserved.validity.preserves_prior_valid());
+        assert_eq!(preserved.diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn checked_preservation_rejects_non_valid_previous_artifacts() {
+        let previous = AssetArtifactDescriptor::new(
+            asset_artifact_id(7),
+            asset_id(2),
+            AssetKind::FormedFieldProduct,
+            ArtifactPayloadKind::FormedFieldProduct {
+                product_id: "previous".to_string(),
+            },
+            ArtifactCacheKey::new("previous"),
+        )
+        .with_validity(ArtifactValidity::Stale);
+        let diagnostic = AssetDiagnosticRecord::error(
+            AssetDiagnosticCode::SourceMissing,
+            "source file is missing",
+        );
+
+        assert_eq!(
+            try_preserve_prior_valid_artifact(&previous, diagnostic),
+            Err(AssetArtifactPreservationError::PreviousArtifactNotValid)
+        );
     }
 }

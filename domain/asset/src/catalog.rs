@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AssetArtifactDescriptor, AssetArtifactId, AssetDependencyGraph, AssetId, AssetKind,
-    AssetRevisionId, AssetSourceDescriptor, AssetSourceId, asset_revision_id,
+    AssetRevisionId, AssetSourceDescriptor, AssetSourceId, AssetSourceRoot, AssetSourceRootId,
+    asset_revision_id,
 };
 
 pub const ASSET_CATALOG_VERSION_V1: u32 = 1;
@@ -48,6 +49,8 @@ impl AssetRecord {
 pub struct AssetCatalog {
     pub version: u32,
     pub records: BTreeMap<AssetId, AssetRecord>,
+    #[serde(default)]
+    pub source_roots: BTreeMap<AssetSourceRootId, AssetSourceRoot>,
     pub sources: BTreeMap<AssetSourceId, AssetSourceDescriptor>,
     pub artifacts: BTreeMap<AssetArtifactId, AssetArtifactDescriptor>,
     pub dependency_graph: AssetDependencyGraph,
@@ -58,6 +61,7 @@ impl Default for AssetCatalog {
         Self {
             version: ASSET_CATALOG_VERSION_V1,
             records: BTreeMap::new(),
+            source_roots: BTreeMap::new(),
             sources: BTreeMap::new(),
             artifacts: BTreeMap::new(),
             dependency_graph: AssetDependencyGraph::new(),
@@ -72,6 +76,10 @@ impl AssetCatalog {
 
     pub fn insert_asset_record(&mut self, record: AssetRecord) -> Option<AssetRecord> {
         self.records.insert(record.asset_id, record)
+    }
+
+    pub fn insert_source_root(&mut self, root: AssetSourceRoot) -> Option<AssetSourceRoot> {
+        self.source_roots.insert(root.root_id, root)
     }
 
     pub fn insert_source(
@@ -99,6 +107,10 @@ impl AssetCatalog {
 
     pub fn source(&self, source_id: AssetSourceId) -> Option<&AssetSourceDescriptor> {
         self.sources.get(&source_id)
+    }
+
+    pub fn source_root(&self, root_id: AssetSourceRootId) -> Option<&AssetSourceRoot> {
+        self.source_roots.get(&root_id)
     }
 
     pub fn artifact(&self, artifact_id: AssetArtifactId) -> Option<&AssetArtifactDescriptor> {

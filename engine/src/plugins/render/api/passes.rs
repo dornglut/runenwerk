@@ -253,6 +253,11 @@ impl FullscreenPassBuilder {
         self.write_color_target(target_alias)
     }
 
+    pub fn clear_color(mut self, color: [f32; 4]) -> Self {
+        self.pass.clear_color = Some(color);
+        self
+    }
+
     pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
         add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self

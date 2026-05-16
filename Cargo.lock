@@ -2749,6 +2749,7 @@ dependencies = [
  "glam 0.32.1",
  "graph",
  "material_graph",
+ "naga",
  "procgen",
  "product",
  "ron",

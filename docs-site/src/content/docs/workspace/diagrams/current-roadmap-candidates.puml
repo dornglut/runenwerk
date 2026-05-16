@@ -21,19 +21,10 @@ legend right
   Context nodes are direct dependencies and are not selectable here.
 endlegend
 
-package "Immediate Dependency Context" {
-  component "WR-003 Render contract follow-ups\nstate=support_only\nV4 B2" as RENDER <<context>>
-
-  component "WR-004 UI/editor guards\nstate=support_only\nV4 B1" as UIGUARDS <<context>>
-
-}
-
 package "Current Implementation Candidates" {
-  component "WR-018 Rendered World V1\nstate=current_candidate\nscore=3.0 V5 B2\ncall=multi-entity SDF packet\nrender/picking consistency" as RENDERWORLD <<candidate>>
+  component "No current_candidate items" as NO_CANDIDATES <<context>>
 
 }
 
-RENDER -down-> RENDERWORLD : dependency context
-UIGUARDS -down-> RENDERWORLD : dependency context
 
 @enduml

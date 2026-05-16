@@ -99,6 +99,9 @@ Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for road
 `task batch:kickoff -- --next` is the normal implementation entrypoint for the
 current roadmap candidate batch. `task roadmap:intake` is the normal entrypoint
 for new designs or change ideas that need roadmap review before implementation.
+Codex CLI `/goal` may execute an accepted written contract, but it must not
+promote or complete roadmap items without the required governance, validation,
+closeout or drift-check evidence, and roadmap render/validate/check gates.
 
 For architecture-sensitive changes, run the architecture governance review before implementation when the task may affect dependency direction, domain ownership, ADR-worthy decisions, migration strategy, tradeoffs, enforcement, or ownership mode.
 Use `task ai:architecture-governance -- --task "<task>" --scope "<scope>"` as the kickoff checklist.

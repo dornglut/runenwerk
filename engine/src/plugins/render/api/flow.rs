@@ -968,6 +968,27 @@ mod tests {
     }
 
     #[test]
+    fn fullscreen_clear_color_is_part_of_the_raster_load_contract() {
+        let flow = RenderFlow::new("test.fullscreen.clear")
+            .with_color_target("test.color")
+            .fullscreen_pass("test.compose")
+            .clear_color([0.1, 0.2, 0.3, 1.0])
+            .write_color_target("test.color")
+            .finish()
+            .validate()
+            .expect("fullscreen clear color should validate");
+        let pass = flow
+            .graph()
+            .passes
+            .passes
+            .iter()
+            .find(|pass| pass.label == "test.compose")
+            .expect("fullscreen pass should be registered");
+
+        assert_eq!(pass.clear_color, Some([0.1, 0.2, 0.3, 1.0]));
+    }
+
+    #[test]
     fn imported_surface_depth_is_rejected_as_graphics_depth_target() {
         let err = RenderFlow::new("test.graphics.surface_depth")
             .with_surface_depth()

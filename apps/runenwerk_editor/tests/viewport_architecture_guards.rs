@@ -315,6 +315,37 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
 }
 
 #[test]
+fn viewport_scene_and_overlay_products_clear_before_drawing() {
+    let app = runenwerk_editor::runtime::build_headless_app()
+        .run_for_frames(1)
+        .expect("headless editor app should run");
+    let flow_registry = app
+        .world()
+        .resource::<RenderFlowRegistryResource>()
+        .expect("render flow registry should exist");
+    let editor_flow = flow_registry
+        .compiled_flows()
+        .iter()
+        .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
+        .expect("editor main flow should exist");
+
+    for pass_label in [
+        "runenwerk.editor.viewport.product.scene",
+        "runenwerk.editor.viewport.product.overlay",
+    ] {
+        let pass = editor_flow
+            .pass_order
+            .iter()
+            .find(|pass| pass.pass_label() == pass_label)
+            .unwrap_or_else(|| panic!("editor flow should contain pass {pass_label}"));
+        assert!(
+            pass.node().clear_color.is_some(),
+            "viewport product pass '{pass_label}' must clear its target before drawing so transparent miss pixels cannot retain stale frame contents",
+        );
+    }
+}
+
+#[test]
 fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
     let app = runenwerk_editor::runtime::build_headless_app()
         .run_for_frames(1)

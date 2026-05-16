@@ -114,13 +114,23 @@ Operational execution checklist:
   - [reports/closeouts/p1-sdf-modeling-core/closeout.md](../reports/closeouts/p1-sdf-modeling-core/closeout.md)
 - P1-A SDF operation-layer historical closeout evidence:
   - [reports/closeouts/p1-sdf-operation-layer/closeout.md](../reports/closeouts/p1-sdf-operation-layer/closeout.md)
+- WR-018 rendered-world V1 closeout evidence:
+  - [reports/closeouts/wr-018-rendered-world-v1/closeout.md](../reports/closeouts/wr-018-rendered-world-v1/closeout.md)
+- WR-020 source-backed asset core closeout evidence:
+  - [reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md](../reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md)
 
 ## Current Focus
 
-- Current implementation candidate is `WR-018` rendered-world V1.
-- `WR-018` is the P0 editor product slice: keep all editor SDF primitive
-  rendering and picking on one extracted viewport scene packet before material,
-  prefab, or terrain production work expands.
+- No current implementation candidate is selected by this closeout.
+- `WR-018` rendered-world V1 is completed evidence: editor SDF primitive
+  rendering and CPU/GPU picking share one extracted viewport scene packet.
+- `WR-020` source-backed asset core is completed evidence: project catalog
+  descriptors, importer-aware source descriptors, deterministic import plans,
+  dependency graph contracts, diagnostics, ratification, and prior-valid
+  artifact preservation live in `domain/asset`.
+- `WR-026` editor adapters remain downstream and must not start until the
+  domain-owned source/catalog contracts are selected for adapter consumption in
+  a separate roadmap slice.
 - `WR-025` is completed evidence for the named Interaction V2 retained-slice
   catalog: menu stack, scroll ownership, menu sizing, chrome slots,
   dock/drop-zones, and status/viewport arbitration.

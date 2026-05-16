@@ -324,6 +324,7 @@ pub struct EditorViewportSceneProductUniform {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EditorViewportPrimitiveInstance {
     pub entity_id: EntityId,
+    pub pick_slot: u32,
     pub translation: Vec3Value,
     pub scale: Vec3Value,
     pub primitive_kind: EditorPrimitiveKind,
@@ -352,6 +353,7 @@ impl EditorViewportPrimitiveInstance {
         let sphere_scale = safe_scale.x.max(safe_scale.y).max(safe_scale.z);
         Self {
             entity_id,
+            pick_slot: 0,
             translation: transform.translation,
             scale: safe_scale,
             primitive_kind: primitive.kind(),
@@ -366,41 +368,6 @@ impl EditorViewportPrimitiveInstance {
             selected,
             hovered,
         }
-    }
-
-    pub fn first_hit_aabb_half_extents(self) -> Vec3 {
-        match self.primitive_kind {
-            EditorPrimitiveKind::Box => self.box_half_extents.to_glam(),
-            EditorPrimitiveKind::Sphere => vec3(
-                self.sphere_radius.max(0.05),
-                self.sphere_radius.max(0.05),
-                self.sphere_radius.max(0.05),
-            ),
-            EditorPrimitiveKind::Capsule => vec3(
-                self.capsule_radius.max(0.05),
-                self.capsule_radius.max(0.05) + self.capsule_half_height.max(0.05),
-                self.capsule_radius.max(0.05),
-            ),
-            EditorPrimitiveKind::Cylinder => vec3(
-                self.capsule_radius.max(0.05),
-                self.capsule_half_height.max(0.05),
-                self.capsule_radius.max(0.05),
-            ),
-            EditorPrimitiveKind::Torus => vec3(
-                self.sphere_radius.max(0.05) * 2.0,
-                self.sphere_radius.max(0.05) * 0.5,
-                self.sphere_radius.max(0.05) * 2.0,
-            ),
-            EditorPrimitiveKind::Plane => vec3(
-                self.box_half_extents.x.max(0.05),
-                self.box_half_extents.y.clamp(0.01, 0.05),
-                self.box_half_extents.z.max(0.05),
-            ),
-        }
-    }
-
-    pub fn entity_id_low_u32(self) -> u32 {
-        u32::try_from(self.entity_id.0).unwrap_or(u32::MAX)
     }
 
     pub fn shader_slot_transform(self) -> [f32; 4] {
@@ -433,7 +400,7 @@ impl EditorViewportPrimitiveInstance {
     pub fn shader_slot_flags(self) -> [u32; 4] {
         [
             self.primitive_kind.as_u32(),
-            self.entity_id_low_u32(),
+            self.pick_slot,
             u32::from(self.selected),
             u32::from(self.hovered),
         ]
@@ -443,6 +410,7 @@ impl EditorViewportPrimitiveInstance {
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct EditorViewportSceneRenderPacket {
     primitives: Vec<EditorViewportPrimitiveInstance>,
+    omitted_primitive_count: usize,
 }
 
 impl EditorViewportSceneRenderPacket {
@@ -451,8 +419,17 @@ impl EditorViewportSceneRenderPacket {
     ) -> Self {
         let mut primitives = primitives.into_iter().collect::<Vec<_>>();
         primitives.sort_by_key(|primitive| primitive.entity_id.0);
+        let omitted_primitive_count = primitives
+            .len()
+            .saturating_sub(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES);
         primitives.truncate(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES);
-        Self { primitives }
+        for (index, primitive) in primitives.iter_mut().enumerate() {
+            primitive.pick_slot = (index + 1) as u32;
+        }
+        Self {
+            primitives,
+            omitted_primitive_count,
+        }
     }
 
     pub fn primitives(&self) -> &[EditorViewportPrimitiveInstance] {
@@ -465,6 +442,25 @@ impl EditorViewportSceneRenderPacket {
 
     pub fn is_empty(&self) -> bool {
         self.primitives.is_empty()
+    }
+
+    pub fn omitted_primitive_count(&self) -> usize {
+        self.omitted_primitive_count
+    }
+
+    pub fn has_overflow(&self) -> bool {
+        self.omitted_primitive_count != 0
+    }
+
+    pub fn entity_for_pick_slot(&self, pick_slot: u32) -> Option<EntityId> {
+        if pick_slot == 0 {
+            return None;
+        }
+
+        self.primitives
+            .iter()
+            .find(|primitive| primitive.pick_slot == pick_slot)
+            .map(|primitive| primitive.entity_id)
     }
 }
 
@@ -1088,15 +1084,23 @@ mod tests {
         let uniform = state.compose_scene_product_uniform((1280, 720));
 
         assert_eq!(uniform.primitive_flags[1], 2);
-        assert_eq!(uniform.primitive_slot_flags[0], [0, 4, 1, 0]);
-        assert_eq!(uniform.primitive_slot_flags[1], [1, 20, 0, 1]);
+        assert_eq!(uniform.primitive_slot_flags[0], [0, 1, 1, 0]);
+        assert_eq!(uniform.primitive_slot_flags[1], [1, 2, 0, 1]);
         assert_eq!(uniform.primitive_slot_transforms[0], [-1.0, 0.0, 0.0, 0.0]);
         assert_eq!(uniform.primitive_slot_params_a[0], [0.25, 0.5, 0.75, 0.6]);
         assert_eq!(uniform.primitive_slot_params_a[1][3], 1.25);
+        assert_eq!(
+            state.scene_packet.entity_for_pick_slot(1),
+            Some(EntityId(4))
+        );
+        assert_eq!(
+            state.scene_packet.entity_for_pick_slot(2),
+            Some(EntityId(20))
+        );
     }
 
     #[test]
-    fn scene_packet_truncates_to_uniform_slot_capacity() {
+    fn viewport_scene_packet_reports_uniform_slot_overflow() {
         let primitives = (0..EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES + 2).map(|index| {
             EditorViewportPrimitiveInstance::from_transform_and_primitive(
                 editor_core::EntityId(index as u64),
@@ -1116,18 +1120,44 @@ mod tests {
             state.scene_packet.len(),
             EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES
         );
+        assert!(state.scene_packet.has_overflow());
+        assert_eq!(state.scene_packet.omitted_primitive_count(), 2);
         assert_eq!(
             uniform.primitive_flags[1],
             EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES as u32
         );
         assert_eq!(
             uniform.primitive_slot_flags[EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES - 1][1],
-            (EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES - 1) as u32
+            EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES as u32
         );
     }
 
     #[test]
-    fn primitive_slot_helpers_define_the_shader_packet_contract() {
+    fn viewport_scene_packet_pick_slots_preserve_full_entity_identity() {
+        let large_entity = editor_core::EntityId(u64::from(u32::MAX) + 99);
+        let instance = EditorViewportPrimitiveInstance::from_transform_and_primitive(
+            large_entity,
+            LocalTransform::default(),
+            EditorPrimitive::default(),
+            false,
+            false,
+        );
+
+        let packet = EditorViewportSceneRenderPacket::from_primitives([instance]);
+        let mut state = EditorViewportRenderState::default();
+        state.set_scene_packet(packet);
+        let uniform = state.compose_scene_product_uniform((1280, 720));
+
+        assert_eq!(uniform.primitive_slot_flags[0][1], 1);
+        assert_eq!(
+            state.scene_packet.entity_for_pick_slot(1),
+            Some(large_entity)
+        );
+        assert_eq!(state.scene_packet.entity_for_pick_slot(0), None);
+    }
+
+    #[test]
+    fn viewport_primitive_slot_helpers_define_the_shader_packet_contract() {
         let mut primitive = EditorPrimitive::default();
         primitive.set_kind(EditorPrimitiveKind::Cylinder);
         primitive.capsule_radius = 0.45;
@@ -1139,18 +1169,22 @@ mod tests {
             true,
             true,
         );
+        let packet = EditorViewportSceneRenderPacket::from_primitives([instance]);
+        let instance = packet.primitives()[0];
 
         assert_eq!(instance.shader_slot_transform(), [1.0, 2.0, 3.0, 0.0]);
         assert_eq!(instance.shader_slot_params_b(), [0.45, 1.25, 0.0, 0.0]);
-        assert_eq!(instance.shader_slot_flags(), [3, 42, 1, 1]);
+        assert_eq!(instance.shader_slot_flags(), [3, 1, 1, 1]);
     }
 
     #[test]
-    fn scene_and_picking_shaders_decode_all_editor_primitive_kinds() {
+    fn viewport_shaders_decode_scene_primitives_and_keep_grid_in_overlay() {
         let scene_shader =
             include_str!("../../../../assets/shaders/editor_viewport_scene_product.wgsl");
         let picking_shader =
             include_str!("../../../../assets/shaders/editor_viewport_picking_product.wgsl");
+        let overlay_shader =
+            include_str!("../../../../assets/shaders/editor_viewport_overlay_product.wgsl");
         for shader in [scene_shader, picking_shader] {
             assert_shader_supports_primitive(shader, EditorPrimitiveKind::Sphere);
             assert_shader_supports_primitive(shader, EditorPrimitiveKind::Capsule);
@@ -1158,6 +1192,47 @@ mod tests {
             assert_shader_supports_primitive(shader, EditorPrimitiveKind::Torus);
             assert_shader_supports_primitive(shader, EditorPrimitiveKind::Plane);
             assert!(shader.contains("return sdf_box("));
+        }
+        assert!(
+            !scene_shader.contains("sdf_ground_box")
+                && !scene_shader.contains("grid_shade")
+                && !scene_shader.contains("grid_color"),
+            "scene product shader must render only packet-backed authored primitives"
+        );
+        assert!(
+            scene_shader.contains("viewport_background"),
+            "scene product misses must resolve to a deterministic background instead of retaining prior target pixels"
+        );
+        assert!(
+            overlay_shader.contains("grid_color") && overlay_shader.contains("grid_overlay"),
+            "viewport grid visuals must live in the overlay product shader"
+        );
+    }
+
+    #[test]
+    fn viewport_wgsl_shaders_parse_and_validate() {
+        for (label, shader) in [
+            (
+                "scene",
+                include_str!("../../../../assets/shaders/editor_viewport_scene_product.wgsl"),
+            ),
+            (
+                "picking",
+                include_str!("../../../../assets/shaders/editor_viewport_picking_product.wgsl"),
+            ),
+            (
+                "overlay",
+                include_str!("../../../../assets/shaders/editor_viewport_overlay_product.wgsl"),
+            ),
+        ] {
+            let module = naga::front::wgsl::parse_str(shader)
+                .unwrap_or_else(|error| panic!("{label} WGSL should parse: {error}"));
+            naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::empty(),
+            )
+            .validate(&module)
+            .unwrap_or_else(|error| panic!("{label} WGSL should validate: {error}"));
         }
     }
 

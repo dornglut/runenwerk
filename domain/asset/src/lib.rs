@@ -14,6 +14,7 @@ pub mod id;
 pub mod import_plan;
 pub mod import_settings;
 pub mod kind;
+pub mod project_catalog;
 pub mod ratification;
 pub mod source;
 
@@ -25,5 +26,6 @@ pub use id::*;
 pub use import_plan::*;
 pub use import_settings::*;
 pub use kind::*;
+pub use project_catalog::*;
 pub use ratification::*;
 pub use source::*;

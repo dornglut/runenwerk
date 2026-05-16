@@ -268,18 +268,22 @@ mod tests {
             scene_file.version,
             editor_persistence::SCENE_FILE_VERSION_V2
         );
-        assert_eq!(scene_file.entities.len(), 1);
+        assert_eq!(scene_file.entities.len(), 2);
+        assert!(
+            scene_file
+                .entities
+                .iter()
+                .any(|record| record.display_name == "Ground Plane"
+                    && record.primitive.kind == ScenePrimitiveKind::Plane),
+            "MVP ground plane should persist as a normal primitive entity"
+        );
 
         let mut restored = RunenwerkEditorRuntime::new();
         register_mvp_component_types(&mut restored);
         apply_scene_file_to_runtime(&mut restored, &scene_file)
             .expect("scene apply should succeed");
 
-        let restored_entity = restored
-            .document()
-            .entity_ids()
-            .next()
-            .expect("restored runtime should contain entity");
+        let restored_entity = entity;
         let restored_ecs = restored
             .ids()
             .resolve_entity(restored_entity)

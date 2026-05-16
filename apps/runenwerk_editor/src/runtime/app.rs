@@ -30,6 +30,9 @@ const EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
 pub const EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID: &str = "editor_viewport_scene_product";
 pub const EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID: &str = "editor_viewport_picking_product";
+pub const EDITOR_VIEWPORT_OVERLAY_PRODUCT_SHADER_ID: &str = "editor_viewport_overlay_product";
+const EDITOR_VIEWPORT_BACKGROUND_CLEAR: [f32; 4] = [0.09, 0.10, 0.12, 1.0];
+const EDITOR_VIEWPORT_TRANSPARENT_CLEAR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 fn configure_app(app: &mut App) {
     app.set_title(WINDOW_TITLE);
@@ -86,11 +89,13 @@ fn register_editor_render_flow(app: &mut App) {
         .with_surface_color()
         .fullscreen_pass(EDITOR_SURFACE_CLEAR_PASS_ID)
         .main_surface_only()
+        .clear_color(EDITOR_VIEWPORT_BACKGROUND_CLEAR)
         .write_surface_color()
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .offscreen_products_only()
         .shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
+        .clear_color(EDITOR_VIEWPORT_BACKGROUND_CLEAR)
         .uniform_from_state_with_surface_to(
             scene_product_uniform.clone(),
             EditorViewportRenderState::compose_scene_product_uniform,
@@ -102,7 +107,7 @@ fn register_editor_render_flow(app: &mut App) {
         .depends_on(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .shader_asset(EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID)
         .uniform_from_state_with_surface_to(
-            scene_product_uniform,
+            scene_product_uniform.clone(),
             EditorViewportRenderState::compose_scene_product_uniform,
         )
         .write_target_alias(VIEWPORT_TARGET_ALIAS_PICKING_IDS)
@@ -110,6 +115,12 @@ fn register_editor_render_flow(app: &mut App) {
         .fullscreen_pass(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
         .offscreen_products_only()
         .depends_on(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)
+        .shader_asset(EDITOR_VIEWPORT_OVERLAY_PRODUCT_SHADER_ID)
+        .clear_color(EDITOR_VIEWPORT_TRANSPARENT_CLEAR)
+        .uniform_from_state_with_surface_to(
+            scene_product_uniform,
+            EditorViewportRenderState::compose_scene_product_uniform,
+        )
         .write_target_alias(VIEWPORT_TARGET_ALIAS_OVERLAY)
         .finish()
         .builtin_ui_composite_pass(EDITOR_MAIN_UI_PASS_ID)

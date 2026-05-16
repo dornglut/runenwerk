@@ -36,11 +36,13 @@ items:
   write_scopes:
   - apps/runenwerk_draw
   - engine/src/runtime
+  - docs-site/src/content/docs/reports/batches/2026-05-14-wr-001-product-job-draw-bridge/batch.toml
   validations:
   - cargo test -p runenwerk_draw --test app_shell
   - cargo test -p engine
-  next_evidence: 2026-05-15 DRF3 preview/final product-surface bridge landed and WR-006 completed DRF4/DRF5
-    GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job evidence before reactivation.
+  next_evidence: 2026-05-15 DRF3 preview/final product-surface bridge landed through docs-site/src/content/docs/reports/batches/2026-05-14-wr-001-product-job-draw-bridge/batch.toml
+    and WR-006 completed DRF4/DRF5 GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job
+    evidence before reactivation.
   current_decision: DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and
     do not reopen procgen bake/rollback.
   current_call: Continue only if the next bounded slice has fresh product-job evidence. The 2026-05-15 WR-001 batch
@@ -240,12 +242,12 @@ items:
   write_scopes:
   - apps/runenwerk_draw
   - engine/src/plugins/render
+  - docs-site/src/content/docs/reports/closeouts/wr-006-draw-drf4-drf5/closeout.md
   validations:
   - cargo test -p runenwerk_draw
   - cargo test -p engine
   next_evidence: 2026-05-15 WR-006 landed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public
-    render-flow/product-surface APIs; validation passed with cargo test -p runenwerk_draw and cargo test -p
-    engine.
+    render-flow/product-surface APIs; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-006-draw-drf4-drf5/closeout.md.
   current_decision: DRF4 and DRF5 are complete; keep CPU tile formation canonical while future Draw work builds
     on validated GPU promotion/fallback.
   current_call: Completed through the 2026-05-15 WR-006 batch. Do not reopen this slice unless GPU validation
@@ -285,13 +287,14 @@ items:
   - engine/src/plugins/net
   - engine/tests/network_plugins
   - domain/ecs
+  - docs-site/src/content/docs/reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md
   validations:
   - cargo test -p engine_net
   - cargo test -p engine --test network_plugins
   - cargo test -p ecs
   - cargo test -p scheduler
   next_evidence: 2026-05-15 Phase 1-3 landed ACK/baseline hardening, delta lifecycle normalization, and engine
-    bridge baseline convergence with focused engine_net and engine plugin tests.
+    bridge baseline convergence; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md.
   current_decision: Phase 1-3 is complete; future replication work should build on the accepted ACK/baseline outcome
     contract and engine bridge checkpoint behavior instead of reopening ad hoc baseline mutation.
   current_call: Completed through the 2026-05-15 WR-007 batches. Do not broaden replication scope until the next
@@ -490,11 +493,12 @@ items:
   - domain/graph
   - docs-site/src/content/docs/adr
   - docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md
+  - docs-site/src/content/docs/reports/closeouts/wr-012-neutral-graph-substrate-boundary/closeout.md
   validations:
   - cargo test -p graph
   - task docs:validate
   next_evidence: 2026-05-16 ADR 0010 accepted the graph substrate/canvas boundary and preserved the former draft
-    rationale; domain/graph remains the implemented structural substrate only.
+    rationale; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-012-neutral-graph-substrate-boundary/closeout.md.
   current_decision: Graph substrate policy is complete; future semantic graph work must start from one concrete owning
     domain and one formed product target, not a broad graph platform.
   current_call: Completed policy gate. Use domain/graph as structural support only; do not reopen it as a semantic graph
@@ -711,8 +715,8 @@ items:
   alias: RENDERWORLD
   lane: Core delivery
   dependency_level: L1
-  gate: Current candidate
-  planning_state: current_candidate
+  gate: Completed
+  planning_state: completed
   priority: P0
   value: 5
   blocker: 2
@@ -731,16 +735,23 @@ items:
   - apps/runenwerk_editor/src/runtime
   - assets/shaders
   - docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+  - docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md
   validations:
   - cargo check -p runenwerk_editor
   - cargo test -p runenwerk_editor viewport
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
   - task docs:validate
-  next_evidence: Multi-entity SDF primitive extraction, scene-product shader packet use, and picking consistency tests.
-  current_decision: Make all editor SDF primitive entities render through one extracted scene packet before material, prefab,
-    or terrain production work expands.
-  current_call: Current implementation slice. Preserve viewport product target ownership and keep render and picking consumers
-    on the same extracted packet.
-  first_move: Continue from editor-rendered-world-and-multi-entity-viewport-design.md and the existing viewport product target registry.
+  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md.
+    Multi-entity SDF primitive extraction, scene-product shader packet use, CPU picking from the render-state packet,
+    picking shader packet decode, and viewport render-job uniform override tests are implemented and validated.
+  current_decision: All editor SDF primitive entities now render and pick through one app-runtime extracted viewport scene
+    packet before material, prefab, terrain, or field visualization production work expands.
+  current_call: Completed through the 2026-05-16 WR-018 rendered-world V1 closeout. Do not reopen this slice unless
+    storage-buffer packet expansion or a later product producer requires a new bounded render-flow contract.
+  first_move: For follow-up viewport product work, consume EditorViewportSceneRenderPacket and the viewport product target
+    registry instead of adding another scene extraction or parallel viewer path.
   diagram_call:
   - multi-entity SDF packet
   - render/picking consistency
@@ -795,11 +806,11 @@ items:
   alias: ASSETCORE
   lane: Core support
   dependency_level: L1
-  gate: Supporting now
-  planning_state: ready_next
+  gate: Completed
+  planning_state: completed
   priority: P0
   value: 5
-  blocker: 3
+  blocker: 2
   tc: 4
   rr_oe: 5
   du: 5
@@ -813,19 +824,26 @@ items:
   write_scopes:
   - domain/asset
   - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+  - docs-site/src/content/docs/reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md
   validations:
   - cargo test -p asset
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
   - task docs:validate
-  next_evidence: Domain-owned project catalog descriptors, deterministic import plans, dependency graph contracts, diagnostics,
-    ratification, and prior-valid artifact preservation.
-  current_decision: Stabilize source descriptors for SDF graph, field product, material graph/material, UI definition, and
-    prefab descriptors in domain/asset before broad external import work or editor adapter expansion.
-  current_call: Supporting foundation for Field Visualizer, Material Lab, and prefab V2. Editor app wiring is downstream
-    WR-026 adapter work, not semantic asset truth.
-  main_blocker: Source identity must wait for rendered-world product usage evidence and avoid reopening broad external import
-    scope; domain/asset contracts must land before editor adapters expand.
-  first_move: Continue from editor-asset-pipeline-and-content-workflow-design.md by hardening domain/asset descriptors,
-    import plans, dependency contracts, diagnostics, and preservation semantics.
+  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md.
+    Domain-owned project catalog descriptors, importer-aware source descriptors, deterministic import plans, dependency
+    graph contracts, diagnostics, ratification, and prior-valid artifact preservation are implemented and validated in
+    domain/asset. WR-026 editor adapters remain downstream.
+  current_decision: Source-backed asset semantic truth now lives in domain/asset for SDF graph, field product, material
+    graph/material, UI definition, and prefab descriptor families before broad external import work or editor adapter
+    expansion.
+  current_call: Completed through the 2026-05-16 WR-020 source-backed asset core closeout. Do not reopen this slice for
+    editor app load/save, import orchestration, diagnostics UI, or provider wiring; that remains WR-026 adapter work.
+  main_blocker: Completed core contract. Follow-up editor adapter implementation requires a separate selected roadmap slice.
+  first_move: For WR-026 or later consumers, use the landed domain/asset project catalog descriptor, source/import-plan,
+    dependency, ratification, diagnostics, and prior-valid preservation APIs instead of adding semantic asset truth in apps.
   diagram_call:
   - deterministic import
   - domain-owned asset truth
@@ -872,9 +890,9 @@ items:
     prior-valid artifact preservation through domain/asset contracts.
   current_decision: Keep editor asset pipeline code as adapter/workflow wiring over domain/asset contracts, not the source
     of semantic asset truth.
-  current_call: Implement only after WR-020 lands the domain-owned source/catalog contracts.
-  main_blocker: Editor adapters must wait for domain/asset descriptor, import-plan, dependency, diagnostics, and ratification
-    contracts to stabilize.
+  current_call: Ready-next only after the WR-020 closeout; do not implement in the WR-020 thread.
+  main_blocker: Explicit user direction excludes WR-026 from this objective. Editor adapter load/save, import orchestration,
+    diagnostics surfacing, and prior-valid artifact UI need a separate selected roadmap slice.
   first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app state.
   diagram_call:
   - editor adapter wiring

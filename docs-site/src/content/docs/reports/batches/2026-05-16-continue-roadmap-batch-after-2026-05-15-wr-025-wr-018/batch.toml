@@ -1,16 +1,16 @@
 id = "2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018"
 goal = "Continue roadmap batch after 2026-05-15-continue-roadmap-batch-after-2026-05-15-wr-025-4: WR-018"
-approval_state = "proposed"
+approval_state = "rejected"
 base_branch = "main"
 base_sha = "52daa34ed11dfeb0ac16a8f15fda3df09dc20a39"
 execution_mode = "worktree"
-integration_risk = "isolated worktrees pending"
-integration_status = "not_started"
-closeout_status = "not_started"
+integration_risk = "historical rejected proposal; superseded by WR-018 closeout evidence"
+integration_status = "superseded"
+closeout_status = "not_applicable"
 integrated_target = ""
 integrated_sha = ""
 validation_results = []
-roadmap_evidence_updates = []
+roadmap_evidence_updates = ["WR-018 completed through docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md; this proposed continuation is preserved only as rejected historical planning evidence."]
 tooling_hardening = []
 
 [[items]]
@@ -24,7 +24,7 @@ branch = "codex/2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018
 worktree = ""
 worktree_cleanup = ""
 prompt_path = "docs-site/src/content/docs/reports/batches/2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018/prompts/wr-018.md"
-status = "proposed"
-roadmap_outcome = "unknown"
-write_scopes = ["apps/runenwerk_editor/src/runtime", "assets/shaders", "docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md"]
+status = "rejected"
+roadmap_outcome = "roadmap_completed"
+write_scopes = ["apps/runenwerk_editor/src/runtime", "assets/shaders", "docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md", "docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md"]
 validations = ["cargo check -p runenwerk_editor", "cargo test -p runenwerk_editor viewport", "task docs:validate"]

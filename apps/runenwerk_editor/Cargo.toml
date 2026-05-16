@@ -49,3 +49,6 @@ engine_net = { path = "../../net/engine_net" }
 engine_net_quic = { path = "../../net/engine_net_quic" }
 rustls = "0.23.37"
 tokio = { version = "1.48.0", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+naga = { version = "27.0.3", features = ["wgsl-in"] }

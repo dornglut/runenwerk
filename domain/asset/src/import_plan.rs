@@ -54,7 +54,7 @@ impl ImportPlan {
         settings: ImportSettings,
         expected_artifact_kind: AssetKind,
     ) -> Self {
-        let cache_key = deterministic_cache_key(source, &settings);
+        let cache_key = deterministic_cache_key(source, &settings, expected_artifact_kind);
         let product_job =
             product_job_descriptor_for_import(job_id, source, &settings, expected_artifact_kind);
         Self {
@@ -175,7 +175,8 @@ fn asset_kind_label(kind: AssetKind) -> &'static str {
 
 fn product_scale_band_for_import(settings: &ImportSettings) -> ProductScaleBand {
     match settings {
-        ImportSettings::WorldSdfProduct { scale_band, .. } => match scale_band.as_str() {
+        ImportSettings::WorldSdfProduct { scale_band, .. }
+        | ImportSettings::FieldProductDescriptor { scale_band } => match scale_band.as_str() {
             "near" => ProductScaleBand::Near,
             "mid" => ProductScaleBand::Mid,
             "far" => ProductScaleBand::Far,
@@ -190,6 +191,7 @@ fn product_scale_band_for_import(settings: &ImportSettings) -> ProductScaleBand 
         | ImportSettings::FieldWorldDefinition { .. }
         | ImportSettings::MaterialGraph { .. }
         | ImportSettings::Material { .. }
+        | ImportSettings::Prefab { .. }
         | ImportSettings::ProceduralTexture { .. }
         | ImportSettings::Texture2D { .. }
         | ImportSettings::Texture3DVolume { .. } => ProductScaleBand::Preview,
@@ -199,10 +201,13 @@ fn product_scale_band_for_import(settings: &ImportSettings) -> ProductScaleBand 
 
 fn product_job_priority(settings: &ImportSettings) -> i32 {
     match settings {
-        ImportSettings::WorldSdfProduct { .. } => 20,
+        ImportSettings::WorldSdfProduct { .. } | ImportSettings::FieldProductDescriptor { .. } => {
+            20
+        }
         ImportSettings::SdfGraph { .. }
         | ImportSettings::SdfBrushLayer { .. }
         | ImportSettings::FieldWorldDefinition { .. } => 10,
+        ImportSettings::Prefab { .. } => 5,
         _ => 0,
     }
 }
@@ -210,17 +215,25 @@ fn product_job_priority(settings: &ImportSettings) -> i32 {
 pub fn deterministic_cache_key(
     source: &AssetSourceDescriptor,
     settings: &ImportSettings,
+    expected_artifact_kind: AssetKind,
 ) -> ArtifactCacheKey {
     let hash = source
         .source_hash
         .as_ref()
         .map(|hash| format!("{}:{}", hash.algorithm, hash.value))
         .unwrap_or_else(|| "unhashed".to_string());
+    let importer = source
+        .importer_id
+        .as_ref()
+        .map(|importer| importer.as_str())
+        .unwrap_or("default_importer");
     ArtifactCacheKey::new(format!(
-        "asset-{}-source-{}-{}-{}",
+        "asset-{}-source-{}-{}-{}-{}-{}",
         source.asset_id.raw(),
         source.source_id.raw(),
+        importer,
         settings.stable_kind_label(),
+        asset_kind_label(expected_artifact_kind),
         hash
     ))
 }
@@ -269,6 +282,47 @@ mod tests {
                 .expect("formed product imports should declare a product job")
                 .output_products,
             vec![product::ProductIdentity::new(3)]
+        );
+    }
+
+    #[test]
+    fn importer_choice_participates_in_import_plan_cache_key() {
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(2),
+            asset_id(1),
+            AssetKind::SdfGraph,
+            "assets/fields/test.ron",
+        )
+        .with_hash(SourceHash::new("sha256", "abc"));
+        let alternate = source
+            .clone()
+            .with_importer(crate::AssetImporterId::new("alternate"));
+        let settings = ImportSettings::SdfGraph {
+            resolution: FieldProductResolution::new(64, 64, 1),
+        };
+
+        assert_ne!(
+            deterministic_cache_key(&source, &settings, AssetKind::FormedFieldProduct),
+            deterministic_cache_key(&alternate, &settings, AssetKind::FormedFieldProduct)
+        );
+    }
+
+    #[test]
+    fn expected_artifact_kind_participates_in_import_plan_cache_key() {
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(2),
+            asset_id(1),
+            AssetKind::SdfGraph,
+            "assets/fields/test.ron",
+        )
+        .with_hash(SourceHash::new("sha256", "abc"));
+        let settings = ImportSettings::SdfGraph {
+            resolution: FieldProductResolution::new(64, 64, 1),
+        };
+
+        assert_ne!(
+            deterministic_cache_key(&source, &settings, AssetKind::FormedFieldProduct),
+            deterministic_cache_key(&source, &settings, AssetKind::WorldSdfChunkPageArtifact)
         );
     }
 }

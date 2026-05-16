@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-16
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
@@ -62,9 +62,10 @@ Implemented today:
 - `assets/editor/config.ron` contains a Blender executable path, `assets/models` contains `.blend` and `.glb` files, and `tools/assets/blender_export.py::main` provides the configured `.blend -> .glb` foreign-reference export helper. These remain compatibility/reference paths, not the canonical world substrate.
 - `apps/runenwerk_editor/src/runtime/viewport/producer_field.rs` and `apps/runenwerk_editor/src/runtime/viewport/producer_volume.rs` publish displayable `Rgba8Unorm` debug preview products for the first field/volume producer breadth.
 
-Remaining gaps after M4:
+Current state after the 2026-05-16 WR-020 repair closeout:
 
-- Source-backed Asset Core is the next asset foundation slice: project catalog load/save, source descriptors, deterministic import jobs, diagnostics, and prior-valid artifact preservation for SDF graph, field product, material graph/material, UI definition, and prefab descriptors.
+- Source-backed Asset Core contracts are implemented in `domain/asset`: V1 catalog source roots with backward-compatible deserialization, strict project-relative source/artifact/catalog paths, project catalog descriptors, source descriptors with importer choice, artifact-kind-aware deterministic import plans, separate source-kind and artifact-kind import compatibility, dependency graph contracts, diagnostics, composed catalog ratification, and checked prior-valid artifact preservation for SDF graph, field product, material graph/material, UI definition, and prefab descriptor families.
+- Editor adapter work remains deferred to `WR-026`: project catalog load/save, import job orchestration, diagnostics surfacing, and prior-valid preservation UI must consume the domain contracts instead of becoming semantic asset truth.
 - Prefabs get source/catalog/design identity through `docs-site/src/content/docs/design/active/sdf-prefab-composition-system-design.md`; runtime prefab instancing remains V2-gated behind rendered-world V1 and source-backed asset identity.
 - Material Lab sources are explicit material graph documents from `docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md`; canvas state must remain a projection.
 - no project-owned data hot reload stream or runtime preview application of changed asset/product revisions;
@@ -473,5 +474,14 @@ The slice landed:
 7. Asset Browser, Import Inspector, Field Product Viewer, and SDF Brush Browser providers.
 8. Scene manifest compatibility adapter backed by the asset catalog.
 9. Blender export job execution using `tools/assets/blender_export.py::main` for configured `.blend` foreign-reference assets, with a missing-tool diagnostic path that preserves the prior valid artifact.
+
+The WR-020 source-backed asset core closeout later hardened the `domain/asset`
+contract with backward-compatible V1 catalog source roots, one strict
+project-relative path validator for source/catalog/artifact publication,
+project catalog descriptors, importer-aware source descriptors,
+artifact-kind-aware cache keys, separate source and artifact compatibility
+checks, composed catalog ratification, import-plan/source ratification, and
+checked prior-valid artifact preservation.
+Editor app adapters remain downstream `WR-026` work.
 
 This makes the asset pipeline real without forcing every future asset kind to be complete in the first patch. M5 starts from this point with runtime preview, project-owned data hot reload streams, and restart boundaries.

@@ -5,14 +5,14 @@ use glam::{Vec2, Vec3, vec2, vec3};
 use scene::{LocalTransform, Vec3Value};
 use ui_math::{UiPoint, UiRect};
 
-use crate::editor_runtime::RunenwerkEditorRuntime;
+use crate::editor_runtime::{EditorPrimitiveKind, RunenwerkEditorRuntime};
 #[cfg(test)]
 use crate::runtime::resources::editor_viewport_camera;
 use crate::runtime::resources::{
     EditorHostResource, EditorViewportCamera, EditorViewportSceneRenderPacket,
 };
 #[cfg(test)]
-use crate::runtime::systems::extract_viewport_scene_render_packet;
+use crate::runtime::systems::{entity_primitive, extract_viewport_scene_render_packet};
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
     ViewportRenderStateResource,
@@ -23,6 +23,9 @@ const GRID_EPSILON: f32 = 1e-5;
 const GIZMO_AXIS_LENGTH: f32 = 1.25;
 const GIZMO_AXIS_PICK_RADIUS_PX: f32 = 10.0;
 const HIT_DISTANCE_EPSILON: f32 = 0.0001;
+const ENTITY_RAYMARCH_HIT_EPSILON: f32 = 0.001;
+const ENTITY_RAYMARCH_MAX_DISTANCE: f32 = 64.0;
+const ENTITY_RAYMARCH_MAX_STEPS: u32 = 96;
 
 #[derive(Debug, Clone, Copy)]
 struct PickingRay {
@@ -181,12 +184,7 @@ fn pick_entity_hit(
     let mut best: Option<EditorPickingHit> = None;
 
     for primitive in scene_packet.primitives() {
-        let half_extents = primitive.first_hit_aabb_half_extents();
-        let center = primitive.translation.to_glam();
-        let min = center - half_extents;
-        let max = center + half_extents;
-
-        let Some(distance) = ray_aabb_first_hit(ray.origin, ray.direction, min, max) else {
+        let Some(distance) = ray_primitive_first_hit(ray, *primitive) else {
             continue;
         };
         let candidate = EditorPickingHit {
@@ -203,6 +201,103 @@ fn pick_entity_hit(
     }
 
     best
+}
+
+fn ray_primitive_first_hit(
+    ray: PickingRay,
+    primitive: crate::runtime::resources::EditorViewportPrimitiveInstance,
+) -> Option<f32> {
+    let mut distance_along_ray = 0.0_f32;
+    for _ in 0..ENTITY_RAYMARCH_MAX_STEPS {
+        let sample_pos = ray.origin + ray.direction * distance_along_ray;
+        let distance = primitive_signed_distance(primitive, sample_pos);
+        if distance < ENTITY_RAYMARCH_HIT_EPSILON {
+            return Some(distance_along_ray.max(0.0));
+        }
+
+        distance_along_ray += distance.max(ENTITY_RAYMARCH_HIT_EPSILON);
+        if distance_along_ray > ENTITY_RAYMARCH_MAX_DISTANCE {
+            return None;
+        }
+    }
+
+    None
+}
+
+fn primitive_signed_distance(
+    primitive: crate::runtime::resources::EditorViewportPrimitiveInstance,
+    sample_pos: Vec3,
+) -> f32 {
+    let center = primitive.translation.to_glam();
+    match primitive.primitive_kind {
+        EditorPrimitiveKind::Sphere => {
+            (sample_pos - center).length() - primitive.sphere_radius.max(0.05)
+        }
+        EditorPrimitiveKind::Capsule => signed_distance_capsule(
+            sample_pos,
+            center,
+            primitive.capsule_radius.max(0.05),
+            primitive.capsule_half_height.max(0.05),
+        ),
+        EditorPrimitiveKind::Cylinder => signed_distance_cylinder(
+            sample_pos,
+            center,
+            primitive.capsule_radius.max(0.05),
+            primitive.capsule_half_height.max(0.05),
+        ),
+        EditorPrimitiveKind::Torus => signed_distance_torus(
+            sample_pos,
+            center,
+            (primitive.sphere_radius * 1.5).max(0.05),
+            (primitive.sphere_radius * 0.5).max(0.05),
+        ),
+        EditorPrimitiveKind::Plane => signed_distance_box(
+            sample_pos,
+            center,
+            vec3(
+                primitive.box_half_extents.x.max(0.05),
+                primitive.box_half_extents.y.clamp(0.01, 0.05),
+                primitive.box_half_extents.z.max(0.05),
+            ),
+        ),
+        EditorPrimitiveKind::Box => {
+            signed_distance_box(sample_pos, center, primitive.box_half_extents.to_glam())
+        }
+    }
+}
+
+fn signed_distance_box(sample_pos: Vec3, center: Vec3, half_extents: Vec3) -> f32 {
+    let q = (sample_pos - center).abs() - half_extents;
+    let outside = q.max(Vec3::ZERO).length();
+    let inside = q.x.max(q.y.max(q.z)).min(0.0);
+    outside + inside
+}
+
+fn signed_distance_capsule(sample_pos: Vec3, center: Vec3, radius: f32, half_height: f32) -> f32 {
+    let local = sample_pos - center;
+    let clamped_y = local.y.clamp(-half_height, half_height);
+    let closest = vec3(0.0, clamped_y, 0.0);
+    (local - closest).length() - radius
+}
+
+fn signed_distance_cylinder(sample_pos: Vec3, center: Vec3, radius: f32, half_height: f32) -> f32 {
+    let local = sample_pos - center;
+    let d = vec2(
+        vec2(local.x, local.z).length() - radius,
+        local.y.abs() - half_height,
+    );
+    d.x.max(d.y).min(0.0) + d.max(Vec2::ZERO).length()
+}
+
+fn signed_distance_torus(
+    sample_pos: Vec3,
+    center: Vec3,
+    major_radius: f32,
+    minor_radius: f32,
+) -> f32 {
+    let local = sample_pos - center;
+    let q = vec2(vec2(local.x, local.z).length() - major_radius, local.y);
+    q.length() - minor_radius
 }
 
 fn pick_grid_hit(ray: PickingRay) -> Option<EditorPickingHit> {
@@ -347,40 +442,6 @@ fn viewport_ray(
     })
 }
 
-fn ray_aabb_first_hit(origin: Vec3, direction: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
-    let mut t_min = 0.0_f32;
-    let mut t_max = f32::INFINITY;
-
-    for axis in 0..3 {
-        let o = origin[axis];
-        let d = direction[axis];
-        let min_value = min[axis];
-        let max_value = max[axis];
-
-        if d.abs() <= f32::EPSILON {
-            if o < min_value || o > max_value {
-                return None;
-            }
-            continue;
-        }
-
-        let inv_d = 1.0 / d;
-        let mut t0 = (min_value - o) * inv_d;
-        let mut t1 = (max_value - o) * inv_d;
-        if t0 > t1 {
-            std::mem::swap(&mut t0, &mut t1);
-        }
-
-        t_min = t_min.max(t0);
-        t_max = t_max.min(t1);
-        if t_max < t_min {
-            return None;
-        }
-    }
-
-    Some(t_min.max(0.0))
-}
-
 fn entity_transform(runtime: &RunenwerkEditorRuntime, entity: EntityId) -> Option<LocalTransform> {
     let ecs_entity = runtime.ids().resolve_entity(entity)?;
     runtime.world().get::<LocalTransform>(ecs_entity).copied()
@@ -469,6 +530,27 @@ mod tests {
         register_mvp_component_types(app.runtime_mut());
         bootstrap_mvp_scene_if_empty(app.runtime_mut()).expect("mvp bootstrap should succeed");
         app.runtime
+    }
+
+    fn entity_with_primitive_kind(
+        runtime: &RunenwerkEditorRuntime,
+        kind: EditorPrimitiveKind,
+    ) -> EntityId {
+        runtime
+            .document()
+            .entity_ids()
+            .find(|entity| {
+                entity_primitive(runtime, *entity)
+                    .map(|(_, primitive)| primitive.kind() == kind)
+                    .unwrap_or(false)
+            })
+            .expect("runtime should contain an entity with requested primitive kind")
+    }
+
+    fn remove_all_editor_primitives(runtime: &mut RunenwerkEditorRuntime) {
+        for entity in runtime.document().entity_ids().collect::<Vec<_>>() {
+            let _ = runtime.remove_component_for_editor_entity::<EditorPrimitive>(entity);
+        }
     }
 
     fn create_sdf_primitive(
@@ -574,11 +656,7 @@ mod tests {
     #[test]
     fn compose_hit_returns_entity_for_primitive_intersection() {
         let runtime = seeded_runtime();
-        let entity = runtime
-            .document()
-            .entity_ids()
-            .next()
-            .expect("seeded runtime should contain one entity");
+        let entity = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Box);
         let transform = entity_transform(&runtime, entity).expect("entity should have transform");
         let camera = editor_viewport_camera();
         let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
@@ -607,11 +685,7 @@ mod tests {
     #[test]
     fn viewport_center_ray_hits_seeded_box_with_viewport_local_aspect() {
         let runtime = seeded_runtime();
-        let entity = runtime
-            .document()
-            .entity_ids()
-            .next()
-            .expect("seeded runtime should contain one entity");
+        let entity = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Box);
         let viewport_bounds = UiRect::new(96.0, 72.0, 960.0, 540.0);
         let cursor = UiPoint::new(
             viewport_bounds.x + viewport_bounds.width * 0.5,
@@ -714,14 +788,7 @@ mod tests {
     #[test]
     fn compose_hit_returns_grid_when_no_entity_intersection() {
         let mut runtime = seeded_runtime();
-        let entity = runtime
-            .document()
-            .entity_ids()
-            .next()
-            .expect("seeded runtime should contain one entity");
-        runtime
-            .remove_component_for_editor_entity::<EditorPrimitive>(entity)
-            .expect("primitive should be removable");
+        remove_all_editor_primitives(&mut runtime);
 
         let camera = editor_viewport_camera();
         let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
@@ -748,14 +815,7 @@ mod tests {
     #[test]
     fn compose_hit_returns_none_for_parallel_ray_without_entity() {
         let mut runtime = seeded_runtime();
-        let entity = runtime
-            .document()
-            .entity_ids()
-            .next()
-            .expect("seeded runtime should contain one entity");
-        runtime
-            .remove_component_for_editor_entity::<EditorPrimitive>(entity)
-            .expect("primitive should be removable");
+        remove_all_editor_primitives(&mut runtime);
         let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
 
         let hit = compose_picking_hit(
@@ -775,6 +835,93 @@ mod tests {
 
         assert_eq!(hit.target, EditorPickingTarget::None);
         assert!(hit.distance.is_infinite());
+    }
+
+    #[test]
+    fn viewport_cpu_picking_hits_bootstrap_ground_plane_as_entity() {
+        let runtime = seeded_runtime();
+        let ground = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Plane);
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = compose_picking_hit(
+            &runtime,
+            &scene_packet,
+            None,
+            None,
+            UiPoint::new(640.0, 360.0),
+            UiRect::new(0.0, 0.0, 1280.0, 720.0),
+            editor_viewport_camera(),
+            crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+            PickingRay {
+                origin: vec3(4.0, 4.0, 4.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        );
+
+        assert_eq!(hit.target, EditorPickingTarget::Entity(ground.0));
+    }
+
+    #[test]
+    fn viewport_cpu_entity_picking_respects_torus_hole() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let _torus = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Torus",
+            SceneVec3::new(0.0, 0.0, 0.0),
+            SdfPrimitiveKind::Torus,
+        );
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let hit = pick_entity_hit(
+            &scene_packet,
+            PickingRay {
+                origin: vec3(0.0, 5.0, 0.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        );
+
+        assert!(
+            hit.is_none(),
+            "ray through the torus hole must not be accepted by a broad AABB"
+        );
+    }
+
+    #[test]
+    fn viewport_cpu_entity_picking_respects_plane_slab_bounds() {
+        let mut runtime = RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let plane = create_sdf_primitive(
+            &mut runtime,
+            10,
+            "Plane",
+            SceneVec3::new(0.0, 0.0, 0.0),
+            SdfPrimitiveKind::Plane,
+        );
+        let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
+
+        let inside_hit = pick_entity_hit(
+            &scene_packet,
+            PickingRay {
+                origin: vec3(0.0, 2.0, 0.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        )
+        .expect("ray over plane slab should hit entity");
+        let outside_hit = pick_entity_hit(
+            &scene_packet,
+            PickingRay {
+                origin: vec3(2.0, 2.0, 0.0),
+                direction: vec3(0.0, -1.0, 0.0),
+            },
+        );
+
+        assert_eq!(inside_hit.target, EditorPickingTarget::Entity(plane.0));
+        assert!(
+            outside_hit.is_none(),
+            "ray outside bounded plane extents must not report an entity hit"
+        );
     }
 
     #[test]

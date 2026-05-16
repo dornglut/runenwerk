@@ -46,12 +46,19 @@ Owning domain/app roadmap docs remain the source of truth for detailed sequencin
 
 ## Now (Current Cross-Repo Priorities)
 
-- [ ] `WR-018`: Implement rendered-world V1 by keeping all editor SDF primitive
-  rendering and picking on one extracted viewport scene packet (source:
-  `design/active/editor-rendered-world-and-multi-entity-viewport-design.md`).
-- [ ] `WR-025`: Lead UI Runtime V2 interaction formation before more local
+- [x] `WR-018`: Implement rendered-world V1 by keeping all editor SDF primitive
+  rendering and picking on one extracted viewport scene packet. Status:
+  completed and validated as of 2026-05-16 (source:
+  `reports/closeouts/wr-018-rendered-world-v1/closeout.md`).
+- [x] `WR-020`: Implement source-backed asset core contracts in `domain/asset`
+  before editor app adapter work: source descriptors, deterministic import
+  plans, dependency graph contracts, diagnostics, ratification, and prior-valid
+  artifact preservation. Status: completed and validated as of 2026-05-16
+  (source:
+  `reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md`).
+- [x] `WR-025`: Lead UI Runtime V2 interaction formation before more local
   popup, scroll, chrome, docking, or viewport-input polish accumulates (source:
-  `adr/accepted/0009-ui-interaction-formation-v2.md`).
+  `reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md`).
 - [ ] `WR-024`: Keep editor shell polish ready-next behind `WR-025`; land it
   only as retained-UI implementation slices consuming Interaction V2 contracts
   or as explicitly bounded compatibility evidence (source:
@@ -78,9 +85,9 @@ Remaining near-term blockers:
 
 - `WR-007`: complete; next net work is Phase 4 standard ECS component
   extraction/apply, but it needs a fresh roadmap slice before implementation.
-- `WR-018`: multi-entity SDF packet rendering, shader packet use, and picking
-  consistency need code and tests before material, prefab, or terrain work
-  expands.
+- `WR-026`: editor adapter load/save, import orchestration, diagnostics
+  surfacing, and prior-valid artifact UI need a separate selected roadmap slice
+  over the completed WR-020 domain contracts.
 - `WR-024`: viewport statistics, popup contrast, scroll behavior, submenu
   anchoring, close affordances, and active indicator slots wait on the WR-025
   contract/migration spine before becoming durable shell/layout work.

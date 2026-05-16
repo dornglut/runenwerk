@@ -892,18 +892,73 @@ def test_hygiene_uses_portable_merged_branch_option_order(monkeypatch: pytest.Mo
     assert commands == [["branch", "--format=%(refname:short)", "--merged"]]
 
 
-def test_roadmap_completion_requires_evidence() -> None:
+def test_roadmap_completion_rejects_vague_evidence_without_path() -> None:
     state = valid_state()
     state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["next_evidence"] = "Validated and complete."
     roadmap = RoadmapState.model_validate(state)
 
     assert validate_completion_evidence(roadmap.items) == [
-        "WR-001: completed items must reference closeout evidence, batch evidence, or explicit implementation evidence"
+        "WR-001: completed items must reference an existing completed closeout or batch evidence path"
     ]
 
-    state["items"][0]["next_evidence"] = "2026-05-15 batch evidence landed."
+
+def test_roadmap_completion_rejects_missing_closeout_path(tmp_path: Path) -> None:
+    evidence_path = "docs-site/src/content/docs/reports/closeouts/wr-001-test/closeout.md"
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["next_evidence"] = f"Closeout evidence landed in {evidence_path}."
+    state["items"][0]["write_scopes"] = [evidence_path]
     roadmap = RoadmapState.model_validate(state)
-    assert validate_completion_evidence(roadmap.items) == []
+
+    assert validate_completion_evidence(roadmap.items, repo_root=tmp_path) == [
+        f"WR-001: completion evidence path does not exist: {evidence_path}"
+    ]
+
+
+def test_roadmap_completion_rejects_non_completed_closeout_frontmatter(tmp_path: Path) -> None:
+    evidence_path = "docs-site/src/content/docs/reports/closeouts/wr-001-test/closeout.md"
+    closeout = tmp_path / evidence_path
+    closeout.parent.mkdir(parents=True)
+    closeout.write_text("---\nstatus: draft\n---\n# Draft\n", encoding="utf-8")
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["next_evidence"] = f"Closeout evidence landed in {evidence_path}."
+    state["items"][0]["write_scopes"] = [evidence_path]
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_evidence(roadmap.items, repo_root=tmp_path) == [
+        f"WR-001: completion closeout evidence status 'draft' is not 'completed': {evidence_path}"
+    ]
+
+
+def test_roadmap_completion_requires_evidence_path_in_write_scopes(tmp_path: Path) -> None:
+    evidence_path = "docs-site/src/content/docs/reports/closeouts/wr-001-test/closeout.md"
+    closeout = tmp_path / evidence_path
+    closeout.parent.mkdir(parents=True)
+    closeout.write_text("---\nstatus: completed\n---\n# Done\n", encoding="utf-8")
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["next_evidence"] = f"Closeout evidence landed in {evidence_path}."
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_evidence(roadmap.items, repo_root=tmp_path) == [
+        "WR-001: completed items must include a completed closeout or batch evidence path in write_scopes"
+    ]
+
+
+def test_roadmap_completion_accepts_completed_closeout_evidence(tmp_path: Path) -> None:
+    evidence_path = "docs-site/src/content/docs/reports/closeouts/wr-001-test/closeout.md"
+    closeout = tmp_path / evidence_path
+    closeout.parent.mkdir(parents=True)
+    closeout.write_text("---\nstatus: completed\n---\n# Done\n", encoding="utf-8")
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["next_evidence"] = f"Closeout evidence landed in {evidence_path}."
+    state["items"][0]["write_scopes"] = [evidence_path]
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_evidence(roadmap.items, repo_root=tmp_path) == []
 
 
 def test_completed_items_are_rejected_from_current_docs(tmp_path: Path) -> None:

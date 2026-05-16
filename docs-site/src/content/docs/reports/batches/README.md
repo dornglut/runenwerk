@@ -18,9 +18,16 @@ the generated roadmap view is
 
 ## Current Proposal
 
-- [`2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018`](2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018/batch.toml):
-  proposed WR-018 continuation batch. This is not closeout evidence until it is
-  approved, prepared, integrated, finalized, and rendered as a batch report.
+No active parallel roadmap batch proposal is indexed here. `WR-018` and
+`WR-020` are completed closeout evidence, and `WR-026` editor adapters remain
+not-started downstream work.
+
+## Historical Proposal Artifacts
+
+- [`2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018`](2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018/prompts/wr-018.md):
+  rejected WR-018 continuation proposal preserved for audit only. WR-018
+  completion evidence lives in
+  [`../closeouts/wr-018-rendered-world-v1/closeout.md`](../closeouts/wr-018-rendered-world-v1/closeout.md).
 
 ## Completed Batch Evidence
 

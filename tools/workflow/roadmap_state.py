@@ -33,6 +33,14 @@ BATCH_SCHEMA = SCHEMA_DIR / "batch-manifest.schema.json"
 ALLOWED_EFFORTS = {1, 2, 3, 5, 8, 13}
 ALLOWED_CONFIDENCE = {1.0, 0.8, 0.5, 0.3}
 ID_PATTERN = re.compile(r"^WR-\d{3}$")
+COMPLETION_EVIDENCE_PATTERN = re.compile(
+    r"docs-site/src/content/docs/reports/(?:closeouts|batches)/[^\s`\"'<>)\]]+"
+)
+COMPLETION_EVIDENCE_ROOTS = (
+    "docs-site/src/content/docs/reports/closeouts/",
+    "docs-site/src/content/docs/reports/batches/",
+)
+COMPLETED_BATCH_INTEGRATION_STATUSES = {"merged", "integrated"}
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanningState = Literal["current_candidate", "support_only", "ready_next", "completed", "blocked_deferred"]
@@ -543,24 +551,91 @@ def validate_changed_paths(paths: list[str], scopes: list[str]) -> list[str]:
     return violations
 
 
-def validate_completion_evidence(items: list[RoadmapItem]) -> list[str]:
+def validate_completion_evidence(items: list[RoadmapItem], repo_root: Path = REPO_ROOT) -> list[str]:
     errors: list[str] = []
     for item in items:
         if item.planning_state != "completed":
             continue
-        evidence = " ".join(
-            [
-                item.next_evidence,
-                item.current_decision,
-                item.current_call,
-                item.first_move,
-            ]
-        ).lower()
-        if not any(marker in evidence for marker in ("closeout", "batch", "landed", "implemented", "validated", "complete")):
+        evidence_paths = completion_evidence_paths(item)
+        if not evidence_paths:
             errors.append(
-                f"{item.id}: completed items must reference closeout evidence, batch evidence, or explicit implementation evidence"
+                f"{item.id}: completed items must reference an existing completed closeout or batch evidence path"
+            )
+            continue
+        accepted_paths: list[str] = []
+        for path in evidence_paths:
+            evidence_error = completion_evidence_status_error(item, path, repo_root)
+            if evidence_error:
+                errors.append(evidence_error)
+            else:
+                accepted_paths.append(path)
+        write_scope_paths = {normalize_repo_path(scope) for scope in item.write_scopes}
+        if accepted_paths and not any(path in write_scope_paths for path in accepted_paths):
+            errors.append(
+                f"{item.id}: completed items must include a completed closeout or batch evidence path in write_scopes"
             )
     return errors
+
+
+def completion_evidence_paths(item: RoadmapItem) -> list[str]:
+    paths: list[str] = []
+    evidence_text = " ".join(
+        [
+            item.next_evidence,
+            item.current_decision,
+            item.current_call,
+            item.first_move,
+        ]
+    )
+    for match in COMPLETION_EVIDENCE_PATTERN.finditer(evidence_text):
+        append_completion_evidence_path(paths, match.group(0))
+    for scope in item.write_scopes:
+        append_completion_evidence_path(paths, scope)
+    return paths
+
+
+def append_completion_evidence_path(paths: list[str], path: str) -> None:
+    normalized = normalize_completion_evidence_path(path)
+    if not is_completion_evidence_path(normalized):
+        return
+    if normalized not in paths:
+        paths.append(normalized)
+
+
+def normalize_completion_evidence_path(path: str) -> str:
+    return normalize_repo_path(path).rstrip(".,;:")
+
+
+def is_completion_evidence_path(path: str) -> bool:
+    return any(path.startswith(root) for root in COMPLETION_EVIDENCE_ROOTS)
+
+
+def completion_evidence_status_error(item: RoadmapItem, path: str, repo_root: Path) -> str | None:
+    evidence_path = repo_root / path
+    if not evidence_path.exists():
+        return f"{item.id}: completion evidence path does not exist: {path}"
+    if path.startswith("docs-site/src/content/docs/reports/closeouts/"):
+        status = document_frontmatter_status(evidence_path)
+        if status is None:
+            return f"{item.id}: completion closeout evidence has no frontmatter status: {path}"
+        if status.lower() != "completed":
+            return f"{item.id}: completion closeout evidence status {status!r} is not 'completed': {path}"
+        return None
+    manifest_path = evidence_path if evidence_path.name == "batch.toml" else evidence_path.parent / "batch.toml"
+    if not manifest_path.exists():
+        return f"{item.id}: completion batch evidence has no batch.toml manifest: {path}"
+    try:
+        manifest = load_batch_manifest(manifest_path)
+    except (OSError, tomllib.TOMLDecodeError, ValueError) as error:
+        return f"{item.id}: completion batch evidence is not a valid batch manifest: {repo_path(manifest_path)} ({error})"
+    if manifest.integration_status not in COMPLETED_BATCH_INTEGRATION_STATUSES or manifest.closeout_status != "completed":
+        return (
+            f"{item.id}: completion batch evidence is not finalized: {repo_path(manifest_path)} "
+            f"(integration_status={manifest.integration_status!r}, closeout_status={manifest.closeout_status!r})"
+        )
+    if item.id not in {batch_item.id for batch_item in manifest.items}:
+        return f"{item.id}: completion batch evidence does not include this roadmap item: {repo_path(manifest_path)}"
+    return None
 
 
 def validate_current_candidate_decision_gates(items: list[RoadmapItem]) -> list[str]:

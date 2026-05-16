@@ -26,7 +26,7 @@ struct VsOut {
 
 struct PickingHit {
     hit : bool,
-    entity_id : u32,
+    pick_slot : u32,
 };
 
 @vertex
@@ -151,10 +151,10 @@ fn scene_sdf(sample_pos: vec3<f32>) -> f32 {
     return distance;
 }
 
-fn nearest_entity_id(sample_pos: vec3<f32>) -> u32 {
+fn nearest_pick_slot(sample_pos: vec3<f32>) -> u32 {
     let count = primitive_count();
     var best_distance = 1e9;
-    var best_entity_id = 0u;
+    var best_pick_slot = 0u;
     var index = 0u;
     loop {
         if index >= count {
@@ -163,11 +163,11 @@ fn nearest_entity_id(sample_pos: vec3<f32>) -> u32 {
         let primitive_distance = abs(sdf_primitive_slot(sample_pos, index));
         if primitive_distance < best_distance {
             best_distance = primitive_distance;
-            best_entity_id = u.primitive_slot_flags[index].y;
+            best_pick_slot = u.primitive_slot_flags[index].y;
         }
         index = index + 1u;
     }
-    return best_entity_id;
+    return best_pick_slot;
 }
 
 fn march_scene(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> PickingHit {
@@ -182,7 +182,7 @@ fn march_scene(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> PickingHit {
         let sample_pos = ray_origin + ray_dir * t;
         let distance = scene_sdf(sample_pos);
         if distance < 0.001 {
-            return PickingHit(true, nearest_entity_id(sample_pos));
+            return PickingHit(true, nearest_pick_slot(sample_pos));
         }
 
         t = t + distance;
@@ -217,7 +217,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) u32 {
     );
     let hit = march_scene(ray_origin, ray_dir);
     if hit.hit {
-        return hit.entity_id;
+        return hit.pick_slot;
     }
     return 0u;
 }

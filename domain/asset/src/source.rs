@@ -53,6 +53,19 @@ impl SourceHash {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct AssetImporterId(String);
+
+impl AssetImporterId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AssetSourceProvenance {
@@ -79,6 +92,8 @@ pub struct AssetSourceDescriptor {
     pub source_root_id: Option<AssetSourceRootId>,
     pub relative_path: String,
     pub source_hash: Option<SourceHash>,
+    #[serde(default)]
+    pub importer_id: Option<AssetImporterId>,
     pub provenance: AssetSourceProvenance,
     pub authored_field_document_kind: Option<AuthoredFieldDocumentKind>,
     pub revision_id: AssetSourceRevisionId,
@@ -107,6 +122,7 @@ impl AssetSourceDescriptor {
             source_root_id: None,
             relative_path: relative_path.into(),
             source_hash: None,
+            importer_id: None,
             provenance: AssetSourceProvenance::Authored,
             authored_field_document_kind,
             revision_id: asset_source_revision_id(1),
@@ -120,6 +136,11 @@ impl AssetSourceDescriptor {
 
     pub fn with_source_root(mut self, source_root_id: AssetSourceRootId) -> Self {
         self.source_root_id = Some(source_root_id);
+        self
+    }
+
+    pub fn with_importer(mut self, importer_id: AssetImporterId) -> Self {
+        self.importer_id = Some(importer_id);
         self
     }
 

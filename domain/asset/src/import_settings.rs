@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::AssetKind;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldProductResolution {
     pub width: u32,
@@ -67,11 +69,17 @@ pub enum ImportSettings {
         resolution: FieldProductResolution,
         scale_band: String,
     },
+    FieldProductDescriptor {
+        scale_band: String,
+    },
     MaterialGraph {
         lowering_target: String,
     },
     Material {
         product_target: String,
+    },
+    Prefab {
+        descriptor_profile: String,
     },
     ProceduralTexture {
         resolution: TextureProductResolution,
@@ -106,8 +114,10 @@ impl ImportSettings {
             Self::SdfBrushLayer { .. } => "sdf_brush_layer",
             Self::FieldWorldDefinition { .. } => "field_world_definition",
             Self::WorldSdfProduct { .. } => "world_sdf_product",
+            Self::FieldProductDescriptor { .. } => "field_product_descriptor",
             Self::MaterialGraph { .. } => "material_graph",
             Self::Material { .. } => "material",
+            Self::Prefab { .. } => "prefab",
             Self::ProceduralTexture { .. } => "procedural_texture",
             Self::Texture2D { .. } => "texture_2d",
             Self::Texture3DVolume { .. } => "texture_3d_volume",
@@ -118,5 +128,86 @@ impl ImportSettings {
             Self::UiDefinition => "ui_definition",
             Self::RawRon { .. } => "raw_ron",
         }
+    }
+
+    pub const fn supports_source_kind(&self, kind: AssetKind) -> bool {
+        matches!(
+            (self, kind),
+            (Self::SdfGraph { .. }, AssetKind::SdfGraph)
+                | (Self::SdfBrushLayer { .. }, AssetKind::SdfBrushLayer)
+                | (
+                    Self::FieldWorldDefinition { .. },
+                    AssetKind::FieldWorldDefinition
+                )
+                | (Self::WorldSdfProduct { .. }, AssetKind::SdfGraph)
+                | (
+                    Self::WorldSdfProduct { .. },
+                    AssetKind::FieldWorldDefinition
+                )
+                | (
+                    Self::FieldProductDescriptor { .. },
+                    AssetKind::FormedFieldProduct
+                )
+                | (Self::MaterialGraph { .. }, AssetKind::MaterialGraph)
+                | (Self::Material { .. }, AssetKind::Material)
+                | (Self::Prefab { .. }, AssetKind::Prefab)
+                | (Self::ProceduralTexture { .. }, AssetKind::ProceduralTexture)
+                | (Self::Texture2D { .. }, AssetKind::Texture2D)
+                | (Self::Texture3DVolume { .. }, AssetKind::Texture3DVolume)
+                | (
+                    Self::ForeignBlend { .. },
+                    AssetKind::ForeignMeshReferenceSource
+                )
+                | (Self::ForeignGltf, AssetKind::ForeignMeshReferenceSource)
+                | (Self::Scene, AssetKind::Scene)
+                | (Self::Shader, AssetKind::Shader)
+                | (Self::UiDefinition, AssetKind::UiDefinition)
+                | (Self::RawRon { .. }, AssetKind::Graph)
+                | (Self::RawRon { .. }, AssetKind::Theme)
+                | (Self::RawRon { .. }, AssetKind::Menu)
+                | (Self::RawRon { .. }, AssetKind::Shortcut)
+                | (Self::RawRon { .. }, AssetKind::WorkspaceDefinition)
+                | (Self::RawRon { .. }, AssetKind::EditorDefinition)
+        )
+    }
+
+    pub const fn supports_artifact_kind(&self, kind: AssetKind) -> bool {
+        matches!(
+            (self, kind),
+            (Self::SdfGraph { .. }, AssetKind::FormedFieldProduct)
+                | (Self::SdfBrushLayer { .. }, AssetKind::FormedFieldProduct)
+                | (
+                    Self::FieldWorldDefinition { .. },
+                    AssetKind::FormedFieldProduct
+                )
+                | (
+                    Self::WorldSdfProduct { .. },
+                    AssetKind::WorldSdfChunkPageArtifact
+                )
+                | (
+                    Self::FieldProductDescriptor { .. },
+                    AssetKind::FormedFieldProduct
+                )
+                | (Self::MaterialGraph { .. }, AssetKind::Material)
+                | (Self::Material { .. }, AssetKind::Material)
+                | (Self::Prefab { .. }, AssetKind::Prefab)
+                | (Self::ProceduralTexture { .. }, AssetKind::ProceduralTexture)
+                | (Self::Texture2D { .. }, AssetKind::Texture2D)
+                | (Self::Texture3DVolume { .. }, AssetKind::Texture3DVolume)
+                | (
+                    Self::ForeignBlend { .. },
+                    AssetKind::ForeignMeshReferenceArtifact
+                )
+                | (Self::ForeignGltf, AssetKind::ForeignMeshReferenceArtifact)
+                | (Self::Scene, AssetKind::Scene)
+                | (Self::Shader, AssetKind::Shader)
+                | (Self::UiDefinition, AssetKind::UiDefinition)
+                | (Self::RawRon { .. }, AssetKind::Graph)
+                | (Self::RawRon { .. }, AssetKind::Theme)
+                | (Self::RawRon { .. }, AssetKind::Menu)
+                | (Self::RawRon { .. }, AssetKind::Shortcut)
+                | (Self::RawRon { .. }, AssetKind::WorkspaceDefinition)
+                | (Self::RawRon { .. }, AssetKind::EditorDefinition)
+        )
     }
 }

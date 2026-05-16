@@ -78,10 +78,6 @@ fn sdf_plane_slab(sample_pos: vec3<f32>, center: vec3<f32>, half_extents: vec3<f
     return sdf_box(sample_pos, center, slab_extents);
 }
 
-fn sdf_main_primitive(sample_pos: vec3<f32>) -> f32 {
-    return sdf_primitive_slot(sample_pos, 0u);
-}
-
 fn primitive_count() -> u32 {
     return min(u.primitive_flags.y, MAX_PRIMITIVES);
 }
@@ -136,17 +132,9 @@ fn sdf_primitive_slot(sample_pos: vec3<f32>, primitive_index: u32) -> f32 {
     );
 }
 
-fn sdf_ground_box(sample_pos: vec3<f32>) -> f32 {
-    return sdf_box(sample_pos, vec3<f32>(0.0, -1.0, 0.0), vec3<f32>(8.0, 0.25, 8.0));
-}
-
 fn scene_sdf(sample_pos: vec3<f32>) -> f32 {
-    var distance = sdf_ground_box(sample_pos);
+    var distance = 1e9;
     let count = primitive_count();
-    if count == 0u {
-        return distance;
-    }
-
     var index = 0u;
     loop {
         if index >= count {
@@ -156,25 +144,6 @@ fn scene_sdf(sample_pos: vec3<f32>) -> f32 {
         index = index + 1u;
     }
     return distance;
-}
-
-fn is_ground_hit(sample_pos: vec3<f32>) -> bool {
-    let ground_distance = abs(sdf_ground_box(sample_pos));
-    let count = primitive_count();
-    if count == 0u {
-        return true;
-    }
-
-    var primitive_distance = 1e9;
-    var index = 0u;
-    loop {
-        if index >= count {
-            break;
-        }
-        primitive_distance = min(primitive_distance, abs(sdf_primitive_slot(sample_pos, index)));
-        index = index + 1u;
-    }
-    return ground_distance <= primitive_distance;
 }
 
 fn hit_primitive_flags(sample_pos: vec3<f32>) -> vec4<u32> {
@@ -206,31 +175,6 @@ fn estimate_normal(sample_pos: vec3<f32>) -> vec3<f32> {
     let ny = scene_sdf(sample_pos + vec3<f32>(0.0, e, 0.0)) - scene_sdf(sample_pos - vec3<f32>(0.0, e, 0.0));
     let nz = scene_sdf(sample_pos + vec3<f32>(0.0, 0.0, e)) - scene_sdf(sample_pos - vec3<f32>(0.0, 0.0, e));
     return normalize(vec3<f32>(nx, ny, nz));
-}
-
-fn grid_color(sample_pos: vec3<f32>) -> vec3<f32> {
-    let major = abs(fract(sample_pos.xz / 2.0) - vec2<f32>(0.5, 0.5));
-    let minor = abs(fract(sample_pos.xz / 0.5) - vec2<f32>(0.5, 0.5));
-    let major_line = max(1.0 - min(major.x, major.y) * 20.0, 0.0);
-    let minor_line = max(1.0 - min(minor.x, minor.y) * 50.0, 0.0);
-    let base = vec3<f32>(0.10, 0.11, 0.13);
-    return base + vec3<f32>(0.10, 0.11, 0.13) * major_line + vec3<f32>(0.04, 0.04, 0.05) * minor_line;
-}
-
-fn grid_shade(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> vec4<f32> {
-    if abs(ray_dir.y) < 1e-5 {
-        return vec4<f32>(0.09, 0.10, 0.12, 1.0);
-    }
-
-    let t = -ray_origin.y / ray_dir.y;
-    if t <= 0.0 {
-        return vec4<f32>(0.09, 0.10, 0.12, 1.0);
-    }
-
-    let hit = ray_origin + ray_dir * t;
-    let color = grid_color(hit);
-    let fog = clamp(1.0 - t * 0.03, 0.0, 1.0);
-    return vec4<f32>(mix(vec3<f32>(0.09, 0.10, 0.12), color, fog), 1.0);
 }
 
 struct RaymarchResult {
@@ -268,6 +212,10 @@ fn march_scene(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> RaymarchResult {
 
 fn color_magenta() -> vec4<f32> {
     return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+}
+
+fn viewport_background() -> vec4<f32> {
+    return vec4<f32>(0.09, 0.10, 0.12, 1.0);
 }
 
 @fragment
@@ -327,11 +275,8 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         return vec4<f32>(0.0, 0.35, 1.0, 1.0);
     }
 
-    if !has_primitive {
-        return grid_shade(ray_origin, ray_dir);
-    }
-    if !ray_hit {
-        return grid_shade(ray_origin, ray_dir);
+    if !has_primitive || !ray_hit {
+        return viewport_background();
     }
 
     let sample_pos = ray_origin + ray_dir * ray_hit_distance;
@@ -340,16 +285,12 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let diff = max(dot(normal, light_dir), 0.1);
     let rim = pow(max(1.0 - max(dot(normal, -ray_dir), 0.0), 0.0), 2.0);
     var base = vec3<f32>(0.72, 0.74, 0.77);
-    if is_ground_hit(sample_pos) {
-        base = vec3<f32>(0.34, 0.37, 0.41);
-    } else {
-        let flags = hit_primitive_flags(sample_pos);
-        if flags.z != 0u {
-            base = vec3<f32>(0.86, 0.78, 0.46);
-        }
-        if flags.w != 0u {
-            base = mix(base, vec3<f32>(0.40, 0.72, 0.96), 0.45);
-        }
+    let flags = hit_primitive_flags(sample_pos);
+    if flags.z != 0u {
+        base = vec3<f32>(0.86, 0.78, 0.46);
+    }
+    if flags.w != 0u {
+        base = mix(base, vec3<f32>(0.40, 0.72, 0.96), 0.45);
     }
     let lit = base * diff + vec3<f32>(0.15, 0.20, 0.28) * rim;
     return vec4<f32>(lit, 1.0);

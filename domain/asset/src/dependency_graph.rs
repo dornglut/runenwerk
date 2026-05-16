@@ -40,6 +40,17 @@ impl AssetDependencyGraph {
             .flat_map(|set| set.iter().copied())
     }
 
+    pub fn dependency_edges(&self) -> impl Iterator<Item = (AssetId, AssetId)> + '_ {
+        self.dependencies_by_asset
+            .iter()
+            .flat_map(|(asset_id, dependencies)| {
+                dependencies
+                    .iter()
+                    .copied()
+                    .map(|depends_on| (*asset_id, depends_on))
+            })
+    }
+
     pub fn invalidation_order_from(&self, changed_asset_id: AssetId) -> Vec<AssetId> {
         let mut visited = BTreeSet::new();
         let mut stack = vec![changed_asset_id];

@@ -247,8 +247,14 @@ def validate_domain_map_alignment(errors: list[str]) -> None:
         errors.append("canonical domain map references stale domain/id_macros path; use foundation/id_macros")
 
 def batch_index_current_proposals(index_text: str) -> set[str]:
+    return batch_index_section_entries(index_text, "Current Proposal")
+
+def batch_index_historical_proposals(index_text: str) -> set[str]:
+    return batch_index_section_entries(index_text, "Historical Proposal Artifacts")
+
+def batch_index_section_entries(index_text: str, section_title: str) -> set[str]:
     match = re.search(
-        r"## Current Proposal(?P<section>.*?)(?:\n## |\Z)",
+        rf"## {re.escape(section_title)}(?P<section>.*?)(?:\n## |\Z)",
         index_text,
         re.DOTALL,
     )
@@ -267,6 +273,7 @@ def validate_batch_manifests(errors: list[str]) -> None:
         errors.append(f"missing batch report index: {index_path}")
         index_text = ""
     current_proposals = batch_index_current_proposals(index_text)
+    historical_proposals = batch_index_historical_proposals(index_text)
     for manifest_path in sorted(batch_root.rglob("batch.toml")):
         try:
             manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
@@ -291,6 +298,13 @@ def validate_batch_manifests(errors: list[str]) -> None:
             and integration_status == "not_started"
             and closeout_status == "not_started"
             and batch_id in current_proposals
+        ):
+            continue
+        if (
+            approval_state == "rejected"
+            and integration_status == "superseded"
+            and closeout_status == "not_applicable"
+            and batch_id in historical_proposals
         ):
             continue
         errors.append(

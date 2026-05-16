@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-05-16
 related_docs:
   - ./agents.md
   - ./architecture-governance-review.md
@@ -88,6 +88,16 @@ explicitly passed.
 `roadmap-items.yaml`; accepted proposals are applied with
 `task roadmap:apply-intake -- --proposal <proposal.yaml>`, then rendered and
 validated.
+
+Codex CLI `/goal` is execution persistence, not roadmap authority. Use it only
+after there is a written execution contract from a plan, batch, accepted design,
+or approved roadmap row. A `/goal` run must not directly promote or complete
+roadmap items unless architecture governance has run when the change is
+architecture-sensitive, bounded implementation or batch validation has passed,
+closeout or drift-check evidence exists, and `task roadmap:render`,
+`task roadmap:validate`, and `task roadmap:check` pass. Completed roadmap rows
+must reference an existing completed closeout or finalized batch evidence path,
+and that path must be included in the row's `write_scopes`.
 
 Use workflow commands to automate Codex prompt, checklist, and gate setup, not
 blind mutation. A typical architecture-sensitive flow is:
