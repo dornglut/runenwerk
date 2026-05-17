@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+asset.workspace = true
 commands.workspace = true
 editor_core.workspace = true
 editor_inspector.workspace = true

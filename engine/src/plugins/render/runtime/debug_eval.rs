@@ -488,6 +488,9 @@ mod tests {
         PreparedDeformationFeatureContribution, PreparedDeformationStream, PreparedDrawBatch,
         PreparedDrawFeatureContribution, PreparedFeaturePayload,
         PreparedMaterialFeatureContribution, PreparedMaterialInstanceInput,
+        PreparedMaterialOutputTarget, PreparedMaterialParameterInput,
+        PreparedMaterialParameterKind, PreparedMaterialParameterPayloadV1,
+        PreparedMaterialParameterProfile,
     };
     use crate::plugins::render::*;
 
@@ -530,8 +533,18 @@ mod tests {
                 instances: vec![PreparedMaterialInstanceInput {
                     material_instance_id: "mat.instance".to_string(),
                     specialization_key_fragment: "opaque".to_string(),
-                    parameter_blob: vec![1, 2, 3],
+                    parameter_payload: PreparedMaterialParameterPayloadV1::new(
+                        PreparedMaterialParameterProfile::PbrPreview,
+                        PreparedMaterialOutputTarget::PbrPreview,
+                        [PreparedMaterialParameterInput::new(
+                            "roughness",
+                            PreparedMaterialParameterKind::Scalar,
+                        )],
+                    ),
+                    texture_bindings: Vec::new(),
                 }],
+                binding_table: PreparedMaterialBindingTable::default(),
+                scene_bundle: None,
             },
         });
         world.insert_resource(PreparedDeformationFeatureResource {
@@ -592,8 +605,18 @@ mod tests {
                 instances: vec![PreparedMaterialInstanceInput {
                     material_instance_id: "material.product.42".to_string(),
                     specialization_key_fragment: "material.first_slice.render_material".to_string(),
-                    parameter_blob: b"roughness:Scalar".to_vec(),
+                    parameter_payload: PreparedMaterialParameterPayloadV1::new(
+                        PreparedMaterialParameterProfile::RenderMaterial,
+                        PreparedMaterialOutputTarget::RenderMaterial,
+                        [PreparedMaterialParameterInput::new(
+                            "roughness",
+                            PreparedMaterialParameterKind::Scalar,
+                        )],
+                    ),
+                    texture_bindings: Vec::new(),
                 }],
+                binding_table: PreparedMaterialBindingTable::default(),
+                scene_bundle: None,
             },
         });
 
@@ -620,6 +643,18 @@ mod tests {
             payload.instances[0].specialization_key_fragment,
             "material.first_slice.render_material"
         );
+        let encoded = payload.instances[0].parameter_payload.encode_v1();
+        let decoded =
+            PreparedMaterialParameterPayloadV1::decode_v1(&encoded).expect("payload should decode");
+        assert_eq!(
+            decoded.profile,
+            PreparedMaterialParameterProfile::RenderMaterial
+        );
+        assert_eq!(
+            decoded.output_target,
+            PreparedMaterialOutputTarget::RenderMaterial
+        );
+        assert!(!String::from_utf8_lossy(&encoded).contains("Scalar"));
     }
 
     #[test]

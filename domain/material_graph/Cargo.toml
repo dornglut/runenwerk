@@ -8,4 +8,5 @@ publish = false
 graph = { path = "../graph" }
 product.workspace = true
 ratification = { path = "../../foundation/ratification" }
+resource_ref.workspace = true
 serde = { version = "1.0.228", features = ["derive"] }

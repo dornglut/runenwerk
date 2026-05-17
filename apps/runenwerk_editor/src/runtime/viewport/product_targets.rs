@@ -25,7 +25,6 @@ use crate::runtime::viewport::{
     ViewportRenderStateResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
     ViewportSurfaceSlot, build_surface_binding_registry, ensure_editor_main_surface_set,
     expression_dimensions_for_bounds, initial_presentation_state, initial_product_descriptors,
-    material_preview_descriptor,
 };
 
 pub const VIEWPORT_DYNAMIC_TARGET_NAMESPACE: &str = "runenwerk.editor.viewport";
@@ -117,6 +116,41 @@ pub struct ViewportProductTargetRegistryResource {
 }
 
 impl ViewportProductTargetRegistryResource {
+    pub fn from_descriptors_for_viewport(
+        viewport_id: ViewportId,
+        descriptors: &[ExpressionProductDescriptor],
+    ) -> Self {
+        let mut registry = Self::default();
+        registry.replace_records(
+            descriptors
+                .iter()
+                .filter_map(|descriptor| {
+                    product_target_record_for_descriptor(viewport_id, descriptor)
+                })
+                .collect(),
+        );
+        registry
+    }
+
+    pub fn from_descriptors_for_viewports(
+        viewport_ids: impl IntoIterator<Item = ViewportId>,
+        descriptors: &[ExpressionProductDescriptor],
+    ) -> Self {
+        let viewport_ids = viewport_ids.into_iter().collect::<Vec<_>>();
+        let mut registry = Self::default();
+        registry.replace_records(
+            descriptors
+                .iter()
+                .flat_map(|descriptor| {
+                    viewport_ids.iter().copied().filter_map(move |viewport_id| {
+                        product_target_record_for_descriptor(viewport_id, descriptor)
+                    })
+                })
+                .collect(),
+        );
+        registry
+    }
+
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -204,10 +238,15 @@ pub fn sync_viewport_product_targets_system(
             viewport_product_targets.requested_dynamic_descriptors(),
         )
         .expect("editor viewport dynamic target contribution must be valid and uniquely owned");
-    sync_surface_sets_from_product_targets(&viewport_product_targets, &mut viewport_surface_sets);
+    sync_surface_sets_from_product_targets(
+        &viewport_product_targets,
+        &viewport_presentations,
+        &mut viewport_surface_sets,
+    );
     viewport_surface_bindings.replace_registry(build_surface_binding_registry(
         &viewport_surface_sets,
         &viewport_presentations,
+        &viewport_product_targets,
     ));
 }
 
@@ -233,11 +272,19 @@ pub fn sync_viewport_presentation_products_system(
             product_dimensions_for_viewport(*viewport_id, &viewport_render_states);
         let mut descriptors = initial_product_descriptors(product_dimensions, source_version);
         if let Some(material_preview) = host.app.material_lab_runtime().active_preview() {
-            descriptors.push(material_preview_descriptor(
+            descriptors.push(super::product_registry::material_preview_descriptor_with_lineage(
                 material_preview.viewport_product_id,
                 product_dimensions,
-                source_version,
+                editor_core::RealityVersion(material_preview.artifact_id.raw()),
                 material_preview.product.specialization_fragment.0.clone(),
+                format!(
+                    "material_artifact={}:shader_artifact={}:material_cache={}:shader_cache={}:scene_shader_cache={}",
+                    material_preview.artifact_id.raw(),
+                    material_preview.shader_artifact_id.raw(),
+                    material_preview.artifact_cache_key.as_str(),
+                    material_preview.shader_cache_key.as_str(),
+                    material_preview.scene_shader_cache_key.as_str()
+                ),
             ));
         }
         viewport_products_registry.update_viewport_descriptors(*viewport_id, descriptors.clone());
@@ -354,6 +401,7 @@ fn build_artifact_observation_frame(
 
 fn sync_surface_sets_from_product_targets(
     viewport_product_targets: &ViewportProductTargetRegistryResource,
+    viewport_presentations: &ViewportPresentationStateResource,
     viewport_surface_sets: &mut ViewportSurfaceSetResource,
 ) {
     let active_viewports = viewport_product_targets
@@ -365,10 +413,25 @@ fn sync_surface_sets_from_product_targets(
     }
 
     for record in viewport_product_targets.records() {
+        if !target_record_is_selected_or_support(record, viewport_presentations) {
+            continue;
+        }
         let Some(handle) = record.surface_handle() else {
             continue;
         };
         viewport_surface_sets.set_surface(record.key.viewport_id, record.surface_slot, handle);
+    }
+}
+
+fn target_record_is_selected_or_support(
+    record: &ViewportProductTargetRecord,
+    viewport_presentations: &ViewportPresentationStateResource,
+) -> bool {
+    match record.key.presentation_slot {
+        ViewportSurfacePresentationSlot::Primary => viewport_presentations
+            .state_for(record.key.viewport_id)
+            .is_some_and(|state| state.selected_primary_product_id == record.key.product_id),
+        ViewportSurfacePresentationSlot::Picking | ViewportSurfacePresentationSlot::Overlay => true,
     }
 }
 
@@ -530,14 +593,21 @@ fn usage_for_descriptor(descriptor: &ExpressionProductDescriptor) -> RenderTextu
         | ExpressionProductKind::Atlas2D
         | ExpressionProductKind::VolumeSlice2D
         | ExpressionProductKind::BrickmapDebug2D
-        | ExpressionProductKind::HistoryColor2D
-        | ExpressionProductKind::MaterialPreview2D => RenderTextureTargetUsage {
+        | ExpressionProductKind::HistoryColor2D => RenderTextureTargetUsage {
             color_attachment: false,
             depth_attachment: false,
             sampled: true,
             storage: false,
             copy_src: true,
             copy_dst: true,
+        },
+        ExpressionProductKind::MaterialPreview2D => RenderTextureTargetUsage {
+            color_attachment: true,
+            depth_attachment: false,
+            sampled: true,
+            storage: false,
+            copy_src: true,
+            copy_dst: false,
         },
     }
 }
@@ -720,17 +790,26 @@ mod tests {
         );
         assert_eq!(target.surface_slot, ViewportSurfaceSlot::PrimaryColor);
         assert!(target.ui_sampleable);
+        assert!(
+            target.usage.color_attachment,
+            "material preview targets are produced by a material preview render pass"
+        );
+        assert!(
+            !target.usage.copy_dst,
+            "material preview targets must not rely on CPU dynamic uploads"
+        );
     }
 
     #[test]
     fn material_viewport_preview_selection_publishes_through_presentation_state() {
         let material_product_id = ExpressionProductId(12);
-        let material_descriptor = material_preview_descriptor(
-            material_product_id,
-            ExpressionDimensions::new(320, 200),
-            RealityVersion(2),
-            "material.first_slice.render_material".to_string(),
-        );
+        let material_descriptor =
+            crate::runtime::viewport::product_registry::material_preview_descriptor(
+                material_product_id,
+                ExpressionDimensions::new(320, 200),
+                RealityVersion(2),
+                "material.first_slice.render_material".to_string(),
+            );
         let mut presentation_state = initial_presentation_state(ViewportId(1));
         presentation_state.select_primary_product(material_product_id);
 
@@ -747,6 +826,92 @@ mod tests {
                 .get(&material_product_id)
                 .copied(),
             Some(ProductAvailabilityState::Available)
+        );
+    }
+
+    #[test]
+    fn surface_sync_keeps_scene_primary_when_material_preview_is_unselected() {
+        let viewport_id = ViewportId(1);
+        let material_product_id = ExpressionProductId(12);
+        let scene_descriptor = descriptor(
+            SCENE_COLOR_PRODUCT_ID,
+            ExpressionProductKind::SceneColor2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+        let material_descriptor = descriptor(
+            material_product_id,
+            ExpressionProductKind::MaterialPreview2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+        let mut targets = ViewportProductTargetRegistryResource::default();
+        targets.replace_records(
+            [&scene_descriptor, &material_descriptor]
+                .into_iter()
+                .filter_map(|descriptor| {
+                    product_target_record_for_descriptor(viewport_id, descriptor)
+                })
+                .collect(),
+        );
+        let mut presentations = ViewportPresentationStateResource::default();
+        presentations.upsert_state(initial_presentation_state(viewport_id));
+        let mut surface_sets = ViewportSurfaceSetResource::default();
+
+        sync_surface_sets_from_product_targets(&targets, &presentations, &mut surface_sets);
+
+        let primary = surface_sets
+            .surface(viewport_id, ViewportSurfaceSlot::PrimaryColor)
+            .expect("scene primary target should bind");
+        assert_eq!(
+            primary.target_id,
+            dynamic_target_id_for(ViewportProductTargetKey::new(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                scene_descriptor.id,
+            ))
+        );
+    }
+
+    #[test]
+    fn surface_sync_binds_material_preview_only_when_selected_primary() {
+        let viewport_id = ViewportId(1);
+        let material_product_id = ExpressionProductId(12);
+        let scene_descriptor = descriptor(
+            SCENE_COLOR_PRODUCT_ID,
+            ExpressionProductKind::SceneColor2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+        let material_descriptor = descriptor(
+            material_product_id,
+            ExpressionProductKind::MaterialPreview2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+        let mut targets = ViewportProductTargetRegistryResource::default();
+        targets.replace_records(
+            [&scene_descriptor, &material_descriptor]
+                .into_iter()
+                .filter_map(|descriptor| {
+                    product_target_record_for_descriptor(viewport_id, descriptor)
+                })
+                .collect(),
+        );
+        let mut presentation = initial_presentation_state(viewport_id);
+        presentation.select_primary_product(material_product_id);
+        let mut presentations = ViewportPresentationStateResource::default();
+        presentations.upsert_state(presentation);
+        let mut surface_sets = ViewportSurfaceSetResource::default();
+
+        sync_surface_sets_from_product_targets(&targets, &presentations, &mut surface_sets);
+
+        let primary = surface_sets
+            .surface(viewport_id, ViewportSurfaceSlot::PrimaryColor)
+            .expect("material preview target should bind as selected primary");
+        assert_eq!(
+            primary.target_id,
+            dynamic_target_id_for(ViewportProductTargetKey::new(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                material_descriptor.id,
+            ))
         );
     }
 

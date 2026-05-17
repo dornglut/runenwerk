@@ -31,6 +31,7 @@ Diagnostics vocabulary             -> foundation/diagnostics
 Ratification vocabulary           -> foundation/ratification
 Command descriptor/proposal vocabulary -> foundation/commands
 Schema vocabulary                  -> foundation/schema
+Portable external resource references -> foundation/resource_ref
 Domain ratification rules         -> owning domain ratifier
 ECS world/query/system runtime      -> domain/ecs
 Schedule planning/execution         -> domain/scheduler
@@ -52,6 +53,7 @@ Chunk/world op logs and deltas       -> domain/world_ops
 SDF world payload/collision data and current SDF field-product specialization -> domain/world_sdf
 UI substrate primitives             -> domain/ui/*
 UI surface semantics                -> domain/ui/ui_surface
+Backend-neutral graph editor contracts -> domain/ui/ui_graph_editor
 UI definition/formation framework   -> domain/ui/ui_definition
 Editor command/session contracts    -> domain/editor/editor_core
 Editor runtime preview protocol     -> domain/editor/editor_preview

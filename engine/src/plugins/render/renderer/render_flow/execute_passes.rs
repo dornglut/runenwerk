@@ -261,12 +261,25 @@ impl Renderer {
             packet.surface_format,
         )?;
 
-        let shader = resolve_shader_material(
+        let shader = resolve_shader_material_for_packet(
             plan.shader.as_ref(),
+            packet,
             shader_registry,
             DEFAULT_FULLSCREEN_SHADER,
             "builtin:fullscreen",
         );
+        reject_material_shader_fallback(
+            plan.feature_id,
+            plan.shader.as_ref(),
+            plan.pass_id,
+            &shader,
+        )?;
+        reject_unresident_material_textures(
+            packet,
+            plan.feature_id,
+            plan.shader.as_ref(),
+            plan.pass_id,
+        )?;
 
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
@@ -297,16 +310,45 @@ impl Renderer {
                     })
                 });
 
-        let pipeline_layout = bind_group_layout.as_ref().map(|layout| {
-            self.flow_pipeline_cache
-                .get_or_create_pipeline_layout(pipeline_key.clone(), || {
+        let material_resources =
+            material_resources_for_pass(packet, plan.feature_id, plan.shader.as_ref());
+        let empty_group0 = if material_resources.is_some() && bind_group_layout.is_none() {
+            let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_compiled_fullscreen_empty_group0_layout"),
+                entries: &[],
+            });
+            let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                label: Some("engine_compiled_fullscreen_empty_group0_bind_group"),
+                layout: &layout,
+                entries: &[],
+            });
+            Some((layout, bind_group))
+        } else {
+            None
+        };
+        let mut pipeline_layout_entries = Vec::<&BindGroupLayout>::new();
+        if let Some(layout) = bind_group_layout.as_ref() {
+            pipeline_layout_entries.push(layout);
+        } else if let Some((layout, _)) = empty_group0.as_ref() {
+            pipeline_layout_entries.push(layout);
+        }
+        if let Some(resources) = material_resources {
+            pipeline_layout_entries.push(resources.layout());
+        }
+        let pipeline_layout = if pipeline_layout_entries.is_empty() {
+            None
+        } else {
+            Some(self.flow_pipeline_cache.get_or_create_pipeline_layout(
+                pipeline_key.clone(),
+                || {
                     device.create_pipeline_layout(&PipelineLayoutDescriptor {
                         label: Some("engine_compiled_fullscreen_pipeline_layout"),
-                        bind_group_layouts: &[layout],
+                        bind_group_layouts: &pipeline_layout_entries,
                         push_constant_ranges: &[],
                     })
-                })
-        });
+                },
+            ))
+        };
 
         let pipeline =
             self.flow_pipeline_cache
@@ -367,6 +409,11 @@ impl Renderer {
         pass.set_pipeline(&pipeline);
         if let Some(bind_group) = bind_group.as_ref() {
             pass.set_bind_group(0, bind_group, &[]);
+        } else if let Some((_, bind_group)) = empty_group0.as_ref() {
+            pass.set_bind_group(0, bind_group, &[]);
+        }
+        if let Some(resources) = material_resources {
+            pass.set_bind_group(1, resources.bind_group(), &[]);
         }
         pass.draw(0..3, 0..1);
         Ok(EncodedPipelinePass {
@@ -401,12 +448,25 @@ impl Renderer {
         let depth_target =
             self.resolve_depth_target_from_plan(runtime_resources, plan.pass_id, &plan.targets)?;
 
-        let shader = resolve_shader_material(
+        let shader = resolve_shader_material_for_packet(
             plan.shader.as_ref(),
+            packet,
             shader_registry,
             DEFAULT_GRAPHICS_SHADER,
             "builtin:graphics",
         );
+        reject_material_shader_fallback(
+            plan.feature_id,
+            plan.shader.as_ref(),
+            plan.pass_id,
+            &shader,
+        )?;
+        reject_unresident_material_textures(
+            packet,
+            plan.feature_id,
+            plan.shader.as_ref(),
+            plan.pass_id,
+        )?;
 
         let vertex_layout_signature_hash = plan.draw_buffers.vertex_layout_signature_hash();
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
@@ -438,16 +498,45 @@ impl Renderer {
                     })
                 });
 
-        let pipeline_layout = bind_group_layout.as_ref().map(|layout| {
-            self.flow_pipeline_cache
-                .get_or_create_pipeline_layout(pipeline_key.clone(), || {
+        let material_resources =
+            material_resources_for_pass(packet, plan.feature_id, plan.shader.as_ref());
+        let empty_group0 = if material_resources.is_some() && bind_group_layout.is_none() {
+            let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("engine_compiled_graphics_empty_group0_layout"),
+                entries: &[],
+            });
+            let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                label: Some("engine_compiled_graphics_empty_group0_bind_group"),
+                layout: &layout,
+                entries: &[],
+            });
+            Some((layout, bind_group))
+        } else {
+            None
+        };
+        let mut pipeline_layout_entries = Vec::<&BindGroupLayout>::new();
+        if let Some(layout) = bind_group_layout.as_ref() {
+            pipeline_layout_entries.push(layout);
+        } else if let Some((layout, _)) = empty_group0.as_ref() {
+            pipeline_layout_entries.push(layout);
+        }
+        if let Some(resources) = material_resources {
+            pipeline_layout_entries.push(resources.layout());
+        }
+        let pipeline_layout = if pipeline_layout_entries.is_empty() {
+            None
+        } else {
+            Some(self.flow_pipeline_cache.get_or_create_pipeline_layout(
+                pipeline_key.clone(),
+                || {
                     device.create_pipeline_layout(&PipelineLayoutDescriptor {
                         label: Some("engine_compiled_graphics_pipeline_layout"),
-                        bind_group_layouts: &[layout],
+                        bind_group_layouts: &pipeline_layout_entries,
                         push_constant_ranges: &[],
                     })
-                })
-        });
+                },
+            ))
+        };
 
         let vertex_attribute_sets = build_vertex_attribute_sets(&plan.draw_buffers);
         let vertex_buffer_layouts =
@@ -529,6 +618,11 @@ impl Renderer {
         pass.set_pipeline(&pipeline);
         if let Some(bind_group) = bind_group.as_ref() {
             pass.set_bind_group(0, bind_group, &[]);
+        } else if let Some((_, bind_group)) = empty_group0.as_ref() {
+            pass.set_bind_group(0, bind_group, &[]);
+        }
+        if let Some(resources) = material_resources {
+            pass.set_bind_group(1, resources.bind_group(), &[]);
         }
 
         for binding in &plan.draw_buffers.vertex_buffers {
@@ -897,6 +991,75 @@ impl Renderer {
             ),
         }
     }
+}
+
+fn reject_material_shader_fallback(
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader_reference: Option<&RenderShaderReference>,
+    pass_id: RenderPassId,
+    shader: &super::provenance::ResolvedShaderMaterial<'_>,
+) -> Result<()> {
+    if pass_consumes_material_resources(feature_id, shader_reference) && shader.fallback_used {
+        bail!(
+            "material feature pass '{}' requires the exact generated shader '{}' to be loaded; builtin or scene-bundle fallback is forbidden",
+            pass_id,
+            shader.shader_id
+        );
+    }
+    Ok(())
+}
+
+fn reject_unresident_material_textures(
+    packet: &RendererPreparedPacket,
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader: Option<&RenderShaderReference>,
+    pass_id: RenderPassId,
+) -> Result<()> {
+    if !pass_consumes_material_resources(feature_id, shader) {
+        return Ok(());
+    }
+    let Some(material) = &packet.prepared_material else {
+        return Ok(());
+    };
+    let texture_count = material
+        .instances
+        .iter()
+        .map(|instance| instance.texture_bindings.len())
+        .sum::<usize>();
+    if texture_count == 0 {
+        return Ok(());
+    }
+    if packet.prepared_material_gpu_resources.is_some() {
+        return Ok(());
+    }
+    bail!(
+        "material feature pass '{}' requires {} GPU-resident material texture bindings, but render-flow material resource bind groups are not prepared; refusing shader execution instead of using pseudo texture sampling",
+        pass_id,
+        texture_count
+    );
+}
+
+fn material_resources_for_pass<'a>(
+    packet: &'a RendererPreparedPacket,
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader: Option<&RenderShaderReference>,
+) -> Option<&'a PreparedMaterialGpuResources> {
+    if pass_consumes_material_resources(feature_id, shader) {
+        packet.prepared_material_gpu_resources.as_ref()
+    } else {
+        None
+    }
+}
+
+fn pass_consumes_material_resources(
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader: Option<&RenderShaderReference>,
+) -> bool {
+    feature_id == Some(crate::plugins::render::features::MATERIAL_RENDER_FEATURE_ID)
+        || matches!(
+            shader,
+            Some(RenderShaderReference::MaterialSceneBundle { .. })
+        )
 }
 
 fn build_vertex_attribute_sets(draw_buffers: &CompiledDrawBufferPlan) -> Vec<Vec<VertexAttribute>> {

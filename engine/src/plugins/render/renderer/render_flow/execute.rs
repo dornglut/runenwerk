@@ -498,6 +498,23 @@ impl Renderer {
                 Some(RuntimeResourceKey::DynamicTexture(key)) => {
                     self.dynamic_texture_targets.texture_ref(pass_id, &key)
                 }
+                None => {
+                    if let Some(key) =
+                        crate::plugins::render::RenderDynamicTextureTargetKey::from_label(
+                            selector.resource_id.as_str(),
+                        )
+                    {
+                        self.dynamic_texture_targets.texture_ref(pass_id, &key)
+                    } else {
+                        runtime_resources.resolve_texture_from_label(
+                            pass_label.as_str(),
+                            selector.resource_id.as_str(),
+                            frame_texture,
+                            packet.surface_size,
+                            packet.surface_format,
+                        )
+                    }
+                }
                 _ => runtime_resources.resolve_texture_from_label(
                     pass_label.as_str(),
                     selector.resource_id.as_str(),

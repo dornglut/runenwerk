@@ -503,8 +503,14 @@ fn populate_viewport_render_state(
     let bounds_changed = render_state.set_viewport_bounds(viewport_bounds_tuple(viewport_bounds));
 
     let runtime = app.runtime();
-    let packet =
-        extract_viewport_scene_render_packet(runtime, app.viewport_tool_state().hovered_entity);
+    let packet = extract_viewport_scene_render_packet_with_material_slots(
+        runtime,
+        app.viewport_tool_state().hovered_entity,
+        |entity| {
+            app.material_lab_runtime()
+                .material_slot_index_for_entity(entity)
+        },
+    );
     if packet.is_empty() {
         render_state.clear_primitive();
     } else {
@@ -518,9 +524,18 @@ fn viewport_bounds_tuple(bounds: UiRect) -> (f32, f32, f32, f32) {
     (bounds.x, bounds.y, bounds.width, bounds.height)
 }
 
+#[cfg(test)]
 pub(crate) fn extract_viewport_scene_render_packet(
     runtime: &crate::editor_runtime::RunenwerkEditorRuntime,
     hovered_entity: Option<editor_core::EntityId>,
+) -> EditorViewportSceneRenderPacket {
+    extract_viewport_scene_render_packet_with_material_slots(runtime, hovered_entity, |_| 0)
+}
+
+pub(crate) fn extract_viewport_scene_render_packet_with_material_slots(
+    runtime: &crate::editor_runtime::RunenwerkEditorRuntime,
+    hovered_entity: Option<editor_core::EntityId>,
+    material_slot_index_for_entity: impl Fn(editor_core::EntityId) -> u32,
 ) -> EditorViewportSceneRenderPacket {
     let selected_entity = runtime.selected_entity();
     EditorViewportSceneRenderPacket::from_primitives(runtime.document().entity_ids().filter_map(
@@ -533,7 +548,8 @@ pub(crate) fn extract_viewport_scene_render_packet(
                     primitive,
                     selected_entity == Some(entity),
                     hovered_entity == Some(entity),
-                ),
+                )
+                .with_material_slot_index(material_slot_index_for_entity(entity)),
             )
         },
     ))

@@ -1,7 +1,7 @@
 version: 1
 production:
   title: Runenwerk Production Tracks
-  last_reviewed: "2026-05-16"
+  last_reviewed: "2026-05-17"
   owner: workspace
 render:
   production_index: docs-site/src/content/docs/workspace/production-track-index.md
@@ -21,9 +21,9 @@ tracks:
       - id: PM-SDF-OW-001
         title: Production product spine
         kind: implementation
-        state: active
+        state: completed
         goal: Establish the product-backed editor and runtime spine needed before richer world capabilities are implemented.
-        outcome: Field visualization, source-backed asset adapters, material preview products, and renderer handoff are planned and executed through WR roadmap rows.
+        outcome: Field visualization, source-backed asset adapters, material preview products, and renderer handoff were planned and executed through WR roadmap rows.
         dependencies: []
         roadmap_links:
           - WR-019
@@ -46,7 +46,16 @@ tracks:
             path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
             required_status: active
             reason: Material preview work must keep material documents as source truth.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md
+            required_status: completed
+            reason: PM-SDF-OW-001 requires completed field visualizer product workflow evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+            required_status: completed
+            reason: PM-SDF-OW-001 requires completed source-backed asset adapter evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md
+            required_status: completed
+            reason: PM-SDF-OW-001 requires completed Material Lab and renderer handoff evidence.
         acceptance_criteria:
           - Product debug, asset catalog adapters, material preview products, and renderer handoff are validated through their WR closeouts.
           - No product workflow adds a parallel viewer, asset truth store, or renderer-owned semantic source.

@@ -44,6 +44,7 @@ pub(super) use provenance::{
     execution_pass_feature_id, execution_pass_id, execution_pass_kind_name,
     execution_pass_order_index, feature_runtime_version, hash_bind_group_layout_entries,
     hash_view_signature, material_specialization_fragment_hash, resolve_shader_material,
+    resolve_shader_material_for_packet,
 };
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedBufferRef, ResolvedColorTargetView, ResolvedDepthTargetView,

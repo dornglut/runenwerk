@@ -3,7 +3,9 @@
 
 use std::collections::BTreeSet;
 
-use editor_viewport::{ExpressionFormat, ExpressionProductId, ViewportId};
+use editor_viewport::{
+    ExpressionFormat, ExpressionProductId, ViewportId, ViewportPresentationState,
+};
 use engine::plugins::render::{PreparedRenderProductSelectionResource, RenderTextureTargetFormat};
 use engine::runtime::{QuerySnapshotRuntimeResource, Res, ResMut};
 use product::{
@@ -17,7 +19,7 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
     EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID, OVERLAY_PRODUCT_ID, PICKING_IDS_PRODUCT_ID,
-    SCENE_COLOR_PRODUCT_ID, ViewportPresentationStateResource, ViewportProductTargetRecord,
+    ViewportPresentationStateResource, ViewportProductTargetRecord,
     ViewportProductTargetRegistryResource, ViewportProductTargetStatus, ViewportRenderJobResource,
     prepared_view_id,
 };
@@ -71,10 +73,8 @@ pub fn prepare_viewport_render_product_selections(
 
     for job in render_jobs.jobs() {
         let view_id = prepared_view_id(job.viewport_id);
-        let mut selection = RenderProductSelection::new(view_id.clone());
-        add_required_viewport_targets(job.viewport_id, product_targets, &mut selection);
-
         let Some(presentation) = presentations.state_for(job.viewport_id) else {
+            let mut selection = RenderProductSelection::new(view_id.clone());
             selection
                 .diagnostics
                 .push(missing_viewport_presentation_diagnostic(job.viewport_id));
@@ -86,6 +86,14 @@ pub fn prepare_viewport_render_product_selections(
             selections.push(selection);
             continue;
         };
+
+        let mut selection = RenderProductSelection::new(view_id.clone());
+        add_required_viewport_targets(
+            job.viewport_id,
+            presentation,
+            product_targets,
+            &mut selection,
+        );
 
         let mut rejected_products = 0usize;
         if !add_selected_product(
@@ -145,13 +153,14 @@ pub fn prepare_viewport_render_product_selections(
 
 fn add_required_viewport_targets(
     viewport_id: ViewportId,
+    presentation: &ViewportPresentationState,
     product_targets: &ViewportProductTargetRegistryResource,
     selection: &mut RenderProductSelection,
 ) {
     let required = [
         (
             editor_viewport::ViewportSurfacePresentationSlot::Primary,
-            SCENE_COLOR_PRODUCT_ID,
+            presentation.selected_primary_product_id,
         ),
         (
             editor_viewport::ViewportSurfacePresentationSlot::Picking,
@@ -327,7 +336,8 @@ mod tests {
     use ui_math::UiRect;
 
     use crate::runtime::viewport::{
-        ViewportRenderJob, initial_product_descriptors, product_target_record_for_descriptor,
+        SCENE_COLOR_PRODUCT_ID, ViewportRenderJob, initial_product_descriptors,
+        material_preview_descriptor,
     };
 
     fn barrier() -> ExecutionBarrier {
@@ -359,16 +369,28 @@ mod tests {
     fn target_registry(viewport_id: ViewportId) -> ViewportProductTargetRegistryResource {
         let descriptors =
             initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
-        let mut registry = ViewportProductTargetRegistryResource::default();
-        registry.replace_records(
-            descriptors
-                .iter()
-                .filter_map(|descriptor| {
-                    product_target_record_for_descriptor(viewport_id, descriptor)
-                })
-                .collect(),
-        );
-        registry
+        ViewportProductTargetRegistryResource::from_descriptors_for_viewport(
+            viewport_id,
+            &descriptors,
+        )
+    }
+
+    fn target_registry_with_material_preview(
+        viewport_id: ViewportId,
+        product_id: ExpressionProductId,
+    ) -> ViewportProductTargetRegistryResource {
+        let mut descriptors =
+            initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
+        descriptors.push(material_preview_descriptor(
+            product_id,
+            ExpressionDimensions::new(320, 200),
+            RealityVersion(1),
+            "material.first_slice.render_material".to_string(),
+        ));
+        ViewportProductTargetRegistryResource::from_descriptors_for_viewport(
+            viewport_id,
+            &descriptors,
+        )
     }
 
     fn render_job(
@@ -495,6 +517,76 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code == FieldProductDiagnosticCode::MissingProduct)
+        );
+    }
+
+    #[test]
+    fn render_product_selection_uses_selected_material_preview_target_as_primary() {
+        let viewport_id = ViewportId(1);
+        let material_product_id = ExpressionProductId(420);
+        let targets = target_registry_with_material_preview(viewport_id, material_product_id);
+        let mut jobs = ViewportRenderJobResource::default();
+        jobs.replace_jobs([render_job(viewport_id, &targets)]);
+
+        let mut presentations = ViewportPresentationStateResource::default();
+        presentations.upsert_state(ViewportPresentationState::new(
+            viewport_id,
+            material_product_id,
+        ));
+
+        let mut snapshots = QuerySnapshotRuntimeResource::default();
+        snapshots.stage(snapshot(material_product_id));
+        snapshots.publish_staged(&barrier());
+
+        let mut app = RunenwerkEditorApp::new();
+        let mut prepared = PreparedRenderProductSelectionResource::default();
+
+        let summary = prepare_viewport_render_product_selections(
+            &mut app,
+            &snapshots,
+            &presentations,
+            &targets,
+            &jobs,
+            &mut prepared,
+        );
+
+        let selection = &prepared.snapshot()[0];
+        let material_target = targets
+            .record_for_product(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                material_product_id,
+            )
+            .expect("material target should exist")
+            .dynamic_key()
+            .label();
+        let scene_target = targets
+            .record_for_product(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                SCENE_COLOR_PRODUCT_ID,
+            )
+            .expect("scene target should exist")
+            .dynamic_key()
+            .label();
+
+        assert_eq!(summary.rejected_product_count, 0);
+        assert_eq!(selection.required_targets.len(), 3);
+        assert!(
+            selection
+                .required_targets
+                .iter()
+                .any(|target| target.target_id == material_target)
+        );
+        assert!(
+            !selection
+                .required_targets
+                .iter()
+                .any(|target| target.target_id == scene_target)
+        );
+        assert_eq!(
+            selection.selected_products[0].product_id,
+            ProductIdentity::new(material_product_id.0)
         );
     }
 }

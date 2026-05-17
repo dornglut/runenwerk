@@ -308,6 +308,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
         } => {
             app.clear_material_diagnostics();
         }
+        ShellCommand::ApplyMaterialSurfaceAction {
+            action,
+            projection_epoch: _,
+        } => {
+            app.apply_material_surface_action(action)?;
+        }
         ShellCommand::ApplySelectedEditorDefinition => {
             let shell_state =
                 shell_state
@@ -1009,6 +1015,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::BuildMaterialPreview { .. } => "BuildMaterialPreview",
         ShellCommand::BuildSelectedMaterialPreview { .. } => "BuildSelectedMaterialPreview",
         ShellCommand::ClearMaterialDiagnostics { .. } => "ClearMaterialDiagnostics",
+        ShellCommand::ApplyMaterialSurfaceAction { .. } => "ApplyMaterialSurfaceAction",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
         ShellCommand::SwitchPanelToolSurfaceKind { .. } => "SwitchPanelToolSurfaceKind",
@@ -1642,6 +1649,13 @@ mod tests {
                 projection_epoch: 1,
             },
             ShellCommand::ClearMaterialDiagnostics {
+                projection_epoch: 1,
+            },
+            ShellCommand::ApplyMaterialSurfaceAction {
+                action: editor_shell::MaterialSurfaceAction::PanGraph {
+                    delta_x: 8,
+                    delta_y: -4,
+                },
                 projection_epoch: 1,
             },
         ] {

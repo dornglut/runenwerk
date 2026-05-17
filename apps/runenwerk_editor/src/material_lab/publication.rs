@@ -17,6 +17,7 @@ pub struct EditorMaterialPreviewPublication {
     pub publication: Option<ProductPublicationOutcome>,
     pub preview: Option<EditorMaterialPreviewProduct>,
     pub artifact: AssetArtifactDescriptor,
+    pub derived_artifacts: Vec<AssetArtifactDescriptor>,
     pub status: ProductPublicationStatus,
 }
 
@@ -25,11 +26,13 @@ impl EditorMaterialPreviewPublication {
         publication: ProductPublicationOutcome,
         preview: EditorMaterialPreviewProduct,
         artifact: AssetArtifactDescriptor,
+        derived_artifacts: impl IntoIterator<Item = AssetArtifactDescriptor>,
     ) -> Self {
         Self {
             publication: Some(publication),
             preview: Some(preview),
             artifact,
+            derived_artifacts: derived_artifacts.into_iter().collect(),
             status: ProductPublicationStatus::Ready,
         }
     }
@@ -39,6 +42,7 @@ impl EditorMaterialPreviewPublication {
             publication: None,
             preview: None,
             artifact,
+            derived_artifacts: Vec::new(),
             status: ProductPublicationStatus::FailedPreserved,
         }
     }
@@ -120,6 +124,11 @@ pub fn publish_pending_material_preview_publications(
         app.asset_catalog_runtime_mut()
             .catalog_mut()
             .insert_artifact(pending_publication.artifact.clone());
+        for artifact in &pending_publication.derived_artifacts {
+            app.asset_catalog_runtime_mut()
+                .catalog_mut()
+                .insert_artifact(artifact.clone());
+        }
         let status = app
             .asset_catalog_runtime()
             .classify_artifact_reload(&pending_publication.artifact);

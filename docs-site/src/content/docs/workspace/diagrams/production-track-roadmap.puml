@@ -31,7 +31,7 @@ legend right
 endlegend
 
 package "PT-SDF-OW SDF-first open-world playable vertical" {
-  component "PM-SDF-OW-001 Production product spine\nkind=implementation\nstate=active\nWR=WR-019, WR-026, WR-021" as PM_SDF_OW_001 <<active>>
+  component "PM-SDF-OW-001 Production product spine\nkind=implementation\nstate=completed\nWR=WR-019, WR-026, WR-021" as PM_SDF_OW_001 <<completed>>
 
   component "PM-SDF-OW-002 Open world substrate design\nkind=design\nstate=active\nWR=WR-001, WR-014, WR-015" as PM_SDF_OW_002 <<active>>
 

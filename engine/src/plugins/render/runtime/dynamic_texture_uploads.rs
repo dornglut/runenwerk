@@ -48,6 +48,31 @@ impl RenderDynamicTextureUploadDescriptor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn rgba8_with_format(
+        target_key: RenderDynamicTextureTargetKey,
+        origin_x: u32,
+        origin_y: u32,
+        width: u32,
+        height: u32,
+        format: RenderTextureTargetFormat,
+        alpha_mode: RenderTextureUploadAlphaMode,
+        product_generation: u64,
+        rgba8: Vec<u8>,
+    ) -> Self {
+        Self {
+            target_key,
+            origin_x,
+            origin_y,
+            width,
+            height,
+            format,
+            alpha_mode,
+            product_generation,
+            rgba8,
+        }
+    }
+
     pub fn expected_byte_len(&self) -> Option<usize> {
         self.width
             .checked_mul(self.height)?

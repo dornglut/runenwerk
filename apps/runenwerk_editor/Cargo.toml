@@ -9,6 +9,7 @@ ignored = ["bytemuck"]
 
 [dependencies]
 anyhow = "1.0.100"
+blake3 = "1.8.2"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
 engine = { path = "../../engine" }
@@ -28,6 +29,7 @@ graph.workspace = true
 material_graph.workspace = true
 procgen.workspace = true
 product.workspace = true
+resource_ref.workspace = true
 spatial.workspace = true
 texture.workspace = true
 world_ops.workspace = true
@@ -35,6 +37,7 @@ world_sdf.workspace = true
 
 ui_input.workspace = true
 ui_definition.workspace = true
+ui_graph_editor.workspace = true
 ui_math.workspace = true
 ui_render_data.workspace = true
 ui_surface.workspace = true
@@ -51,4 +54,5 @@ rustls = "0.23.37"
 tokio = { version = "1.48.0", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
+ktx2.workspace = true
 naga = { version = "27.0.3", features = ["wgsl-in"] }

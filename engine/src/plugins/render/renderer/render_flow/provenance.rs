@@ -295,6 +295,16 @@ pub fn resolve_shader_material<'a>(
                 fallback_used: revision == 0,
             }
         }
+        Some(RenderShaderReference::MaterialSceneBundle { fallback_asset }) => {
+            let revision = shader_registry.revision_for(fallback_asset);
+            ResolvedShaderMaterial {
+                source: shader_registry.source_or(fallback_asset, fallback_source),
+                shader_id: fallback_asset.clone(),
+                pipeline_identity: format!("asset:{fallback_asset}"),
+                revision,
+                fallback_used: revision == 0,
+            }
+        }
         Some(RenderShaderReference::RegistryHandle(handle)) => {
             let revision = shader_registry.revision_for_handle(*handle);
             ResolvedShaderMaterial {
@@ -312,6 +322,52 @@ pub fn resolve_shader_material<'a>(
             revision: 0,
             fallback_used: false,
         },
+    }
+}
+
+pub fn resolve_shader_material_for_packet<'a>(
+    reference: Option<&RenderShaderReference>,
+    packet: &RendererPreparedPacket,
+    shader_registry: &'a ShaderRegistryResource,
+    fallback_source: &'a str,
+    fallback_identity: &'static str,
+) -> ResolvedShaderMaterial<'a> {
+    match reference {
+        Some(RenderShaderReference::MaterialSceneBundle { fallback_asset }) => {
+            if let Some(scene_bundle) = packet
+                .prepared_material
+                .as_ref()
+                .and_then(|material| material.scene_bundle.as_ref())
+            {
+                let revision = shader_registry.revision_for(scene_bundle.shader_path.as_str());
+                return ResolvedShaderMaterial {
+                    source: shader_registry
+                        .source_or(scene_bundle.shader_path.as_str(), fallback_source),
+                    shader_id: scene_bundle.shader_path.clone(),
+                    pipeline_identity: format!(
+                        "material-scene-bundle:{}:{}:{}",
+                        scene_bundle.shader_identity,
+                        scene_bundle.material_table_identity,
+                        scene_bundle.shader_cache_key
+                    ),
+                    revision,
+                    fallback_used: revision == 0,
+                };
+            }
+            let fallback = resolve_shader_material(
+                Some(&RenderShaderReference::AssetPath(fallback_asset.clone())),
+                shader_registry,
+                fallback_source,
+                fallback_identity,
+            );
+            ResolvedShaderMaterial {
+                fallback_used: true,
+                ..fallback
+            }
+        }
+        other => {
+            resolve_shader_material(other, shader_registry, fallback_source, fallback_identity)
+        }
     }
 }
 
@@ -399,6 +455,8 @@ mod tests {
             view_id: "main".to_string(),
             feature_gates,
             feature_runtime_signatures,
+            prepared_material: None,
+            prepared_material_gpu_resources: None,
             prepared_ui: UiPreparedDraws::default(),
             viewport_surface_bindings: Default::default(),
             prepare_timings: RendererFrameTimings::default(),
@@ -504,6 +562,32 @@ mod tests {
         assert_eq!(
             material_specialization_fragment_hash(&packet, Some(WORLD_DRAW_RENDER_FEATURE_ID)),
             0
+        );
+    }
+
+    #[test]
+    fn material_scene_bundle_missing_from_packet_is_a_forbidden_fallback() {
+        let packet = packet_with_feature_gate(
+            MATERIAL_RENDER_FEATURE_ID,
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::FailFrame,
+            },
+        );
+        let shader_registry = ShaderRegistryResource::new();
+        let shader = resolve_shader_material_for_packet(
+            Some(&RenderShaderReference::MaterialSceneBundle {
+                fallback_asset: "assets/shaders/editor_viewport_scene_product.wgsl".to_string(),
+            }),
+            &packet,
+            &shader_registry,
+            "fallback shader",
+            "builtin:graphics",
+        );
+
+        assert!(
+            shader.fallback_used,
+            "material scene passes must not silently use the fallback scene shader when no generated scene bundle is prepared"
         );
     }
 

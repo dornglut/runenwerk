@@ -8,8 +8,10 @@ pub mod preview;
 pub mod ratification;
 
 pub use descriptor::{
-    SamplerDescriptor, TextureChannelLayout, TextureColorSpace, TextureCompression,
-    TextureDescriptor, TextureDimension, TextureExtent, TextureFilterMode, TextureWrapMode,
+    Ktx2TextureMetadata, SamplerDescriptor, TextureChannelLayout, TextureColorSpace,
+    TextureCompression, TextureContainerFormat, TextureContainerMetadata, TextureDescriptor,
+    TextureDimension, TextureExtent, TextureFilterMode, TexturePixelFormat,
+    TextureSupercompression, TextureTranscodeStatus, TextureWrapMode,
 };
 pub use generated::{GeneratedTextureProduct, TextureCacheKey, TextureSourceLineage};
 pub use ids::TextureProductId;

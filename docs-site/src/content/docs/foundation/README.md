@@ -18,3 +18,4 @@ last_reviewed: 2026-04-30
 - [`ratification/README.md`](./ratification/README.md)
 - [`schema/README.md`](./schema/README.md)
 - [`commands/README.md`](./commands/README.md)
+- [`resource-ref/README.md`](./resource-ref/README.md)

@@ -5,6 +5,8 @@ use engine::plugins::render::RenderFrameProducerId;
 
 pub const EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID: RenderFrameProducerId =
     render_frame_producer_id(1);
+pub const EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID: RenderFrameProducerId =
+    render_frame_producer_id(2);
 
 const fn render_frame_producer_id(raw: u64) -> RenderFrameProducerId {
     match RenderFrameProducerId::try_from_raw(raw) {

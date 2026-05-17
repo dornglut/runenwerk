@@ -12,6 +12,14 @@ pub enum TextureIssueCode {
     Texture2dDepthMustBeOne,
     Texture3dDepthMustExceedOne,
     MipCountZero,
+    Ktx2DescriptorHashMissing,
+    Ktx2ArtifactRevisionMissing,
+    Ktx2LayerCountZero,
+    Ktx2FaceCountInvalid,
+    Ktx2LevelCountMismatch,
+    Ktx2ByteLengthZero,
+    Ktx2LevelByteLengthZero,
+    Ktx2UnsupportedTranscode,
     PreviewProductMismatch,
     PreviewMipOutOfRange,
     PreviewSliceOutOfRange,
@@ -65,6 +73,70 @@ pub fn ratify_texture_descriptor(descriptor: &TextureDescriptor) -> TextureRatif
             TextureIssueCode::MipCountZero,
             TextureIssueSubject::Descriptor,
             "texture descriptors must expose at least one mip level",
+        ));
+    }
+    let ktx2 = descriptor.ktx2_metadata();
+    if ktx2.descriptor_hash.trim().is_empty() {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2DescriptorHashMissing,
+            TextureIssueSubject::Descriptor,
+            "KTX2 texture descriptors must carry a descriptor hash",
+        ));
+    }
+    if ktx2.artifact_revision.trim().is_empty() {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2ArtifactRevisionMissing,
+            TextureIssueSubject::Descriptor,
+            "KTX2 texture descriptors must carry an artifact revision",
+        ));
+    }
+    if ktx2.layer_count == 0 {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2LayerCountZero,
+            TextureIssueSubject::Descriptor,
+            "KTX2 texture descriptors must expose at least one layer",
+        ));
+    }
+    if ktx2.face_count != 1 {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2FaceCountInvalid,
+            TextureIssueSubject::Descriptor,
+            "material KTX2 texture descriptors must be non-cubemap textures",
+        ));
+    }
+    if ktx2.level_count != descriptor.mip_count {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2LevelCountMismatch,
+            TextureIssueSubject::Descriptor,
+            "KTX2 level count must match the texture descriptor mip count",
+        ));
+    }
+    if matches!(
+        ktx2.transcode_status,
+        crate::TextureTranscodeStatus::Unsupported
+    ) {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2UnsupportedTranscode,
+            TextureIssueSubject::Descriptor,
+            "KTX2 texture descriptor marks the artifact as unsupported for runtime residency",
+        ));
+    }
+    if ktx2.byte_length.is_some_and(|length| length == 0) {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2ByteLengthZero,
+            TextureIssueSubject::Descriptor,
+            "KTX2 artifact byte length must be non-zero when present",
+        ));
+    }
+    if ktx2
+        .level_byte_lengths
+        .iter()
+        .any(|level_length| *level_length == 0)
+    {
+        report.push(RatificationIssue::error(
+            TextureIssueCode::Ktx2LevelByteLengthZero,
+            TextureIssueSubject::Descriptor,
+            "KTX2 level byte lengths must be non-zero",
         ));
     }
 
@@ -142,5 +214,42 @@ mod tests {
             *report.issues()[0].code(),
             TextureIssueCode::PreviewSliceOutOfRange
         );
+    }
+
+    #[test]
+    fn ktx2_metadata_rejects_unsupported_transcode() {
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(3),
+            "unsupported",
+            TextureDimension::Texture2D,
+            TextureExtent::new(16, 16, 1),
+        )
+        .with_ktx2_metadata(
+            crate::Ktx2TextureMetadata::new(crate::TexturePixelFormat::Bc7Unorm, 1, "hash", "1")
+                .with_transcode_status(crate::TextureTranscodeStatus::Unsupported),
+        );
+
+        let report = ratify_texture_descriptor(&descriptor);
+
+        assert!(report.has_blocking_issues());
+        assert!(
+            report
+                .issues()
+                .iter()
+                .any(|issue| *issue.code() == TextureIssueCode::Ktx2UnsupportedTranscode)
+        );
+    }
+
+    #[test]
+    fn ktx2_descriptor_hash_is_stable_and_non_empty() {
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(4),
+            "albedo",
+            TextureDimension::Texture2D,
+            TextureExtent::new(16, 16, 1),
+        );
+
+        assert!(!descriptor.descriptor_hash().is_empty());
+        assert!(!ratify_texture_descriptor(&descriptor).has_blocking_issues());
     }
 }

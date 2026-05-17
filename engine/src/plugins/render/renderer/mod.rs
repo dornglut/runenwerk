@@ -688,12 +688,33 @@ impl Default for FeatureExecutionGate {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct PreparedMaterialGpuResources {
+    layout: BindGroupLayout,
+    bind_group: BindGroup,
+    _textures: Vec<Texture>,
+    _texture_views: Vec<TextureView>,
+    _samplers: Vec<Sampler>,
+}
+
+impl PreparedMaterialGpuResources {
+    pub(crate) fn layout(&self) -> &BindGroupLayout {
+        &self.layout
+    }
+
+    pub(crate) fn bind_group(&self) -> &BindGroup {
+        &self.bind_group
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct RendererPreparedPacket {
     surface_format: TextureFormat,
     surface_size: (u32, u32),
     view_id: String,
     feature_gates: BTreeMap<RenderFeatureId, FeatureExecutionGate>,
     feature_runtime_signatures: BTreeMap<RenderFeatureId, u64>,
+    prepared_material: Option<crate::plugins::render::PreparedMaterialFeatureContribution>,
+    prepared_material_gpu_resources: Option<PreparedMaterialGpuResources>,
     prepared_ui: UiPreparedDraws,
     viewport_surface_bindings: ViewportSurfaceBindingRegistry,
     prepare_timings: RendererFrameTimings,

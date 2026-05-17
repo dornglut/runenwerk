@@ -146,6 +146,13 @@ impl FullscreenPassBuilder {
         self
     }
 
+    pub fn material_scene_shader_asset(mut self, fallback_asset: impl Into<String>) -> Self {
+        self.pass.shader = Some(RenderShaderReference::MaterialSceneBundle {
+            fallback_asset: fallback_asset.into(),
+        });
+        self
+    }
+
     pub fn for_feature(mut self, feature_id: RenderFeatureId) -> Self {
         self.pass.feature_id = Some(feature_id);
         self
@@ -287,6 +294,13 @@ impl GraphicsPassBuilder {
 
     pub fn shader_asset(mut self, path: impl Into<String>) -> Self {
         self.pass.shader = Some(RenderShaderReference::AssetPath(path.into()));
+        self
+    }
+
+    pub fn material_scene_shader_asset(mut self, fallback_asset: impl Into<String>) -> Self {
+        self.pass.shader = Some(RenderShaderReference::MaterialSceneBundle {
+            fallback_asset: fallback_asset.into(),
+        });
         self
     }
 

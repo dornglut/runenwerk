@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use texture::TextureDescriptor;
 
 use crate::{
     AssetArtifactId, AssetArtifactRevisionId, AssetDiagnosticRecord, AssetId, AssetKind,
@@ -52,11 +53,16 @@ pub enum ArtifactPayloadKind {
         product_id: String,
     },
     TextureProduct {
-        product_id: String,
-        dimension: String,
+        descriptor: TextureDescriptor,
+        descriptor_hash: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        artifact_uri: Option<String>,
     },
     GeneratedTextureProduct {
-        product_id: String,
+        descriptor: TextureDescriptor,
+        descriptor_hash: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        artifact_uri: Option<String>,
     },
     ForeignReference {
         format: String,
@@ -159,6 +165,7 @@ pub fn try_preserve_prior_valid_artifact(
 mod tests {
     use super::*;
     use crate::{AssetDiagnosticCode, AssetDiagnosticRecord, asset_artifact_id, asset_id};
+    use texture::{TextureDescriptor, TextureDimension, TextureExtent, TextureProductId};
 
     #[test]
     fn preserve_prior_valid_artifact_keeps_identity_and_attaches_diagnostic() {
@@ -205,6 +212,37 @@ mod tests {
         assert_eq!(
             try_preserve_prior_valid_artifact(&previous, diagnostic),
             Err(AssetArtifactPreservationError::PreviousArtifactNotValid)
+        );
+    }
+
+    #[test]
+    fn texture_payload_carries_typed_descriptor_identity() {
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(9),
+            "albedo",
+            TextureDimension::Texture2D,
+            TextureExtent::new(64, 64, 1),
+        );
+        let payload = ArtifactPayloadKind::TextureProduct {
+            descriptor_hash: descriptor.descriptor_hash().to_string(),
+            descriptor: descriptor.clone(),
+            artifact_uri: Some(".runenwerk/artifacts/albedo.ktx2".to_string()),
+        };
+
+        let ArtifactPayloadKind::TextureProduct {
+            descriptor: carried,
+            descriptor_hash,
+            artifact_uri,
+        } = payload
+        else {
+            panic!("expected typed texture payload");
+        };
+
+        assert_eq!(carried.product_id, TextureProductId::new(9));
+        assert_eq!(descriptor_hash, descriptor.descriptor_hash());
+        assert_eq!(
+            artifact_uri.as_deref(),
+            Some(".runenwerk/artifacts/albedo.ktx2")
         );
     }
 }

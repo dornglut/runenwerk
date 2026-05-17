@@ -7,6 +7,8 @@ use crate::plugins::render::features::{
 };
 use spatial::ChunkId;
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::fmt;
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedFrameContributions {
@@ -380,13 +382,656 @@ pub struct PreparedDrawBatch {
 #[derive(Debug, Clone, Default)]
 pub struct PreparedMaterialFeatureContribution {
     pub instances: Vec<PreparedMaterialInstanceInput>,
+    pub binding_table: PreparedMaterialBindingTable,
+    pub scene_bundle: Option<PreparedSceneMaterialBundle>,
+}
+
+pub const PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT: usize = 128;
+
+impl PreparedMaterialFeatureContribution {
+    pub fn validate_portable_limits(&self) -> Result<(), PreparedMaterialBindingTableError> {
+        let texture_slots = self
+            .instances
+            .iter()
+            .map(|instance| instance.texture_bindings.len())
+            .sum::<usize>();
+        if texture_slots > PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT {
+            return Err(PreparedMaterialBindingTableError::new(format!(
+                "material texture binding table has {texture_slots} resource slots, portable limit is {PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT}"
+            )));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for instance in &self.instances {
+            for binding in &instance.texture_bindings {
+                if binding.resource_slot_index as usize
+                    >= PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT
+                {
+                    return Err(PreparedMaterialBindingTableError::new(format!(
+                        "material texture resource slot {} exceeds portable limit {}",
+                        binding.resource_slot_index,
+                        PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT
+                    )));
+                }
+                if !seen.insert(binding.resource_slot_index) {
+                    return Err(PreparedMaterialBindingTableError::new(format!(
+                        "duplicate material texture resource slot {}",
+                        binding.resource_slot_index
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedSceneMaterialBundle {
+    pub shader_artifact_id: String,
+    pub shader_cache_key: String,
+    pub shader_path: String,
+    pub shader_identity: String,
+    pub material_table_identity: String,
+}
+
+impl PreparedSceneMaterialBundle {
+    pub fn new(
+        shader_artifact_id: impl Into<String>,
+        shader_cache_key: impl Into<String>,
+        shader_path: impl Into<String>,
+        shader_identity: impl Into<String>,
+        material_table_identity: impl Into<String>,
+    ) -> Self {
+        Self {
+            shader_artifact_id: shader_artifact_id.into(),
+            shader_cache_key: shader_cache_key.into(),
+            shader_path: shader_path.into(),
+            shader_identity: shader_identity.into(),
+            material_table_identity: material_table_identity.into(),
+        }
+    }
+}
+
+pub const PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedMaterialBindingTable {
+    pub backend: PreparedMaterialBindingTableBackend,
+    pub slots: Vec<PreparedMaterialBindingSlot>,
+}
+
+impl Default for PreparedMaterialBindingTable {
+    fn default() -> Self {
+        Self {
+            backend: PreparedMaterialBindingTableBackend::FixedCapacityArray {
+                capacity: PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT,
+            },
+            slots: Vec::new(),
+        }
+    }
+}
+
+impl PreparedMaterialBindingTable {
+    pub fn fixed_capacity(
+        slots: impl IntoIterator<Item = PreparedMaterialBindingSlot>,
+    ) -> Result<Self, PreparedMaterialBindingTableError> {
+        let slots = slots.into_iter().collect::<Vec<_>>();
+        if slots.len() > PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT {
+            return Err(PreparedMaterialBindingTableError::new(format!(
+                "material binding table has {} slots, portable limit is {}",
+                slots.len(),
+                PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT
+            )));
+        }
+        let mut slot_indices = std::collections::BTreeSet::new();
+        for slot in &slots {
+            if slot.slot_index as usize >= PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT {
+                return Err(PreparedMaterialBindingTableError::new(format!(
+                    "material binding slot {} exceeds portable limit {}",
+                    slot.slot_index, PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT
+                )));
+            }
+            if !slot_indices.insert(slot.slot_index) {
+                return Err(PreparedMaterialBindingTableError::new(format!(
+                    "duplicate material binding slot {}",
+                    slot.slot_index
+                )));
+            }
+        }
+        Ok(Self {
+            backend: PreparedMaterialBindingTableBackend::FixedCapacityArray {
+                capacity: PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT,
+            },
+            slots,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PreparedMaterialBindingTableBackend {
+    FixedCapacityArray { capacity: usize },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedMaterialBindingSlot {
+    pub slot_index: u32,
+    pub material_instance_id: String,
+    pub formed_material_artifact_id: String,
+    pub shader_artifact_id: String,
+    pub material_cache_key: String,
+    pub shader_cache_key: String,
+    pub prior_valid: bool,
+}
+
+impl PreparedMaterialBindingSlot {
+    pub fn new(
+        slot_index: u32,
+        material_instance_id: impl Into<String>,
+        formed_material_artifact_id: impl Into<String>,
+        shader_artifact_id: impl Into<String>,
+        material_cache_key: impl Into<String>,
+        shader_cache_key: impl Into<String>,
+    ) -> Self {
+        Self {
+            slot_index,
+            material_instance_id: material_instance_id.into(),
+            formed_material_artifact_id: formed_material_artifact_id.into(),
+            shader_artifact_id: shader_artifact_id.into(),
+            material_cache_key: material_cache_key.into(),
+            shader_cache_key: shader_cache_key.into(),
+            prior_valid: false,
+        }
+    }
+
+    pub fn with_prior_valid(mut self, prior_valid: bool) -> Self {
+        self.prior_valid = prior_valid;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedMaterialBindingTableError {
+    message: String,
+}
+
+impl PreparedMaterialBindingTableError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for PreparedMaterialBindingTableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl Error for PreparedMaterialBindingTableError {}
+
+const MATERIAL_PARAMETER_PAYLOAD_FORMAT_V1: &str = "runenwerk.material-parameters.v1";
+pub const PREPARED_MATERIAL_PARAMETER_PAYLOAD_V1_MAX_PARAMETERS: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreparedMaterialParameterProfile {
+    PbrPreview,
+    RenderMaterial,
+}
+
+impl Default for PreparedMaterialParameterProfile {
+    fn default() -> Self {
+        Self::PbrPreview
+    }
+}
+
+impl PreparedMaterialParameterProfile {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::PbrPreview => "pbr_preview",
+            Self::RenderMaterial => "render_material",
+        }
+    }
+
+    fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "pbr_preview" => Some(Self::PbrPreview),
+            "render_material" => Some(Self::RenderMaterial),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreparedMaterialOutputTarget {
+    PbrPreview,
+    FieldMaterialChannel,
+    RenderMaterial,
+}
+
+impl Default for PreparedMaterialOutputTarget {
+    fn default() -> Self {
+        Self::PbrPreview
+    }
+}
+
+impl PreparedMaterialOutputTarget {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::PbrPreview => "pbr_preview",
+            Self::FieldMaterialChannel => "field_material_channel",
+            Self::RenderMaterial => "render_material",
+        }
+    }
+
+    fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "pbr_preview" => Some(Self::PbrPreview),
+            "field_material_channel" => Some(Self::FieldMaterialChannel),
+            "render_material" => Some(Self::RenderMaterial),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreparedMaterialParameterKind {
+    Scalar,
+    Vector2,
+    Vector3,
+    Vector4,
+    Texture2D,
+    Texture3D,
+}
+
+impl Default for PreparedMaterialParameterKind {
+    fn default() -> Self {
+        Self::Scalar
+    }
+}
+
+impl PreparedMaterialParameterKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Scalar => "scalar",
+            Self::Vector2 => "vector2",
+            Self::Vector3 => "vector3",
+            Self::Vector4 => "vector4",
+            Self::Texture2D => "texture2d",
+            Self::Texture3D => "texture3d",
+        }
+    }
+
+    fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "scalar" => Some(Self::Scalar),
+            "vector2" => Some(Self::Vector2),
+            "vector3" => Some(Self::Vector3),
+            "vector4" => Some(Self::Vector4),
+            "texture2d" => Some(Self::Texture2D),
+            "texture3d" => Some(Self::Texture3D),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PreparedMaterialParameterInput {
+    pub key: String,
+    pub kind: PreparedMaterialParameterKind,
+}
+
+impl PreparedMaterialParameterInput {
+    pub fn new(key: impl Into<String>, kind: PreparedMaterialParameterKind) -> Self {
+        Self {
+            key: key.into(),
+            kind,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PreparedMaterialParameterPayloadV1 {
+    pub profile: PreparedMaterialParameterProfile,
+    pub output_target: PreparedMaterialOutputTarget,
+    pub parameters: Vec<PreparedMaterialParameterInput>,
+}
+
+impl PreparedMaterialParameterPayloadV1 {
+    pub fn new(
+        profile: PreparedMaterialParameterProfile,
+        output_target: PreparedMaterialOutputTarget,
+        parameters: impl IntoIterator<Item = PreparedMaterialParameterInput>,
+    ) -> Self {
+        let mut parameters = parameters.into_iter().collect::<Vec<_>>();
+        parameters.sort_by(|left, right| {
+            left.key
+                .cmp(&right.key)
+                .then(left.kind.label().cmp(right.kind.label()))
+        });
+        Self {
+            profile,
+            output_target,
+            parameters,
+        }
+    }
+
+    pub fn encode_v1(&self) -> Vec<u8> {
+        let mut payload = Vec::new();
+        push_payload_field(&mut payload, "format", MATERIAL_PARAMETER_PAYLOAD_FORMAT_V1);
+        push_payload_field(&mut payload, "version", "1");
+        push_payload_field(&mut payload, "profile", self.profile.label());
+        push_payload_field(&mut payload, "output_target", self.output_target.label());
+        push_payload_field(
+            &mut payload,
+            "parameter_count",
+            &self.parameters.len().to_string(),
+        );
+        for parameter in &self.parameters {
+            push_payload_field(&mut payload, "parameter_key", &parameter.key);
+            push_payload_field(&mut payload, "parameter_kind", parameter.kind.label());
+        }
+        payload
+    }
+
+    pub fn decode_v1(bytes: &[u8]) -> Result<Self, PreparedMaterialParameterPayloadDecodeError> {
+        let mut cursor = PayloadFieldCursor::new(bytes);
+        cursor.expect_field("format", MATERIAL_PARAMETER_PAYLOAD_FORMAT_V1)?;
+        cursor.expect_field("version", "1")?;
+        let profile_label = cursor.required_value("profile")?;
+        let profile = PreparedMaterialParameterProfile::from_label(&profile_label)
+            .ok_or_else(|| PreparedMaterialParameterPayloadDecodeError::new("unknown profile"))?;
+        let output_target_label = cursor.required_value("output_target")?;
+        let output_target = PreparedMaterialOutputTarget::from_label(&output_target_label)
+            .ok_or_else(|| {
+                PreparedMaterialParameterPayloadDecodeError::new("unknown output target")
+            })?;
+        let parameter_count = cursor
+            .required_value("parameter_count")?
+            .parse::<usize>()
+            .map_err(|_| {
+                PreparedMaterialParameterPayloadDecodeError::new("invalid parameter count")
+            })?;
+        if parameter_count > PREPARED_MATERIAL_PARAMETER_PAYLOAD_V1_MAX_PARAMETERS {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(
+                "parameter count exceeds v1 limit",
+            ));
+        }
+        let mut parameters = Vec::with_capacity(parameter_count);
+        for _ in 0..parameter_count {
+            let key = cursor.required_value("parameter_key")?;
+            let kind_label = cursor.required_value("parameter_kind")?;
+            let kind = PreparedMaterialParameterKind::from_label(&kind_label).ok_or_else(|| {
+                PreparedMaterialParameterPayloadDecodeError::new("unknown parameter kind")
+            })?;
+            parameters.push(PreparedMaterialParameterInput::new(key, kind));
+        }
+        cursor.expect_end()?;
+        Ok(Self::new(profile, output_target, parameters))
+    }
+
+    pub fn encoded_len(&self) -> usize {
+        self.encode_v1().len()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedMaterialParameterPayloadDecodeError {
+    message: String,
+}
+
+impl PreparedMaterialParameterPayloadDecodeError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for PreparedMaterialParameterPayloadDecodeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for PreparedMaterialParameterPayloadDecodeError {}
+
+fn push_payload_field(payload: &mut Vec<u8>, label: &str, value: &str) {
+    payload.extend_from_slice(label.as_bytes());
+    payload.push(b'=');
+    payload.extend_from_slice(value.len().to_string().as_bytes());
+    payload.push(b':');
+    payload.extend_from_slice(value.as_bytes());
+    payload.push(b'\n');
+}
+
+struct PayloadFieldCursor<'a> {
+    bytes: &'a [u8],
+    index: usize,
+}
+
+impl<'a> PayloadFieldCursor<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, index: 0 }
+    }
+
+    fn required_value(
+        &mut self,
+        expected_label: &str,
+    ) -> Result<String, PreparedMaterialParameterPayloadDecodeError> {
+        let Some((label, value)) = self.next_field()? else {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(format!(
+                "missing {expected_label}"
+            )));
+        };
+        if label != expected_label {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(format!(
+                "expected {expected_label}, got {label}"
+            )));
+        }
+        Ok(value.clone())
+    }
+
+    fn expect_field(
+        &mut self,
+        expected_label: &str,
+        expected_value: &str,
+    ) -> Result<(), PreparedMaterialParameterPayloadDecodeError> {
+        let value = self.required_value(expected_label)?;
+        if value != expected_value {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(format!(
+                "unsupported {expected_label}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn expect_end(&self) -> Result<(), PreparedMaterialParameterPayloadDecodeError> {
+        if self.index == self.bytes.len() {
+            Ok(())
+        } else {
+            Err(PreparedMaterialParameterPayloadDecodeError::new(
+                "trailing payload fields",
+            ))
+        }
+    }
+
+    fn next_field(
+        &mut self,
+    ) -> Result<Option<(String, String)>, PreparedMaterialParameterPayloadDecodeError> {
+        if self.index >= self.bytes.len() {
+            return Ok(None);
+        }
+        let label_start = self.index;
+        while self.index < self.bytes.len() && self.bytes[self.index] != b'=' {
+            self.index += 1;
+        }
+        if self.index == self.bytes.len() || self.index == label_start {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(
+                "invalid payload field label",
+            ));
+        }
+        let label = std::str::from_utf8(&self.bytes[label_start..self.index])
+            .map_err(|_| PreparedMaterialParameterPayloadDecodeError::new("non-utf8 label"))?
+            .to_string();
+        self.index += 1;
+
+        let length_start = self.index;
+        while self.index < self.bytes.len() && self.bytes[self.index] != b':' {
+            if !self.bytes[self.index].is_ascii_digit() {
+                return Err(PreparedMaterialParameterPayloadDecodeError::new(
+                    "invalid payload field length",
+                ));
+            }
+            self.index += 1;
+        }
+        if self.index == self.bytes.len() || self.index == length_start {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(
+                "missing payload field length",
+            ));
+        }
+        let length = std::str::from_utf8(&self.bytes[length_start..self.index])
+            .map_err(|_| PreparedMaterialParameterPayloadDecodeError::new("non-utf8 length"))?
+            .parse::<usize>()
+            .map_err(|_| {
+                PreparedMaterialParameterPayloadDecodeError::new("invalid payload field length")
+            })?;
+        self.index += 1;
+
+        let value_end = self.index.checked_add(length).ok_or_else(|| {
+            PreparedMaterialParameterPayloadDecodeError::new("payload field length overflow")
+        })?;
+        if value_end > self.bytes.len() {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(
+                "payload field exceeds input",
+            ));
+        }
+        let value = std::str::from_utf8(&self.bytes[self.index..value_end])
+            .map_err(|_| PreparedMaterialParameterPayloadDecodeError::new("non-utf8 value"))?
+            .to_string();
+        self.index = value_end;
+        if self.index >= self.bytes.len() || self.bytes[self.index] != b'\n' {
+            return Err(PreparedMaterialParameterPayloadDecodeError::new(
+                "payload field missing terminator",
+            ));
+        }
+        self.index += 1;
+        Ok(Some((label, value)))
+    }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedMaterialInstanceInput {
     pub material_instance_id: String,
     pub specialization_key_fragment: String,
-    pub parameter_blob: Vec<u8>,
+    pub parameter_payload: PreparedMaterialParameterPayloadV1,
+    pub texture_bindings: Vec<PreparedMaterialTextureBinding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedMaterialTextureBinding {
+    pub node_id: u64,
+    pub binding_key: String,
+    pub resource_slot_index: u32,
+    pub artifact_id: String,
+    pub artifact_path: String,
+    pub texture_kind: PreparedMaterialTextureKind,
+    pub extent_width: u32,
+    pub extent_height: u32,
+    pub extent_depth: u32,
+    pub cache_key: String,
+    pub sampler_policy: String,
+    pub texture_dimension: String,
+    pub residency_identity: String,
+    pub artifact_revision: String,
+    pub descriptor_hash: String,
+    pub pixel_format: String,
+    pub supercompression: String,
+    pub container_byte_length: Option<u64>,
+}
+
+impl PreparedMaterialTextureBinding {
+    pub fn new(
+        node_id: u64,
+        binding_key: impl Into<String>,
+        artifact_id: impl Into<String>,
+        artifact_path: impl Into<String>,
+        texture_kind: PreparedMaterialTextureKind,
+        cache_key: impl Into<String>,
+    ) -> Self {
+        Self {
+            node_id,
+            binding_key: binding_key.into(),
+            resource_slot_index: 0,
+            artifact_id: artifact_id.into(),
+            artifact_path: artifact_path.into(),
+            texture_kind,
+            extent_width: 1,
+            extent_height: 1,
+            extent_depth: match texture_kind {
+                PreparedMaterialTextureKind::Texture2D => 1,
+                PreparedMaterialTextureKind::Texture3D => 2,
+            },
+            cache_key: cache_key.into(),
+            sampler_policy: "linear_repeat".to_string(),
+            texture_dimension: String::new(),
+            residency_identity: String::new(),
+            artifact_revision: String::new(),
+            descriptor_hash: String::new(),
+            pixel_format: "rgba8_unorm".to_string(),
+            supercompression: "none".to_string(),
+            container_byte_length: None,
+        }
+    }
+
+    pub fn with_resource_slot_index(mut self, resource_slot_index: u32) -> Self {
+        self.resource_slot_index = resource_slot_index;
+        self
+    }
+
+    pub fn with_texture_dimension(mut self, texture_dimension: impl Into<String>) -> Self {
+        self.texture_dimension = texture_dimension.into();
+        self
+    }
+
+    pub fn with_extent(mut self, width: u32, height: u32, depth: u32) -> Self {
+        self.extent_width = width;
+        self.extent_height = height;
+        self.extent_depth = depth;
+        self
+    }
+
+    pub fn with_residency_identity(mut self, residency_identity: impl Into<String>) -> Self {
+        self.residency_identity = residency_identity.into();
+        self
+    }
+
+    pub fn with_artifact_revision(mut self, artifact_revision: impl Into<String>) -> Self {
+        self.artifact_revision = artifact_revision.into();
+        self
+    }
+
+    pub fn with_descriptor_hash(mut self, descriptor_hash: impl Into<String>) -> Self {
+        self.descriptor_hash = descriptor_hash.into();
+        self
+    }
+
+    pub fn with_ktx2_contract(
+        mut self,
+        pixel_format: impl Into<String>,
+        supercompression: impl Into<String>,
+        container_byte_length: Option<u64>,
+    ) -> Self {
+        self.pixel_format = pixel_format.into();
+        self.supercompression = supercompression.into();
+        self.container_byte_length = container_byte_length;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PreparedMaterialTextureKind {
+    Texture2D,
+    Texture3D,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -399,4 +1044,123 @@ pub struct PreparedDeformationStream {
     pub stream_id: String,
     pub input_pose_ref: String,
     pub output_buffer_ref: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn material_parameter_payload_round_trips_canonical_v1() {
+        let payload = PreparedMaterialParameterPayloadV1::new(
+            PreparedMaterialParameterProfile::RenderMaterial,
+            PreparedMaterialOutputTarget::RenderMaterial,
+            [
+                PreparedMaterialParameterInput::new(
+                    "roughness",
+                    PreparedMaterialParameterKind::Scalar,
+                ),
+                PreparedMaterialParameterInput::new(
+                    "base_color",
+                    PreparedMaterialParameterKind::Vector4,
+                ),
+            ],
+        );
+
+        let encoded = payload.encode_v1();
+        let decoded =
+            PreparedMaterialParameterPayloadV1::decode_v1(&encoded).expect("payload decodes");
+
+        assert_eq!(decoded, payload);
+        assert!(String::from_utf8_lossy(&encoded).contains("version=1:1"));
+        assert!(!String::from_utf8_lossy(&encoded).contains("Vector4"));
+    }
+
+    #[test]
+    fn material_parameter_payload_rejects_unknown_version() {
+        let payload = PreparedMaterialParameterPayloadV1::new(
+            PreparedMaterialParameterProfile::PbrPreview,
+            PreparedMaterialOutputTarget::PbrPreview,
+            std::iter::empty::<PreparedMaterialParameterInput>(),
+        );
+        let mut encoded = payload.encode_v1();
+        let original = b"version=1:1\n";
+        let replacement = b"version=1:2\n";
+        let position = encoded
+            .windows(original.len())
+            .position(|window| window == original)
+            .expect("version field should exist");
+        encoded.splice(
+            position..position + original.len(),
+            replacement.iter().copied(),
+        );
+
+        let error = PreparedMaterialParameterPayloadV1::decode_v1(&encoded)
+            .expect_err("unknown version should fail");
+
+        assert!(error.to_string().contains("unsupported version"));
+    }
+
+    #[test]
+    fn material_parameter_payload_rejects_oversized_parameter_count_before_allocation() {
+        let mut encoded = Vec::new();
+        push_payload_field(&mut encoded, "format", MATERIAL_PARAMETER_PAYLOAD_FORMAT_V1);
+        push_payload_field(&mut encoded, "version", "1");
+        push_payload_field(&mut encoded, "profile", "pbr_preview");
+        push_payload_field(&mut encoded, "output_target", "pbr_preview");
+        push_payload_field(&mut encoded, "parameter_count", "999999999");
+
+        let error = PreparedMaterialParameterPayloadV1::decode_v1(&encoded)
+            .expect_err("oversized parameter count should fail before allocation");
+
+        assert!(error.to_string().contains("exceeds v1 limit"));
+    }
+
+    #[test]
+    fn material_binding_table_rejects_slots_above_portable_limit() {
+        let error =
+            PreparedMaterialBindingTable::fixed_capacity([PreparedMaterialBindingSlot::new(
+                PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT as u32,
+                "material.product.1",
+                "artifact.material.1",
+                "artifact.shader.2",
+                "material-cache",
+                "shader-cache",
+            )])
+            .expect_err("slot above portable limit should fail");
+
+        assert!(error.to_string().contains("exceeds portable limit"));
+    }
+
+    #[test]
+    fn material_feature_rejects_duplicate_texture_resource_slots() {
+        let duplicate = PreparedMaterialTextureBinding::new(
+            1,
+            "texture_ref",
+            "artifact.1",
+            ".runenwerk/artifacts/texture.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "texture-cache",
+        );
+        let contribution = PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.1".to_string(),
+                specialization_key_fragment: "material.first_slice".to_string(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings: vec![duplicate.clone(), duplicate],
+            }],
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+        };
+
+        let error = contribution
+            .validate_portable_limits()
+            .expect_err("duplicate resource slots should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate material texture resource slot")
+        );
+    }
 }

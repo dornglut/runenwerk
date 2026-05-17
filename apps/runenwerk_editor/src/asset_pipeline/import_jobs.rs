@@ -6,6 +6,10 @@ use asset::{
     AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetKind, AssetSourceDescriptor, ImportPlan,
     ImportSettings, try_preserve_prior_valid_artifact,
 };
+use texture::{
+    TextureChannelLayout, TextureColorSpace, TextureCompression, TextureDescriptor,
+    TextureDimension, TextureExtent, TextureProductId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportJobStatus {
@@ -70,7 +74,7 @@ pub fn run_import_job(
         artifact_id,
         plan.asset_id,
         expected.kind,
-        payload_kind_for_import(expected.kind),
+        payload_kind_for_import(expected.kind, &plan.settings, artifact_id),
         expected.cache_key.clone(),
     )
     .with_source(source.source_id, source.revision_id)
@@ -123,7 +127,11 @@ fn missing_tool_diagnostic(settings: &ImportSettings) -> Option<AssetDiagnosticR
     }
 }
 
-fn payload_kind_for_import(kind: AssetKind) -> ArtifactPayloadKind {
+fn payload_kind_for_import(
+    kind: AssetKind,
+    settings: &ImportSettings,
+    artifact_id: AssetArtifactId,
+) -> ArtifactPayloadKind {
     match kind {
         AssetKind::FormedFieldProduct => ArtifactPayloadKind::FormedFieldProduct {
             product_id: "pending_field_product".to_string(),
@@ -136,13 +144,22 @@ fn payload_kind_for_import(kind: AssetKind) -> ArtifactPayloadKind {
                 product_id: "pending_material_product".to_string(),
             }
         }
-        AssetKind::Texture2D | AssetKind::Texture3DVolume => ArtifactPayloadKind::TextureProduct {
-            product_id: "pending_texture_product".to_string(),
-            dimension: format!("{kind:?}"),
-        },
-        AssetKind::ProceduralTexture => ArtifactPayloadKind::GeneratedTextureProduct {
-            product_id: "pending_generated_texture".to_string(),
-        },
+        AssetKind::Texture2D | AssetKind::Texture3DVolume => {
+            let descriptor = texture_descriptor_for_import(kind, settings, artifact_id);
+            ArtifactPayloadKind::TextureProduct {
+                descriptor_hash: descriptor.descriptor_hash().to_string(),
+                descriptor,
+                artifact_uri: None,
+            }
+        }
+        AssetKind::ProceduralTexture => {
+            let descriptor = texture_descriptor_for_import(kind, settings, artifact_id);
+            ArtifactPayloadKind::GeneratedTextureProduct {
+                descriptor_hash: descriptor.descriptor_hash().to_string(),
+                descriptor,
+                artifact_uri: None,
+            }
+        }
         AssetKind::Scene => ArtifactPayloadKind::SceneManifest,
         AssetKind::Shader => ArtifactPayloadKind::ShaderMetadata,
         AssetKind::UiDefinition => ArtifactPayloadKind::UiDefinition,
@@ -152,6 +169,89 @@ fn payload_kind_for_import(kind: AssetKind) -> ArtifactPayloadKind {
             }
         }
         _ => ArtifactPayloadKind::DiagnosticCapture,
+    }
+}
+
+fn texture_descriptor_for_import(
+    kind: AssetKind,
+    settings: &ImportSettings,
+    artifact_id: AssetArtifactId,
+) -> TextureDescriptor {
+    let product_id = TextureProductId::new(artifact_id.raw());
+    match (kind, settings) {
+        (
+            AssetKind::Texture3DVolume,
+            ImportSettings::Texture3DVolume {
+                resolution,
+                color_space,
+                compression,
+            },
+        ) => TextureDescriptor::new(
+            product_id,
+            format!("texture.artifact.{}", artifact_id.raw()),
+            TextureDimension::Texture3DVolume,
+            TextureExtent::new(resolution.width, resolution.height, resolution.depth),
+        )
+        .with_color_space(texture_color_space(*color_space))
+        .with_compression(texture_compression(*compression)),
+        (
+            AssetKind::ProceduralTexture,
+            ImportSettings::ProceduralTexture {
+                resolution,
+                color_space,
+            },
+        ) => TextureDescriptor::new(
+            product_id,
+            format!("texture.artifact.{}", artifact_id.raw()),
+            TextureDimension::Texture2D,
+            TextureExtent::new(resolution.width, resolution.height, resolution.depth),
+        )
+        .with_color_space(texture_color_space(*color_space)),
+        (
+            AssetKind::Texture2D,
+            ImportSettings::Texture2D {
+                color_space,
+                compression,
+            },
+        ) => TextureDescriptor::new(
+            product_id,
+            format!("texture.artifact.{}", artifact_id.raw()),
+            TextureDimension::Texture2D,
+            TextureExtent::new(512, 512, 1),
+        )
+        .with_color_space(texture_color_space(*color_space))
+        .with_compression(texture_compression(*compression)),
+        (AssetKind::Texture3DVolume, _) => TextureDescriptor::new(
+            product_id,
+            format!("texture.artifact.{}", artifact_id.raw()),
+            TextureDimension::Texture3DVolume,
+            TextureExtent::new(64, 64, 64),
+        )
+        .with_color_space(TextureColorSpace::Data),
+        _ => TextureDescriptor::new(
+            product_id,
+            format!("texture.artifact.{}", artifact_id.raw()),
+            TextureDimension::Texture2D,
+            TextureExtent::new(512, 512, 1),
+        )
+        .with_channel_layout(TextureChannelLayout::Rgba),
+    }
+}
+
+fn texture_color_space(color_space: asset::TextureImportColorSpace) -> TextureColorSpace {
+    match color_space {
+        asset::TextureImportColorSpace::Linear => TextureColorSpace::Linear,
+        asset::TextureImportColorSpace::Srgb => TextureColorSpace::Srgb,
+        asset::TextureImportColorSpace::Data => TextureColorSpace::Data,
+    }
+}
+
+fn texture_compression(compression: asset::TextureImportCompression) -> TextureCompression {
+    match compression {
+        asset::TextureImportCompression::Uncompressed => TextureCompression::Uncompressed,
+        asset::TextureImportCompression::Bc5 => TextureCompression::Bc5,
+        asset::TextureImportCompression::Bc7 => TextureCompression::Bc7,
+        asset::TextureImportCompression::Astc => TextureCompression::Astc,
     }
 }
 

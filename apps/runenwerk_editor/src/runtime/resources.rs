@@ -334,6 +334,7 @@ pub struct EditorViewportPrimitiveInstance {
     pub sphere_radius: f32,
     pub capsule_radius: f32,
     pub capsule_half_height: f32,
+    pub material_slot_index: u32,
     pub selected: bool,
     pub hovered: bool,
 }
@@ -367,9 +368,15 @@ impl EditorViewportPrimitiveInstance {
             sphere_radius: primitive.sphere_radius.max(0.05) * sphere_scale,
             capsule_radius: primitive.capsule_radius.max(0.05) * radial_scale,
             capsule_half_height: primitive.capsule_half_height.max(0.05) * safe_scale.y,
+            material_slot_index: 0,
             selected,
             hovered,
         }
+    }
+
+    pub fn with_material_slot_index(mut self, material_slot_index: u32) -> Self {
+        self.material_slot_index = material_slot_index;
+        self
     }
 
     pub fn shader_slot_transform(self) -> [f32; 4] {
@@ -394,7 +401,7 @@ impl EditorViewportPrimitiveInstance {
         [
             self.capsule_radius.max(0.05),
             self.capsule_half_height.max(0.05),
-            0.0,
+            self.material_slot_index as f32,
             0.0,
         ]
     }

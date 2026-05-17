@@ -27,6 +27,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ratification` | `foundation/ratification` | foundation | Shared ratification report, issue, status, ratifier, and diagnostics-bridge vocabulary. | evolving |
 | `schema` | `foundation/schema` | foundation | Portable schema identity, version, path, value, shape, field, constraint, metadata, and descriptor vocabulary. | evolving |
 | `commands` | `foundation/commands` | foundation | Portable command contract identity, schema reference, descriptor, proposal, metadata, hint, issue, and optional diagnostics-bridge vocabulary. | evolving |
+| `resource_ref` | `foundation/resource_ref` | foundation | Portable external resource references with stable canonical identity encoding and no catalog/runtime lookup ownership. | evolving |
 | `geometry` | `domain/geometry` | domain | Explicit geometric primitives and geometric queries. | evolving |
 | `spatial` | `domain/spatial` | domain | World/grid/chunk/clipmap/ring spatial coordinate contracts. | evolving |
 | `spatial_index` | `domain/spatial_index` | domain | Spatial index traits and spatial hash implementation. | evolving |
@@ -50,6 +51,7 @@ Regenerate or audit this list from `cargo metadata --no-deps` whenever workspace
 | `ui_theme` | `domain/ui/ui_theme` | domain | UI color, spacing, radius, typography, and theme tokens. | evolving |
 | `ui_render_data` | `domain/ui/ui_render_data` | domain | Renderer-facing UI frame, layer, primitive, neutral product-surface primitive, color, and batching contracts. | evolving |
 | `ui_surface` | `domain/ui/ui_surface` | domain | Surface definition, mount, observation, session, presentation, intent, capability, and ratification contracts. | evolving |
+| `ui_graph_editor` | `domain/ui/ui_graph_editor` | domain | Backend-neutral graph editor view models, selection, hit-test intents, edit actions, shortcuts, layout state, and undo/redo grouping contracts. | evolving |
 | `ui_definition` | `domain/ui/ui_definition` | domain | Authored UI templates, slots, repeaters, embeds, menus, availability, validation, normalization, and retained UI formation. | evolving |
 | `ui_tree` | `domain/ui/ui_tree` | domain | Retained UI tree, widget IDs, nodes, and computed layout records. | evolving |
 | `ui_runtime` | `domain/ui/ui_runtime` | domain | Retained UI runtime orchestration, input dispatch, layout, frame output, and runtime state. | evolving |

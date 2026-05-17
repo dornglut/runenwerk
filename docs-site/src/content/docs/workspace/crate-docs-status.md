@@ -29,6 +29,7 @@ Status labels:
 | `ratification` | `foundation/ratification` | current | [`../foundation/ratification/README.md`](../foundation/ratification/README.md) |
 | `schema` | `foundation/schema` | current | [`../foundation/schema/README.md`](../foundation/schema/README.md) |
 | `commands` | `foundation/commands` | current | [`../foundation/commands/README.md`](../foundation/commands/README.md) |
+| `resource_ref` | `foundation/resource_ref` | current | [`../foundation/resource-ref/README.md`](../foundation/resource-ref/README.md) |
 
 ## Domain
 

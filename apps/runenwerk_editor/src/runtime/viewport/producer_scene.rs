@@ -8,6 +8,7 @@ pub const EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID: &str =
     "runenwerk.editor.viewport.product.scene.uniform";
 
 pub const VIEWPORT_TARGET_ALIAS_SCENE_COLOR: &str = "viewport.scene_color";
+pub const VIEWPORT_TARGET_ALIAS_PRIMARY_COLOR: &str = "viewport.primary_color";
 pub const VIEWPORT_TARGET_ALIAS_PICKING_IDS: &str = "viewport.picking_ids";
 pub const VIEWPORT_TARGET_ALIAS_OVERLAY: &str = "viewport.overlay";
 pub const VIEWPORT_TARGET_ALIAS_SCALAR_FIELD: &str = "viewport.scalar_field";
@@ -16,6 +17,7 @@ pub const VIEWPORT_TARGET_ALIAS_ATLAS: &str = "viewport.atlas";
 pub const VIEWPORT_TARGET_ALIAS_VOLUME_SLICE: &str = "viewport.volume_slice";
 pub const VIEWPORT_TARGET_ALIAS_BRICKMAP_DEBUG: &str = "viewport.brickmap_debug";
 pub const VIEWPORT_TARGET_ALIAS_HISTORY_COLOR: &str = "viewport.history_color";
+pub const VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW: &str = "viewport.material_preview";
 
 pub fn surface_slot_target_alias(slot: ViewportSurfaceSlot) -> &'static str {
     match slot {

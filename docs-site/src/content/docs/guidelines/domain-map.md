@@ -20,6 +20,7 @@ This map tracks crate ownership and allowed dependency direction for the active 
 - `foundation/ratification`: shared ratification report vocabulary
 - `foundation/schema`: portable schema identity, version, path, value, shape, field, constraint, metadata, and descriptor vocabulary
 - `foundation/commands`: portable command contract identity, schema reference, descriptor, proposal, metadata, hint, issue, and optional diagnostics-bridge vocabulary
+- `foundation/resource_ref`: portable external resource references with canonical identity encoding and no catalog/runtime lookup ownership
 - `domain/ecs`: entity/component/resource storage, reflection, and typed world/query APIs
 - `domain/ecs_macros`: derive macros for ECS component/resource/bundle/reflection contracts
 - `domain/scheduler`: schedule/stage/runtime execution graph utilities
@@ -36,7 +37,7 @@ This map tracks crate ownership and allowed dependency direction for the active 
 - `domain/material_graph`: authored material graph documents, node catalog boundaries, ratification, lowering, source maps, cache keys, and formed material product descriptors
 - `domain/procgen`: deterministic procgen documents, terrain/material node catalog semantics, planning metadata, ratification, lowering to world operation windows, and product job/publication descriptors
 - `domain/drawing`: drawing document, stroke, brush, paper, layer/composition graph, command, ratification, diagnostic, deterministic ink tile formation, product helper, and tile-lineage contracts
-- `domain/ui/*`: UI geometry, input, layout, text, theme, render-data, surface, definition, tree, runtime, and widget contracts
+- `domain/ui/*`: UI geometry, input, layout, text, theme, render-data, surface, graph-editor, definition, tree, runtime, and widget contracts
 - `domain/editor/*`: editor-facing domain logic (inspector, scene editing, viewport)
 
 ## Engine Layer

@@ -22,6 +22,7 @@ pub enum RenderPassViewScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderShaderReference {
     AssetPath(String),
+    MaterialSceneBundle { fallback_asset: String },
     RegistryHandle(ShaderHandle),
 }
 

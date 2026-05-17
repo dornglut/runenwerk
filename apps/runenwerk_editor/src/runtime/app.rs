@@ -9,7 +9,8 @@ use winit::keyboard::KeyCode;
 use crate::runtime::plugin::EditorAppPlugin;
 use crate::runtime::resources::EditorViewportRenderState;
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, VIEWPORT_TARGET_ALIAS_OVERLAY,
+    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
+    VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, VIEWPORT_TARGET_ALIAS_OVERLAY,
     VIEWPORT_TARGET_ALIAS_PICKING_IDS, VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
 };
 
@@ -28,9 +29,12 @@ const EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.p
 const EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
 const EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
+pub const EDITOR_MATERIAL_PREVIEW_FLOW_ID: &str = "runenwerk.editor.material.preview.flow";
+const EDITOR_MATERIAL_PREVIEW_PASS_ID: &str = "runenwerk.editor.material.preview.pass";
 pub const EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID: &str = "editor_viewport_scene_product";
 pub const EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID: &str = "editor_viewport_picking_product";
 pub const EDITOR_VIEWPORT_OVERLAY_PRODUCT_SHADER_ID: &str = "editor_viewport_overlay_product";
+pub const EDITOR_MATERIAL_PREVIEW_SHADER_ID: &str = "editor_material_preview_generated";
 const EDITOR_VIEWPORT_BACKGROUND_CLEAR: [f32; 4] = [0.09, 0.10, 0.12, 1.0];
 const EDITOR_VIEWPORT_TRANSPARENT_CLEAR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
@@ -94,7 +98,7 @@ fn register_editor_render_flow(app: &mut App) {
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .offscreen_products_only()
-        .shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
+        .material_scene_shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
         .clear_color(EDITOR_VIEWPORT_BACKGROUND_CLEAR)
         .uniform_from_state_with_surface_to(
             scene_product_uniform.clone(),
@@ -131,6 +135,18 @@ fn register_editor_render_flow(app: &mut App) {
         .validate()
         .expect("editor render flow should validate");
     app.add_render_flow(flow);
+
+    let material_preview_flow = RenderFlow::new(EDITOR_MATERIAL_PREVIEW_FLOW_ID)
+        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)
+        .fullscreen_pass(EDITOR_MATERIAL_PREVIEW_PASS_ID)
+        .offscreen_products_only()
+        .shader_asset(EDITOR_MATERIAL_PREVIEW_SHADER_ID)
+        .for_feature(engine::plugins::render::MATERIAL_RENDER_FEATURE_ID)
+        .write_target_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)
+        .finish()
+        .validate()
+        .expect("editor material preview render flow should validate");
+    app.add_render_flow(material_preview_flow);
 }
 
 pub fn build_headless_app() -> App {

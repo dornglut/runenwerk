@@ -9,7 +9,8 @@ use crate::runtime::viewport::{
     ATLAS_PRODUCT_ID, BRICKMAP_DEBUG_PRODUCT_ID, HISTORY_COLOR_PRODUCT_ID, OVERLAY_PRODUCT_ID,
     PICKING_IDS_PRODUCT_ID, SCALAR_FIELD_PRODUCT_ID, SCENE_COLOR_PRODUCT_ID,
     VECTOR_FIELD_PRODUCT_ID, VOLUME_SLICE_PRODUCT_ID, ViewportPresentationStateResource,
-    ViewportSurfaceSet, ViewportSurfaceSetResource, ViewportSurfaceSlot,
+    ViewportProductTargetRegistryResource, ViewportSurfaceSet, ViewportSurfaceSetResource,
+    ViewportSurfaceSlot,
 };
 
 pub fn resolve_product_to_surface_slot(
@@ -61,6 +62,7 @@ fn bind_surface_slot(
 pub fn build_surface_binding_registry(
     viewport_surface_sets: &ViewportSurfaceSetResource,
     viewport_presentations: &ViewportPresentationStateResource,
+    viewport_product_targets: &ViewportProductTargetRegistryResource,
 ) -> ViewportSurfaceBindingRegistry {
     let mut registry = ViewportSurfaceBindingRegistry::default();
 
@@ -71,33 +73,45 @@ pub fn build_surface_binding_registry(
         let Some(presentation_state) = viewport_presentations.state_for(viewport_id) else {
             continue;
         };
-        let Some(primary_slot) =
-            resolve_product_to_surface_slot(presentation_state.selected_primary_product_id)
-        else {
-            continue;
-        };
-
-        bind_surface_slot(
-            &mut registry,
+        if let Some(primary_record) = viewport_product_targets.record_for_product(
             viewport_id,
-            surface_set,
-            primary_slot,
             ViewportSurfacePresentationSlot::Primary,
-        );
-        bind_surface_slot(
-            &mut registry,
+            presentation_state.selected_primary_product_id,
+        ) {
+            bind_surface_slot(
+                &mut registry,
+                viewport_id,
+                surface_set,
+                primary_record.surface_slot,
+                ViewportSurfacePresentationSlot::Primary,
+            );
+        }
+        if let Some(picking_record) = viewport_product_targets.record_for_product(
             viewport_id,
-            surface_set,
-            ViewportSurfaceSlot::PickingIds,
             ViewportSurfacePresentationSlot::Picking,
-        );
-        bind_surface_slot(
-            &mut registry,
+            PICKING_IDS_PRODUCT_ID,
+        ) {
+            bind_surface_slot(
+                &mut registry,
+                viewport_id,
+                surface_set,
+                picking_record.surface_slot,
+                ViewportSurfacePresentationSlot::Picking,
+            );
+        }
+        if let Some(overlay_record) = viewport_product_targets.record_for_product(
             viewport_id,
-            surface_set,
-            ViewportSurfaceSlot::Overlay,
             ViewportSurfacePresentationSlot::Overlay,
-        );
+            OVERLAY_PRODUCT_ID,
+        ) {
+            bind_surface_slot(
+                &mut registry,
+                viewport_id,
+                surface_set,
+                overlay_record.surface_slot,
+                ViewportSurfacePresentationSlot::Overlay,
+            );
+        }
     }
 
     registry
@@ -107,8 +121,27 @@ pub fn build_surface_binding_registry(
 mod tests {
     use super::*;
     use crate::runtime::viewport::{
-        VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportSurfaceHandle, initial_presentation_state,
+        VIEWPORT_DYNAMIC_TARGET_NAMESPACE, ViewportProductTargetRegistryResource,
+        ViewportSurfaceHandle, initial_presentation_state, initial_product_descriptors,
+        product_target_record_for_descriptor,
     };
+    use editor_core::RealityVersion;
+    use editor_viewport::ExpressionDimensions;
+
+    fn target_registry_for(viewport_id: ViewportId) -> ViewportProductTargetRegistryResource {
+        let descriptors =
+            initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
+        let mut registry = ViewportProductTargetRegistryResource::default();
+        registry.replace_records(
+            descriptors
+                .iter()
+                .filter_map(|descriptor| {
+                    product_target_record_for_descriptor(viewport_id, descriptor)
+                })
+                .collect(),
+        );
+        registry
+    }
 
     #[test]
     fn unknown_product_never_resolves_to_surface_slot() {
@@ -151,8 +184,10 @@ mod tests {
         let mut state = initial_presentation_state(viewport_id);
         state.select_primary_product(PICKING_IDS_PRODUCT_ID);
         presentations.upsert_state(state);
+        let product_targets = target_registry_for(viewport_id);
 
-        let registry = build_surface_binding_registry(&surface_sets, &presentations);
+        let registry =
+            build_surface_binding_registry(&surface_sets, &presentations, &product_targets);
         assert!(
             registry
                 .get(
@@ -190,8 +225,10 @@ mod tests {
 
         let mut presentations = ViewportPresentationStateResource::default();
         presentations.upsert_state(initial_presentation_state(owned_viewport));
+        let product_targets = target_registry_for(owned_viewport);
 
-        let registry = build_surface_binding_registry(&surface_sets, &presentations);
+        let registry =
+            build_surface_binding_registry(&surface_sets, &presentations, &product_targets);
 
         assert!(
             registry

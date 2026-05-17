@@ -555,16 +555,36 @@ fn product_core_surface_line(
 fn texture_artifact_line(artifact: &AssetArtifactDescriptor) -> Option<String> {
     match &artifact.payload_kind {
         ArtifactPayloadKind::TextureProduct {
-            product_id,
-            dimension,
+            descriptor,
+            descriptor_hash,
+            artifact_uri,
         } => Some(format!(
-            "texture product: {product_id} dimension={dimension} [{:?}] validity={:?} cache={}",
+            "texture product: {} dimension={:?} descriptor={:?} {}x{}x{} hash={} uri={} [{:?}] validity={:?} cache={}",
+            descriptor.product_id.raw(),
+            descriptor.dimension,
+            descriptor.ktx2_metadata().pixel_format,
+            descriptor.extent.width,
+            descriptor.extent.height,
+            descriptor.extent.depth,
+            descriptor_hash,
+            artifact_uri.as_deref().unwrap_or("none"),
             artifact.kind,
             artifact.validity,
             artifact.cache_key.as_str()
         )),
-        ArtifactPayloadKind::GeneratedTextureProduct { product_id } => Some(format!(
-            "generated texture product: {product_id} [{:?}] validity={:?} cache={}",
+        ArtifactPayloadKind::GeneratedTextureProduct {
+            descriptor,
+            descriptor_hash,
+            artifact_uri,
+        } => Some(format!(
+            "generated texture product: {} descriptor={:?} {}x{}x{} hash={} uri={} [{:?}] validity={:?} cache={}",
+            descriptor.product_id.raw(),
+            descriptor.ktx2_metadata().pixel_format,
+            descriptor.extent.width,
+            descriptor.extent.height,
+            descriptor.extent.depth,
+            descriptor_hash,
+            artifact_uri.as_deref().unwrap_or("none"),
             artifact.kind,
             artifact.validity,
             artifact.cache_key.as_str()
@@ -577,8 +597,8 @@ fn artifact_is_volume_texture(artifact: &AssetArtifactDescriptor) -> bool {
     artifact.kind == AssetKind::Texture3DVolume
         || matches!(
             &artifact.payload_kind,
-            ArtifactPayloadKind::TextureProduct { dimension, .. }
-                if dimension.contains("3D") || dimension.contains("Volume")
+            ArtifactPayloadKind::TextureProduct { descriptor, .. }
+                if descriptor.dimension == texture::TextureDimension::Texture3DVolume
         )
 }
 
@@ -592,9 +612,9 @@ fn first_texture_product_id(
         .values()
         .filter(|artifact| artifact_is_volume_texture(artifact) == volume_only)
         .filter_map(|artifact| match &artifact.payload_kind {
-            ArtifactPayloadKind::TextureProduct { product_id, .. }
-            | ArtifactPayloadKind::GeneratedTextureProduct { product_id } => {
-                product_id.parse::<u64>().ok().map(TextureProductId::new)
+            ArtifactPayloadKind::TextureProduct { descriptor, .. }
+            | ArtifactPayloadKind::GeneratedTextureProduct { descriptor, .. } => {
+                Some(descriptor.product_id)
             }
             _ => None,
         })

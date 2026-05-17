@@ -953,8 +953,12 @@ items:
   - WR-026
   write_scopes:
   - Cargo.lock
+  - Cargo.toml
   - apps/runenwerk_editor
+  - foundation/resource_ref
+  - domain/graph
   - domain/asset
+  - domain/ui/ui_graph_editor
   - domain/editor
   - domain/material_graph
   - engine/src/plugins/render
@@ -963,22 +967,29 @@ items:
   - docs-site/src/content/docs/reports/implementation-plans/wr-021-material-lab-and-material-preview-products/plan.md
   - docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md
   validations:
+  - cargo test -p ui_graph_editor
+  - cargo test -p resource_ref
+  - cargo test -p graph
   - cargo test -p material_graph
+  - cargo test -p engine material_compiler
+  - cargo test -p editor_shell material
   - cargo test -p runenwerk_editor material
   - cargo test -p runenwerk_editor viewport
   - task docs:validate
-  next_evidence: Completed WR-021 implementation in the prepared batch worktree with source-backed material graph persistence,
-    typed material lowering recipes, catalog-backed material artifacts, viewport material preview selection, prior-valid preservation,
-    epoch-guarded material shell commands, and renderer PreparedMaterialFeatureResource handoff to MATERIAL_RENDER_FEATURE_ID;
-    closeout recorded at docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md.
-  current_decision: Completed WR-021 implementation in the prepared batch worktree with source-backed material graph persistence,
-    typed material lowering recipes, catalog-backed material artifacts, viewport material preview selection, prior-valid preservation,
-    epoch-guarded material shell commands, and renderer PreparedMaterialFeatureResource handoff to MATERIAL_RENDER_FEATURE_ID;
-    closeout recorded at docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md.
+  next_evidence: Completed after the WR-021 perfectionist repair. Evidence now covers source-owned V2 material graph layout,
+    direct source-document Material Lab projection, ui_graph_editor shell contracts, immediate source edit ratification refresh,
+    topologically ordered executable IR, generated preview/scene shader artifacts, KTX2-backed typed texture descriptors,
+    exact generated shader load gating, generated default scene material bootstrap, PreparedSceneMaterialBundle consumption,
+    group-1 GPU-resident material texture/sampler bind groups, runtime scene packet material slot indices, dedicated
+    material-preview producer output, selected-primary viewport presentation, prior-valid material handoff preservation, and
+    mandatory GPU proof for generated scene and preview shaders sampling Texture2D and Texture3D KTX2 resources.
+  current_decision: WR-021 is completed by the superseding closeout at docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md.
+    The accepted product spine is source MaterialGraph V2 -> ratification -> typed executable IR -> generated WGSL -> validated
+    shader artifacts -> KTX2 texture residency -> scene material slots -> material preview product -> viewport selection -> GPU
+    pixel evidence. Dynamic plugins, multiple material catalogs, and richer visual polish remain later slices.
   current_call: Do not make canvas state material truth; material source documents own material state and renderer code consumes
     prepared preview/material products only.
-  main_blocker: Material preview work waits for rendered-world V1, Field Visualizer routing, and source-backed asset adapter
-    evidence.
+  main_blocker: Completed; no active blocker remains for WR-021.
   first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands, using FR-4
     sequencing from engine/roadmaps/fully-featured-renderer-roadmap.md.
   diagram_call:

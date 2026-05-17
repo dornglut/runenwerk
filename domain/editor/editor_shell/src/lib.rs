@@ -29,11 +29,18 @@ pub use surfaces::{
     EntityTableSessionMutation, EntityTableSort, EntityTableSurfaceAction,
     ImportInspectorViewModel, InspectorFieldControlKind, InspectorFieldEditIntent,
     InspectorSessionMutation, InspectorSurfaceAction, MaterialGraphCanvasViewModel,
+    MaterialGraphEdgeViewModel, MaterialGraphEditorViewModel, MaterialGraphGroupViewModel,
+    MaterialGraphNodeViewModel, MaterialGraphPortViewModel, MaterialGraphPropertyViewModel,
+    MaterialGraphResourceBindingViewModel, MaterialGraphShortcutViewModel,
     MaterialGraphSourceDetailViewModel, MaterialGraphSourceRowViewModel,
-    MaterialInspectorViewModel, MaterialPreviewViewModel, MaterialSurfaceAction,
-    OutlinerDomainMutation, OutlinerSurfaceAction, SdfOperationDomainMutation,
-    SdfOperationSessionMutation, SdfOperationSurfaceAction, ViewportDomainMutation,
-    ViewportSessionMutation, ViewportSurfaceAction,
+    MaterialGraphToolbarViewModel, MaterialGraphValidationOverlayViewModel,
+    MaterialGraphValidationSeverity, MaterialInspectorViewModel,
+    MaterialNodePaletteCategoryViewModel, MaterialNodePaletteItemViewModel,
+    MaterialNodePaletteViewModel, MaterialPreviewViewModel, MaterialShortcutAction,
+    MaterialSurfaceAction, MaterialUndoRedoViewModel, OutlinerDomainMutation,
+    OutlinerSurfaceAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
+    SdfOperationSurfaceAction, ViewportDomainMutation, ViewportSessionMutation,
+    ViewportSurfaceAction,
 };
 pub use view_models::*;
 pub use workspace::{

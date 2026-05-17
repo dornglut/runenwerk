@@ -96,6 +96,9 @@ impl ShaderRegistryResource {
             {
                 asset.path = path.clone();
                 asset.modified = None;
+                asset.source = None;
+                asset.revision = 0;
+                asset.last_error = None;
                 event = Some(ShaderRegistryEvent {
                     kind: ShaderRegistryEventKind::PathUpdated,
                     id: id.clone(),
@@ -159,6 +162,21 @@ impl ShaderRegistryResource {
                     .filter(|source| !source.trim().is_empty())
             })
             .unwrap_or(fallback)
+    }
+
+    pub fn loaded_source(&self, id: &str) -> Option<&str> {
+        self.resolve_lookup_handle(id)
+            .and_then(|handle| self.asset(handle))
+            .and_then(|asset| {
+                asset
+                    .source
+                    .as_deref()
+                    .filter(|source| !source.trim().is_empty())
+            })
+    }
+
+    pub fn is_loaded(&self, id: &str) -> bool {
+        self.loaded_source(id).is_some() && self.revision_for(id) > 0
     }
 
     pub fn source_or_handle<'a>(&'a self, handle: ShaderHandle, fallback: &'a str) -> &'a str {

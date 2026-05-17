@@ -211,6 +211,7 @@ mod tests {
     use crate::runtime::resources::EditorViewportRenderState;
     use crate::runtime::viewport::{
         ViewportProductRegistryResource, ViewportProductTargetRegistryResource,
+        material_preview_descriptor,
     };
     use editor_core::RealityVersion;
     use editor_viewport::{
@@ -266,21 +267,12 @@ mod tests {
                 ),
             ],
         );
-        let mut target_registry = ViewportProductTargetRegistryResource::default();
-        target_registry.replace_records(
+        let target_registry = ViewportProductTargetRegistryResource::from_descriptors_for_viewport(
+            viewport_id,
             product_registry
                 .descriptors_for(viewport_id)
-                .expect("descriptors should exist")
-                .iter()
-                .filter_map(|descriptor| {
-                    crate::runtime::viewport::product_targets::product_target_record_for_descriptor(
-                        viewport_id,
-                        descriptor,
-                    )
-                })
-                .collect(),
+                .expect("descriptors should exist"),
         );
-
         let flow_id = RenderFlowId::try_from_raw(1).expect("test flow id should be valid");
         let scene_uniform_id =
             RenderResourceId::try_from_raw(9).expect("test uniform id should be valid");
@@ -297,12 +289,99 @@ mod tests {
 
         assert_eq!(job.viewport_id, viewport_id);
         assert_eq!(job.dimensions, ExpressionDimensions::new(320, 200));
+        let scene_target = target_registry
+            .record_for_product(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                SCENE_COLOR_PRODUCT_ID,
+            )
+            .expect("scene target should exist")
+            .dynamic_key();
+        assert_eq!(job.scene_color_target, scene_target);
+        assert_eq!(
+            job.prepared_flow_invocation
+                .target_alias_bindings
+                .get(VIEWPORT_TARGET_ALIAS_SCENE_COLOR),
+            Some(&PreparedTargetBinding::DynamicTexture(scene_target)),
+        );
         assert_eq!(
             job.prepared_flow_invocation
                 .uniform_overrides
                 .get(&scene_uniform_id),
             Some(&viewport_render.compose_scene_product_uniform_bytes((320, 200))),
             "viewport render jobs must carry target-local scene uniforms in the prepared invocation"
+        );
+    }
+
+    #[test]
+    fn selected_material_preview_does_not_retarget_scene_render_alias() {
+        let viewport_id = ViewportId(9);
+        let material_product_id = editor_viewport::ExpressionProductId(42);
+        let mut descriptors = vec![
+            descriptor(
+                SCENE_COLOR_PRODUCT_ID,
+                ExpressionProductKind::SceneColor2D,
+                ExpressionFormat::Rgba8Unorm,
+            ),
+            descriptor(
+                PICKING_IDS_PRODUCT_ID,
+                ExpressionProductKind::PickingIds2D,
+                ExpressionFormat::R32Uint,
+            ),
+            descriptor(
+                OVERLAY_PRODUCT_ID,
+                ExpressionProductKind::Overlay2D,
+                ExpressionFormat::Rgba8Unorm,
+            ),
+        ];
+        descriptors.push(material_preview_descriptor(
+            material_product_id,
+            ExpressionDimensions::new(320, 200),
+            RealityVersion(1),
+            "material.first_slice.render_material".to_string(),
+        ));
+        let target_registry = ViewportProductTargetRegistryResource::from_descriptors_for_viewport(
+            viewport_id,
+            &descriptors,
+        );
+        let flow_id = RenderFlowId::try_from_raw(1).expect("test flow id should be valid");
+        let scene_uniform_id =
+            RenderResourceId::try_from_raw(9).expect("test uniform id should be valid");
+        let viewport_render = EditorViewportRenderState::default();
+
+        let job = build_viewport_render_job(
+            flow_id,
+            scene_uniform_id,
+            &viewport_render,
+            viewport_id,
+            UiRect::new(0.0, 0.0, 320.0, 200.0),
+            &target_registry,
+        )
+        .expect("job should exist when scene/support targets exist");
+
+        let material_target = target_registry
+            .record_for_product(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                material_product_id,
+            )
+            .expect("material target should exist")
+            .dynamic_key();
+        let scene_target = target_registry
+            .record_for_product(
+                viewport_id,
+                ViewportSurfacePresentationSlot::Primary,
+                SCENE_COLOR_PRODUCT_ID,
+            )
+            .expect("scene target should exist")
+            .dynamic_key();
+        assert_eq!(job.scene_color_target, scene_target);
+        assert_ne!(job.scene_color_target, material_target);
+        assert_eq!(
+            job.prepared_flow_invocation
+                .target_alias_bindings
+                .get(VIEWPORT_TARGET_ALIAS_SCENE_COLOR),
+            Some(&PreparedTargetBinding::DynamicTexture(scene_target)),
         );
     }
 }

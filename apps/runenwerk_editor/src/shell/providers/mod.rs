@@ -27,13 +27,14 @@ use editor_shell::{
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
     ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
     ViewportSurfaceAction, ViewportViewModel, build_console_panel, build_entity_table_panel,
-    build_inspector_panel, build_outliner_panel, build_self_authoring_control_panel,
-    build_viewport_panel, editor_domain_proposal, entity_table_sort_button_widget_id,
-    inspector_field_focus_widget_id, inspector_field_widget_id, surface_session_proposal,
-    surface_widget_id, tool_surface_capability_set, tool_surface_definition_id,
-    viewport_debug_stage_button_widget_id, viewport_field_color_ramp_button_widget_id,
-    viewport_field_component_button_widget_id, viewport_field_debug_mode_button_widget_id,
-    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
+    build_inspector_panel, build_material_graph_surface, build_outliner_panel,
+    build_self_authoring_control_panel, build_viewport_panel, editor_domain_proposal,
+    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
+    surface_session_proposal, surface_widget_id, tool_surface_capability_set,
+    tool_surface_definition_id, viewport_debug_stage_button_widget_id,
+    viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
+    viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState,
@@ -1499,6 +1500,42 @@ mod tests {
         LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, TabStackId, ToolSurfaceInstanceId,
         VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
     };
+    use texture::{
+        Ktx2TextureMetadata, TextureDescriptor, TextureDimension, TextureExtent,
+        TexturePixelFormat, TextureProductId,
+    };
+
+    fn texture_descriptor(
+        product_id: u64,
+        dimension: TextureDimension,
+        extent: TextureExtent,
+    ) -> TextureDescriptor {
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(product_id),
+            format!("texture.{product_id}"),
+            dimension,
+            extent,
+        );
+        let mip_count = descriptor.mip_count;
+        let descriptor_hash = descriptor.descriptor_hash().to_string();
+        descriptor.with_ktx2_metadata(
+            Ktx2TextureMetadata::new(
+                TexturePixelFormat::Rgba8Unorm,
+                mip_count,
+                descriptor_hash,
+                "1",
+            )
+            .with_byte_layout(128, [64]),
+        )
+    }
+
+    fn texture_payload(descriptor: TextureDescriptor) -> ArtifactPayloadKind {
+        ArtifactPayloadKind::TextureProduct {
+            descriptor_hash: descriptor.descriptor_hash().to_string(),
+            descriptor,
+            artifact_uri: None,
+        }
+    }
 
     struct DummyProvider {
         descriptor: SurfaceProviderDescriptor,
@@ -2016,10 +2053,11 @@ mod tests {
                 artifact_id,
                 asset_id,
                 AssetKind::Texture2D,
-                ArtifactPayloadKind::TextureProduct {
-                    product_id: "42".to_string(),
-                    dimension: "Texture2D".to_string(),
-                },
+                texture_payload(texture_descriptor(
+                    42,
+                    TextureDimension::Texture2D,
+                    TextureExtent::new(512, 512, 1),
+                )),
                 ArtifactCacheKey::new("texture-42"),
             ));
         let request = m6_texture_request(ToolSurfaceKind::TextureViewer);
@@ -2167,10 +2205,11 @@ mod tests {
                 artifact_id,
                 asset_id,
                 AssetKind::Texture3DVolume,
-                ArtifactPayloadKind::TextureProduct {
-                    product_id: "77".to_string(),
-                    dimension: "Texture3DVolume".to_string(),
-                },
+                texture_payload(texture_descriptor(
+                    77,
+                    TextureDimension::Texture3DVolume,
+                    TextureExtent::new(64, 64, 64),
+                )),
                 ArtifactCacheKey::new("volume-77"),
             ));
         let request = m6_texture_request(ToolSurfaceKind::VolumeTextureViewer);

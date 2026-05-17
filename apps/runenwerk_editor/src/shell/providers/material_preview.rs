@@ -40,8 +40,8 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
             lines.push(format!("specialization: {fragment}"));
         }
         lines.push(format!(
-            "prepared parameter bytes: {}",
-            view_model.prepared_parameter_blob_bytes
+            "prepared parameter payload bytes: {}",
+            view_model.prepared_parameter_payload_bytes
         ));
         lines.extend(view_model.preview_status_lines.clone());
         lines.extend(view_model.diagnostic_lines.clone());

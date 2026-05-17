@@ -8,7 +8,7 @@ use product::{
     ProductRebuildPolicy, ProductResidency, ProductRetentionPolicy, ProductScaleBand, ProductScope,
 };
 
-use crate::{MaterialGraphDocumentId, MaterialOutputTarget, MaterialProductId};
+use crate::{MaterialGraphDocumentId, MaterialIr, MaterialOutputTarget, MaterialProductId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MaterialCacheKey(pub String);
@@ -91,6 +91,7 @@ pub struct FormedMaterialProduct {
     pub parameters: Vec<MaterialParameterDescriptor>,
     pub source_map: MaterialSourceMap,
     pub specialization_fragment: MaterialSpecializationFragment,
+    pub executable_ir: Option<MaterialIr>,
     pub cache_key: MaterialCacheKey,
 }
 
@@ -111,6 +112,7 @@ impl FormedMaterialProduct {
             parameters: Vec::new(),
             source_map: MaterialSourceMap::default(),
             specialization_fragment: MaterialSpecializationFragment::new("material.first_slice"),
+            executable_ir: None,
             cache_key,
         }
     }

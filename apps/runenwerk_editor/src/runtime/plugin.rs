@@ -22,8 +22,8 @@ use crate::runtime::resources::{
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system,
     prepare_material_preview_render_resource_system, produce_editor_picking_system,
-    seed_viewport_runtime_contracts_system, submit_editor_frame_system,
-    sync_viewport_instances_system,
+    produce_material_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
+    submit_editor_frame_system, sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
@@ -54,6 +54,7 @@ pub enum EditorRuntimeSet {
     ViewportRenderJobs,
     ViewportRenderProductSelection,
     MaterialPreviewRenderHandoff,
+    MaterialPreviewProductUpload,
     ViewportGpuResidencySummary,
 }
 
@@ -90,6 +91,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             ),
             Self::MaterialPreviewRenderHandoff => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::MaterialPreviewRenderHandoff",
+            ),
+            Self::MaterialPreviewProductUpload => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::MaterialPreviewProductUpload",
             ),
             Self::ViewportGpuResidencySummary => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::ViewportGpuResidencySummary",
@@ -229,6 +233,13 @@ impl Plugin for EditorAppPlugin {
             prepare_material_preview_render_resource_system
                 .in_set(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .after(EditorRuntimeSet::ViewportRenderProductSelection)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            produce_material_preview_dynamic_uploads_system
+                .in_set(EditorRuntimeSet::MaterialPreviewProductUpload)
+                .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

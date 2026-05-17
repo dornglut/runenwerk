@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 product.workspace = true
+texture.workspace = true
 id = { path = "../../foundation/id" }
 id_macros = { path = "../../foundation/id_macros" }
 diagnostics = { path = "../../foundation/diagnostics" }

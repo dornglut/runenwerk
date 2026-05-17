@@ -17,6 +17,14 @@ impl RenderDynamicTextureTargetKey {
     pub fn label(&self) -> String {
         format!("{}:{}", self.namespace, self.target_id)
     }
+
+    pub fn from_label(label: &str) -> Option<Self> {
+        let (namespace, target_id) = label.split_once(':')?;
+        if namespace.trim().is_empty() || target_id.trim().is_empty() {
+            return None;
+        }
+        Some(Self::new(namespace, target_id))
+    }
 }
 
 impl fmt::Display for RenderDynamicTextureTargetKey {

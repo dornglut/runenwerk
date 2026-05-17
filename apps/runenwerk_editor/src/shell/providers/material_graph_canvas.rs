@@ -99,9 +99,10 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
             SurfaceLocalAction::Material(MaterialSurfaceAction::ClearMaterialDiagnostics),
         ));
 
-        let (root, routes) = build_self_authoring_control_panel(
+        let (root, routes) = build_material_graph_surface(
             context.theme,
             request.tool_surface_instance_id,
+            &view_model,
             lines,
             actions,
         );
@@ -151,6 +152,41 @@ pub(super) fn material_surface_action_command(
         }
         MaterialSurfaceAction::ClearMaterialDiagnostics => {
             Some(ShellCommand::ClearMaterialDiagnostics { projection_epoch })
+        }
+        action => Some(ShellCommand::ApplyMaterialSurfaceAction {
+            action,
+            projection_epoch,
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use asset::asset_id;
+
+    #[test]
+    fn material_surface_action_commands_carry_projection_epoch() {
+        let epoch = 42;
+        let asset_id = asset_id(7);
+        let actions = [
+            MaterialSurfaceAction::SelectMaterialAsset { asset_id },
+            MaterialSurfaceAction::BuildMaterialPreview { asset_id },
+            MaterialSurfaceAction::BuildSelectedMaterialPreview,
+            MaterialSurfaceAction::ClearMaterialDiagnostics,
+            MaterialSurfaceAction::PanGraph {
+                delta_x: 8,
+                delta_y: -4,
+            },
+            MaterialSurfaceAction::SelectPreviewFixture {
+                fixture: material_graph::MaterialGraphPreviewFixture::Sphere,
+            },
+        ];
+
+        for action in actions {
+            let command = material_surface_action_command(action, epoch)
+                .expect("material surface action should produce a shell command");
+            assert_eq!(command.projection_epoch(), Some(epoch));
         }
     }
 }

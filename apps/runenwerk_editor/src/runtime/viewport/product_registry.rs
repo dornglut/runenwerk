@@ -224,6 +224,34 @@ pub fn material_preview_descriptor(
     )
 }
 
+pub fn material_preview_descriptor_with_lineage(
+    product_id: ExpressionProductId,
+    dimensions: ExpressionDimensions,
+    material_generation: RealityVersion,
+    specialization_fragment: String,
+    material_lineage: impl Into<String>,
+) -> ExpressionProductDescriptor {
+    ExpressionProductDescriptor::new(
+        product_id,
+        ExpressionProductKind::MaterialPreview2D,
+        dimensions,
+        ExpressionFormat::Rgba8Unorm,
+        format!(
+            "editor.material_lab.preview:{specialization_fragment}:{}",
+            material_lineage.into()
+        ),
+        ExpressionSourceRealityClass::DerivedMaterial,
+        material_generation,
+        ExpressionFreshness::Current,
+        ExpressionPresentationHints {
+            srgb: true,
+            premultiplied_alpha: false,
+            y_flipped: false,
+        },
+        None,
+    )
+}
+
 #[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]
 pub struct ViewportProductRegistryResource {
     descriptors_by_viewport: BTreeMap<ViewportId, Vec<ExpressionProductDescriptor>>,

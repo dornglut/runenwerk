@@ -21,8 +21,9 @@ use runenwerk_editor::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportLayoutEntry, ViewportLayoutMapResource, ViewportPickingResultsResource,
     ViewportPresentationStateResource, ViewportProductRegistryResource,
-    ViewportRuntimeSettingsHydrationResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
-    ViewportSurfaceSlot, build_surface_binding_registry, initial_product_descriptors,
+    ViewportProductTargetRegistryResource, ViewportRuntimeSettingsHydrationResource,
+    ViewportSurfaceHandle, ViewportSurfaceSetResource, ViewportSurfaceSlot,
+    build_surface_binding_registry, initial_product_descriptors,
 };
 use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource};
 
@@ -195,7 +196,14 @@ fn derived_bindings_support_multiple_viewports_without_main_fallback() {
         ExpressionProductId(1),
     ));
 
-    let registry = build_surface_binding_registry(&surface_sets, &presentations);
+    let descriptors =
+        initial_product_descriptors(ExpressionDimensions::new(320, 200), RealityVersion(1));
+    let product_targets = ViewportProductTargetRegistryResource::from_descriptors_for_viewports(
+        [viewport_a, viewport_b],
+        &descriptors,
+    );
+
+    let registry = build_surface_binding_registry(&surface_sets, &presentations, &product_targets);
     let primary_a = registry
         .get(
             viewport_a.0,
@@ -1367,6 +1375,78 @@ fn app_surface_providers_delegate_reusable_control_composition_to_editor_shell()
             && shell_builder.contains("compact_surface_action_button")
             && shell_builder.contains("SurfaceRouteTable"),
         "self-authoring control panel composition should live in editor_shell while provider code supplies actions and routes",
+    );
+}
+
+#[test]
+fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
+    let app_flow = read_workspace_source("apps/runenwerk_editor/src/runtime/app.rs");
+    assert!(
+        app_flow.contains("material_scene_shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)")
+            && !app_flow.contains("material_scene_shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)\n        .for_feature"),
+        "WR-021 scene pass must resolve generated scene bundles without feature-gating the fallback scene producer",
+    );
+
+    let provenance =
+        read_workspace_source("engine/src/plugins/render/renderer/render_flow/provenance.rs");
+    assert!(
+        provenance.contains("RenderShaderReference::MaterialSceneBundle")
+            && provenance.contains("material.scene_bundle.as_ref()")
+            && provenance.contains("scene_bundle.shader_path")
+            && provenance.contains("fallback_used: true"),
+        "PreparedSceneMaterialBundle must be consumed during shader resolution, and missing generated bundles must be treated as forbidden fallbacks",
+    );
+
+    let execute =
+        read_workspace_source("engine/src/plugins/render/renderer/render_flow/execute_passes.rs");
+    assert!(
+        execute.contains("resolve_shader_material_for_packet")
+            && execute.contains("pass.set_bind_group(1, resources.bind_group(), &[])")
+            && execute.contains("pass_consumes_material_resources")
+            && execute.contains("builtin or scene-bundle fallback is forbidden"),
+        "material feature passes must bind prepared group-1 resources and fail closed instead of falling back to old scene shaders",
+    );
+
+    let material_state = read_workspace_source("apps/runenwerk_editor/src/material_lab/state.rs");
+    let frame_submit =
+        read_workspace_source("apps/runenwerk_editor/src/runtime/systems/frame_submit.rs");
+    assert!(
+        material_state.contains("SceneMaterialPalette")
+            && material_state.contains("primitive_material_slots")
+            && frame_submit.contains("with_material_slot_index"),
+        "SceneMaterialPalette must drive viewport scene packet material slot indices",
+    );
+}
+
+#[test]
+fn wr021_material_descriptors_and_ui_do_not_fall_back_to_old_shortcuts() {
+    let resource_resolution =
+        read_workspace_source("apps/runenwerk_editor/src/material_lab/resource_resolution.rs");
+    assert!(
+        resource_resolution.contains("catalog-persisted texture descriptor")
+            && !resource_resolution.contains("TextureExtent::new(1, 1, 1)")
+            && !resource_resolution.contains("TextureExtent::new(1, 1, 2)"),
+        "material resource resolution must use catalog texture descriptors, not fabricated texture metadata",
+    );
+
+    let material_provider =
+        read_workspace_source("apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs");
+    let material_shell_builder = read_workspace_source(
+        "domain/editor/editor_shell/src/composition/build_material_graph_surface.rs",
+    );
+    assert!(
+        !material_provider.contains("build_self_authoring_control_panel(")
+            && material_provider.contains("build_material_graph_surface")
+            && material_shell_builder.contains("view_model.graph.nodes"),
+        "Material Graph Canvas must project typed graph surface data instead of the generic line/control-panel helper",
+    );
+
+    let material_state = read_workspace_source("apps/runenwerk_editor/src/material_lab/state.rs");
+    let material_catalog = read_workspace_source("domain/material_graph/src/catalog.rs");
+    assert!(
+        material_catalog.contains("from_port_type_id")
+            && !material_state.contains("_ => MaterialValueType::Float"),
+        "unknown material port types must not be silently projected as Float",
     );
 }
 
