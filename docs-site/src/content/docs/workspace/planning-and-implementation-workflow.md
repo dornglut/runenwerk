@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-17
 related_docs:
   - ./agents.md
   - ./architecture-governance-review.md
@@ -221,6 +221,45 @@ A useful plan names:
 - deferred work that must not be implemented yet.
 
 Do not create a plan-only response when the task clearly asks for implementation and the scope is safe. Use the plan internally, then implement.
+
+## Decision-Complete Planning Gate
+
+For architecture-sensitive product work, planning is not a lightweight preface.
+It is the place where implementation and design decisions must be made before
+code changes start. Use this gate for production milestones, roadmap rows with
+cross-domain write scopes, renderer/runtime handoff work, persistence or
+migration changes, new crates, source-of-truth changes, and any task that has
+already shown drift in prior implementation attempts.
+
+The planning pass must be decision-complete before implementation starts:
+
+- name the source of truth and every derived projection or product;
+- define the full runtime chain, not only the nearest adapter or descriptor;
+- name exact owning domains, crates, modules, and files;
+- define public APIs, typed data contracts, persistence shape, diagnostics, and
+  migration behavior;
+- state what must fail closed and what prior-valid state must preserve;
+- define anti-drift architecture guards that fail if placeholders, fallbacks, or
+  local shortcuts return;
+- include end-to-end proof requirements, including GPU/pixel evidence when the
+  user-visible outcome is visual;
+- identify design, ADR, roadmap, production, and write-scope updates required
+  before implementation;
+- list explicit non-goals and later slices so they cannot be smuggled into the
+  implementation or used as hidden completion blockers.
+
+After drafting the plan, run a critical review pass before implementation. The
+review should attack the plan from the repository's long-term architecture:
+dependency direction, domain ownership, source truth, runtime consumption,
+failure modes, test evidence, closeout evidence, and user-visible completeness.
+If the review finds unresolved choices, implementation does not start. Update
+the plan until there are no ambiguous ownership, API, persistence, renderer,
+diagnostic, validation, or closeout decisions left.
+
+For production work, the implementation contract should be treated as the
+accepted decision record for that slice. Product code starts only after the
+contract names the long-term solution and the critical review has either found
+no blocking gaps or those gaps have been folded back into the contract.
 
 ## Design Versus Roadmap Versus Routine
 
