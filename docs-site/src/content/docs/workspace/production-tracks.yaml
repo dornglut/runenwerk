@@ -59,6 +59,12 @@ tracks:
         acceptance_criteria:
           - Product debug, asset catalog adapters, material preview products, and renderer handoff are validated through their WR closeouts.
           - No product workflow adds a parallel viewer, asset truth store, or renderer-owned semantic source.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-SDF-OW-001 is completed as a bounded product-spine milestone; linked WR rows are not all perfectionist_verified.
+          - WR-028 closes the visible Material Lab SDF primitive follow-up; WR-029 remains open for model/mesh material binding.
+          - Model/mesh source identity, submesh/material-region assignment, and renderable_index ABI semantics are not yet accepted.
+        completion_audit: ""
       - id: PM-SDF-OW-002
         title: Open world substrate design
         kind: design

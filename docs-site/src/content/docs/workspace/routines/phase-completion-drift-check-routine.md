@@ -85,6 +85,28 @@ Confirm whether validation ran:
 
 If any command was skipped, record the reason.
 
+### Perfectionist Completion Quality
+
+Before a roadmap row or production milestone is marked `completed`, classify
+the result honestly:
+
+- `bounded_contract` for completed bounded scope with known deferred product or
+  quality gaps;
+- `runtime_proven` for completed runtime/product evidence that still has known
+  architecture, UI, module-structure, or future-scope gaps;
+- `perfectionist_verified` only when a completed audit exists and
+  `known_quality_gaps` is empty.
+
+Check for the failure modes that previously caused overclaiming:
+
+- descriptor-only, prepared-data-only, or status-panel-only evidence;
+- renderer-visible work without GPU/pixel proof when pixels define correctness;
+- source truth leaking into projection, renderer, or runtime cache state;
+- oversized mixed-responsibility modules or catch-all files;
+- fallback, pseudo, migration-only, or test-only paths being treated as
+  production evidence;
+- UI slices that expose typed data but not the claimed interaction depth.
+
 ## Required Patch Actions
 
 After every completed phase:
@@ -95,8 +117,10 @@ After every completed phase:
 4. explicitly name the next phase;
 5. explicitly name what must not be done yet;
 6. preserve deferred-work boundaries;
-7. run docs validation;
-8. run the quiet full gate when code or workspace behavior changed.
+7. set `completion_quality`, `known_quality_gaps`, and `completion_audit`
+   truthfully for completed WR rows or production milestones;
+8. run docs validation;
+9. run the quiet full gate when code or workspace behavior changed.
 
 Do not perform unrelated opportunistic rewrites.
 

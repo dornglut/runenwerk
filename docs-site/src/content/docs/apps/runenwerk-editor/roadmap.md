@@ -5,12 +5,13 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-17
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../design/implemented/editor-workspace-document-mode-panel-architecture.md
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
+  - ../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../design/active/editor-native-multi-window-presentation-design.md
   - ../../design/active/workspace-viewport-expression-upgrade-design.md
   - ../../design/implemented/render-product-surface-foundation-bundle-design.md
@@ -1053,6 +1054,12 @@ Current M6 focus:
 
 Other gated M6 tracks:
 
+- Editor Tool Suite Registry And Workbench Host: status design/ADR proposed.
+  Before expanding more Material Lab-like graph/product tools, remove
+  shell-level one-off routing and persistence tax through the
+  [active design](../../design/active/editor-tool-suite-registry-and-workbench-host-design.md)
+  and
+  [proposed ADR](../../adr/proposed/editor-tool-suite-registry-and-provider-owned-routing.md).
 - M6.3 gameplay graph, M6.4 particles, M6.5 SDF physics, M6.6 animation, and
   M6.7 world-process work remain blocked until the execution substrate and
   their owning contracts are ready.

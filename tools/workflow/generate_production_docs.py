@@ -118,8 +118,8 @@ def render_milestone_register(planning: ProductionPlanningState) -> str:
         "This register is generated from [production-tracks.yaml](./production-tracks.yaml).",
         "Do not edit it directly.",
         "",
-        "| Track | Milestone | Kind | State | Dependencies | WR links | Design gates | Evidence gates | Acceptance criteria |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Track | Milestone | Kind | State | Completion quality | Quality gaps | Dependencies | WR links | Design gates | Evidence gates | Acceptance criteria |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for track in planning.tracks:
         for milestone in track.milestones:
@@ -131,6 +131,8 @@ def render_milestone_register(planning: ProductionPlanningState) -> str:
                         f"{milestone.id} {milestone.title}",
                         milestone.kind,
                         milestone.state,
+                        milestone.completion_quality,
+                        "<br>".join(milestone.known_quality_gaps) if milestone.known_quality_gaps else "None recorded",
                         ", ".join(milestone.dependencies) or "N/A",
                         ", ".join(milestone.roadmap_links) or "N/A",
                         format_design_gates(milestone),

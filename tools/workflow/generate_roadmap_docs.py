@@ -99,8 +99,8 @@ def render_decision_register(roadmap: RoadmapState) -> str:
         "",
         "## Scorecard",
         "",
-        "| ID | Track | Lane | Planning state | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |",
-        "|---|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
+        "| ID | Track | Lane | Planning state | Completion quality | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |",
+        "|---|---|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
     ]
     for item in roadmap.items:
         lines.append(
@@ -111,6 +111,7 @@ def render_decision_register(roadmap: RoadmapState) -> str:
                     item.title,
                     item.lane,
                     item.planning_state,
+                    item.completion_quality,
                     item.dependency_level,
                     item.gate,
                     str(item.value),
@@ -381,12 +382,13 @@ def render_triage_status(roadmap: RoadmapState) -> str:
             "",
             "## Completed Evidence",
             "",
-            "| ID | Track | Priority | Value | Blocker | Score | Current decision | Evidence |",
-            "|---|---|---:|---:|---:|---:|---|---|",
+            "| ID | Track | Priority | Value | Blocker | Score | Completion quality | Quality gaps | Current decision | Evidence |",
+            "|---|---|---:|---:|---:|---:|---|---|---|---|",
         ]
     )
     for item in groups["completed"]:
-        lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.current_decision} | {item.next_evidence} |")
+        quality_gaps = "<br>".join(item.known_quality_gaps) if item.known_quality_gaps else "None recorded"
+        lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.completion_quality} | {quality_gaps} | {item.current_decision} | {item.next_evidence} |")
     lines.extend(
         [
             "",

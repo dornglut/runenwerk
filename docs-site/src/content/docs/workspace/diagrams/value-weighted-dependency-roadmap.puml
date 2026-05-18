@@ -82,6 +82,8 @@ package "Level 1 - Depends On Current Stabilization" {
 
   component "WR-025 UI Runtime V2 interaction formation\nstate=completed\nscore=4.8 gate=accepted architecture gate\nV5 B2\ncall=retained UI first\nnamed interaction slices" as UIV2 <<completed>>
 
+  component "WR-027 Completion quality gate\nstate=completed\nscore=3.0 gate=completed\nV5 B1\ncall=completion quality visible\ncompiler structure repaired" as QUALITY <<completed>>
+
 }
 
 package "Level 2 - Productization / Contract-Gated" {
@@ -107,6 +109,10 @@ package "Level 3 - Downstream Domain Tracks" {
   component "WR-022 SDF Prefab V2\nstate=ready_next\nscore=0.8 gate=v2 gated\nV4 B3\ncall=active design now\nruntime instancing V2" as PREFABV2 <<V4>>
 
   component "WR-023 ECS Parallel Execution\nstate=ready_next\nscore=0.5 gate=design first\nV3 B2\ncall=ECS remains serial now\ndeterministic parallel design" as ECSPAR <<V3>>
+
+  component "WR-028 Material texture visibility\nstate=completed\nscore=1.2 gate=perfectionist repair after wr-021 and wr-027\nV5 B1\ncall=graph texture views\nscene material slots\nGPU proof required" as MATVIS <<completed>>
+
+  component "WR-029 Model mesh materials\nstate=blocked_deferred\nscore=1.1 gate=wr-028 handoff\nV4 B3\ncall=model mesh identity\nsubmesh material regions\nrenderer ABI extension" as MESHMAT <<V4>>
 
 }
 
@@ -153,5 +159,9 @@ ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 UIGUARDS -down-> UIV2 : UI guard substrate
 UIV2 -down-> SHELLPOLISH : interaction contract spine
+MATLAB -down-> QUALITY : quality gate after runtime proof
+MATLAB -down-> MATVIS : material visibility and binding repair
+QUALITY -down-> MATVIS : perfectionist gate before closeout
+MATVIS -down-> MESHMAT : model mesh material binding handoff
 
 @enduml

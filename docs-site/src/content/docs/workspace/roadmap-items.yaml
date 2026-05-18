@@ -49,6 +49,10 @@ items:
     preview and final Draw tile surfaces through existing render APIs, and WR-006 has since completed the dependent GPU proof
     and promotion slice.
   first_move: Continue from runtime-product-job-executor-roadmap.md, runenwerk-draw/roadmap.md, and sdf-first-execution-roadmap.md.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Remaining WR-001 work needs fresh runtime product-job evidence before reactivation.
+  completion_audit: ""
   diagram_call:
   - DRF3 bridge landed
   - WR-006 GPU proof complete
@@ -256,6 +260,9 @@ items:
     evidence regresses.
   first_move: Use apps/runenwerk-draw/roadmap.md and the 2026-05-15 WR-006 batch closeout for follow-up context.
   main_blocker: Complete; future Draw work should preserve CPU truth and public render-flow/product-surface boundaries.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: ""
   diagram_call:
   - GPU proof landed
   - GPU promotion, CPU fallback landed
@@ -304,6 +311,10 @@ items:
   first_move: Use net/multiplayer-replication-implementation-roadmap.md and the 2026-05-15 batch closeouts for follow-up context.
   main_blocker: Complete; future work should preserve the single ACK/baseline outcome contract across engine_net runtimes
     and engine plugin checkpoints.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Future replication rows still need declarative replication and ECS component extraction evidence before broader completion claims.
+  completion_audit: ""
   diagram_call:
   - ACK hardening complete
   - bridge convergence complete
@@ -507,6 +518,10 @@ items:
     or editor canvas authority.
   first_move: For future semantic graph work, choose a concrete owning domain and consume ADR 0010 instead of changing domain/graph
     ownership.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - This is a policy and substrate boundary closeout; future semantic graph products still need owning-domain implementation evidence.
+  completion_audit: ""
   diagram_call:
   - graph substrate accepted
   - semantic meaning stays domain-owned
@@ -754,6 +769,11 @@ items:
     packet expansion or a later product producer requires a new bounded render-flow contract.
   first_move: For follow-up viewport product work, consume EditorViewportSceneRenderPacket and the viewport product target
     registry instead of adding another scene extraction or parallel viewer path.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Storage-buffer scene packet expansion and later product producers remain future bounded render-flow work.
+  - Windowed GPU truth smoke remains environment-gated and does not make this row perfectionist verified.
+  completion_audit: ""
   diagram_call:
   - multi-entity SDF packet
   - render/picking consistency
@@ -804,6 +824,11 @@ items:
   main_blocker: Rendered-world V1 must first prove the viewport packet/product handoff and product target selection path.
   first_move: Implement from field-visualizer-product-workflow-design.md using existing viewport product target state and
     the FR-2 sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Field producers remain product-debug workflow evidence, not a full field-authoring or simulation product family.
+  - Windowed GPU truth smoke remains environment-gated and does not make this row perfectionist verified.
+  completion_audit: ""
   diagram_call:
   - product-backed field debug
   - no parallel viewer path
@@ -854,6 +879,10 @@ items:
   main_blocker: Completed core contract. Follow-up editor adapter implementation requires a separate selected roadmap slice.
   first_move: For WR-026 or later consumers, use the landed domain/asset project catalog descriptor, source/import-plan, dependency,
     ratification, diagnostics, and prior-valid preservation APIs instead of adding semantic asset truth in apps.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Editor adapter execution, external importer execution, cache garbage collection, and runtime hot reload remain downstream adapter/product work.
+  completion_audit: ""
   diagram_call:
   - deterministic import
   - domain-owned asset truth
@@ -914,6 +943,10 @@ items:
     roadmap promotion plus rendered and validated write-scope evidence before product code changes.
   first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app
     state; keep renderer-facing consumers aligned with engine/roadmaps/fully-featured-renderer-roadmap.md.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Later material, prefab, external importer, cache-GC, and runtime hot-reload consumers still need product-specific evidence.
+  completion_audit: ""
   diagram_call:
   - editor adapter wiring
   - prior-valid artifacts
@@ -992,6 +1025,13 @@ items:
   main_blocker: Completed; no active blocker remains for WR-021.
   first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands, using FR-4
     sequencing from engine/roadmaps/fully-featured-renderer-roadmap.md.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - WR-028 supersedes the inherited rich Material Lab graph, live texture view, SDF assignment persistence, and SDF per-hit
+    material-selection gaps for the SDF primitive path.
+  - Model/mesh material binding is not closed by WR-021 or WR-028; WR-029 owns model/mesh source identity, submesh/material-region
+    assignment, and renderable_index ABI semantics.
+  completion_audit: ""
   diagram_call:
   - source-backed material graph
   - preview product handoff
@@ -1213,6 +1253,11 @@ items:
     dock/drop-zone, and status/viewport arbitration spine before changing popup dismissal, focus return, popup layering, submenu
     anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and active-indicator placement, tab reorder/drop-zone
     precedence, or status/viewport-input behavior.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-024 retained UI polish remains the next product-facing shell polish slice.
+  - Alternate UI execution strategies remain deferred behind separate ADR or accepted design evidence.
+  completion_audit: ""
   diagram_call:
   - retained UI first
   - named interaction slices
@@ -1224,6 +1269,227 @@ items:
     dock-drag/drop-zone precedence and invalid-target exclusion, radial/menu hit testing where applicable, viewport status
     dispatch rejection, viewport input arbitration, and screenshot or primitive-order visual/frame-order regressions.
   ownership_mode: Complicated-subsystem domain UI architecture with stream-aligned editor shell migration.
+- id: WR-027
+  title: Completion Quality And Perfectionist Audit Gate
+  diagram_title: Completion quality gate
+  alias: QUALITY
+  lane: Guardrail
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 1
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 3.0
+  rice: Prevent completed roadmap rows and production milestones from overclaiming perfectionist quality.
+  kano: Basic
+  dependencies:
+  - WR-021
+  write_scopes:
+  - tools/workflow
+  - engine/src/plugins/render/material_compiler
+  - engine/tests/material_compiler_architecture.rs
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json
+  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+  - docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+  - docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md
+  - docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md
+  - docs-site/src/content/docs/reports/closeouts/wr-027-completion-quality-and-perfectionist-audit-gate/closeout.md
+  validations:
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - cargo test -p engine material_compiler
+  - cargo check -p runenwerk_editor
+  next_evidence: 2026-05-17 completion quality metadata, validation, generated docs, perfectionist audit report, workflow
+    gate docs, and material compiler module-structure repair landed with closeout evidence in docs-site/src/content/docs/reports/closeouts/wr-027-completion-quality-and-perfectionist-audit-gate/closeout.md.
+  current_decision: Completed roadmap rows now carry an explicit completion quality tier, known quality gaps, and optional
+    audit reference so completed history remains honest without implying perfectionist verification.
+  current_call: Use this gate before claiming future completed work is perfectionist verified; runtime-proven and bounded-contract
+    rows must keep known gaps visible until a completed audit clears them.
+  main_blocker: Complete; future rows must keep completion_quality, known_quality_gaps, and completion_audit accurate.
+  first_move: For future closeouts, run the Perfectionist Closeout Audit gate before promotion and record any residual gaps
+    as roadmap follow-up work instead of hiding them in completed prose.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Existing completed rows were classified honestly, but most have not been individually audited to perfectionist_verified.
+  - WR-028 now owns the explicit Material Lab perfectionist follow-up for rich visual graph editing, live texture views, and
+    per-object scene material binding.
+  completion_audit: ""
+  diagram_call:
+  - completion quality visible
+  - compiler structure repaired
+  ddd_owner: workspace workflow with engine render compiler support
+  adr_requirement: No ADR; this is workflow quality metadata and behavior-preserving compiler module cleanup.
+  fitness_function_requirement: Roadmap and production validation, generated docs checks, workflow tests, compiler tests,
+    material compiler architecture guard, and runenwerk_editor compile check.
+  ownership_mode: Enabling guardrail work over workspace workflow and engine render compiler structure.
+- id: WR-028
+  title: Perfectionist Material Lab Texture Views And Scene Material Binding
+  diagram_title: Material texture visibility
+  alias: MATVIS
+  lane: Product workflow
+  dependency_level: L3
+  gate: Perfectionist repair after WR-021 and WR-027
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 1
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: Make material authoring and assignment honestly visible, editable, and renderer-consumed.
+  kano: Basic
+  dependencies:
+  - WR-021
+  - WR-027
+  write_scopes:
+  - domain/ui/ui_graph_editor
+  - domain/editor/editor_shell
+  - domain/editor/editor_scene
+  - domain/material_graph
+  - domain/asset
+  - domain/texture
+  - apps/runenwerk_editor/src/material_lab
+  - apps/runenwerk_editor/src/runtime/viewport
+  - engine/src/plugins/render
+  - docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md
+  - docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/closeout.md
+  validations:
+  - cargo test -p ui_graph_editor
+  - cargo test -p editor_shell material
+  - cargo test -p editor_scene material
+  - cargo test -p material_graph
+  - cargo test -p asset texture
+  - cargo test -p texture
+  - cargo test -p engine material_compiler
+  - cargo test -p engine generated_scene_wgsl_selects_material_from_hit_sdf_slot
+  - cargo test -p runenwerk_editor material
+  - cargo test -p runenwerk_editor texture_preview
+  - cargo test -p runenwerk_editor volume_texture_viewer
+  - cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots
+  - cargo check -p runenwerk_editor
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  next_evidence: WR-028 closeout and proof manifest now record source-backed MaterialGraphSourceFileV2 texture edits flowing
+    through lowering, product generation, shader/material-table identity changes, and preview/scene GPU captures. WR-029 still
+    owns model/mesh material binding.
+  current_decision: WR-028 is SDF-scoped and perfectionist-verified after repairing the source-to-GPU material graph proof and
+    graph canvas UX evidence. WR-021 remains runtime-proven history; WR-029 carries model/mesh material binding forward.
+  current_call: Completed for rich graph canvas UX, live texture views, editor-scene-owned SDF material assignments, generated
+    SDF scene material selection, renderer consumption, and source-backed GPU/manual proof evidence. Do not claim model/mesh
+    material binding.
+  main_blocker: None for WR-028 SDF scope. Model/mesh material binding remains a WR-029 gate.
+  first_move: Use the repaired closeout and proof manifest for audit; keep WR-029 separate for model/mesh source identity and
+    material-region ownership.
+  diagram_call:
+  - graph texture views
+  - scene material slots
+  - GPU proof required
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Material Lab source truth and projection boundaries must stay aligned with the active design.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Scene material assignment must preserve app-owned viewport scene extraction and renderer-consumed prepared packets.
+  ddd_owner: apps/runenwerk_editor material workflow with domain/material_graph, editor_scene, editor_shell, and engine render support
+  adr_requirement: Architecture governance required before implementation; ADR required if model/mesh material ownership, material
+    graph source truth, or renderer material ABI changes exceed the active designs.
+  fitness_function_requirement: Rich graph interaction tests, texture descriptor/residency tests, per-object material slot
+    consumption tests, renderer material bundle guards, and mandatory GPU pixel evidence.
+  ownership_mode: Stream-aligned material product repair over domain graph/material contracts and engine render prepared-data contracts.
+  completion_quality: perfectionist_verified
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/closeout.md
+- id: WR-029
+  title: Model Mesh Material Binding
+  diagram_title: Model mesh materials
+  alias: MESHMAT
+  lane: Product workflow
+  dependency_level: L3
+  gate: WR-028 handoff
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.1
+  rice: Close model/mesh material binding without weakening the proven SDF material path.
+  kano: Basic
+  dependencies:
+  - WR-028
+  write_scopes:
+  - domain/editor/editor_scene
+  - apps/runenwerk_editor/src/material_lab
+  - apps/runenwerk_editor/src/runtime/viewport
+  - engine/src/plugins/render
+  - docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md
+  validations:
+  - task docs:validate
+  - task roadmap:validate
+  - task production:validate
+  - task planning:validate
+  - cargo check -p runenwerk_editor
+  next_evidence: Promote the WR-029 planning stub into an accepted implementation contract or ADR for model/mesh source identity,
+    submesh/material-region assignment, and renderer ABI extension.
+  current_decision: Split from WR-028 so SDF primitive material completion does not accidentally claim model/mesh support.
+  current_call: Do not implement until stable model/mesh renderable identity and submesh/material-region source ownership are
+    designed and accepted.
+  main_blocker: Needs accepted model/mesh material identity and renderer ABI contract.
+  why_not_ready: Model/mesh source identity, submesh/material-region assignment, and renderable_index ABI semantics are not yet accepted.
+  first_move: Start from docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md
+    and decide stable model/mesh material source identity before product code.
+  diagram_call:
+  - model mesh identity
+  - submesh material regions
+  - renderer ABI extension
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-029 must preserve WR-028 SDF boundaries while extending material binding to model/mesh renderables.
+  ddd_owner: future model/mesh material workflow owner with editor_scene and engine render support
+  adr_requirement: ADR or accepted implementation contract required before model/mesh material binding implementation.
+  fitness_function_requirement: Save/reload material-region assignments, renderer ABI tests, generated shader selection by model/mesh
+    material region, and GPU pixel proof.
+  ownership_mode: Deferred product workflow extension over model/mesh source identity and engine render material binding.
 edges:
 - source: WR-002
   target: WR-001
@@ -1327,3 +1593,15 @@ edges:
 - source: WR-025
   target: WR-024
   label: interaction contract spine
+- source: WR-021
+  target: WR-027
+  label: quality gate after runtime proof
+- source: WR-021
+  target: WR-028
+  label: material visibility and binding repair
+- source: WR-027
+  target: WR-028
+  label: perfectionist gate before closeout
+- source: WR-028
+  target: WR-029
+  label: model mesh material binding handoff

@@ -61,11 +61,13 @@ Validation commands execute checks:
 - `task docs:validate` runs the repository docs validation.
 - `task ci:local` runs the full local host validation pipeline.
 - `task roadmap:validate` checks `roadmap-items.yaml` score math,
-  dependencies, gates, and write-scope overlap.
+  dependencies, gates, write-scope overlap, completion evidence, and
+  completion-quality claims.
 - `task roadmap:check` rejects stale generated roadmap Markdown
   and PUML.
 - `task production:validate` checks `production-tracks.yaml` structure,
-  milestone dependencies, design gates, evidence gates, and WR links.
+  milestone dependencies, design gates, evidence gates, WR links, and
+  production completion-quality claims.
 - `task production:check` rejects stale generated production Markdown,
   PUML, and JSON Schema.
 - `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` prints a
@@ -128,7 +130,10 @@ architecture-sensitive, bounded implementation or batch validation has passed,
 closeout or drift-check evidence exists, and `task roadmap:render`,
 `task roadmap:validate`, and `task roadmap:check` pass. Completed roadmap rows
 must reference an existing completed closeout or finalized batch evidence path,
-and that path must be included in the row's `write_scopes`.
+and that path must be included in the row's `write_scopes`. They must also set
+`completion_quality`, list any `known_quality_gaps`, and only claim
+`perfectionist_verified` when a completed audit path exists and the gap list is
+empty.
 
 Use workflow commands to automate Codex prompt, checklist, and gate setup, not
 blind mutation. A typical architecture-sensitive flow is:
@@ -309,6 +314,40 @@ Every implementation closeout should report:
 - validation commands and results;
 - skipped validation with reasons;
 - remaining risks, blockers, or deferred work.
+
+## Perfectionist Closeout Audit
+
+Before changing a WR row or production milestone to `completed`, run a
+perfectionist closeout audit. This audit does not mean every row must become
+`perfectionist_verified`; it means the completion claim must be honest.
+
+The audit must classify the row or milestone:
+
+- `bounded_contract` when the accepted bounded contract is complete, but the
+  long-term product still has known deferred scope or quality gaps;
+- `runtime_proven` when the accepted product chain has runtime or GPU evidence,
+  but architecture, UI, module-structure, or future product gaps remain;
+- `perfectionist_verified` only when a completed audit path exists and
+  `known_quality_gaps` is empty.
+
+The audit must explicitly check:
+
+- whether the implementation proves the full source-to-runtime chain instead
+  of only descriptors, prepared data, status text, or metadata;
+- whether renderer-visible work has GPU/pixel evidence when product-visible
+  correctness depends on pixels;
+- whether UI work is a real product surface or only a typed/status projection;
+- whether modules follow the repository module-structure guidelines and do not
+  hide mixed responsibilities in large catch-all files;
+- whether fallback, pseudo, migration-only, or test-only paths are named
+  honestly and cannot be mistaken for production evidence;
+- whether any remaining quality gaps are recorded as `known_quality_gaps` and,
+  when appropriate, as explicit follow-up roadmap work.
+
+Completed production milestones inherit the weakest linked WR quality. A
+production milestone may only claim `perfectionist_verified` when all linked WR
+rows are also `perfectionist_verified` and the milestone has its own completed
+audit path.
 
 After any completed phased implementation, run the phase completion drift-check routine before starting the next phase.
 

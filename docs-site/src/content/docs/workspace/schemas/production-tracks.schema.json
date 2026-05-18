@@ -69,6 +69,22 @@
           "title": "Acceptance Criteria",
           "type": "array"
         },
+        "completion_audit": {
+          "default": "",
+          "title": "Completion Audit",
+          "type": "string"
+        },
+        "completion_quality": {
+          "default": "not_applicable",
+          "enum": [
+            "not_applicable",
+            "bounded_contract",
+            "runtime_proven",
+            "perfectionist_verified"
+          ],
+          "title": "Completion Quality",
+          "type": "string"
+        },
         "dependencies": {
           "items": {
             "type": "string"
@@ -107,6 +123,13 @@
           ],
           "title": "Kind",
           "type": "string"
+        },
+        "known_quality_gaps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Known Quality Gaps",
+          "type": "array"
         },
         "outcome": {
           "title": "Outcome",

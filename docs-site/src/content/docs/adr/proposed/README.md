@@ -5,9 +5,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-17
 ---
 
 # Proposed ADRs
 
 - [Animated SDF Lowering and Purpose-Specific Products](animated-sdf-lowering-and-purpose-specific-products.md)
+- [Editor Tool Suite Registry And Provider-Owned Routing](editor-tool-suite-registry-and-provider-owned-routing.md)

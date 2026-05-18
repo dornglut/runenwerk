@@ -50,6 +50,7 @@ BatchItemStatus = Literal["proposed", "approved", "running", "slice_completed", 
 RoadmapOutcome = Literal["unknown", "roadmap_completed", "slice_landed_item_still_current", "deferred_followup_required"]
 DecisionGateKind = Literal["adr", "design", "roadmap", "doc"]
 DecisionGateAppliesTo = Literal["implementation", "discovery"]
+CompletionQuality = Literal["not_applicable", "bounded_contract", "runtime_proven", "perfectionist_verified"]
 
 
 class WorkflowError(ValueError):
@@ -138,6 +139,9 @@ class RoadmapItem(StrictModel):
     first_move: str = ""
     main_blocker: str = ""
     why_not_ready: str = ""
+    completion_quality: CompletionQuality = "not_applicable"
+    known_quality_gaps: list[str] = Field(default_factory=list)
+    completion_audit: str = ""
     diagram_call: list[str] = Field(default_factory=list)
     decision_gates: list[DecisionGate] = Field(default_factory=list)
     ddd_owner: str
@@ -638,6 +642,31 @@ def completion_evidence_status_error(item: RoadmapItem, path: str, repo_root: Pa
     return None
 
 
+def validate_completion_quality(items: list[RoadmapItem], repo_root: Path = REPO_ROOT) -> list[str]:
+    errors: list[str] = []
+    for item in items:
+        if item.planning_state == "completed" and item.completion_quality == "not_applicable":
+            errors.append(f"{item.id}: completed items must set completion_quality")
+        if item.completion_quality == "perfectionist_verified":
+            if item.known_quality_gaps:
+                errors.append(f"{item.id}: perfectionist_verified items must not list known_quality_gaps")
+            if not item.completion_audit.strip():
+                errors.append(f"{item.id}: perfectionist_verified items must reference a completed audit")
+            else:
+                audit_path = repo_root / normalize_repo_path(item.completion_audit)
+                if not audit_path.exists():
+                    errors.append(f"{item.id}: completion_audit path does not exist: {item.completion_audit}")
+                else:
+                    status = document_frontmatter_status(audit_path)
+                    if status is None:
+                        errors.append(f"{item.id}: completion_audit has no frontmatter status: {item.completion_audit}")
+                    elif status.lower() != "completed":
+                        errors.append(
+                            f"{item.id}: completion_audit status {status!r} is not 'completed': {item.completion_audit}"
+                        )
+    return errors
+
+
 def validate_current_candidate_decision_gates(items: list[RoadmapItem]) -> list[str]:
     errors: list[str] = []
     for item in items:
@@ -863,9 +892,10 @@ def validate(source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML sour
     conflicts = validate_write_scopes([item for item in roadmap.items if item.can_enter_implementation_batch])
     missing_scope_paths = validate_existing_write_scope_paths([item for item in roadmap.items if item.can_enter_implementation_batch])
     completion_errors = validate_completion_evidence(roadmap.items)
+    quality_errors = validate_completion_quality(roadmap.items)
     gate_errors = validate_current_candidate_decision_gates(roadmap.items)
     current_doc_errors = validate_completed_items_not_current_in_docs(roadmap.items)
-    if conflicts or missing_scope_paths or completion_errors or gate_errors or current_doc_errors:
+    if conflicts or missing_scope_paths or completion_errors or quality_errors or gate_errors or current_doc_errors:
         console.print("[red]roadmap validation failed[/red]")
         for conflict in conflicts:
             console.print(f"- write-scope conflict: {conflict}")
@@ -873,6 +903,8 @@ def validate(source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML sour
             console.print(f"- write-scope path missing: {missing_scope_path}")
         for completion_error in completion_errors:
             console.print(f"- completion evidence missing: {completion_error}")
+        for quality_error in quality_errors:
+            console.print(f"- completion quality invalid: {quality_error}")
         for gate_error in gate_errors:
             console.print(f"- decision gate unmet: {gate_error}")
         for current_doc_error in current_doc_errors:

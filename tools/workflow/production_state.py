@@ -42,6 +42,7 @@ ProductionMilestoneState = Literal["designing", "ready_next", "active", "complet
 ProductionMilestoneKind = Literal["design", "implementation", "hardening", "release"]
 ProductionTrackState = Literal["active", "paused", "completed", "deferred"]
 ProductionGateKind = Literal["adr", "design", "roadmap", "doc"]
+ProductionCompletionQuality = Literal["not_applicable", "bounded_contract", "runtime_proven", "perfectionist_verified"]
 
 
 class StrictModel(BaseModel):
@@ -117,6 +118,9 @@ class ProductionMilestone(StrictModel):
     design_gates: list[ProductionDesignGate] = Field(default_factory=list)
     evidence_gates: list[ProductionEvidenceGate] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
+    completion_quality: ProductionCompletionQuality = "not_applicable"
+    known_quality_gaps: list[str] = Field(default_factory=list)
+    completion_audit: str = ""
 
     @field_validator("id")
     @classmethod
@@ -317,14 +321,54 @@ def validate_evidence_gates(state: ProductionPlanningState) -> list[str]:
     return errors
 
 
+def validate_completion_quality(
+    state: ProductionPlanningState,
+    roadmap_path: Path = ROADMAP_SOURCE,
+    repo_root: Path = REPO_ROOT,
+) -> list[str]:
+    roadmap = load_roadmap(roadmap_path)
+    errors: list[str] = []
+    for milestone in state.by_milestone_id.values():
+        if milestone.state == "completed" and milestone.completion_quality == "not_applicable":
+            errors.append(f"{milestone.id}: completed production milestones must set completion_quality")
+        if milestone.completion_quality == "perfectionist_verified":
+            if milestone.known_quality_gaps:
+                errors.append(f"{milestone.id}: perfectionist_verified milestones must not list known_quality_gaps")
+            if not milestone.completion_audit.strip():
+                errors.append(f"{milestone.id}: perfectionist_verified milestones must reference a completed audit")
+            else:
+                errors.extend(
+                    gate_status_errors(
+                        milestone.id,
+                        "doc",
+                        milestone.completion_audit,
+                        "completed",
+                        "perfectionist production completion requires a completed audit",
+                        repo_root=repo_root,
+                    )
+                )
+            for roadmap_id in milestone.roadmap_links:
+                roadmap_item = roadmap.by_id.get(roadmap_id)
+                if roadmap_item is None:
+                    continue
+                if roadmap_item.completion_quality != "perfectionist_verified":
+                    errors.append(
+                        f"{milestone.id}: perfectionist_verified milestone links {roadmap_id} "
+                        f"with completion_quality={roadmap_item.completion_quality!r}"
+                    )
+    return errors
+
+
 def gate_status_errors(
     owner_id: str,
     kind: str,
     path: str,
     required_status: str,
     reason: str,
+    *,
+    repo_root: Path = REPO_ROOT,
 ) -> list[str]:
-    candidate = REPO_ROOT / path
+    candidate = repo_root / path
     if not candidate.exists():
         return [f"{owner_id}: {kind} gate missing {path} ({reason})"]
     status = document_frontmatter_status(candidate)
@@ -360,6 +404,7 @@ def validate(source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tra
         errors.extend(validate_roadmap_links(state))
         errors.extend(validate_design_gates(state))
         errors.extend(validate_evidence_gates(state))
+        errors.extend(validate_completion_quality(state))
     except (WorkflowError, ValueError) as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error

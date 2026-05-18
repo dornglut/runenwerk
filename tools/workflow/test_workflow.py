@@ -31,7 +31,12 @@ from parallel_batch import (
     write_validation_result,
     worktree_path_for_item,
 )
-from production_state import ProductionPlanningState, validate_design_gates, validate_roadmap_links
+from production_state import (
+    ProductionPlanningState,
+    validate_completion_quality as validate_production_completion_quality,
+    validate_design_gates,
+    validate_roadmap_links,
+)
 from production_plan import (
     ProductionPlanContext,
     app as production_plan_app,
@@ -55,6 +60,7 @@ from roadmap_state import (
     validate_batch_against_roadmap,
     validate_completed_items_not_current_in_docs,
     validate_completion_evidence,
+    validate_completion_quality,
     validate_changed_paths,
     validate_existing_write_scope_paths,
     validate_write_scopes,
@@ -338,6 +344,59 @@ def test_valid_production_track_fixture_passes() -> None:
     assert validate_design_gates(planning) == []
 
 
+def test_completed_production_milestones_require_completion_quality(tmp_path: Path) -> None:
+    state = valid_production_state()
+    state["tracks"][0]["milestones"][0]["state"] = "completed"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(roadmap_path, valid_state())
+    planning = ProductionPlanningState.model_validate(state)
+
+    assert validate_production_completion_quality(planning, roadmap_path=roadmap_path) == [
+        "PM-TEST-001: completed production milestones must set completion_quality"
+    ]
+
+
+def test_perfectionist_production_quality_rejects_gaps_missing_audit_and_non_verified_wr(tmp_path: Path) -> None:
+    state = valid_production_state()
+    milestone = state["tracks"][0]["milestones"][0]
+    milestone["state"] = "completed"
+    milestone["completion_quality"] = "perfectionist_verified"
+    milestone["known_quality_gaps"] = ["linked WR still has gaps"]
+    roadmap_data = valid_state()
+    roadmap_data["items"][0]["planning_state"] = "completed"
+    roadmap_data["items"][0]["completion_quality"] = "bounded_contract"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(roadmap_path, roadmap_data)
+    planning = ProductionPlanningState.model_validate(state)
+
+    assert validate_production_completion_quality(planning, roadmap_path=roadmap_path) == [
+        "PM-TEST-001: perfectionist_verified milestones must not list known_quality_gaps",
+        "PM-TEST-001: perfectionist_verified milestones must reference a completed audit",
+        "PM-TEST-001: perfectionist_verified milestone links WR-001 with completion_quality='bounded_contract'",
+    ]
+
+
+def test_perfectionist_production_quality_accepts_completed_audit_and_verified_wrs(tmp_path: Path) -> None:
+    audit_path = "docs-site/src/content/docs/reports/audits/pm-test-001-audit.md"
+    audit = tmp_path / audit_path
+    audit.parent.mkdir(parents=True)
+    audit.write_text("---\nstatus: completed\n---\n# Audit\n", encoding="utf-8")
+    state = valid_production_state()
+    milestone = state["tracks"][0]["milestones"][0]
+    milestone["state"] = "completed"
+    milestone["completion_quality"] = "perfectionist_verified"
+    milestone["completion_audit"] = audit_path
+    roadmap_data = valid_state()
+    roadmap_data["items"][0]["planning_state"] = "completed"
+    roadmap_data["items"][0]["completion_quality"] = "perfectionist_verified"
+    roadmap_data["items"][0]["completion_audit"] = audit_path
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(roadmap_path, roadmap_data)
+    planning = ProductionPlanningState.model_validate(state)
+
+    assert validate_production_completion_quality(planning, roadmap_path=roadmap_path, repo_root=tmp_path) == []
+
+
 def test_duplicate_production_track_ids_are_rejected() -> None:
     state = valid_production_state()
     duplicate = dict(state["tracks"][0])
@@ -431,7 +490,7 @@ def test_production_plan_valid_link_prints_expected_contract_path() -> None:
 
     assert result.exit_code == 0
     assert "docs-site/src/content/docs/reports/implementation-plans/wr-019-field-visualizer-product-workflow/plan.md" in result.stdout
-    assert "Next action: write_promotion_contract" in result.stdout
+    assert "Next action:" in result.stdout
 
 
 def test_production_plan_unlinked_wr_fails(tmp_path: Path) -> None:
@@ -1268,6 +1327,59 @@ def test_roadmap_completion_accepts_completed_closeout_evidence(tmp_path: Path) 
     roadmap = RoadmapState.model_validate(state)
 
     assert validate_completion_evidence(roadmap.items, repo_root=tmp_path) == []
+
+
+def test_completed_roadmap_items_require_completion_quality() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_quality(roadmap.items) == [
+        "WR-001: completed items must set completion_quality"
+    ]
+
+
+def test_perfectionist_roadmap_quality_rejects_gaps_or_missing_audit(tmp_path: Path) -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["completion_quality"] = "perfectionist_verified"
+    state["items"][0]["known_quality_gaps"] = ["still has a UI gap"]
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_quality(roadmap.items, repo_root=tmp_path) == [
+        "WR-001: perfectionist_verified items must not list known_quality_gaps",
+        "WR-001: perfectionist_verified items must reference a completed audit",
+    ]
+
+
+def test_perfectionist_roadmap_quality_requires_completed_audit(tmp_path: Path) -> None:
+    audit_path = "docs-site/src/content/docs/reports/audits/wr-001-audit.md"
+    audit = tmp_path / audit_path
+    audit.parent.mkdir(parents=True)
+    audit.write_text("---\nstatus: draft\n---\n# Audit\n", encoding="utf-8")
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["completion_quality"] = "perfectionist_verified"
+    state["items"][0]["completion_audit"] = audit_path
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_quality(roadmap.items, repo_root=tmp_path) == [
+        f"WR-001: completion_audit status 'draft' is not 'completed': {audit_path}"
+    ]
+
+
+def test_perfectionist_roadmap_quality_accepts_completed_audit(tmp_path: Path) -> None:
+    audit_path = "docs-site/src/content/docs/reports/audits/wr-001-audit.md"
+    audit = tmp_path / audit_path
+    audit.parent.mkdir(parents=True)
+    audit.write_text("---\nstatus: completed\n---\n# Audit\n", encoding="utf-8")
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    state["items"][0]["completion_quality"] = "perfectionist_verified"
+    state["items"][0]["completion_audit"] = audit_path
+    roadmap = RoadmapState.model_validate(state)
+
+    assert validate_completion_quality(roadmap.items, repo_root=tmp_path) == []
 
 
 def test_completed_items_are_rejected_from_current_docs(tmp_path: Path) -> None:

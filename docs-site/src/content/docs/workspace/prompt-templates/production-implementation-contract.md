@@ -51,7 +51,8 @@ The contract must be decision-complete:
 - public API, data-flow, diagnostics, persistence, or migration impact;
 - tests and validation commands;
 - stop conditions;
-- closeout requirements and roadmap/production evidence updates.
+- closeout requirements, perfectionist audit requirements, and roadmap/production
+  evidence updates.
 
 No product code changes.
 ```
@@ -67,6 +68,7 @@ Every substantial production implementation contract should include:
 - `Acceptance Criteria`
 - `Stop Conditions`
 - `Closeout Requirements`
+- `Perfectionist Closeout Audit`
 
 The contract is not a substitute for accepted designs, ADRs, roadmap gates, or
 validation. It records exactly how one accepted or promotable WR slice will be
@@ -94,6 +96,8 @@ the contract before implementation:
   prepared-data-only, fallback-only, or unconsumed-contract implementations?
 - What end-to-end evidence proves the actual user-visible product, including
   GPU/pixel evidence for render-visible work?
+- What completion-quality tier is expected at closeout, and what quality gaps
+  would remain visible if the slice cannot honestly be `perfectionist_verified`?
 - What design, ADR, roadmap, production, and closeout documents must be updated
   if the implemented architecture differs from the current docs?
 
@@ -101,3 +105,25 @@ If any answer is still a choice rather than a decision, update the contract
 instead of starting implementation. The implementation plan should make the
 long-term solution boring to execute: no hidden architecture decisions remain
 for the coding pass.
+
+## Perfectionist Closeout Audit
+
+Every production implementation contract must state how closeout will classify
+completion quality:
+
+- `bounded_contract` for an accepted bounded slice with explicit known gaps;
+- `runtime_proven` for a runtime/GPU-proven product chain with remaining
+  architecture, module-structure, UI, or future-scope gaps;
+- `perfectionist_verified` only when a completed audit path exists and the gap
+  list is empty.
+
+The closeout plan must name:
+
+- the exact audit path, when perfectionist verification is intended;
+- any known quality gaps that must stay visible in `roadmap-items.yaml` or
+  `production-tracks.yaml`;
+- the anti-drift guard tests that prevent descriptor-only, prepared-data-only,
+  status-panel-only, fallback-only, pseudo, or unconsumed-contract completion
+  claims;
+- the evidence that proves module structure, UI interaction depth, and
+  end-to-end runtime consumption at the tier being claimed.
