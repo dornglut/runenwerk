@@ -1,0 +1,21 @@
+{
+  "frame_index": 36,
+  "captures": [
+    {
+      "frame_index": 36,
+      "flow_id": "1",
+      "pass_id": "5",
+      "pass_label": "5",
+      "stage": "before",
+      "resource_id": "runenwerk.editor.texture_preview:texture2d.product9028.mip0.slice0.all",
+      "texture_class": "color_target",
+      "width": 4,
+      "height": 4,
+      "format": "Rgba8Unorm",
+      "terminal_code": "completed",
+      "terminal_reason_code": null,
+      "terminal_reason_detail": null,
+      "file": "C:\\Users\\joshi\\Projekte\\Runenwerk\\docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding\\artifacts/captures\\frame_36__flow_1__pass_5__stage_before__resource_runenwerk_editor_texture_preview_texture2d_product9028_mip0_slice0_all.png"
+    }
+  ]
+}

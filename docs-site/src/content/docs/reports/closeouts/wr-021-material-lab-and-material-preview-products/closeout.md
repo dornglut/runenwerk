@@ -328,6 +328,10 @@ Closeout validation after roadmap/production evidence updates:
   a later WR/ADR proves stable extension points over the typed recipe boundary.
 - Multiple material node catalogs and recipe-selected node catalog versions remain
   future work; both V1 recipes intentionally use `MaterialNodeCatalog::first_slice()`.
-- Rich visual polish beyond the V1 source-projected graph surface, shader
-  authoring, material package distribution, and renderer-side specialization
-  cache management remain separate production slices.
+- WR-028 supersedes the inherited rich Material Lab graph canvas, live texture
+  view, SDF assignment persistence, and SDF per-hit material-selection gaps.
+  Model/mesh material binding is not closed by WR-021 or WR-028; WR-029 owns
+  model/mesh source identity, submesh/material-region assignment, and future
+  renderable-index ABI work. Shader authoring, material package distribution,
+  and renderer-side specialization cache management remain separate production
+  slices.

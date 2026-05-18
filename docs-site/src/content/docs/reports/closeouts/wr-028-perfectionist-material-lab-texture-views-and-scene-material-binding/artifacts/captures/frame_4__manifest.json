@@ -1,0 +1,53 @@
+{
+  "frame_index": 4,
+  "captures": [
+    {
+      "frame_index": 4,
+      "flow_id": "1",
+      "pass_id": "2",
+      "pass_label": "2",
+      "stage": "after",
+      "resource_id": "runenwerk.editor.viewport:editor.viewport.2.1.primary",
+      "texture_class": "color_target",
+      "width": 904,
+      "height": 493,
+      "format": "Rgba8UnormSrgb",
+      "terminal_code": "completed",
+      "terminal_reason_code": null,
+      "terminal_reason_detail": null,
+      "file": "C:\\Users\\joshi\\Projekte\\Runenwerk\\docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding\\artifacts/captures\\frame_4__flow_1__pass_2__stage_after__resource_runenwerk_editor_viewport_editor_viewport_2_1_primary.png"
+    },
+    {
+      "frame_index": 4,
+      "flow_id": "1",
+      "pass_id": "5",
+      "pass_label": "5",
+      "stage": "before",
+      "resource_id": "surface.color",
+      "texture_class": "imported_texture",
+      "width": 1280,
+      "height": 720,
+      "format": "Rgba8UnormSrgb",
+      "terminal_code": "completed",
+      "terminal_reason_code": null,
+      "terminal_reason_detail": null,
+      "file": "C:\\Users\\joshi\\Projekte\\Runenwerk\\docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding\\artifacts/captures\\frame_4__flow_1__pass_5__stage_before__resource_surface_color.png"
+    },
+    {
+      "frame_index": 4,
+      "flow_id": "1",
+      "pass_id": "5",
+      "pass_label": "5",
+      "stage": "after",
+      "resource_id": "surface.color",
+      "texture_class": "imported_texture",
+      "width": 1280,
+      "height": 720,
+      "format": "Rgba8UnormSrgb",
+      "terminal_code": "completed",
+      "terminal_reason_code": null,
+      "terminal_reason_detail": null,
+      "file": "C:\\Users\\joshi\\Projekte\\Runenwerk\\docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding\\artifacts/captures\\frame_4__flow_1__pass_5__stage_after__resource_surface_color.png"
+    }
+  ]
+}

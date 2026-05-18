@@ -1,0 +1,75 @@
+(
+    version: 2,
+    document_id: 971,
+    label: "WR-028 Texture3D source-backed material",
+    output_target: render_material,
+    graph: (
+        graph_id: 971,
+        name: "wr028_source_backed_texture_971",
+        cycle_policy: reject_directed_cycles,
+        nodes: [
+            /*[0]*/ (
+                node_id: 7,
+                name: "texture.sample_3d",
+                ports: [
+                    /*[0]*/ (
+                        port_id: 70,
+                        name: "color",
+                        direction: output,
+                        port_type_id: 1,
+                        metadata: [],
+                    ),
+                ],
+                metadata: [],
+                values: [
+                    /*[0]*/ (
+                        key: "texture_ref",
+                        value: (
+                            kind: "resource",
+                            reference: (
+                                kind: "asset.catalog.texture3d",
+                                stable_id: "wr028.source_edit_texture_3d",
+                                revision: None,
+                                artifact: None,
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+            /*[1]*/ (
+                node_id: 8,
+                name: "pbr.output",
+                ports: [
+                    /*[0]*/ (
+                        port_id: 80,
+                        name: "base_color",
+                        direction: input,
+                        port_type_id: 1,
+                        metadata: [],
+                    ),
+                ],
+                metadata: [],
+                values: [],
+            ),
+        ],
+        edges: [
+            /*[0]*/ (
+                edge_id: 7,
+                from_port_id: 70,
+                to_port_id: 80,
+            ),
+        ],
+    ),
+    editor_state: (
+        node_layouts: [],
+        groups: [],
+        viewport: (
+            pan_x: 0,
+            pan_y: 0,
+            zoom_milli: 1000,
+        ),
+        selected_fixture: sphere,
+        selected_preview: material_preview_product,
+        layout_metadata: [],
+    ),
+)
