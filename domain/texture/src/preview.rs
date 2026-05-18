@@ -41,4 +41,27 @@ impl TexturePreviewDescriptor {
         self.slice_index = slice_index;
         self
     }
+
+    pub const fn with_channel(mut self, channel: TexturePreviewChannel) -> Self {
+        self.channel = channel;
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn texture_preview_descriptor_carries_slice_mip_channel_controls() {
+        let descriptor = TexturePreviewDescriptor::new(TextureProductId::new(7))
+            .with_mip_level(2)
+            .with_slice_index(5)
+            .with_channel(TexturePreviewChannel::A);
+
+        assert_eq!(descriptor.product_id, TextureProductId::new(7));
+        assert_eq!(descriptor.mip_level, 2);
+        assert_eq!(descriptor.slice_index, 5);
+        assert_eq!(descriptor.channel, TexturePreviewChannel::A);
+    }
 }

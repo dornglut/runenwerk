@@ -1,8 +1,8 @@
 use ecs::World;
 use engine::plugins::render::{
     PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
-    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource, RenderRuntimeSet,
-    UiFrameSubmissionRegistryResource,
+    RenderDynamicTextureUploadRegistryResource, RenderGpuResidencyBudgetResource,
+    RenderGpuResidencyResource, RenderRuntimeSet, UiFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
 use engine::runtime::ProductPublicationRuntimeResource;
@@ -22,7 +22,8 @@ use crate::runtime::resources::{
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system,
     prepare_material_preview_render_resource_system, produce_editor_picking_system,
-    produce_material_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
+    produce_material_preview_dynamic_uploads_system,
+    produce_texture_preview_dynamic_uploads_system, seed_viewport_runtime_contracts_system,
     submit_editor_frame_system, sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
@@ -55,6 +56,7 @@ pub enum EditorRuntimeSet {
     ViewportRenderProductSelection,
     MaterialPreviewRenderHandoff,
     MaterialPreviewProductUpload,
+    TexturePreviewProductUpload,
     ViewportGpuResidencySummary,
 }
 
@@ -95,6 +97,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::MaterialPreviewProductUpload => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::MaterialPreviewProductUpload",
             ),
+            Self::TexturePreviewProductUpload => SystemSetKey::of::<EditorRuntimeSet>(
+                "EditorRuntimeSet::TexturePreviewProductUpload",
+            ),
             Self::ViewportGpuResidencySummary => SystemSetKey::of::<EditorRuntimeSet>(
                 "EditorRuntimeSet::ViewportGpuResidencySummary",
             ),
@@ -125,6 +130,7 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<ViewportPickingResultsResource>();
         app.init_resource::<UiFrameSubmissionRegistryResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
+        app.init_resource::<RenderDynamicTextureUploadRegistryResource>();
         app.init_resource::<PreparedRenderProductSelectionResource>();
         app.init_resource::<RenderGpuResidencyResource>();
         app.init_resource::<RenderGpuResidencyBudgetResource>();
@@ -240,6 +246,13 @@ impl Plugin for EditorAppPlugin {
             produce_material_preview_dynamic_uploads_system
                 .in_set(EditorRuntimeSet::MaterialPreviewProductUpload)
                 .after(EditorRuntimeSet::MaterialPreviewRenderHandoff)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
+        app.add_systems(
+            RenderPrepare,
+            produce_texture_preview_dynamic_uploads_system
+                .in_set(EditorRuntimeSet::TexturePreviewProductUpload)
+                .after(EditorRuntimeSet::MaterialPreviewProductUpload)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

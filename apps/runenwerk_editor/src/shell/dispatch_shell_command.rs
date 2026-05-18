@@ -314,6 +314,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
         } => {
             app.apply_material_surface_action(action)?;
         }
+        ShellCommand::ApplyTextureSurfaceAction {
+            action,
+            projection_epoch: _,
+        } => {
+            app.apply_texture_surface_action(action);
+        }
         ShellCommand::ApplySelectedEditorDefinition => {
             let shell_state =
                 shell_state
@@ -1019,6 +1025,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::BuildSelectedMaterialPreview { .. } => "BuildSelectedMaterialPreview",
         ShellCommand::ClearMaterialDiagnostics { .. } => "ClearMaterialDiagnostics",
         ShellCommand::ApplyMaterialSurfaceAction { .. } => "ApplyMaterialSurfaceAction",
+        ShellCommand::ApplyTextureSurfaceAction { .. } => "ApplyTextureSurfaceAction",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
         ShellCommand::SwitchPanelToolSurfaceKind { .. } => "SwitchPanelToolSurfaceKind",

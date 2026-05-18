@@ -26,6 +26,7 @@ use crate::shell::{
     EditorSurfaceProviderRegistry, RunenwerkWorkbenchHost, RunenwerkWorkbenchHostError,
     SurfaceSessionStore,
 };
+use crate::texture_preview::TexturePreviewRuntime;
 
 use super::sdf_operations::SdfOperationWorkspaceState;
 
@@ -42,6 +43,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
     pub(crate) material_lab_runtime: MaterialLabRuntime,
+    pub(crate) texture_preview_runtime: TexturePreviewRuntime,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
     pub(crate) field_product_publication_journal: Vec<EditorFieldProductPublicationJournalEntry>,
@@ -88,6 +90,7 @@ impl RunenwerkEditorApp {
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
             material_lab_runtime: MaterialLabRuntime::default(),
+            texture_preview_runtime: TexturePreviewRuntime::default(),
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
             pending_field_product_publications: Vec::new(),
             field_product_publication_journal: Vec::new(),

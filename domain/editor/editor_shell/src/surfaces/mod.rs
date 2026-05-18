@@ -8,6 +8,7 @@ pub mod inspector;
 pub mod material;
 pub mod outliner;
 pub mod sdf_operation;
+pub mod texture;
 pub mod viewport;
 
 pub use asset::*;
@@ -17,4 +18,5 @@ pub use inspector::*;
 pub use material::*;
 pub use outliner::*;
 pub use sdf_operation::*;
+pub use texture::*;
 pub use viewport::*;

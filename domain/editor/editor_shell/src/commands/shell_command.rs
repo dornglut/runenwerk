@@ -5,8 +5,8 @@ use editor_core::DocumentId;
 
 use crate::{
     DockSplitSide, EditorDomainMutation, MaterialSurfaceAction, PanelHostId, PanelInstanceId,
-    SurfaceSessionMutation, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId,
+    SurfaceSessionMutation, TabStackId, TextureSurfaceAction, ToolSurfaceInstanceId,
+    ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId,
     WorkspaceSplitAxis,
 };
 use crate::{SurfaceInteraction, SurfaceLocalAction, SurfaceProviderId};
@@ -109,6 +109,10 @@ pub enum ShellCommand {
     },
     ApplyMaterialSurfaceAction {
         action: MaterialSurfaceAction,
+        projection_epoch: u64,
+    },
+    ApplyTextureSurfaceAction {
+        action: TextureSurfaceAction,
         projection_epoch: u64,
     },
     SetTabStackActivePanel {
@@ -287,6 +291,9 @@ impl ShellCommand {
             | Self::BuildSelectedMaterialPreview { projection_epoch }
             | Self::ClearMaterialDiagnostics { projection_epoch }
             | Self::ApplyMaterialSurfaceAction {
+                projection_epoch, ..
+            }
+            | Self::ApplyTextureSurfaceAction {
                 projection_epoch, ..
             }
             | Self::ApplySurfaceSessionMutation {

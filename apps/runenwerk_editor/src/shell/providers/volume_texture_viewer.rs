@@ -1,4 +1,5 @@
 use super::*;
+use crate::texture_preview::texture_preview_view_model;
 
 pub(super) struct VolumeTextureViewerProvider;
 
@@ -16,7 +17,11 @@ impl EditorSurfaceProvider for VolumeTextureViewerProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(request, TEXTURE_VIEWER_3D_SURFACE_KEY, ToolSurfaceKind::VolumeTextureViewer)
+        stable_key_or_legacy_kind_support(
+            request,
+            TEXTURE_VIEWER_3D_SURFACE_KEY,
+            ToolSurfaceKind::VolumeTextureViewer,
+        )
     }
 
     fn build_frame(
@@ -25,37 +30,98 @@ impl EditorSurfaceProvider for VolumeTextureViewerProvider {
         request: &SurfaceProviderRequest,
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let mut lines = vec![
-            "volume texture viewer: descriptor-first provider".to_string(),
-            surface_document_context_line(&request.document_context),
-            "Texture3D preview is slice/mip/channel inspection; GPU upload remains adapter-owned"
-                .to_string(),
-        ];
-        lines.extend(super::texture_viewer::texture_preview_lines(
-            context
-                .app
-                .asset_catalog_runtime()
-                .volume_texture_preview_descriptor(),
-        ));
-        lines.extend(
-            context
-                .app
-                .asset_catalog_runtime()
-                .volume_texture_product_lines(),
+        let controls = context
+            .app
+            .texture_preview_runtime()
+            .controls(TextureViewerSurfaceKind::VolumeTexture3D);
+        let view_model = texture_preview_view_model(
+            context.app.asset_catalog_runtime().catalog(),
+            context.app.asset_catalog_runtime().selected_asset_id(),
+            context.app.texture_preview_runtime(),
+            TextureViewerSurfaceKind::VolumeTexture3D,
         );
-        lines.extend(
-            context
-                .app
-                .asset_catalog_runtime()
-                .import_diagnostic_lines(),
-        );
-        lines.extend(context.app.asset_catalog_runtime().reload_status_lines());
-
-        let (root, routes) = build_self_authoring_control_panel(
+        let (root, routes) = super::texture_viewer::build_texture_preview_panel(
             context.theme,
-            request.tool_surface_instance_id,
-            lines,
-            Vec::new(),
+            request,
+            &view_model,
+            vec![
+                (
+                    "Slice -".to_string(),
+                    TextureSurfaceAction::SetPreviewSlice {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        slice_index: controls.slice_index.saturating_sub(1),
+                    },
+                ),
+                (
+                    "Slice +".to_string(),
+                    TextureSurfaceAction::SetPreviewSlice {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        slice_index: controls.slice_index.saturating_add(1),
+                    },
+                ),
+                (
+                    "Mip -".to_string(),
+                    TextureSurfaceAction::SetPreviewMip {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        mip_level: controls.mip_level.saturating_sub(1),
+                    },
+                ),
+                (
+                    "Mip +".to_string(),
+                    TextureSurfaceAction::SetPreviewMip {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        mip_level: controls.mip_level.saturating_add(1),
+                    },
+                ),
+                (
+                    "Mip 0".to_string(),
+                    TextureSurfaceAction::SetPreviewMip {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        mip_level: 0,
+                    },
+                ),
+                (
+                    "All".to_string(),
+                    TextureSurfaceAction::SetPreviewChannel {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        channel: TexturePreviewChannelSelection::All,
+                    },
+                ),
+                (
+                    "R".to_string(),
+                    TextureSurfaceAction::SetPreviewChannel {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        channel: TexturePreviewChannelSelection::R,
+                    },
+                ),
+                (
+                    "G".to_string(),
+                    TextureSurfaceAction::SetPreviewChannel {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        channel: TexturePreviewChannelSelection::G,
+                    },
+                ),
+                (
+                    "B".to_string(),
+                    TextureSurfaceAction::SetPreviewChannel {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        channel: TexturePreviewChannelSelection::B,
+                    },
+                ),
+                (
+                    "A".to_string(),
+                    TextureSurfaceAction::SetPreviewChannel {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                        channel: TexturePreviewChannelSelection::A,
+                    },
+                ),
+                (
+                    "Reset".to_string(),
+                    TextureSurfaceAction::ResetPreview {
+                        surface: TextureViewerSurfaceKind::VolumeTexture3D,
+                    },
+                ),
+            ],
         );
 
         Ok(ProviderSurfaceFrame {
@@ -67,10 +133,10 @@ impl EditorSurfaceProvider for VolumeTextureViewerProvider {
 
     fn map_action(
         &self,
-        _context: &SurfaceProviderDispatchContext<'_>,
+        context: &SurfaceProviderDispatchContext<'_>,
         _request: &SurfaceProviderRequest,
-        _action: SurfaceLocalAction,
+        action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
-        Ok(None)
+        super::texture_viewer::texture_surface_action_command(action, context.projection_epoch)
     }
 }

@@ -23,14 +23,15 @@ use editor_shell::{
     SurfacePresentationArtifact, SurfacePresentationArtifactKind, SurfaceProviderAvailability,
     SurfaceProviderDescriptor, SurfaceProviderDiagnostic, SurfaceProviderId,
     SurfaceProviderPriority, SurfaceProviderRequest, SurfaceProviderSupportMode, SurfaceRouteTable,
-    SurfaceSessionMutation, ToolSurfaceKind, ToolSurfaceRegistry,
+    SurfaceSessionMutation, TexturePreviewChannelSelection, TextureSurfaceAction,
+    TextureViewerSurfaceKind, ToolSurfaceKind, ToolSurfaceRegistry, UiNode,
     VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
     VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
     VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
     ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
-    ViewportSurfaceAction, ViewportViewModel, build_console_panel,
+    ViewportSurfaceAction, ViewportViewModel, WidgetId, build_console_panel,
     build_entity_table_panel, build_inspector_panel, build_material_graph_surface,
     build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
     editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
@@ -1913,7 +1914,7 @@ mod tests {
         EditorToolSuite, LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, ProviderFamilyDefinition,
         ProviderFamilyId, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, TabStackId, ToolSuiteId,
         ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfaceInstanceId, ToolSurfacePersistence,
-        ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey,
+        ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey, UiNodeKind,
         VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
     };
     use graph::{CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId};
@@ -1952,6 +1953,97 @@ mod tests {
             descriptor,
             artifact_uri: None,
         }
+    }
+
+    fn texture_payload_with_uri(
+        descriptor: TextureDescriptor,
+        artifact_uri: impl Into<String>,
+    ) -> ArtifactPayloadKind {
+        ArtifactPayloadKind::TextureProduct {
+            descriptor_hash: descriptor.descriptor_hash().to_string(),
+            descriptor,
+            artifact_uri: Some(artifact_uri.into()),
+        }
+    }
+
+    fn generated_texture_payload_with_uri(
+        descriptor: TextureDescriptor,
+        artifact_uri: impl Into<String>,
+    ) -> ArtifactPayloadKind {
+        ArtifactPayloadKind::GeneratedTextureProduct {
+            descriptor_hash: descriptor.descriptor_hash().to_string(),
+            descriptor,
+            artifact_uri: Some(artifact_uri.into()),
+        }
+    }
+
+    fn texture_payload_with_hash(
+        descriptor: TextureDescriptor,
+        descriptor_hash: impl Into<String>,
+        artifact_uri: Option<String>,
+    ) -> ArtifactPayloadKind {
+        ArtifactPayloadKind::TextureProduct {
+            descriptor_hash: descriptor_hash.into(),
+            descriptor,
+            artifact_uri,
+        }
+    }
+
+    fn texture_descriptor_with_byte_length(
+        product_id: u64,
+        dimension: TextureDimension,
+        extent: TextureExtent,
+        byte_length: u64,
+    ) -> TextureDescriptor {
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(product_id),
+            format!("texture.{product_id}"),
+            dimension,
+            extent,
+        );
+        let mip_count = descriptor.mip_count;
+        let descriptor_hash = descriptor.descriptor_hash().to_string();
+        descriptor.with_ktx2_metadata(
+            Ktx2TextureMetadata::new(
+                TexturePixelFormat::Rgba8Unorm,
+                mip_count,
+                descriptor_hash,
+                "1",
+            )
+            .with_byte_layout(
+                byte_length,
+                [extent.width as u64 * extent.height as u64 * extent.depth as u64 * 4],
+            ),
+        )
+    }
+
+    fn texture_descriptor_with_mip_count_and_byte_length(
+        product_id: u64,
+        dimension: TextureDimension,
+        extent: TextureExtent,
+        mip_count: u32,
+        byte_length: u64,
+    ) -> TextureDescriptor {
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(product_id),
+            format!("texture.{product_id}"),
+            dimension,
+            extent,
+        )
+        .with_mip_count(mip_count);
+        let descriptor_hash = descriptor.descriptor_hash().to_string();
+        descriptor.with_ktx2_metadata(
+            Ktx2TextureMetadata::new(
+                TexturePixelFormat::Rgba8Unorm,
+                mip_count,
+                descriptor_hash,
+                "1",
+            )
+            .with_byte_layout(
+                byte_length,
+                [extent.width as u64 * extent.height as u64 * extent.depth as u64 * 4],
+            ),
+        )
     }
 
     struct DummyProvider {
@@ -2355,6 +2447,77 @@ mod tests {
 
     fn provider_frame_text(frame: &ResolvedSurfaceFrame) -> String {
         format!("{:?}", frame.artifact.root)
+    }
+
+    fn frame_has_product_surface(frame: &ResolvedSurfaceFrame) -> bool {
+        fn walk(node: &editor_shell::UiNode) -> bool {
+            matches!(node.kind, UiNodeKind::ProductSurface(_)) || node.children.iter().any(walk)
+        }
+        walk(&frame.artifact.root)
+    }
+
+    fn build_rgba8_ktx2(
+        width: u32,
+        height: u32,
+        depth: u32,
+        slice0_texel: [u8; 4],
+        slice1_texel: [u8; 4],
+    ) -> Vec<u8> {
+        let format = ktx2::Format::R8G8B8A8_UNORM;
+        let (basic, type_size) =
+            ktx2::dfd::Basic::from_format(format).expect("rgba8 dfd should build");
+        let dfd_block = ktx2::dfd::Block::Basic(basic);
+        let dfd_block_bytes = dfd_block.to_vec();
+        let dfd_total_size = 4 + dfd_block_bytes.len();
+        let level_index_offset = ktx2::Header::LENGTH;
+        let dfd_offset = level_index_offset + ktx2::LevelIndex::LENGTH;
+        let after_dfd = dfd_offset + dfd_total_size;
+        let level_data_offset = (after_dfd + 3) / 4 * 4;
+        let texel_count = width as usize * height as usize * depth.max(1) as usize;
+        let level_data_size = texel_count * 4;
+        let mut bytes = vec![0u8; level_data_offset + level_data_size];
+
+        let header = ktx2::Header {
+            format: Some(format),
+            type_size,
+            pixel_width: width,
+            pixel_height: height,
+            pixel_depth: if depth > 1 { depth } else { 0 },
+            layer_count: 0,
+            face_count: 1,
+            level_count: 1,
+            supercompression_scheme: None,
+            index: ktx2::Index {
+                dfd_byte_offset: dfd_offset as u32,
+                dfd_byte_length: dfd_total_size as u32,
+                kvd_byte_offset: 0,
+                kvd_byte_length: 0,
+                sgd_byte_offset: 0,
+                sgd_byte_length: 0,
+            },
+        };
+        bytes[..ktx2::Header::LENGTH].copy_from_slice(&header.as_bytes());
+        let index = ktx2::LevelIndex {
+            byte_offset: level_data_offset as u64,
+            byte_length: level_data_size as u64,
+            uncompressed_byte_length: level_data_size as u64,
+        };
+        bytes[level_index_offset..level_index_offset + ktx2::LevelIndex::LENGTH]
+            .copy_from_slice(&index.as_bytes());
+        bytes[dfd_offset..dfd_offset + 4].copy_from_slice(&(dfd_total_size as u32).to_le_bytes());
+        bytes[dfd_offset + 4..dfd_offset + 4 + dfd_block_bytes.len()]
+            .copy_from_slice(&dfd_block_bytes);
+        let data = &mut bytes[level_data_offset..level_data_offset + level_data_size];
+        let texels_per_slice = width as usize * height as usize;
+        for (index, pixel) in data.chunks_exact_mut(4).enumerate() {
+            let texel = if index / texels_per_slice == 0 {
+                slice0_texel
+            } else {
+                slice1_texel
+            };
+            pixel.copy_from_slice(&texel);
+        }
+        bytes
     }
 
     #[test]
@@ -3929,7 +4092,7 @@ mod tests {
     }
 
     #[test]
-    fn texture_viewer_projects_typed_preview_descriptor_without_routes() {
+    fn texture_viewer_rejects_descriptor_only_completion() {
         let registry = EditorSurfaceProviderRegistry::runenwerk_default();
         let mut app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
@@ -3967,8 +4130,728 @@ mod tests {
 
         assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
         assert_eq!(frame.provider_id, Some(TEXTURE_VIEWER_PROVIDER_ID));
-        assert!(provider_frame_text(&frame).contains("preview descriptor: product=42"));
-        assert!(frame.routes.is_empty());
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("preview descriptor: product=42"));
+        assert!(text.contains("MissingArtifactUri"));
+        assert!(
+            !frame_has_product_surface(&frame),
+            "descriptor-only texture data must not emit product-surface proof"
+        );
+        assert!(!frame.routes.is_empty());
+    }
+
+    #[test]
+    fn texture_viewer_gpu_preview_uses_catalog_residency() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(62);
+        let artifact_id = asset_artifact_id(63);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [12, 34, 56, 255], [12, 34, 56, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-texture-viewer-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        let descriptor = texture_descriptor_with_byte_length(
+            44,
+            TextureDimension::Texture2D,
+            TextureExtent::new(2, 2, 1),
+            bytes.len() as u64,
+        );
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "albedo_gpu",
+                "Albedo GPU",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    artifact_id,
+                    asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(descriptor, path_string.clone()),
+                    ArtifactCacheKey::new("texture-44"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        let request = m6_texture_request(ToolSurfaceKind::TextureViewer);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(TEXTURE_VIEWER_PROVIDER_ID));
+        let text = provider_frame_text(&frame);
+        assert!(frame_has_product_surface(&frame));
+        assert!(text.contains("texture viewer: rendered GPU product-surface preview"));
+        assert!(text.contains("residency class: engine.material_ktx2_upload"));
+        assert!(text.contains("bind group identity: engine_ui_product_surface_bind_group"));
+        assert!(text.contains("artifact URI:"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn texture_viewer_gpu_proof_uses_provider_product_surface_path() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(162);
+        let artifact_id = asset_artifact_id(163);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [108, 210, 162, 255], [108, 210, 162, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-texture-viewer-provider-proof-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "wr028_texture_viewer_provider_proof",
+                "WR-028 Texture Viewer Provider Proof",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    artifact_id,
+                    asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            9028,
+                            TextureDimension::Texture2D,
+                            TextureExtent::new(2, 2, 1),
+                            bytes.len() as u64,
+                        ),
+                        "docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/artifacts/fixtures/wr028-texture-viewer-2d.ktx2",
+                    ),
+                    ArtifactCacheKey::new("wr028-texture-viewer-provider-proof"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        app.asset_catalog_runtime_mut().select_asset(Some(asset_id));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(TEXTURE_VIEWER_PROVIDER_ID));
+        assert!(frame_has_product_surface(&frame));
+        assert!(text.contains("preview descriptor: product=9028"));
+        assert!(text.contains(
+            "preview target: runenwerk.editor.texture_preview:texture2d.product9028.mip0.slice0.all"
+        ));
+        assert!(text.contains("residency class: engine.material_ktx2_upload"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn volume_texture_viewer_gpu_proof_uses_provider_product_surface_path() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(164);
+        let artifact_id = asset_artifact_id(165);
+        let bytes = build_rgba8_ktx2(2, 2, 2, [153, 103, 173, 255], [153, 103, 173, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-volume-viewer-provider-proof-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test volume texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "wr028_volume_viewer_provider_proof",
+                "WR-028 Volume Viewer Provider Proof",
+                AssetKind::Texture3DVolume,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    artifact_id,
+                    asset_id,
+                    AssetKind::Texture3DVolume,
+                    generated_texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            9029,
+                            TextureDimension::Texture3DVolume,
+                            TextureExtent::new(2, 2, 2),
+                            bytes.len() as u64,
+                        ),
+                        "docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/artifacts/fixtures/wr028-volume-texture-viewer-3d.ktx2",
+                    ),
+                    ArtifactCacheKey::new("wr028-volume-viewer-provider-proof"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        app.asset_catalog_runtime_mut().select_asset(Some(asset_id));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::VolumeTextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(VOLUME_TEXTURE_VIEWER_PROVIDER_ID));
+        assert!(frame_has_product_surface(&frame));
+        assert!(text.contains("preview descriptor: product=9029"));
+        assert!(text.contains(
+            "preview target: runenwerk.editor.texture_preview:texture3d.product9029.mip0.slice0.all"
+        ));
+        assert!(text.contains("residency class: engine.material_ktx2_upload"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn texture_preview_records_bind_group_identity() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(72);
+        let artifact_id = asset_artifact_id(73);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [21, 43, 65, 255], [21, 43, 65, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-texture-bind-group-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        let descriptor = texture_descriptor_with_byte_length(
+            78,
+            TextureDimension::Texture2D,
+            TextureExtent::new(2, 2, 1),
+            bytes.len() as u64,
+        );
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "bind_group_texture",
+                "Bind Group Texture",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    artifact_id,
+                    asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(descriptor, path_string.clone()),
+                    ArtifactCacheKey::new("texture-78"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(frame_has_product_surface(&frame));
+        assert!(text.contains("sampler identity: min="));
+        assert!(text.contains("bind group identity: engine_ui_product_surface_bind_group"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn texture_preview_proof_metadata_has_concrete_descriptor_hash() {
+        let mut catalog = asset::AssetCatalog::new();
+        let asset_id = asset_id(74);
+        let artifact_id = asset_artifact_id(75);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [31, 47, 59, 255], [31, 47, 59, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-texture-proof-hash-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        let descriptor = texture_descriptor_with_byte_length(
+            86,
+            TextureDimension::Texture2D,
+            TextureExtent::new(2, 2, 1),
+            bytes.len() as u64,
+        );
+        let descriptor_hash = descriptor.descriptor_hash().to_string();
+        catalog.insert_asset_record(AssetRecord::new(
+            asset_id,
+            "proof_hash_texture",
+            "Proof Hash Texture",
+            AssetKind::Texture2D,
+        ));
+        catalog.insert_artifact(
+            AssetArtifactDescriptor::new(
+                artifact_id,
+                asset_id,
+                AssetKind::Texture2D,
+                texture_payload_with_uri(descriptor, path_string.clone()),
+                ArtifactCacheKey::new("texture-86"),
+            )
+            .with_artifact_path(path_string.clone()),
+        );
+
+        let prepared = crate::texture_preview::prepare_texture_preview(
+            &catalog,
+            Some(asset_id),
+            &crate::texture_preview::TexturePreviewRuntime::default(),
+            TextureViewerSurfaceKind::Texture2D,
+        )
+        .expect("texture preview proof should prepare");
+
+        assert_eq!(prepared.proof.texture_product_id, 86);
+        assert_eq!(prepared.proof.descriptor_hash, descriptor_hash);
+        assert_eq!(prepared.proof.artifact_uri, path_string);
+        assert!(!prepared.proof.descriptor_hash.contains("TextureDescriptor"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn texture_preview_proof_metadata_has_concrete_bind_group_identity() {
+        let mut catalog = asset::AssetCatalog::new();
+        let asset_id = asset_id(76);
+        let artifact_id = asset_artifact_id(77);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [41, 67, 83, 255], [41, 67, 83, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-texture-proof-bind-group-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        catalog.insert_asset_record(AssetRecord::new(
+            asset_id,
+            "proof_bind_group_texture",
+            "Proof Bind Group Texture",
+            AssetKind::Texture2D,
+        ));
+        catalog.insert_artifact(
+            AssetArtifactDescriptor::new(
+                artifact_id,
+                asset_id,
+                AssetKind::Texture2D,
+                texture_payload_with_uri(
+                    texture_descriptor_with_byte_length(
+                        87,
+                        TextureDimension::Texture2D,
+                        TextureExtent::new(2, 2, 1),
+                        bytes.len() as u64,
+                    ),
+                    path_string.clone(),
+                ),
+                ArtifactCacheKey::new("texture-87"),
+            )
+            .with_artifact_path(path_string.clone()),
+        );
+
+        let prepared = crate::texture_preview::prepare_texture_preview(
+            &catalog,
+            Some(asset_id),
+            &crate::texture_preview::TexturePreviewRuntime::default(),
+            TextureViewerSurfaceKind::Texture2D,
+        )
+        .expect("texture preview proof should prepare");
+
+        assert_eq!(
+            prepared.proof.bind_group_identity,
+            "engine_ui_product_surface_bind_group:runenwerk.editor.texture_preview:texture2d.product87.mip0.slice0.all"
+        );
+        assert_eq!(
+            prepared.proof.target_key.label(),
+            "runenwerk.editor.texture_preview:texture2d.product87.mip0.slice0.all"
+        );
+        assert_eq!(
+            prepared.proof.residency_class,
+            "engine.material_ktx2_upload"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn wr028_proof_manifest_rejects_texture_metadata_placeholders() {
+        let manifest = include_str!(
+            "../../../../../docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron"
+        );
+
+        for forbidden in [
+            "descriptor_hash_source",
+            "<dynamic texture preview target>",
+            "manual GPU smoke temp KTX2 artifact",
+            "verified inside viewport_gpu_truth_smoke readback assertions",
+        ] {
+            assert!(
+                !manifest.contains(forbidden),
+                "WR-028 proof manifest still contains placeholder texture proof metadata: {forbidden}"
+            );
+        }
+        assert!(manifest.contains("texture_product_id: 9028"));
+        assert!(manifest.contains("descriptor_hash: \""));
+        assert!(manifest.contains("bind_group_identity: \"engine_ui_product_surface_bind_group:"));
+        assert!(manifest.contains("residency_class: \"engine.material_ktx2_upload\""));
+    }
+
+    #[test]
+    fn wr028_proof_manifest_rejects_temp_artifact_paths() {
+        let manifest = include_str!(
+            "../../../../../docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron"
+        );
+
+        for forbidden in [
+            "AppData/Local/Temp",
+            "std::env::temp_dir",
+            "temp://runenwerk",
+            "runenwerk-wr021-gpu-proof",
+        ] {
+            assert!(
+                !manifest.contains(forbidden),
+                "WR-028 proof manifest must not depend on temp-only proof paths: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn wr028_proof_manifest_links_durable_texture_preview_artifacts() {
+        let manifest = include_str!(
+            "../../../../../docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron"
+        );
+
+        for required in [
+            "artifacts/fixtures/wr028-texture-viewer-2d.ktx2",
+            "artifacts/fixtures/wr028-volume-texture-viewer-3d.ktx2",
+            "artifacts/metadata/wr028-texture2d-proof.ron",
+            "artifacts/metadata/wr028-texture3d-proof.ron",
+            "texture_viewer_provider_product_surface_path: true",
+            "volume_texture_viewer_provider_product_surface_path: true",
+        ] {
+            assert!(
+                manifest.contains(required),
+                "WR-028 proof manifest must link durable texture viewer proof artifact: {required}"
+            );
+        }
+    }
+
+    #[test]
+    fn texture_preview_records_concrete_catalog_metadata() {
+        let manifest = include_str!(
+            "../../../../../docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron"
+        );
+
+        for required in [
+            "texture_product_id: 9028",
+            "texture_product_id: 9029",
+            "artifact_id: 29028",
+            "artifact_id: 29029",
+            "descriptor_hash: \"70726f647563745f69643d343a39303238",
+            "descriptor_hash: \"70726f647563745f69643d343a39303239",
+            "artifact_uri: \"docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/artifacts/fixtures/wr028-texture-viewer-2d.ktx2\"",
+            "artifact_uri: \"docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/artifacts/fixtures/wr028-volume-texture-viewer-3d.ktx2\"",
+            "preview_target_key: \"runenwerk.editor.texture_preview:texture2d.product9028.mip0.slice0.all\"",
+            "preview_target_key: \"runenwerk.editor.texture_preview:texture3d.product9029.mip0.slice0.all\"",
+            "capture_hash: \"blake3:483a40eff929a29193ca839ec96a069cc666764b2065c31a4986285bdec97eab\"",
+            "capture_hash: \"blake3:917eb702a699db47d62821de87e240a75907e8470e8d5547966e983adcfe8dde\"",
+        ] {
+            assert!(
+                manifest.contains(required),
+                "WR-028 proof manifest must record concrete catalog texture metadata: {required}"
+            );
+        }
+    }
+
+    #[test]
+    fn texture_viewer_gpu_proof_rejects_direct_temp_resource_bypass() {
+        let manifest = include_str!(
+            "../../../../../docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron"
+        );
+
+        for forbidden in [
+            "ResolvedMaterialResource",
+            "gpu-truth-texture-70",
+            "gpu-truth-texture-71",
+            "wr021-material-texture-2d.ktx2",
+            "wr021-material-texture-3d.ktx2",
+        ] {
+            assert!(
+                !manifest.contains(forbidden),
+                "WR-028 texture viewer proof must not cite the direct material resource bypass: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn texture_preview_uses_selected_catalog_texture_product() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let unselected_asset_id = asset_id(82);
+        let selected_asset_id = asset_id(84);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [3, 5, 7, 255], [3, 5, 7, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-selected-texture-preview-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                unselected_asset_id,
+                "unselected_texture",
+                "Unselected Texture",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(83),
+                    unselected_asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            79,
+                            TextureDimension::Texture2D,
+                            TextureExtent::new(2, 2, 1),
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("texture-79"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                selected_asset_id,
+                "selected_texture",
+                "Selected Texture",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(85),
+                    selected_asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            80,
+                            TextureDimension::Texture2D,
+                            TextureExtent::new(2, 2, 1),
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("texture-80"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        app.asset_catalog_runtime_mut()
+            .select_asset(Some(selected_asset_id));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(frame_has_product_surface(&frame));
+        assert!(text.contains("preview descriptor: product=80"));
+        assert!(!text.contains("preview descriptor: product=79"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn texture_preview_invalid_selected_asset_does_not_fallback() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let valid_asset_id = asset_id(86);
+        let selected_asset_id = asset_id(88);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [13, 17, 19, 255], [13, 17, 19, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-invalid-selected-texture-preview-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                valid_asset_id,
+                "valid_fallback_texture",
+                "Valid Fallback Texture",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(87),
+                    valid_asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            81,
+                            TextureDimension::Texture2D,
+                            TextureExtent::new(2, 2, 1),
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("texture-81"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                selected_asset_id,
+                "invalid_selected_texture",
+                "Invalid Selected Texture",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(AssetArtifactDescriptor::new(
+                asset_artifact_id(89),
+                selected_asset_id,
+                AssetKind::Texture2D,
+                texture_payload(texture_descriptor(
+                    82,
+                    TextureDimension::Texture2D,
+                    TextureExtent::new(2, 2, 1),
+                )),
+                ArtifactCacheKey::new("texture-82"),
+            ));
+        app.asset_catalog_runtime_mut()
+            .select_asset(Some(selected_asset_id));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("preview descriptor: product=82"));
+        assert!(text.contains("MissingArtifactUri"));
+        assert!(!text.contains("preview descriptor: product=81"));
+        assert!(!frame_has_product_surface(&frame));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn texture_preview_reports_missing_artifact_uri() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(64);
+        let artifact_id = asset_artifact_id(65);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "missing_uri",
+                "Missing URI",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(AssetArtifactDescriptor::new(
+                artifact_id,
+                asset_id,
+                AssetKind::Texture2D,
+                texture_payload(texture_descriptor(
+                    45,
+                    TextureDimension::Texture2D,
+                    TextureExtent::new(2, 2, 1),
+                )),
+                ArtifactCacheKey::new("texture-45"),
+            ));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("MissingArtifactUri"));
+        assert!(!frame_has_product_surface(&frame));
+    }
+
+    #[test]
+    fn texture_preview_reports_invalid_descriptor_hash() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(66);
+        let artifact_id = asset_artifact_id(67);
+        let descriptor =
+            texture_descriptor(46, TextureDimension::Texture2D, TextureExtent::new(2, 2, 1));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "bad_hash",
+                "Bad Hash",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(AssetArtifactDescriptor::new(
+                artifact_id,
+                asset_id,
+                AssetKind::Texture2D,
+                texture_payload_with_hash(
+                    descriptor,
+                    "not-the-descriptor-hash",
+                    Some("mem://bad.ktx2".to_string()),
+                ),
+                ArtifactCacheKey::new("texture-46"),
+            ));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("InvalidDescriptorHash"));
+        assert!(!frame_has_product_surface(&frame));
     }
 
     #[test]
@@ -4081,13 +4964,34 @@ mod tests {
     }
 
     #[test]
-    fn volume_texture_viewer_keeps_gpu_upload_fail_closed() {
+    fn volume_texture_viewer_slice_mip_channel_controls_affect_preview_request() {
         let registry = EditorSurfaceProviderRegistry::runenwerk_default();
         let mut app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
         let theme = ThemeTokens::default();
         let asset_id = asset_id(70);
         let artifact_id = asset_artifact_id(71);
+        let bytes = build_rgba8_ktx2(2, 2, 2, [1, 2, 3, 255], [8, 9, 10, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-volume-texture-viewer-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test volume texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        let descriptor = texture_descriptor_with_byte_length(
+            77,
+            TextureDimension::Texture3DVolume,
+            TextureExtent::new(2, 2, 2),
+            bytes.len() as u64,
+        );
+        app.apply_texture_surface_action(TextureSurfaceAction::SetPreviewSlice {
+            surface: TextureViewerSurfaceKind::VolumeTexture3D,
+            slice_index: 1,
+        });
+        app.apply_texture_surface_action(TextureSurfaceAction::SetPreviewChannel {
+            surface: TextureViewerSurfaceKind::VolumeTexture3D,
+            channel: TexturePreviewChannelSelection::G,
+        });
         app.asset_catalog_runtime_mut()
             .catalog_mut()
             .insert_asset_record(AssetRecord::new(
@@ -4098,17 +5002,16 @@ mod tests {
             ));
         app.asset_catalog_runtime_mut()
             .catalog_mut()
-            .insert_artifact(AssetArtifactDescriptor::new(
-                artifact_id,
-                asset_id,
-                AssetKind::Texture3DVolume,
-                texture_payload(texture_descriptor(
-                    77,
-                    TextureDimension::Texture3DVolume,
-                    TextureExtent::new(64, 64, 64),
-                )),
-                ArtifactCacheKey::new("volume-77"),
-            ));
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    artifact_id,
+                    asset_id,
+                    AssetKind::Texture3DVolume,
+                    texture_payload_with_uri(descriptor, path_string.clone()),
+                    ArtifactCacheKey::new("volume-77"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
         let request = m6_texture_request(ToolSurfaceKind::VolumeTextureViewer);
 
         let frame = registry.resolve_frame(
@@ -4121,8 +5024,196 @@ mod tests {
         assert_eq!(frame.provider_id, Some(VOLUME_TEXTURE_VIEWER_PROVIDER_ID));
         let text = provider_frame_text(&frame);
         assert!(text.contains("preview descriptor: product=77"));
-        assert!(text.contains("GPU upload remains adapter-owned"));
-        assert!(frame.routes.is_empty());
+        assert!(text.contains("selected slice: 1"));
+        assert!(text.contains("selected channel: g"));
+        assert!(text.contains(
+            "preview target: runenwerk.editor.texture_preview:texture3d.product77.mip0.slice1.g"
+        ));
+        assert!(frame_has_product_surface(&frame));
+        assert!(!frame.routes.is_empty());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn volume_texture_viewer_slice_changes_preview_request() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(92);
+        let bytes = build_rgba8_ktx2(2, 2, 2, [1, 2, 3, 255], [8, 9, 10, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-volume-slice-preview-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test volume texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.apply_texture_surface_action(TextureSurfaceAction::SetPreviewSlice {
+            surface: TextureViewerSurfaceKind::VolumeTexture3D,
+            slice_index: 1,
+        });
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "volume_slice",
+                "Volume Slice",
+                AssetKind::Texture3DVolume,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(93),
+                    asset_id,
+                    AssetKind::Texture3DVolume,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            83,
+                            TextureDimension::Texture3DVolume,
+                            TextureExtent::new(2, 2, 2),
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("volume-83"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::VolumeTextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("selected slice: 1"));
+        assert!(text.contains("texture3d.product83.mip0.slice1.all"));
+        assert!(frame_has_product_surface(&frame));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn volume_texture_viewer_channel_changes_preview_request() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(94);
+        let bytes = build_rgba8_ktx2(2, 2, 2, [1, 2, 3, 255], [8, 9, 10, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-volume-channel-preview-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test volume texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.apply_texture_surface_action(TextureSurfaceAction::SetPreviewChannel {
+            surface: TextureViewerSurfaceKind::VolumeTexture3D,
+            channel: TexturePreviewChannelSelection::B,
+        });
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "volume_channel",
+                "Volume Channel",
+                AssetKind::Texture3DVolume,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(95),
+                    asset_id,
+                    AssetKind::Texture3DVolume,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            84,
+                            TextureDimension::Texture3DVolume,
+                            TextureExtent::new(2, 2, 2),
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("volume-84"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::VolumeTextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("selected channel: b"));
+        assert!(text.contains("texture3d.product84.mip0.slice0.b"));
+        assert!(frame_has_product_surface(&frame));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn volume_texture_viewer_mip_request_is_diagnosed_when_unresident() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let asset_id = asset_id(96);
+        let bytes = build_rgba8_ktx2(2, 2, 2, [1, 2, 3, 255], [8, 9, 10, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-volume-mip-preview-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test volume texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.apply_texture_surface_action(TextureSurfaceAction::SetPreviewMip {
+            surface: TextureViewerSurfaceKind::VolumeTexture3D,
+            mip_level: 1,
+        });
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                asset_id,
+                "volume_mip",
+                "Volume Mip",
+                AssetKind::Texture3DVolume,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(97),
+                    asset_id,
+                    AssetKind::Texture3DVolume,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_mip_count_and_byte_length(
+                            85,
+                            TextureDimension::Texture3DVolume,
+                            TextureExtent::new(2, 2, 2),
+                            2,
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("volume-85"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::VolumeTextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("preview descriptor: product=85 mip=1"));
+        assert!(text.contains("FailedUpload"));
+        assert!(text.contains("selected mip 1 is unsupported"));
+        assert!(!frame_has_product_surface(&frame));
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

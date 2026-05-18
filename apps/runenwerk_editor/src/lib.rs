@@ -8,3 +8,4 @@ pub mod material_lab;
 pub mod persistence;
 pub mod runtime;
 pub mod shell;
+pub mod texture_preview;

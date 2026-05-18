@@ -10,6 +10,7 @@ mod image;
 mod label;
 mod numeric_input;
 mod panel;
+mod product_surface;
 mod scroll;
 mod search_field;
 mod select;
@@ -30,6 +31,7 @@ pub use image::image;
 pub use label::label;
 pub use numeric_input::{NumericInputConfig, numeric_input};
 pub use panel::panel;
+pub use product_surface::product_surface;
 pub use scroll::{hscroll, scroll, vscroll, xy_scroll};
 pub use search_field::search_field;
 pub use select::select;
@@ -151,6 +153,17 @@ mod tests {
             )
             .kind,
             UiNodeKind::Image(_)
+        ));
+        assert!(matches!(
+            product_surface(
+                WidgetId(11),
+                ui_render_data::ProductSurfaceTextureBindingSource::dynamic_texture(
+                    "test", "target"
+                ),
+                ui_math::UiSize::new(64.0, 64.0),
+            )
+            .kind,
+            UiNodeKind::ProductSurface(_)
         ));
     }
 }

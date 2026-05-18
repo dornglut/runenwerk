@@ -15,7 +15,7 @@ use crate::{
     InspectorSurfaceAction, MaterialSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction,
     PanelInstanceId, PanelKind, ProviderFamilyId, RoutedShellAction, SdfOperationDomainMutation,
     SdfOperationSessionMutation, SdfOperationSurfaceAction, StructuralCommandTarget, TabStackId,
-    ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceRoute,
+    TextureSurfaceAction, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceRoute,
     ToolSurfaceStableKey, ToolbarViewModel, UiNode, ViewportDomainMutation,
     ViewportSessionMutation, ViewportSurfaceAction, WidgetId, WorkspaceSurfaceIdentityError,
 };
@@ -222,6 +222,7 @@ pub enum SurfaceLocalAction {
     Viewport(ViewportSurfaceAction),
     EditorDefinition(EditorDefinitionSurfaceAction),
     SdfOperation(SdfOperationSurfaceAction),
+    Texture(TextureSurfaceAction),
 }
 
 #[derive(Debug, Clone, PartialEq)]

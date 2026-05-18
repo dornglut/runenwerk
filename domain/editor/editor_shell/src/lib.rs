@@ -45,6 +45,7 @@ pub use surfaces::{
     MaterialTextureResourceOptionViewModel, MaterialTextureResourcePickerViewModel,
     MaterialUndoRedoViewModel, OutlinerDomainMutation, OutlinerSurfaceAction,
     SdfOperationDomainMutation, SdfOperationSessionMutation, SdfOperationSurfaceAction,
+    TexturePreviewChannelSelection, TextureSurfaceAction, TextureViewerSurfaceKind,
     ViewportDomainMutation, ViewportSessionMutation, ViewportSurfaceAction,
 };
 pub use tool_suite::{

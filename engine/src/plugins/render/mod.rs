@@ -12,6 +12,7 @@ pub mod renderer;
 pub mod residency;
 pub mod resource;
 pub mod shader;
+mod texture_upload;
 
 mod plugin;
 pub mod runtime;
