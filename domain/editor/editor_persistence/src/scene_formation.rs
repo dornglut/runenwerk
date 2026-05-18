@@ -1,11 +1,14 @@
 //! File: domain/editor/editor_persistence/src/scene_formation.rs
 //! Purpose: Formed-reality contracts for runtime-ready scene persistence payloads.
 
-use crate::{NormalizedSceneFileV2, SceneEntityRecordV2, SceneFileV2};
+use crate::{
+    NormalizedSceneFileV2, SceneEntityRecordV2, SceneFileV2, SceneMaterialAssignmentsRecord,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FormedScenePackageV2 {
     entities: Vec<SceneEntityRecordV2>,
+    material_assignments: SceneMaterialAssignmentsRecord,
 }
 
 impl FormedScenePackageV2 {
@@ -13,14 +16,20 @@ impl FormedScenePackageV2 {
         &self.entities
     }
 
+    pub fn material_assignments(&self) -> &SceneMaterialAssignmentsRecord {
+        &self.material_assignments
+    }
+
     pub fn into_scene_file(self) -> SceneFileV2 {
-        SceneFileV2::new(self.entities)
+        SceneFileV2::new(self.entities).with_material_assignments(self.material_assignments)
     }
 }
 
 pub fn form_scene_for_runtime(normalized: NormalizedSceneFileV2) -> FormedScenePackageV2 {
+    let material_assignments = normalized.material_assignments().clone();
     FormedScenePackageV2 {
         entities: normalized.into_entities(),
+        material_assignments,
     }
 }
 
@@ -40,6 +49,7 @@ mod tests {
                 SceneTransformRecord::default(),
                 ScenePrimitiveRecord::default(),
             )],
+            material_assignments: Default::default(),
         })
         .expect("normalization should succeed");
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use editor_core::{ComponentTypeId, EntityId, RatifiedChange, ResourceTypeId, TransactionId};
 use editor_inspector::{InspectorEditValue, InspectorPath};
-use editor_scene::SceneEntitySnapshot;
+use editor_scene::{SceneEntitySnapshot, SceneMaterialAssignmentState};
 
 #[derive(Debug, Clone)]
 pub struct SceneFieldSnapshot {
@@ -55,6 +55,7 @@ impl SceneResourceSnapshotRecord {
 #[derive(Debug, Clone, Default)]
 pub struct SceneRuntimeSnapshot {
     pub entities: Vec<SceneEntitySnapshot>,
+    pub material_assignments: SceneMaterialAssignmentState,
     pub components: Vec<SceneComponentSnapshotRecord>,
     pub resources: Vec<SceneResourceSnapshotRecord>,
 }

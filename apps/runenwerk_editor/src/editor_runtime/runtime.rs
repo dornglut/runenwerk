@@ -5,7 +5,10 @@ use editor_core::{
     EditorSession, EntityId, ResourceTypeId,
 };
 use editor_inspector::{InspectTarget, InspectorEditError, InspectorEditValue, InspectorPath};
-use editor_scene::{SceneComponentDescriptor, SceneRuntime};
+use editor_scene::{
+    SceneComponentDescriptor, SceneMaterialAssignmentState, SceneMaterialSlotId, SceneRuntime,
+    SdfPrimitiveSourceId,
+};
 
 use crate::editor_runtime::{
     AuthoredSceneReality, DocumentTabRuntimeRecord, DocumentTabRuntimeState,
@@ -20,6 +23,7 @@ use crate::editor_runtime::{
 
 struct SceneRealityStore {
     authored: SceneDocumentState,
+    material_assignments: SceneMaterialAssignmentState,
     instantiated: ecs::World,
     identities: EditorRuntimeIdRegistry,
 }
@@ -28,6 +32,7 @@ impl SceneRealityStore {
     fn new() -> Self {
         Self {
             authored: SceneDocumentState::new(),
+            material_assignments: SceneMaterialAssignmentState::default(),
             instantiated: ecs::World::new(),
             identities: EditorRuntimeIdRegistry::new(),
         }
@@ -249,6 +254,37 @@ impl RunenwerkEditorRuntime {
         &self.scene_realities.authored
     }
 
+    pub fn scene_material_assignments(&self) -> &SceneMaterialAssignmentState {
+        &self.scene_realities.material_assignments
+    }
+
+    pub(crate) fn replace_scene_material_assignments(
+        &mut self,
+        assignments: SceneMaterialAssignmentState,
+    ) {
+        self.scene_realities.material_assignments = assignments;
+        self.advance_scene_reality_version();
+    }
+
+    pub fn assign_sdf_primitive_material_slot(
+        &mut self,
+        entity_id: EntityId,
+        slot_id: SceneMaterialSlotId,
+    ) -> Result<(), String> {
+        self.scene_realities
+            .material_assignments
+            .assign_sdf_primitive_material_slot(SdfPrimitiveSourceId::new(entity_id), slot_id)?;
+        self.advance_scene_reality_version();
+        Ok(())
+    }
+
+    pub fn material_slot_index_for_entity(&self, entity_id: EntityId) -> u32 {
+        self.scene_realities
+            .material_assignments
+            .resolve_material_slot_for_sdf_primitive(SdfPrimitiveSourceId::new(entity_id))
+            .material_table_index
+    }
+
     pub fn ids(&self) -> &EditorRuntimeIdRegistry {
         &self.scene_realities.identities
     }
@@ -271,6 +307,7 @@ impl RunenwerkEditorRuntime {
         }
 
         self.scene_realities.authored.clear_entities();
+        self.scene_realities.material_assignments = SceneMaterialAssignmentState::default();
         self.scene_realities.identities.clear_scene_entities();
     }
 
@@ -282,6 +319,7 @@ impl RunenwerkEditorRuntime {
                 .entity_ids()
                 .filter_map(|entity| self.scene_realities.authored.entity_snapshot(entity))
                 .collect(),
+            material_assignments: self.scene_realities.material_assignments.clone(),
             ..SceneRuntimeSnapshot::default()
         };
 
@@ -450,6 +488,7 @@ impl RunenwerkEditorRuntime {
         self.scene_realities
             .identities
             .clear_removed_component_cache();
+        self.scene_realities.material_assignments = snapshot.material_assignments.clone();
 
         Ok(())
     }
@@ -464,6 +503,7 @@ impl RunenwerkEditorRuntime {
             DocumentKind::Scene,
             true,
         ));
+        self.scene_realities.material_assignments = SceneMaterialAssignmentState::default();
         self.retention_store = SceneRetentionStore::new();
         self.ratified_changes = RatifiedChangeLog::new();
         self.session_changes = editor_core::SessionChangeLog::new();

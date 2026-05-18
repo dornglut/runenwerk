@@ -4,8 +4,6 @@ use asset::{
     ArtifactCacheKey, ArtifactPayloadKind, ArtifactValidity, AssetArtifactId, AssetCatalog,
     AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetId, AssetKind, AssetSourceId,
 };
-use editor_core::EntityId;
-use editor_scene::{SceneMaterialPalette, SceneMaterialSlotId};
 use editor_shell::{
     MaterialDiagnosticRowViewModel, MaterialDiagnosticSeverity, MaterialGraphCanvasViewModel,
     MaterialGraphEdgeViewModel, MaterialGraphEditorViewModel, MaterialGraphGroupViewModel,
@@ -121,8 +119,6 @@ pub struct MaterialLabRuntime {
     diagnostics: Vec<AssetDiagnosticRecord>,
     publication_journal: Vec<EditorMaterialPreviewPublicationJournalEntry>,
     last_workflow_status: Option<String>,
-    scene_material_palette: SceneMaterialPalette,
-    primitive_material_slots: BTreeMap<EntityId, SceneMaterialSlotId>,
 }
 
 impl MaterialLabRuntime {
@@ -304,45 +300,6 @@ impl MaterialLabRuntime {
 
     pub fn record_publication(&mut self, entry: EditorMaterialPreviewPublicationJournalEntry) {
         self.publication_journal.push(entry);
-    }
-
-
-    pub fn scene_material_palette(&self) -> &SceneMaterialPalette {
-        &self.scene_material_palette
-    }
-
-    pub fn assign_primitive_material_slot(
-        &mut self,
-        entity_id: EntityId,
-        slot_id: SceneMaterialSlotId,
-    ) -> Result<(), String> {
-        if !self.scene_material_palette.contains_slot(slot_id) {
-            return Err(format!(
-                "scene material assignment references unknown slot {}",
-                slot_id.raw()
-            ));
-        }
-        self.primitive_material_slots.insert(entity_id, slot_id);
-        Ok(())
-    }
-
-    pub fn material_slot_index_for_entity(&self, entity_id: EntityId) -> u32 {
-        let slot_id = self
-            .primitive_material_slots
-            .get(&entity_id)
-            .copied()
-            .unwrap_or_else(|| self.scene_material_palette.default_slot().slot_id);
-        self.scene_material_palette
-            .slots
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)
-            .unwrap_or_else(|| {
-                self.scene_material_palette
-                    .slots
-                    .iter()
-                    .position(|slot| slot.is_default)
-                    .unwrap_or(0)
-            }) as u32
     }
 
     pub fn graph_canvas_view_model(

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use editor_scene::SceneMaterialAssignmentState;
 use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
@@ -11,7 +12,10 @@ use engine::plugins::render::{
 };
 use engine::runtime::{Res, ResMut};
 
-use crate::material_lab::{EditorMaterialPreviewProduct, prepared_material_resource_for_preview};
+use crate::material_lab::{
+    EditorMaterialPreviewProduct, prepared_material_resource_for_preview,
+    prepared_material_resource_for_preview_with_scene_materials,
+};
 use crate::runtime::app::{EDITOR_MATERIAL_PREVIEW_FLOW_ID, EDITOR_MATERIAL_PREVIEW_SHADER_ID};
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
@@ -25,8 +29,9 @@ pub fn prepare_material_preview_render_resource_system(
     mut shader_registry: ResMut<ShaderRegistryResource>,
 ) {
     let preview = host.app.material_lab_runtime().active_preview().cloned();
-    if let Some(diagnostic) = prepare_material_preview_render_resource(
+    if let Some(diagnostic) = prepare_material_preview_render_resource_with_scene_materials(
         preview.as_ref(),
+        Some(host.app.runtime().scene_material_assignments()),
         &mut material_feature,
         &mut shader_registry,
     ) {
@@ -36,8 +41,23 @@ pub fn prepare_material_preview_render_resource_system(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn prepare_material_preview_render_resource(
     preview: Option<&EditorMaterialPreviewProduct>,
+    material_feature: &mut PreparedMaterialFeatureResource,
+    shader_registry: &mut ShaderRegistryResource,
+) -> Option<asset::AssetDiagnosticRecord> {
+    prepare_material_preview_render_resource_with_scene_materials(
+        preview,
+        None,
+        material_feature,
+        shader_registry,
+    )
+}
+
+pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
+    preview: Option<&EditorMaterialPreviewProduct>,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
     material_feature: &mut PreparedMaterialFeatureResource,
     shader_registry: &mut ShaderRegistryResource,
 ) -> Option<asset::AssetDiagnosticRecord> {
@@ -53,7 +73,10 @@ pub(crate) fn prepare_material_preview_render_resource(
         if shader_registry.is_loaded(EDITOR_MATERIAL_PREVIEW_SHADER_ID)
             && shader_registry.is_loaded(preview.scene_shader_path.as_str())
         {
-            match prepared_material_resource_for_preview(Some(preview)) {
+            match prepared_material_resource_for_preview_with_scene_materials(
+                Some(preview),
+                scene_material_assignments,
+            ) {
                 Ok(resource) => {
                     *material_feature = resource;
                 }

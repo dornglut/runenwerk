@@ -775,6 +775,37 @@ mod tests {
     }
 
     #[test]
+    fn material_graph_layout_round_trips_v2() {
+        let document = document(MaterialOutputTarget::RenderMaterial).with_editor_state(
+            MaterialGraphEditorState {
+                node_layouts: vec![
+                    MaterialGraphNodeLayout::new(NodeId::new(1), 16, -24),
+                    MaterialGraphNodeLayout::new(NodeId::new(2), 264, 48),
+                ],
+                viewport: MaterialGraphViewportState {
+                    pan_x: -8,
+                    pan_y: 12,
+                    zoom_milli: 1500,
+                },
+                ..MaterialGraphEditorState::default()
+            },
+        );
+
+        let restored = MaterialGraphSourceFileV2::from_document(&document)
+            .into_document()
+            .expect("v2 source should decode");
+
+        assert_eq!(
+            restored.editor_state.node_layouts,
+            document.editor_state.node_layouts
+        );
+        assert_eq!(
+            restored.editor_state.viewport,
+            document.editor_state.viewport
+        );
+    }
+
+    #[test]
     fn material_graph_source_file_v2_rejects_unknown_version() {
         let mut source =
             MaterialGraphSourceFileV2::from_document(&document(MaterialOutputTarget::PbrPreview));

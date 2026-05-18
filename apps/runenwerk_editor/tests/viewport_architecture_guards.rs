@@ -1408,13 +1408,18 @@ fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
     );
 
     let material_state = read_workspace_source("apps/runenwerk_editor/src/material_lab/state.rs");
+    let editor_runtime =
+        read_workspace_source("apps/runenwerk_editor/src/editor_runtime/runtime.rs");
     let frame_submit =
         read_workspace_source("apps/runenwerk_editor/src/runtime/systems/frame_submit.rs");
     assert!(
-        material_state.contains("SceneMaterialPalette")
-            && material_state.contains("primitive_material_slots")
+        !material_state.contains("SceneMaterialAssignmentState")
+            && !material_state.contains("primitive_material_slots:")
+            && editor_runtime.contains("SceneMaterialAssignmentState")
+            && editor_runtime.contains("scene_material_assignments")
+            && frame_submit.contains("runtime.material_slot_index_for_entity(entity)")
             && frame_submit.contains("with_material_slot_index"),
-        "SceneMaterialPalette must drive viewport scene packet material slot indices",
+        "editor_scene SceneMaterialAssignmentState must drive viewport scene packet material slot indices, not a MaterialLabRuntime-owned primitive slot map",
     );
 }
 

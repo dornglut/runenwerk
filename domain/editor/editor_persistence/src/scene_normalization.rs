@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{SCENE_FILE_VERSION_V2, SceneEntityRecordV2, SceneFileV2};
+use crate::{
+    SCENE_FILE_VERSION_V2, SceneEntityRecordV2, SceneFileV2, SceneMaterialAssignmentsRecord,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SceneNormalizationError {
@@ -11,6 +13,12 @@ pub enum SceneNormalizationError {
     DuplicateEntityId(u64),
     MissingParent { entity_id: u64, parent_id: u64 },
     CyclicParentReference { entity_id: u64 },
+    MissingDefaultMaterialSlot,
+    DuplicateMaterialSlotId(u64),
+    DuplicateMaterialPaletteEntryId(u64),
+    DuplicateSdfMaterialAssignment(u64),
+    MaterialAssignmentReferencesMissingEntity { entity_id: u64 },
+    MaterialAssignmentReferencesMissingSlot { entity_id: u64, slot_id: u64 },
 }
 
 impl SceneNormalizationError {
@@ -22,6 +30,24 @@ impl SceneNormalizationError {
             Self::CyclicParentReference { .. } => {
                 "scene normalization found cyclic parent relationship"
             }
+            Self::MissingDefaultMaterialSlot => {
+                "scene normalization found missing default material slot"
+            }
+            Self::DuplicateMaterialSlotId(_) => {
+                "scene normalization found duplicate material slot ids"
+            }
+            Self::DuplicateMaterialPaletteEntryId(_) => {
+                "scene normalization found duplicate material palette entry ids"
+            }
+            Self::DuplicateSdfMaterialAssignment(_) => {
+                "scene normalization found duplicate SDF material assignments"
+            }
+            Self::MaterialAssignmentReferencesMissingEntity { .. } => {
+                "scene normalization found material assignment for missing SDF primitive entity"
+            }
+            Self::MaterialAssignmentReferencesMissingSlot { .. } => {
+                "scene normalization found material assignment for missing material slot"
+            }
         }
     }
 }
@@ -29,6 +55,7 @@ impl SceneNormalizationError {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NormalizedSceneFileV2 {
     entities: Vec<SceneEntityRecordV2>,
+    material_assignments: SceneMaterialAssignmentsRecord,
 }
 
 impl NormalizedSceneFileV2 {
@@ -36,12 +63,16 @@ impl NormalizedSceneFileV2 {
         &self.entities
     }
 
+    pub fn material_assignments(&self) -> &SceneMaterialAssignmentsRecord {
+        &self.material_assignments
+    }
+
     pub fn into_entities(self) -> Vec<SceneEntityRecordV2> {
         self.entities
     }
 
     pub fn into_scene_file(self) -> SceneFileV2 {
-        SceneFileV2::new(self.entities)
+        SceneFileV2::new(self.entities).with_material_assignments(self.material_assignments)
     }
 }
 
@@ -85,8 +116,12 @@ pub fn normalize_scene_file(
         }
     }
 
+    let material_assignments =
+        normalize_material_assignments(scene_file.material_assignments, &parent_by_entity)?;
+
     Ok(NormalizedSceneFileV2 {
         entities: scene_file.entities,
+        material_assignments,
     })
 }
 
@@ -102,6 +137,61 @@ fn has_parent_cycle(entity_id: u64, parent_by_entity: &BTreeMap<u64, Option<u64>
     }
 
     false
+}
+
+fn normalize_material_assignments(
+    mut material_assignments: SceneMaterialAssignmentsRecord,
+    parent_by_entity: &BTreeMap<u64, Option<u64>>,
+) -> Result<SceneMaterialAssignmentsRecord, SceneNormalizationError> {
+    material_assignments.sort_stable();
+
+    let mut default_count = 0usize;
+    let mut slot_ids = BTreeSet::new();
+    let mut palette_entry_ids = BTreeSet::new();
+    for slot in &material_assignments.palette_slots {
+        if slot.is_default {
+            default_count += 1;
+        }
+        if !slot_ids.insert(slot.slot_id) {
+            return Err(SceneNormalizationError::DuplicateMaterialSlotId(
+                slot.slot_id,
+            ));
+        }
+        if !palette_entry_ids.insert(slot.palette_entry_id) {
+            return Err(SceneNormalizationError::DuplicateMaterialPaletteEntryId(
+                slot.palette_entry_id,
+            ));
+        }
+    }
+    if default_count != 1 {
+        return Err(SceneNormalizationError::MissingDefaultMaterialSlot);
+    }
+
+    let mut assignments = BTreeSet::new();
+    for assignment in &material_assignments.sdf_primitive_assignments {
+        if !assignments.insert(assignment.sdf_primitive_entity_id) {
+            return Err(SceneNormalizationError::DuplicateSdfMaterialAssignment(
+                assignment.sdf_primitive_entity_id,
+            ));
+        }
+        if !parent_by_entity.contains_key(&assignment.sdf_primitive_entity_id) {
+            return Err(
+                SceneNormalizationError::MaterialAssignmentReferencesMissingEntity {
+                    entity_id: assignment.sdf_primitive_entity_id,
+                },
+            );
+        }
+        if !slot_ids.contains(&assignment.slot_id) {
+            return Err(
+                SceneNormalizationError::MaterialAssignmentReferencesMissingSlot {
+                    entity_id: assignment.sdf_primitive_entity_id,
+                    slot_id: assignment.slot_id,
+                },
+            );
+        }
+    }
+
+    Ok(material_assignments)
 }
 
 #[cfg(test)]
@@ -129,6 +219,7 @@ mod tests {
                     ScenePrimitiveRecord::default(),
                 ),
             ],
+            material_assignments: Default::default(),
         };
 
         let normalized = normalize_scene_file(scene).expect("normalization should succeed");
@@ -156,6 +247,7 @@ mod tests {
                     ScenePrimitiveRecord::default(),
                 ),
             ],
+            material_assignments: Default::default(),
         };
 
         let error = normalize_scene_file(scene).expect_err("normalization should fail");
@@ -176,6 +268,7 @@ mod tests {
                 SceneTransformRecord::default(),
                 ScenePrimitiveRecord::default(),
             )],
+            material_assignments: Default::default(),
         };
 
         let error = normalize_scene_file(scene).expect_err("normalization should fail");
@@ -208,12 +301,89 @@ mod tests {
                     ScenePrimitiveRecord::default(),
                 ),
             ],
+            material_assignments: Default::default(),
         };
 
         let error = normalize_scene_file(scene).expect_err("normalization should fail");
         assert!(matches!(
             error,
             SceneNormalizationError::CyclicParentReference { .. }
+        ));
+    }
+
+    #[test]
+    fn normalize_scene_file_validates_and_sorts_sdf_material_assignments() {
+        let scene = SceneFileV2 {
+            version: SCENE_FILE_VERSION_V2,
+            entities: vec![
+                SceneEntityRecordV2::new(
+                    2,
+                    "B",
+                    None,
+                    SceneTransformRecord::default(),
+                    ScenePrimitiveRecord::default(),
+                ),
+                SceneEntityRecordV2::new(
+                    1,
+                    "A",
+                    None,
+                    SceneTransformRecord::default(),
+                    ScenePrimitiveRecord::default(),
+                ),
+            ],
+            material_assignments: SceneMaterialAssignmentsRecord::new(
+                [
+                    crate::SceneMaterialSlotRecord::default_generated(),
+                    crate::SceneMaterialSlotRecord {
+                        slot_id: 2,
+                        palette_entry_id: 2,
+                        display_name: "Red".to_string(),
+                        source_ref: None,
+                        material_asset_id: None,
+                        is_default: false,
+                    },
+                ],
+                [
+                    crate::SdfPrimitiveMaterialSlotAssignmentRecord::new(2, 2),
+                    crate::SdfPrimitiveMaterialSlotAssignmentRecord::new(1, 1),
+                ],
+            ),
+        };
+
+        let normalized = normalize_scene_file(scene).expect("normalization should succeed");
+
+        assert_eq!(
+            normalized
+                .material_assignments()
+                .sdf_primitive_assignments
+                .iter()
+                .map(|assignment| assignment.sdf_primitive_entity_id)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+    }
+
+    #[test]
+    fn normalize_scene_file_rejects_sdf_material_assignment_to_missing_entity() {
+        let scene = SceneFileV2 {
+            version: SCENE_FILE_VERSION_V2,
+            entities: vec![SceneEntityRecordV2::new(
+                1,
+                "A",
+                None,
+                SceneTransformRecord::default(),
+                ScenePrimitiveRecord::default(),
+            )],
+            material_assignments: SceneMaterialAssignmentsRecord::new(
+                [crate::SceneMaterialSlotRecord::default_generated()],
+                [crate::SdfPrimitiveMaterialSlotAssignmentRecord::new(99, 1)],
+            ),
+        };
+
+        let error = normalize_scene_file(scene).expect_err("normalization should fail");
+        assert!(matches!(
+            error,
+            SceneNormalizationError::MaterialAssignmentReferencesMissingEntity { entity_id: 99 }
         ));
     }
 }

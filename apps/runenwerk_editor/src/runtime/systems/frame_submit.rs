@@ -506,10 +506,7 @@ fn populate_viewport_render_state(
     let packet = extract_viewport_scene_render_packet_with_material_slots(
         runtime,
         app.viewport_tool_state().hovered_entity,
-        |entity| {
-            app.material_lab_runtime()
-                .material_slot_index_for_entity(entity)
-        },
+        |entity| runtime.material_slot_index_for_entity(entity),
     );
     if packet.is_empty() {
         render_state.clear_primitive();
@@ -575,8 +572,10 @@ mod tests {
     use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, ViewportRenderStateCommand};
     use editor_core::{ChangeOrigin, CommandId, EntityId, SelectionTarget};
     use editor_scene::{
-        SceneCommandIntent, SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent,
-        SdfPrimitiveKind, SdfPrimitiveSpec,
+        SceneCommandIntent, SceneMaterialAssignmentState, SceneMaterialPalette, SceneMaterialSlot,
+        SceneMaterialSlotId, SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent,
+        SdfPrimitiveKind, SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
+        SdfPrimitiveSpec,
     };
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
     use editor_viewport::ViewportId;
@@ -768,6 +767,123 @@ mod tests {
         assert_eq!(
             primitives[1].primitive_kind,
             crate::editor_runtime::EditorPrimitiveKind::Sphere
+        );
+    }
+
+    #[test]
+    fn sdf_assignment_identity_survives_viewport_extraction() {
+        let mut runtime = crate::editor_runtime::RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let left = create_sdf_primitive(
+            &mut runtime,
+            20,
+            "Left",
+            SceneVec3::new(-1.0, 0.0, 0.0),
+            SdfPrimitiveKind::Box,
+        );
+        let right = create_sdf_primitive(
+            &mut runtime,
+            21,
+            "Right",
+            SceneVec3::new(1.0, 0.0, 0.0),
+            SdfPrimitiveKind::Sphere,
+        );
+        let slot_two = SceneMaterialSlotId::new(2);
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(slot_two, "Right Slot"),
+        ])
+        .expect("valid palette");
+        let assignments = SceneMaterialAssignmentState::new(
+            palette,
+            [SdfPrimitiveMaterialSlotAssignment::new(
+                SdfPrimitiveSourceId::new(right),
+                slot_two,
+            )],
+        )
+        .expect("valid material assignment state");
+        runtime.replace_scene_material_assignments(assignments);
+
+        let scene_file = crate::persistence::scene_file_from_runtime(&runtime);
+        let mut restored = crate::editor_runtime::RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut restored);
+        crate::persistence::apply_scene_file_to_runtime(&mut restored, &scene_file)
+            .expect("scene file reload should preserve SDF material assignments");
+
+        let packet =
+            extract_viewport_scene_render_packet_with_material_slots(&restored, None, |entity| {
+                restored.material_slot_index_for_entity(entity)
+            });
+        let primitives = packet.primitives();
+
+        let left_packet = primitives
+            .iter()
+            .find(|primitive| primitive.entity_id == left)
+            .expect("left primitive should survive extraction");
+        let right_packet = primitives
+            .iter()
+            .find(|primitive| primitive.entity_id == right)
+            .expect("right primitive should survive extraction");
+        assert_eq!(left_packet.material_slot_index, 0);
+        assert_eq!(right_packet.material_slot_index, 1);
+    }
+
+    #[test]
+    fn sdf_two_primitives_render_different_material_slots() {
+        let mut runtime = crate::editor_runtime::RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let first = create_sdf_primitive(
+            &mut runtime,
+            30,
+            "First",
+            SceneVec3::new(-0.75, 0.0, 0.0),
+            SdfPrimitiveKind::Box,
+        );
+        let second = create_sdf_primitive(
+            &mut runtime,
+            31,
+            "Second",
+            SceneVec3::new(0.75, 0.0, 0.0),
+            SdfPrimitiveKind::Sphere,
+        );
+        let slot_two = SceneMaterialSlotId::new(2);
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(slot_two, "Second Slot"),
+        ])
+        .expect("valid palette");
+        let assignments = SceneMaterialAssignmentState::new(
+            palette,
+            [SdfPrimitiveMaterialSlotAssignment::new(
+                SdfPrimitiveSourceId::new(second),
+                slot_two,
+            )],
+        )
+        .expect("valid material assignment state");
+        runtime.replace_scene_material_assignments(assignments);
+
+        let packet =
+            extract_viewport_scene_render_packet_with_material_slots(&runtime, None, |entity| {
+                runtime.material_slot_index_for_entity(entity)
+            });
+        let first_slot = packet
+            .primitives()
+            .iter()
+            .find(|primitive| primitive.entity_id == first)
+            .expect("first primitive should render")
+            .material_slot_index;
+        let second_slot = packet
+            .primitives()
+            .iter()
+            .find(|primitive| primitive.entity_id == second)
+            .expect("second primitive should render")
+            .material_slot_index;
+
+        assert_eq!(first_slot, 0);
+        assert_eq!(second_slot, 1);
+        assert_ne!(
+            first_slot, second_slot,
+            "two SDF primitives must reach the renderer with distinct material table slots"
         );
     }
 }

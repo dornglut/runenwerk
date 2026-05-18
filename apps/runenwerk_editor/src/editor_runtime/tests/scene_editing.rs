@@ -4,8 +4,8 @@ use editor_core::{
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_scene::{
-    SceneCommandIntent, SceneEditorCommand, SdfBooleanIntent, SdfPrimitiveKind, SdfPrimitiveSpec,
-    scene_intent_to_command,
+    DEFAULT_SCENE_MATERIAL_SLOT_ID, SceneCommandIntent, SceneEditorCommand, SdfBooleanIntent,
+    SdfPrimitiveKind, SdfPrimitiveSourceId, SdfPrimitiveSpec, scene_intent_to_command,
 };
 
 use crate::editor_runtime::{
@@ -140,6 +140,25 @@ fn scene_editing_vertical_slice_create_add_edit_remove_and_undo_remove() {
     assert_eq!(restored_component.label, "Hero");
     assert_eq!(restored_component.value.x, 3.5);
     assert_eq!(restored_component.value.y, 0.0);
+}
+
+#[test]
+fn material_assignment_mutates_editor_scene_not_material_lab_runtime() {
+    let mut runtime = RunenwerkEditorRuntime::new();
+    let primitive = EntityId(42);
+
+    runtime
+        .assign_sdf_primitive_material_slot(primitive, DEFAULT_SCENE_MATERIAL_SLOT_ID)
+        .expect("default material slot assignment should succeed");
+
+    let assignment = runtime
+        .scene_material_assignments()
+        .assignments()
+        .find(|assignment| assignment.primitive == SdfPrimitiveSourceId::new(primitive))
+        .expect("assignment should live in editor runtime's editor_scene assignment state");
+
+    assert_eq!(assignment.slot_id, DEFAULT_SCENE_MATERIAL_SLOT_ID);
+    assert_eq!(runtime.material_slot_index_for_entity(primitive), 0);
 }
 
 #[test]

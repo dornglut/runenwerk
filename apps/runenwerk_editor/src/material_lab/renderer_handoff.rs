@@ -1,4 +1,5 @@
 use asset::{AssetDiagnosticCode, AssetDiagnosticRecord};
+use editor_scene::{SceneMaterialAssignmentState, SceneMaterialSlot};
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedMaterialBindingSlot,
     PreparedMaterialBindingTable, PreparedMaterialFeatureContribution,
@@ -14,6 +15,13 @@ use crate::material_lab::{EditorMaterialPreviewProduct, MaterialRendererParamete
 pub fn prepared_material_contribution_for_preview(
     preview: &EditorMaterialPreviewProduct,
 ) -> PreparedMaterialFeatureContribution {
+    prepared_material_contribution_for_preview_with_scene_materials(preview, None)
+}
+
+pub fn prepared_material_contribution_for_preview_with_scene_materials(
+    preview: &EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+) -> PreparedMaterialFeatureContribution {
     PreparedMaterialFeatureContribution {
         instances: vec![PreparedMaterialInstanceInput {
             material_instance_id: format!("material.product.{}", preview.product.product_id.raw()),
@@ -21,38 +29,99 @@ pub fn prepared_material_contribution_for_preview(
             parameter_payload: material_parameter_payload(preview),
             texture_bindings: prepared_texture_bindings(preview),
         }],
-        binding_table: PreparedMaterialBindingTable::fixed_capacity([
-            PreparedMaterialBindingSlot::new(
-                0,
-                format!("material.product.{}", preview.product.product_id.raw()),
-                preview.artifact_id.raw().to_string(),
-                preview.shader_artifact_id.raw().to_string(),
-                preview.artifact_cache_key.as_str().to_string(),
-                preview.shader_cache_key.as_str().to_string(),
-            ),
-        ])
-        .expect("single material preview slot is within portable binding table limits"),
+        binding_table: scene_material_binding_table(preview, scene_material_assignments),
         scene_bundle: Some(PreparedSceneMaterialBundle::new(
             preview.scene_shader_artifact_id.raw().to_string(),
             preview.scene_shader_cache_key.as_str().to_string(),
             preview.scene_shader_path.clone(),
             preview.scene_shader_identity.clone(),
-            format!(
-                "fixed64:slot0:{}:{}:{}",
-                preview.product.product_id.raw(),
-                preview.artifact_cache_key.as_str(),
-                preview.shader_cache_key.as_str()
-            ),
+            scene_material_table_identity(preview, scene_material_assignments),
         )),
     }
+}
+
+fn scene_material_binding_table(
+    preview: &EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+) -> PreparedMaterialBindingTable {
+    let slots = match scene_material_assignments {
+        Some(assignments) => assignments
+            .palette()
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(index, slot)| scene_material_binding_slot(preview, index as u32, slot))
+            .collect::<Vec<_>>(),
+        None => vec![preview_material_binding_slot(preview, 0)],
+    };
+    PreparedMaterialBindingTable::fixed_capacity(slots)
+        .expect("editor_scene palette enforces portable material binding slot limits")
+}
+
+fn scene_material_binding_slot(
+    preview: &EditorMaterialPreviewProduct,
+    material_table_index: u32,
+    slot: &SceneMaterialSlot,
+) -> PreparedMaterialBindingSlot {
+    let material_instance_id = slot
+        .material_asset_id
+        .map(|asset_id| format!("material.asset.{}", asset_id.raw()))
+        .or_else(|| {
+            slot.source_ref.as_ref().map(|source_ref| {
+                format!(
+                    "material.source.{}.{}",
+                    source_ref.asset_id.raw(),
+                    source_ref.source_id.raw()
+                )
+            })
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "material.product.{}.slot.{}",
+                preview.product.product_id.raw(),
+                slot.slot_id.raw()
+            )
+        });
+    PreparedMaterialBindingSlot::new(
+        material_table_index,
+        material_instance_id,
+        preview.artifact_id.raw().to_string(),
+        preview.shader_artifact_id.raw().to_string(),
+        preview.artifact_cache_key.as_str().to_string(),
+        preview.shader_cache_key.as_str().to_string(),
+    )
+}
+
+fn preview_material_binding_slot(
+    preview: &EditorMaterialPreviewProduct,
+    material_table_index: u32,
+) -> PreparedMaterialBindingSlot {
+    PreparedMaterialBindingSlot::new(
+        material_table_index,
+        format!("material.product.{}", preview.product.product_id.raw()),
+        preview.artifact_id.raw().to_string(),
+        preview.shader_artifact_id.raw().to_string(),
+        preview.artifact_cache_key.as_str().to_string(),
+        preview.shader_cache_key.as_str().to_string(),
+    )
 }
 
 pub fn prepared_material_resource_for_preview(
     preview: Option<&EditorMaterialPreviewProduct>,
 ) -> Result<PreparedMaterialFeatureResource, AssetDiagnosticRecord> {
+    prepared_material_resource_for_preview_with_scene_materials(preview, None)
+}
+
+pub fn prepared_material_resource_for_preview_with_scene_materials(
+    preview: Option<&EditorMaterialPreviewProduct>,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+) -> Result<PreparedMaterialFeatureResource, AssetDiagnosticRecord> {
     match preview {
         Some(preview) => {
-            let payload = prepared_material_contribution_for_preview(preview);
+            let payload = prepared_material_contribution_for_preview_with_scene_materials(
+                preview,
+                scene_material_assignments,
+            );
             payload.validate_portable_limits().map_err(|error| {
                 AssetDiagnosticRecord::error(
                     AssetDiagnosticCode::RatificationRejected,
@@ -73,6 +142,24 @@ pub fn prepared_material_resource_for_preview(
             fallback_policy: FeatureFallbackPolicy::ReuseLastGood,
             payload: PreparedMaterialFeatureContribution::default(),
         }),
+    }
+}
+
+fn scene_material_table_identity(
+    preview: &EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+) -> String {
+    let base = format!(
+        "fixed64:slot0:{}:{}:{}",
+        preview.product.product_id.raw(),
+        preview.artifact_cache_key.as_str(),
+        preview.shader_cache_key.as_str()
+    );
+    match scene_material_assignments {
+        Some(assignments) => {
+            format!("{}:{}", base, assignments.material_table_identity())
+        }
+        None => base,
     }
 }
 
@@ -174,6 +261,11 @@ mod tests {
     use asset::{
         ArtifactCacheKey, AssetDiagnosticCode, AssetKind, asset_artifact_id, asset_id,
         asset_source_id,
+    };
+    use editor_core::EntityId;
+    use editor_scene::{
+        SceneMaterialAssignmentState, SceneMaterialPalette, SceneMaterialSlot, SceneMaterialSlotId,
+        SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
     };
     use material_graph::{
         FormedMaterialProduct, MaterialCacheKey, MaterialGraphDocumentId, MaterialOutputTarget,
@@ -298,6 +390,132 @@ mod tests {
 
         preview.resolved_resources.truncate(128);
         assert!(prepared_material_resource_for_preview(Some(&preview)).is_ok());
+    }
+
+    #[test]
+    fn material_table_identity_changes_with_sdf_assignment_state() {
+        let product = FormedMaterialProduct::new(
+            MaterialProductId::new(3),
+            MaterialGraphDocumentId::new(2),
+            MaterialOutputTarget::RenderMaterial,
+            MaterialCacheKey::new("material-cache"),
+        );
+        let preview = EditorMaterialPreviewProduct::new(
+            asset_id(1),
+            asset_source_id(2),
+            asset_artifact_id(4),
+            ArtifactCacheKey::new("asset-cache"),
+            product,
+            MaterialRendererParameterProfile::RenderMaterial,
+            asset_artifact_id(5),
+            ArtifactCacheKey::new("shader-cache"),
+            ".runenwerk/artifacts/material-shader-5.wgsl",
+            "shader-identity",
+            asset_artifact_id(6),
+            ArtifactCacheKey::new("scene-shader-cache"),
+            ".runenwerk/artifacts/material-scene-shader-6.wgsl",
+            "scene-shader-identity",
+            Vec::new(),
+        );
+        let slot_two = SceneMaterialSlotId::new(2);
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(slot_two, "Assigned"),
+        ])
+        .expect("valid palette");
+        let mut assignments =
+            SceneMaterialAssignmentState::new(palette.clone(), []).expect("default state");
+        let before = prepared_material_contribution_for_preview_with_scene_materials(
+            &preview,
+            Some(&assignments),
+        )
+        .scene_bundle
+        .expect("scene bundle")
+        .material_table_identity;
+
+        assignments = SceneMaterialAssignmentState::new(
+            palette,
+            [SdfPrimitiveMaterialSlotAssignment::new(
+                SdfPrimitiveSourceId::new(EntityId(42)),
+                slot_two,
+            )],
+        )
+        .expect("assigned state");
+        let after = prepared_material_contribution_for_preview_with_scene_materials(
+            &preview,
+            Some(&assignments),
+        )
+        .scene_bundle
+        .expect("scene bundle")
+        .material_table_identity;
+
+        assert_ne!(before, after);
+        assert!(after.contains("sdf_primitive=42:slot=2"));
+    }
+
+    #[test]
+    fn material_binding_table_follows_editor_scene_palette_slots() {
+        let product = FormedMaterialProduct::new(
+            MaterialProductId::new(3),
+            MaterialGraphDocumentId::new(2),
+            MaterialOutputTarget::RenderMaterial,
+            MaterialCacheKey::new("material-cache"),
+        );
+        let preview = EditorMaterialPreviewProduct::new(
+            asset_id(1),
+            asset_source_id(2),
+            asset_artifact_id(4),
+            ArtifactCacheKey::new("asset-cache"),
+            product,
+            MaterialRendererParameterProfile::RenderMaterial,
+            asset_artifact_id(5),
+            ArtifactCacheKey::new("shader-cache"),
+            ".runenwerk/artifacts/material-shader-5.wgsl",
+            "shader-identity",
+            asset_artifact_id(6),
+            ArtifactCacheKey::new("scene-shader-cache"),
+            ".runenwerk/artifacts/material-scene-shader-6.wgsl",
+            "scene-shader-identity",
+            Vec::new(),
+        );
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [SdfPrimitiveMaterialSlotAssignment::new(
+                SdfPrimitiveSourceId::new(EntityId(42)),
+                SceneMaterialSlotId::new(2),
+            )],
+        )
+        .expect("valid assignments");
+
+        let contribution = prepared_material_contribution_for_preview_with_scene_materials(
+            &preview,
+            Some(&assignments),
+        );
+
+        assert_eq!(contribution.binding_table.slots.len(), 2);
+        assert_eq!(contribution.binding_table.slots[0].slot_index, 0);
+        assert_eq!(contribution.binding_table.slots[1].slot_index, 1);
+        assert_eq!(
+            contribution.binding_table.slots[1].material_instance_id,
+            "material.asset.8"
+        );
+        assert_eq!(
+            contribution.binding_table.slots[1].formed_material_artifact_id,
+            "4"
+        );
+        assert_eq!(contribution.binding_table.slots[1].shader_artifact_id, "5");
+        assert_eq!(
+            contribution.binding_table.slots[1].material_cache_key,
+            "asset-cache"
+        );
+        assert_eq!(
+            contribution.binding_table.slots[1].shader_cache_key,
+            "shader-cache"
+        );
+        assert!(!contribution.binding_table.slots[1].prior_valid);
     }
 
     fn test_resolved_texture_resource(index: u64) -> crate::material_lab::ResolvedMaterialResource {
