@@ -8,7 +8,9 @@ pub mod self_authoring;
 pub mod shortcut_resolution;
 pub mod state;
 pub mod surface_session;
+pub mod tool_suites;
 pub mod ui_definition_assets;
+pub mod workbench_host;
 
 mod toolbar_adapter;
 
@@ -26,6 +28,7 @@ pub use toolbar_adapter::{
     TOOLBAR_REDO_ID, TOOLBAR_SAVE_ID, TOOLBAR_UNDO_ID, TRANSLATE_TOOL_ID,
 };
 pub use ui_definition_assets::*;
+pub use workbench_host::*;
 
 #[cfg(test)]
 mod tests;

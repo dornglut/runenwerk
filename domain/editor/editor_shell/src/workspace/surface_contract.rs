@@ -6,7 +6,14 @@ use ui_surface::{
     SurfaceDefinitionId, SurfaceHostInstanceId, SurfaceInstanceId,
 };
 
-use crate::{PanelKind, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceState};
+use crate::{
+    PanelKind, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceState,
+    tool_suite::{
+        ToolSurfaceRegistry, ToolSurfaceStableKey,
+        stable_key_for_tool_surface_kind as legacy_stable_key_for_tool_surface_kind,
+        tool_surface_kind_for_stable_key,
+    },
+};
 
 pub const OUTLINER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(1);
 pub const VIEWPORT_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(2);
@@ -73,6 +80,21 @@ pub const SIMULATION_PREVIEW_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
     SurfaceDefinitionId::new(43);
 pub const SIMULATION_DIAGNOSTICS_SURFACE_DEFINITION_ID: SurfaceDefinitionId =
     SurfaceDefinitionId::new(44);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolSurfaceDisplayMetadataSource {
+    Registry,
+    Legacy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolSurfaceDisplayMetadata {
+    pub label: String,
+    pub legacy_definition_key: &'static str,
+    pub legacy_semantic_key: &'static str,
+    pub stable_surface_key: Option<ToolSurfaceStableKey>,
+    pub source: ToolSurfaceDisplayMetadataSource,
+}
 
 pub fn editor_surface_definitions() -> Vec<SurfaceDefinition> {
     vec![
@@ -299,6 +321,20 @@ pub fn editor_surface_definitions() -> Vec<SurfaceDefinition> {
     ]
 }
 
+/// C6B legacy boundary helper for callers that still receive
+/// `ToolSurfaceKind`.
+///
+/// Stable-key-first paths should already carry `ToolSurfaceStableKey` and
+/// should not route through this compatibility bridge.
+pub fn stable_key_for_tool_surface_kind(kind: ToolSurfaceKind) -> Option<ToolSurfaceStableKey> {
+    legacy_stable_key_for_tool_surface_kind(kind)
+}
+
+/// C6B legacy boundary helper for enum-backed surface definition metadata.
+///
+/// Normal surface identity is `ToolSurfaceStableKey`; this remains for
+/// compatibility metadata and shell/app surfaces that have not completed final
+/// enum cleanup.
 pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId {
     match kind {
         ToolSurfaceKind::Outliner => OUTLINER_SURFACE_DEFINITION_ID,
@@ -350,6 +386,46 @@ pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId 
     }
 }
 
+pub fn tool_surface_display_metadata_from_registry_or_legacy(
+    kind: ToolSurfaceKind,
+    stable_key: Option<&ToolSurfaceStableKey>,
+    registry: Option<&ToolSurfaceRegistry>,
+) -> ToolSurfaceDisplayMetadata {
+    let legacy_definition = legacy_surface_definition(kind);
+    if let Some((stable_key, definition)) = stable_key.and_then(|key| {
+        registry.and_then(|registry| registry.get(key).map(|definition| (key, definition)))
+    }) {
+        return ToolSurfaceDisplayMetadata {
+            label: definition.label.clone(),
+            legacy_definition_key: tool_surface_kind_definition_key(kind),
+            legacy_semantic_key: legacy_definition.semantic_key,
+            stable_surface_key: Some(stable_key.clone()),
+            source: ToolSurfaceDisplayMetadataSource::Registry,
+        };
+    }
+
+    ToolSurfaceDisplayMetadata {
+        label: legacy_definition.display_name.to_string(),
+        legacy_definition_key: tool_surface_kind_definition_key(kind),
+        legacy_semantic_key: legacy_definition.semantic_key,
+        stable_surface_key: stable_key
+            .cloned()
+            .or_else(|| stable_key_for_tool_surface_kind(kind)),
+        source: ToolSurfaceDisplayMetadataSource::Legacy,
+    }
+}
+
+pub fn tool_surface_capabilities_from_registry_or_legacy(
+    kind: ToolSurfaceKind,
+    _stable_key: Option<&ToolSurfaceStableKey>,
+    _registry: Option<&ToolSurfaceRegistry>,
+) -> SurfaceCapabilitySet {
+    // ToolSurfaceDefinition intentionally does not carry capabilities yet.
+    // Until that contract is designed, capabilities remain enum-backed.
+    tool_surface_capability_set(kind)
+}
+
+/// C6B legacy boundary helper for authored legacy definition keys.
 pub fn tool_surface_kind_definition_key(kind: ToolSurfaceKind) -> &'static str {
     match kind {
         ToolSurfaceKind::Outliner => "outliner",
@@ -448,6 +524,7 @@ pub fn panel_kind_definition_key(kind: PanelKind) -> &'static str {
     }
 }
 
+/// C6B legacy boundary helper for authored legacy definition keys.
 pub fn tool_surface_kind_from_definition_key(value: &str) -> Option<ToolSurfaceKind> {
     match value {
         "outliner" => Some(ToolSurfaceKind::Outliner),
@@ -498,10 +575,23 @@ pub fn tool_surface_kind_from_definition_key(value: &str) -> Option<ToolSurfaceK
     }
 }
 
+/// C6B legacy boundary helper for deriving structural panel grouping from
+/// legacy enum metadata.
 pub fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
     kind.panel_kind()
 }
 
+fn legacy_surface_definition(kind: ToolSurfaceKind) -> SurfaceDefinition {
+    editor_surface_definitions()
+        .into_iter()
+        .find(|definition| definition.id == tool_surface_definition_id(kind))
+        .expect("every tool-surface kind should have a legacy surface definition")
+}
+
+/// C6B legacy boundary helper for enum-backed capability metadata.
+///
+/// Provider matching is stable-key first; this remains until capability
+/// metadata is fully registry-owned.
 pub fn tool_surface_capability_set(kind: ToolSurfaceKind) -> SurfaceCapabilitySet {
     match kind {
         ToolSurfaceKind::Outliner => SurfaceCapabilitySet::new(true, true, true, false),
@@ -553,6 +643,7 @@ pub fn tool_surface_capability_set(kind: ToolSurfaceKind) -> SurfaceCapabilitySe
     }
 }
 
+/// C6B legacy boundary helper for enum-backed session retention metadata.
 pub fn tool_surface_session_retention_class(kind: ToolSurfaceKind) -> SessionRetentionClass {
     match kind {
         ToolSurfaceKind::Outliner => SessionRetentionClass::Restorable,
@@ -602,14 +693,20 @@ pub fn tool_surface_session_retention_class(kind: ToolSurfaceKind) -> SessionRet
     }
 }
 
-pub fn mounted_surface_instance(tool_surface: ToolSurfaceState) -> Option<MountedSurfaceInstance> {
+pub fn mounted_surface_instance(tool_surface: &ToolSurfaceState) -> Option<MountedSurfaceInstance> {
     let ToolSurfaceMount::Mounted { panel_id } = tool_surface.mount else {
         return None;
     };
+    // C5 compatibility boundary pending C6: mounted surface contracts still
+    // include the legacy kind for enum-backed shell consumers. Stable-key
+    // authority is retained on ToolSurfaceState and provider requests.
+    let legacy_tool_surface_kind = tool_surface
+        .legacy_tool_surface_kind()
+        .or_else(|| tool_surface_kind_for_stable_key(tool_surface.stable_surface_key()));
 
     Some(MountedSurfaceInstance::new(
         SurfaceInstanceId::new(tool_surface.id.raw()),
-        tool_surface_definition_id(tool_surface.tool_surface_kind),
+        tool_surface_definition_id(legacy_tool_surface_kind?),
         SurfaceHostInstanceId::new(panel_id.raw()),
     ))
 }
@@ -619,14 +716,17 @@ pub fn mounted_surface_instances(
 ) -> impl Iterator<Item = MountedSurfaceInstance> + '_ {
     workspace_state
         .tool_surfaces()
-        .copied()
         .filter_map(mounted_surface_instance)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{WorkspaceId, WorkspaceIdentityAllocator};
+    use crate::{
+        EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
+        ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole,
+        ToolSurfaceRoute, WorkspaceId, WorkspaceIdentityAllocator,
+    };
 
     #[test]
     fn tool_surface_kind_maps_to_stable_definition_identity() {
@@ -654,6 +754,127 @@ mod tests {
             mounted
                 .iter()
                 .any(|instance| instance.definition_id == VIEWPORT_SURFACE_DEFINITION_ID)
+        );
+    }
+
+    #[test]
+    fn stable_key_for_tool_surface_kind_maps_material_lab_variants() {
+        assert_eq!(
+            stable_key_for_tool_surface_kind(ToolSurfaceKind::MaterialGraphCanvas)
+                .expect("material graph key")
+                .as_str(),
+            "runenwerk.material_lab.graph_canvas"
+        );
+        assert_eq!(
+            stable_key_for_tool_surface_kind(ToolSurfaceKind::MaterialInspector)
+                .expect("material inspector key")
+                .as_str(),
+            "runenwerk.material_lab.inspector"
+        );
+        assert_eq!(
+            stable_key_for_tool_surface_kind(ToolSurfaceKind::MaterialPreview)
+                .expect("material preview key")
+                .as_str(),
+            "runenwerk.material_lab.preview"
+        );
+    }
+
+    #[test]
+    fn stable_key_for_tool_surface_kind_maps_placeholder_to_fallback_key() {
+        assert_eq!(
+            stable_key_for_tool_surface_kind(ToolSurfaceKind::Placeholder)
+                .expect("placeholder fallback key")
+                .as_str(),
+            "runenwerk.diagnostics.placeholder"
+        );
+    }
+
+    #[test]
+    fn registry_metadata_matches_legacy_material_lab_labels() {
+        let registry = material_lab_registry();
+        let key = ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
+
+        let metadata = tool_surface_display_metadata_from_registry_or_legacy(
+            ToolSurfaceKind::MaterialGraphCanvas,
+            Some(&key),
+            Some(registry.surfaces()),
+        );
+
+        assert_eq!(metadata.source, ToolSurfaceDisplayMetadataSource::Registry);
+        assert_eq!(metadata.label, "Material Graph Canvas");
+        assert_eq!(metadata.legacy_definition_key, "material_graph_canvas");
+        assert_eq!(
+            metadata.legacy_semantic_key,
+            "editor.tool_surface.material_graph_canvas"
+        );
+        assert_eq!(
+            metadata
+                .stable_surface_key
+                .as_ref()
+                .map(ToolSurfaceStableKey::as_str),
+            Some("runenwerk.material_lab.graph_canvas")
+        );
+    }
+
+    #[test]
+    fn legacy_metadata_fallback_remains_available_without_registry() {
+        let key = ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
+
+        let metadata = tool_surface_display_metadata_from_registry_or_legacy(
+            ToolSurfaceKind::MaterialGraphCanvas,
+            Some(&key),
+            None,
+        );
+
+        assert_eq!(metadata.source, ToolSurfaceDisplayMetadataSource::Legacy);
+        assert_eq!(metadata.label, "Material Graph Canvas");
+        assert_eq!(metadata.legacy_definition_key, "material_graph_canvas");
+        assert_eq!(
+            metadata
+                .stable_surface_key
+                .as_ref()
+                .map(ToolSurfaceStableKey::as_str),
+            Some("runenwerk.material_lab.graph_canvas")
+        );
+    }
+
+    #[test]
+    fn unresolved_registry_key_falls_back_to_legacy_without_remapping() {
+        let registry = material_lab_registry();
+        let unknown_key = ToolSurfaceStableKey::new("runenwerk.material_lab.unknown").unwrap();
+
+        let metadata = tool_surface_display_metadata_from_registry_or_legacy(
+            ToolSurfaceKind::MaterialGraphCanvas,
+            Some(&unknown_key),
+            Some(registry.surfaces()),
+        );
+
+        assert_eq!(metadata.source, ToolSurfaceDisplayMetadataSource::Legacy);
+        assert_eq!(metadata.label, "Material Graph Canvas");
+        assert_eq!(
+            metadata
+                .stable_surface_key
+                .as_ref()
+                .map(ToolSurfaceStableKey::as_str),
+            Some("runenwerk.material_lab.unknown")
+        );
+    }
+
+    #[test]
+    fn registry_capability_adapter_preserves_legacy_capabilities_when_registry_capabilities_deferred()
+     {
+        let registry = material_lab_registry();
+        let key = ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
+
+        let adapted = tool_surface_capabilities_from_registry_or_legacy(
+            ToolSurfaceKind::MaterialGraphCanvas,
+            Some(&key),
+            Some(registry.surfaces()),
+        );
+
+        assert_eq!(
+            adapted,
+            tool_surface_capability_set(ToolSurfaceKind::MaterialGraphCanvas)
         );
     }
 
@@ -711,5 +932,58 @@ mod tests {
             tool_surface_session_retention_class(ToolSurfaceKind::Placeholder),
             SessionRetentionClass::Ephemeral,
         );
+    }
+
+    fn material_lab_registry() -> ToolSuiteRegistry {
+        let provider_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+        ToolSuiteRegistry::new(vec![EditorToolSuite {
+            suite_id: ToolSuiteId::new("runenwerk.material_lab").unwrap(),
+            label: "Material Lab".to_string(),
+            provider_families: vec![ProviderFamilyDefinition {
+                id: provider_family.clone(),
+                label: "Material Lab".to_string(),
+            }],
+            surfaces: vec![
+                material_lab_surface(
+                    "runenwerk.material_lab.graph_canvas",
+                    "Material Graph Canvas",
+                    ToolSurfaceRole::Primary,
+                    provider_family.clone(),
+                    ToolSurfaceRoute::ProviderOwnedGraphCanvas,
+                ),
+                material_lab_surface(
+                    "runenwerk.material_lab.inspector",
+                    "Material Inspector",
+                    ToolSurfaceRole::Inspector,
+                    provider_family.clone(),
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+                material_lab_surface(
+                    "runenwerk.material_lab.preview",
+                    "Material Preview",
+                    ToolSurfaceRole::Preview,
+                    provider_family,
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+            ],
+        }])
+        .expect("material lab registry fixture should be valid")
+    }
+
+    fn material_lab_surface(
+        key: &str,
+        label: &str,
+        role: ToolSurfaceRole,
+        provider_family: ProviderFamilyId,
+        route: ToolSurfaceRoute,
+    ) -> ToolSurfaceDefinition {
+        ToolSurfaceDefinition {
+            key: ToolSurfaceStableKey::new(key).unwrap(),
+            label: label.to_string(),
+            role,
+            provider_family,
+            route,
+            persistence: ToolSurfacePersistence::StableKey,
+        }
     }
 }

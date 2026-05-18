@@ -15,7 +15,15 @@ impl EditorSurfaceProvider for ConsoleProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::Console
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_key_or_legacy_kind_support(
+            request,
+            EDITOR_CONSOLE_SURFACE_KEY,
+            ToolSurfaceKind::Console,
+        )
     }
 
     fn build_frame(

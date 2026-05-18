@@ -3,6 +3,7 @@
 
 pub mod authored;
 pub mod catalog;
+pub mod commands;
 pub mod formed;
 pub mod ids;
 pub mod ir;
@@ -19,6 +20,10 @@ pub use catalog::{
     MaterialInputContract, MaterialLiteral, MaterialNodeCatalog, MaterialNodeCatalogError,
     MaterialNodeDescriptor, MaterialOutputContract, MaterialResourceContract, MaterialResourceKind,
     MaterialValueContract, MaterialValueType,
+};
+pub use commands::{
+    MaterialGraphCommandError, add_catalog_node, connect_ports, delete_selection, disconnect_edge,
+    move_node_layout, set_node_text_value, set_node_texture_resource,
 };
 pub use formed::{
     FormedMaterialProduct, MaterialCacheKey, MaterialParameterDescriptor, MaterialParameterKind,

@@ -5,10 +5,11 @@ use editor_core::DocumentId;
 
 use crate::{
     DockSplitSide, EditorDomainMutation, MaterialSurfaceAction, PanelHostId, PanelInstanceId,
-    SurfaceSessionMutation, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolbarCommandKind,
-    ToolbarMenuKind, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
+    SurfaceSessionMutation, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
+    ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId,
+    WorkspaceSplitAxis,
 };
-use crate::{SurfaceLocalAction, SurfaceProviderId};
+use crate::{SurfaceInteraction, SurfaceLocalAction, SurfaceProviderId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StructuralCommandTarget {
@@ -221,6 +222,13 @@ pub enum ShellCommand {
         action: SurfaceLocalAction,
         projection_epoch: u64,
     },
+    DispatchSurfaceInteraction {
+        provider_id: SurfaceProviderId,
+        tool_surface_instance_id: ToolSurfaceInstanceId,
+        target: StructuralCommandTarget,
+        interaction: SurfaceInteraction,
+        projection_epoch: u64,
+    },
     NoOp,
 }
 
@@ -288,6 +296,9 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::DispatchSurfaceLocalAction {
+                projection_epoch, ..
+            }
+            | Self::DispatchSurfaceInteraction {
                 projection_epoch, ..
             } => Some(*projection_epoch),
             _ => None,

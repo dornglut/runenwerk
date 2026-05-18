@@ -12,7 +12,15 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        is_m6_workspace_surface(request.tool_surface_kind)
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_keys_or_legacy_kind_support(
+            request,
+            DIAGNOSTICS_SURFACE_KEYS,
+            is_m6_workspace_surface,
+        )
     }
 
     fn build_frame(
@@ -21,10 +29,16 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
         request: &SurfaceProviderRequest,
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
+        let legacy_tool_surface_kind = request.legacy_kind();
         let mut lines = vec![
             "M6 route is fail-closed until the owning domain contract ratifies the document"
                 .to_string(),
-            format!("surface: {}", m6_surface_key(request.tool_surface_kind)),
+            format!(
+                "surface: {}",
+                legacy_tool_surface_kind
+                    .map(m6_surface_key)
+                    .unwrap_or_else(|| request.stable_key().as_str())
+            ),
             format!(
                 "document: {}",
                 request
@@ -33,17 +47,22 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
                     .map(|kind| kind.stable_name())
                     .unwrap_or("none")
             ),
-            m6_surface_gate_line(request.tool_surface_kind).to_string(),
+            legacy_tool_surface_kind
+                .map(m6_surface_gate_line)
+                .unwrap_or("gate: stable-key surface has no legacy compatibility metadata")
+                .to_string(),
         ];
 
-        if matches!(
-            request.tool_surface_kind,
-            ToolSurfaceKind::Diagnostics
-                | ToolSurfaceKind::RuntimeDebug
-                | ToolSurfaceKind::GameplayCompilerDiagnostics
-                | ToolSurfaceKind::PhysicsDebug
-                | ToolSurfaceKind::SimulationDiagnostics
-        ) {
+        if legacy_tool_surface_kind.is_some_and(|kind| {
+            matches!(
+                kind,
+                ToolSurfaceKind::Diagnostics
+                    | ToolSurfaceKind::RuntimeDebug
+                    | ToolSurfaceKind::GameplayCompilerDiagnostics
+                    | ToolSurfaceKind::PhysicsDebug
+                    | ToolSurfaceKind::SimulationDiagnostics
+            )
+        }) {
             lines.extend(context.app.asset_catalog_runtime().reload_status_lines());
         }
 
@@ -55,7 +74,10 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
         );
 
         Ok(ProviderSurfaceFrame {
-            title: m6_surface_title(request.tool_surface_kind).to_string(),
+            title: legacy_tool_surface_kind
+                .map(m6_surface_title)
+                .unwrap_or("M6 Workspace")
+                .to_string(),
             artifact: SurfacePresentationArtifact::provider(root),
             routes,
         })

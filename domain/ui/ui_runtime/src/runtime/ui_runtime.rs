@@ -1,6 +1,7 @@
 //! File: domain/ui/ui_runtime/src/runtime/ui_runtime.rs
 //! Purpose: Retained UI runtime entrypoint.
 
+use std::collections::BTreeSet;
 use ui_input::{
     EventPropagation, FocusChange, FocusTargetId, InputResponse, Key, KeyState, PointerCapture,
     UiInputEvent,
@@ -65,6 +66,39 @@ impl UiRuntime {
         self.state.hovered_widget = None;
     }
 
+    pub fn retain_state_for_tree(&mut self, tree: &UiTree) {
+        let mounted_widgets = tree.walk().map(|node| node.id).collect::<BTreeSet<_>>();
+        let mounted_graph_canvases = tree
+            .walk()
+            .filter(|node| matches!(node.kind, UiNodeKind::GraphCanvas(_)))
+            .map(|node| node.id)
+            .collect::<BTreeSet<_>>();
+
+        self.state
+            .graph_canvas_gestures
+            .retain(|widget_id, _| mounted_graph_canvases.contains(widget_id));
+        self.state
+            .graph_canvas_viewports
+            .retain(|widget_id, _| mounted_graph_canvases.contains(widget_id));
+
+        self.state.hovered_widget = self
+            .state
+            .hovered_widget
+            .filter(|widget_id| mounted_widgets.contains(widget_id));
+        self.state.pressed_widget = self
+            .state
+            .pressed_widget
+            .filter(|widget_id| mounted_widgets.contains(widget_id));
+        self.state.captured_widget = self
+            .state
+            .captured_widget
+            .filter(|widget_id| mounted_widgets.contains(widget_id));
+        self.state.focused_target = self
+            .state
+            .focused_target
+            .filter(|target| mounted_widgets.contains(&WidgetId(target.0)));
+    }
+
     pub fn compute_layout(&self, tree: &UiTree, bounds: UiRect) -> ComputedLayoutMap {
         compute_tree_layout(tree, bounds, &self.state)
     }
@@ -75,6 +109,7 @@ impl UiRuntime {
         layouts: &ComputedLayoutMap,
         event: &UiInputEvent,
     ) -> UiInputOutcome {
+        self.retain_state_for_tree(tree);
         match event {
             UiInputEvent::Pointer(pointer) => {
                 dispatch_pointer_event(tree, layouts, &mut self.state, pointer)
@@ -103,6 +138,8 @@ impl UiRuntime {
                 .scrollbar_thumb_drag
                 .map(|drag| crate::ScrollbarAxisTarget::new(drag.scroll_widget, drag.axis)),
             scrollbar_opacity_by_widget_id: self.state.scrollbar_opacity_entries(),
+            graph_canvas_gestures: self.state.graph_canvas_gestures.clone(),
+            graph_canvas_viewports: self.state.graph_canvas_viewports.clone(),
         };
         build_ui_frame(
             tree,
@@ -181,6 +218,13 @@ impl UiRuntime {
     ) -> UiInputOutcome {
         if matches!(event.key, Key::Escape)
             && matches!(event.state, KeyState::Pressed | KeyState::Repeated)
+            && let Some(outcome) = self.dispatch_graph_canvas_cancel(tree)
+        {
+            return outcome;
+        }
+
+        if matches!(event.key, Key::Escape)
+            && matches!(event.state, KeyState::Pressed | KeyState::Repeated)
             && let Some(outcome) = self.dispatch_popup_escape_dismiss(tree, layouts)
         {
             return outcome;
@@ -195,6 +239,33 @@ impl UiRuntime {
         let Some(target) = self.focused_widget_in_tree(tree) else {
             return UiInputOutcome::ignored();
         };
+
+        if matches!(event.state, KeyState::Pressed | KeyState::Repeated)
+            && is_graph_canvas_widget(tree, target)
+            && let Some(shortcut_action) = graph_canvas_shortcut_action(event)
+        {
+            let mut interactions = UiInteractionResults::new();
+            interactions.push(UiInteraction::GraphCanvasAction {
+                target,
+                action: match shortcut_action {
+                    ui_graph_editor::GraphShortcutAction::DeleteSelection => {
+                        ui_graph_editor::GraphCanvasAction::KeyboardDeleteSelection
+                    }
+                    action => ui_graph_editor::GraphCanvasAction::KeyboardShortcut(action),
+                },
+            });
+            return outcome(
+                Some(target),
+                InputResponse {
+                    propagation: EventPropagation::Stop,
+                    capture: PointerCapture::None,
+                    focus_change: FocusChange::None,
+                    repaint: true,
+                    relayout: false,
+                },
+                interactions,
+            );
+        }
 
         let mut interactions = UiInteractionResults::new();
         interactions.push(UiInteraction::KeyboardInput {
@@ -240,6 +311,40 @@ impl UiRuntime {
         };
 
         Some(outcome(Some(popup), response, interactions))
+    }
+
+    fn dispatch_graph_canvas_cancel(&mut self, tree: &UiTree) -> Option<UiInputOutcome> {
+        let target = self.focused_widget_in_tree(tree)?;
+        if !is_graph_canvas_widget(tree, target) {
+            return None;
+        }
+        let action = self
+            .state
+            .graph_canvas_gestures
+            .entry(target)
+            .or_default()
+            .cancel()?;
+        if self.state.captured_widget == Some(target) {
+            self.state.captured_widget = None;
+        }
+        if self.state.pressed_widget == Some(target) {
+            self.state.pressed_widget = None;
+        }
+
+        let mut interactions = UiInteractionResults::new();
+        interactions.push(UiInteraction::GraphCanvasAction { target, action });
+
+        Some(outcome(
+            Some(target),
+            InputResponse {
+                propagation: EventPropagation::Stop,
+                capture: PointerCapture::Release,
+                focus_change: FocusChange::None,
+                repaint: true,
+                relayout: false,
+            },
+            interactions,
+        ))
     }
 
     fn dispatch_text_event(
@@ -328,6 +433,7 @@ fn focusable_widgets(tree: &UiTree) -> Vec<WidgetId> {
             UiNodeKind::Select(select) if select.enabled => Some(node.id),
             UiNodeKind::Table(table) if table.rows.iter().any(|row| row.enabled) => Some(node.id),
             UiNodeKind::Tree(tree) if tree.rows.iter().any(|row| row.enabled) => Some(node.id),
+            UiNodeKind::GraphCanvas(graph_canvas) if graph_canvas.focusable => Some(node.id),
             UiNodeKind::Tabs(_) | UiNodeKind::ViewportSurfaceEmbed(_) | UiNodeKind::Scroll(_) => {
                 Some(node.id)
             }
@@ -343,9 +449,11 @@ fn focusable_widgets(tree: &UiTree) -> Vec<WidgetId> {
             | UiNodeKind::Select(_)
             | UiNodeKind::Table(_)
             | UiNodeKind::Tree(_)
+            | UiNodeKind::GraphCanvas(_)
             | UiNodeKind::Spacer(_)
             | UiNodeKind::Divider(_)
             | UiNodeKind::Image(_)
+            | UiNodeKind::ProductSurface(_)
             | UiNodeKind::Stack(_)
             | UiNodeKind::Split(_) => None,
         })
@@ -385,6 +493,7 @@ fn focused_widget_captures_viewport_shortcuts(tree: &UiTree, widget_id: WidgetId
         UiNodeKind::Select(select) => select.enabled,
         UiNodeKind::Table(table) => table.rows.iter().any(|row| row.enabled),
         UiNodeKind::Tree(tree) => tree.rows.iter().any(|row| row.enabled),
+        UiNodeKind::GraphCanvas(graph_canvas) => graph_canvas.focusable,
         UiNodeKind::Tabs(_) | UiNodeKind::Scroll(_) => true,
         UiNodeKind::ViewportSurfaceEmbed(_)
         | UiNodeKind::Panel(_)
@@ -395,8 +504,40 @@ fn focused_widget_captures_viewport_shortcuts(tree: &UiTree, widget_id: WidgetId
         | UiNodeKind::Spacer(_)
         | UiNodeKind::Divider(_)
         | UiNodeKind::Image(_)
+        | UiNodeKind::ProductSurface(_)
         | UiNodeKind::Stack(_)
         | UiNodeKind::Split(_) => false,
+    }
+}
+
+fn is_graph_canvas_widget(tree: &UiTree, widget_id: WidgetId) -> bool {
+    tree.walk()
+        .any(|node| node.id == widget_id && matches!(node.kind, UiNodeKind::GraphCanvas(_)))
+}
+
+fn graph_canvas_shortcut_action(
+    event: &ui_input::KeyboardEvent,
+) -> Option<ui_graph_editor::GraphShortcutAction> {
+    if matches!(event.key, Key::Delete | Key::Backspace) {
+        return Some(ui_graph_editor::GraphShortcutAction::DeleteSelection);
+    }
+    match &event.key {
+        Key::Character(value) if !event.modifiers.ctrl && value.eq_ignore_ascii_case("a") => {
+            Some(ui_graph_editor::GraphShortcutAction::AddNode)
+        }
+        Key::Character(value) if event.modifiers.ctrl && value.eq_ignore_ascii_case("z") => {
+            Some(ui_graph_editor::GraphShortcutAction::Undo)
+        }
+        Key::Character(value) if event.modifiers.ctrl && value.eq_ignore_ascii_case("y") => {
+            Some(ui_graph_editor::GraphShortcutAction::Redo)
+        }
+        Key::Character(value) if event.modifiers.ctrl && value.eq_ignore_ascii_case("b") => {
+            Some(ui_graph_editor::GraphShortcutAction::BuildPreview)
+        }
+        Key::Character(value) if !event.modifiers.ctrl && value.eq_ignore_ascii_case("f") => {
+            Some(ui_graph_editor::GraphShortcutAction::FocusPreview)
+        }
+        _ => None,
     }
 }
 
@@ -451,9 +592,9 @@ mod tests {
     use super::*;
     use crate::output::build_ui_frame::{scrollbar_geometry, scrollbar_geometry_for_axis};
     use crate::{
-        ButtonNode, ImageNode, NumericInputNode, PanelNode, PopupNode, ScrollInputPolicies,
-        ScrollInputPolicy, ScrollNode, SpacerNode, StackNode, TabsNode, TextInputNode, ToggleNode,
-        UiNode, UiNodeKind, ViewportSurfaceEmbedNode,
+        ButtonNode, GraphCanvasNode, ImageNode, NumericInputNode, PanelNode, PopupNode,
+        ScrollInputPolicies, ScrollInputPolicy, ScrollNode, SpacerNode, StackNode, TabsNode,
+        TextInputNode, ToggleNode, UiNode, UiNodeKind, ViewportSurfaceEmbedNode,
     };
     use ui_input::{
         FocusChange, FocusTargetId, Key, KeyState, KeyboardEvent, Modifiers, PointerButton,
@@ -507,6 +648,109 @@ mod tests {
             bounds.x + bounds.width * 0.5,
             bounds.y + bounds.height * 0.5,
         )
+    }
+
+    fn graph_canvas_view_model() -> ui_graph_editor::GraphCanvasViewModel {
+        let node = ui_graph_editor::GraphNodeKey(7);
+        let port = ui_graph_editor::GraphPortKey(9);
+        ui_graph_editor::GraphCanvasViewModel {
+            canvas_id: ui_graph_editor::GraphCanvasId(3),
+            viewport: ui_graph_editor::GraphViewport::default(),
+            nodes: vec![ui_graph_editor::GraphNodeView::new(
+                node,
+                "Node",
+                ui_graph_editor::GraphRect::new(20, 20, 80, 44),
+            )],
+            ports: vec![ui_graph_editor::GraphPortView::new(
+                port,
+                node,
+                "out",
+                ui_graph_editor::GraphPortDirection::Output,
+                ui_graph_editor::GraphRect::new(88, 32, 10, 10),
+            )],
+            edges: Vec::new(),
+            overlays: Vec::new(),
+            selection: ui_graph_editor::GraphSelection::default(),
+            hit_test_scene: ui_graph_editor::GraphHitTestScene {
+                canvas_rect: ui_graph_editor::GraphRect::new(0, 0, 240, 160),
+                nodes: vec![ui_graph_editor::GraphNodeBounds {
+                    node,
+                    rect: ui_graph_editor::GraphRect::new(20, 20, 80, 44),
+                }],
+                ports: vec![ui_graph_editor::GraphPortBounds {
+                    port,
+                    node,
+                    rect: ui_graph_editor::GraphRect::new(88, 32, 10, 10),
+                }],
+                edges: Vec::new(),
+                selections: Vec::new(),
+            },
+        }
+    }
+
+    fn graph_canvas_node(theme: ThemeTokens) -> GraphCanvasNode {
+        GraphCanvasNode::new(graph_canvas_view_model(), theme)
+            .with_min_size(UiSize::new(240.0, 160.0))
+    }
+
+    fn graph_canvas_tree(graph_id: WidgetId) -> UiTree {
+        let theme = ThemeTokens::default();
+        UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::new(
+                graph_id,
+                UiNodeKind::GraphCanvas(graph_canvas_node(theme)),
+            )],
+        ))
+    }
+
+    fn scroll_wrapped_compact_graph_canvas_tree(scroll_id: WidgetId, graph_id: WidgetId) -> UiTree {
+        let theme = ThemeTokens::default();
+        let mut graph_canvas = graph_canvas_node(theme.clone());
+        graph_canvas.min_size = UiSize::new(240.0, 72.0);
+        UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                scroll_id,
+                UiNodeKind::Scroll(ScrollNode::vertical(theme.clone())),
+                vec![UiNode::with_children(
+                    WidgetId(902),
+                    UiNodeKind::Stack(StackNode::vertical(0.0)),
+                    vec![
+                        UiNode::new(graph_id, UiNodeKind::GraphCanvas(graph_canvas)),
+                        UiNode::new(
+                            WidgetId(903),
+                            UiNodeKind::Spacer(SpacerNode::new(UiSize::new(240.0, 480.0))),
+                        ),
+                    ],
+                )],
+            )],
+        ))
+    }
+
+    fn graph_and_viewport_tree(graph_id: WidgetId, viewport_id: WidgetId) -> UiTree {
+        let theme = ThemeTokens::default();
+        UiTree::new(UiNode::with_children(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(theme.clone())),
+            vec![UiNode::with_children(
+                WidgetId(904),
+                UiNodeKind::Stack(StackNode::vertical(0.0)),
+                vec![
+                    UiNode::new(graph_id, UiNodeKind::GraphCanvas(graph_canvas_node(theme))),
+                    UiNode::new(
+                        viewport_id,
+                        UiNodeKind::ViewportSurfaceEmbed(ViewportSurfaceEmbedNode {
+                            viewport_id: 5,
+                            slot: ViewportSurfaceEmbedSlotId(5),
+                            min_size: UiSize::new(240.0, 140.0),
+                        }),
+                    ),
+                ],
+            )],
+        ))
     }
 
     fn vertical_overflow_scroll_tree(scroll_id: WidgetId, child_id: WidgetId) -> UiTree {
@@ -753,6 +997,477 @@ mod tests {
                 repaint: true,
                 relayout: true,
             },
+        );
+    }
+
+    #[test]
+    fn graph_canvas_pointer_capture() {
+        let graph_id = WidgetId(700);
+        let tree = graph_canvas_tree(graph_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 180.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let down = UiPoint::new(32.0, 32.0);
+        let down_outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: down,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(down_outcome.dispatch.target, Some(graph_id));
+        assert_eq!(runtime.state().captured_widget, Some(graph_id));
+        assert!(
+            down_outcome
+                .interactions
+                .items
+                .iter()
+                .any(|interaction| matches!(
+                    interaction,
+                    UiInteraction::GraphCanvasAction {
+                        target,
+                        action: ui_graph_editor::GraphCanvasAction::BeginNodeDrag {
+                            node,
+                            ..
+                        },
+                    } if *target == graph_id && *node == ui_graph_editor::GraphNodeKey(7)
+                )),
+            "node-body pointer down must form a graph node drag intent",
+        );
+
+        let move_outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Move,
+                position: UiPoint::new(380.0, 260.0),
+                delta: UiVector::new(348.0, 228.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(move_outcome.dispatch.target, Some(graph_id));
+        assert_eq!(
+            move_outcome.dispatch.response.capture,
+            PointerCapture::CaptureSelf,
+        );
+        assert_eq!(runtime.state().captured_widget, Some(graph_id));
+        assert!(
+            move_outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::GraphCanvasAction {
+                    target: graph_id,
+                    action: ui_graph_editor::GraphCanvasAction::UpdateNodeDrag {
+                        node: ui_graph_editor::GraphNodeKey(7),
+                        delta: ui_graph_editor::GraphVector::new(348, 228),
+                    },
+                }),
+            "captured drag must keep routing to the graph canvas outside its bounds",
+        );
+
+        let up_outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Up,
+                position: UiPoint::new(380.0, 260.0),
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(up_outcome.dispatch.target, Some(graph_id));
+        assert_eq!(
+            up_outcome.dispatch.response.capture,
+            PointerCapture::Release
+        );
+        assert_eq!(runtime.state().captured_widget, None);
+    }
+
+    #[test]
+    fn graph_canvas_state_cleans_up_when_node_unmounts() {
+        let graph_id = WidgetId(705);
+        let tree = graph_canvas_tree(graph_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 180.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: UiPoint::new(32.0, 32.0),
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: UiPoint::new(40.0, 40.0),
+                delta: UiVector::new(0.0, -4.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+                ..Default::default()
+            }),
+        );
+        assert!(
+            runtime
+                .state()
+                .graph_canvas_gestures
+                .contains_key(&graph_id)
+        );
+        assert!(
+            runtime
+                .state()
+                .graph_canvas_viewports
+                .contains_key(&graph_id)
+        );
+
+        let unmounted_tree = UiTree::new(UiNode::new(
+            WidgetId(1),
+            UiNodeKind::Panel(PanelNode::new(ThemeTokens::default())),
+        ));
+        runtime.retain_state_for_tree(&unmounted_tree);
+
+        assert!(
+            !runtime
+                .state()
+                .graph_canvas_gestures
+                .contains_key(&graph_id)
+        );
+        assert!(
+            !runtime
+                .state()
+                .graph_canvas_viewports
+                .contains_key(&graph_id)
+        );
+        assert_eq!(runtime.state().captured_widget, None);
+        assert_eq!(runtime.state().pressed_widget, None);
+        assert_eq!(runtime.state().focused_target, None);
+    }
+
+    #[test]
+    fn graph_canvas_wheel_zoom_does_not_leak_to_scroll_or_viewport() {
+        let scroll_id = WidgetId(710);
+        let graph_id = WidgetId(711);
+        let tree = scroll_wrapped_compact_graph_canvas_tree(scroll_id, graph_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 140.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let graph_point = center_of(&layouts, graph_id);
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: graph_point,
+                delta: UiVector::new(0.0, -4.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(graph_id));
+        assert_eq!(
+            outcome.dispatch.response.propagation,
+            EventPropagation::Stop,
+        );
+        assert_eq!(
+            runtime.scroll_offset(scroll_id),
+            0.0,
+            "graph wheel zoom must not scroll an ancestor viewport",
+        );
+        assert!(
+            runtime
+                .state()
+                .graph_canvas_viewports
+                .get(&graph_id)
+                .is_some_and(|viewport| viewport.zoom_milli != 1000),
+            "wheel input over the graph must update graph zoom state",
+        );
+        assert!(
+            outcome
+                .interactions
+                .items
+                .iter()
+                .any(|interaction| matches!(
+                    interaction,
+                    UiInteraction::GraphCanvasAction {
+                        target,
+                        action: ui_graph_editor::GraphCanvasAction::Zoom { .. },
+                    } if *target == graph_id
+                )),
+            "wheel input over the graph must emit a graph zoom intent",
+        );
+        assert!(
+            !outcome
+                .interactions
+                .items
+                .iter()
+                .any(|interaction| matches!(interaction, UiInteraction::ScrollInputOwned { .. })),
+            "graph wheel zoom must not leak as scroll ownership",
+        );
+
+        let scroll_only_point = UiPoint::new(graph_point.x, graph_point.y + 72.0);
+        let scroll_outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Scroll,
+                position: scroll_only_point,
+                delta: UiVector::new(0.0, -4.0),
+                button: None,
+                modifiers: Modifiers::default(),
+                click_count: 0,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(scroll_outcome.dispatch.target, Some(scroll_id));
+        assert!(
+            runtime.scroll_offset(scroll_id) > 0.0,
+            "wheel outside the graph but inside the scroll owner must still scroll",
+        );
+        assert!(
+            scroll_outcome
+                .interactions
+                .items
+                .iter()
+                .any(|interaction| matches!(
+                    interaction,
+                    UiInteraction::ScrollInputOwned { owner, .. } if *owner == scroll_id
+                )),
+            "scroll owner must receive wheel ownership outside the graph canvas",
+        );
+        assert!(
+            !scroll_outcome
+                .interactions
+                .items
+                .iter()
+                .any(|interaction| matches!(
+                    interaction,
+                    UiInteraction::GraphCanvasAction {
+                        action: ui_graph_editor::GraphCanvasAction::Zoom { .. },
+                        ..
+                    }
+                )),
+            "wheel outside the graph must not emit graph zoom",
+        );
+    }
+
+    #[test]
+    fn graph_canvas_pointer_capture_does_not_leak_to_viewport() {
+        let graph_id = WidgetId(712);
+        let viewport_id = WidgetId(713);
+        let tree = graph_and_viewport_tree(graph_id, viewport_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 340.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        let viewport_point = center_of(&layouts, viewport_id);
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: viewport_point,
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(viewport_id));
+        assert_eq!(
+            runtime.state().captured_widget,
+            Some(viewport_id),
+            "primary drag outside the graph must use the hit widget's normal capture",
+        );
+        assert!(
+            outcome
+                .interactions
+                .items
+                .iter()
+                .all(|interaction| !matches!(interaction, UiInteraction::GraphCanvasAction { .. })),
+            "viewport pointer down must not create graph canvas intents",
+        );
+    }
+
+    #[test]
+    fn graph_canvas_keyboard_shortcuts_require_focus() {
+        let graph_id = WidgetId(720);
+        let tree = graph_canvas_tree(graph_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 180.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let unfocused = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Keyboard(KeyboardEvent {
+                key: Key::Delete,
+                state: KeyState::Pressed,
+                modifiers: Modifiers::default(),
+            }),
+        );
+        assert_eq!(unfocused.dispatch.target, None);
+        assert!(unfocused.interactions.items.is_empty());
+
+        runtime.set_focused_widget(Some(graph_id));
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Keyboard(KeyboardEvent {
+                key: Key::Delete,
+                state: KeyState::Pressed,
+                modifiers: Modifiers::default(),
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(graph_id));
+        assert_eq!(
+            outcome.interactions.items,
+            vec![UiInteraction::GraphCanvasAction {
+                target: graph_id,
+                action: ui_graph_editor::GraphCanvasAction::KeyboardDeleteSelection,
+            }],
+            "delete/backspace may form only a generic graph intent in the substrate",
+        );
+    }
+
+    #[test]
+    fn graph_canvas_keyboard_shortcuts_dispatch_graph_commands() {
+        let graph_id = WidgetId(722);
+        let tree = graph_canvas_tree(graph_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 180.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+        runtime.set_focused_widget(Some(graph_id));
+
+        let add_node = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Keyboard(KeyboardEvent {
+                key: Key::Character("a".to_string()),
+                state: KeyState::Pressed,
+                modifiers: Modifiers::default(),
+            }),
+        );
+        assert_eq!(
+            add_node.interactions.items,
+            vec![UiInteraction::GraphCanvasAction {
+                target: graph_id,
+                action: ui_graph_editor::GraphCanvasAction::KeyboardShortcut(
+                    ui_graph_editor::GraphShortcutAction::AddNode,
+                ),
+            }],
+        );
+
+        let undo = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Keyboard(KeyboardEvent {
+                key: Key::Character("z".to_string()),
+                state: KeyState::Pressed,
+                modifiers: Modifiers {
+                    ctrl: true,
+                    ..Default::default()
+                },
+            }),
+        );
+        assert_eq!(
+            undo.interactions.items,
+            vec![UiInteraction::GraphCanvasAction {
+                target: graph_id,
+                action: ui_graph_editor::GraphCanvasAction::KeyboardShortcut(
+                    ui_graph_editor::GraphShortcutAction::Undo,
+                ),
+            }],
+        );
+    }
+
+    #[test]
+    fn graph_canvas_escape_cancels_active_gesture() {
+        let graph_id = WidgetId(721);
+        let tree = graph_canvas_tree(graph_id);
+        let bounds = UiRect::new(0.0, 0.0, 260.0, 180.0);
+        let mut runtime = UiRuntime::new();
+        let layouts = runtime.compute_layout(&tree, bounds);
+
+        let _ = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Pointer(PointerEvent {
+                kind: PointerEventKind::Down,
+                position: UiPoint::new(32.0, 32.0),
+                delta: UiVector::ZERO,
+                button: Some(PointerButton::Primary),
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                ..Default::default()
+            }),
+        );
+        assert_eq!(runtime.state().captured_widget, Some(graph_id));
+
+        let outcome = runtime.dispatch_input(
+            &tree,
+            &layouts,
+            &UiInputEvent::Keyboard(KeyboardEvent {
+                key: Key::Escape,
+                state: KeyState::Pressed,
+                modifiers: Modifiers::default(),
+            }),
+        );
+
+        assert_eq!(outcome.dispatch.target, Some(graph_id));
+        assert_eq!(outcome.dispatch.response.capture, PointerCapture::Release);
+        assert_eq!(runtime.state().captured_widget, None);
+        assert!(
+            runtime
+                .state()
+                .graph_canvas_gestures
+                .get(&graph_id)
+                .is_some_and(|gesture| gesture.active.is_none()),
+            "escape must clear the session-scoped graph gesture",
+        );
+        assert!(
+            outcome
+                .interactions
+                .items
+                .contains(&UiInteraction::GraphCanvasAction {
+                    target: graph_id,
+                    action: ui_graph_editor::GraphCanvasAction::CancelGesture,
+                }),
+            "escape must emit a generic graph cancel intent",
         );
     }
 

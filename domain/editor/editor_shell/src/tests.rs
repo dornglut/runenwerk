@@ -17,9 +17,11 @@ use crate::{
     EntityTableHierarchyFilter, EntityTableSurfaceAction, ImportInspectorViewModel,
     InspectorSurfaceAction, MaterialGraphCanvasViewModel, MaterialGraphEditorViewModel,
     MaterialGraphSourceRowViewModel, MaterialGraphToolbarViewModel, MaterialNodePaletteViewModel,
-    MaterialPreviewViewModel, MaterialSurfaceAction, MaterialUndoRedoViewModel,
+    MaterialNodePickerViewModel, MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
+    MaterialSurfaceAction, MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel,
     OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction,
-    ShellCommand, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
+    ShellCommand,
+    SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
     ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
     ViewportSurfaceAction, ViewportViewModel, WidgetId, WorkspaceIdentityAllocator,
@@ -38,6 +40,538 @@ use crate::{
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
+
+#[test]
+fn shell_graph_routing_has_no_new_domain_specific_graph_dispatch_actions() {
+    let sources = [
+        ("surface_provider.rs", include_str!("surface_provider.rs")),
+        (
+            "composition/build_editor_shell.rs",
+            include_str!("composition/build_editor_shell.rs"),
+        ),
+        (
+            "commands/map_interactions.rs",
+            include_str!("commands/map_interactions.rs"),
+        ),
+    ];
+    let forbidden_dispatch_actions = [
+        "SurfaceLocalRoute::MaterialGraphCanvas",
+        "DispatchMaterialGraphCanvasAction",
+        "DispatchProcgenGraphCanvasAction",
+        "DispatchGameplayGraphCanvasAction",
+        "DispatchAnimationGraphCanvasAction",
+        "DispatchParticleGraphCanvasAction",
+        "DispatchPhysicsGraphCanvasAction",
+        "DispatchSdfGraphCanvasAction",
+        "command_for_graph_canvas_action",
+        "material_action_for_graph_canvas_action",
+        "material_graph::",
+    ];
+
+    for (source_name, source) in sources {
+        for forbidden in forbidden_dispatch_actions {
+            assert!(
+                !source.contains(forbidden),
+                "{source_name} must not add domain-specific graph dispatch action `{forbidden}`; use provider-owned graph routing instead"
+            );
+        }
+    }
+}
+
+#[test]
+fn editor_shell_no_longer_exposes_material_graph_canvas_route() {
+    let source = include_str!("surface_provider.rs");
+
+    assert!(!source.contains("SurfaceLocalRoute::MaterialGraphCanvas"));
+    assert!(!source.contains("pub const fn material_graph_canvas"));
+    assert!(source.contains("ProviderOwnedGraphCanvas"));
+}
+
+#[test]
+fn editor_shell_no_longer_exposes_dispatch_material_graph_canvas_action() {
+    let source = include_str!("composition/build_editor_shell.rs");
+
+    assert!(!source.contains("DispatchMaterialGraphCanvasAction"));
+    assert!(source.contains("DispatchSurfaceInteraction"));
+}
+
+#[test]
+fn editor_shell_does_not_import_material_graph_for_graph_action_mapping() {
+    let source = include_str!("commands/map_interactions.rs");
+
+    assert!(!source.contains("material_graph::"));
+    assert!(!source.contains("material_action_for_graph_canvas_action"));
+    assert!(source.contains("SurfaceInteraction::GraphCanvasAction"));
+}
+
+#[test]
+fn material_resource_binding_diagnostics_are_app_neutral_view_models() {
+    let source = include_str!("surfaces/material.rs");
+    let block = source_block_between(
+        source,
+        "pub struct MaterialResourceBindingDiagnosticViewModel {",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum MaterialResourceBindingStatusKind",
+        "MaterialResourceBindingDiagnosticViewModel",
+    );
+
+    assert!(block.contains("pub status: MaterialResourceBindingStatusKind"));
+    for forbidden in [
+        "AssetCatalog",
+        "AssetArtifactDescriptor",
+        "ResolvedMaterialResource",
+        "TextureDescriptor",
+        "ProductPublicationRuntimeResource",
+        "Renderer",
+        "resource_resolution",
+    ] {
+        assert!(
+            !block.contains(forbidden),
+            "Material resource binding diagnostics must remain app-neutral presentation DTOs; found forbidden dependency `{forbidden}`"
+        );
+    }
+}
+
+#[test]
+fn reducer_normal_mutations_do_not_reintroduce_tool_surface_kind_authority_fields() {
+    let source = include_str!("workspace/reducer.rs");
+    let enum_block = source
+        .split("pub enum WorkspaceMutation {")
+        .nth(1)
+        .and_then(|tail| tail.split("impl WorkspaceMutation").next())
+        .expect("WorkspaceMutation enum should be followed by impl block");
+
+    for forbidden in [
+        "tool_surface_kind: ToolSurfaceKind",
+        "new_tool_surface_kind: ToolSurfaceKind",
+        "locked_tool_surface_kind: Option<ToolSurfaceKind>",
+        "ReplacePanelToolSurfaceKind",
+        "LockTabStackAreaType",
+    ] {
+        assert!(
+            !enum_block
+                .lines()
+                .map(str::trim)
+                .any(|line| line == forbidden),
+            "normal reducer mutations must not carry ToolSurfaceKind authority field `{forbidden}`; use stable keys plus named legacy wrappers"
+        );
+    }
+
+    assert!(enum_block.contains("stable_surface_key: ToolSurfaceStableKey"));
+    assert!(enum_block.contains("locked_stable_surface_key: Option<ToolSurfaceStableKey>"));
+    assert!(source.contains("add_panel_tab_legacy"));
+    assert!(source.contains("replace_panel_tool_surface_kind_legacy"));
+}
+
+#[test]
+fn tool_surface_kind_usage_is_boundary_only_guard() {
+    let legacy_source = include_str!("tool_suite/legacy.rs");
+    assert!(legacy_source.contains("explicit compatibility boundary"));
+    assert!(legacy_source.contains("Do not use it for new stable-key-first"));
+    assert!(legacy_source.contains("code paths."));
+
+    stable_key_authority_is_end_to_end_guard();
+    tool_surface_kind_is_legacy_boundary_only_guard();
+    panel_kind_is_structural_not_surface_identity_guard();
+    surface_provider_request_requires_stable_key_guard();
+    v5_persistence_uses_stable_key_primary_identity_guard();
+    tool_surface_kind_declaration_is_legacy_boundary_guard();
+    public_tool_surface_kind_apis_are_legacy_labeled_guard();
+    normal_tool_surface_state_does_not_use_tool_surface_kind_authority_guard();
+    normal_workspace_mutations_do_not_use_tool_surface_kind_authority_guard();
+    profile_default_surfaces_do_not_use_tool_surface_kind_authority_guard();
+    provider_request_does_not_require_tool_surface_kind_guard();
+    shell_menu_enum_compatibility_is_marked_pending_final_cleanup();
+    normal_surface_classifiers_use_stable_keys_when_available();
+    app_command_surface_contract_lookup_is_legacy_named();
+    no_unmarked_tool_surface_kind_usage_in_normal_path_guard();
+}
+
+#[test]
+fn stable_key_authority_is_end_to_end_guard() {
+    let state_source = include_str!("workspace/state.rs");
+    let reducer_source = include_str!("workspace/reducer.rs");
+    let profile_source = include_str!("workspace/profile.rs");
+    let projection_source = include_str!("workspace/projection.rs");
+    let app_provider_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/providers/mod.rs");
+    let workbench_host_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/workbench_host.rs");
+
+    let tool_surface_state = source_block_between(
+        state_source,
+        "pub struct ToolSurfaceState {",
+        "impl ToolSurfaceState",
+        "ToolSurfaceState",
+    );
+    assert!(tool_surface_state.contains("pub stable_surface_key: ToolSurfaceStableKey"));
+    assert!(!tool_surface_state.contains("pub tool_surface_kind: ToolSurfaceKind"));
+
+    let mutation_enum = source_block_between(
+        reducer_source,
+        "pub enum WorkspaceMutation {",
+        "impl WorkspaceMutation",
+        "WorkspaceMutation",
+    );
+    assert!(mutation_enum.contains("stable_surface_key: ToolSurfaceStableKey"));
+    assert!(mutation_enum.contains("locked_stable_surface_key: Option<ToolSurfaceStableKey>"));
+    assert!(!mutation_enum.contains("tool_surface_kind: ToolSurfaceKind"));
+
+    let profile_struct = source_block_between(
+        profile_source,
+        "pub struct WorkspaceProfile {",
+        "#[derive(Debug, Clone, PartialEq, Eq, Default)]",
+        "WorkspaceProfile",
+    );
+    assert!(profile_struct.contains("pub default_surfaces: Vec<WorkspaceDefaultToolSurface>"));
+    assert!(!profile_struct.contains("default_tool_surfaces: Vec<ToolSurfaceKind>"));
+
+    assert!(
+        projection_source.contains("pub active_stable_surface_key: Option<ToolSurfaceStableKey>")
+    );
+    assert!(projection_source.contains(".map(|surface| surface.stable_surface_key().clone())"));
+    surface_provider_request_requires_stable_key_guard();
+    v5_persistence_uses_stable_key_primary_identity_guard();
+
+    assert!(app_provider_source.contains("mounted_surface_requests_with_registry"));
+    assert!(
+        app_provider_source
+            .contains("let stable_surface_key = surface.stable_surface_key().clone();")
+    );
+    assert!(app_provider_source.contains("provider_family_provider_map"));
+    assert!(app_provider_source.contains("resolve_frame_with_provider_family_map"));
+    assert!(app_provider_source.contains("SurfaceProviderSupportMode::StableKey"));
+    assert!(app_provider_source.contains("preferred_support_mode"));
+    assert!(app_provider_source.contains(".preferred(supported.support_mode)"));
+
+    assert!(
+        workbench_host_source.contains("provider_family_provider_map: ProviderFamilyProviderMap")
+    );
+    assert!(workbench_host_source.contains("RunenwerkWorkbenchHost"));
+}
+
+#[test]
+fn tool_surface_kind_is_legacy_boundary_only_guard() {
+    let legacy_source = include_str!("tool_suite/legacy.rs");
+    let persisted_source = include_str!("workspace/persisted.rs");
+    let definition_form_source = include_str!("workspace/definition_form.rs");
+    let reducer_source = include_str!("workspace/reducer.rs");
+    let profile_source = include_str!("workspace/profile.rs");
+    let controller_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/controller.rs");
+    let dispatch_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/dispatch/mod.rs");
+
+    assert!(legacy_source.contains("explicit compatibility boundary"));
+    assert!(
+        legacy_source.contains("The reverse stable-key to `ToolSurfaceKind` bridge exists only")
+    );
+
+    assert!(persisted_source.contains("pub fn from_persisted_v1"));
+    assert!(persisted_source.contains("pub fn from_persisted_v2"));
+    assert!(persisted_source.contains("pub fn from_persisted_v3"));
+    assert!(persisted_source.contains("pub fn from_persisted_v4"));
+    assert!(persisted_source.contains("pub fn from_persisted_v5"));
+    assert!(persisted_source.contains("legacy_tool_surface_kind_for_legacy_persistence"));
+    assert!(persisted_source.contains("persisted_v5_stable_surface_key_for_surface"));
+
+    assert!(definition_form_source.contains("authored_legacy_surface_key_still_resolves"));
+    assert!(definition_form_source.contains("ToolSurfaceState::new_legacy"));
+    assert!(reducer_source.contains("add_panel_tab_legacy"));
+    assert!(reducer_source.contains("replace_panel_tool_surface_kind_legacy"));
+    assert!(profile_source.contains("pub fn new_legacy"));
+
+    assert!(controller_source.contains("legacy_tool_surface_kind_for_tab_stack_pending_c6"));
+    assert!(dispatch_source.contains("LegacySurfaceCommandContract"));
+    assert!(dispatch_source.contains("resolve_legacy_surface_command_contract"));
+}
+
+#[test]
+fn panel_kind_is_structural_not_surface_identity_guard() {
+    let state_source = include_str!("workspace/state.rs");
+    let docs = preceding_lines_for(state_source, "pub enum PanelKind", 10);
+
+    assert!(docs.contains("Structural shell/layout grouping"));
+    assert!(docs.contains("not tool-surface identity"));
+    assert!(docs.contains("ToolSurfaceStableKey"));
+
+    let panel_struct = source_block_between(
+        state_source,
+        "pub struct PanelInstanceState {",
+        "#[derive(Debug, Clone, PartialEq)]",
+        "PanelInstanceState",
+    );
+    assert!(panel_struct.contains("pub panel_kind: PanelKind"));
+    assert!(panel_struct.contains("pub active_tool_surface: Option<ToolSurfaceInstanceId>"));
+    normal_tool_surface_state_does_not_use_tool_surface_kind_authority_guard();
+}
+
+#[test]
+fn surface_provider_request_requires_stable_key_guard() {
+    let source = include_str!("surface_provider.rs");
+    let request_struct = source_block_between(
+        source,
+        "pub struct SurfaceProviderRequest {",
+        "impl SurfaceProviderRequest",
+        "SurfaceProviderRequest",
+    );
+
+    assert!(request_struct.contains("pub stable_surface_key: ToolSurfaceStableKey"));
+    assert!(request_struct.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>"));
+    assert!(request_struct.contains("pub provider_family_id: Option<ProviderFamilyId>"));
+    assert!(request_struct.contains("pub surface_route: Option<ToolSurfaceRoute>"));
+    assert!(!request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"));
+    assert!(source.contains("pub fn stable_key(&self) -> &ToolSurfaceStableKey"));
+}
+
+#[test]
+fn v5_persistence_uses_stable_key_primary_identity_guard() {
+    let source = include_str!("workspace/persisted.rs");
+    let persisted_surface = source_block_between(
+        source,
+        "pub struct PersistedToolSurfaceStateV5 {",
+        "pub struct PersistedViewportSettingsV1",
+        "PersistedToolSurfaceStateV5",
+    );
+    let to_persisted_v5 = source_block_between(
+        source,
+        "pub fn to_persisted_v5(&self) -> Result<PersistedWorkspaceStateV5, WorkspaceStateError> {",
+        "pub fn to_persisted_v4",
+        "to_persisted_v5",
+    );
+    let from_persisted_v5 = source_block_between(
+        source,
+        "pub fn from_persisted_v5(",
+        "fn persisted_v5_stable_surface_key_for_surface",
+        "from_persisted_v5",
+    );
+
+    assert!(persisted_surface.contains("pub stable_surface_key: String"));
+    assert!(
+        persisted_surface
+            .contains("pub legacy_tool_surface_kind: Option<PersistedToolSurfaceKindV2>")
+    );
+    assert!(!persisted_surface.contains("pub tool_surface_kind: PersistedToolSurfaceKindV2"));
+    assert!(to_persisted_v5.contains("persisted_v5_stable_surface_key_for_surface(surface)?"));
+    assert!(to_persisted_v5.contains("stable_surface_key: stable_surface_key.to_string()"));
+    assert!(from_persisted_v5.contains("persisted_v5_tool_surface_identity"));
+    assert!(from_persisted_v5.contains("ToolSurfaceState::new_with_stable_key"));
+}
+
+#[test]
+fn tool_surface_kind_declaration_is_legacy_boundary_guard() {
+    let source = include_str!("workspace/state.rs");
+    let declaration_docs = preceding_lines_for(source, "pub enum ToolSurfaceKind", 10);
+
+    assert!(declaration_docs.contains("Legacy boundary enum"));
+    assert!(declaration_docs.contains("ToolSurfaceStableKey"));
+    assert!(declaration_docs.contains("not live tool-surface identity"));
+    assert!(declaration_docs.contains("New"));
+    assert!(declaration_docs.contains("normal APIs should carry `ToolSurfaceStableKey`"));
+}
+
+#[test]
+fn public_tool_surface_kind_apis_are_legacy_labeled_guard() {
+    let surface_contract_source = include_str!("workspace/surface_contract.rs");
+    for helper in [
+        "pub fn stable_key_for_tool_surface_kind",
+        "pub fn tool_surface_definition_id",
+        "pub fn tool_surface_kind_definition_key",
+        "pub fn tool_surface_kind_from_definition_key",
+        "pub fn panel_kind_for_tool_surface_kind",
+        "pub fn tool_surface_capability_set",
+        "pub fn tool_surface_session_retention_class",
+    ] {
+        assert_legacy_boundary_doc(surface_contract_source, helper);
+    }
+
+    let surface_provider_source = include_str!("surface_provider.rs");
+    assert_legacy_boundary_doc(
+        surface_provider_source,
+        "pub fn with_available_tool_surface_kinds",
+    );
+}
+
+#[test]
+fn normal_tool_surface_state_does_not_use_tool_surface_kind_authority_guard() {
+    let source = include_str!("workspace/state.rs");
+    let struct_block = source_block_between(
+        source,
+        "pub struct ToolSurfaceState {",
+        "impl ToolSurfaceState",
+        "ToolSurfaceState",
+    );
+
+    assert!(struct_block.contains("pub stable_surface_key: ToolSurfaceStableKey"));
+    assert!(struct_block.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>"));
+    assert!(
+        !struct_block.contains("pub tool_surface_kind: ToolSurfaceKind"),
+        "ToolSurfaceState must not reintroduce ToolSurfaceKind authority"
+    );
+    assert!(source.contains("pub fn new_with_stable_key"));
+    assert!(source.contains("pub fn new_legacy"));
+    assert!(source.contains("pub panel_kind: PanelKind"));
+}
+
+#[test]
+fn normal_workspace_mutations_do_not_use_tool_surface_kind_authority_guard() {
+    reducer_normal_mutations_do_not_reintroduce_tool_surface_kind_authority_fields();
+}
+
+#[test]
+fn profile_default_surfaces_do_not_use_tool_surface_kind_authority_guard() {
+    let source = include_str!("workspace/profile.rs");
+    let profile_block = source_block_between(
+        source,
+        "pub struct WorkspaceProfile {",
+        "#[derive(Debug, Clone, PartialEq, Eq, Default)]",
+        "WorkspaceProfile",
+    );
+    let default_surface_block = source_block_between(
+        include_str!("workspace/state.rs"),
+        "pub struct WorkspaceDefaultToolSurface {",
+        "impl WorkspaceDefaultToolSurface",
+        "WorkspaceDefaultToolSurface",
+    );
+
+    assert!(profile_block.contains("pub default_surfaces: Vec<WorkspaceDefaultToolSurface>"));
+    assert!(
+        !profile_block.contains("default_tool_surfaces: Vec<ToolSurfaceKind>"),
+        "WorkspaceProfile default surfaces must stay stable-key primary"
+    );
+    assert!(default_surface_block.contains("pub stable_surface_key: ToolSurfaceStableKey"));
+    assert!(default_surface_block.contains("pub panel_kind: PanelKind"));
+    assert!(
+        default_surface_block.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>")
+    );
+    assert!(source.contains("pub fn new_legacy"));
+}
+
+#[test]
+fn provider_request_does_not_require_tool_surface_kind_guard() {
+    let source = include_str!("surface_provider.rs");
+    let request_struct = source_block_between(
+        source,
+        "pub struct SurfaceProviderRequest {",
+        "impl SurfaceProviderRequest",
+        "SurfaceProviderRequest",
+    );
+
+    assert!(request_struct.contains("pub stable_surface_key: ToolSurfaceStableKey"));
+    assert!(request_struct.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>"));
+    assert!(
+        !request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"),
+        "SurfaceProviderRequest must not require ToolSurfaceKind"
+    );
+}
+
+#[test]
+fn shell_menu_enum_compatibility_is_marked_pending_final_cleanup() {
+    let surface_provider_source = include_str!("surface_provider.rs");
+    let composition_source = include_str!("composition/build_editor_shell.rs");
+
+    assert!(
+        surface_provider_source
+            .contains("C6C shell UI compatibility boundary pending final cleanup")
+    );
+    assert!(
+        composition_source.contains("C6C shell UI compatibility boundary pending final cleanup")
+    );
+    assert!(composition_source.contains("RoutedShellAction::SwitchPanelToolSurfaceKindTo"));
+    assert!(composition_source.contains("RoutedShellAction::CreatePanelTab"));
+}
+
+#[test]
+fn normal_surface_classifiers_use_stable_keys_when_available() {
+    let viewport_registry_source =
+        include_str!("../../../../apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs");
+    let surface_session_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/surface_session.rs");
+
+    assert!(viewport_registry_source.contains("surface.stable_surface_key().as_str()"));
+    assert!(viewport_registry_source.contains("SCENE_VIEWPORT_SURFACE_KEY"));
+    assert!(!viewport_registry_source.contains("legacy_tool_surface_kind()"));
+
+    assert!(
+        surface_session_source.contains("retains_live_session_key(surface.stable_surface_key())")
+    );
+    assert!(surface_session_source.contains("SCENE_VIEWPORT_SURFACE_KEY"));
+    assert!(!surface_session_source.contains("legacy_tool_surface_kind()"));
+}
+
+#[test]
+fn app_command_surface_contract_lookup_is_legacy_named() {
+    let dispatch_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/dispatch/mod.rs");
+
+    assert!(dispatch_source.contains("pub(crate) struct LegacySurfaceCommandContract"));
+    assert!(dispatch_source.contains("pub(crate) fn resolve_legacy_surface_command_contract"));
+    assert!(dispatch_source.contains("C6C command-dispatch compatibility boundary"));
+    assert!(
+        dispatch_source.contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
+    );
+    assert!(dispatch_source.contains("or_else(|| surface.legacy_tool_surface_kind())"));
+}
+
+#[test]
+fn no_unmarked_tool_surface_kind_usage_in_normal_path_guard() {
+    let controller_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/controller.rs");
+    let dispatch_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/dispatch/mod.rs");
+    let surface_provider_source = include_str!("surface_provider.rs");
+    let composition_source = include_str!("composition/build_editor_shell.rs");
+
+    assert!(controller_source.contains("legacy_tool_surface_kind_for_tab_stack_pending_c6"));
+    assert!(controller_source.contains("C6C shell UI compatibility boundary"));
+    assert!(
+        controller_source
+            .contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
+    );
+
+    assert!(dispatch_source.contains("LegacySurfaceCommandContract"));
+    assert!(dispatch_source.contains("C6C legacy app-command compatibility boundary"));
+    assert!(
+        dispatch_source.contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
+    );
+
+    let request_struct = source_block_between(
+        surface_provider_source,
+        "pub struct SurfaceProviderRequest {",
+        "impl SurfaceProviderRequest",
+        "SurfaceProviderRequest",
+    );
+    assert!(!request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"));
+    assert!(!composition_source.contains("C5 shell UI compatibility boundary pending C6"));
+    assert!(
+        composition_source.contains("C6C shell UI compatibility boundary pending final cleanup")
+    );
+}
+
+fn source_block_between<'a>(source: &'a str, start: &str, end: &str, label: &str) -> &'a str {
+    source
+        .split(start)
+        .nth(1)
+        .and_then(|tail| tail.split(end).next())
+        .unwrap_or_else(|| panic!("{label} source block should exist"))
+}
+
+fn assert_legacy_boundary_doc(source: &str, needle: &str) {
+    let docs = preceding_lines_for(source, needle, 8);
+    assert!(
+        docs.contains("legacy boundary") || docs.contains("C6B legacy boundary"),
+        "`{needle}` must be explicitly documented as a legacy boundary helper"
+    );
+}
+
+fn preceding_lines_for(source: &str, needle: &str, count: usize) -> String {
+    let prefix = source
+        .split(needle)
+        .next()
+        .unwrap_or_else(|| panic!("source should contain `{needle}`"));
+    let mut lines = prefix.lines().rev().take(count).collect::<Vec<_>>();
+    lines.reverse();
+    lines.join("\n")
+}
 
 #[test]
 fn asset_surface_contracts_use_typed_asset_ids_and_epoch_commands() {
@@ -114,11 +648,16 @@ fn material_surface_contracts_use_typed_ids_and_epoch_commands() {
             search_query: String::new(),
             categories: Vec::new(),
         },
+        texture_picker: MaterialTextureResourcePickerViewModel::default(),
         toolbar: MaterialGraphToolbarViewModel::default(),
         validation_overlays: Vec::new(),
+        active_diagnostic_index: None,
+        node_picker: MaterialNodePickerViewModel::default(),
         shortcuts: Vec::new(),
         undo_redo: MaterialUndoRedoViewModel::default(),
         catalog_status_lines: Vec::new(),
+        diagnostic_rows: Vec::new(),
+        resource_binding_diagnostics: Vec::new(),
         diagnostic_lines: Vec::new(),
     };
     let preview = MaterialPreviewViewModel {
@@ -128,6 +667,9 @@ fn material_surface_contracts_use_typed_ids_and_epoch_commands() {
         viewport_product_id: Some(editor_viewport::ExpressionProductId(25)),
         specialization_fragment: Some("material.first_slice.render_material".to_string()),
         prepared_parameter_payload_bytes: 16,
+        preview_status: MaterialPreviewStatusViewModel::default(),
+        diagnostic_rows: Vec::new(),
+        resource_binding_diagnostics: Vec::new(),
         preview_status_lines: Vec::new(),
         diagnostic_lines: Vec::new(),
     };
@@ -705,15 +1247,18 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
     assert_eq!(*left_right_fraction, 0.72);
     assert_eq!(*center_right_fraction, 0.56);
     assert_eq!(
-        viewport.active_panel.map(|panel| panel.panel_kind),
+        viewport.active_panel.as_ref().map(|panel| panel.panel_kind),
         Some(PanelKind::Viewport)
     );
     assert_eq!(
-        outliner.active_panel.map(|panel| panel.panel_kind),
+        outliner.active_panel.as_ref().map(|panel| panel.panel_kind),
         Some(PanelKind::Outliner)
     );
     assert_eq!(
-        inspector.active_panel.map(|panel| panel.panel_kind),
+        inspector
+            .active_panel
+            .as_ref()
+            .map(|panel| panel.panel_kind),
         Some(PanelKind::Inspector)
     );
 }
@@ -965,6 +1510,129 @@ fn provider_route_activation_maps_to_surface_local_dispatch_command() {
 }
 
 #[test]
+fn graph_canvas_interaction_maps_to_generic_surface_interaction() {
+    let workspace = sample_workspace_state();
+    let (panel_id, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
+    let widget_id = WidgetId(50_010);
+    let mut frame_model = frame_model_for_workspace(&workspace);
+    let frame = frame_model
+        .surfaces
+        .get_mut(&surface_id)
+        .expect("material graph canvas surface should exist in frame model");
+    frame
+        .routes
+        .insert(widget_id, SurfaceLocalRoute::provider_owned_graph_canvas());
+    frame.artifact.root = label(
+        widget_id,
+        frame.title.clone(),
+        ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
+    );
+
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::GraphCanvasAction {
+                target: widget_id,
+                action: ui_graph_editor::GraphCanvasAction::EndNodeDrag {
+                    node: ui_graph_editor::GraphNodeKey(3),
+                    delta: ui_graph_editor::GraphVector::new(12, -6),
+                },
+            }],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert!(matches!(
+        commands.as_slice(),
+        [ShellCommand::DispatchSurfaceInteraction {
+            provider_id,
+            tool_surface_instance_id,
+            target,
+            interaction: SurfaceInteraction::GraphCanvasAction(
+                ui_graph_editor::GraphCanvasAction::EndNodeDrag { node, delta }
+            ),
+            projection_epoch,
+        }] if *provider_id == SurfaceProviderId::try_from_raw(77).unwrap()
+            && *tool_surface_instance_id == surface_id
+            && target.panel_instance_id == panel_id
+            && target.active_tool_surface == Some(surface_id)
+            && *node == ui_graph_editor::GraphNodeKey(3)
+            && *delta == ui_graph_editor::GraphVector::new(12, -6)
+            && *projection_epoch == build.projection_artifacts.projection_epoch
+    ));
+}
+
+#[test]
+fn graph_canvas_shortcut_actions_map_to_generic_surface_interactions() {
+    let workspace = sample_workspace_state();
+    let (panel_id, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
+    let widget_id = WidgetId(50_011);
+    let mut frame_model = frame_model_for_workspace(&workspace);
+    let frame = frame_model
+        .surfaces
+        .get_mut(&surface_id)
+        .expect("material graph canvas surface should exist in frame model");
+    frame
+        .routes
+        .insert(widget_id, SurfaceLocalRoute::provider_owned_graph_canvas());
+    frame.artifact.root = label(
+        widget_id,
+        frame.title.clone(),
+        ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
+    );
+
+    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![
+                UiInteraction::GraphCanvasAction {
+                    target: widget_id,
+                    action: ui_graph_editor::GraphCanvasAction::KeyboardShortcut(
+                        ui_graph_editor::GraphShortcutAction::AddNode,
+                    ),
+                },
+                UiInteraction::GraphCanvasAction {
+                    target: widget_id,
+                    action: ui_graph_editor::GraphCanvasAction::KeyboardShortcut(
+                        ui_graph_editor::GraphShortcutAction::Undo,
+                    ),
+                },
+            ],
+        },
+        &build.projection_artifacts,
+    );
+
+    assert!(matches!(
+        commands.as_slice(),
+        [
+            ShellCommand::DispatchSurfaceInteraction {
+                provider_id,
+                tool_surface_instance_id,
+                target,
+                interaction: SurfaceInteraction::GraphCanvasAction(
+                    ui_graph_editor::GraphCanvasAction::KeyboardShortcut(
+                        ui_graph_editor::GraphShortcutAction::AddNode
+                    )
+                ),
+                projection_epoch,
+            },
+            ShellCommand::DispatchSurfaceInteraction {
+                interaction: SurfaceInteraction::GraphCanvasAction(
+                    ui_graph_editor::GraphCanvasAction::KeyboardShortcut(
+                        ui_graph_editor::GraphShortcutAction::Undo
+                    )
+                ),
+                ..
+            },
+        ] if *provider_id == SurfaceProviderId::try_from_raw(77).unwrap()
+            && *tool_surface_instance_id == surface_id
+            && target.panel_instance_id == panel_id
+            && target.active_tool_surface == Some(surface_id)
+            && *projection_epoch == build.projection_artifacts.projection_epoch
+    ));
+}
+
+#[test]
 fn provider_route_rejects_mismatched_structural_context() {
     let workspace = sample_workspace_state();
     let (_, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
@@ -1030,6 +1698,36 @@ fn surface_text_and_keyboard_input_map_to_typed_entity_table_actions() {
             }),
             SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::BackspaceSearch),
         ]
+    );
+}
+
+#[test]
+fn material_graph_inspector_text_input_maps_to_source_backed_edit() {
+    let actions = mapped_surface_actions_for_route(
+        PanelKind::Outliner,
+        WidgetId(50_105),
+        SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodeValue {
+            node_id: graph::NodeId::new(3),
+            key: "roughness".to_string(),
+            value: String::new(),
+        }),
+        vec![UiInteraction::TextInput {
+            target: WidgetId(50_105),
+            event: TextInputEvent {
+                text: "0.25".to_string(),
+            },
+        }],
+    );
+
+    assert_eq!(
+        actions,
+        vec![SurfaceLocalAction::Material(
+            MaterialSurfaceAction::SetNodeValue {
+                node_id: graph::NodeId::new(3),
+                key: "roughness".to_string(),
+                value: "0.25".to_string(),
+            },
+        )]
     );
 }
 
@@ -1579,10 +2277,11 @@ fn locked_tab_plus_menu_shows_all_kinds_but_routes_only_locked_kind() {
     let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
     let workspace = reduce_workspace(
         &workspace,
-        WorkspaceMutation::LockTabStackAreaType {
-            tab_stack_id: viewport_stack,
-            locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
-        },
+        WorkspaceMutation::lock_tab_stack_area_type_legacy(
+            viewport_stack,
+            Some(ToolSurfaceKind::Viewport),
+        )
+        .expect("legacy wrapper should create lock mutation"),
     )
     .expect("locking viewport tab stack should succeed");
     let available_kinds = vec![
@@ -2136,19 +2835,20 @@ fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
 
     let split_workspace = reduce_workspace(
         &workspace,
-        WorkspaceMutation::SplitTabStackArea {
-            tab_stack_id: viewport_stack,
-            axis: WorkspaceSplitAxis::Horizontal,
+        WorkspaceMutation::split_tab_stack_area_legacy(
+            viewport_stack,
+            WorkspaceSplitAxis::Horizontal,
             split_host_id,
             first_child_host_id,
             second_child_host_id,
             new_tab_stack_id,
             new_panel_id,
-            new_panel_kind: PanelKind::Inspector,
-            new_tool_surface_id: new_surface_id,
-            new_tool_surface_kind: ToolSurfaceKind::Inspector,
-            fraction: 0.5,
-        },
+            PanelKind::Inspector,
+            new_surface_id,
+            ToolSurfaceKind::Inspector,
+            0.5,
+        )
+        .expect("legacy wrapper should create split mutation"),
     )
     .expect("split area should produce a valid workspace graph");
     let frame_model = frame_model_for_workspace(&split_workspace);
@@ -2293,14 +2993,18 @@ fn surface_frame(
     surface: &crate::ToolSurfaceState,
     root_widget_id: WidgetId,
 ) -> ResolvedSurfaceFrame {
+    let legacy_tool_surface_kind = surface
+        .legacy_tool_surface_kind_or_error()
+        .expect("test shell frame fixture should retain legacy compatibility metadata");
     ResolvedSurfaceFrame {
         surface_instance_id: surface.id,
         panel_instance_id,
         tab_stack_id,
-        surface_kind: surface.tool_surface_kind,
-        surface_definition_id: tool_surface_definition_id(surface.tool_surface_kind),
+        surface_kind: Some(legacy_tool_surface_kind),
+        stable_surface_key: surface.stable_surface_key().clone(),
+        surface_definition_id: tool_surface_definition_id(legacy_tool_surface_kind),
         provider_id: Some(SurfaceProviderId::try_from_raw(77).unwrap()),
-        title: format!("{:?}", surface.tool_surface_kind),
+        title: format!("{:?}", legacy_tool_surface_kind),
         artifact: SurfacePresentationArtifact::provider(label(
             root_widget_id,
             "surface",

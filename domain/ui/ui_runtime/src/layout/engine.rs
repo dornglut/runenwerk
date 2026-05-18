@@ -8,11 +8,11 @@ use ui_layout::{
 use ui_math::{Axis, UiRect, UiSize};
 
 use crate::{
-    ButtonNode, ComputedLayout, ComputedLayoutMap, DividerNode, ImageNode, LabelNode,
-    NumericInputNode, OverlayAdornmentNode, PanelNode, PopupAlign, PopupFlipPolicy, PopupNode,
-    PopupPlacement, PopupSide, RadialMenuAnchor, RadialMenuNode, ScrollNode, SelectNode,
-    SpacerNode, SplitNode, StackNode, TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode,
-    UiNode, UiNodeKind, UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
+    ButtonNode, ComputedLayout, ComputedLayoutMap, DividerNode, GraphCanvasNode, ImageNode,
+    LabelNode, NumericInputNode, OverlayAdornmentNode, PanelNode, PopupAlign, PopupFlipPolicy,
+    PopupNode, PopupPlacement, PopupSide, ProductSurfaceNode, RadialMenuAnchor, RadialMenuNode,
+    ScrollNode, SelectNode, SpacerNode, SplitNode, StackNode, TableNode, TabsNode, TextInputNode,
+    ToggleNode, TreeNode, UiNode, UiNodeKind, UiRuntimeState, UiTree, ViewportSurfaceEmbedNode,
 };
 
 pub fn compute_tree_layout(
@@ -50,6 +50,10 @@ fn layout_node(
         UiNodeKind::Spacer(spacer) => layout_spacer(node, spacer, bounds, out),
         UiNodeKind::Divider(divider) => layout_divider(node, divider, bounds, out),
         UiNodeKind::Image(image) => layout_image(node, image, bounds, out),
+        UiNodeKind::ProductSurface(surface) => layout_product_surface(node, surface, bounds, out),
+        UiNodeKind::GraphCanvas(graph_canvas) => {
+            layout_graph_canvas(node, graph_canvas, bounds, out)
+        }
         UiNodeKind::ViewportSurfaceEmbed(embed) => {
             layout_viewport_surface_embed(node, embed, bounds, out)
         }
@@ -459,6 +463,34 @@ fn layout_image(
     let measured_size = UiSize::new(
         bounds.width.max(image.min_size.width),
         bounds.height.max(image.min_size.height),
+    );
+    out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
+    measured_size
+}
+
+fn layout_product_surface(
+    node: &UiNode,
+    surface: &ProductSurfaceNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = UiSize::new(
+        bounds.width.max(surface.min_size.width),
+        bounds.height.max(surface.min_size.height),
+    );
+    out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
+    measured_size
+}
+
+fn layout_graph_canvas(
+    node: &UiNode,
+    graph_canvas: &GraphCanvasNode,
+    bounds: UiRect,
+    out: &mut ComputedLayoutMap,
+) -> UiSize {
+    let measured_size = UiSize::new(
+        bounds.width.max(graph_canvas.min_size.width),
+        bounds.height.max(graph_canvas.min_size.height),
     );
     out.insert(node.id, ComputedLayout::new(bounds, bounds, measured_size));
     measured_size
@@ -1222,6 +1254,8 @@ fn measure_node(node: &UiNode) -> UiSize {
         UiNodeKind::Spacer(spacer) => spacer.min_size,
         UiNodeKind::Divider(divider) => divider_intrinsic_size(divider),
         UiNodeKind::Image(image) => image.min_size,
+        UiNodeKind::ProductSurface(surface) => surface.min_size,
+        UiNodeKind::GraphCanvas(graph_canvas) => graph_canvas.min_size,
         UiNodeKind::ViewportSurfaceEmbed(embed) => embed.min_size,
         UiNodeKind::Scroll(_) => node
             .children

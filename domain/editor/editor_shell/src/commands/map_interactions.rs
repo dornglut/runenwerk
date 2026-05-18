@@ -2,9 +2,10 @@
 //! Purpose: Map semantic UI interactions to shell commands.
 
 use crate::{
-    EntityTableSurfaceAction, InspectorSurfaceAction, OutlinerSurfaceAction, RoutedShellAction,
-    ShellCommand, ShellProjectionArtifacts, StructuralCommandTarget,
-    StructuralWidgetRoutingContext, SurfaceLocalAction, UiInteraction, UiInteractionResults,
+    EntityTableSurfaceAction, InspectorSurfaceAction, MaterialSurfaceAction, OutlinerSurfaceAction,
+    RoutedShellAction, ShellCommand, ShellProjectionArtifacts, StructuralCommandTarget,
+    StructuralWidgetRoutingContext, SurfaceInteraction, SurfaceLocalAction, UiInteraction,
+    UiInteractionResults,
 };
 use ui_input::{Key, KeyState};
 
@@ -50,6 +51,12 @@ pub fn map_interactions_to_shell_commands(
                             EntityTableSurfaceAction::AppendSearchText { .. },
                         ) | SurfaceLocalAction::Inspector(
                             InspectorSurfaceAction::EditFieldText { .. },
+                        ) | SurfaceLocalAction::Material(
+                            MaterialSurfaceAction::SetNodeValue { .. }
+                                | MaterialSurfaceAction::PickTextureResource { .. }
+                                | MaterialSurfaceAction::SetMaterialNodePaletteSearch { .. }
+                                | MaterialSurfaceAction::SetNodePickerSearch { .. }
+                                | MaterialSurfaceAction::SetTextureResourceSearch { .. },
                         )
                     )
                 {
@@ -135,6 +142,13 @@ pub fn map_interactions_to_shell_commands(
                         }),
                         _ => {}
                     }
+                }
+            }
+            UiInteraction::GraphCanvasAction { target, action } => {
+                if let Some(command) =
+                    command_for_provider_owned_graph_canvas_action(*target, action, routing)
+                {
+                    commands.push(command);
                 }
             }
             UiInteraction::HoveredChanged { .. }
@@ -334,7 +348,38 @@ fn command_for_activation(
             action: action.clone(),
             projection_epoch: routing.projection_epoch,
         },
+        RoutedShellAction::DispatchSurfaceInteraction { .. } => ShellCommand::NoOp,
     }
+}
+
+fn command_for_provider_owned_graph_canvas_action(
+    widget_id: crate::WidgetId,
+    action: &ui_graph_editor::GraphCanvasAction,
+    routing: &ShellProjectionArtifacts,
+) -> Option<ShellCommand> {
+    let Some(RoutedShellAction::DispatchSurfaceInteraction {
+        provider_id,
+        tool_surface_instance_id,
+        context,
+    }) = routing.widget_actions_by_id.get(&widget_id)
+    else {
+        return None;
+    };
+    if routing
+        .widget_structural_context_by_id
+        .get(&widget_id)
+        .copied()
+        != Some(*context)
+    {
+        return None;
+    }
+    Some(ShellCommand::DispatchSurfaceInteraction {
+        provider_id: *provider_id,
+        tool_surface_instance_id: *tool_surface_instance_id,
+        target: command_target(*context),
+        interaction: SurfaceInteraction::GraphCanvasAction(action.clone()),
+        projection_epoch: routing.projection_epoch,
+    })
 }
 
 fn command_for_select_change(
@@ -539,6 +584,35 @@ fn surface_text_action(action: &SurfaceLocalAction, text: String) -> SurfaceLoca
                 text,
             })
         }
+        SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodeValue {
+            node_id, key, ..
+        }) => SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodeValue {
+            node_id: *node_id,
+            key: key.clone(),
+            value: text,
+        }),
+        SurfaceLocalAction::Material(MaterialSurfaceAction::PickTextureResource {
+            node_id,
+            key,
+            ..
+        }) => SurfaceLocalAction::Material(MaterialSurfaceAction::PickTextureResource {
+            node_id: *node_id,
+            key: key.clone(),
+            stable_id: text,
+        }),
+        SurfaceLocalAction::Material(MaterialSurfaceAction::SetMaterialNodePaletteSearch {
+            ..
+        }) => SurfaceLocalAction::Material(MaterialSurfaceAction::SetMaterialNodePaletteSearch {
+            query: text,
+        }),
+        SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodePickerSearch { .. }) => {
+            SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodePickerSearch { query: text })
+        }
+        SurfaceLocalAction::Material(MaterialSurfaceAction::SetTextureResourceSearch {
+            ..
+        }) => SurfaceLocalAction::Material(MaterialSurfaceAction::SetTextureResourceSearch {
+            query: text,
+        }),
         _ => action.clone(),
     }
 }
@@ -669,7 +743,8 @@ fn action_has_structural_context_match(
     routing: &ShellProjectionArtifacts,
 ) -> bool {
     let expected = match action {
-        RoutedShellAction::DispatchSurfaceLocalAction { context, .. } => Some(*context),
+        RoutedShellAction::DispatchSurfaceLocalAction { context, .. }
+        | RoutedShellAction::DispatchSurfaceInteraction { context, .. } => Some(*context),
         _ => None,
     };
 

@@ -1,0 +1,98 @@
+@startuml
+title Editor Tool Suite Registration And Surface Resolution Flow
+
+skinparam shadowing false
+skinparam defaultFontName Monospaced
+
+start
+:WorkbenchHost starts;
+
+partition "A. Build ToolSuiteRegistry" {
+  :Install compiled-in ToolSuites;
+
+  if (Duplicate ToolSuiteId?) then (yes)
+    :Reject ToolSuiteRegistry activation;
+    :Emit registry diagnostic;
+    stop
+  else (no)
+  endif
+
+  if (Duplicate stable surface key?) then (yes)
+    :Reject ToolSurfaceRegistry construction;
+    :Emit registry diagnostic;
+    stop
+  else (no)
+  endif
+
+  if (Invalid provider-family reference?) then (yes)
+    :Reject ToolSuiteRegistry activation;
+    :Emit registry diagnostic;
+    stop
+  else (no)
+  endif
+
+  if (Invalid or duplicate suite contribution?) then (yes)
+    :Reject ToolSuiteRegistry activation;
+    :Emit registry diagnostic;
+    stop
+  else (no)
+  endif
+
+  :Validate ToolSuiteRegistry;
+  :Build ToolSurfaceRegistry;
+}
+
+partition "B. Build ProviderRegistry" {
+  :Register concrete providers from app/workbench composition;
+
+  if (Duplicate provider id?) then (yes)
+    :Reject ProviderRegistry construction;
+    :Emit provider registry diagnostic;
+    stop
+  else (no)
+  endif
+
+  :Retain explicit provider priority metadata;
+}
+
+partition "C. Resolve Mounted Surface" {
+  :Load and validate workspace profile/layout;
+  :Resolve mounted ToolSurfaceInstanceId values;
+  :Create SurfaceProviderRequest for each mounted surface;
+
+  if (Registered provider family exists?) then (no)
+    :Emit missing-provider diagnostic artifact;
+    :Surface emits no provider-local routes;
+  else (yes)
+    if (Surface request unsupported?) then (yes)
+      :Emit unsupported-surface diagnostic artifact;
+      :Surface emits no provider-local routes;
+    else (supported)
+      if (Equal-priority provider ambiguity?) then (yes)
+        :Emit ambiguous-provider diagnostic artifact;
+        :Surface emits no provider-local routes;
+      else (valid provider)
+        :Ask provider to build ResolvedSurfaceFrame;
+        if (Provider build succeeds?) then (yes)
+          :Provider returns artifact and local route table;
+        else (no)
+          :Emit provider-error diagnostic artifact;
+          :Surface emits no provider-local routes;
+        endif
+      endif
+    endif
+  endif
+
+  :Shell hosts chrome, docking, tabs, and structural route context around provider artifact;
+}
+stop
+
+note right
+  Registry and provider resolution
+  are deterministic and fail closed.
+  Duplicate provider ids are rejected.
+  Ambiguous, unsupported, and error
+  artifacts emit zero provider-local routes.
+end note
+
+@enduml

@@ -22,7 +22,10 @@ use crate::runtime::viewport::{
     EditorViewportQuerySnapshotJournalEntry, EditorViewportQuerySnapshotSummary,
     EditorViewportRenderSelectionJournalEntry, EditorViewportRenderSelectionSummary,
 };
-use crate::shell::{EditorSurfaceProviderRegistry, SurfaceSessionStore};
+use crate::shell::{
+    EditorSurfaceProviderRegistry, RunenwerkWorkbenchHost, RunenwerkWorkbenchHostError,
+    SurfaceSessionStore,
+};
 
 use super::sdf_operations::SdfOperationWorkspaceState;
 
@@ -34,7 +37,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) console_max_lines: usize,
     pub(crate) debug_logs_enabled: bool,
     pub(crate) surface_sessions: SurfaceSessionStore,
-    pub(crate) surface_provider_registry: Arc<EditorSurfaceProviderRegistry>,
+    pub(crate) workbench_host: Arc<RunenwerkWorkbenchHost>,
     pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
@@ -62,6 +65,16 @@ impl Default for RunenwerkEditorApp {
 
 impl RunenwerkEditorApp {
     pub fn new() -> Self {
+        let workbench_host =
+            RunenwerkWorkbenchHost::new().expect("default workbench host composition must build");
+        Self::with_workbench_host(workbench_host)
+    }
+
+    pub fn try_new() -> Result<Self, RunenwerkWorkbenchHostError> {
+        RunenwerkWorkbenchHost::new().map(Self::with_workbench_host)
+    }
+
+    fn with_workbench_host(workbench_host: RunenwerkWorkbenchHost) -> Self {
         Self {
             runtime: RunenwerkEditorRuntime::new(),
             runtime_mode_sessions: RuntimeModeSessions::default(),
@@ -70,7 +83,7 @@ impl RunenwerkEditorApp {
             console_max_lines: 256,
             debug_logs_enabled: true,
             surface_sessions: SurfaceSessionStore::default(),
-            surface_provider_registry: Arc::new(EditorSurfaceProviderRegistry::runenwerk_default()),
+            workbench_host: Arc::new(workbench_host),
             pending_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
@@ -93,10 +106,14 @@ impl RunenwerkEditorApp {
     pub fn with_surface_provider_registry(
         surface_provider_registry: EditorSurfaceProviderRegistry,
     ) -> Self {
-        Self {
-            surface_provider_registry: Arc::new(surface_provider_registry),
-            ..Self::new()
-        }
+        let workbench_host =
+            RunenwerkWorkbenchHost::from_tool_suites_provider_registry_and_provider_family_assignments(
+            vec![crate::material_lab::material_lab_tool_suite()],
+            surface_provider_registry,
+            Vec::new(),
+        )
+        .expect("custom workbench host composition must build");
+        Self::with_workbench_host(workbench_host)
     }
 
     pub fn runtime(&self) -> &RunenwerkEditorRuntime {
@@ -185,11 +202,15 @@ impl RunenwerkEditorApp {
     }
 
     pub fn surface_provider_registry(&self) -> &EditorSurfaceProviderRegistry {
-        &self.surface_provider_registry
+        self.workbench_host.provider_registry()
     }
 
     pub fn surface_provider_registry_handle(&self) -> Arc<EditorSurfaceProviderRegistry> {
-        Arc::clone(&self.surface_provider_registry)
+        self.workbench_host.provider_registry_handle()
+    }
+
+    pub fn workbench_host(&self) -> &RunenwerkWorkbenchHost {
+        self.workbench_host.as_ref()
     }
 
     pub fn queue_editor_definition_activation(&mut self, document: EditorDefinitionDocument) {

@@ -12,7 +12,11 @@ impl EditorSurfaceProvider for TextureViewerProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::TextureViewer
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_key_or_legacy_kind_support(request, TEXTURE_VIEWER_2D_SURFACE_KEY, ToolSurfaceKind::TextureViewer)
     }
 
     fn build_frame(

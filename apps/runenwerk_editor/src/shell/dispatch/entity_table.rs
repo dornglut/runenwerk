@@ -16,7 +16,7 @@ use crate::editor_panels::EntityTablePanelPresenter;
 use crate::editor_runtime::select_single_entity_with_origin;
 use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch::{
-    resolve_surface_command_contract, surface_capability_label, tool_surface_kind_label,
+    resolve_legacy_surface_command_contract, surface_capability_label, tool_surface_kind_label,
 };
 
 pub(crate) fn dispatch_session_mutation(
@@ -26,7 +26,7 @@ pub(crate) fn dispatch_session_mutation(
     mutation: EntityTableSessionMutation,
 ) -> Result<(), EditorMutationError> {
     let Some(surface_contract) =
-        resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::EntityTable)
+        resolve_legacy_surface_command_contract(shell_state, target, ToolSurfaceKind::EntityTable)
     else {
         app.append_console_line(
             "[entity_table] session mutation ignored (missing structural tool-surface target)"
@@ -99,9 +99,11 @@ pub(crate) fn dispatch_domain_mutation(
                 app.append_console_line("[entity_table] selection ignored (empty row)".to_string());
                 return Ok(());
             };
-            let Some(surface_contract) =
-                resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::EntityTable)
-            else {
+            let Some(surface_contract) = resolve_legacy_surface_command_contract(
+                shell_state,
+                target,
+                ToolSurfaceKind::EntityTable,
+            ) else {
                 app.append_console_line(
                     "[entity_table] selection ignored (missing structural tool-surface target)"
                         .to_string(),
@@ -252,7 +254,8 @@ mod tests {
                 let surface = shell_state
                     .workspace_state()
                     .tool_surface(tool_surface_id)?;
-                (surface.tool_surface_kind == kind).then_some((panel.id, tool_surface_id))
+                (surface.legacy_tool_surface_kind() == Some(kind))
+                    .then_some((panel.id, tool_surface_id))
             })
             .next()
             .expect("default shell state should contain requested surface kind");

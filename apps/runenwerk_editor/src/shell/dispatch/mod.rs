@@ -10,7 +10,8 @@ pub(crate) mod viewport;
 use editor_core::EditorMutationError;
 use editor_shell::{
     EditorDomainMutation, PanelKind, StructuralCommandTarget, SurfaceSessionMutation,
-    ToolSurfaceKind, tool_surface_capability_set, tool_surface_session_retention_class,
+    ToolSurfaceKind, tool_surface_capability_set, tool_surface_kind_for_stable_key,
+    tool_surface_session_retention_class,
 };
 use ui_surface::{
     SessionRetentionClass, SurfaceCapability, SurfaceCapabilitySet, SurfaceInstanceId,
@@ -80,26 +81,30 @@ pub(crate) fn dispatch_editor_domain_mutation(
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct ResolvedSurfaceCommandContract {
+pub(crate) struct LegacySurfaceCommandContract {
     pub(crate) surface_instance_id: SurfaceInstanceId,
     pub(crate) tool_surface_kind: ToolSurfaceKind,
     pub(crate) capabilities: SurfaceCapabilitySet,
     pub(crate) retention_class: SessionRetentionClass,
 }
 
-pub(crate) fn resolve_surface_command_contract(
+pub(crate) fn resolve_legacy_surface_command_contract(
     shell_state: Option<&RunenwerkEditorShellState>,
     target: StructuralCommandTarget,
     fallback_kind: ToolSurfaceKind,
-) -> Option<ResolvedSurfaceCommandContract> {
+) -> Option<LegacySurfaceCommandContract> {
+    // C6C command-dispatch compatibility boundary: legacy command handlers
+    // still consume enum contracts for labels and capability validation, but
+    // the lookup resolves from stable-key authority before legacy metadata.
     let tool_surface_id = target.active_tool_surface?;
     let resolved_kind = if let Some(state) = shell_state {
         let surface = state.workspace_state().tool_surface(tool_surface_id)?;
-        surface.tool_surface_kind
+        tool_surface_kind_for_stable_key(surface.stable_surface_key())
+            .or_else(|| surface.legacy_tool_surface_kind())?
     } else {
         fallback_kind
     };
-    Some(ResolvedSurfaceCommandContract {
+    Some(LegacySurfaceCommandContract {
         surface_instance_id: SurfaceInstanceId::new(tool_surface_id.raw()),
         tool_surface_kind: resolved_kind,
         capabilities: tool_surface_capability_set(resolved_kind),
@@ -107,10 +112,14 @@ pub(crate) fn resolve_surface_command_contract(
     })
 }
 
+// C6C legacy app-command compatibility boundary: downstream command handlers
+// still format enum labels until shell command contracts move to stable keys.
 pub(crate) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
     editor_shell::tool_surface_kind_definition_key(kind)
 }
 
+// C6C legacy app-command compatibility boundary: enum-backed shell commands
+// still derive structural panel grouping here until C6D/follow-up cleanup.
 pub(crate) fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
     editor_shell::panel_kind_for_tool_surface_kind(kind)
 }

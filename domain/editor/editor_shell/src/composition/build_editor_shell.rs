@@ -114,6 +114,10 @@ pub enum RoutedShellAction {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
     },
+    // C6C shell UI compatibility boundary pending final cleanup: these
+    // enum-backed surface-menu actions are retained for existing shell commands
+    // while workspace state, reducers, projection, and provider requests are
+    // stable-key authoritative.
     SwitchPanelToolSurfaceKind {
         tab_stack_id: TabStackId,
         panel_instance_id: Option<PanelInstanceId>,
@@ -154,6 +158,11 @@ pub enum RoutedShellAction {
         provider_id: SurfaceProviderId,
         tool_surface_instance_id: ToolSurfaceInstanceId,
         action: SurfaceLocalAction,
+        context: StructuralWidgetRoutingContext,
+    },
+    DispatchSurfaceInteraction {
+        provider_id: SurfaceProviderId,
+        tool_surface_instance_id: ToolSurfaceInstanceId,
         context: StructuralWidgetRoutingContext,
     },
 }
@@ -463,6 +472,7 @@ fn build_tab_stack_host_from_frame(
     let tab_strip = build_tab_strip_from_frame(tab_stack, frame_model, theme, docking_visual_state);
     let panel_content = tab_stack
         .active_panel
+        .as_ref()
         .and_then(|panel| {
             panel
                 .active_tool_surface
@@ -510,7 +520,10 @@ fn build_tab_strip_from_frame(
     theme: &ThemeTokens,
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> UiNode {
-    let active_panel_id = tab_stack.active_panel.map(|panel| panel.panel_instance_id);
+    let active_panel_id = tab_stack
+        .active_panel
+        .as_ref()
+        .map(|panel| panel.panel_instance_id);
     let drag_visual = docking_visual_state.and_then(|value| value.active_tab_drag.as_ref());
     let show_drop_slots = drag_visual.is_some();
     let mut children = Vec::with_capacity(if show_drop_slots {
@@ -931,7 +944,7 @@ fn viewport_surface_interaction_model(
     for surface in frame_model
         .surfaces
         .values()
-        .filter(|surface| surface.surface_kind == ToolSurfaceKind::Viewport)
+        .filter(|surface| surface.surface_kind == Some(ToolSurfaceKind::Viewport))
     {
         push_viewport_popup_interactions(
             &mut model,
@@ -1145,7 +1158,7 @@ fn build_tab_stack_action_menu_popup(
 ) -> UiNode {
     let tab_stack_id = tab_stack.tab_stack_id;
     let text_style = compact_shell_text_style(theme);
-    let lock_label = if tab_stack.locked_tool_surface_kind.is_some() {
+    let lock_label = if tab_stack.locked_stable_surface_key.is_some() {
         "Unlock Type"
     } else {
         "Lock Type"
@@ -1222,6 +1235,9 @@ fn build_tab_stack_surface_menu_popup(
     theme: &ThemeTokens,
     tool_surface_kinds: &[ToolSurfaceKind],
 ) -> UiNode {
+    // C6C shell UI compatibility boundary pending final cleanup: labels for
+    // the existing enum-backed surface switcher are still sourced from
+    // ToolSurfaceKind.
     let text_style = compact_shell_text_style(theme);
     let children = tool_surface_kinds
         .iter()
@@ -1264,8 +1280,11 @@ fn build_tab_stack_create_surface_menu_popup(
     theme: &ThemeTokens,
     tool_surface_kinds: &[ToolSurfaceKind],
 ) -> UiNode {
+    // C6C shell UI compatibility boundary pending final cleanup: tab creation
+    // menus still expose enum-backed choices, then dispatch through named
+    // legacy wrappers.
     let text_style = compact_shell_text_style(theme);
-    let locked_kind = tab_stack.locked_tool_surface_kind;
+    let locked_kind = tab_stack.legacy_locked_tool_surface_kind;
     let children = tool_surface_kinds
         .iter()
         .copied()
@@ -1825,15 +1844,24 @@ fn build_frame_widget_routes(
             continue;
         };
         for (widget_id, route) in surface.routes.iter() {
-            actions.insert(
-                *widget_id,
+            let action = if route.is_provider_owned_graph_canvas() {
+                RoutedShellAction::DispatchSurfaceInteraction {
+                    provider_id,
+                    tool_surface_instance_id: surface.surface_instance_id,
+                    context,
+                }
+            } else {
+                let Some(action) = route.action().cloned() else {
+                    continue;
+                };
                 RoutedShellAction::DispatchSurfaceLocalAction {
                     provider_id,
                     tool_surface_instance_id: surface.surface_instance_id,
-                    action: route.action.clone(),
+                    action,
                     context,
-                },
-            );
+                }
+            };
+            actions.insert(*widget_id, action);
             structural_contexts.insert(*widget_id, context);
         }
     }
@@ -1964,10 +1992,15 @@ fn register_tab_stack_chrome_routes(
     stack: &ProjectedTabStackSlot,
     tool_surface_kinds: &[ToolSurfaceKind],
 ) {
+    // C6C shell UI compatibility boundary pending final cleanup: chrome routes
+    // still emit enum-backed shell actions, while reducers convert through
+    // explicit legacy wrappers and normal workspace authority remains
+    // stable-key based.
     let default_kind = stack
         .active_panel
+        .as_ref()
         .and_then(|panel| panel.active_tool_surface)
-        .and(stack.locked_tool_surface_kind)
+        .and(stack.legacy_locked_tool_surface_kind)
         .unwrap_or(ToolSurfaceKind::Viewport);
     actions.insert(
         tab_stack_new_tab_button_widget_id(stack.tab_stack_id),
@@ -1983,7 +2016,7 @@ fn register_tab_stack_chrome_routes(
             anchor_widget_id: tab_stack_surface_submenu_anchor_widget_id(stack.tab_stack_id),
         },
     );
-    if let Some(active_panel) = stack.active_panel {
+    if let Some(active_panel) = &stack.active_panel {
         for (index, tool_surface_kind) in tool_surface_kinds.iter().copied().enumerate() {
             actions.insert(
                 tab_stack_surface_menu_item_widget_id(stack.tab_stack_id, index),
@@ -1996,7 +2029,7 @@ fn register_tab_stack_chrome_routes(
     }
     for (index, tool_surface_kind) in tool_surface_kinds.iter().copied().enumerate() {
         if stack
-            .locked_tool_surface_kind
+            .legacy_locked_tool_surface_kind
             .is_none_or(|locked| locked == tool_surface_kind)
         {
             actions.insert(
@@ -2041,7 +2074,7 @@ fn register_tab_stack_chrome_routes(
         tab_stack_lock_type_toggle_widget_id(stack.tab_stack_id),
         RoutedShellAction::LockTabStackAreaType {
             tab_stack_id: stack.tab_stack_id,
-            locked_tool_surface_kind: if stack.locked_tool_surface_kind.is_some() {
+            locked_tool_surface_kind: if stack.locked_stable_surface_key.is_some() {
                 None
             } else {
                 Some(default_kind)

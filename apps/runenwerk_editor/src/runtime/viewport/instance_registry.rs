@@ -4,11 +4,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use editor_shell::{
-    PanelInstanceId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, WorkspaceState,
+    PanelInstanceId, ToolSurfaceInstanceId, ToolSurfaceMount, ToolSurfaceState, WorkspaceState,
 };
 use editor_viewport::ViewportId;
 
 use crate::runtime::viewport::MAIN_VIEWPORT_ID;
+use crate::shell::tool_suites::SCENE_VIEWPORT_SURFACE_KEY;
 
 const FIRST_ALLOCATED_VIEWPORT_ID: u64 = 2;
 
@@ -40,7 +41,7 @@ impl ViewportInstanceRegistryResource {
     pub fn sync_from_workspace_state(&mut self, workspace_state: &WorkspaceState) {
         let mut active_tool_surfaces = BTreeSet::new();
         for tool_surface in workspace_state.tool_surfaces() {
-            if tool_surface.tool_surface_kind != ToolSurfaceKind::Viewport {
+            if !is_viewport_tool_surface(tool_surface) {
                 continue;
             }
             let ToolSurfaceMount::Mounted { panel_id } = tool_surface.mount else {
@@ -174,6 +175,10 @@ impl ViewportInstanceRegistryResource {
     }
 }
 
+pub(crate) fn is_viewport_tool_surface(surface: &ToolSurfaceState) -> bool {
+    surface.stable_surface_key().as_str() == SCENE_VIEWPORT_SURFACE_KEY
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,7 +240,7 @@ mod tests {
         assert!(registry.records().any(|record| {
             workspace
                 .tool_surface(record.tool_surface_id)
-                .is_some_and(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+                .is_some_and(is_viewport_tool_surface)
         }));
     }
 
@@ -246,7 +251,7 @@ mod tests {
         let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
         let viewport_surface = workspace
             .tool_surfaces()
-            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .find(|surface| is_viewport_tool_surface(surface))
             .map(|surface| surface.id)
             .expect("bootstrap workspace should contain a viewport surface");
         let workspace = reduce_workspace(

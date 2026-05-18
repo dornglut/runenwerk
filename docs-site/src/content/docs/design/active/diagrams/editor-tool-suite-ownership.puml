@@ -1,0 +1,95 @@
+@startuml
+title Editor Tool Suite Ownership Boundaries
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Monospaced
+
+package "domain/editor/editor_shell" as ShellPkg {
+  component "Tool-suite contracts\nSurface definitions\nProvider-family contracts\nProvider-owned route vocabulary\nWorkbench host contracts\nRegistry validation diagnostics" as Shell
+}
+
+package "domain/editor/editor_definition" as DefinitionPkg {
+  component "Authored registry documents\nAuthored profile documents\nAuthored definition documents\nDefinition validation" as Definition
+}
+
+package "domain/ui/ui_graph_editor" as GraphPkg {
+  component "Semantic-free graph canvas DTOs\nGraphCanvasAction\nPan / zoom / selection / drag" as Graph
+}
+
+package "Owning Semantic Domains" as SemanticPkg {
+  component "domain/material_graph\nsource truth + commands\nratification + diagnostics" as MaterialGraph
+  component "domain/texture\ntexture descriptors\nratification + diagnostics" as Texture
+  component "domain/procgen\nprocgen documents\nratification + diagnostics" as Procgen
+  component "future domain/animation\nfuture source truth\ncommands + diagnostics" as Animation
+}
+
+package "Product Boundary" as ProductPkg {
+  component "Product Contracts / Descriptors / Ratifiers\nSource maps\nDiagnostics" as ProductContracts
+  component "App Product Workflow / Runtime Adapter\nPreview orchestration\nRenderer adapter" as ProductWorkflow
+  component "Formed Products / Render Selections\nRenderer-consumable choices" as FormedProducts
+}
+
+package "apps/runenwerk_editor" as RunenwerkAppPkg {
+  component "Concrete providers\nWorkbench composition\nProject IO\nPersistence paths\nRuntime/render adapters\nCommand execution bridge" as RunenwerkApp
+}
+
+package "future apps/*" as FutureAppsPkg {
+  component "Standalone workbench compositions\nConcrete providers\nApp IO and adapters" as FutureApps
+}
+
+package "engine/render" as RenderPkg {
+  component "Render-flow execution\nFormed product consumption\nCapture / readback / diff infrastructure" as Render
+}
+
+Definition --> Shell : authored references validate against app-neutral contracts
+RunenwerkApp --> Shell : installs suites and builds registries
+FutureApps --> Shell : reuses contracts without app fork
+RunenwerkApp --> Definition : activates validated definitions
+FutureApps --> Definition : may activate reusable definitions
+RunenwerkApp --> Graph : hosts graph canvas surfaces
+FutureApps --> Graph : hosts graph canvas surfaces
+Graph --> RunenwerkApp : emits semantic-free actions
+
+RunenwerkApp --> MaterialGraph : executes commands through domain boundary
+RunenwerkApp --> Texture : consumes descriptors and preview intent
+RunenwerkApp --> Procgen : executes procgen commands through domain boundary
+FutureApps --> MaterialGraph : compose only needed domains
+FutureApps --> Texture : compose only needed domains
+
+MaterialGraph --> ProductContracts : material descriptors / ratifiers
+Texture --> ProductContracts : texture descriptors / ratifiers
+Procgen --> ProductContracts : procgen product descriptors
+Animation --> ProductContracts : future descriptors / diagnostics
+ProductContracts --> ProductWorkflow : ratified contracts + diagnostics
+RunenwerkApp --> ProductWorkflow : owns concrete workflow and adapters
+FutureApps --> ProductWorkflow : provide app-specific workflow and adapters
+ProductWorkflow --> FormedProducts : forms renderer-consumable products
+FormedProducts --> Render : render consumes formed products only
+
+note right of Shell
+  editor_shell owns host contracts.
+  It must not own material, texture,
+  procgen, animation, gameplay, or
+  renderer semantics.
+end note
+
+note bottom of ProductContracts
+  Domain crates do not directly produce
+  renderer resources and do not push
+  directly into engine/render.
+end note
+
+note bottom of ProductWorkflow
+  Apps and runtime adapters bridge
+  ratified product contracts into
+  formed render selections.
+end note
+
+note bottom of Render
+  engine/render consumes formed products.
+  It must not own editor or domain semantics.
+end note
+
+@enduml

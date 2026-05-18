@@ -12,7 +12,15 @@ impl EditorSurfaceProvider for FieldProductViewerProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::FieldProductViewer
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_key_or_legacy_kind_support(
+            request,
+            FIELD_PRODUCT_VIEWER_SURFACE_KEY,
+            ToolSurfaceKind::FieldProductViewer,
+        )
     }
 
     fn build_frame(

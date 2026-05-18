@@ -12,26 +12,30 @@ use editor_shell::{
     EntityTableSurfaceAction, EntityTableViewModel, InspectorFieldControlKind,
     InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
     InspectorObservedTarget, InspectorSessionMutation, InspectorSurfaceAction,
-    InspectorTargetViewModel, InspectorViewModel, MaterialSurfaceAction, OUTLINER_LIST_WIDGET_ID,
-    ObservationConsumerKind, ObservationFrameMetadata, ObservationSourceReality,
+    InspectorTargetViewModel, InspectorViewModel, MaterialDiagnosticRowViewModel,
+    MaterialPreviewStatusViewModel, MaterialResourceBindingDiagnosticViewModel,
+    MaterialSurfaceAction, OUTLINER_LIST_WIDGET_ID, ObservationConsumerKind,
+    ObservationFrameMetadata, ObservationSourceReality,
     OutlinerDomainMutation, OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel,
-    OutlinerSurfaceAction, OutlinerViewModel, ResolvedSurfaceFrame, ShellCommand,
-    SurfaceCommandProposal, SurfaceDocumentContext, SurfaceLocalAction, SurfaceLocalRoute,
+    OutlinerSurfaceAction, OutlinerViewModel, ProviderFamilyId, ProviderFamilyProviderAssignment,
+    ProviderFamilyProviderMap, ResolvedSurfaceFrame, ShellCommand, SurfaceCommandProposal,
+    SurfaceDocumentContext, SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute,
     SurfacePresentationArtifact, SurfacePresentationArtifactKind, SurfaceProviderAvailability,
     SurfaceProviderDescriptor, SurfaceProviderDiagnostic, SurfaceProviderId,
-    SurfaceProviderPriority, SurfaceProviderRequest, SurfaceRouteTable, SurfaceSessionMutation,
-    ToolSurfaceKind, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
+    SurfaceProviderPriority, SurfaceProviderRequest, SurfaceProviderSupportMode, SurfaceRouteTable,
+    SurfaceSessionMutation, ToolSurfaceKind, ToolSurfaceRegistry,
+    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
     VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
     VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
     ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
-    ViewportSurfaceAction, ViewportViewModel, build_console_panel, build_entity_table_panel,
-    build_inspector_panel, build_material_graph_surface, build_outliner_panel,
-    build_self_authoring_control_panel, build_viewport_panel, editor_domain_proposal,
-    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
-    surface_session_proposal, surface_widget_id, tool_surface_capability_set,
-    tool_surface_definition_id, viewport_debug_stage_button_widget_id,
+    ViewportSurfaceAction, ViewportViewModel, build_console_panel,
+    build_entity_table_panel, build_inspector_panel, build_material_graph_surface,
+    build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
+    editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
+    inspector_field_widget_id, surface_session_proposal, surface_widget_id,
+    tool_surface_capability_set, tool_surface_definition_id, viewport_debug_stage_button_widget_id,
     viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
     viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
     viewport_tool_radial_item_widget_id,
@@ -53,6 +57,16 @@ use crate::runtime::viewport::{
     ViewportInstanceRegistryResource,
 };
 use crate::shell::active_route_actions_by_target;
+use crate::shell::tool_suites::{
+    ASSET_BROWSER_SURFACE_KEY, DIAGNOSTICS_SURFACE_KEYS, EDITOR_CONSOLE_SURFACE_KEY,
+    EDITOR_DESIGN_SURFACE_KEYS, FIELD_LAYER_STACK_SURFACE_KEY, FIELD_PRODUCT_VIEWER_SURFACE_KEY,
+    IMPORT_INSPECTOR_SURFACE_KEY, MATERIAL_GRAPH_CANVAS_SURFACE_KEY,
+    MATERIAL_INSPECTOR_SURFACE_KEY, MATERIAL_PREVIEW_SURFACE_KEY, PROCGEN_GRAPH_CANVAS_SURFACE_KEY,
+    PROCGEN_PREVIEW_SURFACE_KEY, SCENE_ENTITY_TABLE_SURFACE_KEY, SCENE_INSPECTOR_SURFACE_KEY,
+    SCENE_OUTLINER_SURFACE_KEY, SCENE_VIEWPORT_SURFACE_KEY, SDF_BRUSH_BROWSER_SURFACE_KEY,
+    SDF_GRAPH_CANVAS_SURFACE_KEY, TEXTURE_VIEWER_2D_SURFACE_KEY, TEXTURE_VIEWER_3D_SURFACE_KEY,
+    TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+};
 use crate::shell::toolbar_adapter::{
     build_toolbar_observation_frame, build_toolbar_view_model, toolbar_binding_with_active_menus,
 };
@@ -78,12 +92,53 @@ const FIELD_LAYER_STACK_PROVIDER_ID: SurfaceProviderId = surface_provider_id(17)
 const SDF_GRAPH_CANVAS_PROVIDER_ID: SurfaceProviderId = surface_provider_id(18);
 const PROCGEN_GRAPH_CANVAS_PROVIDER_ID: SurfaceProviderId = surface_provider_id(19);
 const PROCGEN_PREVIEW_PROVIDER_ID: SurfaceProviderId = surface_provider_id(20);
+const TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID: SurfaceProviderId = surface_provider_id(21);
 
 const fn surface_provider_id(raw: u64) -> SurfaceProviderId {
     match SurfaceProviderId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("surface provider id constants must be non-zero"),
     }
+}
+
+pub(crate) fn runenwerk_provider_family_assignments() -> Vec<ProviderFamilyProviderAssignment> {
+    vec![
+        provider_family_assignment("runenwerk.scene", SCENE_OUTLINER_PROVIDER_ID),
+        provider_family_assignment("runenwerk.scene", SCENE_ENTITY_TABLE_PROVIDER_ID),
+        provider_family_assignment("runenwerk.scene", SCENE_VIEWPORT_PROVIDER_ID),
+        provider_family_assignment("runenwerk.scene", SCENE_INSPECTOR_PROVIDER_ID),
+        provider_family_assignment("runenwerk.editor", CONSOLE_PROVIDER_ID),
+        provider_family_assignment("runenwerk.editor_design", SELF_AUTHORING_PROVIDER_ID),
+        provider_family_assignment("runenwerk.assets", ASSET_BROWSER_PROVIDER_ID),
+        provider_family_assignment("runenwerk.assets", IMPORT_INSPECTOR_PROVIDER_ID),
+        provider_family_assignment("runenwerk.field_world", FIELD_PRODUCT_VIEWER_PROVIDER_ID),
+        provider_family_assignment("runenwerk.field_world", SDF_BRUSH_BROWSER_PROVIDER_ID),
+        provider_family_assignment("runenwerk.field_world", FIELD_LAYER_STACK_PROVIDER_ID),
+        provider_family_assignment("runenwerk.field_world", SDF_GRAPH_CANVAS_PROVIDER_ID),
+        provider_family_assignment("runenwerk.texture", TEXTURE_VIEWER_PROVIDER_ID),
+        provider_family_assignment("runenwerk.texture", VOLUME_TEXTURE_VIEWER_PROVIDER_ID),
+        provider_family_assignment("runenwerk.procgen", PROCGEN_GRAPH_CANVAS_PROVIDER_ID),
+        provider_family_assignment("runenwerk.procgen", PROCGEN_PREVIEW_PROVIDER_ID),
+        provider_family_assignment("runenwerk.diagnostics", M6_WORKSPACE_PROVIDER_ID),
+        provider_family_assignment(
+            "runenwerk.diagnostics",
+            TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID,
+        ),
+        provider_family_assignment("runenwerk.material_lab", MATERIAL_GRAPH_CANVAS_PROVIDER_ID),
+        provider_family_assignment("runenwerk.material_lab", MATERIAL_INSPECTOR_PROVIDER_ID),
+        provider_family_assignment("runenwerk.material_lab", MATERIAL_PREVIEW_PROVIDER_ID),
+    ]
+}
+
+fn provider_family_assignment(
+    provider_family_id: &str,
+    provider_id: SurfaceProviderId,
+) -> ProviderFamilyProviderAssignment {
+    ProviderFamilyProviderAssignment::new(
+        ProviderFamilyId::new(provider_family_id)
+            .expect("compiled-in provider family id should be valid"),
+        provider_id,
+    )
 }
 
 pub struct SurfaceProviderBuildContext<'a> {
@@ -110,6 +165,13 @@ pub struct SurfaceProviderDispatchContext<'a> {
 pub trait EditorSurfaceProvider: Send + Sync {
     fn descriptor(&self) -> SurfaceProviderDescriptor;
     fn supports(&self, request: &SurfaceProviderRequest) -> bool;
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        if self.supports(request) {
+            SurfaceProviderSupportMode::LegacyKind
+        } else {
+            SurfaceProviderSupportMode::Unsupported
+        }
+    }
     fn build_frame(
         &self,
         context: &SurfaceProviderBuildContext<'_>,
@@ -122,6 +184,43 @@ pub trait EditorSurfaceProvider: Send + Sync {
         request: &SurfaceProviderRequest,
         action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic>;
+
+    fn map_interaction(
+        &self,
+        _context: &SurfaceProviderDispatchContext<'_>,
+        _request: &SurfaceProviderRequest,
+        _interaction: SurfaceInteraction,
+    ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
+        Ok(None)
+    }
+}
+
+fn stable_key_or_legacy_kind_support(
+    request: &SurfaceProviderRequest,
+    stable_key: &str,
+    legacy_kind: ToolSurfaceKind,
+) -> SurfaceProviderSupportMode {
+    if request.matches_stable_key(stable_key) {
+        SurfaceProviderSupportMode::StableKey
+    } else if request.legacy_kind() == Some(legacy_kind) {
+        SurfaceProviderSupportMode::LegacyKind
+    } else {
+        SurfaceProviderSupportMode::Unsupported
+    }
+}
+
+fn stable_keys_or_legacy_kind_support(
+    request: &SurfaceProviderRequest,
+    stable_keys: &[&str],
+    legacy_kind_predicate: impl Fn(ToolSurfaceKind) -> bool,
+) -> SurfaceProviderSupportMode {
+    if request.matches_any_stable_key(stable_keys) {
+        SurfaceProviderSupportMode::StableKey
+    } else if request.legacy_kind().is_some_and(legacy_kind_predicate) {
+        SurfaceProviderSupportMode::LegacyKind
+    } else {
+        SurfaceProviderSupportMode::Unsupported
+    }
 }
 
 #[derive(Debug)]
@@ -133,6 +232,26 @@ pub struct ProviderSurfaceFrame {
     pub title: String,
     pub artifact: SurfacePresentationArtifact,
     pub routes: SurfaceRouteTable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SurfaceProviderSupportObservation {
+    pub provider_id: SurfaceProviderId,
+    pub support_mode: SurfaceProviderSupportMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SurfaceProviderResolutionObservation {
+    pub candidate_provider_ids: Vec<SurfaceProviderId>,
+    pub support_modes: Vec<SurfaceProviderSupportObservation>,
+    pub selected_provider_id: Option<SurfaceProviderId>,
+    pub availability: SurfaceProviderAvailability,
+    pub diagnostic: Option<SurfaceProviderDiagnostic>,
+}
+
+struct SupportedProvider<'a> {
+    provider: &'a dyn EditorSurfaceProvider,
+    support_mode: SurfaceProviderSupportMode,
 }
 
 pub struct EditorSurfaceProviderRegistry {
@@ -175,8 +294,122 @@ impl EditorSurfaceProviderRegistry {
             Box::new(ProcgenGraphCanvasProvider),
             Box::new(ProcgenPreviewProvider),
             Box::new(M6WorkspaceProvider),
+            Box::new(ToolSuiteRegistryInspectorProvider),
         ])
         .expect("default surface providers must have unique ids")
+    }
+
+    pub fn provider_descriptors(&self) -> impl Iterator<Item = SurfaceProviderDescriptor> + '_ {
+        self.providers
+            .iter()
+            .map(|provider| provider.descriptor())
+    }
+
+    pub fn provider_ids(&self) -> impl Iterator<Item = SurfaceProviderId> + '_ {
+        self.providers
+            .iter()
+            .map(|provider| provider.descriptor().id)
+    }
+
+    pub fn has_provider_id(&self, provider_id: SurfaceProviderId) -> bool {
+        self.provider_ids().any(|id| id == provider_id)
+    }
+
+    pub(crate) fn observe_resolution_for_request(
+        &self,
+        request: &SurfaceProviderRequest,
+        provider_family_map: Option<&ProviderFamilyProviderMap>,
+    ) -> SurfaceProviderResolutionObservation {
+        let candidate_providers =
+            match self.candidate_providers_for_request(request, provider_family_map) {
+                Ok(candidate_providers) => candidate_providers,
+                Err(diagnostic) => {
+                    return SurfaceProviderResolutionObservation {
+                        candidate_provider_ids: Vec::new(),
+                        support_modes: Vec::new(),
+                        selected_provider_id: None,
+                        availability: SurfaceProviderAvailability::Unsupported,
+                        diagnostic: Some(diagnostic),
+                    };
+                }
+            };
+        let candidate_provider_ids = candidate_providers
+            .iter()
+            .map(|provider| provider.descriptor().id)
+            .collect::<Vec<_>>();
+        let support_modes = candidate_providers
+            .iter()
+            .map(|provider| SurfaceProviderSupportObservation {
+                provider_id: provider.descriptor().id,
+                support_mode: provider.support_mode(request),
+            })
+            .collect::<Vec<_>>();
+
+        if !workspace_allows_document(request) {
+            return SurfaceProviderResolutionObservation {
+                candidate_provider_ids,
+                support_modes,
+                selected_provider_id: None,
+                availability: SurfaceProviderAvailability::Unsupported,
+                diagnostic: Some(SurfaceProviderDiagnostic::new(
+                    "editor.surface.unsupported_document",
+                    "workspace profile does not allow the active document kind",
+                )),
+            };
+        }
+
+        let supported = candidate_providers
+            .into_iter()
+            .filter_map(|provider| {
+                let support_mode = provider.support_mode(request);
+                support_mode.is_supported().then_some(SupportedProvider {
+                    provider,
+                    support_mode,
+                })
+            })
+            .collect::<Vec<_>>();
+        if supported.is_empty() {
+            return SurfaceProviderResolutionObservation {
+                candidate_provider_ids,
+                support_modes,
+                selected_provider_id: None,
+                availability: SurfaceProviderAvailability::Unsupported,
+                diagnostic: Some(SurfaceProviderDiagnostic::new(
+                    "editor.surface.unsupported_provider",
+                    "no provider supports this surface request",
+                )),
+            };
+        }
+
+        let preferred_support_mode = supported.iter().fold(
+            SurfaceProviderSupportMode::Unsupported,
+            |current, supported| current.preferred(supported.support_mode),
+        );
+        let supported = supported
+            .into_iter()
+            .filter(|supported| supported.support_mode == preferred_support_mode)
+            .map(|supported| supported.provider)
+            .collect::<Vec<_>>();
+        let Some(provider) = deterministic_provider(supported) else {
+            return SurfaceProviderResolutionObservation {
+                candidate_provider_ids,
+                support_modes,
+                selected_provider_id: None,
+                availability: SurfaceProviderAvailability::Ambiguous,
+                diagnostic: Some(SurfaceProviderDiagnostic::new(
+                    "editor.surface.ambiguous_provider",
+                    "multiple providers support this request at the same priority",
+                )),
+            };
+        };
+
+        SurfaceProviderResolutionObservation {
+            candidate_provider_ids,
+            support_modes,
+            selected_provider_id: Some(provider.descriptor().id),
+            availability: SurfaceProviderAvailability::Available,
+            diagnostic: None,
+        }
     }
 
     pub fn resolve_frame(
@@ -184,6 +417,16 @@ impl EditorSurfaceProviderRegistry {
         context: &SurfaceProviderBuildContext<'_>,
         request: &SurfaceProviderRequest,
         session: &SurfaceSessionState,
+    ) -> ResolvedSurfaceFrame {
+        self.resolve_frame_with_provider_family_map(context, request, session, None)
+    }
+
+    pub fn resolve_frame_with_provider_family_map(
+        &self,
+        context: &SurfaceProviderBuildContext<'_>,
+        request: &SurfaceProviderRequest,
+        session: &SurfaceSessionState,
+        provider_family_map: Option<&ProviderFamilyProviderMap>,
     ) -> ResolvedSurfaceFrame {
         if !workspace_allows_document(request) {
             return unsupported_frame(
@@ -194,11 +437,29 @@ impl EditorSurfaceProviderRegistry {
             );
         }
 
-        let supported = self
-            .providers
-            .iter()
-            .map(Box::as_ref)
-            .filter(|provider| provider.supports(request))
+        let candidate_providers =
+            match self.candidate_providers_for_request(request, provider_family_map) {
+                Ok(candidate_providers) => candidate_providers,
+                Err(diagnostic) => {
+                    return diagnostic_frame(
+                        request,
+                        "Unsupported Surface",
+                        SurfaceProviderAvailability::Unsupported,
+                        SurfacePresentationArtifactKind::Unsupported,
+                        diagnostic,
+                    );
+                }
+            };
+
+        let supported = candidate_providers
+            .into_iter()
+            .filter_map(|provider| {
+                let support_mode = provider.support_mode(request);
+                support_mode.is_supported().then_some(SupportedProvider {
+                    provider,
+                    support_mode,
+                })
+            })
             .collect::<Vec<_>>();
         if supported.is_empty() {
             return unsupported_frame(
@@ -208,6 +469,15 @@ impl EditorSurfaceProviderRegistry {
                 "no provider supports this surface request",
             );
         }
+        let preferred_support_mode = supported.iter().fold(
+            SurfaceProviderSupportMode::Unsupported,
+            |current, supported| current.preferred(supported.support_mode),
+        );
+        let supported = supported
+            .into_iter()
+            .filter(|supported| supported.support_mode == preferred_support_mode)
+            .map(|supported| supported.provider)
+            .collect::<Vec<_>>();
         let Some(provider) = deterministic_provider(supported) else {
             return diagnostic_frame(
                 request,
@@ -226,7 +496,8 @@ impl EditorSurfaceProviderRegistry {
                 surface_instance_id: request.tool_surface_instance_id,
                 panel_instance_id: request.panel_instance_id,
                 tab_stack_id: request.tab_stack_id,
-                surface_kind: request.tool_surface_kind,
+                surface_kind: request.legacy_kind(),
+                stable_surface_key: request.stable_surface_key.clone(),
                 surface_definition_id: request.surface_definition_id,
                 provider_id: Some(descriptor.id),
                 title: frame.title,
@@ -242,6 +513,40 @@ impl EditorSurfaceProviderRegistry {
                 diagnostic,
             ),
         }
+    }
+
+    fn candidate_providers_for_request(
+        &self,
+        request: &SurfaceProviderRequest,
+        provider_family_map: Option<&ProviderFamilyProviderMap>,
+    ) -> Result<Vec<&dyn EditorSurfaceProvider>, SurfaceProviderDiagnostic> {
+        let Some(provider_family_map) = provider_family_map else {
+            return Ok(self.providers.iter().map(Box::as_ref).collect());
+        };
+
+        let Some(provider_family_id) = request.provider_family_id.as_ref() else {
+            return Ok(self.providers.iter().map(Box::as_ref).collect());
+        };
+
+        let provider_ids = provider_family_map
+            .providers_for(provider_family_id)
+            .collect::<BTreeSet<_>>();
+        if provider_ids.is_empty() {
+            return Err(SurfaceProviderDiagnostic::new(
+                "editor.surface.unassigned_provider_family",
+                format!(
+                    "no providers are assigned to provider family `{}`",
+                    provider_family_id.as_str()
+                ),
+            ));
+        }
+
+        Ok(self
+            .providers
+            .iter()
+            .map(Box::as_ref)
+            .filter(|provider| provider_ids.contains(&provider.descriptor().id))
+            .collect())
     }
 
     pub fn map_action(
@@ -266,6 +571,32 @@ impl EditorSurfaceProviderRegistry {
         provider
             .map_action(context, request, action)
             .map_err(|_| EditorMutationError::session_rejected("surface provider action failed"))
+    }
+
+    pub fn map_interaction(
+        &self,
+        context: &SurfaceProviderDispatchContext<'_>,
+        request: &SurfaceProviderRequest,
+        provider_id: SurfaceProviderId,
+        interaction: SurfaceInteraction,
+    ) -> Result<Option<SurfaceCommandProposal>, EditorMutationError> {
+        let provider = self
+            .providers
+            .iter()
+            .find(|provider| provider.descriptor().id == provider_id)
+            .ok_or(EditorMutationError::session_rejected(
+                "surface provider id is not registered",
+            ))?;
+        if !provider.supports(request) {
+            return Err(EditorMutationError::session_rejected(
+                "surface provider id does not support target surface",
+            ));
+        }
+        provider
+            .map_interaction(context, request, interaction)
+            .map_err(|_| {
+                EditorMutationError::session_rejected("surface provider interaction failed")
+            })
     }
 }
 
@@ -328,11 +659,33 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
     };
     let document_context = active_document_context(app);
     let mut surfaces = BTreeMap::new();
-    for request in mounted_surface_requests(shell_state, document_context) {
+    for request in mounted_surface_requests_with_registry(
+        shell_state,
+        document_context,
+        Some(app.workbench_host().tool_surface_registry()),
+    ) {
         let session = app
             .surface_sessions()
             .session_or_default(request.tool_surface_instance_id);
-        let frame = registry.resolve_frame(&context, &request, &session);
+        let frame = if request.provider_family_id.is_none() {
+            diagnostic_frame(
+                &request,
+                "Unsupported Surface",
+                SurfaceProviderAvailability::Unsupported,
+                SurfacePresentationArtifactKind::Unsupported,
+                SurfaceProviderDiagnostic::new(
+                    "editor.surface.unresolved_provider_family",
+                    "stable surface metadata did not resolve to a provider family",
+                ),
+            )
+        } else {
+            registry.resolve_frame_with_provider_family_map(
+                &context,
+                &request,
+                &session,
+                Some(app.workbench_host().provider_family_provider_map()),
+            )
+        };
         surfaces.insert(request.tool_surface_instance_id, frame);
     }
 
@@ -370,6 +723,14 @@ pub fn mounted_surface_requests(
     shell_state: &RunenwerkEditorShellState,
     document_context: SurfaceDocumentContext,
 ) -> Vec<SurfaceProviderRequest> {
+    mounted_surface_requests_with_registry(shell_state, document_context, None)
+}
+
+pub fn mounted_surface_requests_with_registry(
+    shell_state: &RunenwerkEditorShellState,
+    document_context: SurfaceDocumentContext,
+    tool_surface_registry: Option<&ToolSurfaceRegistry>,
+) -> Vec<SurfaceProviderRequest> {
     shell_state
         .workspace_state()
         .panels()
@@ -381,15 +742,29 @@ pub fn mounted_surface_requests(
                 .tab_stacks()
                 .find(|stack| stack.ordered_panels.contains(&panel.id))
                 .map(|stack| stack.id)?;
+            let stable_surface_key = surface.stable_surface_key().clone();
+            let legacy_tool_surface_kind = surface.legacy_tool_surface_kind();
+            let registered_surface =
+                tool_surface_registry.and_then(|registry| registry.get(&stable_surface_key));
+            let surface_definition_id = legacy_tool_surface_kind
+                .map(tool_surface_definition_id)
+                .unwrap_or(editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID);
+            let capabilities = legacy_tool_surface_kind
+                .map(tool_surface_capability_set)
+                .unwrap_or_default();
             Some(SurfaceProviderRequest {
                 workspace_profile_id: shell_state.active_workspace_profile_id(),
                 document_context: document_context.clone(),
                 panel_instance_id: panel.id,
                 tab_stack_id,
                 tool_surface_instance_id: surface.id,
-                tool_surface_kind: surface.tool_surface_kind,
-                surface_definition_id: tool_surface_definition_id(surface.tool_surface_kind),
-                capabilities: tool_surface_capability_set(surface.tool_surface_kind),
+                stable_surface_key,
+                legacy_tool_surface_kind,
+                provider_family_id: registered_surface
+                    .map(|definition| definition.provider_family.clone()),
+                surface_route: registered_surface.map(|definition| definition.route),
+                surface_definition_id,
+                capabilities,
             })
         })
         .collect()
@@ -857,10 +1232,22 @@ fn inspector_value_summary(value: &InspectorValue) -> String {
 
 fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
     let registry = editor_shell::default_workspace_profile_registry();
-    if request.tool_surface_kind == ToolSurfaceKind::Console
-        || is_self_authoring_surface(request.tool_surface_kind)
-        || is_asset_surface(request.tool_surface_kind)
-        || is_m6_global_diagnostic_surface(request.tool_surface_kind)
+    if request.matches_stable_key(EDITOR_CONSOLE_SURFACE_KEY)
+        || request.matches_any_stable_key(EDITOR_DESIGN_SURFACE_KEYS)
+        || request.matches_any_stable_key(&[
+            ASSET_BROWSER_SURFACE_KEY,
+            IMPORT_INSPECTOR_SURFACE_KEY,
+            FIELD_PRODUCT_VIEWER_SURFACE_KEY,
+            SDF_BRUSH_BROWSER_SURFACE_KEY,
+        ])
+        || request.matches_any_stable_key(DIAGNOSTICS_SURFACE_KEYS)
+        || request.matches_stable_key(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
+        || request.legacy_kind().is_some_and(|kind| {
+            kind == ToolSurfaceKind::Console
+                || is_self_authoring_surface(kind)
+                || is_asset_surface(kind)
+                || is_m6_global_diagnostic_surface(kind)
+        })
     {
         return true;
     }
@@ -871,6 +1258,20 @@ fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
         .profile(request.workspace_profile_id)
         .map(|profile| profile.document_kind_filters.contains(document_kind))
         .unwrap_or(false)
+}
+
+fn legacy_surface_kind_or_diagnostic(
+    request: &SurfaceProviderRequest,
+) -> Result<ToolSurfaceKind, SurfaceProviderDiagnostic> {
+    request.legacy_kind().ok_or_else(|| {
+        SurfaceProviderDiagnostic::new(
+            "editor.surface.missing_legacy_kind",
+            format!(
+                "surface `{}` is stable-key authoritative and has no legacy compatibility kind for this provider path",
+                request.stable_key().as_str()
+            ),
+        )
+    })
 }
 
 fn surface_document_context_line(document_context: &SurfaceDocumentContext) -> String {
@@ -929,7 +1330,15 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        is_self_authoring_surface(request.tool_surface_kind)
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_keys_or_legacy_kind_support(
+            request,
+            EDITOR_DESIGN_SURFACE_KEYS,
+            is_self_authoring_surface,
+        )
     }
 
     fn build_frame(
@@ -938,8 +1347,9 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
         request: &SurfaceProviderRequest,
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let title = self_authoring_title(request.tool_surface_kind).to_string();
-        let (root, routes) = match request.tool_surface_kind {
+        let legacy_tool_surface_kind = legacy_surface_kind_or_diagnostic(request)?;
+        let title = self_authoring_title(legacy_tool_surface_kind).to_string();
+        let (root, routes) = match legacy_tool_surface_kind {
             ToolSurfaceKind::UiCanvas => context
                 .shell_state
                 .self_authoring()
@@ -961,8 +1371,8 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
             _ => build_self_authoring_control_panel(
                 context.theme,
                 request.tool_surface_instance_id,
-                self_authoring_lines(context, request.tool_surface_kind),
-                self_authoring_actions(context, request.tool_surface_kind),
+                self_authoring_lines(context, legacy_tool_surface_kind),
+                self_authoring_actions(context, legacy_tool_surface_kind),
             ),
         };
 
@@ -1468,6 +1878,7 @@ pub mod scene;
 pub mod sdf_brush_browser;
 pub mod sdf_graph_canvas;
 pub mod texture_viewer;
+pub mod tool_suite_registry_inspector;
 pub mod volume_texture_viewer;
 
 use asset_browser::AssetBrowserProvider;
@@ -1487,19 +1898,25 @@ use scene::{
 use sdf_brush_browser::SdfBrushBrowserProvider;
 use sdf_graph_canvas::SdfGraphCanvasProvider;
 use texture_viewer::TextureViewerProvider;
+use tool_suite_registry_inspector::ToolSuiteRegistryInspectorProvider;
 use volume_texture_viewer::VolumeTextureViewerProvider;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use asset::{
-        ArtifactCacheKey, ArtifactPayloadKind, AssetArtifactDescriptor, AssetKind, AssetRecord,
+        ArtifactCacheKey, ArtifactPayloadKind, AssetArtifactDescriptor, AssetDiagnosticCode,
+        AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetKind, AssetRecord,
         AssetSourceDescriptor, SourceHash, asset_artifact_id, asset_id, asset_source_id,
     };
     use editor_shell::{
-        LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, TabStackId, ToolSurfaceInstanceId,
+        EditorToolSuite, LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, ProviderFamilyDefinition,
+        ProviderFamilyId, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, TabStackId, ToolSuiteId,
+        ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfaceInstanceId, ToolSurfacePersistence,
+        ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey,
         VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
     };
+    use graph::{CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId};
     use texture::{
         Ktx2TextureMetadata, TextureDescriptor, TextureDimension, TextureExtent,
         TexturePixelFormat, TextureProductId,
@@ -1540,6 +1957,7 @@ mod tests {
     struct DummyProvider {
         descriptor: SurfaceProviderDescriptor,
         supports: bool,
+        support_mode: Option<SurfaceProviderSupportMode>,
         fail: bool,
     }
 
@@ -1549,7 +1967,19 @@ mod tests {
         }
 
         fn supports(&self, _request: &SurfaceProviderRequest) -> bool {
-            self.supports
+            self.support_mode
+                .map(SurfaceProviderSupportMode::is_supported)
+                .unwrap_or(self.supports)
+        }
+
+        fn support_mode(&self, _request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+            self.support_mode.unwrap_or_else(|| {
+                if self.supports {
+                    SurfaceProviderSupportMode::LegacyKind
+                } else {
+                    SurfaceProviderSupportMode::Unsupported
+                }
+            })
         }
 
         fn build_frame(
@@ -1593,6 +2023,24 @@ mod tests {
                 SurfaceProviderPriority(priority),
             ),
             supports,
+            support_mode: None,
+            fail: false,
+        })
+    }
+
+    fn dummy_with_support_mode(
+        id: u64,
+        priority: u16,
+        support_mode: SurfaceProviderSupportMode,
+    ) -> Box<dyn EditorSurfaceProvider> {
+        Box::new(DummyProvider {
+            descriptor: SurfaceProviderDescriptor::new(
+                SurfaceProviderId::try_from_raw(id).unwrap(),
+                format!("provider-{id}"),
+                SurfaceProviderPriority(priority),
+            ),
+            supports: support_mode.is_supported(),
+            support_mode: Some(support_mode),
             fail: false,
         })
     }
@@ -1605,11 +2053,13 @@ mod tests {
                 SurfaceProviderPriority::DEFAULT,
             ),
             supports: true,
+            support_mode: None,
             fail: true,
         })
     }
 
     fn request() -> SurfaceProviderRequest {
+        let tool_surface_kind = ToolSurfaceKind::Viewport;
         SurfaceProviderRequest {
             workspace_profile_id: LAYOUT_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
@@ -1619,9 +2069,12 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(3).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(3).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(3).unwrap(),
-            tool_surface_kind: ToolSurfaceKind::Viewport,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: VIEWPORT_SURFACE_DEFINITION_ID,
-            capabilities: tool_surface_capability_set(ToolSurfaceKind::Viewport),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
         }
     }
 
@@ -1631,8 +2084,23 @@ mod tests {
     ) -> SurfaceProviderRequest {
         SurfaceProviderRequest {
             document_context,
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
+            ..request()
+        }
+    }
+
+    fn request_with_stable_key(
+        stable_surface_key: &str,
+        tool_surface_kind: ToolSurfaceKind,
+    ) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            stable_surface_key: ToolSurfaceStableKey::new(stable_surface_key).unwrap(),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            surface_definition_id: tool_surface_definition_id(tool_surface_kind),
+            capabilities: tool_surface_capability_set(tool_surface_kind),
             ..request()
         }
     }
@@ -1644,7 +2112,10 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(10).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(10).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(10).unwrap(),
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
         }
@@ -1660,9 +2131,34 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(20).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(20).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(20).unwrap(),
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
+    fn stable_key_only_material_request(
+        stable_key: &str,
+        route: ToolSurfaceRoute,
+    ) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(6),
+                document_kind: DocumentKind::MaterialGraph,
+            },
+            panel_instance_id: PanelInstanceId::try_from_raw(20).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(20).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(20).unwrap(),
+            stable_surface_key: ToolSurfaceStableKey::new(stable_key).unwrap(),
+            legacy_tool_surface_kind: None,
+            provider_family_id: Some(ProviderFamilyId::new("runenwerk.material_lab").unwrap()),
+            surface_route: Some(route),
+            surface_definition_id: editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID,
+            capabilities: Default::default(),
         }
     }
 
@@ -1680,7 +2176,10 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(21).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(21).unwrap(),
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
         }
@@ -1696,7 +2195,10 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(23).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(23).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(23).unwrap(),
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
         }
@@ -1715,7 +2217,10 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(22).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(22).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(22).unwrap(),
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
         }
@@ -1728,9 +2233,107 @@ mod tests {
             panel_instance_id: PanelInstanceId::try_from_raw(30).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(30).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(30).unwrap(),
-            tool_surface_kind,
+            stable_surface_key: stable_key_for_test(tool_surface_kind),
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            provider_family_id: None,
+            surface_route: None,
             surface_definition_id: tool_surface_definition_id(tool_surface_kind),
             capabilities: tool_surface_capability_set(tool_surface_kind),
+        }
+    }
+
+    fn inspector_request() -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            workspace_profile_id: RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::NoActiveDocument,
+            panel_instance_id: PanelInstanceId::try_from_raw(31).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(31).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(31).unwrap(),
+            stable_surface_key: ToolSurfaceStableKey::new(
+                TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+            )
+            .unwrap(),
+            legacy_tool_surface_kind: None,
+            provider_family_id: Some(ProviderFamilyId::new("runenwerk.diagnostics").unwrap()),
+            surface_route: Some(ToolSurfaceRoute::ProviderOwnedLocal),
+            surface_definition_id: editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID,
+            capabilities: Default::default(),
+        }
+    }
+
+    fn stable_key_for_test(tool_surface_kind: ToolSurfaceKind) -> ToolSurfaceStableKey {
+        editor_shell::stable_key_for_tool_surface_kind(tool_surface_kind)
+            .expect("provider test fixture surface should have a stable key")
+    }
+
+    fn scene_viewport_tool_suite_registry() -> ToolSuiteRegistry {
+        let provider_family_id = ProviderFamilyId::new("runenwerk.scene").unwrap();
+        ToolSuiteRegistry::new(vec![EditorToolSuite {
+            suite_id: ToolSuiteId::new("runenwerk.scene").unwrap(),
+            label: "Scene".to_string(),
+            provider_families: vec![ProviderFamilyDefinition {
+                id: provider_family_id.clone(),
+                label: "Scene".to_string(),
+            }],
+            surfaces: vec![ToolSurfaceDefinition {
+                key: ToolSurfaceStableKey::new("runenwerk.scene.viewport").unwrap(),
+                label: "Viewport".to_string(),
+                role: ToolSurfaceRole::Primary,
+                provider_family: provider_family_id,
+                route: ToolSurfaceRoute::ProviderOwnedLocal,
+                persistence: ToolSurfacePersistence::StableKey,
+            }],
+        }])
+        .expect("scene viewport fixture should be valid")
+    }
+
+    fn tool_suite_registry_for_provider_family(provider_family_id: &str) -> ToolSuiteRegistry {
+        let provider_family_id = ProviderFamilyId::new(provider_family_id).unwrap();
+        ToolSuiteRegistry::new(vec![EditorToolSuite {
+            suite_id: ToolSuiteId::new(provider_family_id.as_str()).unwrap(),
+            label: "Fixture".to_string(),
+            provider_families: vec![ProviderFamilyDefinition {
+                id: provider_family_id.clone(),
+                label: "Fixture".to_string(),
+            }],
+            surfaces: vec![ToolSurfaceDefinition {
+                key: ToolSurfaceStableKey::new("runenwerk.scene.viewport").unwrap(),
+                label: "Viewport".to_string(),
+                role: ToolSurfaceRole::Primary,
+                provider_family: provider_family_id,
+                route: ToolSurfaceRoute::ProviderOwnedLocal,
+                persistence: ToolSurfacePersistence::StableKey,
+            }],
+        }])
+        .expect("provider family fixture should be valid")
+    }
+
+    fn provider_family_map(
+        registry: &ToolSuiteRegistry,
+        provider_family_id: &str,
+        provider_ids: &[u64],
+    ) -> ProviderFamilyProviderMap {
+        let provider_family_id = ProviderFamilyId::new(provider_family_id).unwrap();
+        ProviderFamilyProviderMap::new(
+            registry,
+            provider_ids
+                .iter()
+                .copied()
+                .map(|id| {
+                    ProviderFamilyProviderAssignment::new(
+                        provider_family_id.clone(),
+                        SurfaceProviderId::try_from_raw(id).unwrap(),
+                    )
+                })
+                .collect(),
+        )
+        .expect("provider family map fixture should be valid")
+    }
+
+    fn request_for_provider_family(provider_family_id: &str) -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            provider_family_id: Some(ProviderFamilyId::new(provider_family_id).unwrap()),
+            ..request()
         }
     }
 
@@ -1767,6 +2370,1116 @@ mod tests {
             error,
             SurfaceProviderRegistryError::DuplicateProviderId(id) if id == SurfaceProviderId::try_from_raw(1).unwrap()
         ));
+    }
+
+    #[test]
+    fn mounted_surface_request_includes_advisory_stable_key_when_available() {
+        let shell_state = RunenwerkEditorShellState::new();
+        let requests =
+            mounted_surface_requests(&shell_state, SurfaceDocumentContext::NoActiveDocument);
+
+        let viewport_request = requests
+            .iter()
+            .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+            .expect("default workspace should mount viewport");
+
+        assert_eq!(
+            viewport_request.stable_key().as_str(),
+            "runenwerk.scene.viewport"
+        );
+        assert_eq!(viewport_request.provider_family_id, None);
+        assert_eq!(viewport_request.surface_route, None);
+    }
+
+    #[test]
+    fn live_mounted_surface_requests_use_stable_key_authority() {
+        let shell_state = RunenwerkEditorShellState::new();
+        let requests =
+            mounted_surface_requests(&shell_state, SurfaceDocumentContext::NoActiveDocument);
+
+        let viewport_request = requests
+            .iter()
+            .find(|request| request.matches_stable_key(SCENE_VIEWPORT_SURFACE_KEY))
+            .expect("default workspace should mount viewport by stable key");
+
+        assert_eq!(
+            viewport_request.stable_key().as_str(),
+            SCENE_VIEWPORT_SURFACE_KEY
+        );
+    }
+
+    #[test]
+    fn live_mounted_surface_requests_include_legacy_kind_only_as_metadata() {
+        let shell_state = RunenwerkEditorShellState::new();
+        let requests =
+            mounted_surface_requests(&shell_state, SurfaceDocumentContext::NoActiveDocument);
+
+        let viewport_request = requests
+            .iter()
+            .find(|request| request.matches_stable_key(SCENE_VIEWPORT_SURFACE_KEY))
+            .expect("default workspace should mount viewport by stable key");
+
+        assert_eq!(
+            viewport_request.legacy_kind(),
+            Some(ToolSurfaceKind::Viewport)
+        );
+    }
+
+    #[test]
+    fn mounted_surface_request_enrichment_adds_provider_family_and_route_when_registry_resolves() {
+        let shell_state = RunenwerkEditorShellState::new();
+        let registry = scene_viewport_tool_suite_registry();
+
+        let requests = mounted_surface_requests_with_registry(
+            &shell_state,
+            SurfaceDocumentContext::NoActiveDocument,
+            Some(registry.surfaces()),
+        );
+
+        let viewport_request = requests
+            .iter()
+            .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+            .expect("default workspace should mount viewport");
+
+        assert_eq!(
+            viewport_request.stable_key().as_str(),
+            "runenwerk.scene.viewport"
+        );
+        assert_eq!(
+            viewport_request
+                .provider_family_id
+                .as_ref()
+                .map(ProviderFamilyId::as_str),
+            Some("runenwerk.scene")
+        );
+        assert_eq!(
+            viewport_request.surface_route,
+            Some(ToolSurfaceRoute::ProviderOwnedLocal)
+        );
+    }
+
+    #[test]
+    fn mounted_surface_request_without_registry_matches_legacy_behavior() {
+        let shell_state = RunenwerkEditorShellState::new();
+        let document_context = SurfaceDocumentContext::NoActiveDocument;
+
+        let legacy_requests = mounted_surface_requests(&shell_state, document_context.clone());
+        let explicit_requests =
+            mounted_surface_requests_with_registry(&shell_state, document_context, None);
+
+        assert_eq!(legacy_requests, explicit_requests);
+        assert!(
+            legacy_requests
+                .iter()
+                .all(|request| request.provider_family_id.is_none()
+                    && request.surface_route.is_none())
+        );
+    }
+
+    #[test]
+    fn provider_resolution_unchanged_when_metadata_is_present_but_providers_ignore_it() {
+        let registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 200, true), dummy(2, 10, false)])
+                .expect("ids are unique");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let mut enriched_request = request();
+        enriched_request.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.scene.viewport").unwrap();
+        enriched_request.provider_family_id =
+            Some(ProviderFamilyId::new("runenwerk.scene").unwrap());
+        enriched_request.surface_route = Some(ToolSurfaceRoute::ProviderOwnedLocal);
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &enriched_request,
+            &Default::default(),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(1).unwrap())
+        );
+    }
+
+    #[test]
+    fn provider_family_filtering_limits_candidates_before_supports() {
+        let provider_registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 1, true), dummy(2, 200, true)])
+                .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request_for_provider_family("runenwerk.scene"),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(2).unwrap())
+        );
+    }
+
+    #[test]
+    fn provider_family_filtering_still_runs_before_stable_key_matching() {
+        let provider_registry = EditorSurfaceProviderRegistry::new(vec![
+            dummy_with_support_mode(1, 1, SurfaceProviderSupportMode::StableKey),
+            dummy_with_support_mode(2, 10, SurfaceProviderSupportMode::StableKey),
+        ])
+        .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request_for_provider_family("runenwerk.scene"),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(2).unwrap())
+        );
+    }
+
+    #[test]
+    fn provider_family_filtering_preserves_existing_priority_resolution() {
+        let provider_registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 200, true), dummy(2, 10, true)])
+                .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[1, 2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request_for_provider_family("runenwerk.scene"),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(2).unwrap())
+        );
+    }
+
+    #[test]
+    fn missing_provider_family_assignment_fails_closed() {
+        let provider_registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 1, true)]).expect("ids are unique");
+        let suite_registry = tool_suite_registry_for_provider_family("runenwerk.scene");
+        let provider_family_map =
+            ProviderFamilyProviderMap::new(&suite_registry, Vec::new()).unwrap();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request_for_provider_family("runenwerk.scene"),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Unsupported);
+        assert_eq!(frame.provider_id, None);
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn request_without_provider_family_id_keeps_legacy_full_candidate_behavior() {
+        let provider_registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 1, true), dummy(2, 200, true)])
+                .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request(),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(1).unwrap())
+        );
+    }
+
+    #[test]
+    fn provider_family_filtering_does_not_change_material_graph_provider_resolution() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
+        request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.material_lab").unwrap());
+        request.surface_route = Some(ToolSurfaceRoute::ProviderOwnedGraphCanvas);
+
+        let legacy_frame = host.provider_registry().resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+        );
+        let filtered_frame = host
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context(&app, &shell_state, &theme),
+                &request,
+                &Default::default(),
+                Some(host.provider_family_provider_map()),
+            );
+
+        assert_eq!(filtered_frame.availability, legacy_frame.availability);
+        assert_eq!(filtered_frame.provider_id, legacy_frame.provider_id);
+        assert_eq!(
+            filtered_frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(12).unwrap())
+        );
+    }
+
+    #[test]
+    fn equal_priority_ambiguity_still_fails_closed_after_family_filtering() {
+        let provider_registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 100, true), dummy(2, 100, true)])
+                .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[1, 2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request_for_provider_family("runenwerk.scene"),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Ambiguous);
+        assert_eq!(frame.provider_id, None);
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn provider_family_filtering_keeps_provider_supports_enum_backed() {
+        let provider_registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 100, false)]).expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[1]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request_for_provider_family("runenwerk.scene"),
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Unsupported);
+        assert_eq!(frame.provider_id, None);
+    }
+
+    #[test]
+    fn material_graph_provider_supports_stable_key_first() {
+        let provider = MaterialGraphCanvasProvider;
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new(MATERIAL_GRAPH_CANVAS_SURFACE_KEY).unwrap();
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::StableKey
+        );
+    }
+
+    #[test]
+    fn material_graph_provider_legacy_support_still_works_when_stable_key_does_not_match() {
+        let provider = MaterialGraphCanvasProvider;
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+        request.stable_surface_key = ToolSurfaceStableKey::new("runenwerk.fixture.other").unwrap();
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::LegacyKind
+        );
+    }
+
+    #[test]
+    fn material_inspector_provider_supports_stable_key_first() {
+        let provider = MaterialInspectorProvider;
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialInspector);
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new(MATERIAL_INSPECTOR_SURFACE_KEY).unwrap();
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::StableKey
+        );
+    }
+
+    #[test]
+    fn material_preview_provider_supports_stable_key_first() {
+        let provider = MaterialPreviewProvider;
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialPreview);
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new(MATERIAL_PREVIEW_SURFACE_KEY).unwrap();
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::StableKey
+        );
+    }
+
+    #[test]
+    fn material_lab_providers_do_not_require_legacy_tool_surface_kind() {
+        let cases = [
+            (
+                &MaterialGraphCanvasProvider as &dyn EditorSurfaceProvider,
+                stable_key_only_material_request(
+                    MATERIAL_GRAPH_CANVAS_SURFACE_KEY,
+                    ToolSurfaceRoute::ProviderOwnedGraphCanvas,
+                ),
+            ),
+            (
+                &MaterialInspectorProvider,
+                stable_key_only_material_request(
+                    MATERIAL_INSPECTOR_SURFACE_KEY,
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+            ),
+            (
+                &MaterialPreviewProvider,
+                stable_key_only_material_request(
+                    MATERIAL_PREVIEW_SURFACE_KEY,
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+            ),
+        ];
+
+        for (provider, request) in cases {
+            assert_eq!(request.legacy_kind(), None);
+            assert_eq!(
+                provider.support_mode(&request),
+                SurfaceProviderSupportMode::StableKey
+            );
+            assert!(provider.supports(&request));
+        }
+    }
+
+    #[test]
+    fn material_lab_provider_resolution_uses_stable_keys() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let cases = [
+            (
+                stable_key_only_material_request(
+                    MATERIAL_GRAPH_CANVAS_SURFACE_KEY,
+                    ToolSurfaceRoute::ProviderOwnedGraphCanvas,
+                ),
+                MATERIAL_GRAPH_CANVAS_PROVIDER_ID,
+            ),
+            (
+                stable_key_only_material_request(
+                    MATERIAL_INSPECTOR_SURFACE_KEY,
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+                MATERIAL_INSPECTOR_PROVIDER_ID,
+            ),
+            (
+                stable_key_only_material_request(
+                    MATERIAL_PREVIEW_SURFACE_KEY,
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+                MATERIAL_PREVIEW_PROVIDER_ID,
+            ),
+        ];
+
+        for (request, expected_provider_id) in cases {
+            let frame = host
+                .provider_registry()
+                .resolve_frame_with_provider_family_map(
+                    &context(&app, &shell_state, &theme),
+                    &request,
+                    &SurfaceSessionState::default(),
+                    Some(host.provider_family_provider_map()),
+                );
+
+            assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+            assert_eq!(frame.provider_id, Some(expected_provider_id));
+            assert_eq!(frame.stable_surface_key, request.stable_surface_key);
+            assert_eq!(frame.surface_kind, None);
+        }
+    }
+
+    #[test]
+    fn texture_providers_support_registered_stable_keys() {
+        let texture_provider = TextureViewerProvider;
+        let mut texture_request = m6_texture_request(ToolSurfaceKind::TextureViewer);
+        texture_request.stable_surface_key =
+            ToolSurfaceStableKey::new(TEXTURE_VIEWER_2D_SURFACE_KEY).unwrap();
+
+        let volume_provider = VolumeTextureViewerProvider;
+        let mut volume_request = m6_texture_request(ToolSurfaceKind::VolumeTextureViewer);
+        volume_request.stable_surface_key =
+            ToolSurfaceStableKey::new(TEXTURE_VIEWER_3D_SURFACE_KEY).unwrap();
+
+        assert_eq!(
+            texture_provider.support_mode(&texture_request),
+            SurfaceProviderSupportMode::StableKey
+        );
+        assert_eq!(
+            volume_provider.support_mode(&volume_request),
+            SurfaceProviderSupportMode::StableKey
+        );
+    }
+
+    #[test]
+    fn asset_providers_support_registered_stable_keys() {
+        let asset_provider = AssetBrowserProvider;
+        let mut asset_browser_request = asset_request(ToolSurfaceKind::AssetBrowser);
+        asset_browser_request.stable_surface_key =
+            ToolSurfaceStableKey::new(ASSET_BROWSER_SURFACE_KEY).unwrap();
+
+        let import_provider = ImportInspectorProvider;
+        let mut import_request = asset_request(ToolSurfaceKind::ImportInspector);
+        import_request.stable_surface_key =
+            ToolSurfaceStableKey::new(IMPORT_INSPECTOR_SURFACE_KEY).unwrap();
+
+        assert_eq!(
+            asset_provider.support_mode(&asset_browser_request),
+            SurfaceProviderSupportMode::StableKey
+        );
+        assert_eq!(
+            import_provider.support_mode(&import_request),
+            SurfaceProviderSupportMode::StableKey
+        );
+    }
+
+    #[test]
+    fn console_and_editor_design_providers_support_registered_stable_keys() {
+        let console_provider = ConsoleProvider;
+        let console_request =
+            request_with_stable_key(EDITOR_CONSOLE_SURFACE_KEY, ToolSurfaceKind::Console);
+
+        let self_authoring_provider = SelfAuthoringProvider;
+        let mut definition_validation_request =
+            self_authoring_request(ToolSurfaceKind::DefinitionValidation);
+        definition_validation_request.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.editor_design.definition_validation").unwrap();
+
+        assert_eq!(
+            console_provider.support_mode(&console_request),
+            SurfaceProviderSupportMode::StableKey
+        );
+        assert_eq!(
+            self_authoring_provider.support_mode(&definition_validation_request),
+            SurfaceProviderSupportMode::StableKey
+        );
+    }
+
+    #[test]
+    fn field_and_procgen_providers_support_registered_stable_keys() {
+        let field_product_provider = FieldProductViewerProvider;
+        let mut field_product_request = asset_request(ToolSurfaceKind::FieldProductViewer);
+        field_product_request.stable_surface_key =
+            ToolSurfaceStableKey::new(FIELD_PRODUCT_VIEWER_SURFACE_KEY).unwrap();
+
+        let sdf_brush_provider = SdfBrushBrowserProvider;
+        let mut sdf_brush_request = asset_request(ToolSurfaceKind::SdfBrushBrowser);
+        sdf_brush_request.stable_surface_key =
+            ToolSurfaceStableKey::new(SDF_BRUSH_BROWSER_SURFACE_KEY).unwrap();
+
+        let field_layer_provider = FieldLayerStackProvider;
+        let mut field_layer_request =
+            m6_sdf_request(ToolSurfaceKind::FieldLayerStack, DocumentKind::SdfGraph);
+        field_layer_request.stable_surface_key =
+            ToolSurfaceStableKey::new(FIELD_LAYER_STACK_SURFACE_KEY).unwrap();
+
+        let sdf_graph_provider = SdfGraphCanvasProvider;
+        let mut sdf_graph_request =
+            m6_sdf_request(ToolSurfaceKind::SdfGraphCanvas, DocumentKind::SdfGraph);
+        sdf_graph_request.stable_surface_key =
+            ToolSurfaceStableKey::new(SDF_GRAPH_CANVAS_SURFACE_KEY).unwrap();
+
+        let procgen_graph_provider = ProcgenGraphCanvasProvider;
+        let mut procgen_graph_request = m6_procgen_request(ToolSurfaceKind::ProcgenGraphCanvas);
+        procgen_graph_request.stable_surface_key =
+            ToolSurfaceStableKey::new(PROCGEN_GRAPH_CANVAS_SURFACE_KEY).unwrap();
+
+        let procgen_preview_provider = ProcgenPreviewProvider;
+        let mut procgen_preview_request = m6_procgen_request(ToolSurfaceKind::ProcgenPreview);
+        procgen_preview_request.stable_surface_key =
+            ToolSurfaceStableKey::new(PROCGEN_PREVIEW_SURFACE_KEY).unwrap();
+
+        for (provider, request) in [
+            (
+                &field_product_provider as &dyn EditorSurfaceProvider,
+                &field_product_request,
+            ),
+            (&sdf_brush_provider, &sdf_brush_request),
+            (&field_layer_provider, &field_layer_request),
+            (&sdf_graph_provider, &sdf_graph_request),
+            (&procgen_graph_provider, &procgen_graph_request),
+            (&procgen_preview_provider, &procgen_preview_request),
+        ] {
+            assert_eq!(
+                provider.support_mode(request),
+                SurfaceProviderSupportMode::StableKey
+            );
+        }
+    }
+
+    #[test]
+    fn scene_core_providers_support_registered_stable_keys() {
+        let providers = [
+            (
+                Box::new(SceneOutlinerProvider) as Box<dyn EditorSurfaceProvider>,
+                SCENE_OUTLINER_SURFACE_KEY,
+                ToolSurfaceKind::Outliner,
+            ),
+            (
+                Box::new(SceneEntityTableProvider) as Box<dyn EditorSurfaceProvider>,
+                SCENE_ENTITY_TABLE_SURFACE_KEY,
+                ToolSurfaceKind::EntityTable,
+            ),
+            (
+                Box::new(SceneViewportProvider) as Box<dyn EditorSurfaceProvider>,
+                SCENE_VIEWPORT_SURFACE_KEY,
+                ToolSurfaceKind::Viewport,
+            ),
+            (
+                Box::new(SceneInspectorProvider) as Box<dyn EditorSurfaceProvider>,
+                SCENE_INSPECTOR_SURFACE_KEY,
+                ToolSurfaceKind::Inspector,
+            ),
+        ];
+
+        for (provider, stable_key, kind) in providers {
+            let request = request_with_stable_key(stable_key, kind);
+            assert_eq!(
+                provider.support_mode(&request),
+                SurfaceProviderSupportMode::StableKey
+            );
+        }
+    }
+
+    #[test]
+    fn provider_matching_constants_match_registered_suite_keys() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let constants = [
+            &[SCENE_OUTLINER_SURFACE_KEY][..],
+            &[SCENE_ENTITY_TABLE_SURFACE_KEY],
+            &[SCENE_VIEWPORT_SURFACE_KEY],
+            &[SCENE_INSPECTOR_SURFACE_KEY],
+            &[EDITOR_CONSOLE_SURFACE_KEY],
+            EDITOR_DESIGN_SURFACE_KEYS,
+            &[ASSET_BROWSER_SURFACE_KEY],
+            &[IMPORT_INSPECTOR_SURFACE_KEY],
+            &[FIELD_PRODUCT_VIEWER_SURFACE_KEY],
+            &[SDF_BRUSH_BROWSER_SURFACE_KEY],
+            &[FIELD_LAYER_STACK_SURFACE_KEY],
+            &[SDF_GRAPH_CANVAS_SURFACE_KEY],
+            DIAGNOSTICS_SURFACE_KEYS,
+            &[MATERIAL_GRAPH_CANVAS_SURFACE_KEY],
+            &[MATERIAL_INSPECTOR_SURFACE_KEY],
+            &[MATERIAL_PREVIEW_SURFACE_KEY],
+            &[TEXTURE_VIEWER_2D_SURFACE_KEY],
+            &[TEXTURE_VIEWER_3D_SURFACE_KEY],
+            &[PROCGEN_GRAPH_CANVAS_SURFACE_KEY],
+            &[PROCGEN_PREVIEW_SURFACE_KEY],
+            &[TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY],
+        ];
+
+        for stable_key in constants.into_iter().flatten() {
+            let stable_key = ToolSurfaceStableKey::new(*stable_key).unwrap();
+            assert!(
+                host.tool_surface_registry().get(&stable_key).is_some(),
+                "provider matching constant should be registered: {}",
+                stable_key.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn tool_suite_registry_inspector_provider_is_registered() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+
+        assert!(registry.has_provider_id(TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID));
+        assert!(
+            registry
+                .provider_descriptors()
+                .any(|descriptor| descriptor.id == TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID
+                    && descriptor.label == "Tool Suite Registry Inspector")
+        );
+    }
+
+    #[test]
+    fn inspector_provider_supports_stable_key_only() {
+        let provider = ToolSuiteRegistryInspectorProvider;
+        let request = inspector_request();
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::StableKey
+        );
+        assert!(provider.supports(&request));
+    }
+
+    #[test]
+    fn inspector_provider_does_not_support_legacy_kind() {
+        let provider = ToolSuiteRegistryInspectorProvider;
+        let mut request = inspector_request();
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.diagnostics.diagnostics").unwrap();
+        request.legacy_tool_surface_kind = Some(ToolSurfaceKind::Diagnostics);
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::Unsupported
+        );
+        assert!(!provider.supports(&request));
+    }
+
+    #[test]
+    fn inspector_surface_can_be_resolved_by_stable_key() {
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = inspector_request();
+
+        let frame = app
+            .workbench_host()
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context(&app, &shell_state, &theme),
+                &request,
+                &SurfaceSessionState::default(),
+                Some(app.workbench_host().provider_family_provider_map()),
+            );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID)
+        );
+        assert_eq!(frame.title, "Tool Suite Registry Inspector");
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn inspector_resolution_observation_matches_provider_resolution_for_material_lab() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+        request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.material_lab").unwrap());
+        request.surface_route = Some(ToolSurfaceRoute::ProviderOwnedGraphCanvas);
+
+        let observation = host
+            .provider_registry()
+            .observe_resolution_for_request(&request, Some(host.provider_family_provider_map()));
+        let frame = host
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context(&app, &shell_state, &theme),
+                &request,
+                &SurfaceSessionState::default(),
+                Some(host.provider_family_provider_map()),
+            );
+
+        assert_eq!(observation.availability, frame.availability);
+        assert_eq!(observation.selected_provider_id, frame.provider_id);
+        assert!(observation
+            .candidate_provider_ids
+            .contains(&MATERIAL_GRAPH_CANVAS_PROVIDER_ID));
+        assert!(observation.support_modes.iter().any(|row| {
+            row.provider_id == MATERIAL_GRAPH_CANVAS_PROVIDER_ID
+                && row.support_mode == SurfaceProviderSupportMode::StableKey
+        }));
+    }
+
+    #[test]
+    fn inspector_resolution_observation_matches_provider_resolution_for_diagnostics_inspector() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = inspector_request();
+
+        let observation = host
+            .provider_registry()
+            .observe_resolution_for_request(&request, Some(host.provider_family_provider_map()));
+        let frame = host
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context(&app, &shell_state, &theme),
+                &request,
+                &SurfaceSessionState::default(),
+                Some(host.provider_family_provider_map()),
+            );
+
+        assert_eq!(observation.availability, frame.availability);
+        assert_eq!(observation.selected_provider_id, frame.provider_id);
+        assert_eq!(
+            observation.selected_provider_id,
+            Some(TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID)
+        );
+    }
+
+    #[test]
+    fn unresolved_mounted_surface_reports_diagnostic_without_mutation() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let provider_count_before = host.provider_registry().provider_ids().count();
+        let assignment_count_before = host.provider_family_provider_map().assignments().len();
+        let mut request = request();
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.gameplay.graph_canvas").unwrap();
+        request.legacy_tool_surface_kind = None;
+        request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.gameplay").unwrap());
+        request.surface_route = Some(ToolSurfaceRoute::ProviderOwnedLocal);
+
+        let observation = host
+            .provider_registry()
+            .observe_resolution_for_request(&request, Some(host.provider_family_provider_map()));
+
+        assert_eq!(
+            observation.availability,
+            SurfaceProviderAvailability::Unsupported
+        );
+        assert_eq!(observation.selected_provider_id, None);
+        assert!(observation.diagnostic.is_some_and(|diagnostic| {
+            diagnostic.code == "editor.surface.unassigned_provider_family"
+        }));
+        assert_eq!(
+            host.provider_registry().provider_ids().count(),
+            provider_count_before
+        );
+        assert_eq!(
+            host.provider_family_provider_map().assignments().len(),
+            assignment_count_before
+        );
+    }
+
+    #[test]
+    fn no_new_tool_surface_kind_for_inspector() {
+        let state_source =
+            include_str!("../../../../../domain/editor/editor_shell/src/workspace/state.rs");
+        let shell_source = include_str!(
+            "../../../../../domain/editor/editor_shell/src/composition/build_editor_shell.rs"
+        );
+
+        assert!(!state_source.contains("ToolSuiteRegistryInspector"));
+        assert!(!shell_source.contains(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY));
+    }
+
+    #[test]
+    fn no_dynamic_plugin_behavior_introduced() {
+        let inspector_source = include_str!("tool_suite_registry_inspector.rs");
+        let diagnostics_suite_source = include_str!("../tool_suites/diagnostics_tool_suite.rs");
+
+        for source in [inspector_source, diagnostics_suite_source] {
+            assert!(!source.contains("runtime::plugin"));
+            assert!(!source.contains("dynamic plugin"));
+            assert!(!source.contains("PluginMarketplace"));
+        }
+    }
+
+    #[test]
+    fn provider_resolution_prefers_stable_key_support() {
+        let provider_registry = EditorSurfaceProviderRegistry::new(vec![
+            dummy_with_support_mode(1, 1, SurfaceProviderSupportMode::LegacyKind),
+            dummy_with_support_mode(2, 200, SurfaceProviderSupportMode::StableKey),
+        ])
+        .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[1, 2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = SurfaceProviderRequest {
+            stable_surface_key: ToolSurfaceStableKey::new(SCENE_VIEWPORT_SURFACE_KEY).unwrap(),
+            provider_family_id: Some(ProviderFamilyId::new("runenwerk.scene").unwrap()),
+            ..request()
+        };
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(2).unwrap())
+        );
+    }
+
+    #[test]
+    fn provider_resolution_preserves_legacy_support_when_stable_key_does_not_match() {
+        let provider_registry = EditorSurfaceProviderRegistry::new(vec![
+            dummy_with_support_mode(1, 200, SurfaceProviderSupportMode::LegacyKind),
+            dummy_with_support_mode(2, 10, SurfaceProviderSupportMode::LegacyKind),
+        ])
+        .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map = provider_family_map(&suite_registry, "runenwerk.scene", &[1, 2]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let mut request = request_for_provider_family("runenwerk.scene");
+        request.stable_surface_key = ToolSurfaceStableKey::new("runenwerk.fixture.other").unwrap();
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(
+            frame.provider_id,
+            Some(SurfaceProviderId::try_from_raw(2).unwrap())
+        );
+    }
+
+    #[test]
+    fn provider_resolution_works_without_legacy_kind_for_stable_key_supported_surface() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let mut request =
+            request_with_stable_key(SCENE_VIEWPORT_SURFACE_KEY, ToolSurfaceKind::Viewport);
+        request.legacy_tool_surface_kind = None;
+        request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.scene").unwrap());
+
+        let frame = host
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context(&app, &shell_state, &theme),
+                &request,
+                &Default::default(),
+                Some(host.provider_family_provider_map()),
+            );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert_eq!(frame.provider_id, Some(SCENE_VIEWPORT_PROVIDER_ID));
+    }
+
+    #[test]
+    fn provider_resolution_falls_back_to_legacy_only_when_legacy_kind_present() {
+        let provider = MaterialGraphCanvasProvider;
+        let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
+        request.stable_surface_key = ToolSurfaceStableKey::new("runenwerk.fixture.other").unwrap();
+
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::LegacyKind
+        );
+
+        request.legacy_tool_surface_kind = None;
+        assert_eq!(
+            provider.support_mode(&request),
+            SurfaceProviderSupportMode::Unsupported
+        );
+    }
+
+    #[test]
+    fn stable_key_ambiguity_fails_closed() {
+        let provider_registry = EditorSurfaceProviderRegistry::new(vec![
+            dummy_with_support_mode(1, 100, SurfaceProviderSupportMode::StableKey),
+            dummy_with_support_mode(2, 100, SurfaceProviderSupportMode::StableKey),
+            dummy_with_support_mode(3, 1, SurfaceProviderSupportMode::LegacyKind),
+        ])
+        .expect("ids are unique");
+        let suite_registry = scene_viewport_tool_suite_registry();
+        let provider_family_map =
+            provider_family_map(&suite_registry, "runenwerk.scene", &[1, 2, 3]);
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = SurfaceProviderRequest {
+            stable_surface_key: ToolSurfaceStableKey::new(SCENE_VIEWPORT_SURFACE_KEY).unwrap(),
+            provider_family_id: Some(ProviderFamilyId::new("runenwerk.scene").unwrap()),
+            ..request()
+        };
+
+        let frame = provider_registry.resolve_frame_with_provider_family_map(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &Default::default(),
+            Some(&provider_family_map),
+        );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Ambiguous);
+        assert_eq!(frame.provider_id, None);
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn future_placeholder_families_do_not_gain_provider_support() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let mut request = m6_procgen_request(ToolSurfaceKind::GameplayGraphCanvas);
+        request.stable_surface_key =
+            ToolSurfaceStableKey::new("runenwerk.gameplay.graph_canvas").unwrap();
+        request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.gameplay").unwrap());
+
+        let frame = host
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context(&app, &shell_state, &theme),
+                &request,
+                &Default::default(),
+                Some(host.provider_family_provider_map()),
+            );
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Unsupported);
+        assert_eq!(frame.provider_id, None);
+        assert!(frame.routes.is_empty());
+    }
+
+    #[test]
+    fn live_mounted_surface_requests_include_provider_family_when_registry_resolves() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let shell_state = RunenwerkEditorShellState::new();
+        let requests = mounted_surface_requests_with_registry(
+            &shell_state,
+            SurfaceDocumentContext::NoActiveDocument,
+            Some(host.tool_surface_registry()),
+        );
+
+        let viewport_request = requests
+            .iter()
+            .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+            .expect("default workspace should mount viewport");
+
+        assert_eq!(
+            viewport_request
+                .provider_family_id
+                .as_ref()
+                .map(ProviderFamilyId::as_str),
+            Some("runenwerk.scene")
+        );
+        assert_eq!(
+            viewport_request.surface_route,
+            Some(ToolSurfaceRoute::ProviderOwnedLocal)
+        );
+    }
+
+    #[test]
+    fn unresolved_registry_surface_request_reports_diagnostic_in_live_frame_path() {
+        let app = RunenwerkEditorApp::with_surface_provider_registry(
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 100, true)]).expect("ids are unique"),
+        );
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame_model = build_editor_shell_frame_model(
+            &app,
+            &shell_state,
+            app.surface_provider_registry(),
+            &theme,
+            None,
+            None,
+            None,
+        );
+
+        let viewport_frame = frame_model
+            .surfaces
+            .values()
+            .find(|frame| frame.surface_kind == Some(ToolSurfaceKind::Viewport))
+            .expect("default workspace should include viewport frame");
+
+        assert_eq!(
+            viewport_frame.availability,
+            SurfaceProviderAvailability::Unsupported
+        );
+        assert_eq!(viewport_frame.provider_id, None);
+        assert!(viewport_frame.routes.is_empty());
+    }
+
+    #[test]
+    fn request_still_contains_legacy_tool_surface_kind_and_capabilities() {
+        let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
+        let shell_state = RunenwerkEditorShellState::new();
+        let requests = mounted_surface_requests_with_registry(
+            &shell_state,
+            SurfaceDocumentContext::NoActiveDocument,
+            Some(host.tool_surface_registry()),
+        );
+        let request = requests
+            .iter()
+            .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+            .expect("default workspace should mount viewport");
+
+        assert_eq!(request.legacy_kind(), Some(ToolSurfaceKind::Viewport));
+        assert_eq!(
+            request.surface_definition_id,
+            tool_surface_definition_id(ToolSurfaceKind::Viewport)
+        );
+        assert_eq!(
+            request.capabilities,
+            tool_surface_capability_set(ToolSurfaceKind::Viewport)
+        );
+    }
+
+    #[test]
+    fn non_material_providers_ignore_graph_canvas_interaction_by_default() {
+        let registry =
+            EditorSurfaceProviderRegistry::new(vec![dummy(1, 200, true)]).expect("ids are unique");
+        let request = request();
+        let proposal = registry
+            .map_interaction(
+                &SurfaceProviderDispatchContext {
+                    projection_epoch: 61,
+                    _marker: std::marker::PhantomData,
+                },
+                &request,
+                SurfaceProviderId::try_from_raw(1).unwrap(),
+                SurfaceInteraction::GraphCanvasAction(
+                    ui_graph_editor::GraphCanvasAction::ClearSelection,
+                ),
+            )
+            .expect("default provider interaction mapper should not fail");
+
+        assert_eq!(proposal, None);
     }
 
     #[test]
@@ -1951,6 +3664,190 @@ mod tests {
             provider_frame_text(&frame).contains("domain/material_graph remains material truth")
         );
         assert!(!frame.routes.is_empty());
+    }
+
+    #[test]
+    fn material_graph_canvas_view_model_exposes_structured_diagnostics() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        app.material_lab_runtime_mut().record_diagnostic(
+            AssetDiagnosticRecord::new(
+                AssetDiagnosticCode::RatificationRejected,
+                AssetDiagnosticSeverity::Warning,
+                "base color input is disconnected",
+            )
+            .with_subject("material_graph.node:7"),
+        );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialGraphCanvas),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("material diagnostic [Warning] asset.ratification.rejected"));
+        assert!(text.contains("subject=material_graph.node:7"));
+        assert!(text.contains("base color input is disconnected"));
+    }
+
+    #[test]
+    fn material_preview_view_model_reports_preview_status() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialPreview),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("material preview status [NoSelection]"));
+        assert!(text.contains("No material asset selected"));
+        assert!(text.contains("last good material preview available: false"));
+    }
+
+    #[test]
+    fn material_preview_provider_renders_preview_product_status() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        app.material_lab_runtime_mut()
+            .set_active_preview(test_material_preview_product(asset_id(202)));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialPreview),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("material preview product status: active material preview product ready"));
+        assert!(text.contains("active material product label: material product 30"));
+        assert!(text.contains("material preview artifact label: material artifact 32"));
+        assert!(text.contains("material preview shader artifact label: shader artifact 33"));
+        assert!(
+            text.contains("material preview scene shader artifact label: scene shader artifact 34")
+        );
+        assert!(text.contains("material preview viewport product label: viewport product 10030"));
+    }
+
+    #[test]
+    fn material_inspector_renders_resource_binding_diagnostics() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        app.material_lab_runtime_mut().set_active_source_document(
+            asset_id(241),
+            material_texture_binding_source_document(),
+        );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialInspector),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("Texture / Resource Bindings"));
+        assert!(text.contains("material.resource.unresolved_binding"));
+        assert!(text.contains("status=Unresolved"));
+    }
+
+    #[test]
+    fn material_preview_renders_resource_binding_diagnostics() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        app.material_lab_runtime_mut().set_active_source_document(
+            asset_id(242),
+            material_texture_binding_source_document(),
+        );
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialPreview),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("Texture / Resource Bindings"));
+        assert!(text.contains("material.resource.unresolved_binding"));
+        assert!(text.contains("status=Unresolved"));
+    }
+
+    #[test]
+    fn provider_string_lines_remain_compatible_during_ml_a() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialPreview),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("material diagnostics: none (structured)"));
+        assert!(text.contains("No active material preview product"));
+        assert!(text.contains("No material diagnostics"));
+    }
+
+    fn test_material_preview_product(
+        asset_id: asset::AssetId,
+    ) -> crate::material_lab::EditorMaterialPreviewProduct {
+        let product = material_graph::FormedMaterialProduct::new(
+            material_graph::MaterialProductId::new(30),
+            material_graph::MaterialGraphDocumentId::new(31),
+            material_graph::MaterialOutputTarget::RenderMaterial,
+            material_graph::MaterialCacheKey::new("material-preview-cache"),
+        );
+        crate::material_lab::EditorMaterialPreviewProduct::new(
+            asset_id,
+            asset_source_id(22),
+            asset_artifact_id(32),
+            ArtifactCacheKey::new("artifact-cache"),
+            product,
+            crate::material_lab::MaterialRendererParameterProfile::RenderMaterial,
+            asset_artifact_id(33),
+            ArtifactCacheKey::new("shader-cache"),
+            ".runenwerk/artifacts/material.wgsl",
+            "material-shader",
+            asset_artifact_id(34),
+            ArtifactCacheKey::new("scene-shader-cache"),
+            ".runenwerk/artifacts/scene-material.wgsl",
+            "scene-material-shader",
+            [],
+        )
+    }
+
+    fn material_texture_binding_source_document() -> material_graph::MaterialGraphDocument {
+        material_graph::MaterialGraphDocument::new(
+            material_graph::MaterialGraphDocumentId::new(2401),
+            "material-texture-binding",
+            GraphDefinition::new(
+                GraphId::new(2401),
+                "material-texture-binding",
+                CyclePolicy::RejectDirectedCycles,
+                [NodeDefinition::new(
+                    NodeId::new(24),
+                    "texture.sample_2d",
+                    [],
+                )],
+                [],
+            ),
+            material_graph::MaterialOutputTarget::RenderMaterial,
+        )
     }
 
     #[test]

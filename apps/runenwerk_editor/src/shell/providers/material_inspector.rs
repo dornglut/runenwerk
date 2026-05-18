@@ -12,7 +12,15 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::MaterialInspector
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_key_or_legacy_kind_support(
+            request,
+            MATERIAL_INSPECTOR_SURFACE_KEY,
+            ToolSurfaceKind::MaterialInspector,
+        )
     }
 
     fn build_frame(
@@ -21,7 +29,10 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
         request: &SurfaceProviderRequest,
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let view_model = context.app.material_lab_runtime().inspector_view_model();
+        let view_model = context
+            .app
+            .material_lab_runtime()
+            .inspector_view_model(context.app.asset_catalog_runtime().catalog());
         let mut lines = vec![
             "material inspector: formed material product surface".to_string(),
             surface_document_context_line(&request.document_context),
@@ -42,6 +53,14 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
         }
         lines.extend(view_model.parameter_lines.clone());
         lines.extend(view_model.source_map_lines.clone());
+        lines.extend(super::material_graph_canvas::material_diagnostic_row_lines(
+            &view_model.diagnostic_rows,
+        ));
+        lines.extend(
+            super::material_graph_canvas::material_resource_binding_diagnostic_lines(
+                &view_model.resource_binding_diagnostics,
+            ),
+        );
         lines.extend(view_model.diagnostic_lines.clone());
         lines.extend(context.app.asset_catalog_runtime().reload_status_lines());
         let mut actions = vec![(

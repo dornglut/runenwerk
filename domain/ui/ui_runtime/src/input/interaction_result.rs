@@ -31,6 +31,10 @@ pub enum UiInteraction {
         target: WidgetId,
         event: KeyboardEvent,
     },
+    GraphCanvasAction {
+        target: WidgetId,
+        action: ui_graph_editor::GraphCanvasAction,
+    },
     TextInput {
         target: WidgetId,
         event: TextInputEvent,

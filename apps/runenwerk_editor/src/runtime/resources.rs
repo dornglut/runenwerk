@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use editor_core::EntityId;
 use editor_shell::{
-    ToolSurfaceInstanceId, WorkspaceIdentityAllocator, form_workspace_state_from_definition,
+    ToolSurfaceInstanceId, WorkspaceIdentityAllocator,
+    form_workspace_state_from_definition_with_registry,
 };
 use editor_viewport::{
     ViewportCameraSettings, ViewportFieldVisualizerSettings, ViewportId, ViewportRuntimeSettings,
@@ -50,9 +51,14 @@ pub struct RuntimePreviewProcessResource {
 
 impl Default for EditorHostResource {
     fn default() -> Self {
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("default shell workspace should be compatible with workbench registry");
         Self {
-            app: RunenwerkEditorApp::new(),
-            shell_state: RunenwerkEditorShellState::new(),
+            app,
+            shell_state,
             theme: ThemeTokens::default(),
         }
     }
@@ -231,10 +237,11 @@ impl EditorHostResource {
                         self.shell_state.workspace_state().next_identity_seed(),
                     );
                     let next_workspace_id = allocator.allocate_workspace_id();
-                    match form_workspace_state_from_definition(
+                    match form_workspace_state_from_definition_with_registry(
                         &layout,
                         next_workspace_id,
                         &mut allocator,
+                        self.app.workbench_host().tool_surface_registry(),
                     ) {
                         Ok(workspace_state) => {
                             self.shell_state.replace_workspace_state(workspace_state);
@@ -401,7 +408,7 @@ impl EditorViewportPrimitiveInstance {
         [
             self.capsule_radius.max(0.05),
             self.capsule_half_height.max(0.05),
-            self.material_slot_index as f32,
+            0.0,
             0.0,
         ]
     }
@@ -411,7 +418,7 @@ impl EditorViewportPrimitiveInstance {
             self.primitive_kind.as_u32(),
             self.pick_slot,
             u32::from(self.selected),
-            u32::from(self.hovered),
+            self.material_slot_index,
         ]
     }
 }
@@ -1096,7 +1103,7 @@ mod tests {
 
         assert_eq!(uniform.primitive_flags[1], 2);
         assert_eq!(uniform.primitive_slot_flags[0], [0, 1, 1, 0]);
-        assert_eq!(uniform.primitive_slot_flags[1], [1, 2, 0, 1]);
+        assert_eq!(uniform.primitive_slot_flags[1], [1, 2, 0, 0]);
         assert_eq!(uniform.primitive_slot_transforms[0], [-1.0, 0.0, 0.0, 0.0]);
         assert_eq!(uniform.primitive_slot_params_a[0], [0.25, 0.5, 0.75, 0.6]);
         assert_eq!(uniform.primitive_slot_params_a[1][3], 1.25);
@@ -1185,7 +1192,22 @@ mod tests {
 
         assert_eq!(instance.shader_slot_transform(), [1.0, 2.0, 3.0, 0.0]);
         assert_eq!(instance.shader_slot_params_b(), [0.45, 1.25, 0.0, 0.0]);
-        assert_eq!(instance.shader_slot_flags(), [3, 1, 1, 1]);
+        assert_eq!(instance.shader_slot_flags(), [3, 1, 1, 0]);
+    }
+
+    #[test]
+    fn sdf_material_slot_packet_uses_typed_u32_lane() {
+        let instance = EditorViewportPrimitiveInstance::from_transform_and_primitive(
+            editor_core::EntityId(42),
+            LocalTransform::default(),
+            EditorPrimitive::default(),
+            false,
+            false,
+        )
+        .with_material_slot_index(17);
+
+        assert_eq!(instance.shader_slot_params_b()[2], 0.0);
+        assert_eq!(instance.shader_slot_flags()[3], 17);
     }
 
     #[test]

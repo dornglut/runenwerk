@@ -5,6 +5,10 @@ use asset::{
     ArtifactPayloadKind, ArtifactValidity, AssetArtifactDescriptor, AssetArtifactId, AssetCatalog,
     AssetDiagnosticCode, AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetKind,
 };
+use editor_shell::{
+    MaterialDiagnosticSeverity, MaterialResourceBindingDiagnosticViewModel,
+    MaterialResourceBindingStatusKind,
+};
 use material_graph::{MaterialIr, MaterialResourceBinding};
 use resource_ref::ResourceRef;
 use texture::{
@@ -45,6 +49,292 @@ pub fn resolve_material_resources(
         Ok(resolved)
     } else {
         Err(diagnostics)
+    }
+}
+
+pub fn material_resource_binding_diagnostic_row(
+    catalog: &AssetCatalog,
+    binding: &MaterialResourceBinding,
+) -> MaterialResourceBindingDiagnosticViewModel {
+    let binding_label = format!(
+        "node {} resource '{}'",
+        binding.node_id.raw(),
+        binding.binding_key
+    );
+    let resource_label = binding.reference.stable_id.as_str().to_string();
+    let expected_kind = match expected_texture_kind(binding.reference.kind.as_str()) {
+        Some(kind) => kind,
+        None => {
+            return material_resource_binding_row(
+                MaterialResourceBindingStatusKind::Unsupported,
+                "material.resource.unsupported_kind",
+                binding_label,
+                resource_label,
+                Some(binding.reference.kind.as_str().to_string()),
+                None,
+                format!(
+                    "resource kind '{}' is not supported by Material Lab texture bindings",
+                    binding.reference.kind.as_str()
+                ),
+            );
+        }
+    };
+    let expected_label = Some(asset_kind_label(expected_kind).to_string());
+    let stable_id = binding.reference.stable_id.as_str();
+    let matching_assets = catalog
+        .assets()
+        .filter(|record| record.stable_name == stable_id)
+        .collect::<Vec<_>>();
+    if matching_assets.is_empty() {
+        return material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Missing,
+            "material.resource.missing",
+            binding_label,
+            resource_label,
+            expected_label,
+            None,
+            format!("texture asset '{stable_id}' is not present in the asset catalog"),
+        );
+    }
+    if matching_assets.len() > 1 {
+        return material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Ambiguous,
+            "material.resource.ambiguous_asset",
+            binding_label,
+            resource_label,
+            expected_label,
+            None,
+            format!("texture asset stable id '{stable_id}' resolves to multiple catalog assets"),
+        );
+    }
+
+    let asset = matching_assets[0];
+    if asset.kind != expected_kind {
+        return material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Incompatible,
+            "material.resource.incompatible_asset_kind",
+            binding_label,
+            resource_label,
+            expected_label,
+            None,
+            format!(
+                "texture asset '{stable_id}' is {:?}, expected {:?}",
+                asset.kind, expected_kind
+            ),
+        );
+    }
+
+    let artifacts = asset
+        .artifact_ids
+        .iter()
+        .filter_map(|artifact_id| catalog.artifact(*artifact_id))
+        .collect::<Vec<_>>();
+    let generated_candidates = artifacts
+        .iter()
+        .filter(|artifact| artifact.kind == expected_kind)
+        .filter(|artifact| generated_texture_payload_matches(artifact, expected_kind))
+        .collect::<Vec<_>>();
+    let artifact_selector = binding
+        .reference
+        .artifact
+        .as_ref()
+        .map(|artifact| artifact.as_str());
+    let candidates = artifacts
+        .iter()
+        .copied()
+        .filter(|artifact| artifact.kind == expected_kind)
+        .filter(|artifact| artifact.validity == ArtifactValidity::Valid)
+        .filter(|artifact| texture_payload_matches(artifact, expected_kind))
+        .filter(|artifact| {
+            artifact_selector.is_none_or(|selector| artifact_matches_selector(artifact, selector))
+        })
+        .collect::<Vec<_>>();
+
+    if candidates.is_empty() {
+        if generated_candidates
+            .iter()
+            .any(|artifact| artifact.validity != ArtifactValidity::Valid)
+        {
+            return material_resource_binding_row(
+                MaterialResourceBindingStatusKind::GeneratedUnavailable,
+                "material.resource.generated_unavailable",
+                binding_label,
+                resource_label,
+                expected_label,
+                generated_candidates
+                    .first()
+                    .map(|artifact| artifact_label(artifact.artifact_id)),
+                format!(
+                    "generated texture asset '{stable_id}' exists but has no valid selected artifact"
+                ),
+            );
+        }
+        if artifacts
+            .iter()
+            .any(|artifact| artifact.kind == expected_kind && !texture_payload_is_texture(artifact))
+        {
+            return material_resource_binding_row(
+                MaterialResourceBindingStatusKind::Unsupported,
+                "material.resource.unsupported_payload",
+                binding_label,
+                resource_label,
+                expected_label,
+                None,
+                format!("texture asset '{stable_id}' has no texture-product artifact payload"),
+            );
+        }
+        if artifacts.iter().any(|artifact| texture_payload_is_texture(artifact)) {
+            return material_resource_binding_row(
+                MaterialResourceBindingStatusKind::Incompatible,
+                "material.resource.incompatible_artifact",
+                binding_label,
+                resource_label,
+                expected_label,
+                artifacts.first().map(|artifact| artifact_label(artifact.artifact_id)),
+                format!(
+                    "texture asset '{stable_id}' has texture artifacts that do not match the expected kind"
+                ),
+            );
+        }
+        return material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Unresolved,
+            "material.resource.unresolved",
+            binding_label,
+            resource_label,
+            expected_label,
+            None,
+            format!(
+                "texture asset '{stable_id}' has no exact valid {:?} artifact",
+                expected_kind
+            ),
+        );
+    }
+
+    if candidates.len() > 1 {
+        return material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Ambiguous,
+            "material.resource.ambiguous_artifact",
+            binding_label,
+            resource_label,
+            expected_label,
+            None,
+            format!(
+                "texture asset '{stable_id}' resolves to multiple valid artifacts; add an artifact selector"
+            ),
+        );
+    }
+
+    let artifact = candidates[0];
+    let resolved_artifact_label = Some(artifact_label(artifact.artifact_id));
+    let Some(artifact_path) = artifact.artifact_path.as_deref() else {
+        let status = if generated_texture_payload_matches(artifact, expected_kind) {
+            MaterialResourceBindingStatusKind::GeneratedUnavailable
+        } else {
+            MaterialResourceBindingStatusKind::Unsupported
+        };
+        return material_resource_binding_row(
+            status,
+            "material.resource.artifact_path_missing",
+            binding_label,
+            resource_label,
+            expected_label,
+            resolved_artifact_label,
+            format!(
+                "texture artifact {} has no artifact path for KTX2 residency",
+                artifact.artifact_id.raw()
+            ),
+        );
+    };
+    if !artifact_path.to_ascii_lowercase().ends_with(".ktx2") {
+        return material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Unsupported,
+            "material.resource.unsupported_artifact_path",
+            binding_label,
+            resource_label,
+            expected_label,
+            resolved_artifact_label,
+            format!(
+                "texture artifact {} is '{}', but Material Lab texture residency requires KTX2",
+                artifact.artifact_id.raw(),
+                artifact_path
+            ),
+        );
+    }
+
+    match texture_descriptor_for_artifact(artifact, expected_kind) {
+        Ok(descriptor) => {
+            let descriptor_report = ratify_texture_descriptor(&descriptor);
+            if descriptor_report.has_blocking_issues() {
+                return material_resource_binding_row(
+                    MaterialResourceBindingStatusKind::Incompatible,
+                    "material.resource.invalid_descriptor",
+                    binding_label,
+                    resource_label,
+                    expected_label,
+                    resolved_artifact_label,
+                    format!(
+                        "texture artifact {} has invalid descriptor issues: {:?}",
+                        artifact.artifact_id.raw(),
+                        descriptor_report.issues()
+                    ),
+                );
+            }
+            let ktx2 = descriptor.ktx2_metadata();
+            if ktx2.byte_length.is_none() {
+                return material_resource_binding_row(
+                    MaterialResourceBindingStatusKind::Unsupported,
+                    "material.resource.missing_ktx2_bytes",
+                    binding_label,
+                    resource_label,
+                    expected_label,
+                    resolved_artifact_label,
+                    format!(
+                        "texture artifact {} descriptor has no KTX2 byte length",
+                        artifact.artifact_id.raw()
+                    ),
+                );
+            }
+            if matches!(ktx2.transcode_status, TextureTranscodeStatus::Unsupported) {
+                return material_resource_binding_row(
+                    MaterialResourceBindingStatusKind::Unsupported,
+                    "material.resource.unsupported_transcode",
+                    binding_label,
+                    resource_label,
+                    expected_label,
+                    resolved_artifact_label,
+                    format!(
+                        "texture artifact {} marks KTX2 runtime transcode as unsupported",
+                        artifact.artifact_id.raw()
+                    ),
+                );
+            }
+            let status = if generated_texture_payload_matches(artifact, expected_kind) {
+                MaterialResourceBindingStatusKind::GeneratedAvailable
+            } else {
+                MaterialResourceBindingStatusKind::Resolved
+            };
+            material_resource_binding_row(
+                status,
+                "material.resource.resolved",
+                binding_label,
+                resource_label,
+                expected_label,
+                resolved_artifact_label,
+                format!(
+                    "texture resource resolved to artifact {}",
+                    artifact.artifact_id.raw()
+                ),
+            )
+        }
+        Err(error) => material_resource_binding_row(
+            MaterialResourceBindingStatusKind::Incompatible,
+            "material.resource.incompatible_descriptor",
+            binding_label,
+            resource_label,
+            expected_label,
+            resolved_artifact_label,
+            error.message,
+        ),
     }
 }
 
@@ -195,6 +485,55 @@ fn resolve_material_resource_binding(
     })
 }
 
+fn material_resource_binding_row(
+    status: MaterialResourceBindingStatusKind,
+    code: impl Into<String>,
+    binding_label: String,
+    resource_key_or_slot_label: String,
+    expected_kind_label: Option<String>,
+    resolved_artifact_label: Option<String>,
+    message: impl Into<String>,
+) -> MaterialResourceBindingDiagnosticViewModel {
+    MaterialResourceBindingDiagnosticViewModel {
+        severity: resource_binding_severity(status),
+        code: code.into(),
+        binding_label,
+        resource_key_or_slot_label,
+        expected_kind_label,
+        resolved_artifact_label,
+        message: message.into(),
+        status,
+    }
+}
+
+fn resource_binding_severity(
+    status: MaterialResourceBindingStatusKind,
+) -> MaterialDiagnosticSeverity {
+    match status {
+        MaterialResourceBindingStatusKind::Resolved
+        | MaterialResourceBindingStatusKind::GeneratedAvailable => MaterialDiagnosticSeverity::Info,
+        MaterialResourceBindingStatusKind::GeneratedUnavailable
+        | MaterialResourceBindingStatusKind::Unknown => MaterialDiagnosticSeverity::Warning,
+        MaterialResourceBindingStatusKind::Missing
+        | MaterialResourceBindingStatusKind::Ambiguous
+        | MaterialResourceBindingStatusKind::Incompatible
+        | MaterialResourceBindingStatusKind::Unsupported
+        | MaterialResourceBindingStatusKind::Unresolved => MaterialDiagnosticSeverity::Error,
+    }
+}
+
+fn asset_kind_label(kind: AssetKind) -> &'static str {
+    match kind {
+        AssetKind::Texture2D => "texture_2d",
+        AssetKind::Texture3DVolume => "texture_3d",
+        _ => "unsupported_texture_kind",
+    }
+}
+
+fn artifact_label(artifact_id: AssetArtifactId) -> String {
+    format!("artifact {}", artifact_id.raw())
+}
+
 fn texture_descriptor_for_artifact(
     artifact: &AssetArtifactDescriptor,
     expected_kind: AssetKind,
@@ -291,6 +630,26 @@ fn texture_payload_matches(artifact: &AssetArtifactDescriptor, expected_kind: As
         }
         _ => false,
     }
+}
+
+fn generated_texture_payload_matches(
+    artifact: &AssetArtifactDescriptor,
+    expected_kind: AssetKind,
+) -> bool {
+    match (&artifact.payload_kind, expected_kind) {
+        (ArtifactPayloadKind::GeneratedTextureProduct { descriptor, .. }, kind) => {
+            descriptor_dimension_matches_kind(descriptor.dimension, kind)
+        }
+        _ => false,
+    }
+}
+
+fn texture_payload_is_texture(artifact: &AssetArtifactDescriptor) -> bool {
+    matches!(
+        artifact.payload_kind,
+        ArtifactPayloadKind::TextureProduct { .. }
+            | ArtifactPayloadKind::GeneratedTextureProduct { .. }
+    )
 }
 
 fn descriptor_dimension_matches_kind(dimension: TextureDimension, kind: AssetKind) -> bool {
@@ -476,5 +835,74 @@ mod tests {
         let resolved = resolve_material_resource_binding(&catalog, &binding).expect("resolved");
 
         assert_eq!(resolved.artifact_id, asset_artifact_id(8));
+    }
+
+    #[test]
+    fn unsupported_texture_artifact_reports_binding_diagnostic() {
+        let mut catalog = AssetCatalog::new();
+        catalog.insert_asset_record(AssetRecord::new(
+            asset_id(1),
+            "rock.albedo",
+            "Rock Albedo",
+            AssetKind::Texture2D,
+        ));
+        catalog.insert_artifact(
+            AssetArtifactDescriptor::new(
+                asset_artifact_id(7),
+                asset_id(1),
+                AssetKind::Texture2D,
+                ArtifactPayloadKind::DiagnosticCapture,
+                ArtifactCacheKey::new("texture-cache"),
+            )
+            .with_artifact_path(".runenwerk/artifacts/texture-7.ktx2"),
+        );
+        let binding = MaterialResourceBinding::new(
+            graph::NodeId::new(4),
+            "texture_ref",
+            ResourceRef::new("asset.catalog.texture2d", "rock.albedo").expect("ref"),
+        );
+
+        let row = material_resource_binding_diagnostic_row(&catalog, &binding);
+
+        assert_eq!(row.status, MaterialResourceBindingStatusKind::Unsupported);
+        assert_eq!(row.code, "material.resource.unsupported_payload");
+        assert!(row.message.contains("texture-product artifact payload"));
+    }
+
+    #[test]
+    fn resource_resolution_behavior_unchanged_by_diagnostic_dto_population() {
+        let mut catalog = AssetCatalog::new();
+        catalog.insert_asset_record(AssetRecord::new(
+            asset_id(1),
+            "rock.albedo",
+            "Rock Albedo",
+            AssetKind::Texture2D,
+        ));
+        catalog.insert_artifact(
+            AssetArtifactDescriptor::new(
+                asset_artifact_id(7),
+                asset_id(1),
+                AssetKind::Texture2D,
+                texture_payload(descriptor(
+                    7,
+                    TextureDimension::Texture2D,
+                    TextureExtent::new(512, 512, 1),
+                )),
+                ArtifactCacheKey::new("texture-cache"),
+            )
+            .with_artifact_path(".runenwerk/artifacts/texture-7.ktx2"),
+        );
+        let binding = MaterialResourceBinding::new(
+            graph::NodeId::new(4),
+            "texture_ref",
+            ResourceRef::new("asset.catalog.texture2d", "rock.albedo").expect("ref"),
+        );
+
+        let before = resolve_material_resource_binding(&catalog, &binding).expect("resolved");
+        let row = material_resource_binding_diagnostic_row(&catalog, &binding);
+        let after = resolve_material_resource_binding(&catalog, &binding).expect("resolved");
+
+        assert_eq!(row.status, MaterialResourceBindingStatusKind::Resolved);
+        assert_eq!(before, after);
     }
 }

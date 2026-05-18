@@ -74,4 +74,145 @@ mod tests {
         assert_eq!(stroke.draw_key.material_id, 9);
         assert!(stroke.clip.is_some());
     }
+
+    #[test]
+    fn graph_canvas_emits_primitives() {
+        let mut batch = GraphCanvasPrimitiveBatch::new();
+        let draw_key = UiDrawKey::new(0, None);
+        let paint = UiPaint::rgba(0.2, 0.3, 0.4, 1.0);
+        batch.push(
+            GraphCanvasPrimitiveRole::NodeBox,
+            RectPrimitive::new(
+                ui_math::UiRect::new(8.0, 8.0, 96.0, 48.0),
+                4.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 0),
+            ),
+        );
+        batch.push(
+            GraphCanvasPrimitiveRole::Port,
+            RectPrimitive::new(
+                ui_math::UiRect::new(4.0, 20.0, 8.0, 8.0),
+                4.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 1),
+            ),
+        );
+        batch.push(
+            GraphCanvasPrimitiveRole::Edge,
+            StrokePrimitive::new(
+                [
+                    ui_math::UiPoint::new(20.0, 20.0),
+                    ui_math::UiPoint::new(80.0, 30.0),
+                ],
+                2.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 2),
+            ),
+        );
+        batch.push(
+            GraphCanvasPrimitiveRole::Label,
+            RectPrimitive::new(
+                ui_math::UiRect::new(12.0, 12.0, 24.0, 8.0),
+                0.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 3),
+            ),
+        );
+        batch.push(
+            GraphCanvasPrimitiveRole::SelectionOutline,
+            BorderPrimitive::new(
+                ui_math::UiRect::new(6.0, 6.0, 100.0, 52.0),
+                4.0,
+                1.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 4),
+            ),
+        );
+        batch.push(
+            GraphCanvasPrimitiveRole::ConnectionPreview,
+            StrokePrimitive::new(
+                [
+                    ui_math::UiPoint::new(20.0, 20.0),
+                    ui_math::UiPoint::new(120.0, 60.0),
+                ],
+                1.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 5),
+            ),
+        );
+        batch.push(
+            GraphCanvasPrimitiveRole::Overlay,
+            BorderPrimitive::new(
+                ui_math::UiRect::new(96.0, 4.0, 20.0, 20.0),
+                10.0,
+                1.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, 6),
+            ),
+        );
+
+        for role in [
+            GraphCanvasPrimitiveRole::NodeBox,
+            GraphCanvasPrimitiveRole::Port,
+            GraphCanvasPrimitiveRole::Edge,
+            GraphCanvasPrimitiveRole::Label,
+            GraphCanvasPrimitiveRole::SelectionOutline,
+            GraphCanvasPrimitiveRole::ConnectionPreview,
+            GraphCanvasPrimitiveRole::Overlay,
+        ] {
+            assert_eq!(batch.count_role(role), 1);
+        }
+        assert_eq!(batch.into_ui_primitives().len(), 7);
+    }
+
+    #[test]
+    fn graph_canvas_orders_primitives_by_role() {
+        let mut batch = GraphCanvasPrimitiveBatch::new();
+        let draw_key = UiDrawKey::new(0, None);
+        let paint = UiPaint::rgba(0.2, 0.3, 0.4, 1.0);
+        let rect = |order| {
+            RectPrimitive::new(
+                ui_math::UiRect::new(0.0, 0.0, 1.0, 1.0),
+                0.0,
+                paint,
+                draw_key,
+                UiSortKey::new(0, 0, order),
+            )
+        };
+
+        batch.push(GraphCanvasPrimitiveRole::Label, rect(0));
+        batch.push(GraphCanvasPrimitiveRole::Overlay, rect(1));
+        batch.push(GraphCanvasPrimitiveRole::NodeBox, rect(2));
+        batch.push(GraphCanvasPrimitiveRole::Edge, rect(3));
+        batch.push(GraphCanvasPrimitiveRole::SelectionOutline, rect(4));
+        batch.push(GraphCanvasPrimitiveRole::ConnectionPreview, rect(5));
+        batch.push(GraphCanvasPrimitiveRole::Port, rect(6));
+
+        let roles = batch
+            .into_render_primitives()
+            .into_iter()
+            .map(|primitive| primitive.role)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            roles,
+            vec![
+                GraphCanvasPrimitiveRole::Edge,
+                GraphCanvasPrimitiveRole::ConnectionPreview,
+                GraphCanvasPrimitiveRole::NodeBox,
+                GraphCanvasPrimitiveRole::Port,
+                GraphCanvasPrimitiveRole::SelectionOutline,
+                GraphCanvasPrimitiveRole::Overlay,
+                GraphCanvasPrimitiveRole::Label,
+            ]
+        );
+    }
 }

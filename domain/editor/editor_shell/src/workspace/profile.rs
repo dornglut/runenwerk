@@ -1,14 +1,22 @@
 //! File: domain/editor/editor_shell/src/workspace/profile.rs
 //! Purpose: Workspace profile contracts for task-focused editor layout presets.
 
+use std::fmt;
+
 use editor_core::{
     DocumentKind, EDIT_MODE_ID, ModeId, PLAY_MODE_ID, PREVIEW_MODE_ID, SIMULATE_MODE_ID,
 };
 use id_macros::id;
 
 use crate::{
-    PanelHostKind, ToolSurfaceKind, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceSplitAxis,
-    WorkspaceState,
+    PanelHostKind, PanelKind, ToolSurfaceKind, WorkspaceId, WorkspaceIdentityAllocator,
+    WorkspaceSplitAxis,
+    tool_suite::{ToolSurfaceRegistry, ToolSurfaceStableKey},
+};
+
+use super::state::{
+    WorkspaceDefaultToolSurface, WorkspaceState, WorkspaceStateError,
+    WorkspaceSurfaceIdentityError, WorkspaceToolSurfaceRegistryCompatibilityReport,
 };
 
 #[id]
@@ -29,6 +37,8 @@ pub const SIMULATION_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profil
 pub const RUNTIME_DEBUG_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(13);
 pub const GRAPH_WORKSPACE_PROFILE_ID: WorkspaceProfileId = workspace_profile_id(14);
 pub const LAYOUT_WORKSPACE_PROFILE_ID: WorkspaceProfileId = SCENE_WORKSPACE_PROFILE_ID;
+const TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY: &str =
+    "runenwerk.diagnostics.tool_suite_registry_inspector";
 
 const fn workspace_profile_id(raw: u64) -> WorkspaceProfileId {
     match WorkspaceProfileId::try_from_raw(raw) {
@@ -100,17 +110,105 @@ pub struct WorkspaceProfile {
     pub id: WorkspaceProfileId,
     pub label: String,
     pub default_layout_template: WorkspaceLayoutTemplate,
-    pub default_tool_surfaces: Vec<ToolSurfaceKind>,
+    pub default_surfaces: Vec<WorkspaceDefaultToolSurface>,
     pub default_modes: Vec<ModeId>,
     pub document_kind_filters: Vec<DocumentKind>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct WorkspaceProfileToolSurfaceCompatibilityReport {
+    pub compatible_surfaces: Vec<WorkspaceProfileToolSurfaceCompatibleSurface>,
+    pub unregistered_legacy_surfaces: Vec<WorkspaceProfileToolSurfaceLegacySurface>,
+    pub unmapped_legacy_surfaces: Vec<WorkspaceProfileToolSurfaceUnmappedLegacySurface>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceProfileToolSurfaceCompatibleSurface {
+    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+    pub stable_surface_key: ToolSurfaceStableKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceProfileToolSurfaceLegacySurface {
+    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+    pub stable_surface_key: ToolSurfaceStableKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceProfileToolSurfaceUnmappedLegacySurface {
+    pub tool_surface_kind: ToolSurfaceKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkspaceProfileRegistryBackedBuildError {
+    UnregisteredDefaultToolSurface {
+        profile_id: WorkspaceProfileId,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+        stable_surface_key: ToolSurfaceStableKey,
+    },
+    UnmappedDefaultToolSurface {
+        profile_id: WorkspaceProfileId,
+        tool_surface_kind: ToolSurfaceKind,
+    },
+    WorkspaceCompatibility {
+        profile_id: WorkspaceProfileId,
+        report: WorkspaceToolSurfaceRegistryCompatibilityReport,
+    },
+    WorkspaceState {
+        profile_id: WorkspaceProfileId,
+        error: WorkspaceStateError,
+    },
+}
+
+impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnregisteredDefaultToolSurface {
+                profile_id,
+                legacy_tool_surface_kind,
+                stable_surface_key,
+            } => match legacy_tool_surface_kind {
+                Some(kind) => write!(
+                    f,
+                    "workspace profile {} references {kind:?} with unregistered stable key `{stable_surface_key}`",
+                    profile_id.raw()
+                ),
+                None => write!(
+                    f,
+                    "workspace profile {} references unregistered stable key `{stable_surface_key}` without legacy compatibility metadata",
+                    profile_id.raw()
+                ),
+            },
+            Self::UnmappedDefaultToolSurface {
+                profile_id,
+                tool_surface_kind,
+            } => write!(
+                f,
+                "workspace profile {} references {tool_surface_kind:?} without a safe stable-key mapping",
+                profile_id.raw()
+            ),
+            Self::WorkspaceCompatibility { profile_id, .. } => write!(
+                f,
+                "workspace profile {} produced a workspace that is not compatible with the tool-surface registry",
+                profile_id.raw()
+            ),
+            Self::WorkspaceState { profile_id, error } => write!(
+                f,
+                "workspace profile {} failed to build workspace state: {error}",
+                profile_id.raw()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for WorkspaceProfileRegistryBackedBuildError {}
 
 impl WorkspaceProfile {
     pub fn new(
         id: WorkspaceProfileId,
         label: impl Into<String>,
         default_layout_template: WorkspaceLayoutTemplate,
-        default_tool_surfaces: Vec<ToolSurfaceKind>,
+        default_surfaces: Vec<WorkspaceDefaultToolSurface>,
         default_modes: Vec<ModeId>,
         document_kind_filters: Vec<DocumentKind>,
     ) -> Self {
@@ -118,10 +216,38 @@ impl WorkspaceProfile {
             id,
             label: label.into(),
             default_layout_template,
-            default_tool_surfaces,
+            default_surfaces,
             default_modes,
             document_kind_filters,
         }
+    }
+
+    pub fn new_legacy(
+        id: WorkspaceProfileId,
+        label: impl Into<String>,
+        default_layout_template: WorkspaceLayoutTemplate,
+        default_tool_surfaces: Vec<ToolSurfaceKind>,
+        default_modes: Vec<ModeId>,
+        document_kind_filters: Vec<DocumentKind>,
+    ) -> Result<Self, WorkspaceSurfaceIdentityError> {
+        let default_surfaces = default_tool_surfaces
+            .into_iter()
+            .map(WorkspaceDefaultToolSurface::new_legacy)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::new(
+            id,
+            label,
+            default_layout_template,
+            default_surfaces,
+            default_modes,
+            document_kind_filters,
+        ))
+    }
+
+    pub fn legacy_default_tool_surfaces(&self) -> impl Iterator<Item = ToolSurfaceKind> + '_ {
+        self.default_surfaces
+            .iter()
+            .filter_map(WorkspaceDefaultToolSurface::legacy_tool_surface_kind)
     }
 
     pub fn build_default_workspace_state(
@@ -129,23 +255,119 @@ impl WorkspaceProfile {
         workspace_id: WorkspaceId,
         allocator: &mut WorkspaceIdentityAllocator,
     ) -> WorkspaceState {
+        self.try_build_default_workspace_state(workspace_id, allocator)
+            .expect("compiled-in workspace profile default surfaces should keep C3 legacy metadata")
+    }
+
+    pub fn try_build_default_workspace_state(
+        &self,
+        workspace_id: WorkspaceId,
+        allocator: &mut WorkspaceIdentityAllocator,
+    ) -> Result<WorkspaceState, WorkspaceStateError> {
         if self.default_layout_template == WorkspaceLayoutTemplate::ToolWorkspace {
-            return WorkspaceState::bootstrap_tool_workspace_layout(
+            return WorkspaceState::bootstrap_tool_workspace_layout_with_stable_surfaces(
                 workspace_id,
                 allocator,
-                &self.default_tool_surfaces,
+                &self.default_surfaces,
             );
         }
-        self.default_layout_template
-            .build_workspace_state(workspace_id, allocator)
+        Ok(self
+            .default_layout_template
+            .build_workspace_state(workspace_id, allocator))
+    }
+
+    pub fn build_default_workspace_state_with_registry(
+        &self,
+        workspace_id: WorkspaceId,
+        allocator: &mut WorkspaceIdentityAllocator,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<WorkspaceState, WorkspaceProfileRegistryBackedBuildError> {
+        self.require_tool_surface_registry_compatibility(registry)?;
+        let mut workspace = self
+            .try_build_default_workspace_state(workspace_id, allocator)
+            .map_err(
+                |error| WorkspaceProfileRegistryBackedBuildError::WorkspaceState {
+                    profile_id: self.id,
+                    error,
+                },
+            )?;
+        workspace.populate_stable_surface_keys_from_legacy();
+        let report = workspace.validate_tool_surface_registry_compatibility(registry);
+        if report.is_fully_compatible() {
+            Ok(workspace)
+        } else {
+            Err(
+                WorkspaceProfileRegistryBackedBuildError::WorkspaceCompatibility {
+                    profile_id: self.id,
+                    report,
+                },
+            )
+        }
     }
 
     pub fn required_tool_surfaces_are_present(&self, workspace_state: &WorkspaceState) -> bool {
-        self.default_tool_surfaces.iter().all(|surface_kind| {
+        self.default_surfaces.iter().all(|required_surface| {
             workspace_state
                 .tool_surfaces()
-                .any(|surface| surface.tool_surface_kind == *surface_kind)
+                .any(|surface| surface.stable_surface_key() == required_surface.stable_surface_key())
         })
+    }
+
+    pub fn validate_tool_surface_registry_compatibility(
+        &self,
+        registry: &ToolSurfaceRegistry,
+    ) -> WorkspaceProfileToolSurfaceCompatibilityReport {
+        let mut report = WorkspaceProfileToolSurfaceCompatibilityReport::default();
+
+        for default_surface in &self.default_surfaces {
+            let stable_surface_key = default_surface.stable_surface_key().clone();
+            let legacy_tool_surface_kind = default_surface.legacy_tool_surface_kind();
+            match registry.get(&stable_surface_key) {
+                Some(_) => {
+                    report
+                        .compatible_surfaces
+                        .push(WorkspaceProfileToolSurfaceCompatibleSurface {
+                            legacy_tool_surface_kind,
+                            stable_surface_key,
+                        });
+                }
+                None => {
+                    report.unregistered_legacy_surfaces.push(
+                        WorkspaceProfileToolSurfaceLegacySurface {
+                            legacy_tool_surface_kind,
+                            stable_surface_key,
+                        },
+                    );
+                }
+            }
+        }
+
+        report
+    }
+
+    pub fn require_tool_surface_registry_compatibility(
+        &self,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<(), WorkspaceProfileRegistryBackedBuildError> {
+        let report = self.validate_tool_surface_registry_compatibility(registry);
+        if let Some(surface) = report.unregistered_legacy_surfaces.first() {
+            return Err(
+                WorkspaceProfileRegistryBackedBuildError::UnregisteredDefaultToolSurface {
+                    profile_id: self.id,
+                    legacy_tool_surface_kind: surface.legacy_tool_surface_kind,
+                    stable_surface_key: surface.stable_surface_key.clone(),
+                },
+            );
+        }
+        if let Some(surface) = report.unmapped_legacy_surfaces.first() {
+            return Err(
+                WorkspaceProfileRegistryBackedBuildError::UnmappedDefaultToolSurface {
+                    profile_id: self.id,
+                    tool_surface_kind: surface.tool_surface_kind,
+                },
+            );
+        }
+        Ok(())
     }
 }
 
@@ -259,7 +481,7 @@ fn tab_stack_surface_kinds_by_host(
                 let surface_id = panel.active_tool_surface?;
                 workspace_state
                     .tool_surface(surface_id)
-                    .map(|surface| surface.tool_surface_kind)
+                    .and_then(|surface| surface.legacy_tool_surface_kind())
             })
             .collect(),
     )
@@ -302,7 +524,7 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
     WorkspaceProfileRegistry::new(
         SCENE_WORKSPACE_PROFILE_ID,
         vec![
-            WorkspaceProfile::new(
+            compiled_in_legacy_workspace_profile(
                 SCENE_WORKSPACE_PROFILE_ID,
                 "Scene",
                 WorkspaceLayoutTemplate::Scene,
@@ -320,7 +542,7 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                 ],
                 vec![DocumentKind::Scene],
             ),
-            WorkspaceProfile::new(
+            compiled_in_legacy_workspace_profile(
                 MODELLING_WORKSPACE_PROFILE_ID,
                 "Modelling",
                 WorkspaceLayoutTemplate::Modelling,
@@ -333,7 +555,7 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                 vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
                 vec![DocumentKind::Scene, DocumentKind::SdfBrushLayer],
             ),
-            WorkspaceProfile::new(
+            compiled_in_legacy_workspace_profile(
                 EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
                 "Editor Design",
                 WorkspaceLayoutTemplate::EditorDesign,
@@ -494,14 +716,18 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::RuntimeDebug,
                 ],
             ),
-            m6_workspace_profile(
+            m6_workspace_profile_with_default_surfaces(
                 RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
                 "Runtime Debug",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::RuntimeDebug,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    compiled_in_legacy_default_surface(ToolSurfaceKind::AssetBrowser),
+                    compiled_in_legacy_default_surface(ToolSurfaceKind::RuntimeDebug),
+                    compiled_in_legacy_default_surface(ToolSurfaceKind::Diagnostics),
+                    compiled_in_stable_default_surface(
+                        TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+                        PanelKind::Diagnostics,
+                    ),
+                    compiled_in_legacy_default_surface(ToolSurfaceKind::Console),
                 ],
                 vec![DocumentKind::RuntimeDebug, DocumentKind::Scene],
             ),
@@ -526,7 +752,7 @@ fn m6_workspace_profile(
     default_tool_surfaces: Vec<ToolSurfaceKind>,
     document_kind_filters: Vec<DocumentKind>,
 ) -> WorkspaceProfile {
-    WorkspaceProfile::new(
+    compiled_in_legacy_workspace_profile(
         id,
         label,
         WorkspaceLayoutTemplate::ToolWorkspace,
@@ -536,9 +762,67 @@ fn m6_workspace_profile(
     )
 }
 
+fn m6_workspace_profile_with_default_surfaces(
+    id: WorkspaceProfileId,
+    label: impl Into<String>,
+    default_surfaces: Vec<WorkspaceDefaultToolSurface>,
+    document_kind_filters: Vec<DocumentKind>,
+) -> WorkspaceProfile {
+    WorkspaceProfile::new(
+        id,
+        label,
+        WorkspaceLayoutTemplate::ToolWorkspace,
+        default_surfaces,
+        vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
+        document_kind_filters,
+    )
+}
+
+fn compiled_in_legacy_default_surface(kind: ToolSurfaceKind) -> WorkspaceDefaultToolSurface {
+    WorkspaceDefaultToolSurface::new_legacy(kind)
+        .expect("compiled-in workspace profile default surfaces should have stable keys")
+}
+
+fn compiled_in_stable_default_surface(
+    stable_surface_key: &str,
+    panel_kind: PanelKind,
+) -> WorkspaceDefaultToolSurface {
+    WorkspaceDefaultToolSurface::new_with_panel_kind(
+        ToolSurfaceStableKey::new(stable_surface_key)
+            .expect("compiled-in workspace profile stable surface key should be valid"),
+        panel_kind,
+        None,
+    )
+}
+
+fn compiled_in_legacy_workspace_profile(
+    id: WorkspaceProfileId,
+    label: impl Into<String>,
+    default_layout_template: WorkspaceLayoutTemplate,
+    default_tool_surfaces: Vec<ToolSurfaceKind>,
+    default_modes: Vec<ModeId>,
+    document_kind_filters: Vec<DocumentKind>,
+) -> WorkspaceProfile {
+    WorkspaceProfile::new_legacy(
+        id,
+        label,
+        default_layout_template,
+        default_tool_surfaces,
+        default_modes,
+        document_kind_filters,
+    )
+    .expect("compiled-in workspace profile default surfaces should have stable keys")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
+        ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole,
+        ToolSurfaceRoute, saveable_tool_surface_stable_key_candidates,
+        stable_key_for_tool_surface_kind,
+    };
 
     #[test]
     fn default_registry_exposes_layout_profile() {
@@ -551,14 +835,225 @@ mod tests {
         assert_eq!(profile.label, "Scene");
         assert!(
             profile
-                .default_tool_surfaces
-                .contains(&ToolSurfaceKind::Viewport)
+                .legacy_default_tool_surfaces()
+                .any(|kind| kind == ToolSurfaceKind::Viewport)
         );
         assert!(profile.default_modes.contains(&EDIT_MODE_ID));
         assert!(profile.default_modes.contains(&PREVIEW_MODE_ID));
         assert!(profile.default_modes.contains(&SIMULATE_MODE_ID));
         assert!(profile.default_modes.contains(&PLAY_MODE_ID));
         assert!(profile.document_kind_filters.contains(&DocumentKind::Scene));
+    }
+
+    #[test]
+    fn default_profiles_store_stable_keys_primary() {
+        let registry = default_workspace_profile_registry();
+
+        for profile in registry.profiles() {
+            assert!(
+                profile
+                    .default_surfaces
+                    .iter()
+                    .all(|surface| !surface.stable_surface_key().as_str().is_empty()),
+                "{} profile should store stable surface keys as default surface authority",
+                profile.label
+            );
+        }
+    }
+
+    #[test]
+    fn default_profiles_retain_legacy_metadata_for_compatibility() {
+        let registry = default_workspace_profile_registry();
+
+        for profile in registry.profiles() {
+            assert!(
+                profile.default_surfaces.iter().all(|surface| {
+                    surface.legacy_tool_surface_kind().is_some()
+                        || surface.stable_surface_key().as_str()
+                            == TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
+                }),
+                "{} profile should retain legacy metadata except for explicitly stable-key-native surfaces",
+                profile.label
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_debug_profile_reaches_inspector_by_stable_key_without_legacy_kind() {
+        let registry = default_workspace_profile_registry();
+        let profile = registry
+            .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
+            .expect("runtime debug profile should exist");
+        let inspector = profile
+            .default_surfaces
+            .iter()
+            .find(|surface| {
+                surface.stable_surface_key().as_str() == TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
+            })
+            .expect("runtime debug profile should include the registry inspector");
+
+        assert_eq!(inspector.legacy_tool_surface_kind(), None);
+        assert_eq!(inspector.panel_kind(), PanelKind::Diagnostics);
+    }
+
+    #[test]
+    fn legacy_profile_constructor_preserves_existing_surface_order() {
+        let profile = WorkspaceProfile::new_legacy(
+            GRAPH_WORKSPACE_PROFILE_ID,
+            "Graph",
+            WorkspaceLayoutTemplate::ToolWorkspace,
+            vec![
+                ToolSurfaceKind::AssetBrowser,
+                ToolSurfaceKind::GraphCanvas,
+                ToolSurfaceKind::Diagnostics,
+                ToolSurfaceKind::Console,
+            ],
+            vec![EDIT_MODE_ID],
+            vec![DocumentKind::Graph],
+        )
+        .expect("legacy profile fixture should map stable keys");
+
+        assert_eq!(
+            profile.legacy_default_tool_surfaces().collect::<Vec<_>>(),
+            vec![
+                ToolSurfaceKind::AssetBrowser,
+                ToolSurfaceKind::GraphCanvas,
+                ToolSurfaceKind::Diagnostics,
+                ToolSurfaceKind::Console,
+            ]
+        );
+    }
+
+    #[test]
+    fn stable_key_profile_builder_preserves_layout_shape() {
+        let registry = default_workspace_profile_registry();
+        let profile = registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let mut legacy_allocator = WorkspaceIdentityAllocator::new();
+        let legacy_workspace_id = legacy_allocator.allocate_workspace_id();
+        let legacy_workspace = WorkspaceState::bootstrap_tool_workspace_layout(
+            legacy_workspace_id,
+            &mut legacy_allocator,
+            &profile.legacy_default_tool_surfaces().collect::<Vec<_>>(),
+        );
+        let mut stable_allocator = WorkspaceIdentityAllocator::new();
+        let stable_workspace_id = stable_allocator.allocate_workspace_id();
+
+        let stable_workspace =
+            profile.build_default_workspace_state(stable_workspace_id, &mut stable_allocator);
+
+        assert_eq!(
+            workspace_surface_order(&stable_workspace),
+            workspace_surface_order(&legacy_workspace)
+        );
+    }
+
+    #[test]
+    fn stable_key_profile_builder_populates_tool_surface_state_authority() {
+        let registry = default_workspace_profile_registry();
+        let profile = registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+        for surface in workspace.tool_surfaces() {
+            let expected_key = surface
+                .legacy_tool_surface_kind()
+                .and_then(stable_key_for_tool_surface_kind)
+                .expect("default profile surfaces should retain C3 legacy metadata");
+            assert_eq!(surface.stable_surface_key(), &expected_key);
+        }
+    }
+
+    #[test]
+    fn default_profile_all_stable_keys_registered() {
+        let profile_registry = default_workspace_profile_registry();
+        let tool_suite_registry = full_saveable_registry();
+
+        for profile in profile_registry.profiles() {
+            for surface in &profile.default_surfaces {
+                assert!(
+                    tool_suite_registry
+                        .surfaces()
+                        .get(surface.stable_surface_key())
+                        .is_some(),
+                    "{} profile has unregistered default stable key {}",
+                    profile.label,
+                    surface.stable_surface_key().as_str()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn registry_free_legacy_profile_builder_is_compatibility_only() {
+        let profile = WorkspaceProfile::new_legacy(
+            TEXTURE_WORKSPACE_PROFILE_ID,
+            "Textures",
+            WorkspaceLayoutTemplate::ToolWorkspace,
+            vec![
+                ToolSurfaceKind::AssetBrowser,
+                ToolSurfaceKind::TextureViewer,
+                ToolSurfaceKind::Console,
+            ],
+            vec![EDIT_MODE_ID],
+            vec![DocumentKind::ProceduralTexture],
+        )
+        .expect("legacy profile fixture should map stable keys");
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+        assert!(workspace.validate_integrity().is_ok());
+        assert!(
+            profile
+                .default_surfaces
+                .iter()
+                .all(|surface| surface.legacy_tool_surface_kind().is_some())
+        );
+    }
+
+    #[test]
+    fn profile_storage_no_longer_uses_tool_surface_kind_as_authority() {
+        let source = include_str!("profile.rs");
+        let profile_struct = source
+            .split("pub struct WorkspaceProfile {")
+            .nth(1)
+            .and_then(|tail| tail.split("}").next())
+            .expect("WorkspaceProfile struct should exist");
+
+        assert!(!profile_struct.contains("default_tool_surfaces: Vec<ToolSurfaceKind>"));
+        assert!(profile_struct.contains("default_surfaces: Vec<WorkspaceDefaultToolSurface>"));
+        assert!(source.contains("new_legacy"));
+        assert!(include_str!("state.rs").contains("pub panel_kind: PanelKind"));
+    }
+
+    #[test]
+    fn panel_kind_remains_authoritative_in_c3() {
+        let registry = default_workspace_profile_registry();
+        let profile = registry
+            .profile(TEXTURE_WORKSPACE_PROFILE_ID)
+            .expect("texture profile should exist");
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+        assert!(
+            workspace
+                .panels()
+                .any(|panel| panel.panel_kind == PanelKind::TextureViewer)
+        );
+        assert!(
+            workspace
+                .panels()
+                .any(|panel| panel.panel_kind == PanelKind::VolumeTextureViewer)
+        );
     }
 
     #[test]
@@ -632,8 +1127,8 @@ mod tests {
         assert_eq!(profile.label, "Editor Design");
         assert!(
             profile
-                .default_tool_surfaces
-                .contains(&ToolSurfaceKind::UiCanvas)
+                .legacy_default_tool_surfaces()
+                .any(|kind| kind == ToolSurfaceKind::UiCanvas)
         );
         assert!(
             profile
@@ -641,11 +1136,9 @@ mod tests {
                 .contains(&DocumentKind::UiLayout)
         );
         assert!(workspace.validate_integrity().is_ok());
-        assert!(
-            workspace
-                .tool_surfaces()
-                .any(|surface| surface.tool_surface_kind == ToolSurfaceKind::DefinitionValidation)
-        );
+        assert!(workspace.tool_surfaces().any(|surface| {
+            surface.legacy_tool_surface_kind() == Some(ToolSurfaceKind::DefinitionValidation)
+        }));
     }
 
     #[test]
@@ -694,6 +1187,346 @@ mod tests {
                 "{} profile should mount its default M6 surfaces",
                 profile.label
             );
+        }
+    }
+
+    #[test]
+    fn default_profile_registry_can_report_material_lab_registry_compatibility() {
+        let profile_registry = default_workspace_profile_registry();
+        let material_profile = profile_registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let tool_suite_registry = material_lab_registry();
+
+        let report = material_profile
+            .validate_tool_surface_registry_compatibility(tool_suite_registry.surfaces());
+
+        let compatible_keys = report
+            .compatible_surfaces
+            .iter()
+            .map(|surface| surface.stable_surface_key.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            compatible_keys,
+            vec![
+                "runenwerk.material_lab.graph_canvas",
+                "runenwerk.material_lab.inspector",
+                "runenwerk.material_lab.preview",
+            ]
+        );
+        assert_eq!(
+            report
+                .unregistered_legacy_surfaces
+                .iter()
+                .map(|surface| surface.stable_surface_key.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "runenwerk.assets.browser",
+                "runenwerk.texture.viewer_2d",
+                "runenwerk.diagnostics.diagnostics",
+                "runenwerk.editor.console",
+            ]
+        );
+    }
+
+    #[test]
+    fn default_profile_registry_reports_unregistered_legacy_material_lab_surface() {
+        let profile_registry = default_workspace_profile_registry();
+        let material_profile = profile_registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let empty_registry = ToolSuiteRegistry::new(Vec::new()).expect("empty registry is valid");
+
+        let report = material_profile
+            .validate_tool_surface_registry_compatibility(empty_registry.surfaces());
+
+        let unregistered_keys = report
+            .unregistered_legacy_surfaces
+            .iter()
+            .map(|surface| surface.stable_surface_key.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            unregistered_keys,
+            vec![
+                "runenwerk.assets.browser",
+                "runenwerk.material_lab.graph_canvas",
+                "runenwerk.material_lab.inspector",
+                "runenwerk.material_lab.preview",
+                "runenwerk.texture.viewer_2d",
+                "runenwerk.diagnostics.diagnostics",
+                "runenwerk.editor.console",
+            ]
+        );
+    }
+
+    #[test]
+    fn default_profiles_still_build_without_tool_surface_registry() {
+        let registry = default_workspace_profile_registry();
+        let mut allocator = WorkspaceIdentityAllocator::new();
+
+        for profile in registry.profiles() {
+            let workspace_id = allocator.allocate_workspace_id();
+            let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+            assert!(
+                workspace.validate_integrity().is_ok(),
+                "{} profile should still build without a tool-surface registry",
+                profile.label
+            );
+        }
+    }
+
+    #[test]
+    fn registry_free_default_profile_builder_still_works() {
+        let registry = default_workspace_profile_registry();
+        let profile = registry
+            .profile(SCENE_WORKSPACE_PROFILE_ID)
+            .expect("scene profile should exist");
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+
+        assert!(workspace.validate_integrity().is_ok());
+    }
+
+    #[test]
+    fn registry_aware_default_profile_builder_preserves_legacy_tool_surface_kinds() {
+        let profile_registry = default_workspace_profile_registry();
+        let profile = profile_registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let tool_suite_registry = full_saveable_registry();
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile
+            .build_default_workspace_state_with_registry(
+                workspace_id,
+                &mut allocator,
+                tool_suite_registry.surfaces(),
+            )
+            .expect("full registry should build material workspace");
+
+        assert!(
+            workspace
+                .tool_surfaces()
+                .any(|surface| surface.legacy_tool_surface_kind()
+                    == Some(ToolSurfaceKind::MaterialGraphCanvas))
+        );
+        assert!(
+            workspace
+                .tool_surfaces()
+                .any(|surface| surface.legacy_tool_surface_kind()
+                    == Some(ToolSurfaceKind::MaterialInspector))
+        );
+        assert!(
+            workspace
+                .tool_surfaces()
+                .any(|surface| surface.legacy_tool_surface_kind()
+                    == Some(ToolSurfaceKind::MaterialPreview))
+        );
+    }
+
+    #[test]
+    fn registry_aware_default_profile_builder_populates_stable_keys() {
+        let profile_registry = default_workspace_profile_registry();
+        let profile = profile_registry
+            .profile(TEXTURE_WORKSPACE_PROFILE_ID)
+            .expect("texture profile should exist");
+        let tool_suite_registry = full_saveable_registry();
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let workspace = profile
+            .build_default_workspace_state_with_registry(
+                workspace_id,
+                &mut allocator,
+                tool_suite_registry.surfaces(),
+            )
+            .expect("full registry should build texture workspace");
+
+        for surface in workspace.tool_surfaces() {
+            let key = surface.stable_surface_key();
+            assert!(
+                tool_suite_registry.surfaces().get(key).is_some(),
+                "stable metadata should be registered: {}",
+                key.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn registry_aware_default_profile_builder_rejects_unregistered_surface_key() {
+        let profile_registry = default_workspace_profile_registry();
+        let material_profile = profile_registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let tool_suite_registry = material_lab_registry();
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        let error = material_profile
+            .build_default_workspace_state_with_registry(
+                workspace_id,
+                &mut allocator,
+                tool_suite_registry.surfaces(),
+            )
+            .expect_err("partial registry should reject non-material profile surfaces");
+
+        assert!(matches!(
+            error,
+            WorkspaceProfileRegistryBackedBuildError::UnregisteredDefaultToolSurface {
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::AssetBrowser),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn registry_aware_builder_preserves_default_profile_surface_order() {
+        let profile_registry = default_workspace_profile_registry();
+        let procgen_profile = profile_registry
+            .profile(PROCGEN_WORKSPACE_PROFILE_ID)
+            .expect("procgen profile should exist");
+        let tool_suite_registry = full_saveable_registry();
+        let mut legacy_allocator = WorkspaceIdentityAllocator::new();
+        let legacy_workspace_id = legacy_allocator.allocate_workspace_id();
+        let legacy_workspace = procgen_profile
+            .build_default_workspace_state(legacy_workspace_id, &mut legacy_allocator);
+        let mut registry_allocator = WorkspaceIdentityAllocator::new();
+        let registry_workspace_id = registry_allocator.allocate_workspace_id();
+
+        let registry_workspace = procgen_profile
+            .build_default_workspace_state_with_registry(
+                registry_workspace_id,
+                &mut registry_allocator,
+                tool_suite_registry.surfaces(),
+            )
+            .expect("registry-aware procgen profile should build");
+
+        assert_eq!(
+            workspace_surface_order(&registry_workspace),
+            workspace_surface_order(&legacy_workspace)
+        );
+    }
+
+    #[test]
+    fn placeholder_surface_remains_explicit_diagnostics_namespace_not_implemented_domain() {
+        let key = stable_key_for_tool_surface_kind(ToolSurfaceKind::Placeholder)
+            .expect("placeholder should have an explicit fallback key");
+
+        assert_eq!(key.as_str(), "runenwerk.diagnostics.placeholder");
+    }
+
+    #[test]
+    fn profile_compatibility_validation_does_not_change_default_surface_order() {
+        let profile_registry = default_workspace_profile_registry();
+        let material_profile = profile_registry
+            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
+            .expect("material profile should exist");
+        let original_order = material_profile.default_surfaces.clone();
+        let tool_suite_registry = material_lab_registry();
+
+        let _report = material_profile
+            .validate_tool_surface_registry_compatibility(tool_suite_registry.surfaces());
+
+        assert_eq!(material_profile.default_surfaces, original_order);
+    }
+
+    fn workspace_surface_order(workspace: &WorkspaceState) -> Vec<ToolSurfaceKind> {
+        workspace
+            .tab_stacks()
+            .flat_map(|stack| stack.ordered_panels.iter())
+            .filter_map(|panel_id| workspace.panel(*panel_id))
+            .filter_map(|panel| panel.active_tool_surface)
+            .filter_map(|surface_id| workspace.tool_surface(surface_id))
+            .filter_map(|surface| surface.legacy_tool_surface_kind())
+            .collect()
+    }
+
+    fn full_saveable_registry() -> ToolSuiteRegistry {
+        let provider_family = ProviderFamilyId::new("runenwerk.test").unwrap();
+        ToolSuiteRegistry::new(vec![EditorToolSuite {
+            suite_id: ToolSuiteId::new("runenwerk.test").unwrap(),
+            label: "Test".to_string(),
+            provider_families: vec![ProviderFamilyDefinition {
+                id: provider_family.clone(),
+                label: "Test".to_string(),
+            }],
+            surfaces: saveable_tool_surface_stable_key_candidates()
+                .iter()
+                .map(|candidate| {
+                    material_lab_surface(
+                        candidate.stable_key,
+                        candidate.stable_key,
+                        ToolSurfaceRole::Primary,
+                        provider_family.clone(),
+                        ToolSurfaceRoute::ProviderOwnedLocal,
+                    )
+                })
+                .chain(std::iter::once(material_lab_surface(
+                    TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+                    "Tool Suite Registry Inspector",
+                    ToolSurfaceRole::Inspector,
+                    provider_family.clone(),
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                )))
+                .collect(),
+        }])
+        .expect("full saveable registry fixture should be valid")
+    }
+
+    fn material_lab_registry() -> ToolSuiteRegistry {
+        let provider_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+        ToolSuiteRegistry::new(vec![EditorToolSuite {
+            suite_id: ToolSuiteId::new("runenwerk.material_lab").unwrap(),
+            label: "Material Lab".to_string(),
+            provider_families: vec![ProviderFamilyDefinition {
+                id: provider_family.clone(),
+                label: "Material Lab".to_string(),
+            }],
+            surfaces: vec![
+                material_lab_surface(
+                    "runenwerk.material_lab.graph_canvas",
+                    "Material Graph",
+                    ToolSurfaceRole::Primary,
+                    provider_family.clone(),
+                    ToolSurfaceRoute::ProviderOwnedGraphCanvas,
+                ),
+                material_lab_surface(
+                    "runenwerk.material_lab.inspector",
+                    "Material Inspector",
+                    ToolSurfaceRole::Inspector,
+                    provider_family.clone(),
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+                material_lab_surface(
+                    "runenwerk.material_lab.preview",
+                    "Material Preview",
+                    ToolSurfaceRole::Preview,
+                    provider_family,
+                    ToolSurfaceRoute::ProviderOwnedLocal,
+                ),
+            ],
+        }])
+        .expect("material lab registry fixture should be valid")
+    }
+
+    fn material_lab_surface(
+        key: &str,
+        label: &str,
+        role: ToolSurfaceRole,
+        provider_family: ProviderFamilyId,
+        route: ToolSurfaceRoute,
+    ) -> ToolSurfaceDefinition {
+        ToolSurfaceDefinition {
+            key: ToolSurfaceStableKey::new(key).unwrap(),
+            label: label.to_string(),
+            role,
+            provider_family,
+            route,
+            persistence: ToolSurfacePersistence::StableKey,
         }
     }
 }

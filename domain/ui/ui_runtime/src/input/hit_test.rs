@@ -65,6 +65,8 @@ fn clip_rect_for_node(node: &UiNode, layout: &ComputedLayout) -> Option<ui_math:
         | UiNodeKind::NumericInput(_)
         | UiNodeKind::Tabs(_)
         | UiNodeKind::Select(_) => Some(layout.content_bounds),
+        UiNodeKind::GraphCanvas(graph_canvas) if graph_canvas.clip => Some(layout.bounds),
+        UiNodeKind::GraphCanvas(_) => None,
         UiNodeKind::Button(_) => Some(layout.bounds),
         UiNodeKind::Table(_) | UiNodeKind::Tree(_) => Some(layout.bounds),
         UiNodeKind::Label(_)
@@ -72,8 +74,9 @@ fn clip_rect_for_node(node: &UiNode, layout: &ComputedLayout) -> Option<ui_math:
         | UiNodeKind::Spacer(_)
         | UiNodeKind::Divider(_)
         | UiNodeKind::Image(_)
-        | UiNodeKind::ViewportSurfaceEmbed(_)
+        | UiNodeKind::ProductSurface(_)
         | UiNodeKind::Stack(_)
+        | UiNodeKind::ViewportSurfaceEmbed(_)
         | UiNodeKind::Split(_) => None,
     }
 }

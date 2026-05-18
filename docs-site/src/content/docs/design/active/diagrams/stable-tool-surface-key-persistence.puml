@@ -1,0 +1,59 @@
+@startuml
+title Stable Tool Surface Key Persistence
+
+skinparam shadowing false
+skinparam defaultFontName Monospaced
+
+start
+:Persisted workspace layout entry is loaded;
+
+if (Legacy ToolSurfaceKind / PersistedToolSurfaceKindV2?) then (yes)
+  :Use versioned compatibility adapter;
+  :Produce stable surface key candidate;
+else (already stable key)
+  :Use persisted stable surface key;
+endif
+
+:Look up stable key in active ToolSurfaceRegistry;
+
+if (Stable key known?) then (no)
+  :Emit diagnostic artifact;
+  :Fail closed with no provider-local routes;
+  :Do not silently map to another tool;
+  stop
+else (yes)
+  if (Removed or incompatible?) then (yes)
+    :Reject activation or preserve current workspace;
+    :Emit compatibility diagnostic;
+    :Registry activation alone must not rewrite WorkspaceState;
+    stop
+  else (known and compatible)
+    :Mount ToolSurfaceInstanceId;
+    :Resolve provider;
+    :Build surface frame;
+  endif
+endif
+
+:Registry activation alone leaves WorkspaceState unchanged;
+
+if (Explicit workspace layout apply requested?) then (yes)
+  :Validate layout definition against registry;
+  :Apply workspace mutation through governed shell command;
+else (no)
+  :Keep existing WorkspaceState unchanged;
+endif
+
+stop
+
+note right
+  Stable keys replace ever-growing persisted
+  enum variants for registry-owned surfaces.
+  Compatibility adapters are allowed
+  during migration.
+  Unknown keys must never silently become
+  the wrong tool.
+  Explicit workspace layout apply is
+  required for layout mutation.
+end note
+
+@enduml

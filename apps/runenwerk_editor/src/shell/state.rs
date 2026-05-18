@@ -4,9 +4,10 @@ use editor_shell::{
     DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
     MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId, SCENE_WORKSPACE_PROFILE_ID,
     ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolbarMenuKind, UiRuntime, UiTree, WidgetId, WorkspaceId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId, WorkspaceSplitAxis,
-    WorkspaceState, WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
+    ToolSurfaceKind, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
+    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
+    WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis, WorkspaceState,
+    WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -82,6 +83,12 @@ pub struct RunenwerkEditorShellState {
 
 impl Default for RunenwerkEditorShellState {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RunenwerkEditorShellState {
+    pub fn new() -> Self {
         let mut identity_allocator = WorkspaceIdentityAllocator::new();
         let workspace_id = identity_allocator.allocate_workspace_id();
         let profile_registry = default_workspace_profile_registry();
@@ -91,6 +98,41 @@ impl Default for RunenwerkEditorShellState {
             .expect("default workspace profile should exist")
             .build_default_workspace_state(workspace_id, &mut identity_allocator);
         debug_assert!(workspace_state.validate_integrity().is_ok());
+        Self::from_bootstrapped_workspace(
+            identity_allocator,
+            active_workspace_profile_id,
+            workspace_state,
+        )
+    }
+
+    pub fn new_with_tool_surface_registry(
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
+        let mut identity_allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = identity_allocator.allocate_workspace_id();
+        let profile_registry = default_workspace_profile_registry();
+        let active_workspace_profile_id = profile_registry.default_profile_id();
+        let workspace_state = profile_registry
+            .default_profile()
+            .expect("default workspace profile should exist")
+            .build_default_workspace_state_with_registry(
+                workspace_id,
+                &mut identity_allocator,
+                registry,
+            )?;
+        debug_assert!(workspace_state.validate_integrity().is_ok());
+        Ok(Self::from_bootstrapped_workspace(
+            identity_allocator,
+            active_workspace_profile_id,
+            workspace_state,
+        ))
+    }
+
+    fn from_bootstrapped_workspace(
+        identity_allocator: WorkspaceIdentityAllocator,
+        active_workspace_profile_id: WorkspaceProfileId,
+        workspace_state: WorkspaceState,
+    ) -> Self {
         let mut active_editor_definitions = ActiveEditorDefinitionCatalogs::default();
         let checked_in_definitions = load_checked_in_editor_ui_definitions()
             .expect("checked-in editor UI definitions should load");
@@ -125,12 +167,6 @@ impl Default for RunenwerkEditorShellState {
             corner_area_split_session: None,
             docking_visual_state: DockingInteractionVisualState::default(),
         }
-    }
-}
-
-impl RunenwerkEditorShellState {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn runtime(&self) -> &UiRuntime {
@@ -385,9 +421,18 @@ impl RunenwerkEditorShellState {
         &mut self,
         build: impl FnOnce(&mut WorkspaceIdentityAllocator) -> (WorkspaceMutation, T),
     ) -> Result<T, WorkspaceStateError> {
+        self.try_apply_workspace_mutation_with_allocations(|allocator| Ok(build(allocator)))
+    }
+
+    pub fn try_apply_workspace_mutation_with_allocations<T>(
+        &mut self,
+        build: impl FnOnce(
+            &mut WorkspaceIdentityAllocator,
+        ) -> Result<(WorkspaceMutation, T), WorkspaceStateError>,
+    ) -> Result<T, WorkspaceStateError> {
         let mut allocator =
             WorkspaceIdentityAllocator::from_seed(self.identity_allocator.seed_snapshot());
-        let (op, value) = build(&mut allocator);
+        let (op, value) = build(&mut allocator)?;
         let next_workspace_state = reduce_workspace(&self.workspace_state, op)?;
         self.identity_allocator = allocator;
         self.workspace_state = next_workspace_state;
@@ -400,16 +445,16 @@ impl RunenwerkEditorShellState {
         panel_instance_id: PanelInstanceId,
         tool_surface_kind: ToolSurfaceKind,
     ) -> Result<ToolSurfaceInstanceId, WorkspaceStateError> {
-        self.apply_workspace_mutation_with_allocations(|allocator| {
+        self.try_apply_workspace_mutation_with_allocations(|allocator| {
             let tool_surface_id = allocator.allocate_tool_surface_instance_id();
-            (
-                WorkspaceMutation::ReplacePanelToolSurfaceKind {
-                    panel_id: panel_instance_id,
+            Ok((
+                WorkspaceMutation::replace_panel_tool_surface_kind_legacy(
+                    panel_instance_id,
                     tool_surface_id,
                     tool_surface_kind,
-                },
+                )?,
                 tool_surface_id,
-            )
+            ))
         })
     }
 

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use editor_shell::{ToolSurfaceInstanceId, ToolSurfaceKind, WorkspaceMutation};
+use editor_shell::{ToolSurfaceInstanceId, WorkspaceMutation};
 use editor_viewport::{ViewportId, ViewportRuntimeSettings};
 use engine::runtime::ResMut;
 
@@ -12,7 +12,7 @@ use crate::runtime::viewport::{
     MAIN_VIEWPORT_ID, ViewportInstanceRegistryResource, ViewportPickingResultsResource,
     ViewportPresentationStateResource, ViewportRenderStateResource,
     ViewportRuntimeSettingsHydrationKey, ViewportRuntimeSettingsHydrationResource,
-    initial_presentation_state,
+    initial_presentation_state, is_viewport_tool_surface,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -46,7 +46,7 @@ pub fn sync_viewport_instances_system(
                 .shell_state
                 .workspace_state()
                 .tool_surface(record.tool_surface_id)?;
-            if surface.tool_surface_kind == ToolSurfaceKind::Viewport
+            if is_viewport_tool_surface(surface)
                 && surface.viewport_instance_id != Some(record.viewport_id)
             {
                 Some((record.tool_surface_id, record.viewport_id))
@@ -62,7 +62,7 @@ pub fn sync_viewport_instances_system(
                 .shell_state
                 .workspace_state()
                 .tool_surface(record.tool_surface_id)?;
-            if surface.tool_surface_kind != ToolSurfaceKind::Viewport {
+            if !is_viewport_tool_surface(surface) {
                 return None;
             }
             if let Some(settings) = surface.viewport_settings {

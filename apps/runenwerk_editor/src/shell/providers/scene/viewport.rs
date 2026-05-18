@@ -15,10 +15,21 @@ impl EditorSurfaceProvider for SceneViewportProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        matches!(
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        if !matches!(
             request.document_context.resolved_document_kind(),
             Some(DocumentKind::Scene)
-        ) && request.tool_surface_kind == ToolSurfaceKind::Viewport
+        ) {
+            return SurfaceProviderSupportMode::Unsupported;
+        }
+        stable_key_or_legacy_kind_support(
+            request,
+            SCENE_VIEWPORT_SURFACE_KEY,
+            ToolSurfaceKind::Viewport,
+        )
     }
 
     fn build_frame(

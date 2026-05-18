@@ -2,17 +2,18 @@
 //! Purpose: Convert retained tree + computed layout into UiFrame.
 
 use crate::{
-    ButtonNode, ComputedLayoutMap, DividerNode, ImageNode, LabelNode, NumericInputNode, PanelNode,
-    PopupNode, RadialMenuNode, ScrollNode, ScrollbarAxisOpacities, ScrollbarAxisTarget, SelectNode,
-    TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree,
-    ViewportSurfaceEmbedNode, WidgetId,
+    ButtonNode, ComputedLayoutMap, DividerNode, GraphCanvasNode, ImageNode, LabelNode,
+    NumericInputNode, PanelNode, PopupNode, ProductSurfaceNode, RadialMenuNode, ScrollNode,
+    ScrollbarAxisOpacities, ScrollbarAxisTarget, SelectNode, TableNode, TabsNode, TextInputNode,
+    ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
 };
 use std::collections::BTreeMap;
 use ui_math::{Axis, UiRect, UiSize};
 use ui_render_data::{
-    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, RectPrimitive, UiDrawKey,
-    UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
-    ViewportSurfaceEmbedPrimitive,
+    BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, GraphCanvasPrimitiveBatch,
+    GraphCanvasPrimitiveRole, ImagePrimitive, ProductSurfacePrimitive, RectPrimitive,
+    StrokePrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
+    UiSurface, UiSurfaceId, ViewportSurfaceEmbedPrimitive,
 };
 use ui_text::{
     AtlasTextLayouter, FontAtlasSource, TextAlign, TextLayoutRequest, TextLayouter,
@@ -27,6 +28,8 @@ pub struct InteractionVisualState {
     pub hovered_scrollbar: Option<ScrollbarAxisTarget>,
     pub active_scrollbar: Option<ScrollbarAxisTarget>,
     pub scrollbar_opacity_by_widget_id: BTreeMap<WidgetId, ScrollbarAxisOpacities>,
+    pub graph_canvas_gestures: BTreeMap<WidgetId, ui_graph_editor::GraphCanvasGestureState>,
+    pub graph_canvas_viewports: BTreeMap<WidgetId, ui_graph_editor::GraphViewport>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -243,6 +246,24 @@ fn emit_node(
             node_layer_order,
             primitive_order,
         ),
+        UiNodeKind::ProductSurface(surface) => emit_product_surface(
+            surface,
+            layout.bounds,
+            layer,
+            node_layer_order,
+            primitive_order,
+        ),
+        UiNodeKind::GraphCanvas(graph_canvas) => emit_graph_canvas(
+            node.id,
+            graph_canvas,
+            layout.bounds,
+            layer,
+            atlas_source,
+            layouter,
+            interaction_state.clone(),
+            node_layer_order,
+            primitive_order,
+        ),
         UiNodeKind::ViewportSurfaceEmbed(embed) => emit_viewport_surface_embed(
             embed,
             layout.bounds,
@@ -318,6 +339,8 @@ fn emit_node(
         | UiNodeKind::Spacer(_)
         | UiNodeKind::Divider(_)
         | UiNodeKind::Image(_)
+        | UiNodeKind::ProductSurface(_)
+        | UiNodeKind::GraphCanvas(_)
         | UiNodeKind::ViewportSurfaceEmbed(_)
         | UiNodeKind::Stack(_)
         | UiNodeKind::Split(_) => {}
@@ -742,6 +765,257 @@ fn emit_image(
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
+}
+
+fn emit_product_surface(
+    surface: &ProductSurfaceNode,
+    bounds: UiRect,
+    layer: &mut UiLayer,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    layer.push(UiPrimitive::ProductSurface(ProductSurfacePrimitive::new(
+        surface.source.clone(),
+        bounds,
+        surface.uv_rect,
+        surface.tint,
+        surface.alpha_mode,
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "graph canvas emission maps a retained graph view model into concrete render primitives"
+)]
+fn emit_graph_canvas(
+    widget_id: WidgetId,
+    graph_canvas: &GraphCanvasNode,
+    bounds: UiRect,
+    layer: &mut UiLayer,
+    atlas_source: &dyn FontAtlasSource,
+    layouter: &dyn TextLayouter,
+    interaction_state: InteractionVisualState,
+    depth: u32,
+    primitive_order: &mut u32,
+) {
+    let interaction = interaction_state.for_widget(widget_id);
+    let viewport = interaction_state
+        .graph_canvas_viewports
+        .get(&widget_id)
+        .copied()
+        .unwrap_or(graph_canvas.canvas.viewport);
+    let mut background = graph_canvas.theme.background_panel;
+    if interaction.hovered {
+        background = brighten(background, 1.03);
+    }
+    let mut border = graph_canvas.theme.border;
+    if interaction.focused {
+        border = brighten(graph_canvas.theme.accent, 1.04);
+    }
+
+    layer.push(UiPrimitive::Rect(RectPrimitive::new(
+        bounds,
+        graph_canvas.theme.radius.sm,
+        paint_from_color(background),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+    layer.push(UiPrimitive::Border(BorderPrimitive::new(
+        bounds,
+        graph_canvas.theme.radius.sm,
+        graph_canvas.theme.border_width,
+        paint_from_color(border),
+        default_draw_key(),
+        sort_key(depth, *primitive_order),
+    )));
+    *primitive_order += 1;
+
+    if graph_canvas.clip {
+        layer.push(UiPrimitive::Clip(ClipPrimitive::Push {
+            rect: bounds,
+            sort_key: sort_key(depth, *primitive_order),
+        }));
+        *primitive_order += 1;
+    }
+
+    let mut batch = GraphCanvasPrimitiveBatch::new();
+    for edge in &graph_canvas.canvas.edges {
+        batch.push(
+            GraphCanvasPrimitiveRole::Edge,
+            StrokePrimitive::new(
+                [
+                    graph_point_to_ui(bounds, viewport, edge.from),
+                    graph_point_to_ui(bounds, viewport, edge.to),
+                ],
+                if edge.selected { 3.0 } else { 2.0 },
+                paint_from_color(if edge.selected {
+                    graph_canvas.theme.accent
+                } else {
+                    graph_canvas.theme.border
+                }),
+                default_draw_key(),
+                sort_key(depth, *primitive_order),
+            )
+            .with_clip(bounds),
+        );
+        *primitive_order += 1;
+    }
+
+    if let Some(gesture) = interaction_state.graph_canvas_gestures.get(&widget_id)
+        && let Some(ui_graph_editor::GraphActiveGesture::ConnectionPreview(connection)) =
+            gesture.active
+    {
+        batch.push(
+            GraphCanvasPrimitiveRole::ConnectionPreview,
+            StrokePrimitive::new(
+                [
+                    graph_point_to_ui(bounds, viewport, connection.start),
+                    graph_point_to_ui(bounds, viewport, connection.current),
+                ],
+                2.0,
+                paint_from_color(graph_canvas.theme.accent),
+                default_draw_key(),
+                sort_key(depth, *primitive_order),
+            )
+            .with_clip(bounds),
+        );
+        *primitive_order += 1;
+    }
+
+    for node in &graph_canvas.canvas.nodes {
+        let rect = graph_rect_to_ui(bounds, viewport, node.rect);
+        batch.push(
+            GraphCanvasPrimitiveRole::NodeBox,
+            RectPrimitive::new(
+                rect,
+                graph_canvas.theme.radius.sm,
+                paint_from_color(graph_canvas.theme.background_panel),
+                default_draw_key(),
+                sort_key(depth, *primitive_order),
+            ),
+        );
+        *primitive_order += 1;
+        if node.selected || graph_canvas.canvas.selection.nodes.contains(&node.node) {
+            batch.push(
+                GraphCanvasPrimitiveRole::SelectionOutline,
+                BorderPrimitive::new(
+                    rect,
+                    graph_canvas.theme.radius.sm,
+                    graph_canvas.theme.border_width.max(1.0),
+                    paint_from_color(graph_canvas.theme.accent),
+                    default_draw_key(),
+                    sort_key(depth, *primitive_order),
+                ),
+            );
+            *primitive_order += 1;
+        }
+        let label_rect = UiRect::new(
+            rect.x + graph_canvas.theme.spacing.xs,
+            rect.y + graph_canvas.theme.spacing.xs,
+            (rect.width - graph_canvas.theme.spacing.xs * 2.0).max(0.0),
+            graph_canvas.text_style.font_size * 1.4,
+        );
+        let label = LabelNode {
+            text: node.title.clone(),
+            text_style: graph_canvas.text_style.clone(),
+            constraints: ui_layout::LayoutConstraints::tight(label_rect.size()),
+        };
+        emit_label(
+            &label,
+            label_rect,
+            layer,
+            atlas_source,
+            layouter,
+            depth,
+            primitive_order,
+        );
+    }
+
+    for port in &graph_canvas.canvas.ports {
+        batch.push(
+            GraphCanvasPrimitiveRole::Port,
+            RectPrimitive::new(
+                graph_rect_to_ui(bounds, viewport, port.rect),
+                4.0,
+                paint_from_color(graph_canvas.theme.accent),
+                default_draw_key(),
+                sort_key(depth, *primitive_order),
+            ),
+        );
+        *primitive_order += 1;
+    }
+
+    for overlay in &graph_canvas.canvas.overlays {
+        batch.push(
+            GraphCanvasPrimitiveRole::Overlay,
+            BorderPrimitive::new(
+                graph_rect_to_ui(bounds, viewport, overlay.rect),
+                graph_canvas.theme.radius.sm,
+                if overlay.active {
+                    graph_canvas.theme.border_width.max(2.0)
+                } else {
+                    graph_canvas.theme.border_width.max(1.0)
+                },
+                paint_from_color(match overlay.severity {
+                    ui_graph_editor::GraphOverlaySeverity::Info => graph_canvas.theme.accent,
+                    ui_graph_editor::GraphOverlaySeverity::Warning => {
+                        brighten(graph_canvas.theme.accent, 1.20)
+                    }
+                    ui_graph_editor::GraphOverlaySeverity::Error => {
+                        ui_theme::UiColor::new(1.0, 0.12, 0.18, 1.0)
+                    }
+                }),
+                default_draw_key(),
+                sort_key(depth, *primitive_order),
+            ),
+        );
+        *primitive_order += 1;
+    }
+
+    for primitive in batch.into_ui_primitives() {
+        layer.push(primitive);
+    }
+
+    if graph_canvas.clip {
+        layer.push(UiPrimitive::Clip(ClipPrimitive::Pop {
+            sort_key: sort_key(depth, *primitive_order),
+        }));
+        *primitive_order += 1;
+    }
+}
+
+fn graph_rect_to_ui(
+    canvas_bounds: UiRect,
+    viewport: ui_graph_editor::GraphViewport,
+    rect: ui_graph_editor::GraphRect,
+) -> UiRect {
+    let origin = graph_point_to_ui(
+        canvas_bounds,
+        viewport,
+        ui_graph_editor::GraphPoint::new(rect.x, rect.y),
+    );
+    let zoom = viewport.zoom_milli.max(1) as f32 / 1000.0;
+    UiRect::new(
+        origin.x,
+        origin.y,
+        rect.width.max(0) as f32 * zoom,
+        rect.height.max(0) as f32 * zoom,
+    )
+}
+
+fn graph_point_to_ui(
+    canvas_bounds: UiRect,
+    viewport: ui_graph_editor::GraphViewport,
+    point: ui_graph_editor::GraphPoint,
+) -> ui_math::UiPoint {
+    let zoom = viewport.zoom_milli.max(1) as f32 / 1000.0;
+    ui_math::UiPoint::new(
+        canvas_bounds.x + viewport.pan_x as f32 + point.x as f32 * zoom,
+        canvas_bounds.y + viewport.pan_y as f32 + point.y as f32 * zoom,
+    )
 }
 
 #[expect(

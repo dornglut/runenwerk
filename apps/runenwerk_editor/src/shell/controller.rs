@@ -11,7 +11,7 @@ use editor_shell::{
     VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
     surface_widget_id, tab_stack_container_widget_id, tab_stack_popup_menu_widget_id,
-    viewport_tool_radial_item_widget_id,
+    tool_surface_kind_for_stable_key, viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::{
@@ -27,8 +27,9 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportInstanceRegistryResource, ViewportPresentationStateResource,
-    ViewportRenderStateCommandQueueResource,
+    ViewportRenderStateCommandQueueResource, is_viewport_tool_surface,
 };
+use crate::shell::tool_suites::EDITOR_CONSOLE_SURFACE_KEY;
 use crate::shell::{
     CornerAreaSplitSession, CornerSplitResizeSession, EditorShellFrameMetrics,
     EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderDispatchContext,
@@ -571,7 +572,7 @@ impl RunenwerkEditorShellController {
         let open_viewport_surfaces = shell_state
             .workspace_state()
             .tool_surfaces()
-            .filter(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .filter(|surface| is_viewport_tool_surface(surface))
             .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
             .filter(|surface| {
                 app.surface_sessions()
@@ -627,7 +628,7 @@ impl RunenwerkEditorShellController {
         let open_viewport_surfaces = shell_state
             .workspace_state()
             .tool_surfaces()
-            .filter(|surface| surface.tool_surface_kind == ToolSurfaceKind::Viewport)
+            .filter(|surface| is_viewport_tool_surface(surface))
             .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
             .filter(|surface| {
                 app.surface_sessions()
@@ -717,8 +718,10 @@ impl RunenwerkEditorShellController {
                     } else {
                         WorkspaceSplitAxis::Vertical
                     };
-                    let tool_surface_kind =
-                        active_tool_surface_kind_for_tab_stack(shell_state, session.tab_stack_id);
+                    let tool_surface_kind = legacy_tool_surface_kind_for_tab_stack_pending_c6(
+                        shell_state,
+                        session.tab_stack_id,
+                    );
                     let command = ShellCommand::SplitTabStackArea {
                         tab_stack_id: session.tab_stack_id,
                         axis,
@@ -1005,6 +1008,55 @@ impl RunenwerkEditorShellController {
                 if let Some(proposal) =
                     registry.map_action(&dispatch_context, &request, provider_id, action)?
                     && let Some(command) = shell_command_from_surface_proposal(proposal)
+                {
+                    dispatch_shell_command_with_viewport_commands(
+                        app,
+                        Some(shell_state),
+                        command,
+                        viewport_presentations.as_deref_mut(),
+                        viewport_observations,
+                        tool_surface_bindings,
+                        viewport_render_commands.as_deref_mut(),
+                        Some(current_epoch),
+                    )?;
+                }
+                continue;
+            }
+
+            if let ShellCommand::DispatchSurfaceInteraction {
+                provider_id,
+                tool_surface_instance_id,
+                target,
+                interaction,
+                projection_epoch,
+            } = command
+            {
+                if !shell_state.is_projection_epoch_current(projection_epoch)
+                    || target.active_tool_surface != Some(tool_surface_instance_id)
+                {
+                    continue;
+                }
+                let document_context = active_document_context(app);
+                let Some(request) = mounted_surface_requests(shell_state, document_context)
+                    .into_iter()
+                    .find(|request| {
+                        request.tool_surface_instance_id == tool_surface_instance_id
+                            && request.panel_instance_id == target.panel_instance_id
+                            && request.tab_stack_id == target.tab_stack_id
+                    })
+                else {
+                    continue;
+                };
+                let dispatch_context = SurfaceProviderDispatchContext {
+                    projection_epoch: current_epoch,
+                    _marker: std::marker::PhantomData,
+                };
+                if let Some(proposal) = registry.map_interaction(
+                    &dispatch_context,
+                    &request,
+                    provider_id,
+                    interaction,
+                )? && let Some(command) = shell_command_from_surface_proposal(proposal)
                 {
                     dispatch_shell_command_with_viewport_commands(
                         app,
@@ -1419,10 +1471,12 @@ fn collect_projected_tab_stacks_for_controller<'a>(
     }
 }
 
-fn active_tool_surface_kind_for_tab_stack(
+fn legacy_tool_surface_kind_for_tab_stack_pending_c6(
     shell_state: &RunenwerkEditorShellState,
     tab_stack_id: editor_shell::TabStackId,
 ) -> ToolSurfaceKind {
+    // C6C shell UI compatibility boundary: drag/drop preview still emits
+    // enum-backed shell commands, but resolution prefers stable-key authority.
     let Some(tab_stack) = shell_state.workspace_state().tab_stack(tab_stack_id) else {
         return ToolSurfaceKind::Viewport;
     };
@@ -1437,7 +1491,10 @@ fn active_tool_surface_kind_for_tab_stack(
         .panel(panel_id)
         .and_then(|panel| panel.active_tool_surface)
         .and_then(|surface_id| shell_state.workspace_state().tool_surface(surface_id))
-        .map(|surface| surface.tool_surface_kind)
+        .and_then(|surface| {
+            tool_surface_kind_for_stable_key(surface.stable_surface_key())
+                .or_else(|| surface.legacy_tool_surface_kind())
+        })
         .unwrap_or(ToolSurfaceKind::Viewport)
 }
 
@@ -1681,7 +1738,7 @@ fn active_console_surface(
         .filter_map(|panel| {
             let surface_id = panel.active_tool_surface?;
             let surface = shell_state.workspace_state().tool_surface(surface_id)?;
-            (surface.tool_surface_kind == editor_shell::ToolSurfaceKind::Console)
+            (surface.stable_surface_key().as_str() == EDITOR_CONSOLE_SURFACE_KEY)
                 .then_some(surface_id)
         })
         .next()

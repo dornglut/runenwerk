@@ -3745,6 +3745,7 @@ dependencies = [
 name = "ui_runtime"
 version = "0.1.0"
 dependencies = [
+ "ui_graph_editor",
  "ui_input",
  "ui_layout",
  "ui_math",
@@ -3780,6 +3781,7 @@ dependencies = [
 name = "ui_tree"
 version = "0.1.0"
 dependencies = [
+ "ui_graph_editor",
  "ui_layout",
  "ui_math",
  "ui_render_data",

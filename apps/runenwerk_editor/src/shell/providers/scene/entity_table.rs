@@ -15,10 +15,21 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        matches!(
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        if !matches!(
             request.document_context.resolved_document_kind(),
             Some(DocumentKind::Scene)
-        ) && request.tool_surface_kind == ToolSurfaceKind::EntityTable
+        ) {
+            return SurfaceProviderSupportMode::Unsupported;
+        }
+        stable_key_or_legacy_kind_support(
+            request,
+            SCENE_ENTITY_TABLE_SURFACE_KEY,
+            ToolSurfaceKind::EntityTable,
+        )
     }
 
     fn build_frame(

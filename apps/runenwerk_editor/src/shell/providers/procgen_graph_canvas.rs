@@ -12,7 +12,15 @@ impl EditorSurfaceProvider for ProcgenGraphCanvasProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::ProcgenGraphCanvas
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_key_or_legacy_kind_support(
+            request,
+            PROCGEN_GRAPH_CANVAS_SURFACE_KEY,
+            ToolSurfaceKind::ProcgenGraphCanvas,
+        )
     }
 
     fn build_frame(

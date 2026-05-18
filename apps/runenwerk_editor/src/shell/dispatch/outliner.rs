@@ -13,7 +13,7 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_panels::OutlinerPanelCommand;
 use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch::{
-    resolve_surface_command_contract, surface_capability_label, tool_surface_kind_label,
+    resolve_legacy_surface_command_contract, surface_capability_label, tool_surface_kind_label,
 };
 
 pub(crate) fn dispatch_domain_mutation(
@@ -24,9 +24,11 @@ pub(crate) fn dispatch_domain_mutation(
 ) -> Result<(), EditorMutationError> {
     match mutation {
         OutlinerDomainMutation::SelectEntity { entity } => {
-            let Some(surface_contract) =
-                resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::Outliner)
-            else {
+            let Some(surface_contract) = resolve_legacy_surface_command_contract(
+                shell_state,
+                target,
+                ToolSurfaceKind::Outliner,
+            ) else {
                 app.append_console_line(
                     "[outliner] entity selection ignored (missing structural tool-surface target)"
                         .to_string(),

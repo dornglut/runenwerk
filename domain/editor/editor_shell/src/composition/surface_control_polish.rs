@@ -71,7 +71,7 @@ pub(crate) fn apply_flat_compact_surface_button_polish(node: &mut UiNode, theme:
     }
 }
 
-pub(crate) fn compact_surface_action_button(
+pub fn compact_surface_action_button(
     id: WidgetId,
     label: impl Into<String>,
     selected: bool,

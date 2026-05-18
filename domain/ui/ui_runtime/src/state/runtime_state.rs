@@ -132,6 +132,8 @@ pub struct UiRuntimeState {
     pub active_scrollbar: Option<ScrollbarAxisTarget>,
     pub frame_index: u64,
     pub scrollbar_activity_frames: BTreeMap<WidgetId, ScrollbarAxisActivityFrames>,
+    pub graph_canvas_gestures: BTreeMap<WidgetId, ui_graph_editor::GraphCanvasGestureState>,
+    pub graph_canvas_viewports: BTreeMap<WidgetId, ui_graph_editor::GraphViewport>,
 }
 
 impl UiRuntimeState {
@@ -143,6 +145,7 @@ impl UiRuntimeState {
         self.middle_pan_last_position = None;
         self.scrollbar_thumb_drag = None;
         self.hovered_scrollbar = None;
+        self.graph_canvas_gestures.clear();
     }
 
     pub fn scroll_offset(&self, widget_id: WidgetId) -> f32 {

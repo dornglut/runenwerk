@@ -963,10 +963,8 @@ fn panel_registry_activation_rejects_unknown_default_tool_surface() {
             let default_tool_surface = panel
                 .active_tool_surface
                 .and_then(|surface_id| host.shell_state.workspace_state().tool_surface(surface_id))
-                .map(|surface| {
-                    editor_shell::tool_surface_kind_definition_key(surface.tool_surface_kind)
-                        .to_string()
-                })
+                .and_then(|surface| surface.legacy_tool_surface_kind())
+                .map(|kind| editor_shell::tool_surface_kind_definition_key(kind).to_string())
                 .unwrap_or_else(|| "placeholder".to_string());
             editor_definition::EditorPanelDefinition {
                 id: editor_shell::panel_kind_definition_key(panel.panel_kind).to_string(),
@@ -2722,11 +2720,11 @@ fn provider_local_viewport_field_controls_are_routed_actions() {
         ))
         .expect("field component control should have a route");
     assert!(matches!(
-        &route.action,
-        SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
+        route.action(),
+        Some(SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
             viewport_id: routed_viewport,
             patch,
-        }) if *routed_viewport == viewport_id
+        })) if *routed_viewport == viewport_id
             && *patch == ViewportFieldVisualizerSettingsPatch::SetComponent(
                 ViewportFieldVisualizerComponent::X
             )
@@ -2740,11 +2738,11 @@ fn provider_local_viewport_field_controls_are_routed_actions() {
         ))
         .expect("field slice increment control should have a route");
     assert!(matches!(
-        &route.action,
-        SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
+        route.action(),
+        Some(SurfaceLocalAction::Viewport(ViewportSurfaceAction::PatchFieldVisualizerSettings {
             viewport_id: routed_viewport,
             patch,
-        }) if *routed_viewport == viewport_id
+        })) if *routed_viewport == viewport_id
             && *patch == ViewportFieldVisualizerSettingsPatch::StepSliceIndex(1)
     ));
 }
@@ -2788,7 +2786,7 @@ fn editor_type_switch_replaces_mounted_surface_without_changing_panel_identity()
         shell_state
             .workspace_state()
             .tool_surface(after_surface)
-            .map(|surface| surface.tool_surface_kind),
+            .and_then(|surface| surface.legacy_tool_surface_kind()),
         Some(editor_shell::ToolSurfaceKind::Inspector)
     );
     assert_eq!(
@@ -5111,7 +5109,10 @@ fn tab_plus_create_surface_menu_click_creates_selected_tab() {
         .and_then(|panel| panel.active_tool_surface)
         .and_then(|surface_id| shell_state.workspace_state().tool_surface(surface_id))
         .expect("active panel should have a mounted tool surface");
-    assert_eq!(active_surface.tool_surface_kind, ToolSurfaceKind::Inspector);
+    assert_eq!(
+        active_surface.legacy_tool_surface_kind(),
+        Some(ToolSurfaceKind::Inspector)
+    );
     assert!(
         shell_state.active_tab_stack_popup_menu().is_none(),
         "creating a tab should close the create-surface popup"
@@ -5497,29 +5498,29 @@ fn dragging_dynamic_split_border_updates_workspace_fraction() {
     let (_, viewport_stack_id) =
         panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
     let split_host_id = shell_state
-        .apply_workspace_mutation_with_allocations(|allocator| {
+        .try_apply_workspace_mutation_with_allocations(|allocator| {
             let split_host_id = allocator.allocate_panel_host_id();
             let first_child_host_id = allocator.allocate_panel_host_id();
             let second_child_host_id = allocator.allocate_panel_host_id();
             let new_tab_stack_id = allocator.allocate_tab_stack_id();
             let new_panel_id = allocator.allocate_panel_instance_id();
             let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-            (
-                WorkspaceMutation::SplitTabStackArea {
-                    tab_stack_id: viewport_stack_id,
-                    axis: WorkspaceSplitAxis::Horizontal,
+            Ok((
+                WorkspaceMutation::split_tab_stack_area_legacy(
+                    viewport_stack_id,
+                    WorkspaceSplitAxis::Horizontal,
                     split_host_id,
                     first_child_host_id,
                     second_child_host_id,
                     new_tab_stack_id,
                     new_panel_id,
-                    new_panel_kind: PanelKind::Inspector,
+                    PanelKind::Inspector,
                     new_tool_surface_id,
-                    new_tool_surface_kind: ToolSurfaceKind::Inspector,
-                    fraction: 0.45,
-                },
+                    ToolSurfaceKind::Inspector,
+                    0.45,
+                )?,
                 split_host_id,
-            )
+            ))
         })
         .expect("dynamic workspace split should be valid");
 
@@ -5585,29 +5586,29 @@ fn dragging_dynamic_inspector_split_border_from_tab_strip_resizes_area() {
     let (_, inspector_stack_id) =
         panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Inspector);
     let split_host_id = shell_state
-        .apply_workspace_mutation_with_allocations(|allocator| {
+        .try_apply_workspace_mutation_with_allocations(|allocator| {
             let split_host_id = allocator.allocate_panel_host_id();
             let first_child_host_id = allocator.allocate_panel_host_id();
             let second_child_host_id = allocator.allocate_panel_host_id();
             let new_tab_stack_id = allocator.allocate_tab_stack_id();
             let new_panel_id = allocator.allocate_panel_instance_id();
             let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-            (
-                WorkspaceMutation::SplitTabStackArea {
-                    tab_stack_id: inspector_stack_id,
-                    axis: WorkspaceSplitAxis::Horizontal,
+            Ok((
+                WorkspaceMutation::split_tab_stack_area_legacy(
+                    inspector_stack_id,
+                    WorkspaceSplitAxis::Horizontal,
                     split_host_id,
                     first_child_host_id,
                     second_child_host_id,
                     new_tab_stack_id,
                     new_panel_id,
-                    new_panel_kind: PanelKind::Console,
+                    PanelKind::Console,
                     new_tool_surface_id,
-                    new_tool_surface_kind: ToolSurfaceKind::Console,
-                    fraction: 0.3,
-                },
+                    ToolSurfaceKind::Console,
+                    0.3,
+                )?,
                 split_host_id,
-            )
+            ))
         })
         .expect("inspector-side dynamic split should be valid");
 

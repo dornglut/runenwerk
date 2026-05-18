@@ -1,12 +1,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use editor_shell::{ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, WorkspaceState};
+use editor_shell::{
+    ToolSurfaceInstanceId, ToolSurfaceMount, ToolSurfaceStableKey, ToolSurfaceState, WorkspaceState,
+};
 use editor_viewport::ViewportId;
 use ui_math::UiPoint;
 
 use crate::editor_features::viewport::ViewportInteractionState;
 use crate::editor_panels::EntityTablePanelUiState;
 use crate::editor_runtime::inspector_state::EditorInspectorUiState;
+use crate::shell::tool_suites::{
+    ASSET_BROWSER_SURFACE_KEY, EDITOR_CONSOLE_SURFACE_KEY, FIELD_PRODUCT_VIEWER_SURFACE_KEY,
+    IMPORT_INSPECTOR_SURFACE_KEY, SCENE_ENTITY_TABLE_SURFACE_KEY, SCENE_INSPECTOR_SURFACE_KEY,
+    SCENE_OUTLINER_SURFACE_KEY, SCENE_VIEWPORT_SURFACE_KEY, SDF_BRUSH_BROWSER_SURFACE_KEY,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceSessionState {
@@ -110,7 +117,7 @@ impl SurfaceSessionStore {
     pub fn prune_for_workspace(&mut self, workspace: &WorkspaceState) {
         let live = workspace
             .tool_surfaces()
-            .filter(|surface| retains_live_session(surface.tool_surface_kind))
+            .filter(|surface| retains_live_session(surface))
             .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
             .map(|surface| surface.id)
             .collect::<BTreeSet<_>>();
@@ -177,18 +184,22 @@ impl SurfaceSessionStore {
     }
 }
 
-fn retains_live_session(kind: ToolSurfaceKind) -> bool {
+fn retains_live_session(surface: &ToolSurfaceState) -> bool {
+    retains_live_session_key(surface.stable_surface_key())
+}
+
+fn retains_live_session_key(key: &ToolSurfaceStableKey) -> bool {
     matches!(
-        kind,
-        ToolSurfaceKind::Outliner
-            | ToolSurfaceKind::EntityTable
-            | ToolSurfaceKind::Viewport
-            | ToolSurfaceKind::Inspector
-            | ToolSurfaceKind::Console
-            | ToolSurfaceKind::AssetBrowser
-            | ToolSurfaceKind::ImportInspector
-            | ToolSurfaceKind::FieldProductViewer
-            | ToolSurfaceKind::SdfBrushBrowser
+        key.as_str(),
+        SCENE_OUTLINER_SURFACE_KEY
+            | SCENE_ENTITY_TABLE_SURFACE_KEY
+            | SCENE_VIEWPORT_SURFACE_KEY
+            | SCENE_INSPECTOR_SURFACE_KEY
+            | EDITOR_CONSOLE_SURFACE_KEY
+            | ASSET_BROWSER_SURFACE_KEY
+            | IMPORT_INSPECTOR_SURFACE_KEY
+            | FIELD_PRODUCT_VIEWER_SURFACE_KEY
+            | SDF_BRUSH_BROWSER_SURFACE_KEY
     )
 }
 
@@ -204,7 +215,7 @@ mod tests {
         let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
         let surface_id = workspace
             .tool_surfaces()
-            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::EntityTable)
+            .find(|surface| surface.stable_surface_key().as_str() == SCENE_ENTITY_TABLE_SURFACE_KEY)
             .expect("entity table surface should exist")
             .id;
         let mut store = SurfaceSessionStore::default();
@@ -248,7 +259,7 @@ mod tests {
         let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
         let surface_id = workspace
             .tool_surfaces()
-            .find(|surface| surface.tool_surface_kind == ToolSurfaceKind::Console)
+            .find(|surface| surface.stable_surface_key().as_str() == EDITOR_CONSOLE_SURFACE_KEY)
             .expect("console surface should exist")
             .id;
         let mut store = SurfaceSessionStore::default();

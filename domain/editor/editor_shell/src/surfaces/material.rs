@@ -7,11 +7,16 @@ pub struct MaterialGraphCanvasViewModel {
     pub selected: Option<MaterialGraphSourceDetailViewModel>,
     pub graph: MaterialGraphEditorViewModel,
     pub palette: MaterialNodePaletteViewModel,
+    pub texture_picker: MaterialTextureResourcePickerViewModel,
     pub toolbar: MaterialGraphToolbarViewModel,
     pub validation_overlays: Vec<MaterialGraphValidationOverlayViewModel>,
+    pub active_diagnostic_index: Option<usize>,
+    pub node_picker: MaterialNodePickerViewModel,
     pub shortcuts: Vec<MaterialGraphShortcutViewModel>,
     pub undo_redo: MaterialUndoRedoViewModel,
     pub catalog_status_lines: Vec<String>,
+    pub diagnostic_rows: Vec<MaterialDiagnosticRowViewModel>,
+    pub resource_binding_diagnostics: Vec<MaterialResourceBindingDiagnosticViewModel>,
     pub diagnostic_lines: Vec<String>,
 }
 
@@ -107,6 +112,35 @@ pub struct MaterialGraphResourceBindingViewModel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialTextureResourcePickerViewModel {
+    pub search_query: String,
+    pub options: Vec<MaterialTextureResourceOptionViewModel>,
+}
+
+impl Default for MaterialTextureResourcePickerViewModel {
+    fn default() -> Self {
+        Self {
+            search_query: String::new(),
+            options: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialTextureResourceOptionViewModel {
+    pub stable_id: String,
+    pub display_name: String,
+    pub asset_id: asset::AssetId,
+    pub artifact_id: asset::AssetArtifactId,
+    pub product_id: u64,
+    pub resource_kind: material_graph::MaterialResourceKind,
+    pub descriptor_hash: String,
+    pub artifact_uri: String,
+    pub valid: bool,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialGraphEdgeViewModel {
     pub edge_id: graph::EdgeId,
     pub from_port_id: graph::PortId,
@@ -139,6 +173,14 @@ pub struct MaterialNodePaletteItemViewModel {
     pub output_targets: Vec<material_graph::MaterialOutputTarget>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MaterialNodePickerViewModel {
+    pub open: bool,
+    pub search_query: String,
+    pub highlighted_descriptor_key: Option<String>,
+    pub categories: Vec<MaterialNodePaletteCategoryViewModel>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialGraphToolbarViewModel {
     pub selected_fixture: material_graph::MaterialGraphPreviewFixture,
@@ -169,10 +211,12 @@ impl Default for MaterialGraphToolbarViewModel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialGraphValidationOverlayViewModel {
+    pub diagnostic_index: Option<usize>,
     pub subject_node_id: Option<graph::NodeId>,
     pub subject_port_id: Option<graph::PortId>,
     pub severity: MaterialGraphValidationSeverity,
     pub message: String,
+    pub active: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,6 +257,8 @@ pub struct MaterialInspectorViewModel {
     pub output_target: Option<material_graph::MaterialOutputTarget>,
     pub parameter_lines: Vec<String>,
     pub source_map_lines: Vec<String>,
+    pub diagnostic_rows: Vec<MaterialDiagnosticRowViewModel>,
+    pub resource_binding_diagnostics: Vec<MaterialResourceBindingDiagnosticViewModel>,
     pub diagnostic_lines: Vec<String>,
 }
 
@@ -224,8 +270,118 @@ pub struct MaterialPreviewViewModel {
     pub viewport_product_id: Option<editor_viewport::ExpressionProductId>,
     pub specialization_fragment: Option<String>,
     pub prepared_parameter_payload_bytes: usize,
+    pub preview_status: MaterialPreviewStatusViewModel,
+    pub diagnostic_rows: Vec<MaterialDiagnosticRowViewModel>,
+    pub resource_binding_diagnostics: Vec<MaterialResourceBindingDiagnosticViewModel>,
     pub preview_status_lines: Vec<String>,
     pub diagnostic_lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialDiagnosticRowViewModel {
+    pub severity: MaterialDiagnosticSeverity,
+    pub code: String,
+    pub subject_label: Option<String>,
+    pub category_label: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaterialDiagnosticSeverity {
+    Info,
+    Warning,
+    Error,
+    Fatal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialResourceBindingDiagnosticViewModel {
+    pub severity: MaterialDiagnosticSeverity,
+    pub code: String,
+    pub binding_label: String,
+    pub resource_key_or_slot_label: String,
+    pub expected_kind_label: Option<String>,
+    pub resolved_artifact_label: Option<String>,
+    pub message: String,
+    pub status: MaterialResourceBindingStatusKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaterialResourceBindingStatusKind {
+    Resolved,
+    Missing,
+    Ambiguous,
+    Incompatible,
+    Unsupported,
+    Unresolved,
+    GeneratedAvailable,
+    GeneratedUnavailable,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialPreviewStatusViewModel {
+    pub status: MaterialPreviewStatusKind,
+    pub headline: String,
+    pub detail_lines: Vec<String>,
+    pub last_good_available: bool,
+    pub active_preview_label: Option<String>,
+    pub publication_status: MaterialPreviewPublicationStatusKind,
+    pub product_status_label: Option<String>,
+    pub last_publication_label: Option<String>,
+    pub last_good_reason: Option<String>,
+    pub failed_preserved_last_good: bool,
+    pub active_product_label: Option<String>,
+    pub material_artifact_label: Option<String>,
+    pub shader_artifact_label: Option<String>,
+    pub scene_shader_artifact_label: Option<String>,
+    pub viewport_product_label: Option<String>,
+    pub diagnostic_count: usize,
+}
+
+impl Default for MaterialPreviewStatusViewModel {
+    fn default() -> Self {
+        Self {
+            status: MaterialPreviewStatusKind::Unknown,
+            headline: "Material preview status unknown".to_string(),
+            detail_lines: Vec::new(),
+            last_good_available: false,
+            active_preview_label: None,
+            publication_status: MaterialPreviewPublicationStatusKind::NoPublication,
+            product_status_label: None,
+            last_publication_label: None,
+            last_good_reason: None,
+            failed_preserved_last_good: false,
+            active_product_label: None,
+            material_artifact_label: None,
+            shader_artifact_label: None,
+            scene_shader_artifact_label: None,
+            viewport_product_label: None,
+            diagnostic_count: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaterialPreviewStatusKind {
+    NoSelection,
+    NoSourceDocument,
+    NoActivePreview,
+    Queued,
+    Blocked,
+    Published,
+    FailedPreservedLastGood,
+    FailedNoPreview,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaterialPreviewPublicationStatusKind {
+    NoPublication,
+    Ready,
+    FailedPreserved,
+    Rejected,
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,10 +404,35 @@ pub enum MaterialSurfaceAction {
     SelectGraphNode {
         node_id: graph::NodeId,
     },
+    SelectGraphEdge {
+        edge_id: graph::EdgeId,
+    },
+    ClearGraphSelection,
+    SetMaterialNodePaletteSearch {
+        query: String,
+    },
+    OpenNodePicker,
+    CloseNodePicker,
+    SetNodePickerSearch {
+        query: String,
+    },
+    HighlightNodePickerNode {
+        descriptor_key: String,
+    },
+    ConfirmNodePickerSelection,
+    SetTextureResourceSearch {
+        query: String,
+    },
+    MoveGraphNode {
+        node_id: graph::NodeId,
+        delta_x: i32,
+        delta_y: i32,
+    },
     AddGraphNode {
         descriptor_key: String,
     },
     DeleteSelectedGraphNodes,
+    DeleteSelectedGraphSelection,
     ConnectPorts {
         from_port_id: graph::PortId,
         to_port_id: graph::PortId,

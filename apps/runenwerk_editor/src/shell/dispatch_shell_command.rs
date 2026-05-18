@@ -439,20 +439,20 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ))?;
             shell_state.close_tab_stack_popup_menu();
             shell_state
-                .apply_workspace_mutation_with_allocations(|allocator| {
+                .try_apply_workspace_mutation_with_allocations(|allocator| {
                     let panel_id = allocator.allocate_panel_instance_id();
                     let tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    (
-                        WorkspaceMutation::AddPanelTab {
+                    Ok((
+                        WorkspaceMutation::add_panel_tab_legacy(
                             tab_stack_id,
                             panel_id,
-                            panel_kind: panel_kind_for_tool_surface_kind(tool_surface_kind),
+                            panel_kind_for_tool_surface_kind(tool_surface_kind),
                             tool_surface_id,
                             tool_surface_kind,
-                            activate_panel: true,
-                        },
+                            true,
+                        )?,
                         (),
-                    )
+                    ))
                 })
                 .map_err(|_| EditorMutationError::runtime_rejected("create panel tab failed"))?;
             app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
@@ -522,15 +522,15 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ))?;
             shell_state.close_tab_stack_popup_menu();
             shell_state
-                .apply_workspace_mutation_with_allocations(|allocator| {
+                .try_apply_workspace_mutation_with_allocations(|allocator| {
                     let split_host_id = allocator.allocate_panel_host_id();
                     let first_child_host_id = allocator.allocate_panel_host_id();
                     let second_child_host_id = allocator.allocate_panel_host_id();
                     let new_tab_stack_id = allocator.allocate_tab_stack_id();
                     let new_panel_id = allocator.allocate_panel_instance_id();
                     let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    (
-                        WorkspaceMutation::SplitTabStackArea {
+                    Ok((
+                        WorkspaceMutation::split_tab_stack_area_legacy(
                             tab_stack_id,
                             axis,
                             split_host_id,
@@ -538,13 +538,13 @@ pub fn dispatch_shell_command_with_viewport_commands(
                             second_child_host_id,
                             new_tab_stack_id,
                             new_panel_id,
-                            new_panel_kind: panel_kind_for_tool_surface_kind(tool_surface_kind),
+                            panel_kind_for_tool_surface_kind(tool_surface_kind),
                             new_tool_surface_id,
-                            new_tool_surface_kind: tool_surface_kind,
-                            fraction: 0.5,
-                        },
+                            tool_surface_kind,
+                            0.5,
+                        )?,
                         (),
-                    )
+                    ))
                 })
                 .map_err(|_| {
                     EditorMutationError::runtime_rejected("split tab stack area failed")
@@ -611,18 +611,18 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ))?;
             shell_state.close_tab_stack_popup_menu();
             shell_state
-                .apply_workspace_mutation_with_allocations(|allocator| {
+                .try_apply_workspace_mutation_with_allocations(|allocator| {
                     let panel_id = allocator.allocate_panel_instance_id();
                     let tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    (
-                        WorkspaceMutation::ResetTabStackArea {
+                    Ok((
+                        WorkspaceMutation::reset_tab_stack_area_legacy(
                             tab_stack_id,
                             panel_id,
                             tool_surface_id,
                             tool_surface_kind,
-                        },
+                        )?,
                         (),
-                    )
+                    ))
                 })
                 .map_err(|_| {
                     EditorMutationError::runtime_rejected("reset tab stack area failed")
@@ -641,11 +641,13 @@ pub fn dispatch_shell_command_with_viewport_commands(
                         "missing shell state for workspace command",
                     ))?;
             shell_state.close_tab_stack_popup_menu();
+            let lock_mutation = WorkspaceMutation::lock_tab_stack_area_type_legacy(
+                tab_stack_id,
+                locked_tool_surface_kind,
+            )
+            .map_err(|_| EditorMutationError::runtime_rejected("lock tab stack area failed"))?;
             shell_state
-                .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaType {
-                    tab_stack_id,
-                    locked_tool_surface_kind,
-                })
+                .apply_workspace_mutation(lock_mutation)
                 .map_err(|_| EditorMutationError::runtime_rejected("lock tab stack area failed"))?;
         }
         ShellCommand::ActivateDocumentTab { document_id } => {
@@ -976,9 +978,10 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 viewport_render_commands,
             )?;
         }
-        ShellCommand::DispatchSurfaceLocalAction { .. } => {
+        ShellCommand::DispatchSurfaceLocalAction { .. }
+        | ShellCommand::DispatchSurfaceInteraction { .. } => {
             return Err(EditorMutationError::session_rejected(
-                "surface-local command must be resolved through provider registry before dispatch",
+                "surface provider command must be resolved through provider registry before dispatch",
             ));
         }
         ShellCommand::NoOp => {}
@@ -1054,6 +1057,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ApplySurfaceSessionMutation { .. } => "ApplySurfaceSessionMutation",
         ShellCommand::ApplyEditorDomainMutation { .. } => "ApplyEditorDomainMutation",
         ShellCommand::DispatchSurfaceLocalAction { .. } => "DispatchSurfaceLocalAction",
+        ShellCommand::DispatchSurfaceInteraction { .. } => "DispatchSurfaceInteraction",
         ShellCommand::NoOp => "NoOp",
     }
 }
@@ -1327,20 +1331,35 @@ fn load_workspace_profile_layout(
                 "[workspace] ignored stale/incompatible saved {} workspace layout; rebuilt default",
                 profile.label
             ));
-            let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-            let workspace_id = allocator.allocate_workspace_id();
-            profile.build_default_workspace_state(workspace_id, &mut allocator)
+            build_default_workspace_for_profile(app, profile)?
         }
     } else {
-        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        profile.build_default_workspace_state(workspace_id, &mut allocator)
+        build_default_workspace_for_profile(app, profile)?
     };
     shell_state.set_active_workspace_profile_id(profile_id);
     shell_state.replace_workspace_state(workspace_state);
     app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
     app.append_console_line(format!("[workspace] loaded {} workspace", profile.label));
     Ok(())
+}
+
+fn build_default_workspace_for_profile(
+    app: &RunenwerkEditorApp,
+    profile: &editor_shell::WorkspaceProfile,
+) -> Result<editor_shell::WorkspaceState, EditorMutationError> {
+    let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
+    let workspace_id = allocator.allocate_workspace_id();
+    profile
+        .build_default_workspace_state_with_registry(
+            workspace_id,
+            &mut allocator,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .map_err(|_| {
+            EditorMutationError::runtime_rejected(
+                "workspace profile is incompatible with tool-surface registry",
+            )
+        })
 }
 
 fn workspace_layout_matches_profile(
@@ -1597,6 +1616,19 @@ mod tests {
         scene_profile().build_default_workspace_state(workspace_id, &mut allocator)
     }
 
+    fn workspace_surface_order(
+        workspace: &editor_shell::WorkspaceState,
+    ) -> Vec<editor_shell::ToolSurfaceKind> {
+        workspace
+            .tab_stacks()
+            .flat_map(|stack| stack.ordered_panels.iter())
+            .filter_map(|panel_id| workspace.panel(*panel_id))
+            .filter_map(|panel| panel.active_tool_surface)
+            .filter_map(|surface_id| workspace.tool_surface(surface_id))
+            .filter_map(|surface| surface.legacy_tool_surface_kind())
+            .collect()
+    }
+
     fn panel_and_stack_by_kind(
         workspace: &editor_shell::WorkspaceState,
         kind: PanelKind,
@@ -1673,6 +1705,49 @@ mod tests {
     }
 
     #[test]
+    fn graph_interaction_epoch_mismatch_fails_closed() {
+        let mut app = RunenwerkEditorApp::new();
+        let command = ShellCommand::ApplyMaterialSurfaceAction {
+            action: editor_shell::MaterialSurfaceAction::SelectGraphNode {
+                node_id: graph::NodeId::new(9),
+            },
+            projection_epoch: 1,
+        };
+
+        dispatch_shell_command(&mut app, None, command, None, None, None, Some(2))
+            .expect("stale material graph interaction command should fail closed");
+
+        assert!(
+            app.material_lab_runtime().selected_graph_nodes().is_empty(),
+            "stale graph interaction must not mutate Material Lab selection"
+        );
+    }
+
+    #[test]
+    fn graph_interaction_without_active_source_fails_closed() {
+        let mut app = RunenwerkEditorApp::new();
+        let command = ShellCommand::ApplyMaterialSurfaceAction {
+            action: editor_shell::MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(9),
+                delta_x: 10,
+                delta_y: -4,
+            },
+            projection_epoch: 2,
+        };
+
+        let result = dispatch_shell_command(&mut app, None, command, None, None, None, Some(2));
+
+        assert!(
+            result.is_err(),
+            "source-backed graph edits must fail closed when no material source is active"
+        );
+        assert!(
+            app.material_lab_runtime().active_source_document().is_none(),
+            "missing source failure must not synthesize Material Lab source state"
+        );
+    }
+
+    #[test]
     fn stale_legacy_profile_layout_requires_default_scene_graph() {
         let workspace = default_scene_workspace();
         let (viewport_panel, viewport_stack) =
@@ -1723,5 +1798,42 @@ mod tests {
         };
 
         assert!(!workspace_layout_matches_profile(&saved, &profile));
+    }
+
+    #[test]
+    fn fallback_default_workspace_uses_registry_when_available() {
+        let app = RunenwerkEditorApp::new();
+        let profile = scene_profile();
+
+        let workspace = build_default_workspace_for_profile(&app, &profile)
+            .expect("profile fallback should build through hosted registry");
+
+        let report = workspace.validate_tool_surface_registry_compatibility(
+            app.workbench_host().tool_surface_registry(),
+        );
+        assert!(report.is_fully_compatible());
+    }
+
+    #[test]
+    fn workspace_layout_load_fallback_preserves_legacy_behavior() {
+        let app = RunenwerkEditorApp::new();
+        let profile = scene_profile();
+        let legacy_workspace = default_scene_workspace();
+
+        let registry_workspace = build_default_workspace_for_profile(&app, &profile)
+            .expect("profile fallback should build through hosted registry");
+
+        assert_eq!(
+            workspace_surface_order(&registry_workspace),
+            workspace_surface_order(&legacy_workspace)
+        );
+        assert_eq!(
+            profile
+                .default_layout_template
+                .default_graph_matches(&registry_workspace),
+            profile
+                .default_layout_template
+                .default_graph_matches(&legacy_workspace)
+        );
     }
 }

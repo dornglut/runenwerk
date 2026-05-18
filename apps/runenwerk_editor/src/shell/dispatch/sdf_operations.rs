@@ -10,7 +10,7 @@ use ui_surface::SurfaceCapability;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::shell::RunenwerkEditorShellState;
-use crate::shell::dispatch::resolve_surface_command_contract;
+use crate::shell::dispatch::resolve_legacy_surface_command_contract;
 
 pub(crate) fn dispatch_session_mutation(
     app: &mut RunenwerkEditorApp,
@@ -90,9 +90,11 @@ fn ensure_sdf_surface(
     target: StructuralCommandTarget,
     required_capabilities: &[SurfaceCapability],
 ) -> Result<(), EditorMutationError> {
-    let Some(contract) =
-        resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::FieldLayerStack)
-    else {
+    let Some(contract) = resolve_legacy_surface_command_contract(
+        shell_state,
+        target,
+        ToolSurfaceKind::FieldLayerStack,
+    ) else {
         return Err(EditorMutationError::session_rejected(
             "missing SDF operation surface command target",
         ));
@@ -142,7 +144,8 @@ mod tests {
                 let surface = shell_state
                     .workspace_state()
                     .tool_surface(tool_surface_id)?;
-                (surface.tool_surface_kind == kind).then_some((panel.id, tool_surface_id))
+                (surface.legacy_tool_surface_kind() == Some(kind))
+                    .then_some((panel.id, tool_surface_id))
             })
             .next()
             .expect("default shell state should contain requested surface kind");

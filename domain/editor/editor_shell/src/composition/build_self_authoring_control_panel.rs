@@ -97,7 +97,7 @@ mod tests {
             UiNodeKind::Button(button) if button.label == "Apply"
         ));
         assert_eq!(
-            routes.get(&action_id).map(|route| &route.action),
+            routes.get(&action_id).and_then(SurfaceLocalRoute::action),
             Some(&action)
         );
     }

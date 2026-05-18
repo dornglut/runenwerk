@@ -12,7 +12,15 @@ impl EditorSurfaceProvider for ImportInspectorProvider {
     }
 
     fn supports(&self, request: &SurfaceProviderRequest) -> bool {
-        request.tool_surface_kind == ToolSurfaceKind::ImportInspector
+        self.support_mode(request).is_supported()
+    }
+
+    fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
+        stable_key_or_legacy_kind_support(
+            request,
+            IMPORT_INSPECTOR_SURFACE_KEY,
+            ToolSurfaceKind::ImportInspector,
+        )
     }
 
     fn build_frame(

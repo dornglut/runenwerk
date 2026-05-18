@@ -120,7 +120,17 @@ pub fn tool_surface_registry_covers_workspace(
     workspace: &WorkspaceState,
 ) -> Result<(), UiDefinitionDiagnostic> {
     for surface in workspace.tool_surfaces() {
-        let key = tool_surface_kind_definition_key(surface.tool_surface_kind);
+        let Some(legacy_tool_surface_kind) = surface.legacy_tool_surface_kind() else {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.definition.tool_surface_registry.active_workspace_missing_legacy_kind",
+                format!(
+                    "active workspace surface '{}' has stable key '{}' but no legacy compatibility kind",
+                    surface.id.raw(),
+                    surface.stable_surface_key()
+                ),
+            ));
+        };
+        let key = tool_surface_kind_definition_key(legacy_tool_surface_kind);
         if !registry
             .tool_surfaces
             .iter()

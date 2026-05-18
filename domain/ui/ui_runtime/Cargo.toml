@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+ui_graph_editor.workspace = true
 ui_input.workspace = true
 ui_layout.workspace = true
 ui_math.workspace = true

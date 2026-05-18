@@ -106,7 +106,7 @@ fn active_panels_by_identity(
     let mut active_panels = BTreeMap::new();
 
     for stack in all_projected_stacks(artifact) {
-        if let Some(panel) = stack.active_panel {
+        if let Some(panel) = &stack.active_panel {
             active_panels.insert(active_panel_key(panel), panel.active_tool_surface);
         }
     }
@@ -114,7 +114,7 @@ fn active_panels_by_identity(
     active_panels
 }
 
-fn active_panel_key(panel: ProjectedPanelSlot) -> (PanelInstanceId, TabStackId) {
+fn active_panel_key(panel: &ProjectedPanelSlot) -> (PanelInstanceId, TabStackId) {
     (panel.panel_instance_id, panel.tab_stack_id)
 }
 

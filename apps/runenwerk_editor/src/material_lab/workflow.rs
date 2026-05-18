@@ -12,9 +12,8 @@ use engine::plugins::render::{
     MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
 };
 use material_graph::{
-    MaterialGraphDocument, MaterialGraphIssueCode, MaterialGraphIssueSubject,
-    MaterialGraphNodeLayout, MaterialNodeCatalog, MaterialOutputTarget, MaterialResourceKind,
-    lower_material_graph,
+    MaterialGraphDocument, MaterialGraphIssueCode, MaterialGraphIssueSubject, MaterialNodeCatalog,
+    MaterialOutputTarget, lower_material_graph,
 };
 use product::ProductPublicationOutcome;
 
@@ -71,11 +70,50 @@ impl RunenwerkEditorApp {
 
     fn apply_source_backed_material_edit(
         &mut self,
-        action: MaterialSurfaceAction,
+        mut action: MaterialSurfaceAction,
     ) -> Result<(), editor_core::EditorMutationError> {
         if let MaterialSurfaceAction::SelectGraphNode { node_id } = action {
             self.material_lab_runtime_mut().select_graph_node(node_id);
             return Ok(());
+        }
+        if let MaterialSurfaceAction::SelectGraphEdge { edge_id } = action {
+            self.material_lab_runtime_mut().select_graph_edge(edge_id);
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::ClearGraphSelection = action {
+            self.material_lab_runtime_mut().clear_graph_selection();
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::SetMaterialNodePaletteSearch { query } = action {
+            self.material_lab_runtime_mut()
+                .set_node_palette_search_query(query);
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::OpenNodePicker = action {
+            self.material_lab_runtime_mut().open_node_picker();
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::CloseNodePicker = action {
+            self.material_lab_runtime_mut().close_node_picker();
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::SetNodePickerSearch { query } = action {
+            self.material_lab_runtime_mut()
+                .set_node_picker_search_query(query);
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::HighlightNodePickerNode { descriptor_key } = action {
+            self.material_lab_runtime_mut()
+                .highlight_node_picker_node(descriptor_key);
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::SetTextureResourceSearch { query } = action {
+            self.material_lab_runtime_mut()
+                .set_texture_resource_search_query(query);
+            return Ok(());
+        }
+        if let MaterialSurfaceAction::NavigateDiagnostic { diagnostic_index } = action {
+            return self.navigate_material_graph_diagnostic(diagnostic_index);
         }
 
         if let MaterialSurfaceAction::UndoMaterialEdit = action {
@@ -84,6 +122,20 @@ impl RunenwerkEditorApp {
         if let MaterialSurfaceAction::RedoMaterialEdit = action {
             return self.redo_material_edit();
         }
+        let close_node_picker_after_change =
+            if matches!(action, MaterialSurfaceAction::ConfirmNodePickerSelection) {
+                let Some(descriptor_key) = self
+                    .material_lab_runtime()
+                    .node_picker_highlighted_descriptor_key()
+                    .map(str::to_string)
+                else {
+                    return Ok(());
+                };
+                action = MaterialSurfaceAction::AddGraphNode { descriptor_key };
+                true
+            } else {
+                false
+            };
 
         let Some(asset_id) = self.material_lab_runtime().selected_material_asset_id() else {
             return Err(editor_core::EditorMutationError::runtime_rejected(
@@ -104,8 +156,32 @@ impl RunenwerkEditorApp {
             .iter()
             .copied()
             .collect::<Vec<_>>();
-        let changed = apply_material_document_action(&mut document, &selected_nodes, &action)
-            .map_err(|message| editor_core::EditorMutationError::runtime_rejected(message))?;
+        let selected_edges = self
+            .material_lab_runtime()
+            .selected_graph_edges()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        if let Err(message) = validate_texture_resource_picker_selection(
+            self.asset_catalog_runtime().catalog(),
+            &document,
+            &action,
+        ) {
+            self.record_material_workflow_diagnostics([material_diagnostic(
+                AssetDiagnosticCode::RatificationRejected,
+                message,
+            )]);
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "catalog texture picker selection is invalid",
+            ));
+        }
+        let changed = apply_material_document_action(
+            &mut document,
+            &selected_nodes,
+            &selected_edges,
+            &action,
+        )
+        .map_err(|message| editor_core::EditorMutationError::runtime_rejected(message))?;
         if changed {
             self.material_lab_runtime_mut()
                 .push_undo_snapshot(asset_id, before);
@@ -115,8 +191,74 @@ impl RunenwerkEditorApp {
                         "failed to persist material graph source edit",
                     )
                 })?;
+            if close_node_picker_after_change {
+                self.material_lab_runtime_mut().close_node_picker();
+            }
             self.refresh_material_source_projection(asset_id, document);
         }
+        Ok(())
+    }
+
+    fn navigate_material_graph_diagnostic(
+        &mut self,
+        diagnostic_index: usize,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let diagnostic = self
+            .material_lab_runtime()
+            .diagnostics()
+            .get(diagnostic_index)
+            .cloned()
+            .ok_or_else(|| {
+                editor_core::EditorMutationError::runtime_rejected(
+                    "material diagnostic index is not available",
+                )
+            })?;
+        self.material_lab_runtime_mut()
+            .set_active_diagnostic_index(Some(diagnostic_index));
+
+        let (subject_node_id, subject_port_id) =
+            material_graph_subject_from_diagnostic(diagnostic.subject.as_deref());
+        if subject_node_id.is_none() && subject_port_id.is_none() {
+            return Ok(());
+        }
+
+        let Some(asset_id) = self.material_lab_runtime().selected_material_asset_id() else {
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "no selected material asset for diagnostic navigation",
+            ));
+        };
+        let mut document = self
+            .load_material_graph_document_for_asset(asset_id)
+            .map_err(|_| {
+                editor_core::EditorMutationError::runtime_rejected(
+                    "failed to load material graph source for diagnostic navigation",
+                )
+            })?;
+        let target_node_id = subject_node_id.or_else(|| {
+            subject_port_id.and_then(|port_id| {
+                document
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|node| node.ports.iter().any(|port| port.id == port_id))
+                    .map(|node| node.id)
+            })
+        });
+        let Some(target_node_id) = target_node_id else {
+            return Ok(());
+        };
+
+        center_material_graph_viewport_on_node(&mut document, target_node_id);
+        self.write_material_graph_document_for_asset(asset_id, &document)
+            .map_err(|_| {
+                editor_core::EditorMutationError::runtime_rejected(
+                    "failed to persist material graph diagnostic navigation",
+                )
+            })?;
+        self.material_lab_runtime_mut()
+            .select_graph_node(target_node_id);
+        self.material_lab_runtime_mut()
+            .set_active_source_document(asset_id, document);
         Ok(())
     }
 
@@ -295,6 +437,7 @@ pub struct EditorMaterialPreviewBuildOutcome {
 fn apply_material_document_action(
     document: &mut MaterialGraphDocument,
     selected_nodes: &[graph::NodeId],
+    selected_edges: &[graph::EdgeId],
     action: &MaterialSurfaceAction,
 ) -> Result<bool, &'static str> {
     match action {
@@ -317,197 +460,169 @@ fn apply_material_document_action(
         }
         MaterialSurfaceAction::PersistMaterialLayout => Ok(true),
         MaterialSurfaceAction::AddGraphNode { descriptor_key } => {
-            add_material_graph_node(document, descriptor_key)?;
+            material_graph::add_catalog_node(
+                document,
+                descriptor_key,
+                &MaterialNodeCatalog::first_slice(),
+            )
+            .map_err(|error| error.as_static_str())?;
             Ok(true)
         }
-        MaterialSurfaceAction::DeleteSelectedGraphNodes => {
-            if selected_nodes.is_empty() {
-                return Ok(false);
-            }
-            delete_material_graph_nodes(document, selected_nodes);
-            Ok(true)
-        }
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id,
+            delta_x,
+            delta_y,
+        } => material_graph::move_node_layout(document, *node_id, *delta_x, *delta_y)
+            .map_err(|error| error.as_static_str()),
+        MaterialSurfaceAction::DeleteSelectedGraphNodes => Ok(material_graph::delete_selection(
+            document,
+            selected_nodes,
+            &[],
+        )),
+        MaterialSurfaceAction::DeleteSelectedGraphSelection => Ok(
+            material_graph::delete_selection(document, selected_nodes, selected_edges),
+        ),
         MaterialSurfaceAction::ConnectPorts {
             from_port_id,
             to_port_id,
         } => {
-            let edge_id = next_edge_id(document);
-            document.graph.edges.push(graph::EdgeDefinition::new(
-                edge_id,
-                *from_port_id,
-                *to_port_id,
-            ));
+            material_graph::connect_ports(document, *from_port_id, *to_port_id)
+                .map_err(|error| error.as_static_str())?;
             Ok(true)
         }
         MaterialSurfaceAction::DisconnectEdge { edge_id } => {
-            document.graph.edges.retain(|edge| edge.id != *edge_id);
-            Ok(true)
+            material_graph::disconnect_edge(document, *edge_id)
+                .map_err(|error| error.as_static_str())
         }
         MaterialSurfaceAction::SetNodeValue {
             node_id,
             key,
             value,
-        } => {
-            let Some(node) = document
-                .graph
-                .nodes
-                .iter_mut()
-                .find(|node| node.id == *node_id)
-            else {
-                return Err("material graph node is missing");
-            };
-            set_node_graph_value(node, key, graph::GraphValue::Text(value.clone()));
-            Ok(true)
-        }
+        } => material_graph::set_node_text_value(document, *node_id, key, value.clone())
+            .map_err(|error| error.as_static_str()),
         MaterialSurfaceAction::PickTextureResource {
             node_id,
             key,
             stable_id,
-        } => {
-            let Some(node) = document
-                .graph
-                .nodes
-                .iter_mut()
-                .find(|node| node.id == *node_id)
-            else {
-                return Err("material graph node is missing");
-            };
-            let catalog = MaterialNodeCatalog::first_slice();
-            let Some(descriptor) = catalog.descriptor(&node.name) else {
-                return Err("material graph node is not in the active catalog");
-            };
-            let resource_kind = descriptor
-                .resources
-                .iter()
-                .find(|resource| resource.key == *key)
-                .map(|resource| resource.kind)
-                .ok_or("material graph node resource binding is missing")?;
-            let kind = match resource_kind {
-                MaterialResourceKind::Texture2D => "asset.catalog.texture2d",
-                MaterialResourceKind::Texture3D => "asset.catalog.texture3d",
-            };
-            let reference = resource_ref::ResourceRef::new(kind, stable_id.as_str())
-                .map_err(|_| "material graph texture resource reference is invalid")?;
-            set_node_graph_value(node, key, graph::GraphValue::Resource(reference));
-            Ok(true)
-        }
+        } => material_graph::set_node_texture_resource(
+            document,
+            *node_id,
+            key,
+            stable_id,
+            &MaterialNodeCatalog::first_slice(),
+        )
+        .map_err(|error| error.as_static_str()),
         _ => Err("material surface action is not a source document edit"),
     }
 }
 
-fn add_material_graph_node(
+fn center_material_graph_viewport_on_node(
     document: &mut MaterialGraphDocument,
-    descriptor_key: &str,
-) -> Result<(), &'static str> {
-    let catalog = MaterialNodeCatalog::first_slice();
-    let descriptor = catalog
-        .descriptor(descriptor_key)
-        .ok_or("material node descriptor is not in the active catalog")?;
-    let node_id = next_node_id(document);
-    let mut next_port = next_port_id(document).raw();
-    let mut ports = Vec::new();
-    for input in &descriptor.inputs {
-        ports.push(graph::PortDefinition::new(
-            graph::PortId::new(next_port),
-            input.name.clone(),
-            graph::PortDirection::Input,
-            input.value_type.port_type_id(),
-        ));
-        next_port += 1;
-    }
-    for output in &descriptor.outputs {
-        ports.push(graph::PortDefinition::new(
-            graph::PortId::new(next_port),
-            output.name.clone(),
-            graph::PortDirection::Output,
-            output.value_type.port_type_id(),
-        ));
-        next_port += 1;
-    }
-    let node = graph::NodeDefinition::new(node_id, descriptor.key.clone(), ports);
-    document.graph.nodes.push(node);
-    document
+    node_id: graph::NodeId,
+) {
+    let (position_x, position_y) = document
         .editor_state
         .node_layouts
-        .push(MaterialGraphNodeLayout::new(
-            node_id,
-            (document.graph.nodes.len() as i32 % 4) * 220,
-            (document.graph.nodes.len() as i32 / 4) * 120,
+        .iter()
+        .find(|layout| layout.node_id == node_id)
+        .map(|layout| (layout.position_x, layout.position_y))
+        .or_else(|| {
+            document
+                .graph
+                .nodes
+                .iter()
+                .position(|node| node.id == node_id)
+                .map(|index| ((index as i32 % 4) * 220, (index as i32 / 4) * 120))
+        })
+        .unwrap_or((0, 0));
+    document.editor_state.viewport.pan_x = 320_i32.saturating_sub(position_x);
+    document.editor_state.viewport.pan_y = 220_i32.saturating_sub(position_y);
+}
+
+fn validate_texture_resource_picker_selection(
+    catalog: &AssetCatalog,
+    document: &MaterialGraphDocument,
+    action: &MaterialSurfaceAction,
+) -> Result<(), String> {
+    let MaterialSurfaceAction::PickTextureResource {
+        node_id,
+        key,
+        stable_id,
+    } = action
+    else {
+        return Ok(());
+    };
+    let node = document
+        .graph
+        .nodes
+        .iter()
+        .find(|node| node.id == *node_id)
+        .ok_or_else(|| format!("texture picker node {} is missing", node_id.raw()))?;
+    let material_node_catalog = MaterialNodeCatalog::first_slice();
+    let descriptor = material_node_catalog
+        .descriptor(&node.name)
+        .ok_or_else(|| {
+            format!(
+                "texture picker node '{}' is not in the material node catalog",
+                node.name
+            )
+        })?;
+    let resource = descriptor
+        .resources
+        .iter()
+        .find(|resource| resource.key == *key)
+        .ok_or_else(|| format!("texture picker resource binding '{key}' is missing"))?;
+    let expected_dimension = match resource.kind {
+        material_graph::MaterialResourceKind::Texture2D => texture::TextureDimension::Texture2D,
+        material_graph::MaterialResourceKind::Texture3D => {
+            texture::TextureDimension::Texture3DVolume
+        }
+    };
+    let asset_record = catalog
+        .assets()
+        .find(|record| record.stable_name == *stable_id)
+        .ok_or_else(|| {
+            format!("texture picker selection '{stable_id}' is not a catalog texture asset")
+        })?;
+    let Some(artifact) = asset_record
+        .artifact_ids
+        .iter()
+        .filter_map(|artifact_id| catalog.artifact(*artifact_id))
+        .find(|artifact| {
+            matches!(
+                &artifact.payload_kind,
+                ArtifactPayloadKind::TextureProduct { descriptor, .. }
+                    | ArtifactPayloadKind::GeneratedTextureProduct { descriptor, .. }
+                    if descriptor.dimension == expected_dimension
+            )
+        })
+    else {
+        return Err(format!(
+            "texture picker selection '{}' has no catalog-backed {:?} product",
+            stable_id, resource.kind
         ));
+    };
+    if artifact.validity != asset::ArtifactValidity::Valid {
+        return Err(format!(
+            "texture picker selection '{}' artifact {} is {:?}",
+            stable_id,
+            artifact.artifact_id.raw(),
+            artifact.validity
+        ));
+    }
+    let artifact_uri = match &artifact.payload_kind {
+        ArtifactPayloadKind::TextureProduct { artifact_uri, .. }
+        | ArtifactPayloadKind::GeneratedTextureProduct { artifact_uri, .. } => artifact_uri,
+        _ => unreachable!("artifact payload was matched above"),
+    };
+    if artifact_uri.is_none() {
+        return Err(format!(
+            "texture picker selection '{}' artifact {} has no artifact_uri",
+            stable_id,
+            artifact.artifact_id.raw()
+        ));
+    }
     Ok(())
-}
-
-fn delete_material_graph_nodes(document: &mut MaterialGraphDocument, node_ids: &[graph::NodeId]) {
-    let node_ids = node_ids
-        .iter()
-        .copied()
-        .collect::<std::collections::BTreeSet<_>>();
-    let deleted_ports = document
-        .graph
-        .nodes
-        .iter()
-        .filter(|node| node_ids.contains(&node.id))
-        .flat_map(|node| node.ports.iter().map(|port| port.id))
-        .collect::<std::collections::BTreeSet<_>>();
-    document
-        .graph
-        .nodes
-        .retain(|node| !node_ids.contains(&node.id));
-    document.graph.edges.retain(|edge| {
-        !deleted_ports.contains(&edge.from_port) && !deleted_ports.contains(&edge.to_port)
-    });
-    document
-        .editor_state
-        .node_layouts
-        .retain(|layout| !node_ids.contains(&layout.node_id));
-}
-
-fn set_node_graph_value(node: &mut graph::NodeDefinition, key: &str, value: graph::GraphValue) {
-    if let Some(entry) = node.values.iter_mut().find(|entry| entry.key == key) {
-        entry.value = value;
-    } else {
-        node.values
-            .push(graph::GraphMetadataEntry::new(key.to_string(), value));
-    }
-}
-
-fn next_node_id(document: &MaterialGraphDocument) -> graph::NodeId {
-    graph::NodeId::new(
-        document
-            .graph
-            .nodes
-            .iter()
-            .map(|node| node.id.raw())
-            .max()
-            .unwrap_or(0)
-            + 1,
-    )
-}
-
-fn next_port_id(document: &MaterialGraphDocument) -> graph::PortId {
-    graph::PortId::new(
-        document
-            .graph
-            .nodes
-            .iter()
-            .flat_map(|node| node.ports.iter().map(|port| port.id.raw()))
-            .max()
-            .unwrap_or(0)
-            + 1,
-    )
-}
-
-fn next_edge_id(document: &MaterialGraphDocument) -> graph::EdgeId {
-    graph::EdgeId::new(
-        document
-            .graph
-            .edges
-            .iter()
-            .map(|edge| edge.id.raw())
-            .max()
-            .unwrap_or(0)
-            + 1,
-    )
 }
 
 pub fn rebuild_material_preview_for_asset(
@@ -1062,6 +1177,37 @@ fn material_graph_diagnostic(
         AssetDiagnosticCode::RatificationRejected,
         format!("material graph rejected {code:?} {subject:?}: {message}"),
     )
+    .with_subject(material_graph_diagnostic_subject(subject))
+}
+
+fn material_graph_diagnostic_subject(subject: &MaterialGraphIssueSubject) -> String {
+    match subject {
+        MaterialGraphIssueSubject::Document => "material_graph.document".to_string(),
+        MaterialGraphIssueSubject::Graph => "material_graph.graph".to_string(),
+        MaterialGraphIssueSubject::Node(node_id) => {
+            format!("material_graph.node:{}", node_id.raw())
+        }
+        MaterialGraphIssueSubject::Output => "material_graph.output".to_string(),
+    }
+}
+
+fn material_graph_subject_from_diagnostic(
+    subject: Option<&str>,
+) -> (Option<graph::NodeId>, Option<graph::PortId>) {
+    let Some(subject) = subject else {
+        return (None, None);
+    };
+    if let Some(raw) = subject.strip_prefix("material_graph.node:")
+        && let Ok(node_id) = raw.parse::<u64>()
+    {
+        return (Some(graph::NodeId::new(node_id)), None);
+    }
+    if let Some(raw) = subject.strip_prefix("material_graph.port:")
+        && let Ok(port_id) = raw.parse::<u64>()
+    {
+        return (None, Some(graph::PortId::new(port_id)));
+    }
+    (None, None)
 }
 
 fn material_diagnostic(
@@ -1131,13 +1277,335 @@ fn absolute_source_path(project_root: &Path, source: &AssetSourceDescriptor) -> 
 mod tests {
     use super::*;
     use asset::{
-        AssetProjectCatalogDescriptor, AssetRecord, AssetSourceDescriptor, AssetSourceRoot,
-        AssetSourceRootKind, ImportSettings, SourceHash, asset_artifact_id, asset_id,
-        asset_source_id, asset_source_root_id,
+        AssetDiagnosticCode, AssetDiagnosticRecord, AssetProjectCatalogDescriptor, AssetRecord,
+        AssetSourceDescriptor, AssetSourceRoot, AssetSourceRootKind, ImportSettings, SourceHash,
+        asset_artifact_id, asset_id, asset_source_id, asset_source_root_id,
     };
     use editor_persistence::{
         ProjectFileV3, ProjectImportProfileDefaultV3, ProjectImportProfileDefinitionV3,
     };
+    use texture::{TextureDescriptor, TextureDimension, TextureExtent, TextureProductId};
+
+    #[test]
+    fn material_graph_node_move_persists_source_layout() {
+        let mut document = command_test_document();
+
+        let changed = apply_material_document_action(
+            &mut document,
+            &[],
+            &[],
+            &MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 40,
+                delta_y: -12,
+            },
+        )
+        .expect("node move should be accepted");
+
+        assert!(changed);
+        let restored = material_graph::MaterialGraphSourceFileV2::from_document(&document)
+            .into_document()
+            .expect("source should round-trip");
+        assert_eq!(
+            restored.editor_state.node_layouts,
+            vec![material_graph::MaterialGraphNodeLayout::new(
+                graph::NodeId::new(1),
+                40,
+                -12
+            )]
+        );
+    }
+
+    #[test]
+    fn material_graph_connect_ports_mutates_source_graph() {
+        let mut document = command_test_document();
+
+        apply_material_document_action(
+            &mut document,
+            &[],
+            &[],
+            &MaterialSurfaceAction::ConnectPorts {
+                from_port_id: graph::PortId::new(1),
+                to_port_id: graph::PortId::new(2),
+            },
+        )
+        .expect("compatible ports should connect");
+
+        assert_eq!(
+            document.graph.edges,
+            vec![graph::EdgeDefinition::new(
+                graph::EdgeId::new(1),
+                graph::PortId::new(1),
+                graph::PortId::new(2)
+            )]
+        );
+    }
+
+    #[test]
+    fn material_graph_disconnect_edge_mutates_source_graph() {
+        let mut document = command_test_document();
+        material_graph::connect_ports(&mut document, graph::PortId::new(1), graph::PortId::new(2))
+            .expect("setup edge");
+
+        apply_material_document_action(
+            &mut document,
+            &[],
+            &[],
+            &MaterialSurfaceAction::DisconnectEdge {
+                edge_id: graph::EdgeId::new(1),
+            },
+        )
+        .expect("edge disconnect should be accepted");
+
+        assert!(document.graph.edges.is_empty());
+    }
+
+    #[test]
+    fn material_graph_property_edit_mutates_source_graph() {
+        let mut document = command_test_document();
+
+        apply_material_document_action(
+            &mut document,
+            &[],
+            &[],
+            &MaterialSurfaceAction::SetNodeValue {
+                node_id: graph::NodeId::new(1),
+                key: "roughness".to_string(),
+                value: "0.25".to_string(),
+            },
+        )
+        .expect("property edit should be accepted");
+
+        let value = document.graph.nodes[0]
+            .value("roughness")
+            .expect("node value should be present");
+        assert_eq!(value, &graph::GraphValue::Text("0.25".to_string()));
+    }
+
+    #[test]
+    fn material_graph_texture_ref_edit_mutates_source_graph() {
+        let mut document = texture_edit_command_document();
+
+        apply_material_document_action(
+            &mut document,
+            &[],
+            &[],
+            &MaterialSurfaceAction::PickTextureResource {
+                node_id: graph::NodeId::new(1),
+                key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
+                stable_id: "rock.albedo".to_string(),
+            },
+        )
+        .expect("texture ref edit should be accepted");
+
+        let value = document.graph.nodes[0]
+            .value(material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF)
+            .expect("texture ref should be present");
+        let graph::GraphValue::Resource(reference) = value else {
+            panic!("texture ref should be stored as a resource value");
+        };
+        assert_eq!(reference.kind.as_str(), "asset.catalog.texture2d");
+        assert_eq!(reference.stable_id.as_str(), "rock.albedo");
+    }
+
+    #[test]
+    fn material_graph_node_drag_is_one_undo_transaction() {
+        let root = unique_temp_dir("material_graph_node_drag_undo");
+        let asset_id = asset_id(41);
+        let source_id = asset_source_id(42);
+        let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
+
+        app.apply_material_surface_action(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 10,
+            delta_y: 4,
+        })
+        .expect("drag commit should apply as one material edit");
+
+        assert!(app.material_lab_runtime().can_undo());
+        app.apply_material_surface_action(MaterialSurfaceAction::UndoMaterialEdit)
+            .expect("one undo should roll back the drag commit");
+
+        let document = app
+            .load_material_graph_document_for_asset(asset_id)
+            .expect("document should reload after undo");
+        assert!(document.editor_state.node_layouts.is_empty());
+        assert!(
+            !app.material_lab_runtime().can_undo(),
+            "node drag commit must create exactly one undo snapshot"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn material_graph_property_edit_groups_commit_correctly() {
+        let root = unique_temp_dir("material_graph_property_edit_undo");
+        let asset_id = asset_id(51);
+        let source_id = asset_source_id(52);
+        let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
+
+        app.apply_material_surface_action(MaterialSurfaceAction::SetNodeValue {
+            node_id: graph::NodeId::new(1),
+            key: "roughness".to_string(),
+            value: "0.25".to_string(),
+        })
+        .expect("property commit should apply as one material edit");
+
+        assert!(app.material_lab_runtime().can_undo());
+        app.apply_material_surface_action(MaterialSurfaceAction::UndoMaterialEdit)
+            .expect("one undo should roll back the property commit");
+
+        let document = app
+            .load_material_graph_document_for_asset(asset_id)
+            .expect("document should reload after undo");
+        assert_eq!(document.graph.nodes[0].value("roughness"), None);
+        assert!(
+            !app.material_lab_runtime().can_undo(),
+            "property commit must create exactly one undo snapshot"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn material_graph_texture_picker_selection_updates_source_ref() {
+        let root = unique_temp_dir("material_graph_texture_picker_select");
+        let material_asset_id = asset_id(61);
+        let source_id = asset_source_id(62);
+        let mut app = material_edit_app(
+            &root,
+            material_asset_id,
+            source_id,
+            texture_edit_command_document(),
+        );
+        insert_texture_product(
+            app.asset_catalog_runtime_mut().catalog_mut(),
+            asset_id(63),
+            asset_artifact_id(64),
+            "rock.albedo",
+            "Rock Albedo",
+            65,
+            TextureDimension::Texture2D,
+        );
+
+        app.apply_material_surface_action(MaterialSurfaceAction::PickTextureResource {
+            node_id: graph::NodeId::new(1),
+            key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
+            stable_id: "rock.albedo".to_string(),
+        })
+        .expect("catalog-backed texture picker selection should update source ref");
+
+        let document = app
+            .load_material_graph_document_for_asset(material_asset_id)
+            .expect("edited material document should reload");
+        let value = document.graph.nodes[0]
+            .value(material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF)
+            .expect("texture ref should be present");
+        let graph::GraphValue::Resource(reference) = value else {
+            panic!("texture picker should write a resource ref");
+        };
+        assert_eq!(reference.kind.as_str(), "asset.catalog.texture2d");
+        assert_eq!(reference.stable_id.as_str(), "rock.albedo");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn material_graph_texture_picker_rejects_missing_texture_product() {
+        let root = unique_temp_dir("material_graph_texture_picker_missing");
+        let asset_id = asset_id(66);
+        let source_id = asset_source_id(67);
+        let mut app =
+            material_edit_app(&root, asset_id, source_id, texture_edit_command_document());
+
+        let result =
+            app.apply_material_surface_action(MaterialSurfaceAction::PickTextureResource {
+                node_id: graph::NodeId::new(1),
+                key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
+                stable_id: "missing.albedo".to_string(),
+            });
+
+        assert!(result.is_err());
+        assert!(
+            app.material_lab_runtime()
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| { diagnostic.message.contains("not a catalog texture asset") })
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn material_graph_node_picker_confirm_adds_highlighted_node_to_source() {
+        let root = unique_temp_dir("material_graph_node_picker_confirm");
+        let asset_id = asset_id(68);
+        let source_id = asset_source_id(69);
+        let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
+
+        app.apply_material_surface_action(MaterialSurfaceAction::OpenNodePicker)
+            .expect("node picker should open");
+        app.apply_material_surface_action(MaterialSurfaceAction::HighlightNodePickerNode {
+            descriptor_key: "pbr.base_color".to_string(),
+        })
+        .expect("catalog node should highlight");
+        app.apply_material_surface_action(MaterialSurfaceAction::ConfirmNodePickerSelection)
+            .expect("highlighted catalog node should be added through source-backed workflow");
+
+        let document = app
+            .load_material_graph_document_for_asset(asset_id)
+            .expect("edited material document should reload");
+        assert!(
+            document
+                .graph
+                .nodes
+                .iter()
+                .any(|node| node.name == "pbr.base_color"),
+            "modal confirmation must route through AddGraphNode and persist the source file",
+        );
+        assert!(
+            !app.material_lab_runtime()
+                .graph_canvas_view_model(&AssetCatalog::new(), Vec::new())
+                .node_picker
+                .open,
+            "successful modal confirmation should close the node picker",
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn material_graph_navigate_diagnostic_selects_and_centers_subject() {
+        let root = unique_temp_dir("material_graph_navigate_diagnostic");
+        let asset_id = asset_id(70);
+        let source_id = asset_source_id(71);
+        let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
+        app.material_lab_runtime_mut().record_diagnostic(
+            AssetDiagnosticRecord::error(
+                AssetDiagnosticCode::RatificationRejected,
+                "roughness input is missing",
+            )
+            .with_subject("material_graph.port:2"),
+        );
+
+        app.apply_material_surface_action(MaterialSurfaceAction::NavigateDiagnostic {
+            diagnostic_index: 0,
+        })
+        .expect("diagnostic navigation should load and persist source viewport state");
+
+        let document = app
+            .load_material_graph_document_for_asset(asset_id)
+            .expect("material document should reload after navigation");
+        assert_eq!(
+            app.material_lab_runtime().active_diagnostic_index(),
+            Some(0)
+        );
+        assert!(
+            app.material_lab_runtime()
+                .selected_graph_nodes()
+                .contains(&graph::NodeId::new(2)),
+            "port diagnostic navigation should select the owning node",
+        );
+        assert_eq!(document.editor_state.viewport.pan_x, 100);
+        assert_eq!(document.editor_state.viewport.pan_y, 220);
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn material_preview_build_lowers_source_document_and_queues_publication() {
@@ -1492,6 +1960,142 @@ mod tests {
                 profile_name,
             ));
         project
+    }
+
+    fn command_test_document() -> MaterialGraphDocument {
+        use graph::{
+            CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId, PortDefinition,
+            PortDirection, PortId,
+        };
+        let float = material_graph::MaterialValueType::Float.port_type_id();
+        MaterialGraphDocument::new(
+            material_graph::MaterialGraphDocumentId::new(77),
+            "Command Test",
+            GraphDefinition::new(
+                GraphId::new(1),
+                "material.command",
+                CyclePolicy::RejectDirectedCycles,
+                [
+                    NodeDefinition::new(
+                        NodeId::new(1),
+                        "pbr.roughness",
+                        [PortDefinition::new(
+                            PortId::new(1),
+                            "value",
+                            PortDirection::Output,
+                            float,
+                        )],
+                    ),
+                    NodeDefinition::new(
+                        NodeId::new(2),
+                        "pbr.output",
+                        [PortDefinition::new(
+                            PortId::new(2),
+                            "roughness",
+                            PortDirection::Input,
+                            float,
+                        )],
+                    ),
+                ],
+                [],
+            ),
+            MaterialOutputTarget::RenderMaterial,
+        )
+    }
+
+    fn material_edit_app(
+        root: &std::path::Path,
+        asset_id: AssetId,
+        source_id: asset::AssetSourceId,
+        document: MaterialGraphDocument,
+    ) -> RunenwerkEditorApp {
+        let source = AssetSourceDescriptor::new(
+            source_id,
+            asset_id,
+            AssetKind::MaterialGraph,
+            "assets/materials/edit.material.ron",
+        )
+        .with_hash(SourceHash::new("sha256", "edit"));
+        write_material_graph_document(&root.join(&source.relative_path), &document)
+            .expect("material graph source should write");
+        let session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+            root,
+            &material_project_with_recipe("render", "render_material"),
+        )
+        .expect("project session should form");
+        let mut catalog = AssetCatalog::new();
+        catalog.insert_asset_record(
+            AssetRecord::new(asset_id, "edit", "Edit", AssetKind::MaterialGraph)
+                .with_primary_source(source_id),
+        );
+        catalog.insert_source(source);
+
+        let mut app = RunenwerkEditorApp::new();
+        app.set_asset_project_session(session);
+        app.asset_catalog_runtime_mut().replace_catalog(catalog);
+        app.material_lab_runtime_mut()
+            .select_material_asset(Some(asset_id));
+        app.material_lab_runtime_mut()
+            .set_active_source_document(asset_id, document);
+        app
+    }
+
+    fn texture_edit_command_document() -> MaterialGraphDocument {
+        use graph::{CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId};
+        MaterialGraphDocument::new(
+            material_graph::MaterialGraphDocumentId::new(78),
+            "Texture Edit",
+            GraphDefinition::new(
+                GraphId::new(1),
+                "material.texture_edit",
+                CyclePolicy::RejectDirectedCycles,
+                [NodeDefinition::new(NodeId::new(1), "texture.sample_2d", [])],
+                [],
+            ),
+            MaterialOutputTarget::RenderMaterial,
+        )
+    }
+
+    fn insert_texture_product(
+        catalog: &mut AssetCatalog,
+        asset_id: AssetId,
+        artifact_id: asset::AssetArtifactId,
+        stable_name: &str,
+        display_name: &str,
+        product_id: u64,
+        dimension: TextureDimension,
+    ) {
+        let depth = match dimension {
+            TextureDimension::Texture2D => 1,
+            TextureDimension::Texture3DVolume => 2,
+        };
+        let descriptor = TextureDescriptor::new(
+            TextureProductId::new(product_id),
+            display_name,
+            dimension,
+            TextureExtent::new(4, 4, depth),
+        );
+        let asset_kind = match dimension {
+            TextureDimension::Texture2D => AssetKind::Texture2D,
+            TextureDimension::Texture3DVolume => AssetKind::Texture3DVolume,
+        };
+        catalog.insert_asset_record(AssetRecord::new(
+            asset_id,
+            stable_name,
+            display_name,
+            asset_kind,
+        ));
+        catalog.insert_artifact(AssetArtifactDescriptor::new(
+            artifact_id,
+            asset_id,
+            asset_kind,
+            ArtifactPayloadKind::TextureProduct {
+                descriptor_hash: descriptor.descriptor_hash().to_string(),
+                descriptor,
+                artifact_uri: Some(format!(".runenwerk/artifacts/{stable_name}.ktx2")),
+            },
+            ArtifactCacheKey::new(format!("{stable_name}-cache")),
+        ));
     }
 
     fn texture_material_graph_document(

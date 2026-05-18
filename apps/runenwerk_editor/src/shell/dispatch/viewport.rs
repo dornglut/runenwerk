@@ -23,7 +23,7 @@ use crate::runtime::viewport::{
 };
 use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch::{
-    resolve_surface_command_contract, surface_capability_label, tool_surface_kind_label,
+    resolve_legacy_surface_command_contract, surface_capability_label, tool_surface_kind_label,
 };
 use crate::shell::surface_session::ViewportToolRadialSession;
 
@@ -34,7 +34,7 @@ pub(crate) fn dispatch_session_mutation(
     mutation: ViewportSessionMutation,
 ) -> Result<(), EditorMutationError> {
     let Some(surface_contract) =
-        resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::Viewport)
+        resolve_legacy_surface_command_contract(shell_state, target, ToolSurfaceKind::Viewport)
     else {
         app.append_console_line(
             "[viewport] session mutation ignored (missing structural tool-surface target)"
@@ -301,7 +301,7 @@ fn dispatch_select_product(
         return Ok(());
     };
     let Some(surface_contract) =
-        resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::Viewport)
+        resolve_legacy_surface_command_contract(shell_state, target, ToolSurfaceKind::Viewport)
     else {
         app.append_console_line(
             "[viewport] product selection ignored (missing structural tool-surface target)"
@@ -415,7 +415,7 @@ fn resolve_viewport_state_command_target(
     command_label: &'static str,
 ) -> Option<ViewportId> {
     let Some(surface_contract) =
-        resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::Viewport)
+        resolve_legacy_surface_command_contract(shell_state, target, ToolSurfaceKind::Viewport)
     else {
         app.append_console_line(format!(
             "[viewport] {command_label} ignored (missing structural tool-surface target)"

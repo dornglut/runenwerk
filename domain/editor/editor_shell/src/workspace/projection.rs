@@ -15,23 +15,25 @@ use crate::{
     INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID,
     OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
     OUTLINER_SCROLL_WIDGET_ID, PanelHostId, PanelHostKind, PanelInstanceId, PanelKind,
-    TabStackHostState, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, VIEWPORT_BODY_WIDGET_ID,
-    VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID,
-    VIEWPORT_SURFACE_EMBED_WIDGET_ID, WidgetId, WorkspaceSplitAxis, WorkspaceState,
-    WorkspaceStateError, floating_host_widget_id, surface_widget_id, tab_button_widget_id,
-    tab_drop_zone_widget_id, tab_strip_widget_id, workspace_split_handle_widget_id,
-    workspace_split_host_widget_id,
+    TabStackHostState, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceStableKey,
+    VIEWPORT_BODY_WIDGET_ID, VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID,
+    VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
+    WorkspaceState, WorkspaceStateError, floating_host_widget_id, surface_widget_id,
+    tab_button_widget_id, tab_drop_zone_widget_id, tab_strip_widget_id,
+    workspace_split_handle_widget_id, workspace_split_host_widget_id,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedPanelSlot {
     pub panel_instance_id: PanelInstanceId,
     pub panel_kind: PanelKind,
     pub active_tool_surface: Option<ToolSurfaceInstanceId>,
+    pub active_stable_surface_key: Option<ToolSurfaceStableKey>,
+    pub legacy_active_tool_surface_kind: Option<ToolSurfaceKind>,
     pub tab_stack_id: TabStackId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedTabButton {
     pub widget_id: WidgetId,
     pub panel: ProjectedPanelSlot,
@@ -50,7 +52,8 @@ pub struct ProjectedTabStackSlot {
     pub tabs: Vec<ProjectedTabButton>,
     pub drop_slots: Vec<ProjectedTabDropSlot>,
     pub active_panel: Option<ProjectedPanelSlot>,
-    pub locked_tool_surface_kind: Option<ToolSurfaceKind>,
+    pub locked_stable_surface_key: Option<ToolSurfaceStableKey>,
+    pub legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -145,7 +148,10 @@ pub fn project_workspace_for_shell(
             &mut tab_button_route_by_widget_id,
             &mut tab_drop_route_by_widget_id,
         );
-        register_active_panel_widget_contexts(&mut widget_context_by_id, stack_slot.active_panel);
+        register_active_panel_widget_contexts(
+            &mut widget_context_by_id,
+            stack_slot.active_panel.as_ref(),
+        );
     }
 
     for floating in &floating_hosts {
@@ -156,7 +162,7 @@ pub fn project_workspace_for_shell(
         );
         register_active_panel_widget_contexts(
             &mut widget_context_by_id,
-            floating.tab_stack.active_panel,
+            floating.tab_stack.active_panel.as_ref(),
         );
     }
 
@@ -275,7 +281,7 @@ fn register_tab_stack_routes(
 
 fn register_active_panel_widget_contexts(
     map: &mut BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
-    active_panel: Option<ProjectedPanelSlot>,
+    active_panel: Option<&ProjectedPanelSlot>,
 ) {
     let Some(panel) = active_panel else {
         return;
@@ -396,6 +402,14 @@ fn project_tab_stack_slot_by_id(
             panel_instance_id: panel.id,
             panel_kind: panel.panel_kind,
             active_tool_surface: panel.active_tool_surface,
+            active_stable_surface_key: panel
+                .active_tool_surface
+                .and_then(|surface_id| workspace_state.tool_surface(surface_id))
+                .map(|surface| surface.stable_surface_key().clone()),
+            legacy_active_tool_surface_kind: panel
+                .active_tool_surface
+                .and_then(|surface_id| workspace_state.tool_surface(surface_id))
+                .and_then(|surface| surface.legacy_tool_surface_kind()),
             tab_stack_id,
         };
         tabs.push(ProjectedTabButton {
@@ -407,7 +421,7 @@ fn project_tab_stack_slot_by_id(
     let active_panel = stack.active_panel.and_then(|active_id| {
         tabs.iter()
             .find(|tab| tab.panel.panel_instance_id == active_id)
-            .map(|tab| tab.panel)
+            .map(|tab| tab.panel.clone())
     });
 
     let drop_slots = (0..=tabs.len())
@@ -423,7 +437,8 @@ fn project_tab_stack_slot_by_id(
         tabs,
         drop_slots,
         active_panel,
-        locked_tool_surface_kind: stack.locked_tool_surface_kind,
+        locked_stable_surface_key: stack.locked_stable_surface_key.clone(),
+        legacy_locked_tool_surface_kind: stack.legacy_locked_tool_surface_kind,
     })
 }
 
@@ -450,6 +465,17 @@ mod tests {
             .find(|panel| panel.panel_kind == panel_kind)
             .and_then(|panel| panel.active_tool_surface)
             .expect("default panel should have an active tool surface")
+    }
+
+    fn projected_active_panel_by_kind(
+        artifact: &WorkspaceProjectionArtifact,
+        panel_kind: PanelKind,
+    ) -> &ProjectedPanelSlot {
+        projected_host_tab_stacks(&artifact.root_host)
+            .into_iter()
+            .filter_map(|stack| stack.active_panel.as_ref())
+            .find(|panel| panel.panel_kind == panel_kind)
+            .expect("projected active panel should exist")
     }
 
     #[test]
@@ -492,6 +518,64 @@ mod tests {
             5,
             "default layout should expose one tab button route per default panel"
         );
+    }
+
+    #[test]
+    fn projection_uses_stable_surface_key_as_authority() {
+        let workspace = bootstrap_workspace();
+        let viewport_surface = surface_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let expected_key = workspace
+            .tool_surface(viewport_surface)
+            .expect("viewport surface should exist")
+            .stable_surface_key()
+            .clone();
+
+        let artifact = project_workspace_for_shell(&workspace).expect("projection should succeed");
+        let viewport_panel = projected_active_panel_by_kind(&artifact, PanelKind::Viewport);
+
+        assert_eq!(
+            viewport_panel.active_stable_surface_key.as_ref(),
+            Some(&expected_key)
+        );
+        assert_eq!(
+            viewport_panel.legacy_active_tool_surface_kind,
+            Some(ToolSurfaceKind::Viewport)
+        );
+    }
+
+    #[test]
+    fn projection_legacy_kind_is_optional_metadata() {
+        let mut workspace = bootstrap_workspace();
+        let viewport_surface = surface_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let expected_key = workspace
+            .tool_surface(viewport_surface)
+            .expect("viewport surface should exist")
+            .stable_surface_key()
+            .clone();
+        workspace
+            .tool_surfaces_by_id
+            .get_mut(&viewport_surface)
+            .expect("viewport surface should be mutable")
+            .legacy_tool_surface_kind = None;
+
+        let artifact = project_workspace_for_shell(&workspace).expect("projection should succeed");
+        let viewport_panel = projected_active_panel_by_kind(&artifact, PanelKind::Viewport);
+
+        assert_eq!(
+            viewport_panel.active_stable_surface_key.as_ref(),
+            Some(&expected_key)
+        );
+        assert_eq!(viewport_panel.legacy_active_tool_surface_kind, None);
+    }
+
+    #[test]
+    fn panel_kind_remains_authoritative_in_c4() {
+        let workspace = bootstrap_workspace();
+        let artifact = project_workspace_for_shell(&workspace).expect("projection should succeed");
+
+        let viewport_panel = projected_active_panel_by_kind(&artifact, PanelKind::Viewport);
+
+        assert_eq!(viewport_panel.panel_kind, PanelKind::Viewport);
     }
 
     #[test]

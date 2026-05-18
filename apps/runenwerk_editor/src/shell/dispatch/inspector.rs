@@ -20,7 +20,7 @@ use crate::editor_runtime::{
 };
 use crate::shell::RunenwerkEditorShellState;
 use crate::shell::dispatch::{
-    resolve_surface_command_contract, surface_capability_label, tool_surface_kind_label,
+    resolve_legacy_surface_command_contract, surface_capability_label, tool_surface_kind_label,
 };
 
 const TRANSFORM_STEPPER_INCREMENT: f64 = 0.25;
@@ -31,7 +31,7 @@ pub(crate) fn dispatch_session_mutation(
     target: StructuralCommandTarget,
     mutation: InspectorSessionMutation,
 ) -> Result<(), EditorMutationError> {
-    let Some(surface_contract) = resolve_surface_command_contract(
+    let Some(surface_contract) = resolve_legacy_surface_command_contract(
         shell_state.as_deref(),
         target,
         ToolSurfaceKind::Inspector,
@@ -107,7 +107,7 @@ pub(crate) fn dispatch_session_mutation(
 fn dispatch_activate_field(
     app: &mut RunenwerkEditorApp,
     target: StructuralCommandTarget,
-    surface_contract: crate::shell::dispatch::ResolvedSurfaceCommandContract,
+    surface_contract: crate::shell::dispatch::LegacySurfaceCommandContract,
     index: usize,
 ) -> Result<(), EditorMutationError> {
     for required_capability in [SurfaceCapability::Observe, SurfaceCapability::Interact] {

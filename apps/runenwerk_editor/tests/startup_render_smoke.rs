@@ -267,29 +267,29 @@ fn split_viewport_resize_keeps_each_viewport_product_sized_to_its_embed() {
             .expect("editor host should exist");
         let viewport_stack_id = viewport_stack_id(&host.shell_state);
         host.shell_state
-            .apply_workspace_mutation_with_allocations(|allocator| {
+            .try_apply_workspace_mutation_with_allocations(|allocator| {
                 let split_host_id = allocator.allocate_panel_host_id();
                 let first_child_host_id = allocator.allocate_panel_host_id();
                 let second_child_host_id = allocator.allocate_panel_host_id();
                 let new_tab_stack_id = allocator.allocate_tab_stack_id();
                 let new_panel_id = allocator.allocate_panel_instance_id();
                 let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                (
-                    WorkspaceMutation::SplitTabStackArea {
-                        tab_stack_id: viewport_stack_id,
-                        axis: WorkspaceSplitAxis::Horizontal,
+                Ok((
+                    WorkspaceMutation::split_tab_stack_area_legacy(
+                        viewport_stack_id,
+                        WorkspaceSplitAxis::Horizontal,
                         split_host_id,
                         first_child_host_id,
                         second_child_host_id,
                         new_tab_stack_id,
                         new_panel_id,
-                        new_panel_kind: PanelKind::Viewport,
+                        PanelKind::Viewport,
                         new_tool_surface_id,
-                        new_tool_surface_kind: ToolSurfaceKind::Viewport,
-                        fraction: 0.50,
-                    },
+                        ToolSurfaceKind::Viewport,
+                        0.50,
+                    )?,
                     split_host_id,
-                )
+                ))
             })
             .expect("viewport split should be valid")
     };

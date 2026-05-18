@@ -6,9 +6,12 @@ use editor_viewport::{ViewportId, ViewportRuntimeSettings};
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
     PanelInstanceId, PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId,
-    TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState,
-    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    TabStackState, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceStableKey,
+    ToolSurfaceState, WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError,
+    tool_suite::stable_key_for_tool_surface_kind,
 };
+
+use super::state::is_viewport_stable_surface_key;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorkspaceMutation {
@@ -26,7 +29,8 @@ pub enum WorkspaceMutation {
         panel_id: PanelInstanceId,
         panel_kind: PanelKind,
         tool_surface_id: ToolSurfaceInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
         activate_panel: bool,
     },
     ClosePanelTab {
@@ -47,7 +51,8 @@ pub enum WorkspaceMutation {
         new_panel_id: PanelInstanceId,
         new_panel_kind: PanelKind,
         new_tool_surface_id: ToolSurfaceInstanceId,
-        new_tool_surface_kind: ToolSurfaceKind,
+        new_stable_surface_key: ToolSurfaceStableKey,
+        legacy_new_tool_surface_kind: Option<ToolSurfaceKind>,
         fraction: f32,
     },
     DuplicateTabStackArea {
@@ -61,12 +66,15 @@ pub enum WorkspaceMutation {
     ResetTabStackArea {
         tab_stack_id: TabStackId,
         panel_id: PanelInstanceId,
+        panel_kind: PanelKind,
         tool_surface_id: ToolSurfaceInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     },
-    LockTabStackAreaType {
+    LockTabStackAreaStableKey {
         tab_stack_id: TabStackId,
-        locked_tool_surface_kind: Option<ToolSurfaceKind>,
+        locked_stable_surface_key: Option<ToolSurfaceStableKey>,
+        legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
     },
     ApplySavedLayoutPreset {
         workspace_state: Box<WorkspaceState>,
@@ -90,10 +98,11 @@ pub enum WorkspaceMutation {
         tool_surface_id: ToolSurfaceInstanceId,
         viewport_settings: Option<ViewportRuntimeSettings>,
     },
-    ReplacePanelToolSurfaceKind {
+    ReplacePanelToolSurfaceStableKey {
         panel_id: PanelInstanceId,
         tool_surface_id: ToolSurfaceInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     },
     ReorderPanelInTabStack {
         tab_stack_id: TabStackId,
@@ -146,6 +155,121 @@ pub enum WorkspaceMutation {
         split_host_id: PanelHostId,
         fraction: f32,
     },
+}
+
+impl WorkspaceMutation {
+    pub fn add_panel_tab_legacy(
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+        panel_kind: PanelKind,
+        tool_surface_id: ToolSurfaceInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+        activate_panel: bool,
+    ) -> Result<Self, WorkspaceStateError> {
+        Ok(Self::AddPanelTab {
+            tab_stack_id,
+            panel_id,
+            panel_kind,
+            tool_surface_id,
+            stable_surface_key: stable_key_for_legacy_surface(tool_surface_kind)?,
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+            activate_panel,
+        })
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "legacy structural split wrapper carries explicit ids"
+    )]
+    pub fn split_tab_stack_area_legacy(
+        tab_stack_id: TabStackId,
+        axis: WorkspaceSplitAxis,
+        split_host_id: PanelHostId,
+        first_child_host_id: PanelHostId,
+        second_child_host_id: PanelHostId,
+        new_tab_stack_id: TabStackId,
+        new_panel_id: PanelInstanceId,
+        new_panel_kind: PanelKind,
+        new_tool_surface_id: ToolSurfaceInstanceId,
+        new_tool_surface_kind: ToolSurfaceKind,
+        fraction: f32,
+    ) -> Result<Self, WorkspaceStateError> {
+        Ok(Self::SplitTabStackArea {
+            tab_stack_id,
+            axis,
+            split_host_id,
+            first_child_host_id,
+            second_child_host_id,
+            new_tab_stack_id,
+            new_panel_id,
+            new_panel_kind,
+            new_tool_surface_id,
+            new_stable_surface_key: stable_key_for_legacy_surface(new_tool_surface_kind)?,
+            legacy_new_tool_surface_kind: Some(new_tool_surface_kind),
+            fraction,
+        })
+    }
+
+    pub fn reset_tab_stack_area_legacy(
+        tab_stack_id: TabStackId,
+        panel_id: PanelInstanceId,
+        tool_surface_id: ToolSurfaceInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+    ) -> Result<Self, WorkspaceStateError> {
+        Ok(Self::ResetTabStackArea {
+            tab_stack_id,
+            panel_id,
+            panel_kind: panel_kind_for_tool_surface(tool_surface_kind),
+            tool_surface_id,
+            stable_surface_key: stable_key_for_legacy_surface(tool_surface_kind)?,
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+        })
+    }
+
+    pub fn lock_tab_stack_area_type_legacy(
+        tab_stack_id: TabStackId,
+        locked_tool_surface_kind: Option<ToolSurfaceKind>,
+    ) -> Result<Self, WorkspaceStateError> {
+        Ok(Self::LockTabStackAreaStableKey {
+            tab_stack_id,
+            locked_stable_surface_key: locked_tool_surface_kind
+                .map(stable_key_for_legacy_surface)
+                .transpose()?,
+            legacy_locked_tool_surface_kind: locked_tool_surface_kind,
+        })
+    }
+
+    pub fn replace_panel_tool_surface_kind_legacy(
+        panel_id: PanelInstanceId,
+        tool_surface_id: ToolSurfaceInstanceId,
+        tool_surface_kind: ToolSurfaceKind,
+    ) -> Result<Self, WorkspaceStateError> {
+        Ok(Self::ReplacePanelToolSurfaceStableKey {
+            panel_id,
+            tool_surface_id,
+            stable_surface_key: stable_key_for_legacy_surface(tool_surface_kind)?,
+            legacy_tool_surface_kind: Some(tool_surface_kind),
+        })
+    }
+}
+
+fn stable_key_for_legacy_surface(
+    tool_surface_kind: ToolSurfaceKind,
+) -> Result<ToolSurfaceStableKey, WorkspaceStateError> {
+    stable_key_for_legacy_surface_with_resolver(tool_surface_kind, stable_key_for_tool_surface_kind)
+}
+
+fn stable_key_for_legacy_surface_with_resolver(
+    tool_surface_kind: ToolSurfaceKind,
+    stable_key_for_kind: impl FnOnce(ToolSurfaceKind) -> Option<ToolSurfaceStableKey>,
+) -> Result<ToolSurfaceStableKey, WorkspaceStateError> {
+    stable_key_for_kind(tool_surface_kind)
+        .ok_or(
+            crate::WorkspaceSurfaceIdentityError::UnmappedLegacySurface {
+                kind: tool_surface_kind,
+            },
+        )
+        .map_err(WorkspaceStateError::from)
 }
 
 pub fn reduce_workspace(
@@ -209,7 +333,8 @@ fn apply_mutation(
             panel_id,
             panel_kind,
             tool_surface_id,
-            tool_surface_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
             activate_panel,
         } => add_panel_tab(
             state,
@@ -217,7 +342,8 @@ fn apply_mutation(
             panel_id,
             panel_kind,
             tool_surface_id,
-            tool_surface_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
             activate_panel,
         )?,
         WorkspaceMutation::ClosePanelTab {
@@ -238,7 +364,8 @@ fn apply_mutation(
             new_panel_id,
             new_panel_kind,
             new_tool_surface_id,
-            new_tool_surface_kind,
+            new_stable_surface_key,
+            legacy_new_tool_surface_kind,
             fraction,
         } => split_tab_stack_area(
             state,
@@ -251,7 +378,8 @@ fn apply_mutation(
             new_panel_id,
             new_panel_kind,
             new_tool_surface_id,
-            new_tool_surface_kind,
+            new_stable_surface_key,
+            legacy_new_tool_surface_kind,
             fraction,
         )?,
         WorkspaceMutation::DuplicateTabStackArea {
@@ -265,24 +393,30 @@ fn apply_mutation(
         WorkspaceMutation::ResetTabStackArea {
             tab_stack_id,
             panel_id,
+            panel_kind,
             tool_surface_id,
-            tool_surface_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
         } => reset_tab_stack_area(
             state,
             tab_stack_id,
             panel_id,
+            panel_kind,
             tool_surface_id,
-            tool_surface_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
         )?,
-        WorkspaceMutation::LockTabStackAreaType {
+        WorkspaceMutation::LockTabStackAreaStableKey {
             tab_stack_id,
-            locked_tool_surface_kind,
+            locked_stable_surface_key,
+            legacy_locked_tool_surface_kind,
         } => {
-            state
+            let stack = state
                 .tab_stacks_by_id
                 .get_mut(&tab_stack_id)
-                .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?
-                .locked_tool_surface_kind = locked_tool_surface_kind;
+                .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
+            stack.locked_stable_surface_key = locked_stable_surface_key;
+            stack.legacy_locked_tool_surface_kind = legacy_locked_tool_surface_kind;
         }
         WorkspaceMutation::ApplySavedLayoutPreset { workspace_state } => {
             workspace_state.validate_integrity()?;
@@ -300,7 +434,6 @@ fn apply_mutation(
             let tool_surface = state
                 .tool_surfaces_by_id
                 .get(&tool_surface_id)
-                .copied()
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
 
             if let Some(existing) = panel.active_tool_surface
@@ -361,7 +494,6 @@ fn apply_mutation(
             let old_mount = state
                 .tool_surfaces_by_id
                 .get(&tool_surface_id)
-                .copied()
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?
                 .mount;
 
@@ -408,7 +540,7 @@ fn apply_mutation(
                 .get_mut(&tool_surface_id)
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
             if viewport_instance_id.is_some()
-                && surface.tool_surface_kind != ToolSurfaceKind::Viewport
+                && !is_viewport_stable_surface_key(surface.stable_surface_key())
             {
                 return Err(WorkspaceStateError::ProjectionShapeMismatch(
                     "viewport instance id can only be assigned to viewport tool surfaces",
@@ -424,7 +556,8 @@ fn apply_mutation(
                 .tool_surfaces_by_id
                 .get_mut(&tool_surface_id)
                 .ok_or(WorkspaceStateError::MissingToolSurface(tool_surface_id))?;
-            if viewport_settings.is_some() && surface.tool_surface_kind != ToolSurfaceKind::Viewport
+            if viewport_settings.is_some()
+                && !is_viewport_stable_surface_key(surface.stable_surface_key())
             {
                 return Err(WorkspaceStateError::ProjectionShapeMismatch(
                     "viewport settings can only be assigned to viewport tool surfaces",
@@ -432,17 +565,18 @@ fn apply_mutation(
             }
             surface.viewport_settings = viewport_settings;
         }
-        WorkspaceMutation::ReplacePanelToolSurfaceKind {
+        WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
             panel_id,
             tool_surface_id,
-            tool_surface_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
         } => {
             if let Some(tab_stack_id) = tab_stack_id_for_panel(state, panel_id)
-                && let Some(locked_kind) = state
+                && let Some(locked_key) = state
                     .tab_stacks_by_id
                     .get(&tab_stack_id)
-                    .and_then(|stack| stack.locked_tool_surface_kind)
-                && locked_kind != tool_surface_kind
+                    .and_then(|stack| stack.locked_stable_surface_key.as_ref())
+                && locked_key != &stable_surface_key
             {
                 return Err(WorkspaceStateError::ProjectionShapeMismatch(
                     "surface switch violates locked area type",
@@ -468,13 +602,12 @@ fn apply_mutation(
 
             state.tool_surfaces_by_id.insert(
                 tool_surface_id,
-                ToolSurfaceState {
-                    id: tool_surface_id,
-                    tool_surface_kind,
-                    mount: ToolSurfaceMount::Mounted { panel_id },
-                    viewport_instance_id: None,
-                    viewport_settings: None,
-                },
+                ToolSurfaceState::new_with_stable_key(
+                    tool_surface_id,
+                    stable_surface_key,
+                    legacy_tool_surface_kind,
+                    ToolSurfaceMount::Mounted { panel_id },
+                ),
             );
             state
                 .panels_by_id
@@ -612,7 +745,8 @@ fn add_panel_tab(
     panel_id: PanelInstanceId,
     panel_kind: PanelKind,
     tool_surface_id: ToolSurfaceInstanceId,
-    tool_surface_kind: ToolSurfaceKind,
+    stable_surface_key: ToolSurfaceStableKey,
+    legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     activate_panel: bool,
 ) -> Result<(), WorkspaceStateError> {
     if state.panels_by_id.contains_key(&panel_id) {
@@ -625,8 +759,8 @@ fn add_panel_tab(
         .tab_stacks_by_id
         .get_mut(&tab_stack_id)
         .ok_or(WorkspaceStateError::MissingTabStack(tab_stack_id))?;
-    if let Some(locked_kind) = stack.locked_tool_surface_kind
-        && locked_kind != tool_surface_kind
+    if let Some(locked_key) = stack.locked_stable_surface_key.as_ref()
+        && locked_key != &stable_surface_key
     {
         return Err(WorkspaceStateError::ProjectionShapeMismatch(
             "new tab violates locked area type",
@@ -643,13 +777,12 @@ fn add_panel_tab(
     );
     state.tool_surfaces_by_id.insert(
         tool_surface_id,
-        ToolSurfaceState {
-            id: tool_surface_id,
-            tool_surface_kind,
-            mount: ToolSurfaceMount::Mounted { panel_id },
-            viewport_instance_id: None,
-            viewport_settings: None,
-        },
+        ToolSurfaceState::new_with_stable_key(
+            tool_surface_id,
+            stable_surface_key,
+            legacy_tool_surface_kind,
+            ToolSurfaceMount::Mounted { panel_id },
+        ),
     );
     stack.ordered_panels.push(panel_id);
     if activate_panel || stack.active_panel.is_none() {
@@ -744,7 +877,8 @@ fn split_tab_stack_area(
     new_panel_id: PanelInstanceId,
     new_panel_kind: PanelKind,
     new_tool_surface_id: ToolSurfaceInstanceId,
-    new_tool_surface_kind: ToolSurfaceKind,
+    new_stable_surface_key: ToolSurfaceStableKey,
+    legacy_new_tool_surface_kind: Option<ToolSurfaceKind>,
     fraction: f32,
 ) -> Result<(), WorkspaceStateError> {
     if !(fraction > 0.0 && fraction < 1.0 && fraction.is_finite()) {
@@ -811,7 +945,8 @@ fn split_tab_stack_area(
             id: new_tab_stack_id,
             ordered_panels: vec![new_panel_id],
             active_panel: Some(new_panel_id),
-            locked_tool_surface_kind: None,
+            locked_stable_surface_key: None,
+            legacy_locked_tool_surface_kind: None,
         },
     );
     state.panels_by_id.insert(
@@ -824,15 +959,14 @@ fn split_tab_stack_area(
     );
     state.tool_surfaces_by_id.insert(
         new_tool_surface_id,
-        ToolSurfaceState {
-            id: new_tool_surface_id,
-            tool_surface_kind: new_tool_surface_kind,
-            mount: ToolSurfaceMount::Mounted {
+        ToolSurfaceState::new_with_stable_key(
+            new_tool_surface_id,
+            new_stable_surface_key,
+            legacy_new_tool_surface_kind,
+            ToolSurfaceMount::Mounted {
                 panel_id: new_panel_id,
             },
-            viewport_instance_id: None,
-            viewport_settings: None,
-        },
+        ),
     );
     Ok(())
 }
@@ -855,20 +989,29 @@ fn duplicate_tab_stack_area(
     let source_surface = source_panel
         .active_tool_surface
         .and_then(|surface_id| state.tool_surfaces_by_id.get(&surface_id))
-        .copied();
-    let source_surface_kind = source_surface
-        .map(|surface| surface.tool_surface_kind)
-        .unwrap_or(ToolSurfaceKind::Placeholder);
+        .cloned();
+    let source_stable_surface_key = match source_surface.as_ref() {
+        Some(surface) => surface.stable_surface_key().clone(),
+        None => stable_key_for_legacy_surface(ToolSurfaceKind::Placeholder)?,
+    };
+    let legacy_source_surface_kind = source_surface
+        .as_ref()
+        .and_then(ToolSurfaceState::legacy_tool_surface_kind)
+        .or(Some(ToolSurfaceKind::Placeholder));
     add_panel_tab(
         state,
         tab_stack_id,
         new_panel_id,
         source_panel.panel_kind,
         new_tool_surface_id,
-        source_surface_kind,
+        source_stable_surface_key,
+        legacy_source_surface_kind,
         true,
     )?;
-    if source_surface_kind == ToolSurfaceKind::Viewport
+    if state
+        .tool_surfaces_by_id
+        .get(&new_tool_surface_id)
+        .is_some_and(|surface| is_viewport_stable_surface_key(surface.stable_surface_key()))
         && let Some(settings) = source_surface.and_then(|surface| surface.viewport_settings)
         && let Some(target_surface) = state.tool_surfaces_by_id.get_mut(&new_tool_surface_id)
     {
@@ -881,8 +1024,10 @@ fn reset_tab_stack_area(
     state: &mut WorkspaceState,
     tab_stack_id: TabStackId,
     panel_id: PanelInstanceId,
+    panel_kind: PanelKind,
     tool_surface_id: ToolSurfaceInstanceId,
-    tool_surface_kind: ToolSurfaceKind,
+    stable_surface_key: ToolSurfaceStableKey,
+    legacy_tool_surface_kind: Option<ToolSurfaceKind>,
 ) -> Result<(), WorkspaceStateError> {
     let existing_panels = state
         .tab_stacks_by_id
@@ -905,9 +1050,10 @@ fn reset_tab_stack_area(
         state,
         tab_stack_id,
         panel_id,
-        panel_kind_for_tool_surface(tool_surface_kind),
+        panel_kind,
         tool_surface_id,
-        tool_surface_kind,
+        stable_surface_key,
+        legacy_tool_surface_kind,
         true,
     )
 }
@@ -952,7 +1098,8 @@ fn close_tab_stack_area(
                 id: tab_stack_id,
                 ordered_panels: Vec::new(),
                 active_panel: None,
-                locked_tool_surface_kind: None,
+                locked_stable_surface_key: None,
+                legacy_locked_tool_surface_kind: None,
             },
         );
         return Ok(());
@@ -1289,7 +1436,8 @@ fn move_panel_to_new_split_area(
             id: new_tab_stack_id,
             ordered_panels: vec![panel_id],
             active_panel: Some(panel_id),
-            locked_tool_surface_kind: None,
+            locked_stable_surface_key: None,
+            legacy_locked_tool_surface_kind: None,
         },
     );
     Ok(())
@@ -1401,7 +1549,8 @@ fn move_panel_to_new_host_split_area(
             id: new_tab_stack_id,
             ordered_panels: vec![panel_id],
             active_panel: Some(panel_id),
-            locked_tool_surface_kind: None,
+            locked_stable_surface_key: None,
+            legacy_locked_tool_surface_kind: None,
         },
     );
     cleanup_empty_tab_stack_area(state, source_tab_stack_id)?;
@@ -1456,7 +1605,8 @@ fn move_panel_to_new_floating_host(
             id: floating_tab_stack_id,
             ordered_panels: vec![panel_id],
             active_panel: Some(panel_id),
-            locked_tool_surface_kind: None,
+            locked_stable_surface_key: None,
+            legacy_locked_tool_surface_kind: None,
         },
     );
     state.hosts_by_id.insert(
@@ -1566,8 +1716,104 @@ mod tests {
             .id
     }
 
+    fn stable_key_for_test(kind: ToolSurfaceKind) -> ToolSurfaceStableKey {
+        stable_key_for_tool_surface_kind(kind).expect("test surface kind should have stable key")
+    }
+
     #[test]
-    fn compaction_collapses_persisted_empty_docked_tab_stack_areas() {
+    fn stable_key_add_tab_matches_legacy_add_tab_behavior() {
+        let workspace = bootstrap_workspace();
+        let console_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Console);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let stable = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::AddPanelTab {
+                tab_stack_id: console_stack,
+                panel_id,
+                panel_kind: PanelKind::Inspector,
+                tool_surface_id: surface_id,
+                stable_surface_key: stable_key_for_test(ToolSurfaceKind::Inspector),
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
+                activate_panel: true,
+            },
+        )
+        .expect("stable-key add-tab mutation should succeed");
+
+        let legacy = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::add_panel_tab_legacy(
+                console_stack,
+                panel_id,
+                PanelKind::Inspector,
+                surface_id,
+                ToolSurfaceKind::Inspector,
+                true,
+            )
+            .expect("legacy wrapper should create add-tab mutation"),
+        )
+        .expect("legacy add-tab wrapper should succeed");
+
+        assert_eq!(stable, legacy);
+    }
+
+    #[test]
+    fn legacy_mutation_wrappers_produce_same_workspace_graph() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let split_host_id = allocator.allocate_panel_host_id();
+        let first_child_host_id = allocator.allocate_panel_host_id();
+        let second_child_host_id = allocator.allocate_panel_host_id();
+        let new_tab_stack_id = allocator.allocate_tab_stack_id();
+        let new_panel_id = allocator.allocate_panel_instance_id();
+        let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let stable = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::SplitTabStackArea {
+                tab_stack_id: viewport_stack,
+                axis: WorkspaceSplitAxis::Horizontal,
+                split_host_id,
+                first_child_host_id,
+                second_child_host_id,
+                new_tab_stack_id,
+                new_panel_id,
+                new_panel_kind: PanelKind::Inspector,
+                new_tool_surface_id: new_surface_id,
+                new_stable_surface_key: stable_key_for_test(ToolSurfaceKind::Inspector),
+                legacy_new_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
+                fraction: 0.5,
+            },
+        )
+        .expect("stable-key split should succeed");
+
+        let legacy = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::split_tab_stack_area_legacy(
+                viewport_stack,
+                WorkspaceSplitAxis::Horizontal,
+                split_host_id,
+                first_child_host_id,
+                second_child_host_id,
+                new_tab_stack_id,
+                new_panel_id,
+                PanelKind::Inspector,
+                new_surface_id,
+                ToolSurfaceKind::Inspector,
+                0.5,
+            )
+            .expect("legacy wrapper should create split mutation"),
+        )
+        .expect("legacy split should succeed");
+
+        assert_eq!(stable, legacy);
+    }
+
+    #[test]
+    fn stable_key_split_preserves_structural_identity() {
         let workspace = bootstrap_workspace();
         let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
         let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
@@ -1590,9 +1836,322 @@ mod tests {
                 new_panel_id,
                 new_panel_kind: PanelKind::Console,
                 new_tool_surface_id: new_surface_id,
-                new_tool_surface_kind: ToolSurfaceKind::Console,
-                fraction: 0.72,
+                new_stable_surface_key: stable_key_for_test(ToolSurfaceKind::Console),
+                legacy_new_tool_surface_kind: Some(ToolSurfaceKind::Console),
+                fraction: 0.45,
             },
+        )
+        .expect("stable-key split should create a valid graph");
+
+        assert!(split.host(split_host_id).is_some());
+        assert_eq!(
+            split
+                .tab_stack(new_tab_stack_id)
+                .expect("new stack should exist")
+                .ordered_panels,
+            vec![new_panel_id]
+        );
+        assert_eq!(
+            split
+                .tool_surface(new_surface_id)
+                .expect("new surface should exist")
+                .stable_surface_key()
+                .as_str(),
+            "runenwerk.editor.console"
+        );
+    }
+
+    #[test]
+    fn stable_key_reset_preserves_structural_identity() {
+        let workspace = bootstrap_workspace();
+        let inspector_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Inspector);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let reset = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::ResetTabStackArea {
+                tab_stack_id: inspector_stack,
+                panel_id,
+                panel_kind: PanelKind::Console,
+                tool_surface_id: surface_id,
+                stable_surface_key: stable_key_for_test(ToolSurfaceKind::Console),
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Console),
+            },
+        )
+        .expect("stable-key reset should succeed");
+
+        assert_eq!(
+            reset
+                .tab_stack(inspector_stack)
+                .expect("stack should exist")
+                .ordered_panels,
+            vec![panel_id]
+        );
+        assert_eq!(
+            reset
+                .panel(panel_id)
+                .expect("panel should exist")
+                .active_tool_surface,
+            Some(surface_id)
+        );
+    }
+
+    #[test]
+    fn stable_key_close_preserves_structural_identity() {
+        let workspace = bootstrap_workspace();
+        let outliner_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Outliner);
+        let outliner_panel = panel_id_by_kind(&workspace, PanelKind::Outliner);
+
+        let closed = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::ClosePanelTab {
+                tab_stack_id: outliner_stack,
+                panel_id: outliner_panel,
+            },
+        )
+        .expect("close should preserve remaining graph validity");
+
+        assert!(closed.panel(outliner_panel).is_none());
+        assert!(closed.tab_stack(outliner_stack).is_some());
+    }
+
+    #[test]
+    fn stable_key_replace_surface_preserves_panel_identity() {
+        let workspace = bootstrap_workspace();
+        let inspector_panel = panel_id_by_kind(&workspace, PanelKind::Inspector);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let replaced = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
+                panel_id: inspector_panel,
+                tool_surface_id: new_surface_id,
+                stable_surface_key: stable_key_for_test(ToolSurfaceKind::Console),
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Console),
+            },
+        )
+        .expect("stable-key replace should succeed");
+
+        assert_eq!(
+            replaced
+                .panel(inspector_panel)
+                .expect("panel identity should remain")
+                .active_tool_surface,
+            Some(new_surface_id)
+        );
+    }
+
+    #[test]
+    fn stable_key_lock_rejects_incompatible_surface_switch() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let viewport_panel = panel_id_by_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let locked = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaStableKey {
+                tab_stack_id: viewport_stack,
+                locked_stable_surface_key: Some(stable_key_for_test(ToolSurfaceKind::Viewport)),
+                legacy_locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            },
+        )
+        .expect("stable-key lock should succeed");
+
+        let error = reduce_workspace(
+            &locked,
+            WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
+                panel_id: viewport_panel,
+                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
+                stable_surface_key: stable_key_for_test(ToolSurfaceKind::Inspector),
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
+            },
+        )
+        .expect_err("incompatible stable-key switch should fail");
+
+        assert!(matches!(
+            error,
+            WorkspaceStateError::ProjectionShapeMismatch(_)
+        ));
+    }
+
+    #[test]
+    fn reducer_normal_paths_store_stable_key_authority() {
+        let workspace = bootstrap_workspace();
+        let console_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Console);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+        let key = stable_key_for_test(ToolSurfaceKind::Inspector);
+
+        let reduced = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::AddPanelTab {
+                tab_stack_id: console_stack,
+                panel_id,
+                panel_kind: PanelKind::Inspector,
+                tool_surface_id: surface_id,
+                stable_surface_key: key.clone(),
+                legacy_tool_surface_kind: None,
+                activate_panel: true,
+            },
+        )
+        .expect("stable-key add-tab mutation should not require legacy kind");
+
+        let surface = reduced
+            .tool_surface(surface_id)
+            .expect("stable-key surface should exist");
+        assert_eq!(surface.stable_surface_key(), &key);
+        assert_eq!(surface.legacy_tool_surface_kind(), None);
+    }
+
+    #[test]
+    fn reducer_legacy_paths_store_legacy_metadata_only() {
+        let workspace = bootstrap_workspace();
+        let console_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Console);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let reduced = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::add_panel_tab_legacy(
+                console_stack,
+                panel_id,
+                PanelKind::Inspector,
+                surface_id,
+                ToolSurfaceKind::Inspector,
+                true,
+            )
+            .expect("legacy wrapper should create add-tab mutation"),
+        )
+        .expect("legacy add-tab wrapper should succeed");
+
+        let surface = reduced
+            .tool_surface(surface_id)
+            .expect("legacy-created surface should exist");
+        assert_eq!(
+            surface.stable_surface_key().as_str(),
+            "runenwerk.scene.inspector"
+        );
+        assert_eq!(
+            surface.legacy_tool_surface_kind(),
+            Some(ToolSurfaceKind::Inspector)
+        );
+    }
+
+    #[test]
+    fn legacy_mutation_wrapper_rejects_unmapped_surface_kind() {
+        let error =
+            stable_key_for_legacy_surface_with_resolver(ToolSurfaceKind::Inspector, |_kind| None)
+                .expect_err("legacy wrapper resolver should reject unmapped kinds");
+
+        assert!(matches!(
+            error,
+            WorkspaceStateError::SurfaceIdentity(
+                crate::WorkspaceSurfaceIdentityError::UnmappedLegacySurface {
+                    kind: ToolSurfaceKind::Inspector
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn panel_kind_remains_authoritative_in_c2() {
+        let workspace = bootstrap_workspace();
+        let console_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Console);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let reduced = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::AddPanelTab {
+                tab_stack_id: console_stack,
+                panel_id,
+                panel_kind: PanelKind::Console,
+                tool_surface_id: surface_id,
+                stable_surface_key: stable_key_for_test(ToolSurfaceKind::Inspector),
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
+                activate_panel: true,
+            },
+        )
+        .expect("C2 should keep panel kind explicit");
+
+        assert_eq!(
+            reduced
+                .panel(panel_id)
+                .expect("panel should exist")
+                .panel_kind,
+            PanelKind::Console
+        );
+    }
+
+    #[test]
+    fn reducer_legacy_paths_still_work_through_wrappers() {
+        let workspace = bootstrap_workspace();
+        let console_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Console);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let reduced = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::add_panel_tab_legacy(
+                console_stack,
+                panel_id,
+                PanelKind::Inspector,
+                surface_id,
+                ToolSurfaceKind::Inspector,
+                true,
+            )
+            .expect("legacy wrapper should create add-tab mutation"),
+        )
+        .expect("legacy reducer wrapper should construct stable-key authoritative surface");
+
+        let surface = reduced
+            .tool_surface(surface_id)
+            .expect("new tool surface should exist");
+        assert_eq!(
+            surface.stable_surface_key().as_str(),
+            "runenwerk.scene.inspector"
+        );
+        assert_eq!(
+            surface.legacy_tool_surface_kind(),
+            Some(ToolSurfaceKind::Inspector)
+        );
+    }
+
+    #[test]
+    fn compaction_collapses_persisted_empty_docked_tab_stack_areas() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let split_host_id = allocator.allocate_panel_host_id();
+        let first_child_host_id = allocator.allocate_panel_host_id();
+        let second_child_host_id = allocator.allocate_panel_host_id();
+        let new_tab_stack_id = allocator.allocate_tab_stack_id();
+        let new_panel_id = allocator.allocate_panel_instance_id();
+        let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let split = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::split_tab_stack_area_legacy(
+                viewport_stack,
+                WorkspaceSplitAxis::Vertical,
+                split_host_id,
+                first_child_host_id,
+                second_child_host_id,
+                new_tab_stack_id,
+                new_panel_id,
+                PanelKind::Console,
+                new_surface_id,
+                ToolSurfaceKind::Console,
+                0.72,
+            )
+            .expect("legacy wrapper should create split mutation"),
         )
         .expect("split should create a valid docked area");
 
@@ -1971,14 +2530,15 @@ mod tests {
 
         let added = reduce_workspace(
             &workspace,
-            WorkspaceMutation::AddPanelTab {
-                tab_stack_id: outliner_stack,
+            WorkspaceMutation::add_panel_tab_legacy(
+                outliner_stack,
                 panel_id,
-                panel_kind: PanelKind::Console,
-                tool_surface_id: surface_id,
-                tool_surface_kind: ToolSurfaceKind::Console,
-                activate_panel: true,
-            },
+                PanelKind::Console,
+                surface_id,
+                ToolSurfaceKind::Console,
+                true,
+            )
+            .expect("legacy wrapper should create add-tab mutation"),
         )
         .expect("adding a panel tab should succeed");
         assert_eq!(
@@ -2011,14 +2571,15 @@ mod tests {
         let second_surface = allocator.allocate_tool_surface_instance_id();
         let with_second = reduce_workspace(
             &closed,
-            WorkspaceMutation::AddPanelTab {
-                tab_stack_id: outliner_stack,
-                panel_id: second_panel,
-                panel_kind: PanelKind::Inspector,
-                tool_surface_id: second_surface,
-                tool_surface_kind: ToolSurfaceKind::Inspector,
-                activate_panel: true,
-            },
+            WorkspaceMutation::add_panel_tab_legacy(
+                outliner_stack,
+                second_panel,
+                PanelKind::Inspector,
+                second_surface,
+                ToolSurfaceKind::Inspector,
+                true,
+            )
+            .expect("legacy wrapper should create second add-tab mutation"),
         )
         .expect("second tab should add");
         let only_outliner = reduce_workspace(
@@ -2054,19 +2615,20 @@ mod tests {
 
         let split = reduce_workspace(
             &workspace,
-            WorkspaceMutation::SplitTabStackArea {
-                tab_stack_id: viewport_stack,
-                axis: WorkspaceSplitAxis::Horizontal,
+            WorkspaceMutation::split_tab_stack_area_legacy(
+                viewport_stack,
+                WorkspaceSplitAxis::Horizontal,
                 split_host_id,
                 first_child_host_id,
                 second_child_host_id,
                 new_tab_stack_id,
                 new_panel_id,
-                new_panel_kind: PanelKind::Inspector,
-                new_tool_surface_id: new_surface_id,
-                new_tool_surface_kind: ToolSurfaceKind::Inspector,
-                fraction: 0.5,
-            },
+                PanelKind::Inspector,
+                new_surface_id,
+                ToolSurfaceKind::Inspector,
+                0.5,
+            )
+            .expect("legacy wrapper should create split mutation"),
         )
         .expect("split should produce a valid graph");
         assert!(split.host(split_host_id).is_some());
@@ -2095,12 +2657,13 @@ mod tests {
         let reset_surface = allocator.allocate_tool_surface_instance_id();
         let reset = reduce_workspace(
             &duplicated,
-            WorkspaceMutation::ResetTabStackArea {
-                tab_stack_id: new_tab_stack_id,
-                panel_id: reset_panel,
-                tool_surface_id: reset_surface,
-                tool_surface_kind: ToolSurfaceKind::Console,
-            },
+            WorkspaceMutation::reset_tab_stack_area_legacy(
+                new_tab_stack_id,
+                reset_panel,
+                reset_surface,
+                ToolSurfaceKind::Console,
+            )
+            .expect("legacy wrapper should create reset mutation"),
         )
         .expect("reset should replace area contents");
         assert_eq!(
@@ -2134,20 +2697,22 @@ mod tests {
         let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
         let locked = reduce_workspace(
             &workspace,
-            WorkspaceMutation::LockTabStackAreaType {
-                tab_stack_id: viewport_stack,
-                locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
-            },
+            WorkspaceMutation::lock_tab_stack_area_type_legacy(
+                viewport_stack,
+                Some(ToolSurfaceKind::Viewport),
+            )
+            .expect("legacy wrapper should create lock mutation"),
         )
         .expect("locking area type should succeed");
 
         let switch_error = reduce_workspace(
             &locked,
-            WorkspaceMutation::ReplacePanelToolSurfaceKind {
-                panel_id: viewport_panel,
-                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
-                tool_surface_kind: ToolSurfaceKind::Inspector,
-            },
+            WorkspaceMutation::replace_panel_tool_surface_kind_legacy(
+                viewport_panel,
+                allocator.allocate_tool_surface_instance_id(),
+                ToolSurfaceKind::Inspector,
+            )
+            .expect("legacy wrapper should create replace mutation"),
         )
         .expect_err("incompatible switch should fail");
         assert!(matches!(
@@ -2157,19 +2722,92 @@ mod tests {
 
         let tab_error = reduce_workspace(
             &locked,
-            WorkspaceMutation::AddPanelTab {
-                tab_stack_id: viewport_stack,
-                panel_id: allocator.allocate_panel_instance_id(),
-                panel_kind: PanelKind::Inspector,
-                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
-                tool_surface_kind: ToolSurfaceKind::Inspector,
-                activate_panel: true,
-            },
+            WorkspaceMutation::add_panel_tab_legacy(
+                viewport_stack,
+                allocator.allocate_panel_instance_id(),
+                PanelKind::Inspector,
+                allocator.allocate_tool_surface_instance_id(),
+                ToolSurfaceKind::Inspector,
+                true,
+            )
+            .expect("legacy wrapper should create add-tab mutation"),
         )
         .expect_err("incompatible new tab should fail");
         assert!(matches!(
             tab_error,
             WorkspaceStateError::ProjectionShapeMismatch(_)
         ));
+    }
+
+    #[test]
+    fn stable_key_lock_allows_same_surface_switch() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let viewport_panel = panel_id_by_kind(&workspace, PanelKind::Viewport);
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let locked = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaStableKey {
+                tab_stack_id: viewport_stack,
+                locked_stable_surface_key: Some(stable_key_for_test(ToolSurfaceKind::Viewport)),
+                legacy_locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            },
+        )
+        .expect("stable-key lock should succeed");
+        let new_surface_id = allocator.allocate_tool_surface_instance_id();
+
+        let switched = reduce_workspace(
+            &locked,
+            WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
+                panel_id: viewport_panel,
+                tool_surface_id: new_surface_id,
+                stable_surface_key: stable_key_for_test(ToolSurfaceKind::Viewport),
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            },
+        )
+        .expect("same stable key should satisfy locked area");
+
+        assert_eq!(
+            switched
+                .panel(viewport_panel)
+                .expect("viewport panel should exist")
+                .active_tool_surface,
+            Some(new_surface_id)
+        );
+    }
+
+    #[test]
+    fn stable_key_duplicate_preserves_structural_identity() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+        let viewport_surface_key = workspace
+            .tab_stack(viewport_stack)
+            .and_then(|stack| stack.active_panel)
+            .and_then(|panel_id| workspace.panel(panel_id))
+            .and_then(|panel| panel.active_tool_surface)
+            .and_then(|surface_id| workspace.tool_surface(surface_id))
+            .map(|surface| surface.stable_surface_key().clone())
+            .expect("viewport surface should exist");
+        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
+        let duplicate_panel = allocator.allocate_panel_instance_id();
+        let duplicate_surface = allocator.allocate_tool_surface_instance_id();
+
+        let duplicated = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::DuplicateTabStackArea {
+                tab_stack_id: viewport_stack,
+                new_panel_id: duplicate_panel,
+                new_tool_surface_id: duplicate_surface,
+            },
+        )
+        .expect("duplicate should preserve valid graph");
+
+        assert_eq!(
+            duplicated
+                .tool_surface(duplicate_surface)
+                .expect("duplicate surface should exist")
+                .stable_surface_key(),
+            &viewport_surface_key
+        );
     }
 }

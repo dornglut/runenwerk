@@ -4,6 +4,7 @@
 pub mod border;
 pub mod clip;
 pub mod glyph_run;
+pub mod graph_canvas;
 pub mod image;
 pub mod product_surface;
 pub mod rect;
@@ -14,6 +15,9 @@ pub mod viewport_surface_embed;
 pub use border::BorderPrimitive;
 pub use clip::ClipPrimitive;
 pub use glyph_run::GlyphRunPrimitive;
+pub use graph_canvas::{
+    GraphCanvasPrimitiveBatch, GraphCanvasPrimitiveRole, GraphCanvasRenderPrimitive,
+};
 pub use image::ImagePrimitive;
 pub use product_surface::{
     ProductSurfaceAlphaMode, ProductSurfacePrimitive, ProductSurfaceTextureBindingSource,

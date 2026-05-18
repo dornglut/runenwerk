@@ -13,6 +13,7 @@ pub mod recipes;
 pub mod renderer_handoff;
 pub mod resource_resolution;
 pub mod state;
+pub mod tool_suite;
 pub mod workflow;
 
 pub use default_material::*;
@@ -24,4 +25,5 @@ pub use recipes::*;
 pub use renderer_handoff::*;
 pub use resource_resolution::*;
 pub use state::*;
+pub use tool_suite::material_lab_tool_suite;
 pub use workflow::*;

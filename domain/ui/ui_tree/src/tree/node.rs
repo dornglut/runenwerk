@@ -1,9 +1,12 @@
-//! File: domain/ui/ui_runtime/src/tree/node.rs
+//! File: domain/ui/ui_tree/src/tree/node.rs
 //! Purpose: Retained UI node and node-kind contracts.
 
 use ui_layout::{LayoutConstraints, SizePolicy};
 use ui_math::{Axis, UiInsets, UiRect, UiSize};
-use ui_render_data::{UiDrawKey, UiPaint, ViewportSurfaceEmbedSlotId};
+use ui_render_data::{
+    ProductSurfaceAlphaMode, ProductSurfaceTextureBindingSource, UiDrawKey, UiPaint,
+    ViewportSurfaceEmbedSlotId,
+};
 use ui_text::TextStyle;
 use ui_theme::{ThemeTokens, UiColor};
 
@@ -52,6 +55,8 @@ pub enum UiNodeKind {
     Spacer(SpacerNode),
     Divider(DividerNode),
     Image(ImageNode),
+    ProductSurface(ProductSurfaceNode),
+    GraphCanvas(GraphCanvasNode),
     ViewportSurfaceEmbed(ViewportSurfaceEmbedNode),
     Scroll(ScrollNode),
     Stack(StackNode),
@@ -803,6 +808,65 @@ impl ImageNode {
             tint,
             min_size,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProductSurfaceNode {
+    pub source: ProductSurfaceTextureBindingSource,
+    pub uv_rect: UiRect,
+    pub tint: UiPaint,
+    pub alpha_mode: ProductSurfaceAlphaMode,
+    pub min_size: UiSize,
+}
+
+impl ProductSurfaceNode {
+    pub const fn new(
+        source: ProductSurfaceTextureBindingSource,
+        uv_rect: UiRect,
+        tint: UiPaint,
+        alpha_mode: ProductSurfaceAlphaMode,
+        min_size: UiSize,
+    ) -> Self {
+        Self {
+            source,
+            uv_rect,
+            tint,
+            alpha_mode,
+            min_size,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphCanvasNode {
+    pub canvas: ui_graph_editor::GraphCanvasViewModel,
+    pub min_size: UiSize,
+    pub theme: ThemeTokens,
+    pub text_style: TextStyle,
+    pub focusable: bool,
+    pub capture_pointer_drag: bool,
+    pub owns_wheel_zoom: bool,
+    pub clip: bool,
+}
+
+impl GraphCanvasNode {
+    pub fn new(canvas: ui_graph_editor::GraphCanvasViewModel, theme: ThemeTokens) -> Self {
+        Self {
+            canvas,
+            min_size: UiSize::new(160.0, 120.0),
+            theme,
+            text_style: TextStyle::default(),
+            focusable: true,
+            capture_pointer_drag: true,
+            owns_wheel_zoom: true,
+            clip: true,
+        }
+    }
+
+    pub fn with_min_size(mut self, min_size: UiSize) -> Self {
+        self.min_size = min_size;
+        self
     }
 }
 
