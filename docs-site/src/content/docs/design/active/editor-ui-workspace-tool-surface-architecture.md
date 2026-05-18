@@ -5,11 +5,13 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-17
 related:
   - ../implemented/ui-definition-formation-foundation-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
   - ../implemented/editor-workspace-document-mode-panel-architecture.md
+related_designs:
+  - ./editor-tool-suite-registry-and-workbench-host-design.md
 ---
 
 # Editor / UI / Workspace / Tool-Surface Architecture
