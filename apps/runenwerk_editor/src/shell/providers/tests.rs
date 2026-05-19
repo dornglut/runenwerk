@@ -2004,6 +2004,48 @@
     }
 
     #[test]
+    fn material_preview_provider_renders_preview_scene_product_section() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let product = test_preview_scene_product();
+        app.material_lab_runtime_mut()
+            .record_preview_scene_product(&product.request_identity(), product.clone())
+            .expect("fresh preview scene product should record");
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_material_request(ToolSurfaceKind::MaterialPreview),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("Preview Scene Product"));
+        assert!(
+            text.contains("preview scene product status: current preview scene product available")
+        );
+        assert!(text.contains("preview scene product mode: scene material table"));
+        assert!(text.contains(&format!(
+            "preview scene product: {}",
+            product.product_identity
+        )));
+        assert!(
+            text.contains("preview scene product material table: material table provider-table")
+        );
+        assert!(text
+            .contains("preview scene product resource layout: resource layout provider-layout"));
+        assert!(
+            text.contains("preview scene product shader: shader identity provider-shader-identity")
+        );
+        assert!(text.contains(
+            "preview scene product shader artifact: shader artifact provider-shader-artifact cache provider-shader-cache"
+        ));
+        assert!(text.contains("preview scene product slots: 1"));
+        assert!(text.contains("preview scene product resources: 1"));
+    }
+
+    #[test]
     fn material_inspector_renders_resource_binding_diagnostics() {
         let registry = EditorSurfaceProviderRegistry::runenwerk_default();
         let mut app = RunenwerkEditorApp::new();
@@ -2089,6 +2131,44 @@
             ".runenwerk/artifacts/scene-material.wgsl",
             "scene-material-shader",
             [],
+        )
+    }
+
+    fn test_preview_scene_product() -> crate::material_lab::PreviewSceneProduct {
+        let shader = crate::material_lab::PreviewSceneShaderProductRef::new(
+            "provider-shader-artifact",
+            ArtifactCacheKey::new("provider-shader-cache"),
+            "provider-shader-identity",
+            ".runenwerk/artifacts/provider-scene-table.wgsl",
+            "provider-table",
+            "provider-layout",
+        );
+        crate::material_lab::PreviewSceneProduct::new(
+            crate::material_lab::PreviewSceneProductMode::SceneMaterialTable,
+            editor_viewport::ExpressionProductId(10030),
+            material_graph::MaterialProductId::new(30),
+            ArtifactCacheKey::new("provider-active-material-cache"),
+            "provider-table",
+            "provider-layout",
+            shader,
+            [crate::material_lab::PreviewSceneMaterialSlot::new(
+                0,
+                "provider-slot",
+                material_graph::MaterialProductId::new(30),
+                ArtifactCacheKey::new("provider-material-cache"),
+                "provider-scene-shader",
+                [crate::material_lab::PreviewSceneResourceSlotMapping::new(0, 0)],
+            )],
+            [crate::material_lab::PreviewSceneResourceSlot::new(
+                0,
+                "provider-texture-product",
+                "Texture2D",
+                "2d",
+                "rgba8_unorm_srgb|sampled",
+                "linear_repeat",
+                "provider-texture-artifact",
+                ArtifactCacheKey::new("provider-texture-cache"),
+            )],
         )
     }
 

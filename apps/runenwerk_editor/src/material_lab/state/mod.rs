@@ -26,9 +26,9 @@ use product::ProductPublicationStatus;
 
 use crate::material_lab::{
     MaterialRendererParameterProfile, PreviewSceneProduct, PreviewSceneProductDiagnostic,
-    PreviewSceneProductRequestIdentity, ResolvedMaterialResource, material_document_id_for_source,
-    material_parameter_payload, material_preview_expression_product_id,
-    material_resource_binding_diagnostic_row,
+    PreviewSceneProductMode, PreviewSceneProductRequestIdentity, ResolvedMaterialResource,
+    material_document_id_for_source, material_parameter_payload,
+    material_preview_expression_product_id, material_resource_binding_diagnostic_row,
 };
 
 mod diagnostics;

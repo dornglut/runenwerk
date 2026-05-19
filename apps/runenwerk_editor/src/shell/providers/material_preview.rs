@@ -114,9 +114,7 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
     }
 }
 
-fn material_preview_status_lines(
-    status: &MaterialPreviewStatusViewModel,
-) -> Vec<String> {
+fn material_preview_status_lines(status: &MaterialPreviewStatusViewModel) -> Vec<String> {
     let mut lines = vec![format!(
         "material preview status [{:?}]: {}",
         status.status, status.headline
@@ -146,6 +144,42 @@ fn material_preview_status_lines(
         "material preview diagnostic count: {}",
         status.diagnostic_count
     ));
+    lines.push("Preview Scene Product".to_string());
+    if let Some(label) = &status.preview_scene_product_status_label {
+        lines.push(format!("preview scene product status: {label}"));
+    }
+    if let Some(label) = &status.preview_scene_product_mode_label {
+        lines.push(format!("preview scene product mode: {label}"));
+    }
+    if let Some(identity) = &status.preview_scene_product_identity {
+        lines.push(format!("preview scene product: {identity}"));
+    }
+    if let Some(label) = &status.material_table_identity_label {
+        lines.push(format!("preview scene product material table: {label}"));
+    }
+    if let Some(label) = &status.resource_layout_identity_label {
+        lines.push(format!("preview scene product resource layout: {label}"));
+    }
+    if let Some(label) = &status.preview_scene_product_shader_identity_label {
+        lines.push(format!("preview scene product shader: {label}"));
+    }
+    if let Some(label) = &status.preview_scene_product_shader_artifact_label {
+        lines.push(format!("preview scene product shader artifact: {label}"));
+    }
+    if let Some(slot_count) = status.slot_count {
+        lines.push(format!("preview scene product slots: {slot_count}"));
+    }
+    if let Some(resource_slot_count) = status.resource_slot_count {
+        lines.push(format!(
+            "preview scene product resources: {resource_slot_count}"
+        ));
+    }
+    if let Some(identity) = &status.last_valid_preview_scene_product_identity {
+        lines.push(format!("preview scene product last valid: {identity}"));
+    }
+    if let Some(reason) = &status.preview_scene_product_failure_reason {
+        lines.push(format!("preview scene product failure: {reason}"));
+    }
     if let Some(label) = &status.active_preview_label {
         lines.push(format!("active preview: {label}"));
     }
@@ -159,7 +193,9 @@ fn material_preview_status_lines(
         lines.push(format!("material preview shader artifact label: {label}"));
     }
     if let Some(label) = &status.scene_shader_artifact_label {
-        lines.push(format!("material preview scene shader artifact label: {label}"));
+        lines.push(format!(
+            "material preview scene shader artifact label: {label}"
+        ));
     }
     if let Some(label) = &status.viewport_product_label {
         lines.push(format!("material preview viewport product label: {label}"));

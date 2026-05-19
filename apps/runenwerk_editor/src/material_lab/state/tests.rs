@@ -708,6 +708,158 @@
     }
 
     #[test]
+    fn preview_status_includes_current_preview_scene_product_identity() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product.clone())
+            .expect("fresh preview scene product should record");
+
+        let view = runtime.preview_view_model(&AssetCatalog::new());
+
+        assert_eq!(
+            view.preview_status.preview_scene_product_identity.as_deref(),
+            Some(product.product_identity.as_str())
+        );
+        assert!(
+            view.preview_status
+                .preview_scene_product_status_label
+                .as_deref()
+                .is_some_and(|label| label.contains("current preview scene product available"))
+        );
+    }
+
+    #[test]
+    fn preview_status_includes_scene_material_table_mode() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product)
+            .expect("fresh preview scene product should record");
+
+        let view = runtime.preview_view_model(&AssetCatalog::new());
+
+        assert_eq!(
+            view.preview_status
+                .preview_scene_product_mode_label
+                .as_deref(),
+            Some("scene material table")
+        );
+    }
+
+    #[test]
+    fn preview_status_includes_material_table_and_resource_layout_identity() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product)
+            .expect("fresh preview scene product should record");
+
+        let view = runtime.preview_view_model(&AssetCatalog::new());
+
+        assert_eq!(
+            view.preview_status.material_table_identity_label.as_deref(),
+            Some("material table table-a")
+        );
+        assert_eq!(
+            view.preview_status.resource_layout_identity_label.as_deref(),
+            Some("resource layout layout-a")
+        );
+        assert_eq!(
+            view.preview_status
+                .preview_scene_product_shader_identity_label
+                .as_deref(),
+            Some("shader identity shader-identity-active")
+        );
+        assert_eq!(
+            view.preview_status
+                .preview_scene_product_shader_artifact_label
+                .as_deref(),
+            Some("shader artifact shader-artifact-active cache shader-cache-active")
+        );
+        assert_eq!(view.preview_status.slot_count, Some(2));
+        assert_eq!(view.preview_status.resource_slot_count, Some(2));
+    }
+
+    #[test]
+    fn preview_status_includes_last_valid_preview_scene_product() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        let request_identity = product.request_identity();
+        runtime
+            .record_preview_scene_product(&request_identity, product.clone())
+            .expect("fresh preview scene product should record");
+        assert!(runtime.record_preview_scene_product_failure(Some(&request_identity)));
+
+        let view = runtime.preview_view_model(&AssetCatalog::new());
+
+        assert_eq!(
+            view.preview_status
+                .last_valid_preview_scene_product_identity
+                .as_deref(),
+            Some(product.product_identity.as_str())
+        );
+        assert_eq!(
+            view.preview_status.preview_scene_product_identity.as_deref(),
+            Some(product.product_identity.as_str())
+        );
+        assert!(
+            view.preview_status
+                .preview_scene_product_status_label
+                .as_deref()
+                .is_some_and(|label| label.contains("last-valid preview scene product preserved"))
+        );
+    }
+
+    #[test]
+    fn preview_status_reports_preview_scene_product_failure_reason() {
+        let mut runtime = MaterialLabRuntime::default();
+        runtime.record_preview_scene_product_failure(None);
+        runtime.record_diagnostic(AssetDiagnosticRecord::error(
+            AssetDiagnosticCode::RatificationRejected,
+            "current preview scene product is stale for the active material preview request",
+        ));
+
+        let view = runtime.preview_view_model(&AssetCatalog::new());
+
+        assert_eq!(
+            view.preview_status
+                .preview_scene_product_failure_reason
+                .as_deref(),
+            Some("current preview scene product is stale for the active material preview request")
+        );
+    }
+
+    #[test]
+    fn diagnostics_rows_include_stale_preview_scene_product_state() {
+        let mut runtime = MaterialLabRuntime::default();
+        runtime.record_preview_scene_product_failure(None);
+        runtime.record_diagnostic(AssetDiagnosticRecord::error(
+            AssetDiagnosticCode::RatificationRejected,
+            "scene material table generated shader bundle is stale for the current material table/resource layout",
+        ));
+
+        let view = runtime.preview_view_model(&AssetCatalog::new());
+
+        assert!(view.diagnostic_rows.iter().any(|row| {
+            row.code == "material.preview_scene.generated_bundle_stale"
+                && row.category_label.as_deref() == Some("preview scene product")
+                && row.message.contains("generated shader bundle is stale")
+        }));
+    }
+
+    #[test]
+    fn dto_remains_presentation_only() {
+        let dto_source =
+            include_str!("../../../../../domain/editor/editor_shell/src/surfaces/material.rs");
+
+        assert!(dto_source.contains("preview_scene_product_identity: Option<String>"));
+        assert!(!dto_source.contains("PreviewSceneProduct"));
+        assert!(!dto_source.contains("PreparedSceneMaterialBundle"));
+        assert!(!dto_source.contains("PreparedMaterialFeatureContribution"));
+    }
+
+    #[test]
     fn material_runtime_records_current_preview_scene_product() {
         let mut runtime = MaterialLabRuntime::default();
         let product = preview_scene_product("active", "table-a", "layout-a");

@@ -23,6 +23,8 @@ impl MaterialLabRuntime {
                 ]
             },
         );
+        let mut diagnostic_rows = self.material_diagnostic_rows();
+        diagnostic_rows.extend(self.preview_scene_product_diagnostic_rows());
         MaterialPreviewViewModel {
             selected_asset_id: self.selected_material_asset_id,
             active_product_id: self
@@ -47,7 +49,7 @@ impl MaterialLabRuntime {
                 .map(|preview| material_parameter_payload(preview).encoded_len())
                 .unwrap_or(0),
             preview_status: self.material_preview_status_view_model(),
-            diagnostic_rows: self.material_diagnostic_rows(),
+            diagnostic_rows,
             resource_binding_diagnostics: self.material_resource_binding_diagnostic_rows(catalog),
             preview_status_lines,
             diagnostic_lines: self.diagnostic_lines(),
@@ -55,6 +57,9 @@ impl MaterialLabRuntime {
     }
 
     fn material_preview_status_view_model(&self) -> MaterialPreviewStatusViewModel {
+        let product_for_lineage = self
+            .current_preview_scene_product()
+            .or_else(|| self.last_valid_preview_scene_product());
         let last_publication = self.publication_journal.last();
         let publication_status = last_publication
             .map(|entry| material_preview_publication_status_kind(entry.status))
@@ -63,9 +68,8 @@ impl MaterialLabRuntime {
             .active_preview
             .as_ref()
             .map(|preview| format!("material product {}", preview.product_id().raw()));
-        let failed_preserved_last_good = last_publication.is_some_and(|entry| {
-            entry.status == ProductPublicationStatus::FailedPreserved
-        });
+        let failed_preserved_last_good = last_publication
+            .is_some_and(|entry| entry.status == ProductPublicationStatus::FailedPreserved);
         let last_good_available = self.active_preview.is_some() || failed_preserved_last_good;
         let active_product_label = self
             .active_preview
@@ -130,22 +134,55 @@ impl MaterialLabRuntime {
         }
         if let Some(preview) = &self.active_preview {
             detail_lines.push(format!("active artifact: {}", preview.artifact_id.raw()));
-            detail_lines.push(format!("viewport product: {}", preview.viewport_product_id.0));
-            detail_lines.push(format!("shader artifact: {}", preview.shader_artifact_id.raw()));
+            detail_lines.push(format!(
+                "viewport product: {}",
+                preview.viewport_product_id.0
+            ));
+            detail_lines.push(format!(
+                "shader artifact: {}",
+                preview.shader_artifact_id.raw()
+            ));
             detail_lines.push(format!(
                 "scene shader artifact: {}",
                 preview.scene_shader_artifact_id.raw()
             ));
         }
 
+        let preview_scene_product_status_label = Some(preview_scene_product_status_label(
+            self.preview_scene_product_status(),
+        ));
+        let preview_scene_product_identity =
+            product_for_lineage.map(|product| product.product_identity.clone());
+        let preview_scene_product_mode_label =
+            product_for_lineage.map(|product| preview_scene_product_mode_label(product.mode));
+        let material_table_identity_label = product_for_lineage
+            .map(|product| format!("material table {}", product.material_table_identity));
+        let resource_layout_identity_label = product_for_lineage
+            .map(|product| format!("resource layout {}", product.resource_layout_identity));
+        let preview_scene_product_shader_identity_label = product_for_lineage
+            .map(|product| format!("shader identity {}", product.shader.shader_identity));
+        let preview_scene_product_shader_artifact_label = product_for_lineage.map(|product| {
+            format!(
+                "shader artifact {} cache {}",
+                product.shader.shader_artifact_id,
+                product.shader.shader_cache_key.as_str()
+            )
+        });
+        let slot_count = product_for_lineage.map(|product| product.slots.len());
+        let resource_slot_count = product_for_lineage.map(|product| product.resources.len());
+        let last_valid_preview_scene_product_identity = self
+            .last_valid_preview_scene_product()
+            .map(|product| product.product_identity.clone());
+        let preview_scene_product_failure_reason = self.preview_scene_product_failure_reason();
+
         let (status, headline) = if self.selected_material_asset_id.is_none() {
             (
                 MaterialPreviewStatusKind::NoSelection,
                 "No material asset selected".to_string(),
             )
-        } else if last_publication.is_some_and(|entry| {
-            entry.status == ProductPublicationStatus::FailedPreserved
-        }) {
+        } else if last_publication
+            .is_some_and(|entry| entry.status == ProductPublicationStatus::FailedPreserved)
+        {
             (
                 MaterialPreviewStatusKind::FailedPreservedLastGood,
                 "Preview build failed; prior valid material remains available".to_string(),
@@ -206,11 +243,20 @@ impl MaterialLabRuntime {
             shader_artifact_label,
             scene_shader_artifact_label,
             viewport_product_label,
+            preview_scene_product_identity,
+            preview_scene_product_mode_label,
+            preview_scene_product_status_label,
+            material_table_identity_label,
+            resource_layout_identity_label,
+            preview_scene_product_shader_identity_label,
+            preview_scene_product_shader_artifact_label,
+            slot_count,
+            resource_slot_count,
+            last_valid_preview_scene_product_identity,
+            preview_scene_product_failure_reason,
             diagnostic_count: self.diagnostics.len(),
         }
     }
-
-
 }
 
 fn material_preview_publication_status_kind(
@@ -239,6 +285,25 @@ fn material_preview_product_status_label(
         format!("last publication status: {publication_status:?}")
     } else {
         format!("preview status: {status:?}")
+    }
+}
+
+fn preview_scene_product_status_label(status: PreviewSceneProductRuntimeStatus) -> String {
+    match status {
+        PreviewSceneProductRuntimeStatus::Empty => "no preview scene product".to_string(),
+        PreviewSceneProductRuntimeStatus::Current { product_identity } => {
+            format!("current preview scene product available ({product_identity})")
+        }
+        PreviewSceneProductRuntimeStatus::LastValidPreserved { product_identity } => {
+            format!("last-valid preview scene product preserved ({product_identity})")
+        }
+    }
+}
+
+fn preview_scene_product_mode_label(mode: PreviewSceneProductMode) -> String {
+    match mode {
+        PreviewSceneProductMode::SingleMaterial => "single material".to_string(),
+        PreviewSceneProductMode::SceneMaterialTable => "scene material table".to_string(),
     }
 }
 
@@ -277,4 +342,3 @@ pub fn previous_valid_material_artifact<'a>(
             artifact.kind == AssetKind::Material && artifact.validity == ArtifactValidity::Valid
         })
 }
-
