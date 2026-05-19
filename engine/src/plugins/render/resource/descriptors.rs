@@ -102,6 +102,15 @@ impl RenderTextureDescriptor {
         }
     }
 
+    pub const fn surface_color_exact(format: RenderTextureTargetFormat) -> Self {
+        Self {
+            size: RenderTextureSizePolicy::Surface,
+            format: RenderTextureFormatPolicy::Exact(format),
+            usage: RenderTextureTargetUsage::color_sampled(),
+            sample_mode: RenderTextureSampleMode::FilterableFloat,
+        }
+    }
+
     pub const fn surface_sampled() -> Self {
         Self {
             size: RenderTextureSizePolicy::Surface,
@@ -268,6 +277,13 @@ impl RenderResourceDescriptor {
         Self::color_target_with_lifetime(id, ResourceLifetime::Persistent)
     }
 
+    pub fn color_target_exact(
+        id: impl Into<RenderResourceId>,
+        format: RenderTextureTargetFormat,
+    ) -> Self {
+        Self::color_target_exact_with_lifetime(id, format, ResourceLifetime::Persistent)
+    }
+
     pub fn color_target_with_lifetime(
         id: impl Into<RenderResourceId>,
         lifetime: ResourceLifetime,
@@ -276,6 +292,18 @@ impl RenderResourceDescriptor {
             id: id.into(),
             lifetime,
             texture: RenderTextureDescriptor::surface_color(),
+        })
+    }
+
+    pub fn color_target_exact_with_lifetime(
+        id: impl Into<RenderResourceId>,
+        format: RenderTextureTargetFormat,
+        lifetime: ResourceLifetime,
+    ) -> Self {
+        Self::ColorTarget(ColorTargetDescriptor {
+            id: id.into(),
+            lifetime,
+            texture: RenderTextureDescriptor::surface_color_exact(format),
         })
     }
 

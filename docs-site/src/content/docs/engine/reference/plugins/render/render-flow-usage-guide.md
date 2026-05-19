@@ -16,7 +16,7 @@ last_reviewed: 2026-05-05
 2. Model frame-owned simulation/render values as ECS `Resource` types.
 3. Build a `RenderFlow` with ergonomic declarations:
    - `with_state`, `with_surface_color`, `with_builtin_ui`
-   - `with_color_target`, `with_depth_target`, `with_history_texture`
+   - `with_color_target`, `with_color_target_exact`, `with_depth_target`, `with_history_texture`
    - `double_buffer_storage_array`
    - pass builders (`compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`)
 4. Validate (`.validate()?`) and register with `App::add_render_flow(...)`.
@@ -149,6 +149,22 @@ Compatibility path:
 - A fullscreen or graphics pass may still write `surface.color` directly with `.write_surface_color()`.
 - Use `present_pass(...)` when the flow needs a first-class terminal pass for inspection, ordering, or copy/history work.
 
+## Surface-Format And Exact-Format Color Targets
+
+Use `with_color_target("...")` for presentation-style color targets that should inherit the platform-selected surface/swapchain format. This keeps ordinary scene, viewport, and UI presentation paths aligned with the active adapter and surface capabilities.
+
+Use `with_color_target_exact("...", format)` for surface-sized, flow-owned targets whose byte format is part of the data contract. Exact means exact texture format only; it does not mean fixed size. CPU proof data, deterministic product bytes, and intermediate byte-truth targets should declare the required format explicitly:
+
+```rust
+use engine::plugins::render::{RenderFlow, RenderTextureTargetFormat};
+
+let flow = RenderFlow::new("proof.flow")
+    .with_color_target_exact("proof.rgba8", RenderTextureTargetFormat::Rgba8Unorm)
+    .validate()?;
+```
+
+Future fixed-size exact targets should be added as a separate API if a flow needs exact dimensions as well as exact format.
+
 ## Product Targets, Aliases, And Prepared Invocations
 
 Use flow-owned targets when one compiled flow writes one local product:
@@ -222,6 +238,12 @@ History retention should be expressed through explicit history resources or dyna
 - flow-owned history textures use `with_history_texture(...)` plus a `copy_pass(...)` and are scoped per prepared invocation;
 - dynamic product targets use `RenderDynamicTextureRetention` and prepared view/invocation history signatures;
 - prepared views and invocations carry history signatures so resize, camera, product, or descriptor changes can invalidate only the affected product/history scope.
+
+## Copy Pass Raw Transfer Policy
+
+`copy_pass(...)` is a raw texture transfer. It allows identical color formats and color formats that are identical after removing the sRGB suffix, such as `Rgba8Unorm <-> Rgba8UnormSrgb` and `Bgra8Unorm <-> Bgra8UnormSrgb`.
+
+No color-space conversion happens during `copy_pass(...)`. Unrelated color formats and depth/stencil formats are rejected. Any actual color-space conversion must be modeled as a future explicit shader blit/convert pass family, never hidden inside `copy_pass(...)`.
 
 ## UI Composite After Direct Surface Writes
 

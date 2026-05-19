@@ -191,6 +191,7 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
 - `RenderDynamicTextureTargetKey`
 - `RenderDynamicTextureRetention`
 - `RenderTextureTargetFormat`
+- `RenderTextureFormatPolicy`
 - `RenderTextureTargetUsage`
 - `RenderTextureSampleMode`
 - `ImportedTextureSemantic`
@@ -220,6 +221,13 @@ Current multi-view contract:
 
 - prepared frame packets can carry main-surface and offscreen product views plus per-flow invocations.
 - active renderer execution for dynamic target aliases remains part of the render product surface bundle; avoid cloning flows or suffixing static labels as a substitute.
+
+Flow-owned color target format contract:
+
+- `RenderFlow::with_color_target(label)` declares a surface-sized, flow-owned color target that resolves to the selected surface format.
+- `RenderFlow::with_color_target_exact(label, format)` declares a surface-sized, flow-owned color target with an exact texture format.
+- Exact-format targets are for byte-truth product/proof/intermediate data. They are not fixed-size targets; fixed-size exact targets require a separate future API.
+- `copy_pass(...)` is a raw transfer. It may copy between identical color formats or color formats equal after removing the sRGB suffix, and it must reject unrelated formats and depth/stencil formats.
 
 ## Product Surface APIs
 

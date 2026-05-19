@@ -429,6 +429,7 @@ pub fn compiled_storage_access_to_storage_texture_access(
 ) -> StorageTextureAccess {
     match access {
         CompiledStorageAccess::ReadOnly => StorageTextureAccess::ReadOnly,
+        CompiledStorageAccess::WriteOnly => StorageTextureAccess::WriteOnly,
         CompiledStorageAccess::ReadWrite => StorageTextureAccess::ReadWrite,
     }
 }

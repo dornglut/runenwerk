@@ -12,6 +12,7 @@ impl FlowRuntimeResources {
             let mut reuse = RuntimeResourceReuse::NotRealized;
             let mut size_bytes = None::<u64>;
             let mut texture_size = None::<(u32, u32)>;
+            let mut texture_format = None::<String>;
             let mut element_count = None::<u64>;
             let mut generation = None::<u64>;
 
@@ -56,6 +57,7 @@ impl FlowRuntimeResources {
                             RuntimeResourceReuse::Created
                         };
                         texture_size = Some(texture.size);
+                        texture_format = Some(format!("{:?}", texture.format));
                         generation = Some(texture.generation);
                     }
                 }
@@ -75,6 +77,7 @@ impl FlowRuntimeResources {
                 reuse,
                 size_bytes,
                 texture_size,
+                texture_format,
                 element_count,
                 generation,
             });
@@ -104,6 +107,7 @@ impl FlowRuntimeResources {
                 },
                 size_bytes: Some(buffer.size),
                 texture_size: None,
+                texture_format: None,
                 element_count: Some(1),
                 generation: Some(buffer.generation),
             });
@@ -133,6 +137,7 @@ impl FlowRuntimeResources {
                 },
                 size_bytes: None,
                 texture_size: Some(texture.size),
+                texture_format: Some(format!("{:?}", texture.format)),
                 element_count: None,
                 generation: Some(texture.generation),
             });

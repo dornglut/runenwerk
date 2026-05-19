@@ -3,7 +3,10 @@ use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RE
 use crate::plugins::render::graph::{
     RenderFlowGraph, RenderPassKind, RenderPassNode, validate_builtin_ui_pass_shape,
 };
-use crate::plugins::render::resource::{ImportedBufferSemantic, ImportedTextureSemantic};
+use crate::plugins::render::resource::{
+    ImportedBufferSemantic, ImportedTextureSemantic, RenderTextureDescriptor,
+    RenderTextureFormatPolicy, RenderTextureSampleMode, RenderTextureTargetFormat,
+};
 use crate::plugins::render::{
     RenderPassId, RenderResourceId, RenderTargetAliasKind, RenderVertexStepMode,
 };
@@ -24,6 +27,46 @@ pub enum RenderFlowValidationIssue {
         "storage_buffer '{resource_id:?}' declares zero elements; element_count must be greater than zero"
     )]
     ZeroLengthStorageBuffer { resource_id: RenderResourceId },
+
+    #[error(
+        "resource '{resource_id:?}' ({resource_kind}) resolves to format '{format:?}', expected {expected_format_class}"
+    )]
+    InvalidTextureFormatClass {
+        resource_id: RenderResourceId,
+        resource_kind: &'static str,
+        format: RenderTextureTargetFormat,
+        expected_format_class: &'static str,
+    },
+
+    #[error(
+        "resource '{resource_id:?}' ({resource_kind}) declares invalid format policy: {reason}"
+    )]
+    InvalidTextureFormatPolicy {
+        resource_id: RenderResourceId,
+        resource_kind: &'static str,
+        reason: &'static str,
+    },
+
+    #[error(
+        "resource '{resource_id:?}' ({resource_kind}) declares usage that is invalid for format '{format:?}': {reason}"
+    )]
+    InvalidTextureUsageForFormat {
+        resource_id: RenderResourceId,
+        resource_kind: &'static str,
+        format: RenderTextureTargetFormat,
+        reason: &'static str,
+    },
+
+    #[error(
+        "resource '{resource_id:?}' ({resource_kind}) declares sample mode '{sample_mode:?}' that is invalid for format '{format:?}': {reason}"
+    )]
+    InvalidTextureSampleModeForFormat {
+        resource_id: RenderResourceId,
+        resource_kind: &'static str,
+        format: RenderTextureTargetFormat,
+        sample_mode: RenderTextureSampleMode,
+        reason: &'static str,
+    },
 
     #[error("duplicate pass id '{pass_label}' ({pass_id:?})")]
     DuplicatePassId {
@@ -428,6 +471,7 @@ pub fn validate_flow_graph(
         {
             issues.push(RenderFlowValidationIssue::ZeroLengthStorageBuffer { resource_id });
         }
+        validate_resource_descriptor_shape(resource, &mut issues);
         resources_by_id.insert(resource_id, resource);
     }
     validate_imported_resource_descriptors(&resources_by_id, &mut issues);
@@ -760,6 +804,190 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 });
             }
         }
+    }
+}
+
+fn validate_resource_descriptor_shape(
+    resource: &RenderResourceDescriptor,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    match resource {
+        RenderResourceDescriptor::SampledTexture(value) => {
+            validate_texture_descriptor_format_usage(
+                value.id,
+                "sampled_texture",
+                &value.texture,
+                issues,
+            );
+        }
+        RenderResourceDescriptor::StorageTexture(value) => {
+            validate_texture_descriptor_format_usage(
+                value.id,
+                "storage_texture",
+                &value.texture,
+                issues,
+            );
+        }
+        RenderResourceDescriptor::ColorTarget(value) => {
+            validate_color_target_descriptor_shape(value.id, &value.texture, issues);
+        }
+        RenderResourceDescriptor::DepthTarget(value) => {
+            validate_depth_target_descriptor_shape(value.id, &value.texture, issues);
+        }
+        RenderResourceDescriptor::HistoryTexture(value) => {
+            validate_texture_descriptor_format_usage(
+                value.id,
+                "history_texture",
+                &value.texture,
+                issues,
+            );
+        }
+        RenderResourceDescriptor::UniformBuffer(_)
+        | RenderResourceDescriptor::StorageBuffer(_)
+        | RenderResourceDescriptor::TargetAlias(_)
+        | RenderResourceDescriptor::ImportedTexture(_)
+        | RenderResourceDescriptor::ImportedBuffer(_) => {}
+    }
+}
+
+fn validate_color_target_descriptor_shape(
+    resource_id: RenderResourceId,
+    texture: &RenderTextureDescriptor,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    if let RenderTextureFormatPolicy::Exact(format) = texture.format
+        && format.is_depth()
+    {
+        issues.push(RenderFlowValidationIssue::InvalidTextureFormatClass {
+            resource_id,
+            resource_kind: "color_target",
+            format,
+            expected_format_class: "a color format",
+        });
+    }
+    validate_texture_descriptor_format_usage(resource_id, "color_target", texture, issues);
+}
+
+fn validate_depth_target_descriptor_shape(
+    resource_id: RenderResourceId,
+    texture: &RenderTextureDescriptor,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    match texture.format {
+        RenderTextureFormatPolicy::Surface => {
+            issues.push(RenderFlowValidationIssue::InvalidTextureFormatPolicy {
+                resource_id,
+                resource_kind: "depth_target",
+                reason: "depth targets must declare an exact depth/stencil format",
+            });
+        }
+        RenderTextureFormatPolicy::Exact(format) if !format.is_depth() => {
+            issues.push(RenderFlowValidationIssue::InvalidTextureFormatClass {
+                resource_id,
+                resource_kind: "depth_target",
+                format,
+                expected_format_class: "a depth/stencil format",
+            });
+        }
+        RenderTextureFormatPolicy::Exact(_) => {}
+    }
+    validate_texture_descriptor_format_usage(resource_id, "depth_target", texture, issues);
+}
+
+fn validate_texture_descriptor_format_usage(
+    resource_id: RenderResourceId,
+    resource_kind: &'static str,
+    texture: &RenderTextureDescriptor,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    let RenderTextureFormatPolicy::Exact(format) = texture.format else {
+        return;
+    };
+
+    if format.is_depth() {
+        if texture.usage.color_attachment || texture.usage.storage {
+            issues.push(RenderFlowValidationIssue::InvalidTextureUsageForFormat {
+                resource_id,
+                resource_kind,
+                format,
+                reason: "depth/stencil formats cannot be color attachments or storage textures",
+            });
+        }
+        if texture.usage.sampled && texture.sample_mode != RenderTextureSampleMode::Depth {
+            issues.push(
+                RenderFlowValidationIssue::InvalidTextureSampleModeForFormat {
+                    resource_id,
+                    resource_kind,
+                    format,
+                    sample_mode: texture.sample_mode,
+                    reason: "sampled depth/stencil formats must use depth sampling mode",
+                },
+            );
+        }
+    } else if texture.usage.depth_attachment {
+        issues.push(RenderFlowValidationIssue::InvalidTextureUsageForFormat {
+            resource_id,
+            resource_kind,
+            format,
+            reason: "color formats cannot be depth/stencil attachments",
+        });
+    }
+
+    if texture.usage.sampled && !texture.sample_mode.is_sampled() {
+        issues.push(
+            RenderFlowValidationIssue::InvalidTextureSampleModeForFormat {
+                resource_id,
+                resource_kind,
+                format,
+                sample_mode: texture.sample_mode,
+                reason: "sampled usage requires a sampled mode",
+            },
+        );
+    }
+
+    if !texture.usage.sampled && texture.sample_mode.is_sampled() {
+        issues.push(
+            RenderFlowValidationIssue::InvalidTextureSampleModeForFormat {
+                resource_id,
+                resource_kind,
+                format,
+                sample_mode: texture.sample_mode,
+                reason: "unsampled textures must use NotSampled mode",
+            },
+        );
+    }
+
+    if texture.usage.sampled
+        && format.is_uint()
+        && texture.sample_mode != RenderTextureSampleMode::Uint
+    {
+        issues.push(
+            RenderFlowValidationIssue::InvalidTextureSampleModeForFormat {
+                resource_id,
+                resource_kind,
+                format,
+                sample_mode: texture.sample_mode,
+                reason: "integer formats must use integer sampling mode",
+            },
+        );
+    }
+
+    if texture.usage.sampled
+        && format.is_displayable()
+        && !matches!(
+            texture.sample_mode,
+            RenderTextureSampleMode::FilterableFloat | RenderTextureSampleMode::NonFilterableFloat
+        )
+    {
+        issues.push(
+            RenderFlowValidationIssue::InvalidTextureSampleModeForFormat {
+                resource_id,
+                resource_kind,
+                format,
+                sample_mode: texture.sample_mode,
+                reason: "displayable color formats must use float sampling mode",
+            },
+        );
     }
 }
 

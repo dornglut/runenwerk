@@ -155,6 +155,7 @@ pub enum CompiledBindingEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompiledStorageAccess {
     ReadOnly,
+    WriteOnly,
     ReadWrite,
 }
 
@@ -391,7 +392,7 @@ fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> Co
             .entries
             .push(CompiledBindingEntry::StorageTexture {
                 resource: compile_resource_ref(resource, resources),
-                access: CompiledStorageAccess::ReadWrite,
+                access: CompiledStorageAccess::WriteOnly,
             });
     }
 
@@ -647,6 +648,40 @@ mod tests {
                 resource: CompiledResourceRef::Imported(storage_id),
                 access: CompiledStorageAccess::ReadWrite,
             }
+        );
+    }
+
+    #[test]
+    fn write_texture_emits_write_only_storage_texture_binding() {
+        let texture_id = resource(8);
+        let mut resources = ResourceGraph::default();
+        resources.add_resource(RenderResourceDescriptor::storage_texture(texture_id));
+        let mut pass = RenderPassNode::new(
+            RenderPassId::try_from_raw(2).unwrap(),
+            "test.texture.write",
+            RenderPassKind::Compute,
+        );
+        pass.write_textures.push(texture_id);
+
+        let bindings = compile_pass_bindings(&pass, &resources);
+        let storage_textures = bindings
+            .bind_group
+            .entries
+            .iter()
+            .filter_map(|entry| match entry {
+                CompiledBindingEntry::StorageTexture { resource, access } => {
+                    Some((resource.clone(), *access))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            storage_textures,
+            vec![(
+                CompiledResourceRef::FlowOwned(texture_id),
+                CompiledStorageAccess::WriteOnly,
+            )]
         );
     }
 

@@ -246,12 +246,33 @@ mod tests {
         let spec = FlowRuntimeResources::texture_allocation_spec(
             &descriptor,
             (1280, 720),
-            TextureFormat::Bgra8Unorm,
+            TextureFormat::Rgba8UnormSrgb,
         )
         .expect("color target should allocate");
 
         assert_eq!(spec.size, (1280, 720));
-        assert_eq!(spec.format, TextureFormat::Bgra8Unorm);
+        assert_eq!(spec.format, TextureFormat::Rgba8UnormSrgb);
+        assert!(spec.usage.contains(TextureUsages::RENDER_ATTACHMENT));
+        assert!(spec.usage.contains(TextureUsages::TEXTURE_BINDING));
+    }
+
+    #[test]
+    fn exact_color_target_allocation_ignores_surface_format_policy() {
+        let id = RenderResourceId::try_from_raw(13).unwrap();
+        let descriptor = RenderResourceDescriptor::color_target_exact(
+            id,
+            crate::plugins::render::RenderTextureTargetFormat::Rgba8Unorm,
+        );
+
+        let spec = FlowRuntimeResources::texture_allocation_spec(
+            &descriptor,
+            (1280, 720),
+            TextureFormat::Rgba8UnormSrgb,
+        )
+        .expect("exact color target should allocate");
+
+        assert_eq!(spec.size, (1280, 720));
+        assert_eq!(spec.format, TextureFormat::Rgba8Unorm);
         assert!(spec.usage.contains(TextureUsages::RENDER_ATTACHMENT));
         assert!(spec.usage.contains(TextureUsages::TEXTURE_BINDING));
     }

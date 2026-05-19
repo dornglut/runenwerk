@@ -705,7 +705,7 @@ impl Renderer {
                 destination.id
             );
         }
-        if source.format != destination.format {
+        if !copy_formats_are_raw_compatible(source.format, destination.format) {
             bail!(
                 "pass '{}' requested copy with incompatible formats '{}' ({:?}) -> '{}' ({:?})",
                 pass_id,
@@ -1113,6 +1113,67 @@ fn blend_state_for_color_format(format: TextureFormat) -> Option<BlendState> {
         | TextureFormat::Rgba32Uint
         | TextureFormat::Rgba32Sint => None,
         _ => Some(BlendState::ALPHA_BLENDING),
+    }
+}
+
+fn copy_formats_are_raw_compatible(source: TextureFormat, destination: TextureFormat) -> bool {
+    if texture_format_is_depth_or_stencil(source) || texture_format_is_depth_or_stencil(destination)
+    {
+        return false;
+    }
+    source.remove_srgb_suffix() == destination.remove_srgb_suffix()
+}
+
+fn texture_format_is_depth_or_stencil(format: TextureFormat) -> bool {
+    format.is_depth_stencil_format()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_copy_formats_accept_srgb_suffix_pairs() {
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba8UnormSrgb
+        ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Rgba8Unorm
+        ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Bgra8Unorm,
+            TextureFormat::Bgra8UnormSrgb
+        ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Bgra8UnormSrgb,
+            TextureFormat::Bgra8Unorm
+        ));
+    }
+
+    #[test]
+    fn raw_copy_formats_reject_unrelated_color_formats() {
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Bgra8Unorm
+        ));
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba16Float
+        ));
+    }
+
+    #[test]
+    fn raw_copy_formats_reject_depth_stencil_formats() {
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Depth32Float,
+            TextureFormat::Depth32Float
+        ));
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Depth32Float
+        ));
     }
 }
 

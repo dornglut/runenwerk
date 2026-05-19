@@ -1,6 +1,7 @@
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, RenderFlow, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
-    ShaderRegistryResource,
+    GpuStorage, GpuUniform, RenderFlow, RenderFlowValidationIssue, RenderFrameDataRegistry,
+    RenderPassId, RenderPassKind, RenderResourceDescriptor, RenderTextureFormatPolicy,
+    RenderTextureSizePolicy, RenderTextureTargetFormat, ShaderRegistryResource,
 };
 use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -170,6 +171,48 @@ fn v2_named_uniform_buffers_support_prepared_invocation_overrides() {
         vec![*handle.id()],
         "named uniform buffers should be real flow resources, not ad hoc request bytes"
     );
+}
+
+#[test]
+fn v2_exact_color_target_is_surface_sized_with_exact_format() {
+    let flow = RenderFlow::new("v2.exact-color")
+        .with_color_target_exact("proof.bytes", RenderTextureTargetFormat::Rgba8Unorm);
+    let id = flow
+        .resource_id("proof.bytes")
+        .expect("exact color target should register a resource");
+    let resource = flow
+        .graph()
+        .resources
+        .resources
+        .iter()
+        .find(|resource| *resource.id() == id)
+        .expect("registered resource should have a descriptor");
+
+    let RenderResourceDescriptor::ColorTarget(target) = resource else {
+        panic!("exact color target should remain a color target");
+    };
+    assert_eq!(target.texture.size, RenderTextureSizePolicy::Surface);
+    assert_eq!(
+        target.texture.format,
+        RenderTextureFormatPolicy::Exact(RenderTextureTargetFormat::Rgba8Unorm)
+    );
+}
+
+#[test]
+fn v2_exact_color_target_rejects_depth_format() {
+    let err = RenderFlow::new("v2.exact-color-depth")
+        .with_color_target_exact("proof.bytes", RenderTextureTargetFormat::Depth32Float)
+        .validation_report()
+        .expect_err("exact color targets cannot resolve to depth formats");
+
+    assert!(err.issues.iter().any(|issue| matches!(
+        issue,
+        RenderFlowValidationIssue::InvalidTextureFormatClass {
+            resource_kind: "color_target",
+            format: RenderTextureTargetFormat::Depth32Float,
+            ..
+        }
+    )));
 }
 
 #[test]

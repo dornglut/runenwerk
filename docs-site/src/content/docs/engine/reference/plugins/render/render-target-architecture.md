@@ -75,7 +75,8 @@ Generic external imports remain compatibility constructors and are rejected in a
 
 Target identity is explicit:
 
-- flow-owned target: declared directly on a `RenderFlow`;
+- flow-owned surface-format target: declared directly on a `RenderFlow` with `with_color_target(...)` and resolved to the selected surface format;
+- flow-owned exact-format target: declared with `with_color_target_exact(...)` when byte truth requires a specific color format independent of the selected surface format;
 - target alias: static authoring placeholder resolved by a prepared flow invocation;
 - dynamic target key: backend-neutral runtime address requested through `RenderDynamicTextureTargetRequestRegistryResource`;
 - surface target: the main swapchain surface import.
@@ -85,6 +86,8 @@ History retention is explicit:
 - flow-owned history textures are declared with `with_history_texture(...)` and usually updated through `copy_pass(...)`;
 - dynamic targets carry `RenderDynamicTextureRetention`;
 - prepared views and invocations carry history signatures used by future cache invalidation and inspection.
+
+`copy_pass(...)` is a raw texture transfer contract, not a color conversion contract. It may copy between color formats that are identical after stripping the sRGB suffix, but unrelated color formats and depth/stencil formats must be rejected. Shader blit/convert behavior belongs in an explicit future pass family.
 
 ## Non-goals
 

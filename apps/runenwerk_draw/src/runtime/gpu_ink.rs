@@ -64,7 +64,10 @@ fn build_drawing_ink_gpu_flow() -> (RenderFlow, DrawingInkGpuFlowResource) {
             DRAWING_GPU_INK_CPU_INPUT_ALIAS,
             RenderTargetAliasKind::Texture,
         )
-        .with_color_target(DRAWING_GPU_INK_CPU_REFERENCE_TARGET)
+        .with_color_target_exact(
+            DRAWING_GPU_INK_CPU_REFERENCE_TARGET,
+            RenderTextureTargetFormat::Rgba8Unorm,
+        )
         .with_storage_texture(DRAWING_GPU_INK_SCRATCH_TARGET)
         .with_target_alias(DRAWING_GPU_INK_OUTPUT_ALIAS, RenderTargetAliasKind::Texture)
         .copy_pass(DRAWING_GPU_INK_CPU_REFERENCE_PASS)
@@ -478,5 +481,37 @@ fn gpu_texture_target_usage() -> RenderTextureTargetUsage {
         storage: false,
         copy_src: true,
         copy_dst: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engine::plugins::render::{
+        RenderResourceDescriptor, RenderTextureFormatPolicy, RenderTextureSizePolicy,
+    };
+
+    #[test]
+    fn cpu_reference_target_is_exact_rgba8_unorm_proof_data() {
+        let (flow, _resource) = build_drawing_ink_gpu_flow();
+        let id = flow
+            .resource_id(DRAWING_GPU_INK_CPU_REFERENCE_TARGET)
+            .expect("CPU reference target should be registered");
+        let descriptor = flow
+            .graph()
+            .resources
+            .resources
+            .iter()
+            .find(|descriptor| *descriptor.id() == id)
+            .expect("CPU reference target should have a descriptor");
+
+        let RenderResourceDescriptor::ColorTarget(target) = descriptor else {
+            panic!("CPU reference proof data should be a flow-owned color target");
+        };
+        assert_eq!(target.texture.size, RenderTextureSizePolicy::Surface);
+        assert_eq!(
+            target.texture.format,
+            RenderTextureFormatPolicy::Exact(RenderTextureTargetFormat::Rgba8Unorm)
+        );
     }
 }

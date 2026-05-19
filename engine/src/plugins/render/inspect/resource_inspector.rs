@@ -76,6 +76,7 @@ pub struct RuntimeResourceInspectionEntry {
     pub reuse: RuntimeResourceReuse,
     pub size_bytes: Option<u64>,
     pub texture_size: Option<(u32, u32)>,
+    pub texture_format: Option<String>,
     pub element_count: Option<u64>,
     pub generation: Option<u64>,
 }

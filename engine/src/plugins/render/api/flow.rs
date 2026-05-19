@@ -8,7 +8,8 @@ use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
     RenderPassId, RenderPassIdSequence, RenderPassNode, RenderResourceDescriptor, RenderResourceId,
-    RenderResourceIdSequence, RenderTargetAliasKind, validate_flow_graph,
+    RenderResourceIdSequence, RenderTargetAliasKind, RenderTextureTargetFormat,
+    validate_flow_graph,
 };
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -70,6 +71,15 @@ impl RenderFlow {
 
     pub fn with_color_target(mut self, label: impl Into<String>) -> Self {
         self.register_color_target(label.into());
+        self
+    }
+
+    pub fn with_color_target_exact(
+        mut self,
+        label: impl Into<String>,
+        format: RenderTextureTargetFormat,
+    ) -> Self {
+        self.register_color_target_exact(label.into(), format);
         self
     }
 
@@ -351,6 +361,24 @@ impl RenderFlow {
         id
     }
 
+    fn register_color_target_exact(
+        &mut self,
+        label: String,
+        format: RenderTextureTargetFormat,
+    ) -> RenderResourceId {
+        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            return id;
+        }
+
+        let id = self.allocate_resource_id();
+        self.upsert_labeled_resource(
+            label,
+            id,
+            RenderResourceDescriptor::color_target_exact(id, format),
+        );
+        id
+    }
+
     fn register_depth_target(&mut self, label: String) -> RenderResourceId {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
             return id;
@@ -506,6 +534,7 @@ mod tests {
     use super::*;
     use crate::plugins::render::{
         CompiledPassDescriptor, GpuStorage, GpuUniform, RenderFlowValidationIssue, RenderPassKind,
+        RenderTextureFormatPolicy, RenderTextureSizePolicy, RenderTextureTargetFormat,
         RenderVertexBufferLayout, RenderVertexFormat, compile_flow_plan,
     };
 
@@ -593,6 +622,83 @@ mod tests {
                 CompiledPassDescriptor::Present(_),
             ]
         ));
+    }
+
+    #[test]
+    fn with_color_target_exact_declares_surface_sized_exact_format() {
+        let flow = RenderFlow::new("test.exact.color")
+            .with_color_target_exact("test.proof", RenderTextureTargetFormat::Rgba8Unorm);
+
+        let id = flow
+            .resource_id("test.proof")
+            .expect("exact color target should be registered");
+        let resource = flow
+            .graph()
+            .resources
+            .resources
+            .iter()
+            .find(|resource| *resource.id() == id)
+            .expect("registered target should have a descriptor");
+
+        let RenderResourceDescriptor::ColorTarget(value) = resource else {
+            panic!("exact color target should remain a color target");
+        };
+        assert_eq!(value.texture.size, RenderTextureSizePolicy::Surface);
+        assert_eq!(
+            value.texture.format,
+            RenderTextureFormatPolicy::Exact(RenderTextureTargetFormat::Rgba8Unorm)
+        );
+    }
+
+    #[test]
+    fn exact_color_target_rejects_depth_format() {
+        let err = RenderFlow::new("test.exact.color.depth")
+            .with_color_target_exact("test.proof", RenderTextureTargetFormat::Depth32Float)
+            .validation_report()
+            .expect_err("color target must not resolve to depth format");
+
+        assert!(err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::InvalidTextureFormatClass {
+                resource_kind: "color_target",
+                format: RenderTextureTargetFormat::Depth32Float,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn depth_target_rejects_color_format() {
+        let mut flow = RenderFlow::new("test.depth.color").with_depth_target("test.depth");
+        let id = flow
+            .resource_id("test.depth")
+            .expect("depth target should be registered");
+        let resource = flow
+            .graph
+            .resources
+            .resources
+            .iter_mut()
+            .find(|resource| *resource.id() == id)
+            .expect("registered target should have a descriptor");
+
+        let RenderResourceDescriptor::DepthTarget(value) = resource else {
+            panic!("registered resource should be a depth target");
+        };
+        value.texture.format =
+            RenderTextureFormatPolicy::Exact(RenderTextureTargetFormat::Rgba8Unorm);
+
+        let err = flow
+            .validation_report()
+            .expect_err("depth target must resolve to depth/stencil format");
+
+        assert!(err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::InvalidTextureFormatClass {
+                resource_kind: "depth_target",
+                format: RenderTextureTargetFormat::Rgba8Unorm,
+                ..
+            }
+        )));
     }
 
     #[test]
