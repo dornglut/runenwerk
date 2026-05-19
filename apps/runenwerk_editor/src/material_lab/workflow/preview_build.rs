@@ -1,10 +1,11 @@
-use super::*;
 use super::artifact_io::{
-    canonical_shader_registry_path, catalog_with_material_artifacts, material_artifact_path,
-    material_scene_shader_artifact_path, material_shader_artifact_path, write_material_shader_artifact,
+    canonical_shader_registry_path, catalog_with_material_artifacts,
+    content_addressed_artifact_path, material_artifact_path, material_scene_shader_artifact_path,
+    material_shader_artifact_path, write_material_shader_artifact,
 };
 use super::diagnostics::{material_diagnostic, material_graph_diagnostic};
 use super::source_resolution::resolve_material_source_for_asset;
+use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorMaterialPreviewBuildOutcome {
@@ -342,6 +343,34 @@ pub fn rebuild_material_preview_for_asset(
     }
 }
 
+pub(crate) fn write_scene_material_table_shader_bundle(
+    project_root: &Path,
+    material_table_identity: &str,
+    resource_layout_identity: &str,
+    compiled_shader: &CompiledSceneMaterialTableShader,
+) -> Result<EditorSceneMaterialTableShaderBundle> {
+    let shader_cache_key = ArtifactCacheKey::new(format!(
+        "material-scene-table-shader-v1:table={}:resources={}:shader={}",
+        material_table_identity, resource_layout_identity, compiled_shader.identity
+    ));
+    let shader_relative_path =
+        content_addressed_artifact_path("material-scene-table-shader", &shader_cache_key, "wgsl");
+    let shader_absolute_path = project_root.join(&shader_relative_path);
+    write_material_shader_artifact(&shader_absolute_path, &compiled_shader.wgsl)?;
+    let artifact_hash = blake3::hash(shader_cache_key.as_str().as_bytes());
+    Ok(EditorSceneMaterialTableShaderBundle::new(
+        format!(
+            "generated.material-scene-table-shader.{}",
+            artifact_hash.to_hex()
+        ),
+        shader_cache_key,
+        canonical_shader_registry_path(project_root, &shader_relative_path),
+        compiled_shader.identity.clone(),
+        material_table_identity.to_string(),
+        resource_layout_identity.to_string(),
+    ))
+}
+
 fn preserved_or_blocked(
     catalog: &AssetCatalog,
     asset_id: AssetId,
@@ -376,4 +405,3 @@ fn blocked_preview(message: impl Into<String>) -> EditorMaterialPreviewBuildOutc
         )],
     }
 }
-

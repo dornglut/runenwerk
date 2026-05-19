@@ -73,5 +73,7 @@ pub struct CompiledSceneMaterialTableShader {
     pub shader_id: String,
     pub wgsl: String,
     pub identity: String,
+    pub resource_layout_identity: String,
+    pub resource_bindings: Vec<CompiledMaterialResourceBinding>,
     pub slot_count: usize,
 }

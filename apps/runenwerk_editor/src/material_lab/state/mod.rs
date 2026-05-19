@@ -13,12 +13,12 @@ use editor_shell::{
     MaterialGraphToolbarViewModel, MaterialGraphValidationOverlayViewModel,
     MaterialGraphValidationSeverity, MaterialInspectorViewModel,
     MaterialNodePaletteCategoryViewModel, MaterialNodePaletteItemViewModel,
-    MaterialNodePaletteViewModel, MaterialNodePickerViewModel, MaterialPreviewStatusKind,
-    MaterialPreviewPublicationStatusKind, MaterialPreviewStatusViewModel,
-    MaterialPreviewViewModel, MaterialResourceBindingDiagnosticViewModel,
-    MaterialResourceBindingStatusKind, MaterialShortcutAction,
-    MaterialTextureResourceOptionViewModel, MaterialTextureResourcePickerViewModel,
-    MaterialUndoRedoViewModel,
+    MaterialNodePaletteViewModel, MaterialNodePickerViewModel,
+    MaterialPreviewPublicationStatusKind, MaterialPreviewStatusKind,
+    MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
+    MaterialResourceBindingDiagnosticViewModel, MaterialResourceBindingStatusKind,
+    MaterialShortcutAction, MaterialTextureResourceOptionViewModel,
+    MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel,
 };
 use editor_viewport::ExpressionProductId;
 use material_graph::{FormedMaterialProduct, MaterialProductId, MaterialResourceBinding};
@@ -41,5 +41,6 @@ mod tests;
 
 pub use preview_status::{material_artifact_lines, previous_valid_material_artifact};
 pub use runtime::{
-    EditorMaterialPreviewProduct, EditorMaterialPreviewPublicationJournalEntry, MaterialLabRuntime,
+    EditorMaterialPreviewProduct, EditorMaterialPreviewPublicationJournalEntry,
+    EditorSceneMaterialTableShaderBundle, MaterialLabRuntime,
 };

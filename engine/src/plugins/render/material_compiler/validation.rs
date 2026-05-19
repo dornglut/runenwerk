@@ -6,7 +6,7 @@ use material_graph::{
     MATERIAL_IR_CONTRACT_VERSION, MaterialIr, MaterialIrInputSource, MaterialNodeOp,
 };
 
-use super::MaterialShaderCompileError;
+use super::{MaterialShaderCompileError, SceneMaterialTableSlot};
 
 pub(super) fn validate_ir(ir: &MaterialIr) -> Result<(), MaterialShaderCompileError> {
     if ir.contract_version != MATERIAL_IR_CONTRACT_VERSION {
@@ -55,6 +55,25 @@ pub(super) fn validate_ir(ir: &MaterialIr) -> Result<(), MaterialShaderCompileEr
                     });
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_scene_material_table_slots(
+    slots: &[SceneMaterialTableSlot<'_>],
+) -> Result<(), MaterialShaderCompileError> {
+    if slots.is_empty() {
+        return Err(MaterialShaderCompileError::InvalidSceneMaterialTable(
+            "scene material table requires at least one material slot".to_string(),
+        ));
+    }
+    let mut seen_slot_indices = BTreeSet::new();
+    for slot in slots {
+        if !seen_slot_indices.insert(slot.slot_index) {
+            return Err(MaterialShaderCompileError::InvalidSceneMaterialTable(
+                format!("duplicate material slot index {}", slot.slot_index),
+            ));
         }
     }
     Ok(())

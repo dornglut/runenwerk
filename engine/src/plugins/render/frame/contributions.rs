@@ -431,6 +431,7 @@ pub struct PreparedSceneMaterialBundle {
     pub shader_path: String,
     pub shader_identity: String,
     pub material_table_identity: String,
+    pub resource_layout_identity: String,
 }
 
 impl PreparedSceneMaterialBundle {
@@ -441,12 +442,31 @@ impl PreparedSceneMaterialBundle {
         shader_identity: impl Into<String>,
         material_table_identity: impl Into<String>,
     ) -> Self {
+        Self::new_with_resource_layout(
+            shader_artifact_id,
+            shader_cache_key,
+            shader_path,
+            shader_identity,
+            material_table_identity,
+            "",
+        )
+    }
+
+    pub fn new_with_resource_layout(
+        shader_artifact_id: impl Into<String>,
+        shader_cache_key: impl Into<String>,
+        shader_path: impl Into<String>,
+        shader_identity: impl Into<String>,
+        material_table_identity: impl Into<String>,
+        resource_layout_identity: impl Into<String>,
+    ) -> Self {
         Self {
             shader_artifact_id: shader_artifact_id.into(),
             shader_cache_key: shader_cache_key.into(),
             shader_path: shader_path.into(),
             shader_identity: shader_identity.into(),
             material_table_identity: material_table_identity.into(),
+            resource_layout_identity: resource_layout_identity.into(),
         }
     }
 }

@@ -17,11 +17,12 @@ pub use types::{
     SceneMaterialTableCompileRequest, SceneMaterialTableSlot,
 };
 
-use bindings::compiled_resource_bindings;
+use bindings::{compiled_resource_bindings, scene_material_table_resource_binding_plan};
 use identity::{
-    material_scene_shader_identity, material_scene_table_shader_identity, material_shader_identity,
+    material_scene_shader_identity, material_scene_table_resource_layout_identity,
+    material_scene_table_shader_identity, material_shader_identity,
 };
-use validation::{validate_ir, validate_wgsl};
+use validation::{validate_ir, validate_scene_material_table_slots, validate_wgsl};
 use wgsl::{
     WgslMaterialProgram, material_program_wgsl, material_scene_product_wgsl,
     material_scene_table_product_wgsl,
@@ -55,22 +56,14 @@ pub fn compile_material_shader(
 pub fn compile_scene_material_table_shader(
     request: SceneMaterialTableCompileRequest<'_>,
 ) -> Result<CompiledSceneMaterialTableShader, MaterialShaderCompileError> {
-    if request.slots.is_empty() {
-        return Err(MaterialShaderCompileError::InvalidSceneMaterialTable(
-            "scene material table requires at least one material slot".to_string(),
-        ));
-    }
+    validate_scene_material_table_slots(&request.slots)?;
+    let resource_plan = scene_material_table_resource_binding_plan(&request.slots);
+    let declaration_bindings = resource_plan.declaration_bindings();
     let mut compiled_slots = Vec::new();
     for slot in &request.slots {
         validate_ir(slot.ir)?;
-        let resource_bindings = compiled_resource_bindings(slot.ir);
-        if !resource_bindings.is_empty() {
-            return Err(MaterialShaderCompileError::InvalidSceneMaterialTable(
-                "scene material table compiler does not yet support texture resource bindings"
-                    .to_string(),
-            ));
-        }
-        let program = WgslMaterialProgram::compile(slot.ir, &resource_bindings)?;
+        let resource_bindings = resource_plan.bindings_for_slot(slot.slot_index);
+        let program = WgslMaterialProgram::compile(slot.ir, resource_bindings)?;
         compiled_slots.push(wgsl::SceneMaterialTableProgramSlot {
             slot_index: slot.slot_index,
             material_instance_id: slot.material_instance_id.clone(),
@@ -78,13 +71,16 @@ pub fn compile_scene_material_table_shader(
             program,
         });
     }
-    let wgsl = material_scene_table_product_wgsl(&compiled_slots);
+    let wgsl = material_scene_table_product_wgsl(&compiled_slots, &declaration_bindings);
     validate_wgsl(&wgsl)?;
-    let identity = material_scene_table_shader_identity(&request.slots);
+    let identity = material_scene_table_shader_identity(&request.slots, &resource_plan);
+    let resource_layout_identity = material_scene_table_resource_layout_identity(&resource_plan);
     Ok(CompiledSceneMaterialTableShader {
         shader_id: format!("material.scene_table.{identity}"),
         wgsl,
         identity,
+        resource_layout_identity,
+        resource_bindings: resource_plan.all_slot_bindings(),
         slot_count: request.slots.len(),
     })
 }

@@ -1,5 +1,5 @@
-use super::*;
 use super::picker_projection::{first_palette_descriptor_key, palette_contains_descriptor};
+use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorMaterialPreviewProduct {
@@ -66,6 +66,45 @@ impl EditorMaterialPreviewProduct {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorSceneMaterialTableShaderBundle {
+    pub shader_artifact_id: String,
+    pub shader_cache_key: ArtifactCacheKey,
+    pub shader_path: String,
+    pub shader_identity: String,
+    pub material_table_identity: String,
+    pub resource_layout_identity: String,
+}
+
+impl EditorSceneMaterialTableShaderBundle {
+    pub fn new(
+        shader_artifact_id: impl Into<String>,
+        shader_cache_key: ArtifactCacheKey,
+        shader_path: impl Into<String>,
+        shader_identity: impl Into<String>,
+        material_table_identity: impl Into<String>,
+        resource_layout_identity: impl Into<String>,
+    ) -> Self {
+        Self {
+            shader_artifact_id: shader_artifact_id.into(),
+            shader_cache_key,
+            shader_path: shader_path.into(),
+            shader_identity: shader_identity.into(),
+            material_table_identity: material_table_identity.into(),
+            resource_layout_identity: resource_layout_identity.into(),
+        }
+    }
+
+    pub fn matches_scene_table(
+        &self,
+        material_table_identity: &str,
+        resource_layout_identity: &str,
+    ) -> bool {
+        self.material_table_identity == material_table_identity
+            && self.resource_layout_identity == resource_layout_identity
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorMaterialPreviewPublicationJournalEntry {
     pub artifact_id: AssetArtifactId,
     pub product_id: Option<MaterialProductId>,
@@ -91,6 +130,7 @@ pub struct MaterialLabRuntime {
     pub(super) diagnostics: Vec<AssetDiagnosticRecord>,
     pub(super) publication_journal: Vec<EditorMaterialPreviewPublicationJournalEntry>,
     pub(super) last_workflow_status: Option<String>,
+    pub(super) scene_material_table_shader_bundle: Option<EditorSceneMaterialTableShaderBundle>,
 }
 
 impl MaterialLabRuntime {
@@ -283,5 +323,20 @@ impl MaterialLabRuntime {
         self.publication_journal.push(entry);
     }
 
+    pub fn set_scene_material_table_shader_bundle(
+        &mut self,
+        bundle: EditorSceneMaterialTableShaderBundle,
+    ) {
+        self.scene_material_table_shader_bundle = Some(bundle);
+    }
 
+    pub fn clear_scene_material_table_shader_bundle(&mut self) {
+        self.scene_material_table_shader_bundle = None;
+    }
+
+    pub fn scene_material_table_shader_bundle(
+        &self,
+    ) -> Option<&EditorSceneMaterialTableShaderBundle> {
+        self.scene_material_table_shader_bundle.as_ref()
+    }
 }

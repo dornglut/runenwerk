@@ -96,6 +96,58 @@ fn material_channel_color_ir() -> MaterialIr {
     lowering.product.expect("formed").executable_ir.expect("ir")
 }
 
+fn texture_base_color_ir(document_id: u64, stable_id: &str) -> MaterialIr {
+    let color = PortTypeId::new(1);
+    let vec2 = PortTypeId::new(3);
+    let texture_ref = ResourceRef::new("asset.catalog.texture2d", stable_id).expect("resource ref");
+    let document = MaterialGraphDocument::new(
+        MaterialGraphDocumentId::new(document_id),
+        "texture_slot",
+        GraphDefinition::new(
+            GraphId::new(1),
+            "texture_slot",
+            CyclePolicy::RejectDirectedCycles,
+            [
+                NodeDefinition::new(
+                    NodeId::new(1),
+                    "texture.sample_2d",
+                    [
+                        PortDefinition::new(PortId::new(1), "uv", PortDirection::Input, vec2),
+                        PortDefinition::new(PortId::new(2), "color", PortDirection::Output, color),
+                    ],
+                )
+                .with_values([GraphMetadataEntry::new(
+                    material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF,
+                    GraphValue::resource(texture_ref),
+                )]),
+                NodeDefinition::new(
+                    NodeId::new(2),
+                    "pbr.output",
+                    [PortDefinition::new(
+                        PortId::new(3),
+                        "base_color",
+                        PortDirection::Input,
+                        color,
+                    )],
+                ),
+            ],
+            [graph::EdgeDefinition::new(
+                graph::EdgeId::new(1),
+                PortId::new(2),
+                PortId::new(3),
+            )],
+        ),
+        MaterialOutputTarget::RenderMaterial,
+    );
+    let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
+    assert!(
+        !lowering.report.has_blocking_issues(),
+        "{:?}",
+        lowering.report.issues()
+    );
+    lowering.product.expect("formed").executable_ir.expect("ir")
+}
+
 fn all_first_slice_ops_ir() -> MaterialIr {
     let catalog = MaterialNodeCatalog::first_slice();
     let nodes = catalog
@@ -328,13 +380,208 @@ fn scene_material_table_wgsl_dispatches_to_source_backed_slot_evaluators() {
     assert!(shader.wgsl.contains("fn evaluate_material_slot_0"));
     assert!(shader.wgsl.contains("fn evaluate_material_slot_1"));
     assert!(shader.wgsl.contains("switch material_slot_index"));
-    assert!(shader.wgsl.contains("case 0u: { return evaluate_material_slot_0(ctx); }"));
-    assert!(shader.wgsl.contains("case 1u: { return evaluate_material_slot_1(ctx); }"));
+    assert!(
+        shader
+            .wgsl
+            .contains("case 0u: { return evaluate_material_slot_0(ctx); }")
+    );
+    assert!(
+        shader
+            .wgsl
+            .contains("case 1u: { return evaluate_material_slot_1(ctx); }")
+    );
     assert!(
         !shader
             .wgsl
             .contains("slot_ctx.material_channel = f32(material_slot_index);"),
         "scene material tables must dispatch by slot instead of rewriting material_channel"
+    );
+}
+
+#[test]
+fn scene_material_table_compiles_texture_bearing_slots_to_valid_wgsl() {
+    let default_ir = texture_base_color_ir(10, "texture.albedo");
+    let assigned_ir = texture_base_color_ir(11, "texture.moss");
+
+    let shader = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &default_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &assigned_ir,
+            },
+        ],
+    })
+    .expect("texture-bearing scene material table should compile");
+
+    assert_eq!(shader.slot_count, 2);
+    assert!(shader.wgsl.contains("texture_2d<f32>"));
+    assert!(shader.wgsl.contains("textureSample"));
+    assert!(shader.wgsl.contains("fn evaluate_material_slot_0"));
+    assert!(shader.wgsl.contains("fn evaluate_material_slot_1"));
+    assert!(
+        shader.wgsl.contains("@group(1) @binding(0)")
+            && shader.wgsl.contains("@group(1) @binding(2)"),
+        "different texture resources must receive different table-wide bindings"
+    );
+}
+
+#[test]
+fn scene_material_table_slot_evaluators_use_table_wide_resource_bindings() {
+    let default_ir = texture_base_color_ir(12, "texture.albedo");
+    let assigned_ir = texture_base_color_ir(13, "texture.moss");
+
+    let shader = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &default_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &assigned_ir,
+            },
+        ],
+    })
+    .expect("texture-bearing scene material table should compile");
+
+    assert_eq!(shader.resource_bindings.len(), 2);
+    assert_eq!(shader.resource_bindings[0].texture_binding, 0);
+    assert_eq!(shader.resource_bindings[1].texture_binding, 2);
+    assert!(
+        shader
+            .wgsl
+            .contains("textureSample(rw_material_texture_0, rw_material_sampler_1")
+    );
+    assert!(
+        shader
+            .wgsl
+            .contains("textureSample(rw_material_texture_2, rw_material_sampler_3")
+    );
+    assert_eq!(shader.wgsl.matches("@group(1) @binding(0)").count(), 1);
+    assert_eq!(shader.wgsl.matches("@group(1) @binding(2)").count(), 1);
+}
+
+#[test]
+fn scene_material_table_deduplicates_identical_resource_refs() {
+    let default_ir = texture_base_color_ir(14, "texture.shared");
+    let assigned_ir = texture_base_color_ir(15, "texture.shared");
+
+    let shader = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &default_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &assigned_ir,
+            },
+        ],
+    })
+    .expect("texture-bearing scene material table should compile");
+
+    assert_eq!(shader.resource_bindings.len(), 2);
+    assert!(
+        shader
+            .resource_bindings
+            .iter()
+            .all(|binding| binding.texture_binding == 0)
+    );
+    assert_eq!(shader.wgsl.matches("@group(1) @binding(0)").count(), 1);
+}
+
+#[test]
+fn scene_material_table_identity_changes_for_resource_layout_and_mapping() {
+    let albedo_ir = texture_base_color_ir(16, "texture.albedo");
+    let moss_ir = texture_base_color_ir(17, "texture.moss");
+    let sand_ir = texture_base_color_ir(18, "texture.sand");
+
+    let baseline = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &albedo_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &moss_ir,
+            },
+        ],
+    })
+    .expect("baseline table should compile");
+    let changed_resource = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &albedo_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &sand_ir,
+            },
+        ],
+    })
+    .expect("changed resource table should compile");
+    let changed_mapping = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &moss_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &albedo_ir,
+            },
+        ],
+    })
+    .expect("changed mapping table should compile");
+    let changed_slot_order =
+        compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+            slots: vec![
+                SceneMaterialTableSlot {
+                    slot_index: 1,
+                    material_instance_id: "material.asset.10".to_string(),
+                    ir: &albedo_ir,
+                },
+                SceneMaterialTableSlot {
+                    slot_index: 0,
+                    material_instance_id: "material.asset.11".to_string(),
+                    ir: &moss_ir,
+                },
+            ],
+        })
+        .expect("changed slot order table should compile");
+
+    assert_ne!(baseline.identity, changed_resource.identity);
+    assert_ne!(
+        baseline.resource_layout_identity,
+        changed_resource.resource_layout_identity
+    );
+    assert_ne!(baseline.identity, changed_mapping.identity);
+    assert_ne!(
+        baseline.resource_layout_identity,
+        changed_mapping.resource_layout_identity
+    );
+    assert_ne!(baseline.identity, changed_slot_order.identity);
+    assert_ne!(
+        baseline.resource_layout_identity,
+        changed_slot_order.resource_layout_identity
     );
 }
 

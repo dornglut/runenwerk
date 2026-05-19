@@ -1010,6 +1010,7 @@ fn hash_prepared_feature_contribution(
                 scene_bundle.shader_path.hash(&mut hasher);
                 scene_bundle.shader_identity.hash(&mut hasher);
                 scene_bundle.material_table_identity.hash(&mut hasher);
+                scene_bundle.resource_layout_identity.hash(&mut hasher);
             }
             value.instances.len().hash(&mut hasher);
             for instance in &value.instances {

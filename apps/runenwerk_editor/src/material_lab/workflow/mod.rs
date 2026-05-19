@@ -9,7 +9,8 @@ use asset::{
 };
 use editor_shell::MaterialSurfaceAction;
 use engine::plugins::render::{
-    MaterialPreviewFixture, MaterialShaderCompileRequest, compile_material_shader,
+    CompiledSceneMaterialTableShader, MaterialPreviewFixture, MaterialShaderCompileRequest,
+    compile_material_shader,
 };
 use material_graph::{
     MaterialGraphDocument, MaterialGraphIssueCode, MaterialGraphIssueSubject, MaterialNodeCatalog,
@@ -19,7 +20,8 @@ use product::ProductPublicationOutcome;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::material_lab::{
-    EditorMaterialPreviewProduct, EditorMaterialPreviewPublication, ResolvedMaterialLoweringRecipe,
+    EditorMaterialPreviewProduct, EditorMaterialPreviewPublication,
+    EditorSceneMaterialTableShaderBundle, ResolvedMaterialLoweringRecipe,
     material_document_id_for_source, material_product_id_for_import_job,
     previous_valid_material_artifact, read_material_graph_document, resolve_material_resources,
     write_material_graph_document,
@@ -35,10 +37,12 @@ mod source_resolution;
 mod tests;
 
 pub use artifact_io::{catalog_with_material_artifact, catalog_with_material_artifacts};
-pub use preview_build::{rebuild_material_preview_for_asset, EditorMaterialPreviewBuildOutcome};
+pub(crate) use preview_build::write_scene_material_table_shader_bundle;
+pub use preview_build::{EditorMaterialPreviewBuildOutcome, rebuild_material_preview_for_asset};
 pub use source_resolution::{
-    default_material_graph_document_for_source, default_material_graph_document_for_source_with_target,
-    material_source_for_asset, resolve_material_source_for_asset,
+    default_material_graph_document_for_source,
+    default_material_graph_document_for_source_with_target, material_source_for_asset,
+    resolve_material_source_for_asset,
 };
 
 #[cfg(test)]

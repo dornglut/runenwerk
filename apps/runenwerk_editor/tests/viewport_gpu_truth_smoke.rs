@@ -5,8 +5,8 @@ use asset::{
 use editor_core::{DocumentId, DocumentKind};
 use editor_persistence::{
     ProjectFileV3, SceneEntityRecordV2, SceneFileV2, SceneMaterialAssignmentsRecord,
-    SceneMaterialSlotRecord, ScenePrimitiveKind, ScenePrimitiveRecord, SceneTransformRecord,
-    SdfPrimitiveMaterialSlotAssignmentRecord,
+    SceneMaterialSlotRecord, SceneMaterialSourceRefRecord, ScenePrimitiveKind,
+    ScenePrimitiveRecord, SceneTransformRecord, SdfPrimitiveMaterialSlotAssignmentRecord,
 };
 use editor_viewport::ViewportPresentationState;
 use engine::App;
@@ -340,8 +340,39 @@ struct Wr028SdfPixelSamples {
 }
 
 fn configure_wr028_sdf_two_slot_scene(app: &mut App) {
-    let preview = wr028_sdf_slot_color_material_preview_product();
-    let scene_file = wr028_two_sdf_primitive_scene_file();
+    let left_texture_path = write_gpu_truth_ktx2_texture(
+        "wr028-scene-table-source-texture-left.ktx2",
+        4,
+        4,
+        1,
+        [38, 164, 92, 255],
+    );
+    let left_proof = source_backed_texture_material_preview_product(
+        72,
+        &left_texture_path,
+        TextureDimension::Texture2D,
+        asset::AssetKind::Texture2D,
+        "texture.sample_2d",
+        "wr028.scene_table_texture_left",
+        "SceneTableLeft",
+    );
+    let right_texture_path = write_gpu_truth_ktx2_texture(
+        "wr028-scene-table-source-texture-right.ktx2",
+        4,
+        4,
+        1,
+        [168, 72, 220, 255],
+    );
+    let right_proof = source_backed_texture_material_preview_product(
+        73,
+        &right_texture_path,
+        TextureDimension::Texture2D,
+        asset::AssetKind::Texture2D,
+        "texture.sample_2d",
+        "wr028.scene_table_texture_right",
+        "SceneTableRight",
+    );
+    let scene_file = wr028_two_sdf_primitive_scene_file(&left_proof.preview, &right_proof.preview);
     let host = app
         .world_mut()
         .resource_mut::<EditorHostResource>()
@@ -349,12 +380,15 @@ fn configure_wr028_sdf_two_slot_scene(app: &mut App) {
     register_mvp_component_types(host.app.runtime_mut());
     apply_scene_file_to_runtime(host.app.runtime_mut(), &scene_file)
         .expect("WR-028 SDF proof scene should load into the empty editor runtime");
-    host.app
-        .material_lab_runtime_mut()
-        .set_active_preview(preview);
+    let material_runtime = host.app.material_lab_runtime_mut();
+    material_runtime.set_active_preview(right_proof.preview);
+    material_runtime.set_active_preview(left_proof.preview);
 }
 
-fn wr028_two_sdf_primitive_scene_file() -> SceneFileV2 {
+fn wr028_two_sdf_primitive_scene_file(
+    default_preview: &EditorMaterialPreviewProduct,
+    assigned_preview: &EditorMaterialPreviewProduct,
+) -> SceneFileV2 {
     let left_transform = SceneTransformRecord {
         translation: [-1.25, 0.0, 0.0],
         ..Default::default()
@@ -368,11 +402,22 @@ fn wr028_two_sdf_primitive_scene_file() -> SceneFileV2 {
         sphere_radius: 0.75,
         ..Default::default()
     };
+    let mut default_slot = SceneMaterialSlotRecord::default_generated();
+    default_slot.material_asset_id = Some(default_preview.asset_id.raw());
+    default_slot.source_ref = Some(SceneMaterialSourceRefRecord::new(
+        default_preview.asset_id.raw(),
+        default_preview.source_id.raw(),
+    ));
     let mut second_slot = SceneMaterialSlotRecord::default_generated();
     second_slot.slot_id = 2;
     second_slot.palette_entry_id = 2;
     second_slot.display_name = "WR-028 Slot 1".to_string();
     second_slot.is_default = false;
+    second_slot.material_asset_id = Some(assigned_preview.asset_id.raw());
+    second_slot.source_ref = Some(SceneMaterialSourceRefRecord::new(
+        assigned_preview.asset_id.raw(),
+        assigned_preview.source_id.raw(),
+    ));
 
     SceneFileV2::new(vec![
         SceneEntityRecordV2::new(201, "WR-028 Left SDF Slot 0", None, left_transform, sphere),
@@ -385,129 +430,22 @@ fn wr028_two_sdf_primitive_scene_file() -> SceneFileV2 {
         ),
     ])
     .with_material_assignments(SceneMaterialAssignmentsRecord::new(
-        [SceneMaterialSlotRecord::default_generated(), second_slot],
+        [default_slot, second_slot],
         [SdfPrimitiveMaterialSlotAssignmentRecord::new(202, 2)],
     ))
-}
-
-fn wr028_sdf_slot_color_material_preview_product() -> EditorMaterialPreviewProduct {
-    let product_id = 82;
-    let product = wr028_sdf_slot_color_material_product(product_id);
-    let ir = product
-        .executable_ir
-        .as_ref()
-        .expect("WR-028 SDF slot color material product should include IR");
-    let compiled = compile_material_shader(MaterialShaderCompileRequest {
-        ir,
-        fixture: MaterialPreviewFixture::Sphere,
-    })
-    .expect("WR-028 SDF slot color material shader should compile");
-    let preview_shader_path =
-        write_gpu_truth_shader("wr028-sdf-two-slot-preview.wgsl", compiled.wgsl.as_str());
-    let scene_shader_path = write_gpu_truth_shader(
-        "wr028-sdf-two-slot-scene.wgsl",
-        compiled.scene_wgsl.as_str(),
-    );
-
-    EditorMaterialPreviewProduct::new(
-        asset_id(product_id + 101),
-        asset_source_id(product_id + 102),
-        asset_artifact_id(product_id + 103),
-        ArtifactCacheKey::new(format!("wr028-sdf-slot-color-artifact-cache-{product_id}")),
-        product,
-        MaterialRendererParameterProfile::RenderMaterial,
-        asset_artifact_id(product_id + 104),
-        ArtifactCacheKey::new(format!(
-            "wr028-sdf-slot-color-preview-shader-cache:{}",
-            compiled.identity
-        )),
-        preview_shader_path,
-        compiled.identity,
-        asset_artifact_id(product_id + 105),
-        ArtifactCacheKey::new(format!(
-            "wr028-sdf-slot-color-scene-shader-cache:{}",
-            compiled.scene_identity
-        )),
-        scene_shader_path,
-        compiled.scene_identity,
-        [],
-    )
-}
-
-fn wr028_sdf_slot_color_material_product(product_id: u64) -> FormedMaterialProduct {
-    let color = PortTypeId::new(1);
-    let scalar = PortTypeId::new(2);
-    let document = MaterialGraphDocument::new(
-        MaterialGraphDocumentId::new(28),
-        "wr028_sdf_slot_color",
-        GraphDefinition::new(
-            GraphId::new(28),
-            "wr028_sdf_slot_color",
-            CyclePolicy::RejectDirectedCycles,
-            [
-                NodeDefinition::new(
-                    NodeId::new(1),
-                    "sdf.material_channel",
-                    [PortDefinition::new(
-                        PortId::new(1),
-                        "value",
-                        PortDirection::Output,
-                        scalar,
-                    )],
-                ),
-                NodeDefinition::new(
-                    NodeId::new(2),
-                    "proc.ramp",
-                    [
-                        PortDefinition::new(PortId::new(2), "value", PortDirection::Input, scalar),
-                        PortDefinition::new(PortId::new(3), "color", PortDirection::Output, color),
-                    ],
-                )
-                .with_values([
-                    GraphMetadataEntry::new("low_color", GraphValue::text("1.0 0.05 0.02 1.0")),
-                    GraphMetadataEntry::new("high_color", GraphValue::text("0.02 0.95 0.20 1.0")),
-                ]),
-                NodeDefinition::new(
-                    NodeId::new(3),
-                    "pbr.output",
-                    [PortDefinition::new(
-                        PortId::new(4),
-                        "base_color",
-                        PortDirection::Input,
-                        color,
-                    )],
-                ),
-            ],
-            [
-                graph::EdgeDefinition::new(graph::EdgeId::new(1), PortId::new(1), PortId::new(2)),
-                graph::EdgeDefinition::new(graph::EdgeId::new(2), PortId::new(3), PortId::new(4)),
-            ],
-        ),
-        MaterialOutputTarget::RenderMaterial,
-    );
-    let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
-    assert!(
-        !lowering.report.has_blocking_issues(),
-        "{:?}",
-        lowering.report.issues()
-    );
-    lowering
-        .product
-        .expect("WR-028 slot color material should form")
-        .with_product_id(MaterialProductId::new(product_id))
 }
 
 fn assert_wr028_sdf_two_slot_scene_pixels(
     capture: &engine::plugins::render::inspect::RenderCapturedTexture,
 ) -> Wr028SdfPixelSamples {
     let left = dominant_pixel_in_region(capture, 0, capture.width / 2, |rgba| {
-        rgba[0] as i32 - rgba[1] as i32
+        rgba[1] as i32 - rgba[0].max(rgba[2]) as i32
     })
-    .expect("left SDF primitive should produce a red-dominant slot-0 pixel");
+    .expect("left SDF primitive should produce a green source-texture slot-0 pixel");
     let right = dominant_pixel_in_region(capture, capture.width / 2, capture.width, |rgba| {
-        rgba[1] as i32 - rgba[0] as i32
+        rgba[2] as i32 - rgba[1] as i32
     })
-    .expect("right SDF primitive should produce a green-dominant slot-1 pixel");
+    .expect("right SDF primitive should produce a blue source-texture slot-1 pixel");
     let background_pixel = RenderPixelCoordinate {
         x: 16_u32.min(capture.width.saturating_sub(1)),
         y: 16_u32.min(capture.height.saturating_sub(1)),
@@ -517,13 +455,13 @@ fn assert_wr028_sdf_two_slot_scene_pixels(
         .expect("background point should be sampleable");
 
     assert!(
-        left.1[0] > left.1[1].saturating_add(24),
-        "left SDF sample must be red-dominant from material slot 0: {:?}",
+        left.1[1] > left.1[0].saturating_add(12) && left.1[1] > left.1[2].saturating_add(12),
+        "left SDF sample must be green-dominant from source-backed material slot 0: {:?}",
         left
     );
     assert!(
-        right.1[1] > right.1[0].saturating_add(24),
-        "right SDF sample must be green-dominant from material slot 1: {:?}",
+        right.1[2] > right.1[1].saturating_add(12) && right.1[0] > right.1[1].saturating_add(12),
+        "right SDF sample must be purple/blue-dominant from source-backed material slot 1: {:?}",
         right
     );
     assert_ne!(
@@ -1533,8 +1471,19 @@ fn assert_material_preview_product_pixels(
     let scene_record = provenance
         .records
         .iter()
-        .find(|record| record.shader_id == scene_shader_path)
-        .expect("scene pass should consume the generated scene material bundle shader")
+        .find(|record| {
+            record.shader_id == scene_shader_path || scene_product_record_targets_scene_color(record)
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "scene pass should consume either the active preview scene shader or the generated scene table shader; records={:?}",
+                provenance
+                    .records
+                    .iter()
+                    .map(|record| record.shader_id.as_str())
+                    .collect::<Vec<_>>()
+            )
+        })
         .clone();
     let material_preview_record = provenance
         .records

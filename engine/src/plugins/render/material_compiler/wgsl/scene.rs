@@ -2,6 +2,7 @@
 
 use material_graph::MaterialIr;
 
+use super::super::CompiledMaterialResourceBinding;
 use super::super::MATERIAL_WGSL_COMPILER_CONTRACT_VERSION;
 use super::super::bindings::material_resource_declarations;
 use super::super::identity::output_target_label;
@@ -345,11 +346,19 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {{
     )
 }
 
-pub(crate) fn material_scene_table_product_wgsl(slots: &[SceneMaterialTableProgramSlot<'_>]) -> String {
+pub(crate) fn material_scene_table_product_wgsl(
+    slots: &[SceneMaterialTableProgramSlot<'_>],
+    resource_bindings: &[CompiledMaterialResourceBinding],
+) -> String {
     let first = slots
         .first()
         .expect("scene material table compiler validates non-empty slots");
-    let base = material_scene_product_wgsl(first.ir, &first.program);
+    let base_program = WgslMaterialProgram {
+        lines: first.program.lines.clone(),
+        output: first.program.output.clone(),
+        resource_bindings: resource_bindings.to_vec(),
+    };
+    let base = material_scene_product_wgsl(first.ir, &base_program);
     let Some(evaluate_start) = base.find("fn evaluate_material(ctx: MaterialEvalContext)") else {
         return base;
     };
