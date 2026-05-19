@@ -666,7 +666,13 @@ fn dispatch_graph_canvas_pointer_event(
                 .entry(target)
                 .or_default()
                 .update_pointer(graph_point, hit);
-            if let Some(ui_graph_editor::GraphCanvasAction::Pan { delta }) = action.as_ref() {
+            if let Some(ui_graph_editor::GraphCanvasAction::Pan { phase, delta }) = action.as_ref()
+                && matches!(
+                    phase,
+                    ui_graph_editor::GraphGesturePhase::Begin
+                        | ui_graph_editor::GraphGesturePhase::Update
+                )
+            {
                 let current = state
                     .graph_canvas_viewports
                     .get(&target)

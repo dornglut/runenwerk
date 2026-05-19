@@ -330,6 +330,9 @@ impl SceneMaterialAssignmentState {
                 slot_id.raw()
             ));
         }
+        if self.sdf_primitive_slots.get(&primitive).copied() == Some(slot_id) {
+            return Ok(());
+        }
         self.sdf_primitive_slots.insert(primitive, slot_id);
         self.bump_revision();
         Ok(())
@@ -534,6 +537,36 @@ mod tests {
             DEFAULT_SCENE_MATERIAL_SLOT_ID
         );
         assert_eq!(default_resolution.material_table_index, 0);
+    }
+
+    #[test]
+    fn sdf_assignment_state_revision_changes_only_when_assignment_changes() {
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Rock")
+                .with_material_asset(asset_id(7)),
+            SceneMaterialSlot::new(SceneMaterialSlotId::new(3), "Moss")
+                .with_material_asset(asset_id(8)),
+        ])
+        .expect("valid palette");
+        let mut assignments = SceneMaterialAssignmentState::new(palette, []).expect("state");
+        let primitive = SdfPrimitiveSourceId::new(EntityId(10));
+        let initial_revision = assignments.source_revision();
+
+        assignments
+            .assign_sdf_primitive_material_slot(primitive, SceneMaterialSlotId::new(2))
+            .expect("assign material");
+        let assigned_revision = assignments.source_revision();
+        assignments
+            .assign_sdf_primitive_material_slot(primitive, SceneMaterialSlotId::new(2))
+            .expect("same assignment should be a no-op");
+        assert_eq!(assignments.source_revision(), assigned_revision);
+
+        assignments
+            .assign_sdf_primitive_material_slot(primitive, SceneMaterialSlotId::new(3))
+            .expect("changed assignment should update revision");
+        assert!(assigned_revision > initial_revision);
+        assert!(assignments.source_revision() > assigned_revision);
     }
 
     #[test]

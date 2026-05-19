@@ -4826,6 +4826,88 @@ mod tests {
     }
 
     #[test]
+    fn texture_preview_selected_incompatible_asset_does_not_fallback() {
+        let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let mut app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let valid_asset_id = asset_id(86);
+        let selected_asset_id = asset_id(88);
+        let bytes = build_rgba8_ktx2(2, 2, 1, [13, 17, 19, 255], [13, 17, 19, 255]);
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-incompatible-selected-texture-preview-{}.ktx2",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("test texture should write");
+        let path_string = path.to_string_lossy().to_string();
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                valid_asset_id,
+                "valid_fallback_texture",
+                "Valid Fallback Texture",
+                AssetKind::Texture2D,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(
+                AssetArtifactDescriptor::new(
+                    asset_artifact_id(87),
+                    valid_asset_id,
+                    AssetKind::Texture2D,
+                    texture_payload_with_uri(
+                        texture_descriptor_with_byte_length(
+                            81,
+                            TextureDimension::Texture2D,
+                            TextureExtent::new(2, 2, 1),
+                            bytes.len() as u64,
+                        ),
+                        path_string.clone(),
+                    ),
+                    ArtifactCacheKey::new("texture-81"),
+                )
+                .with_artifact_path(path_string.clone()),
+            );
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(AssetRecord::new(
+                selected_asset_id,
+                "selected_volume_texture",
+                "Selected Volume Texture",
+                AssetKind::Texture3DVolume,
+            ));
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_artifact(AssetArtifactDescriptor::new(
+                asset_artifact_id(89),
+                selected_asset_id,
+                AssetKind::Texture3DVolume,
+                texture_payload(texture_descriptor(
+                    82,
+                    TextureDimension::Texture3DVolume,
+                    TextureExtent::new(2, 2, 2),
+                )),
+                ArtifactCacheKey::new("texture-82"),
+            ));
+        app.asset_catalog_runtime_mut()
+            .select_asset(Some(selected_asset_id));
+
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &m6_texture_request(ToolSurfaceKind::TextureViewer),
+            &Default::default(),
+        );
+
+        let text = provider_frame_text(&frame);
+        assert!(text.contains("MissingTextureProduct"));
+        assert!(text.contains("selected asset 88 has no compatible Texture2D texture product"));
+        assert!(!text.contains("preview descriptor: product=81"));
+        assert!(!text.contains("preview descriptor: product=82"));
+        assert!(!frame_has_product_surface(&frame));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn texture_preview_reports_missing_artifact_uri() {
         let registry = EditorSurfaceProviderRegistry::runenwerk_default();
         let mut app = RunenwerkEditorApp::new();

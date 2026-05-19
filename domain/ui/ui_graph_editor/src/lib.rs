@@ -439,6 +439,7 @@ pub enum GraphCanvasAction {
     },
     ClearSelection,
     Pan {
+        phase: GraphGesturePhase,
         delta: GraphVector,
     },
     Zoom {
@@ -666,6 +667,7 @@ impl GraphCanvasGestureState {
                         current: point,
                     }));
                     Some(GraphCanvasAction::Pan {
+                        phase: GraphGesturePhase::Begin,
                         delta: GraphVector::ZERO,
                     })
                 }
@@ -703,6 +705,7 @@ impl GraphCanvasGestureState {
                 let previous = pan.current;
                 pan.current = point;
                 Some(GraphCanvasAction::Pan {
+                    phase: GraphGesturePhase::Update,
                     delta: GraphVector::new(point.x - previous.x, point.y - previous.y),
                 })
             }
@@ -742,7 +745,10 @@ impl GraphCanvasGestureState {
             }
             GraphActiveGesture::Pan(mut pan) => {
                 pan.current = point;
-                Some(GraphCanvasAction::Pan { delta: pan.delta() })
+                Some(GraphCanvasAction::Pan {
+                    phase: GraphGesturePhase::End,
+                    delta: pan.delta(),
+                })
             }
             GraphActiveGesture::Marquee(mut marquee) => {
                 marquee.current = point;
@@ -895,6 +901,44 @@ mod tests {
             })
         );
         assert!(state.active.is_none());
+    }
+
+    #[test]
+    fn graph_canvas_pan_separates_incremental_updates_from_final_commit() {
+        let mut state = GraphCanvasGestureState::default();
+
+        assert_eq!(
+            state.begin_pointer(
+                GraphHitTarget::Background,
+                GraphPoint::new(10, 10),
+                GraphInputModifiers::default(),
+            ),
+            Some(GraphCanvasAction::Pan {
+                phase: GraphGesturePhase::Begin,
+                delta: GraphVector::ZERO,
+            })
+        );
+        assert_eq!(
+            state.update_pointer(GraphPoint::new(14, 13), GraphHitTarget::Background),
+            Some(GraphCanvasAction::Pan {
+                phase: GraphGesturePhase::Update,
+                delta: GraphVector::new(4, 3),
+            })
+        );
+        assert_eq!(
+            state.update_pointer(GraphPoint::new(16, 15), GraphHitTarget::Background),
+            Some(GraphCanvasAction::Pan {
+                phase: GraphGesturePhase::Update,
+                delta: GraphVector::new(2, 2),
+            })
+        );
+        assert_eq!(
+            state.end_pointer(GraphPoint::new(18, 19), GraphHitTarget::Background),
+            Some(GraphCanvasAction::Pan {
+                phase: GraphGesturePhase::End,
+                delta: GraphVector::new(8, 9),
+            })
+        );
     }
 
     #[test]

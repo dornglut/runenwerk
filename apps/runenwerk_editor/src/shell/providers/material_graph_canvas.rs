@@ -214,12 +214,13 @@ pub(super) fn material_action_for_graph_canvas_action(
         ui_graph_editor::GraphCanvasAction::ClearSelection => {
             Some(MaterialSurfaceAction::ClearGraphSelection)
         }
-        ui_graph_editor::GraphCanvasAction::Pan { delta } => {
-            Some(MaterialSurfaceAction::PanGraph {
-                delta_x: delta.x,
-                delta_y: delta.y,
-            })
-        }
+        ui_graph_editor::GraphCanvasAction::Pan {
+            phase: ui_graph_editor::GraphGesturePhase::End,
+            delta,
+        } => Some(MaterialSurfaceAction::PanGraph {
+            delta_x: delta.x,
+            delta_y: delta.y,
+        }),
         ui_graph_editor::GraphCanvasAction::Zoom { zoom_milli, .. } => {
             Some(MaterialSurfaceAction::SetGraphZoom { zoom_milli })
         }
@@ -244,7 +245,8 @@ pub(super) fn material_action_for_graph_canvas_action(
         }
         // Gesture lifecycle and provisional interactions are canvas-local state.
         // Only committed graph edits become Material Lab source/workflow commands.
-        ui_graph_editor::GraphCanvasAction::BeginNodeDrag { .. }
+        ui_graph_editor::GraphCanvasAction::Pan { .. }
+        | ui_graph_editor::GraphCanvasAction::BeginNodeDrag { .. }
         | ui_graph_editor::GraphCanvasAction::UpdateNodeDrag { .. }
         | ui_graph_editor::GraphCanvasAction::BeginConnection { .. }
         | ui_graph_editor::GraphCanvasAction::UpdateConnection { .. }
@@ -411,6 +413,7 @@ mod tests {
             ),
             (
                 ui_graph_editor::GraphCanvasAction::Pan {
+                    phase: ui_graph_editor::GraphGesturePhase::End,
                     delta: ui_graph_editor::GraphVector::new(8, -4),
                 },
                 MaterialSurfaceAction::PanGraph {
@@ -521,6 +524,14 @@ mod tests {
     #[test]
     fn material_graph_provider_intentionally_ignores_incomplete_graph_interactions() {
         let ignored = [
+            ui_graph_editor::GraphCanvasAction::Pan {
+                phase: ui_graph_editor::GraphGesturePhase::Begin,
+                delta: ui_graph_editor::GraphVector::ZERO,
+            },
+            ui_graph_editor::GraphCanvasAction::Pan {
+                phase: ui_graph_editor::GraphGesturePhase::Update,
+                delta: ui_graph_editor::GraphVector::new(4, 5),
+            },
             ui_graph_editor::GraphCanvasAction::BeginNodeDrag {
                 node: ui_graph_editor::GraphNodeKey(1),
                 start: ui_graph_editor::GraphPoint::new(0, 0),
@@ -555,7 +566,10 @@ mod tests {
         ];
 
         for graph_action in ignored {
-            assert_eq!(material_action_for_graph_canvas_action(graph_action.clone()), None);
+            assert_eq!(
+                material_action_for_graph_canvas_action(graph_action.clone()),
+                None
+            );
             assert_eq!(map_graph_action_to_shell_command(graph_action, 73), None);
         }
     }
@@ -614,6 +628,7 @@ mod tests {
                 &request,
                 MATERIAL_GRAPH_CANVAS_PROVIDER_ID,
                 SurfaceInteraction::GraphCanvasAction(ui_graph_editor::GraphCanvasAction::Pan {
+                    phase: ui_graph_editor::GraphGesturePhase::End,
                     delta: ui_graph_editor::GraphVector::new(8, -4),
                 }),
             )

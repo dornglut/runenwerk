@@ -212,10 +212,7 @@ pub fn prepare_texture_preview(
         select_texture_artifact(catalog, selected_asset_id, surface).ok_or_else(|| {
             (
                 None,
-                TexturePreviewDiagnostic::new(
-                    TexturePreviewDiagnosticCode::MissingTextureProduct,
-                    "no catalog-backed texture product is available for this viewer",
-                ),
+                missing_texture_product_diagnostic(selected_asset_id, surface),
             )
         })?;
     let (descriptor, descriptor_hash, artifact_uri) =
@@ -371,22 +368,45 @@ fn select_texture_artifact(
     surface: TextureViewerSurfaceKind,
 ) -> Option<&AssetArtifactDescriptor> {
     if let Some(asset_id) = selected_asset_id {
-        let selected_artifact = catalog.asset(asset_id).and_then(|record| {
+        return catalog.asset(asset_id).and_then(|record| {
             record
                 .artifact_ids
                 .iter()
                 .filter_map(|artifact_id| catalog.artifact(*artifact_id))
                 .find(|artifact| artifact_matches_surface(artifact, surface))
         });
-        if selected_artifact.is_some() {
-            return selected_artifact;
-        }
     }
 
     catalog
         .artifacts
         .values()
         .find(|artifact| artifact_matches_surface(artifact, surface))
+}
+
+fn missing_texture_product_diagnostic(
+    selected_asset_id: Option<AssetId>,
+    surface: TextureViewerSurfaceKind,
+) -> TexturePreviewDiagnostic {
+    let surface_label = texture_surface_product_label(surface);
+    let message = match selected_asset_id {
+        Some(asset_id) => format!(
+            "selected asset {} has no compatible {surface_label} texture product",
+            asset_id.raw()
+        ),
+        None => {
+            format!(
+                "no catalog-backed {surface_label} texture product is available for this viewer"
+            )
+        }
+    };
+    TexturePreviewDiagnostic::new(TexturePreviewDiagnosticCode::MissingTextureProduct, message)
+}
+
+fn texture_surface_product_label(surface: TextureViewerSurfaceKind) -> &'static str {
+    match surface {
+        TextureViewerSurfaceKind::Texture2D => "Texture2D",
+        TextureViewerSurfaceKind::VolumeTexture3D => "Texture3DVolume",
+    }
 }
 
 fn artifact_matches_surface(
