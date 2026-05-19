@@ -945,6 +945,32 @@ Status: C6D implemented. Option C is complete.
   seams to stable-key-native APIs, but those seams are explicitly marked and no
   longer act as normal authority.
 
+Baseline repair after C6D tightened the completed state without changing the
+deferred product scope:
+
+- V5 tab-stack locks now persist `locked_stable_surface_key` as the primary
+  lock identity and keep legacy locked `ToolSurfaceKind` only as compatibility
+  metadata;
+- V1-V4 locked-kind layouts still migrate through the legacy bridge into
+  stable-key lock authority;
+- app V5 layout loading now passes the WorkbenchHost `ToolSurfaceRegistry` so
+  stable-key-only persisted surfaces and tab-stack locks load through the real
+  app read path;
+- shell tab-stack split/reset/lock chrome now emits stable-key commands for
+  active stable-key surfaces, so stable-key-only tools such as the Tool Suite
+  Registry Inspector are not silently remapped to viewport semantics;
+- stable-key-only tab-stack switch chrome no longer emits legacy enum switch
+  actions; legacy switch actions remain available only where legacy surface
+  metadata is present;
+- live reducer lock mutations validate stable-key and legacy metadata
+  consistency before updating tab-stack lock state;
+- architecture guards were refreshed to assert the stable-key command paths,
+  the labeled legacy command-dispatch boundary, and the typed Material Graph
+  canvas model.
+
+This repair does not implement dynamic plugins, Texture Lab, or WR-028
+per-slot material binding.
+
 ## Post-Migration Platform Diagnostic: Tool Suite Registry Inspector
 
 Status: Phase A-E implemented; closeout evidence is recorded in

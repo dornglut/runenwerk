@@ -1304,7 +1304,7 @@ fn surface_session_mutations_are_structurally_gated_before_session_state_access(
         ("viewport", &viewport, "ToolSurfaceKind::Viewport"),
     ] {
         assert!(
-            source.contains("resolve_surface_command_contract")
+            source.contains("resolve_legacy_surface_command_contract")
                 && source.contains(expected_kind_marker)
                 && source.contains("surface-kind mismatch")
                 && source.contains("SurfaceCapability::Observe")
@@ -1314,7 +1314,7 @@ fn surface_session_mutations_are_structurally_gated_before_session_state_access(
     }
     assert!(
         !entity_table.contains(
-            "resolve_surface_command_contract(shell_state, target, ToolSurfaceKind::EntityTable).is_none()"
+            "resolve_legacy_surface_command_contract(shell_state, target, ToolSurfaceKind::EntityTable).is_none()"
         ),
         "entity-table session dispatch must not treat any existing active tool surface as an entity-table session target",
     );
@@ -1442,7 +1442,7 @@ fn wr021_material_descriptors_and_ui_do_not_fall_back_to_old_shortcuts() {
     assert!(
         !material_provider.contains("build_self_authoring_control_panel(")
             && material_provider.contains("build_material_graph_surface")
-            && material_shell_builder.contains("view_model.graph.nodes"),
+            && material_shell_builder.contains("view_model.graph.graph_editor.canvas"),
         "Material Graph Canvas must project typed graph surface data instead of the generic line/control-panel helper",
     );
 
@@ -1452,6 +1452,33 @@ fn wr021_material_descriptors_and_ui_do_not_fall_back_to_old_shortcuts() {
         material_catalog.contains("from_port_type_id")
             && !material_state.contains("_ => MaterialValueType::Float"),
         "unknown material port types must not be silently projected as Float",
+    );
+}
+
+#[test]
+fn shell_chrome_stable_key_only_surfaces_do_not_fallback_to_viewport() {
+    let shell_builder =
+        read_workspace_source("domain/editor/editor_shell/src/composition/build_editor_shell.rs");
+    let shell_commands =
+        read_workspace_source("domain/editor/editor_shell/src/commands/shell_command.rs");
+    let controller = read_workspace_source("apps/runenwerk_editor/src/shell/controller.rs");
+
+    assert!(
+        shell_builder.contains("SplitTabStackAreaStableKey")
+            && shell_builder.contains("ResetTabStackAreaStableKey")
+            && shell_builder.contains("LockTabStackAreaStableKey")
+            && shell_builder.contains("tab_stack_supports_legacy_switch_menu")
+            && shell_builder.contains("legacy_active_tool_surface_kind")
+            && shell_commands.contains("SplitTabStackAreaStableKey")
+            && shell_commands.contains("ResetTabStackAreaStableKey")
+            && shell_commands.contains("LockTabStackAreaStableKey"),
+        "shell chrome must have stable-key-native split/reset/lock paths and gate legacy switch actions on legacy metadata",
+    );
+    assert!(
+        !shell_builder.contains("unwrap_or(ToolSurfaceKind::Viewport)")
+            && !controller.contains("unwrap_or(ToolSurfaceKind::Viewport)")
+            && !controller.contains("return ToolSurfaceKind::Viewport"),
+        "stable-key-only shell chrome must not silently remap missing legacy metadata to viewport",
     );
 }
 

@@ -9,7 +9,7 @@ use editor_shell::{
     PERSISTED_WORKSPACE_STATE_VERSION_V3, PERSISTED_WORKSPACE_STATE_VERSION_V4,
     PERSISTED_WORKSPACE_STATE_VERSION_V5, PersistedWorkspaceStateV1, PersistedWorkspaceStateV2,
     PersistedWorkspaceStateV3, PersistedWorkspaceStateV4, PersistedWorkspaceStateV5,
-    WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
+    ToolSurfaceRegistry, WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
     default_workspace_profile_registry,
 };
 
@@ -97,6 +97,20 @@ pub fn read_workspace_layout(path: &Path) -> Result<WorkspaceState> {
 }
 
 pub fn read_workspace_layout_with_metadata(path: &Path) -> Result<WorkspaceLayoutReadResult> {
+    read_workspace_layout_with_optional_registry(path, None)
+}
+
+pub fn read_workspace_layout_with_metadata_and_registry(
+    path: &Path,
+    registry: &ToolSurfaceRegistry,
+) -> Result<WorkspaceLayoutReadResult> {
+    read_workspace_layout_with_optional_registry(path, Some(registry))
+}
+
+fn read_workspace_layout_with_optional_registry(
+    path: &Path,
+    registry: Option<&ToolSurfaceRegistry>,
+) -> Result<WorkspaceLayoutReadResult> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read workspace layout: {}", path.display()))?;
     let probe: PersistedWorkspaceVersionProbe =
@@ -174,7 +188,7 @@ pub fn read_workspace_layout_with_metadata(path: &Path) -> Result<WorkspaceLayou
             let layout_template_version = persisted.layout_template_version;
             let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
             (
-                WorkspaceState::from_persisted_v5(persisted, None),
+                WorkspaceState::from_persisted_v5(persisted, registry),
                 workspace_profile_id,
                 layout_template,
                 layout_template_version,
@@ -215,7 +229,7 @@ mod tests {
         },
         shell::tool_suites::{
             MATERIAL_GRAPH_CANVAS_SURFACE_KEY, MATERIAL_INSPECTOR_SURFACE_KEY,
-            MATERIAL_PREVIEW_SURFACE_KEY,
+            MATERIAL_PREVIEW_SURFACE_KEY, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
         },
     };
     use editor_shell::{SurfaceDocumentContext, SurfaceProviderAvailability};
@@ -223,8 +237,9 @@ mod tests {
         MATERIAL_WORKSPACE_PROFILE_ID, PanelKind, PersistedPanelHostKindV1,
         PersistedPanelHostNodeV1, PersistedPanelInstanceStateV2, PersistedPanelKindV2,
         PersistedTabStackStateV1, PersistedToolSurfaceKindV2, PersistedToolSurfaceMountV1,
-        PersistedToolSurfaceStateV2, PersistedWorkspaceStateV2, ToolSurfaceStableKey,
-        WorkspaceDefaultToolSurface, WorkspaceIdentityAllocator,
+        PersistedToolSurfaceStateV2, PersistedWorkspaceStateV2,
+        RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, ToolSurfaceStableKey, WorkspaceDefaultToolSurface,
+        WorkspaceIdentityAllocator, WorkspaceMutation, reduce_workspace,
     };
     use std::sync::atomic::{AtomicU64, Ordering};
     use ui_theme::ThemeTokens;
@@ -360,6 +375,66 @@ mod tests {
         .expect("stable-key-native Material Lab workspace should build")
     }
 
+    fn runtime_debug_inspector_workspace(app: &RunenwerkEditorApp) -> WorkspaceState {
+        let profile_registry = default_workspace_profile_registry();
+        let profile = profile_registry
+            .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
+            .expect("runtime debug profile should exist");
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+
+        profile
+            .build_default_workspace_state_with_registry(
+                workspace_id,
+                &mut allocator,
+                app.workbench_host().tool_surface_registry(),
+            )
+            .expect("runtime debug profile should build with hosted registry")
+    }
+
+    fn runtime_debug_locked_inspector_workspace(app: &RunenwerkEditorApp) -> WorkspaceState {
+        let workspace = runtime_debug_inspector_workspace(app);
+        let (inspector_stack, _) =
+            tab_stack_and_panel_by_surface_key(&workspace, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY);
+        let inspector_key = ToolSurfaceStableKey::new(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
+            .expect("inspector stable key should be valid");
+
+        reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaStableKey {
+                tab_stack_id: inspector_stack,
+                locked_stable_surface_key: Some(inspector_key),
+                legacy_locked_tool_surface_kind: None,
+            },
+        )
+        .expect("stable-key-only inspector lock should apply")
+    }
+
+    fn tab_stack_and_panel_by_surface_key(
+        workspace: &WorkspaceState,
+        stable_surface_key: &str,
+    ) -> (editor_shell::TabStackId, editor_shell::PanelInstanceId) {
+        let stable_surface_key = ToolSurfaceStableKey::new(stable_surface_key)
+            .expect("test stable surface key should be valid");
+        let surface_id = workspace
+            .tool_surfaces()
+            .find(|surface| surface.stable_surface_key() == &stable_surface_key)
+            .expect("surface should exist by stable key")
+            .id;
+        let panel_id = workspace
+            .panels()
+            .find(|panel| panel.active_tool_surface == Some(surface_id))
+            .expect("stable-key surface should be active in a panel")
+            .id;
+        let tab_stack_id = workspace
+            .tab_stacks()
+            .find(|stack| stack.ordered_panels.contains(&panel_id))
+            .expect("stable-key surface panel should be mounted in a tab stack")
+            .id;
+
+        (tab_stack_id, panel_id)
+    }
+
     fn material_surface_keys(workspace: &WorkspaceState) -> Vec<String> {
         workspace
             .tool_surfaces()
@@ -444,6 +519,119 @@ mod tests {
         let loaded = read_workspace_layout(&path).expect("workspace layout should decode");
 
         assert_eq!(workspace, loaded);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn app_v5_layout_load_uses_registry_for_stable_key_only_surface() {
+        let app = RunenwerkEditorApp::new();
+        let workspace = runtime_debug_inspector_workspace(&app);
+        let path = temp_workspace_layout_path();
+
+        write_workspace_layout(&path, &workspace)
+            .expect("runtime debug workspace should write");
+        let loaded = read_workspace_layout_with_metadata_and_registry(
+            &path,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("registry-aware app reader should load stable-key-only inspector layout");
+
+        let inspector_key = ToolSurfaceStableKey::new(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
+            .expect("inspector stable key should be valid");
+        let inspector_surface = loaded
+            .workspace_state
+            .tool_surfaces()
+            .find(|surface| surface.stable_surface_key() == &inspector_key)
+            .expect("loaded workspace should preserve inspector stable key");
+
+        assert_eq!(inspector_surface.legacy_tool_surface_kind(), None);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn runtime_debug_inspector_v5_layout_round_trips_through_real_app_read_path() {
+        let app = RunenwerkEditorApp::new();
+        let workspace = runtime_debug_inspector_workspace(&app);
+        let path = temp_workspace_layout_path();
+
+        write_workspace_layout_for_profile(&path, &workspace, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
+            .expect("runtime debug workspace should write with profile metadata");
+        let loaded = read_workspace_layout_with_metadata_and_registry(
+            &path,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("registry-aware app reader should load runtime debug layout");
+
+        assert_eq!(loaded.workspace_state, workspace);
+        assert_eq!(
+            loaded.workspace_profile_id,
+            Some(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn v5_stable_key_only_tab_stack_lock_loads_through_app_workspace_layout_reader() {
+        let app = RunenwerkEditorApp::new();
+        let workspace = runtime_debug_locked_inspector_workspace(&app);
+        let (inspector_stack, _) =
+            tab_stack_and_panel_by_surface_key(&workspace, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY);
+        let path = temp_workspace_layout_path();
+
+        write_workspace_layout(&path, &workspace)
+            .expect("locked runtime debug workspace should write");
+        let loaded = read_workspace_layout_with_metadata_and_registry(
+            &path,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("registry-aware app reader should load stable-key-only tab-stack lock");
+        let loaded_stack = loaded
+            .workspace_state
+            .tab_stack(inspector_stack)
+            .expect("loaded inspector tab stack should exist");
+
+        assert_eq!(
+            loaded_stack
+                .locked_stable_surface_key
+                .as_ref()
+                .map(|key| key.as_str()),
+            Some(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
+        );
+        assert_eq!(loaded_stack.legacy_locked_tool_surface_kind, None);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn v5_unknown_stable_key_still_fails_closed_with_registry() {
+        let app = RunenwerkEditorApp::new();
+        let workspace = runtime_debug_locked_inspector_workspace(&app);
+        let mut persisted = workspace
+            .to_persisted_v5()
+            .expect("runtime debug workspace should form v5");
+        let (inspector_stack, _) =
+            tab_stack_and_panel_by_surface_key(&workspace, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY);
+        let stack_id = inspector_stack.raw();
+        let persisted_stack = persisted
+            .tab_stacks
+            .iter_mut()
+            .find(|stack| stack.id == stack_id)
+            .expect("persisted inspector stack should exist");
+        persisted_stack.locked_stable_surface_key =
+            Some("runenwerk.unknown.stable_only_surface".to_string());
+
+        let path = temp_workspace_layout_path();
+        write_persisted_layout(&path, &persisted);
+        let error = read_workspace_layout_with_metadata_and_registry(
+            &path,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect_err("unknown V5 lock stable key should fail with registry");
+
+        assert!(
+            error
+                .to_string()
+                .contains("failed to validate persisted workspace layout")
+        );
         let _ = std::fs::remove_file(path);
     }
 
@@ -655,6 +843,56 @@ mod tests {
 
         assert_eq!(loaded, workspace);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn v1_to_v4_workspace_layout_load_still_works() {
+        let app = RunenwerkEditorApp::new();
+        let workspace = placeholder_workspace();
+
+        let path_v1 = temp_workspace_layout_path();
+        write_persisted_layout(&path_v1, &workspace.to_persisted_v1());
+        let loaded_v1 = read_workspace_layout_with_metadata_and_registry(
+            &path_v1,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("v1 workspace layout should load with registry-aware reader")
+        .workspace_state;
+        assert_eq!(loaded_v1, workspace);
+        let _ = std::fs::remove_file(path_v1);
+
+        let path_v2 = temp_workspace_layout_path();
+        write_persisted_layout(&path_v2, &workspace.to_persisted_v2());
+        let loaded_v2 = read_workspace_layout_with_metadata_and_registry(
+            &path_v2,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("v2 workspace layout should load with registry-aware reader")
+        .workspace_state;
+        assert_eq!(loaded_v2, workspace);
+        let _ = std::fs::remove_file(path_v2);
+
+        let path_v3 = temp_workspace_layout_path();
+        write_persisted_layout(&path_v3, &workspace.to_persisted_v3());
+        let loaded_v3 = read_workspace_layout_with_metadata_and_registry(
+            &path_v3,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("v3 workspace layout should load with registry-aware reader")
+        .workspace_state;
+        assert_eq!(loaded_v3, workspace);
+        let _ = std::fs::remove_file(path_v3);
+
+        let path_v4 = temp_workspace_layout_path();
+        write_persisted_layout(&path_v4, &workspace.to_persisted_v4());
+        let loaded_v4 = read_workspace_layout_with_metadata_and_registry(
+            &path_v4,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("v4 workspace layout should load with registry-aware reader")
+        .workspace_state;
+        assert_eq!(loaded_v4, workspace);
+        let _ = std::fs::remove_file(path_v4);
     }
 
     #[test]

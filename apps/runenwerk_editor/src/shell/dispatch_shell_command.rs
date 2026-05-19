@@ -12,7 +12,7 @@ use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component
 use crate::persistence::{
     WorkspaceLayoutReadResult, default_workspace_layout_path_for_profile,
     legacy_workspace_layout_path_for_scene, load_scene_file_into_runtime_classified,
-    read_retained_change_log, read_workspace_layout_with_metadata,
+    read_retained_change_log, read_workspace_layout_with_metadata_and_registry,
     retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
     write_workspace_layout_for_profile,
 };
@@ -557,6 +557,52 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 })?;
             app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
         }
+        ShellCommand::SplitTabStackAreaStableKey {
+            tab_stack_id,
+            axis,
+            panel_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace command",
+                    ))?;
+            shell_state.close_tab_stack_popup_menu();
+            shell_state
+                .try_apply_workspace_mutation_with_allocations(|allocator| {
+                    let split_host_id = allocator.allocate_panel_host_id();
+                    let first_child_host_id = allocator.allocate_panel_host_id();
+                    let second_child_host_id = allocator.allocate_panel_host_id();
+                    let new_tab_stack_id = allocator.allocate_tab_stack_id();
+                    let new_panel_id = allocator.allocate_panel_instance_id();
+                    let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
+                    Ok((
+                        WorkspaceMutation::SplitTabStackArea {
+                            tab_stack_id,
+                            axis,
+                            split_host_id,
+                            first_child_host_id,
+                            second_child_host_id,
+                            new_tab_stack_id,
+                            new_panel_id,
+                            new_panel_kind: panel_kind,
+                            new_tool_surface_id,
+                            new_stable_surface_key: stable_surface_key.clone(),
+                            legacy_new_tool_surface_kind: legacy_tool_surface_kind,
+                            fraction: 0.5,
+                        },
+                        (),
+                    ))
+                })
+                .map_err(|_| {
+                    EditorMutationError::runtime_rejected("split tab stack area failed")
+                })?;
+            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+        }
         ShellCommand::DuplicateTabStackArea {
             tab_stack_id,
             projection_epoch: _,
@@ -635,6 +681,41 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 })?;
             app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
         }
+        ShellCommand::ResetTabStackAreaStableKey {
+            tab_stack_id,
+            panel_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace command",
+                    ))?;
+            shell_state.close_tab_stack_popup_menu();
+            shell_state
+                .try_apply_workspace_mutation_with_allocations(|allocator| {
+                    let panel_id = allocator.allocate_panel_instance_id();
+                    let tool_surface_id = allocator.allocate_tool_surface_instance_id();
+                    Ok((
+                        WorkspaceMutation::ResetTabStackArea {
+                            tab_stack_id,
+                            panel_id,
+                            panel_kind,
+                            tool_surface_id,
+                            stable_surface_key: stable_surface_key.clone(),
+                            legacy_tool_surface_kind,
+                        },
+                        (),
+                    ))
+                })
+                .map_err(|_| {
+                    EditorMutationError::runtime_rejected("reset tab stack area failed")
+                })?;
+            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+        }
         ShellCommand::LockTabStackAreaType {
             tab_stack_id,
             locked_tool_surface_kind,
@@ -654,6 +735,27 @@ pub fn dispatch_shell_command_with_viewport_commands(
             .map_err(|_| EditorMutationError::runtime_rejected("lock tab stack area failed"))?;
             shell_state
                 .apply_workspace_mutation(lock_mutation)
+                .map_err(|_| EditorMutationError::runtime_rejected("lock tab stack area failed"))?;
+        }
+        ShellCommand::LockTabStackAreaStableKey {
+            tab_stack_id,
+            locked_stable_surface_key,
+            legacy_locked_tool_surface_kind,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace command",
+                    ))?;
+            shell_state.close_tab_stack_popup_menu();
+            shell_state
+                .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaStableKey {
+                    tab_stack_id,
+                    locked_stable_surface_key,
+                    legacy_locked_tool_surface_kind,
+                })
                 .map_err(|_| EditorMutationError::runtime_rejected("lock tab stack area failed"))?;
         }
         ShellCommand::ActivateDocumentTab { document_id } => {
@@ -1033,10 +1135,13 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ClosePanelTab { .. } => "ClosePanelTab",
         ShellCommand::CloseOtherPanelTabs { .. } => "CloseOtherPanelTabs",
         ShellCommand::SplitTabStackArea { .. } => "SplitTabStackArea",
+        ShellCommand::SplitTabStackAreaStableKey { .. } => "SplitTabStackAreaStableKey",
         ShellCommand::DuplicateTabStackArea { .. } => "DuplicateTabStackArea",
         ShellCommand::CloseTabStackArea { .. } => "CloseTabStackArea",
         ShellCommand::ResetTabStackArea { .. } => "ResetTabStackArea",
+        ShellCommand::ResetTabStackAreaStableKey { .. } => "ResetTabStackAreaStableKey",
         ShellCommand::LockTabStackAreaType { .. } => "LockTabStackAreaType",
+        ShellCommand::LockTabStackAreaStableKey { .. } => "LockTabStackAreaStableKey",
         ShellCommand::ActivateDocumentTab { .. } => "ActivateDocumentTab",
         ShellCommand::CloseDocumentTab { .. } => "CloseDocumentTab",
         ShellCommand::SaveDocumentTab { .. } => "SaveDocumentTab",
@@ -1328,7 +1433,11 @@ fn load_workspace_profile_layout(
     let workspace_layout_path = default_workspace_layout_path_for_profile(profile_id);
     let workspace_state = if workspace_layout_path.exists() {
         let saved_workspace =
-            read_workspace_layout_with_metadata(&workspace_layout_path).map_err(|_| {
+            read_workspace_layout_with_metadata_and_registry(
+                &workspace_layout_path,
+                app.workbench_host().tool_surface_registry(),
+            )
+            .map_err(|_| {
                 EditorMutationError::runtime_rejected("failed to load workspace layout")
             })?;
         if workspace_layout_matches_profile(&saved_workspace, profile) {
@@ -1549,7 +1658,10 @@ fn load_scene_from_default_path(
     };
 
     if let Some(layout_path_to_load) = layout_path_to_load {
-        match read_workspace_layout_with_metadata(&layout_path_to_load) {
+        match read_workspace_layout_with_metadata_and_registry(
+            &layout_path_to_load,
+            app.workbench_host().tool_surface_registry(),
+        ) {
             Ok(saved_workspace) => {
                 let registry = default_workspace_profile_registry();
                 let active_profile = registry.profile(shell_state.active_workspace_profile_id());

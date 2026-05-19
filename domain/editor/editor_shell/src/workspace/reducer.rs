@@ -272,6 +272,27 @@ fn stable_key_for_legacy_surface_with_resolver(
         .map_err(WorkspaceStateError::from)
 }
 
+fn validate_tab_stack_lock_identity(
+    tab_stack_id: TabStackId,
+    locked_stable_surface_key: Option<&ToolSurfaceStableKey>,
+    legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
+) -> Result<(), WorkspaceStateError> {
+    let Some(legacy_kind) = legacy_locked_tool_surface_kind else {
+        return Ok(());
+    };
+    let expected_stable_surface_key = stable_key_for_tool_surface_kind(legacy_kind);
+    if expected_stable_surface_key.as_ref() == locked_stable_surface_key {
+        return Ok(());
+    }
+
+    Err(WorkspaceStateError::TabStackLockStableKeyLegacyMismatch {
+        tab_stack_id,
+        locked_stable_surface_key: locked_stable_surface_key.cloned(),
+        legacy_locked_tool_surface_kind: legacy_kind,
+        expected_stable_surface_key,
+    })
+}
+
 pub fn reduce_workspace(
     state: &WorkspaceState,
     op: WorkspaceMutation,
@@ -411,6 +432,11 @@ fn apply_mutation(
             locked_stable_surface_key,
             legacy_locked_tool_surface_kind,
         } => {
+            validate_tab_stack_lock_identity(
+                tab_stack_id,
+                locked_stable_surface_key.as_ref(),
+                legacy_locked_tool_surface_kind,
+            )?;
             let stack = state
                 .tab_stacks_by_id
                 .get_mut(&tab_stack_id)
@@ -1975,6 +2001,89 @@ mod tests {
             error,
             WorkspaceStateError::ProjectionShapeMismatch(_)
         ));
+    }
+
+    #[test]
+    fn lock_tab_stack_area_stable_key_rejects_legacy_kind_mismatch() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+
+        let error = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaStableKey {
+                tab_stack_id: viewport_stack,
+                locked_stable_surface_key: Some(stable_key_for_test(ToolSurfaceKind::Viewport)),
+                legacy_locked_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
+            },
+        )
+        .expect_err("lock stable key and legacy metadata mismatch should fail");
+
+        assert!(matches!(
+            error,
+            WorkspaceStateError::TabStackLockStableKeyLegacyMismatch {
+                legacy_locked_tool_surface_kind: ToolSurfaceKind::Inspector,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn lock_tab_stack_area_stable_key_accepts_matching_legacy_metadata() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+
+        let locked = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaStableKey {
+                tab_stack_id: viewport_stack,
+                locked_stable_surface_key: Some(stable_key_for_test(ToolSurfaceKind::Viewport)),
+                legacy_locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            },
+        )
+        .expect("matching lock stable key and legacy metadata should succeed");
+
+        let stack = locked
+            .tab_stack(viewport_stack)
+            .expect("locked stack should exist");
+        assert_eq!(
+            stack
+                .locked_stable_surface_key
+                .as_ref()
+                .map(|key| key.as_str()),
+            Some("runenwerk.scene.viewport")
+        );
+        assert_eq!(
+            stack.legacy_locked_tool_surface_kind,
+            Some(ToolSurfaceKind::Viewport)
+        );
+    }
+
+    #[test]
+    fn lock_tab_stack_area_stable_key_accepts_no_legacy_metadata() {
+        let workspace = bootstrap_workspace();
+        let viewport_stack = tab_stack_id_by_panel_kind(&workspace, PanelKind::Viewport);
+
+        let locked = reduce_workspace(
+            &workspace,
+            WorkspaceMutation::LockTabStackAreaStableKey {
+                tab_stack_id: viewport_stack,
+                locked_stable_surface_key: Some(stable_key_for_test(ToolSurfaceKind::Viewport)),
+                legacy_locked_tool_surface_kind: None,
+            },
+        )
+        .expect("stable-key-only lock metadata should succeed");
+
+        let stack = locked
+            .tab_stack(viewport_stack)
+            .expect("locked stack should exist");
+        assert_eq!(
+            stack
+                .locked_stable_surface_key
+                .as_ref()
+                .map(|key| key.as_str()),
+            Some("runenwerk.scene.viewport")
+        );
+        assert_eq!(stack.legacy_locked_tool_surface_kind, None);
     }
 
     #[test]

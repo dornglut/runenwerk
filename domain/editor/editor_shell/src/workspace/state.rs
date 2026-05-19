@@ -615,6 +615,26 @@ pub enum WorkspaceStateError {
         legacy_tool_surface_kind: ToolSurfaceKind,
         expected_stable_surface_key: Option<ToolSurfaceStableKey>,
     },
+    PersistedTabStackLockStableKeyInvalidSyntax {
+        tab_stack_id: u64,
+        stable_surface_key: String,
+    },
+    PersistedTabStackLockStableKeyUnknown {
+        tab_stack_id: u64,
+        stable_surface_key: ToolSurfaceStableKey,
+    },
+    PersistedTabStackLockStableKeyLegacyMismatch {
+        tab_stack_id: u64,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: ToolSurfaceKind,
+        expected_stable_surface_key: Option<ToolSurfaceStableKey>,
+    },
+    TabStackLockStableKeyLegacyMismatch {
+        tab_stack_id: TabStackId,
+        locked_stable_surface_key: Option<ToolSurfaceStableKey>,
+        legacy_locked_tool_surface_kind: ToolSurfaceKind,
+        expected_stable_surface_key: Option<ToolSurfaceStableKey>,
+    },
     PersistedLegacySurfaceUnmappedForStableWrite {
         tool_surface_id: ToolSurfaceInstanceId,
         tool_surface_kind: ToolSurfaceKind,
@@ -739,6 +759,54 @@ impl std::fmt::Display for WorkspaceStateError {
                 None => write!(
                     f,
                     "persisted tool surface {tool_surface_id} stable key `{stable_surface_key}` has no safe legacy mapping for {legacy_tool_surface_kind:?}",
+                ),
+            },
+            Self::PersistedTabStackLockStableKeyInvalidSyntax {
+                tab_stack_id,
+                stable_surface_key,
+            } => write!(
+                f,
+                "persisted tab stack {tab_stack_id} has invalid lock stable key `{stable_surface_key}`",
+            ),
+            Self::PersistedTabStackLockStableKeyUnknown {
+                tab_stack_id,
+                stable_surface_key,
+            } => write!(
+                f,
+                "persisted tab stack {tab_stack_id} references unknown lock stable key `{stable_surface_key}`",
+            ),
+            Self::PersistedTabStackLockStableKeyLegacyMismatch {
+                tab_stack_id,
+                stable_surface_key,
+                legacy_tool_surface_kind,
+                expected_stable_surface_key,
+            } => match expected_stable_surface_key {
+                Some(expected) => write!(
+                    f,
+                    "persisted tab stack {tab_stack_id} lock stable key `{stable_surface_key}` does not match legacy kind {legacy_tool_surface_kind:?}; expected `{expected}`",
+                ),
+                None => write!(
+                    f,
+                    "persisted tab stack {tab_stack_id} lock stable key `{stable_surface_key}` has no safe legacy mapping for {legacy_tool_surface_kind:?}",
+                ),
+            },
+            Self::TabStackLockStableKeyLegacyMismatch {
+                tab_stack_id,
+                locked_stable_surface_key,
+                legacy_locked_tool_surface_kind,
+                expected_stable_surface_key,
+            } => match (locked_stable_surface_key, expected_stable_surface_key) {
+                (Some(actual), Some(expected)) => write!(
+                    f,
+                    "tab stack {tab_stack_id:?} lock stable key `{actual}` does not match legacy kind {legacy_locked_tool_surface_kind:?}; expected `{expected}`",
+                ),
+                (None, Some(expected)) => write!(
+                    f,
+                    "tab stack {tab_stack_id:?} lock legacy kind {legacy_locked_tool_surface_kind:?} requires stable key `{expected}`",
+                ),
+                (_, None) => write!(
+                    f,
+                    "tab stack {tab_stack_id:?} lock legacy kind {legacy_locked_tool_surface_kind:?} has no safe stable-key mapping",
                 ),
             },
             Self::PersistedLegacySurfaceUnmappedForStableWrite {

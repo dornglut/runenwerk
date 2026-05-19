@@ -10,14 +10,17 @@ use editor_shell::{
     EditorDomainMutation, EntityTableComponentFilter, EntityTableHierarchyFilter,
     EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
     LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_LIST_WIDGET_ID,
-    OutlinerDomainMutation, PanelKind, SCENE_WORKSPACE_PROFILE_ID, ShellCommand,
-    StructuralCommandTarget, SurfaceLocalAction, SurfaceProviderAvailability, SurfaceProviderId,
-    SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, UiInteraction,
-    UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+    OutlinerDomainMutation, PanelKind, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+    SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget, SurfaceLocalAction,
+    SurfaceProviderAvailability, SurfaceProviderId, SurfaceSessionMutation, ToolSurfaceKind,
+    ToolbarCommandKind, ToolbarMenuKind, UiInteraction, UiInteractionResults,
+    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
     VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation,
     ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis,
     build_editor_shell_frame, map_interactions_to_shell_commands, surface_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id, tab_strip_scroll_widget_id,
+    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_popup_menu_widget_id, tab_stack_reset_area_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_strip_scroll_widget_id,
     viewport_field_component_button_widget_id, workspace_split_host_widget_id,
 };
 use editor_viewport::{
@@ -5120,6 +5123,126 @@ fn tab_plus_create_surface_menu_click_creates_selected_tab() {
 }
 
 #[test]
+fn inspector_tab_stack_lock_uses_stable_key() {
+    let app = RunenwerkEditorApp::new();
+    let (mut shell_state, inspector_stack) = runtime_debug_inspector_shell_state(&app);
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let artifacts = shell_state
+        .last_projection_artifacts()
+        .expect("runtime debug projection artifacts should exist");
+    let lock_action = artifacts
+        .widget_actions_by_id
+        .get(&tab_stack_lock_type_toggle_widget_id(inspector_stack))
+        .expect("inspector tab-stack lock chrome should be routed");
+
+    assert!(matches!(
+        lock_action,
+        editor_shell::RoutedShellAction::LockTabStackAreaStableKey {
+            locked_stable_surface_key: Some(key),
+            legacy_locked_tool_surface_kind: None,
+            ..
+        } if key.as_str() == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
+    ));
+}
+
+#[test]
+fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required() {
+    let app = RunenwerkEditorApp::new();
+    let (mut shell_state, inspector_stack) = runtime_debug_inspector_shell_state(&app);
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let artifacts = shell_state
+        .last_projection_artifacts()
+        .expect("runtime debug projection artifacts should exist");
+    let split_action = artifacts
+        .widget_actions_by_id
+        .get(&tab_stack_split_horizontal_button_widget_id(inspector_stack))
+        .expect("inspector tab-stack split chrome should be routed");
+    let reset_action = artifacts
+        .widget_actions_by_id
+        .get(&tab_stack_reset_area_button_widget_id(inspector_stack))
+        .expect("inspector tab-stack reset chrome should be routed");
+
+    assert!(!matches!(
+        split_action,
+        editor_shell::RoutedShellAction::SplitTabStackArea { .. }
+    ));
+    assert!(!matches!(
+        reset_action,
+        editor_shell::RoutedShellAction::ResetTabStackArea { .. }
+    ));
+    assert!(matches!(
+        split_action,
+        editor_shell::RoutedShellAction::SplitTabStackAreaStableKey {
+            stable_surface_key,
+            panel_kind: PanelKind::Diagnostics,
+            legacy_tool_surface_kind: None,
+            ..
+        } if stable_surface_key.as_str()
+            == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
+    ));
+    assert!(matches!(
+        reset_action,
+        editor_shell::RoutedShellAction::ResetTabStackAreaStableKey {
+            stable_surface_key,
+            panel_kind: PanelKind::Diagnostics,
+            legacy_tool_surface_kind: None,
+            ..
+        } if stable_surface_key.as_str()
+            == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
+    ));
+}
+
+#[test]
+fn inspector_switch_type_menu_does_not_emit_legacy_enum_actions() {
+    let app = RunenwerkEditorApp::new();
+    let (mut shell_state, inspector_stack) = runtime_debug_inspector_shell_state(&app);
+    let (_, inspector_panel) = tab_stack_and_panel_by_surface_key(
+        shell_state.workspace_state(),
+        crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+    );
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let artifacts = shell_state
+        .last_projection_artifacts()
+        .expect("runtime debug projection artifacts should exist");
+
+    assert!(!artifacts
+        .widget_actions_by_id
+        .values()
+        .any(|action| matches!(
+            action,
+            editor_shell::RoutedShellAction::ToggleTabStackSurfaceMenu {
+                tab_stack_id,
+                ..
+            } if *tab_stack_id == inspector_stack
+        )));
+    assert!(!artifacts
+        .widget_actions_by_id
+        .values()
+        .any(|action| matches!(
+            action,
+            editor_shell::RoutedShellAction::SwitchPanelToolSurfaceKindTo {
+                panel_instance_id,
+                ..
+            } if *panel_instance_id == inspector_panel
+        )));
+}
+
+#[test]
 fn tab_plus_create_surface_menu_inside_pointer_down_does_not_dismiss_before_activation() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();
@@ -5930,6 +6053,71 @@ fn center_of_widget(
         bounds.x + bounds.width * 0.5,
         bounds.y + bounds.height * 0.5,
     )
+}
+
+fn runtime_debug_inspector_shell_state(
+    app: &RunenwerkEditorApp,
+) -> (RunenwerkEditorShellState, editor_shell::TabStackId) {
+    let host = app.workbench_host();
+    let profile_registry = editor_shell::default_workspace_profile_registry();
+    let profile = profile_registry
+        .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
+        .expect("runtime debug profile should exist");
+    let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
+    let workspace_id = allocator.allocate_workspace_id();
+    let workspace = profile
+        .build_default_workspace_state_with_registry(
+            workspace_id,
+            &mut allocator,
+            host.tool_surface_registry(),
+        )
+        .expect("runtime debug profile should build through hosted registry");
+    let (inspector_stack, inspector_panel) = tab_stack_and_panel_by_surface_key(
+        &workspace,
+        crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+    );
+    let workspace = editor_shell::reduce_workspace(
+        &workspace,
+        WorkspaceMutation::SetTabStackActivePanel {
+            tab_stack_id: inspector_stack,
+            active_panel: Some(inspector_panel),
+        },
+    )
+    .expect("inspector panel should become active in its tab stack");
+    let mut shell_state =
+        RunenwerkEditorShellState::new_with_tool_surface_registry(host.tool_surface_registry())
+            .expect("shell state should build through hosted registry");
+
+    shell_state.set_active_workspace_profile_id(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID);
+    shell_state.replace_workspace_state(workspace);
+
+    (shell_state, inspector_stack)
+}
+
+fn tab_stack_and_panel_by_surface_key(
+    workspace: &editor_shell::WorkspaceState,
+    stable_surface_key: &str,
+) -> (editor_shell::TabStackId, editor_shell::PanelInstanceId) {
+    let stable_surface_key = editor_shell::ToolSurfaceStableKey::new(stable_surface_key)
+        .expect("test stable surface key should be valid");
+    let surface_id = workspace
+        .tool_surfaces()
+        .find(|surface| surface.stable_surface_key() == &stable_surface_key)
+        .expect("surface should exist by stable key")
+        .id;
+    let panel_id = workspace
+        .panels()
+        .find(|panel| panel.active_tool_surface == Some(surface_id))
+        .expect("stable-key surface should be active in a panel")
+        .id;
+
+    let tab_stack_id = workspace
+        .tab_stacks()
+        .find(|stack| stack.ordered_panels.contains(&panel_id))
+        .expect("stable-key surface panel should be mounted in a tab stack")
+        .id;
+
+    (tab_stack_id, panel_id)
 }
 
 fn panel_and_stack_by_kind(

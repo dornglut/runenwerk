@@ -6,8 +6,8 @@ use editor_core::DocumentId;
 use crate::{
     DockSplitSide, EditorDomainMutation, MaterialSurfaceAction, PanelHostId, PanelInstanceId,
     SurfaceSessionMutation, TabStackId, TextureSurfaceAction, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId,
-    WorkspaceSplitAxis,
+    ToolSurfaceKind, ToolSurfaceStableKey, ToolbarCommandKind, ToolbarMenuKind, WidgetId,
+    WorkspaceProfileId, WorkspaceSplitAxis,
 };
 use crate::{SurfaceInteraction, SurfaceLocalAction, SurfaceProviderId};
 
@@ -152,6 +152,14 @@ pub enum ShellCommand {
         tool_surface_kind: ToolSurfaceKind,
         projection_epoch: u64,
     },
+    SplitTabStackAreaStableKey {
+        tab_stack_id: TabStackId,
+        axis: WorkspaceSplitAxis,
+        panel_kind: crate::PanelKind,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+        projection_epoch: u64,
+    },
     DuplicateTabStackArea {
         tab_stack_id: TabStackId,
         projection_epoch: u64,
@@ -165,9 +173,22 @@ pub enum ShellCommand {
         tool_surface_kind: ToolSurfaceKind,
         projection_epoch: u64,
     },
+    ResetTabStackAreaStableKey {
+        tab_stack_id: TabStackId,
+        panel_kind: crate::PanelKind,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+        projection_epoch: u64,
+    },
     LockTabStackAreaType {
         tab_stack_id: TabStackId,
         locked_tool_surface_kind: Option<ToolSurfaceKind>,
+        projection_epoch: u64,
+    },
+    LockTabStackAreaStableKey {
+        tab_stack_id: TabStackId,
+        locked_stable_surface_key: Option<ToolSurfaceStableKey>,
+        legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
         projection_epoch: u64,
     },
     ActivateDocumentTab {
@@ -260,6 +281,9 @@ impl ShellCommand {
             | Self::SplitTabStackArea {
                 projection_epoch, ..
             }
+            | Self::SplitTabStackAreaStableKey {
+                projection_epoch, ..
+            }
             | Self::DuplicateTabStackArea {
                 projection_epoch, ..
             }
@@ -269,7 +293,13 @@ impl ShellCommand {
             | Self::ResetTabStackArea {
                 projection_epoch, ..
             }
+            | Self::ResetTabStackAreaStableKey {
+                projection_epoch, ..
+            }
             | Self::LockTabStackAreaType {
+                projection_epoch, ..
+            }
+            | Self::LockTabStackAreaStableKey {
                 projection_epoch, ..
             }
             | Self::SelectAsset {

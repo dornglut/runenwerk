@@ -2,16 +2,17 @@ use editor_shell::{
     BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockDropCandidate,
     DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope, DockSplitSide,
     DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId, ProjectedTabStackSlot,
-    ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
+    PanelKind, ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame,
+    SurfaceCommandProposal,
     TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
     TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination,
-    ToolSurfaceKind, ToolSurfaceMount, UiInputOutcome, UiInteractionResults, UiTree,
-    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+    ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceStableKey, UiInputOutcome, UiInteractionResults,
+    UiTree, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
     surface_widget_id, tab_stack_container_widget_id, tab_stack_popup_menu_widget_id,
-    tool_surface_kind_for_stable_key, viewport_tool_radial_item_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::{
@@ -718,15 +719,14 @@ impl RunenwerkEditorShellController {
                     } else {
                         WorkspaceSplitAxis::Vertical
                     };
-                    let tool_surface_kind = legacy_tool_surface_kind_for_tab_stack_pending_c6(
+                    let Some(command) = split_tab_stack_area_command_for_active_surface_pending_c6(
                         shell_state,
                         session.tab_stack_id,
-                    );
-                    let command = ShellCommand::SplitTabStackArea {
-                        tab_stack_id: session.tab_stack_id,
                         axis,
-                        tool_surface_kind,
-                        projection_epoch: session.projection_epoch,
+                        session.projection_epoch,
+                    ) else {
+                        shell_state.clear_corner_area_split();
+                        return Ok(Some(consumed_pointer_outcome(None, false)));
                     };
                     shell_state.clear_corner_area_split();
                     dispatch_shell_command(
@@ -1471,31 +1471,54 @@ fn collect_projected_tab_stacks_for_controller<'a>(
     }
 }
 
-fn legacy_tool_surface_kind_for_tab_stack_pending_c6(
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TabStackChromeSurfaceTarget {
+    panel_kind: PanelKind,
+    stable_surface_key: ToolSurfaceStableKey,
+    legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+}
+
+fn tab_stack_chrome_surface_target_pending_c6(
     shell_state: &RunenwerkEditorShellState,
     tab_stack_id: editor_shell::TabStackId,
-) -> ToolSurfaceKind {
-    // C6C shell UI compatibility boundary: drag/drop preview still emits
-    // enum-backed shell commands, but resolution prefers stable-key authority.
+) -> Option<TabStackChromeSurfaceTarget> {
+    // C6D repair: corner split is still app-shell chrome, but it must preserve
+    // stable-key identity instead of inventing viewport legacy fallback.
     let Some(tab_stack) = shell_state.workspace_state().tab_stack(tab_stack_id) else {
-        return ToolSurfaceKind::Viewport;
+        return None;
     };
     let Some(panel_id) = tab_stack
         .active_panel
         .or_else(|| tab_stack.ordered_panels.first().copied())
     else {
-        return ToolSurfaceKind::Viewport;
+        return None;
     };
-    shell_state
-        .workspace_state()
-        .panel(panel_id)
-        .and_then(|panel| panel.active_tool_surface)
-        .and_then(|surface_id| shell_state.workspace_state().tool_surface(surface_id))
-        .and_then(|surface| {
-            tool_surface_kind_for_stable_key(surface.stable_surface_key())
-                .or_else(|| surface.legacy_tool_surface_kind())
-        })
-        .unwrap_or(ToolSurfaceKind::Viewport)
+    let panel = shell_state.workspace_state().panel(panel_id)?;
+    let surface = panel
+        .active_tool_surface
+        .and_then(|surface_id| shell_state.workspace_state().tool_surface(surface_id))?;
+    Some(TabStackChromeSurfaceTarget {
+        panel_kind: panel.panel_kind,
+        stable_surface_key: surface.stable_surface_key().clone(),
+        legacy_tool_surface_kind: surface.legacy_tool_surface_kind(),
+    })
+}
+
+fn split_tab_stack_area_command_for_active_surface_pending_c6(
+    shell_state: &RunenwerkEditorShellState,
+    tab_stack_id: editor_shell::TabStackId,
+    axis: WorkspaceSplitAxis,
+    projection_epoch: u64,
+) -> Option<ShellCommand> {
+    let target = tab_stack_chrome_surface_target_pending_c6(shell_state, tab_stack_id)?;
+    Some(ShellCommand::SplitTabStackAreaStableKey {
+        tab_stack_id,
+        axis,
+        panel_kind: target.panel_kind,
+        stable_surface_key: target.stable_surface_key,
+        legacy_tool_surface_kind: target.legacy_tool_surface_kind,
+        projection_epoch,
+    })
 }
 
 fn split_boundary_position(

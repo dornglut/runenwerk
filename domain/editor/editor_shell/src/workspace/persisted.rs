@@ -102,7 +102,7 @@ pub struct PersistedWorkspaceStateV5 {
     pub workspace_id: u64,
     pub root_host_id: u64,
     pub hosts: Vec<PersistedPanelHostNodeV1>,
-    pub tab_stacks: Vec<PersistedTabStackStateV1>,
+    pub tab_stacks: Vec<PersistedTabStackStateV5>,
     pub panels: Vec<PersistedPanelInstanceStateV2>,
     pub tool_surfaces: Vec<PersistedToolSurfaceStateV5>,
 }
@@ -154,6 +154,21 @@ pub struct PersistedTabStackStateV1 {
     pub active_panel: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locked_tool_surface_kind: Option<PersistedToolSurfaceKindV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedTabStackStateV5 {
+    pub id: u64,
+    pub ordered_panels: Vec<u64>,
+    pub active_panel: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locked_stable_surface_key: Option<String>,
+    #[serde(
+        default,
+        alias = "locked_tool_surface_kind",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub legacy_locked_tool_surface_kind: Option<PersistedToolSurfaceKindV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -441,6 +456,57 @@ fn tab_stack_lock_from_legacy_persistence(
     Ok((Some(stable_key), Some(kind)))
 }
 
+fn persisted_v5_tab_stack_lock_identity(
+    tab_stack_id: u64,
+    locked_stable_surface_key: Option<String>,
+    legacy_kind: Option<ToolSurfaceKind>,
+    registry: Option<&ToolSurfaceRegistry>,
+) -> Result<(Option<ToolSurfaceStableKey>, Option<ToolSurfaceKind>), WorkspaceStateError> {
+    let Some(stable_key) = locked_stable_surface_key else {
+        return tab_stack_lock_from_legacy_persistence(legacy_kind);
+    };
+    let stable_key = ToolSurfaceStableKey::new(stable_key.clone()).map_err(|_| {
+        WorkspaceStateError::PersistedTabStackLockStableKeyInvalidSyntax {
+            tab_stack_id,
+            stable_surface_key: stable_key,
+        }
+    })?;
+
+    if registry.is_some_and(|registry| registry.get(&stable_key).is_none()) {
+        return Err(WorkspaceStateError::PersistedTabStackLockStableKeyUnknown {
+            tab_stack_id,
+            stable_surface_key: stable_key,
+        });
+    }
+
+    if let Some(legacy_kind) = legacy_kind {
+        match stable_key_for_tool_surface_kind(legacy_kind) {
+            Some(expected) if expected == stable_key => {
+                return Ok((Some(stable_key), Some(legacy_kind)));
+            }
+            expected_stable_surface_key => {
+                return Err(
+                    WorkspaceStateError::PersistedTabStackLockStableKeyLegacyMismatch {
+                        tab_stack_id,
+                        stable_surface_key: stable_key,
+                        legacy_tool_surface_kind: legacy_kind,
+                        expected_stable_surface_key,
+                    },
+                );
+            }
+        }
+    }
+
+    match tool_surface_kind_for_stable_key(&stable_key) {
+        Some(legacy_kind) => Ok((Some(stable_key), Some(legacy_kind))),
+        None if registry.is_some() => Ok((Some(stable_key), None)),
+        None => Err(WorkspaceStateError::PersistedTabStackLockStableKeyUnknown {
+            tab_stack_id,
+            stable_surface_key: stable_key,
+        }),
+    }
+}
+
 impl WorkspaceState {
     pub fn to_persisted_v5(&self) -> Result<PersistedWorkspaceStateV5, WorkspaceStateError> {
         let mut tool_surfaces = Vec::with_capacity(self.tool_surfaces_by_id.len());
@@ -480,14 +546,17 @@ impl WorkspaceState {
             tab_stacks: self
                 .tab_stacks_by_id
                 .values()
-                .map(|stack| PersistedTabStackStateV1 {
+                .map(|stack| PersistedTabStackStateV5 {
                     id: stack.id.raw(),
                     ordered_panels: stack.ordered_panels.iter().map(|id| id.raw()).collect(),
                     active_panel: stack.active_panel.map(|id| id.raw()),
-                    locked_tool_surface_kind: legacy_locked_tool_surface_kind_for_persistence(
-                        stack,
-                    )
-                    .map(persisted_tool_surface_kind_v2),
+                    locked_stable_surface_key: stack
+                        .locked_stable_surface_key
+                        .as_ref()
+                        .map(ToString::to_string),
+                    legacy_locked_tool_surface_kind: stack
+                        .legacy_locked_tool_surface_kind
+                        .map(persisted_tool_surface_kind_v2),
                 })
                 .collect(),
             panels: self
@@ -1093,10 +1162,15 @@ impl WorkspaceState {
                 })
                 .transpose()?;
             let legacy_locked_tool_surface_kind = stack
-                .locked_tool_surface_kind
+                .legacy_locked_tool_surface_kind
                 .map(workspace_tool_surface_kind_v2);
             let (locked_stable_surface_key, legacy_locked_tool_surface_kind) =
-                tab_stack_lock_from_legacy_persistence(legacy_locked_tool_surface_kind)?;
+                persisted_v5_tab_stack_lock_identity(
+                    stack.id,
+                    stack.locked_stable_surface_key,
+                    legacy_locked_tool_surface_kind,
+                    registry,
+                )?;
             tab_stacks_by_id.insert(
                 stack_id,
                 TabStackState {
@@ -2487,8 +2561,75 @@ mod tests {
         workspace
     }
 
+    fn stable_key_only_locked_test_workspace() -> WorkspaceState {
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = allocator.allocate_workspace_id();
+        let root_host_id = allocator.allocate_panel_host_id();
+        let tab_stack_id = allocator.allocate_tab_stack_id();
+        let panel_id = allocator.allocate_panel_instance_id();
+        let surface_id = allocator.allocate_tool_surface_instance_id();
+        let stable_surface_key = ToolSurfaceStableKey::new("runenwerk.test.stable_only_surface")
+            .expect("test stable key should be valid");
+
+        let workspace = WorkspaceState {
+            workspace_id,
+            root_host_id,
+            hosts_by_id: BTreeMap::from([(
+                root_host_id,
+                PanelHostNode {
+                    id: root_host_id,
+                    kind: PanelHostKind::TabStackHost(TabStackHostState { tab_stack_id }),
+                },
+            )]),
+            tab_stacks_by_id: BTreeMap::from([(
+                tab_stack_id,
+                TabStackState {
+                    id: tab_stack_id,
+                    ordered_panels: vec![panel_id],
+                    active_panel: Some(panel_id),
+                    locked_stable_surface_key: Some(stable_surface_key.clone()),
+                    legacy_locked_tool_surface_kind: None,
+                },
+            )]),
+            panels_by_id: BTreeMap::from([(
+                panel_id,
+                PanelInstanceState {
+                    id: panel_id,
+                    panel_kind: PanelKind::Diagnostics,
+                    active_tool_surface: Some(surface_id),
+                },
+            )]),
+            tool_surfaces_by_id: BTreeMap::from([(
+                surface_id,
+                ToolSurfaceState::new_with_stable_key(
+                    surface_id,
+                    stable_surface_key,
+                    None,
+                    ToolSurfaceMount::Mounted { panel_id },
+                ),
+            )]),
+        };
+        workspace
+            .validate_integrity()
+            .expect("stable-key-only test fixture should be valid");
+        workspace
+    }
+
     fn default_profile_tool_surface_registry() -> ToolSuiteRegistry {
         let provider_family_id = ProviderFamilyId::new("runenwerk.test").unwrap();
+        let mut stable_keys = saveable_tool_surface_stable_key_candidates()
+            .iter()
+            .map(|candidate| candidate.stable_key.to_string())
+            .collect::<Vec<_>>();
+        stable_keys.push("runenwerk.test.stable_only_surface".to_string());
+        for profile in default_workspace_profile_registry().profiles() {
+            for surface in &profile.default_surfaces {
+                let key = surface.stable_surface_key().as_str();
+                if !stable_keys.iter().any(|known| known == key) {
+                    stable_keys.push(key.to_string());
+                }
+            }
+        }
         ToolSuiteRegistry::new(vec![EditorToolSuite {
             suite_id: ToolSuiteId::new("runenwerk.test").unwrap(),
             label: "Test".to_string(),
@@ -2496,24 +2637,17 @@ mod tests {
                 id: provider_family_id.clone(),
                 label: "Test".to_string(),
             }],
-            surfaces: saveable_tool_surface_stable_key_candidates()
+            surfaces: stable_keys
                 .iter()
-                .map(|candidate| {
+                .map(|key| {
                     material_lab_surface(
-                        candidate.stable_key,
-                        candidate.stable_key,
+                        key,
+                        key,
                         ToolSurfaceRole::Primary,
                         provider_family_id.clone(),
                         ToolSurfaceRoute::ProviderOwnedLocal,
                     )
                 })
-                .chain(std::iter::once(material_lab_surface(
-                    "runenwerk.diagnostics.tool_suite_registry_inspector",
-                    "Tool Suite Registry Inspector",
-                    ToolSurfaceRole::Inspector,
-                    provider_family_id.clone(),
-                    ToolSurfaceRoute::ProviderOwnedLocal,
-                )))
                 .collect(),
         }])
         .expect("default profile tool-surface registry fixture should be valid")
@@ -2937,6 +3071,149 @@ mod tests {
             .expect("v5 material lab workspace should load");
 
         assert_eq!(workspace, restored);
+    }
+
+    #[test]
+    fn v5_round_trip_preserves_stable_key_only_tab_stack_lock() {
+        let workspace = stable_key_only_locked_test_workspace();
+        let registry = default_profile_tool_surface_registry();
+        let expected_lock = workspace
+            .tab_stacks()
+            .next()
+            .and_then(|stack| stack.locked_stable_surface_key.clone())
+            .expect("fixture should be locked by stable key");
+
+        let persisted = workspace
+            .to_persisted_v5()
+            .expect("stable-key-only lock should persist");
+        let restored = WorkspaceState::from_persisted_v5(
+            persisted,
+            Some(registry.surfaces()),
+        )
+        .expect("stable-key-only test lock should restore with registry");
+
+        let restored_stack = restored
+            .tab_stacks()
+            .next()
+            .expect("restored fixture should contain a tab stack");
+        assert_eq!(
+            restored_stack.locked_stable_surface_key.as_ref(),
+            Some(&expected_lock)
+        );
+        assert_eq!(restored_stack.legacy_locked_tool_surface_kind, None);
+        assert_eq!(workspace, restored);
+    }
+
+    #[test]
+    fn v5_lock_writes_stable_key_as_primary_identity() {
+        let workspace = stable_key_only_locked_test_workspace();
+        let persisted = workspace
+            .to_persisted_v5()
+            .expect("stable-key-only lock should persist");
+
+        assert_eq!(
+            persisted.tab_stacks[0].locked_stable_surface_key.as_deref(),
+            Some("runenwerk.test.stable_only_surface")
+        );
+        assert_eq!(persisted.tab_stacks[0].legacy_locked_tool_surface_kind, None);
+
+        let serialized = ron::ser::to_string_pretty(
+            &persisted,
+            ron::ser::PrettyConfig::new().struct_names(false),
+        )
+        .expect("v5 workspace should serialize");
+
+        assert!(serialized.contains("locked_stable_surface_key"));
+        assert!(!serialized.contains("locked_tool_surface_kind"));
+    }
+
+    #[test]
+    fn v5_lock_legacy_kind_is_metadata_only() {
+        let workspace = material_lab_workspace();
+        let registry = material_lab_registry();
+        let mut persisted = workspace
+            .to_persisted_v5()
+            .expect("material lab lock should persist");
+        persisted.tab_stacks[0].legacy_locked_tool_surface_kind = None;
+
+        let restored = WorkspaceState::from_persisted_v5(
+            persisted,
+            Some(registry.surfaces()),
+        )
+        .expect("stable lock should restore without legacy metadata");
+
+        assert_eq!(
+            restored
+                .tab_stacks()
+                .next()
+                .and_then(|stack| stack.locked_stable_surface_key.as_ref())
+                .map(|key| key.as_str()),
+            Some("runenwerk.material_lab.graph_canvas")
+        );
+    }
+
+    #[test]
+    fn v5_lock_key_legacy_kind_mismatch_fails_closed() {
+        let workspace = material_lab_workspace();
+        let mut persisted = workspace
+            .to_persisted_v5()
+            .expect("material lab lock should persist");
+        persisted.tab_stacks[0].legacy_locked_tool_surface_kind =
+            Some(PersistedToolSurfaceKindV2::MaterialPreview);
+
+        let error = WorkspaceState::from_persisted_v5(persisted, None)
+            .expect_err("lock stable key and legacy metadata mismatch must fail");
+
+        assert!(matches!(
+            error,
+            WorkspaceStateError::PersistedTabStackLockStableKeyLegacyMismatch {
+                legacy_tool_surface_kind: ToolSurfaceKind::MaterialPreview,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn v1_to_v4_locked_kind_migrates_to_stable_key_lock() {
+        let workspace = bootstrap_workspace();
+
+        let mut v1 = workspace.to_persisted_v1();
+        v1.tab_stacks[0].locked_tool_surface_kind =
+            Some(PersistedToolSurfaceKindV2::Viewport);
+        let restored_v1 = WorkspaceState::from_persisted_v1(v1).expect("v1 lock should decode");
+
+        let mut v2 = workspace.to_persisted_v2();
+        v2.tab_stacks[0].locked_tool_surface_kind =
+            Some(PersistedToolSurfaceKindV2::Viewport);
+        let restored_v2 = WorkspaceState::from_persisted_v2(v2).expect("v2 lock should decode");
+
+        let mut v3 = workspace.to_persisted_v3();
+        v3.tab_stacks[0].locked_tool_surface_kind =
+            Some(PersistedToolSurfaceKindV2::Viewport);
+        let restored_v3 = WorkspaceState::from_persisted_v3(v3).expect("v3 lock should decode");
+
+        let mut v4 = workspace.to_persisted_v4();
+        v4.tab_stacks[0].locked_tool_surface_kind =
+            Some(PersistedToolSurfaceKindV2::Viewport);
+        let restored_v4 = WorkspaceState::from_persisted_v4(v4).expect("v4 lock should decode");
+
+        for restored in [restored_v1, restored_v2, restored_v3, restored_v4] {
+            let stack = restored
+                .tab_stacks()
+                .next()
+                .expect("restored workspace should contain a tab stack");
+            assert_eq!(
+                stack
+                    .locked_stable_surface_key
+                    .as_ref()
+                    .map(|key| key.as_str()),
+                Some("runenwerk.scene.viewport")
+            );
+            assert_eq!(
+                stack.legacy_locked_tool_surface_kind,
+                Some(ToolSurfaceKind::Viewport)
+            );
+        }
     }
 
     #[test]

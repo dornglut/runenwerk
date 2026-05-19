@@ -280,7 +280,8 @@ fn tool_surface_kind_is_legacy_boundary_only_guard() {
     assert!(reducer_source.contains("replace_panel_tool_surface_kind_legacy"));
     assert!(profile_source.contains("pub fn new_legacy"));
 
-    assert!(controller_source.contains("legacy_tool_surface_kind_for_tab_stack_pending_c6"));
+    assert!(controller_source.contains("tab_stack_chrome_surface_target_pending_c6"));
+    assert!(controller_source.contains("SplitTabStackAreaStableKey"));
     assert!(dispatch_source.contains("LegacySurfaceCommandContract"));
     assert!(dispatch_source.contains("resolve_legacy_surface_command_contract"));
 }
@@ -332,6 +333,12 @@ fn v5_persistence_uses_stable_key_primary_identity_guard() {
         "pub struct PersistedViewportSettingsV1",
         "PersistedToolSurfaceStateV5",
     );
+    let persisted_tab_stack = source_block_between(
+        source,
+        "pub struct PersistedTabStackStateV5 {",
+        "pub struct PersistedPanelInstanceStateV1",
+        "PersistedTabStackStateV5",
+    );
     let to_persisted_v5 = source_block_between(
         source,
         "pub fn to_persisted_v5(&self) -> Result<PersistedWorkspaceStateV5, WorkspaceStateError> {",
@@ -351,9 +358,17 @@ fn v5_persistence_uses_stable_key_primary_identity_guard() {
             .contains("pub legacy_tool_surface_kind: Option<PersistedToolSurfaceKindV2>")
     );
     assert!(!persisted_surface.contains("pub tool_surface_kind: PersistedToolSurfaceKindV2"));
+    assert!(persisted_tab_stack.contains("pub locked_stable_surface_key: Option<String>"));
+    assert!(
+        persisted_tab_stack
+            .contains("pub legacy_locked_tool_surface_kind: Option<PersistedToolSurfaceKindV2>")
+    );
+    assert!(!persisted_tab_stack.contains("pub locked_tool_surface_kind: Option"));
     assert!(to_persisted_v5.contains("persisted_v5_stable_surface_key_for_surface(surface)?"));
     assert!(to_persisted_v5.contains("stable_surface_key: stable_surface_key.to_string()"));
+    assert!(to_persisted_v5.contains("locked_stable_surface_key: stack"));
     assert!(from_persisted_v5.contains("persisted_v5_tool_surface_identity"));
+    assert!(from_persisted_v5.contains("persisted_v5_tab_stack_lock_identity"));
     assert!(from_persisted_v5.contains("ToolSurfaceState::new_with_stable_key"));
 }
 
@@ -521,12 +536,10 @@ fn no_unmarked_tool_surface_kind_usage_in_normal_path_guard() {
     let surface_provider_source = include_str!("surface_provider.rs");
     let composition_source = include_str!("composition/build_editor_shell.rs");
 
-    assert!(controller_source.contains("legacy_tool_surface_kind_for_tab_stack_pending_c6"));
-    assert!(controller_source.contains("C6C shell UI compatibility boundary"));
-    assert!(
-        controller_source
-            .contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
-    );
+    assert!(controller_source.contains("tab_stack_chrome_surface_target_pending_c6"));
+    assert!(controller_source.contains("C6D repair"));
+    assert!(controller_source.contains("stable_surface_key: surface.stable_surface_key().clone()"));
+    assert!(!controller_source.contains("unwrap_or(ToolSurfaceKind::Viewport)"));
 
     assert!(dispatch_source.contains("LegacySurfaceCommandContract"));
     assert!(dispatch_source.contains("C6C legacy app-command compatibility boundary"));
