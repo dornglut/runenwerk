@@ -291,6 +291,18 @@ fn command_for_activation(
             tool_surface_kind: *tool_surface_kind,
             projection_epoch: routing.projection_epoch,
         },
+        RoutedShellAction::CreatePanelTabStableKey {
+            tab_stack_id,
+            panel_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
+        } => ShellCommand::CreatePanelTabStableKey {
+            tab_stack_id: *tab_stack_id,
+            panel_kind: *panel_kind,
+            stable_surface_key: stable_surface_key.clone(),
+            legacy_tool_surface_kind: *legacy_tool_surface_kind,
+            projection_epoch: routing.projection_epoch,
+        },
         RoutedShellAction::ClosePanelTab {
             tab_stack_id,
             panel_instance_id,

@@ -2701,6 +2701,11 @@ mod tests {
             key: ToolSurfaceStableKey::new(key).unwrap(),
             label: label.to_string(),
             role,
+            panel_kind: match role {
+                ToolSurfaceRole::Primary => crate::PanelKind::MaterialGraphCanvas,
+                ToolSurfaceRole::Inspector => crate::PanelKind::MaterialInspector,
+                ToolSurfaceRole::Preview => crate::PanelKind::MaterialPreview,
+            },
             provider_family,
             route,
             persistence: ToolSurfacePersistence::StableKey,
@@ -3086,11 +3091,8 @@ mod tests {
         let persisted = workspace
             .to_persisted_v5()
             .expect("stable-key-only lock should persist");
-        let restored = WorkspaceState::from_persisted_v5(
-            persisted,
-            Some(registry.surfaces()),
-        )
-        .expect("stable-key-only test lock should restore with registry");
+        let restored = WorkspaceState::from_persisted_v5(persisted, Some(registry.surfaces()))
+            .expect("stable-key-only test lock should restore with registry");
 
         let restored_stack = restored
             .tab_stacks()
@@ -3115,7 +3117,10 @@ mod tests {
             persisted.tab_stacks[0].locked_stable_surface_key.as_deref(),
             Some("runenwerk.test.stable_only_surface")
         );
-        assert_eq!(persisted.tab_stacks[0].legacy_locked_tool_surface_kind, None);
+        assert_eq!(
+            persisted.tab_stacks[0].legacy_locked_tool_surface_kind,
+            None
+        );
 
         let serialized = ron::ser::to_string_pretty(
             &persisted,
@@ -3136,11 +3141,8 @@ mod tests {
             .expect("material lab lock should persist");
         persisted.tab_stacks[0].legacy_locked_tool_surface_kind = None;
 
-        let restored = WorkspaceState::from_persisted_v5(
-            persisted,
-            Some(registry.surfaces()),
-        )
-        .expect("stable lock should restore without legacy metadata");
+        let restored = WorkspaceState::from_persisted_v5(persisted, Some(registry.surfaces()))
+            .expect("stable lock should restore without legacy metadata");
 
         assert_eq!(
             restored
@@ -3178,23 +3180,19 @@ mod tests {
         let workspace = bootstrap_workspace();
 
         let mut v1 = workspace.to_persisted_v1();
-        v1.tab_stacks[0].locked_tool_surface_kind =
-            Some(PersistedToolSurfaceKindV2::Viewport);
+        v1.tab_stacks[0].locked_tool_surface_kind = Some(PersistedToolSurfaceKindV2::Viewport);
         let restored_v1 = WorkspaceState::from_persisted_v1(v1).expect("v1 lock should decode");
 
         let mut v2 = workspace.to_persisted_v2();
-        v2.tab_stacks[0].locked_tool_surface_kind =
-            Some(PersistedToolSurfaceKindV2::Viewport);
+        v2.tab_stacks[0].locked_tool_surface_kind = Some(PersistedToolSurfaceKindV2::Viewport);
         let restored_v2 = WorkspaceState::from_persisted_v2(v2).expect("v2 lock should decode");
 
         let mut v3 = workspace.to_persisted_v3();
-        v3.tab_stacks[0].locked_tool_surface_kind =
-            Some(PersistedToolSurfaceKindV2::Viewport);
+        v3.tab_stacks[0].locked_tool_surface_kind = Some(PersistedToolSurfaceKindV2::Viewport);
         let restored_v3 = WorkspaceState::from_persisted_v3(v3).expect("v3 lock should decode");
 
         let mut v4 = workspace.to_persisted_v4();
-        v4.tab_stacks[0].locked_tool_surface_kind =
-            Some(PersistedToolSurfaceKindV2::Viewport);
+        v4.tab_stacks[0].locked_tool_surface_kind = Some(PersistedToolSurfaceKindV2::Viewport);
         let restored_v4 = WorkspaceState::from_persisted_v4(v4).expect("v4 lock should decode");
 
         for restored in [restored_v1, restored_v2, restored_v3, restored_v4] {
@@ -3466,9 +3464,7 @@ mod tests {
                 persisted,
                 Some(tool_surface_registry.surfaces()),
             )
-            .unwrap_or_else(|error| {
-                    panic!("failed to restore profile {}: {error}", profile.label)
-                });
+            .unwrap_or_else(|error| panic!("failed to restore profile {}: {error}", profile.label));
             let after_tab_order = restored
                 .tab_stacks()
                 .map(|stack| (stack.id, stack.ordered_panels.clone()))

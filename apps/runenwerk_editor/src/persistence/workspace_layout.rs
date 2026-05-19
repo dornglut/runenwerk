@@ -92,11 +92,19 @@ fn write_workspace_layout_with_profile(
         .with_context(|| format!("failed to write workspace layout: {}", path.display()))
 }
 
-pub fn read_workspace_layout(path: &Path) -> Result<WorkspaceState> {
-    Ok(read_workspace_layout_with_metadata(path)?.workspace_state)
+/// Legacy/test compatibility reader that does not have access to the
+/// tool-surface registry. Production app paths must use
+/// `read_workspace_layout_with_metadata_and_registry`.
+pub fn read_workspace_layout_legacy_no_registry(path: &Path) -> Result<WorkspaceState> {
+    Ok(read_workspace_layout_with_metadata_legacy_no_registry(path)?.workspace_state)
 }
 
-pub fn read_workspace_layout_with_metadata(path: &Path) -> Result<WorkspaceLayoutReadResult> {
+/// Legacy/test compatibility reader that decodes without stable-key registry
+/// validation. Production app paths must use
+/// `read_workspace_layout_with_metadata_and_registry`.
+pub fn read_workspace_layout_with_metadata_legacy_no_registry(
+    path: &Path,
+) -> Result<WorkspaceLayoutReadResult> {
     read_workspace_layout_with_optional_registry(path, None)
 }
 
@@ -223,24 +231,24 @@ mod tests {
     use super::*;
     use crate::{
         editor_app::RunenwerkEditorApp,
-        shell::{
-            RunenwerkEditorShellState, SurfaceProviderBuildContext, SurfaceSessionState,
-            mounted_surface_requests_with_registry,
-        },
         shell::tool_suites::{
             MATERIAL_GRAPH_CANVAS_SURFACE_KEY, MATERIAL_INSPECTOR_SURFACE_KEY,
             MATERIAL_PREVIEW_SURFACE_KEY, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
         },
+        shell::{
+            RunenwerkEditorShellState, SurfaceProviderBuildContext, SurfaceSessionState,
+            mounted_surface_requests_with_registry,
+        },
     };
-    use editor_shell::{SurfaceDocumentContext, SurfaceProviderAvailability};
     use editor_shell::{
         MATERIAL_WORKSPACE_PROFILE_ID, PanelKind, PersistedPanelHostKindV1,
         PersistedPanelHostNodeV1, PersistedPanelInstanceStateV2, PersistedPanelKindV2,
         PersistedTabStackStateV1, PersistedToolSurfaceKindV2, PersistedToolSurfaceMountV1,
-        PersistedToolSurfaceStateV2, PersistedWorkspaceStateV2,
-        RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, ToolSurfaceStableKey, WorkspaceDefaultToolSurface,
-        WorkspaceIdentityAllocator, WorkspaceMutation, reduce_workspace,
+        PersistedToolSurfaceStateV2, PersistedWorkspaceStateV2, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+        ToolSurfaceStableKey, WorkspaceDefaultToolSurface, WorkspaceIdentityAllocator,
+        WorkspaceMutation, reduce_workspace,
     };
+    use editor_shell::{SurfaceDocumentContext, SurfaceProviderAvailability};
     use std::sync::atomic::{AtomicU64, Ordering};
     use ui_theme::ThemeTokens;
 
@@ -394,8 +402,10 @@ mod tests {
 
     fn runtime_debug_locked_inspector_workspace(app: &RunenwerkEditorApp) -> WorkspaceState {
         let workspace = runtime_debug_inspector_workspace(app);
-        let (inspector_stack, _) =
-            tab_stack_and_panel_by_surface_key(&workspace, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY);
+        let (inspector_stack, _) = tab_stack_and_panel_by_surface_key(
+            &workspace,
+            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+        );
         let inspector_key = ToolSurfaceStableKey::new(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
             .expect("inspector stable key should be valid");
 
@@ -438,9 +448,12 @@ mod tests {
     fn material_surface_keys(workspace: &WorkspaceState) -> Vec<String> {
         workspace
             .tool_surfaces()
-            .filter(|surface| surface.stable_surface_key().as_str().starts_with(
-                "runenwerk.material_lab.",
-            ))
+            .filter(|surface| {
+                surface
+                    .stable_surface_key()
+                    .as_str()
+                    .starts_with("runenwerk.material_lab.")
+            })
             .map(|surface| surface.stable_surface_key().as_str().to_string())
             .collect()
     }
@@ -516,7 +529,8 @@ mod tests {
         let path = temp_workspace_layout_path();
         write_workspace_layout(&path, &workspace)
             .expect("workspace layout should write successfully");
-        let loaded = read_workspace_layout(&path).expect("workspace layout should decode");
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
+            .expect("workspace layout should decode");
 
         assert_eq!(workspace, loaded);
         let _ = std::fs::remove_file(path);
@@ -528,8 +542,7 @@ mod tests {
         let workspace = runtime_debug_inspector_workspace(&app);
         let path = temp_workspace_layout_path();
 
-        write_workspace_layout(&path, &workspace)
-            .expect("runtime debug workspace should write");
+        write_workspace_layout(&path, &workspace).expect("runtime debug workspace should write");
         let loaded = read_workspace_layout_with_metadata_and_registry(
             &path,
             app.workbench_host().tool_surface_registry(),
@@ -574,8 +587,10 @@ mod tests {
     fn v5_stable_key_only_tab_stack_lock_loads_through_app_workspace_layout_reader() {
         let app = RunenwerkEditorApp::new();
         let workspace = runtime_debug_locked_inspector_workspace(&app);
-        let (inspector_stack, _) =
-            tab_stack_and_panel_by_surface_key(&workspace, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY);
+        let (inspector_stack, _) = tab_stack_and_panel_by_surface_key(
+            &workspace,
+            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+        );
         let path = temp_workspace_layout_path();
 
         write_workspace_layout(&path, &workspace)
@@ -608,8 +623,10 @@ mod tests {
         let mut persisted = workspace
             .to_persisted_v5()
             .expect("runtime debug workspace should form v5");
-        let (inspector_stack, _) =
-            tab_stack_and_panel_by_surface_key(&workspace, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY);
+        let (inspector_stack, _) = tab_stack_and_panel_by_surface_key(
+            &workspace,
+            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+        );
         let stack_id = inspector_stack.raw();
         let persisted_stack = persisted
             .tab_stacks
@@ -642,7 +659,7 @@ mod tests {
 
         write_workspace_layout(&path, &workspace)
             .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout(&path)
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
             .expect("stable-key-native Material Lab workspace should load");
 
         assert!(
@@ -660,7 +677,7 @@ mod tests {
 
         write_workspace_layout(&path, &workspace)
             .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout(&path)
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
             .expect("stable-key-native Material Lab workspace should load");
 
         assert!(
@@ -678,7 +695,7 @@ mod tests {
 
         write_workspace_layout(&path, &workspace)
             .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout(&path)
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
             .expect("stable-key-native Material Lab workspace should load");
 
         assert!(
@@ -719,7 +736,7 @@ mod tests {
 
         write_workspace_layout(&path, &workspace)
             .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout(&path)
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
             .expect("stable-key-native Material Lab workspace should load");
 
         assert_eq!(tab_stack_shape(&loaded), expected_shape);
@@ -735,13 +752,12 @@ mod tests {
 
         write_workspace_layout(&path, &workspace)
             .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout(&path)
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
             .expect("stable-key-native Material Lab workspace should load");
 
-        let mut shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
-            host.tool_surface_registry(),
-        )
-        .expect("shell state should build with hosted registry");
+        let mut shell_state =
+            RunenwerkEditorShellState::new_with_tool_surface_registry(host.tool_surface_registry())
+                .expect("shell state should build with hosted registry");
         shell_state.set_active_workspace_profile_id(MATERIAL_WORKSPACE_PROFILE_ID);
         shell_state.replace_workspace_state(loaded);
 
@@ -768,12 +784,14 @@ mod tests {
             let mut stable_only_request = request.clone();
             stable_only_request.legacy_tool_surface_kind = None;
 
-            let frame = host.provider_registry().resolve_frame_with_provider_family_map(
-                &context(&app, &shell_state, &theme),
-                &stable_only_request,
-                &SurfaceSessionState::default(),
-                Some(host.provider_family_provider_map()),
-            );
+            let frame = host
+                .provider_registry()
+                .resolve_frame_with_provider_family_map(
+                    &context(&app, &shell_state, &theme),
+                    &stable_only_request,
+                    &SurfaceSessionState::default(),
+                    Some(host.provider_family_provider_map()),
+                );
 
             assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
             assert_eq!(
@@ -797,7 +815,8 @@ mod tests {
         let path = temp_workspace_layout_path();
 
         write_workspace_layout(&path, workspace).expect("workspace layout should write");
-        let loaded = read_workspace_layout(&path).expect("workspace layout should decode");
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
+            .expect("workspace layout should decode");
 
         assert_eq!(&loaded, workspace);
         let _ = std::fs::remove_file(path);
@@ -814,7 +833,8 @@ mod tests {
 
         write_workspace_layout(&path, shell_state.workspace_state())
             .expect("workspace layout should write");
-        let loaded = read_workspace_layout(&path).expect("workspace layout should decode");
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
+            .expect("workspace layout should decode");
         shell_state.replace_workspace_state(loaded);
         let requests = mounted_surface_requests_with_registry(
             &shell_state,
@@ -839,7 +859,8 @@ mod tests {
 
         let path = temp_workspace_layout_path();
         write_persisted_layout(&path, &persisted);
-        let loaded = read_workspace_layout(&path).expect("v4 workspace layout should decode");
+        let loaded = read_workspace_layout_legacy_no_registry(&path)
+            .expect("v4 workspace layout should decode");
 
         assert_eq!(loaded, workspace);
         let _ = std::fs::remove_file(path);
@@ -905,7 +926,7 @@ mod tests {
 
         let path = temp_workspace_layout_path();
         write_persisted_layout(&path, &persisted);
-        let error = read_workspace_layout(&path)
+        let error = read_workspace_layout_legacy_no_registry(&path)
             .expect_err("invalid v5 stable key should fail explicit validation");
 
         assert!(
@@ -927,7 +948,7 @@ mod tests {
 
         let path = temp_workspace_layout_path();
         write_persisted_layout(&path, &persisted);
-        let error = read_workspace_layout(&path)
+        let error = read_workspace_layout_legacy_no_registry(&path)
             .expect_err("v5 stable key and legacy metadata mismatch should fail");
 
         assert!(
@@ -979,7 +1000,7 @@ mod tests {
 
         write_workspace_layout_for_profile(&path, &workspace, MATERIAL_WORKSPACE_PROFILE_ID)
             .expect("workspace layout should write with profile metadata");
-        let loaded = read_workspace_layout_with_metadata(&path)
+        let loaded = read_workspace_layout_with_metadata_legacy_no_registry(&path)
             .expect("workspace layout should decode with profile metadata");
 
         assert_eq!(loaded.workspace_state, workspace);

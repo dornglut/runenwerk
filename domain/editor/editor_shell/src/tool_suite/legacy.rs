@@ -542,6 +542,7 @@ mod tests {
                 key: stable_key("runenwerk.material_lab.graph_canvas"),
                 label: "Material Graph".to_string(),
                 role: ToolSurfaceRole::Primary,
+                panel_kind: crate::PanelKind::MaterialGraphCanvas,
                 provider_family,
                 route: ToolSurfaceRoute::ProviderOwnedGraphCanvas,
                 persistence: ToolSurfacePersistence::StableKey,

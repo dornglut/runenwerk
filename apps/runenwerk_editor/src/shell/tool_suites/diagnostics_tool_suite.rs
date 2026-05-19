@@ -1,11 +1,13 @@
 //! File: apps/runenwerk_editor/src/shell/tool_suites/diagnostics_tool_suite.rs
 //! Purpose: Diagnostics and runtime-debug tool-suite metadata.
 
-use editor_shell::{EditorToolSuite, ToolSurfaceKind, ToolSurfaceRole, ToolSurfaceRoute};
+use editor_shell::{
+    EditorToolSuite, PanelKind, ToolSurfaceKind, ToolSurfaceRole, ToolSurfaceRoute,
+};
 
 use super::{
-    stable_tool_surface_definition, tool_suite, ToolSuiteSurface,
-    TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+    TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY, ToolSuiteSurface, stable_tool_surface_definition,
+    tool_suite,
 };
 
 pub fn diagnostics_tool_suite() -> EditorToolSuite {
@@ -23,6 +25,7 @@ pub fn diagnostics_tool_suite() -> EditorToolSuite {
         TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
         "Tool Suite Registry Inspector",
         ToolSurfaceRole::Inspector,
+        PanelKind::Diagnostics,
         ToolSurfaceRoute::ProviderOwnedLocal,
         provider_family,
     ));

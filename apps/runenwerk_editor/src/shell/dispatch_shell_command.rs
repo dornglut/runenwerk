@@ -463,6 +463,40 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 .map_err(|_| EditorMutationError::runtime_rejected("create panel tab failed"))?;
             app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
         }
+        ShellCommand::CreatePanelTabStableKey {
+            tab_stack_id,
+            panel_kind,
+            stable_surface_key,
+            legacy_tool_surface_kind,
+            projection_epoch: _,
+        } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workspace command",
+                    ))?;
+            shell_state.close_tab_stack_popup_menu();
+            shell_state
+                .try_apply_workspace_mutation_with_allocations(|allocator| {
+                    let panel_id = allocator.allocate_panel_instance_id();
+                    let tool_surface_id = allocator.allocate_tool_surface_instance_id();
+                    Ok((
+                        WorkspaceMutation::AddPanelTab {
+                            tab_stack_id,
+                            panel_id,
+                            panel_kind,
+                            tool_surface_id,
+                            stable_surface_key: stable_surface_key.clone(),
+                            legacy_tool_surface_kind,
+                            activate_panel: true,
+                        },
+                        (),
+                    ))
+                })
+                .map_err(|_| EditorMutationError::runtime_rejected("create panel tab failed"))?;
+            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+        }
         ShellCommand::ClosePanelTab {
             tab_stack_id,
             panel_instance_id,
@@ -1132,6 +1166,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
         ShellCommand::SwitchPanelToolSurfaceKind { .. } => "SwitchPanelToolSurfaceKind",
         ShellCommand::CreatePanelTab { .. } => "CreatePanelTab",
+        ShellCommand::CreatePanelTabStableKey { .. } => "CreatePanelTabStableKey",
         ShellCommand::ClosePanelTab { .. } => "ClosePanelTab",
         ShellCommand::CloseOtherPanelTabs { .. } => "CloseOtherPanelTabs",
         ShellCommand::SplitTabStackArea { .. } => "SplitTabStackArea",
@@ -1432,14 +1467,11 @@ fn load_workspace_profile_layout(
         ))?;
     let workspace_layout_path = default_workspace_layout_path_for_profile(profile_id);
     let workspace_state = if workspace_layout_path.exists() {
-        let saved_workspace =
-            read_workspace_layout_with_metadata_and_registry(
-                &workspace_layout_path,
-                app.workbench_host().tool_surface_registry(),
-            )
-            .map_err(|_| {
-                EditorMutationError::runtime_rejected("failed to load workspace layout")
-            })?;
+        let saved_workspace = read_workspace_layout_with_metadata_and_registry(
+            &workspace_layout_path,
+            app.workbench_host().tool_surface_registry(),
+        )
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to load workspace layout"))?;
         if workspace_layout_matches_profile(&saved_workspace, profile) {
             saved_workspace.workspace_state
         } else {
@@ -1861,7 +1893,9 @@ mod tests {
             "source-backed graph edits must fail closed when no material source is active"
         );
         assert!(
-            app.material_lab_runtime().active_source_document().is_none(),
+            app.material_lab_runtime()
+                .active_source_document()
+                .is_none(),
             "missing source failure must not synthesize Material Lab source state"
         );
     }

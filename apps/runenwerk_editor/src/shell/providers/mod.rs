@@ -15,17 +15,17 @@ use editor_shell::{
     InspectorTargetViewModel, InspectorViewModel, MaterialDiagnosticRowViewModel,
     MaterialPreviewStatusViewModel, MaterialResourceBindingDiagnosticViewModel,
     MaterialSurfaceAction, OUTLINER_LIST_WIDGET_ID, ObservationConsumerKind,
-    ObservationFrameMetadata, ObservationSourceReality,
-    OutlinerDomainMutation, OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel,
-    OutlinerSurfaceAction, OutlinerViewModel, ProviderFamilyId, ProviderFamilyProviderAssignment,
+    ObservationFrameMetadata, ObservationSourceReality, OutlinerDomainMutation,
+    OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerSurfaceAction,
+    OutlinerViewModel, ProviderFamilyId, ProviderFamilyProviderAssignment,
     ProviderFamilyProviderMap, ResolvedSurfaceFrame, ShellCommand, SurfaceCommandProposal,
     SurfaceDocumentContext, SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute,
     SurfacePresentationArtifact, SurfacePresentationArtifactKind, SurfaceProviderAvailability,
     SurfaceProviderDescriptor, SurfaceProviderDiagnostic, SurfaceProviderId,
     SurfaceProviderPriority, SurfaceProviderRequest, SurfaceProviderSupportMode, SurfaceRouteTable,
     SurfaceSessionMutation, TexturePreviewChannelSelection, TextureSurfaceAction,
-    TextureViewerSurfaceKind, ToolSurfaceKind, ToolSurfaceRegistry, UiNode,
-    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
+    TextureViewerSurfaceKind, ToolSurfaceCreateCandidate, ToolSurfaceKind, ToolSurfaceRegistry,
+    UiNode, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
     VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
     VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
@@ -36,10 +36,10 @@ use editor_shell::{
     build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
     editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
     inspector_field_widget_id, surface_session_proposal, surface_widget_id,
-    tool_surface_capability_set, tool_surface_definition_id, viewport_debug_stage_button_widget_id,
-    viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
-    viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
-    viewport_tool_radial_item_widget_id,
+    tool_surface_capability_set, tool_surface_definition_id, tool_surface_kind_for_stable_key,
+    viewport_debug_stage_button_widget_id, viewport_field_color_ramp_button_widget_id,
+    viewport_field_component_button_widget_id, viewport_field_debug_mode_button_widget_id,
+    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState,
@@ -301,9 +301,7 @@ impl EditorSurfaceProviderRegistry {
     }
 
     pub fn provider_descriptors(&self) -> impl Iterator<Item = SurfaceProviderDescriptor> + '_ {
-        self.providers
-            .iter()
-            .map(|provider| provider.descriptor())
+        self.providers.iter().map(|provider| provider.descriptor())
     }
 
     pub fn provider_ids(&self) -> impl Iterator<Item = SurfaceProviderId> + '_ {
@@ -711,13 +709,66 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
         active_route_actions_by_target(active_definitions, history.can_undo(), history.can_redo());
     let available_panel_kinds = active_definitions.available_panel_kinds();
     let available_tool_surface_kinds = active_definitions.available_tool_surface_kinds();
+    let available_tool_surface_create_candidates = build_tool_surface_create_candidates(
+        &available_tool_surface_kinds,
+        app.workbench_host().tool_surface_registry(),
+    );
 
     EditorShellFrameModel::new(build_toolbar_view_model(&toolbar_frame), surfaces)
         .with_route_actions(route_actions)
         .with_available_panel_kinds(available_panel_kinds)
         .with_available_tool_surface_kinds(available_tool_surface_kinds)
+        .with_available_tool_surface_create_candidates(available_tool_surface_create_candidates)
         .with_active_ui_definitions(toolbar_template, toolbar_binding, shell_chrome_template)
         .with_active_tab_stack_popup_menu(shell_state.active_tab_stack_popup_menu())
+}
+
+fn build_tool_surface_create_candidates(
+    available_tool_surface_kinds: &[ToolSurfaceKind],
+    tool_surface_registry: &ToolSurfaceRegistry,
+) -> Vec<ToolSurfaceCreateCandidate> {
+    let mut candidates = Vec::new();
+    let mut seen = BTreeSet::new();
+    let legacy_kinds = if available_tool_surface_kinds.is_empty() {
+        tool_surface_registry
+            .iter()
+            .filter_map(|surface| tool_surface_kind_for_stable_key(&surface.key))
+            .collect::<Vec<_>>()
+    } else {
+        available_tool_surface_kinds.to_vec()
+    };
+
+    for kind in legacy_kinds {
+        let Some(stable_surface_key) = editor_shell::stable_key_for_tool_surface_kind(kind) else {
+            continue;
+        };
+        let Some(surface) = tool_surface_registry.get(&stable_surface_key) else {
+            continue;
+        };
+        if seen.insert(stable_surface_key.clone()) {
+            candidates.push(ToolSurfaceCreateCandidate::new(
+                stable_surface_key,
+                surface.label.clone(),
+                surface.panel_kind,
+                Some(kind),
+            ));
+        }
+    }
+
+    for surface in tool_surface_registry.iter() {
+        if tool_surface_kind_for_stable_key(&surface.key).is_none()
+            && seen.insert(surface.key.clone())
+        {
+            candidates.push(ToolSurfaceCreateCandidate::new(
+                surface.key.clone(),
+                surface.label.clone(),
+                surface.panel_kind,
+                None,
+            ));
+        }
+    }
+
+    candidates
 }
 
 pub fn mounted_surface_requests(
@@ -1911,11 +1962,11 @@ mod tests {
         AssetSourceDescriptor, SourceHash, asset_artifact_id, asset_id, asset_source_id,
     };
     use editor_shell::{
-        EditorToolSuite, LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, ProviderFamilyDefinition,
-        ProviderFamilyId, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, TabStackId, ToolSuiteId,
-        ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfaceInstanceId, ToolSurfacePersistence,
-        ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey, UiNodeKind,
-        VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
+        EditorToolSuite, LAYOUT_WORKSPACE_PROFILE_ID, PanelInstanceId, PanelKind,
+        ProviderFamilyDefinition, ProviderFamilyId, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, TabStackId,
+        ToolSuiteId, ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfaceInstanceId,
+        ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey,
+        UiNodeKind, VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
     };
     use graph::{CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId};
     use texture::{
@@ -2371,6 +2422,7 @@ mod tests {
                 key: ToolSurfaceStableKey::new("runenwerk.scene.viewport").unwrap(),
                 label: "Viewport".to_string(),
                 role: ToolSurfaceRole::Primary,
+                panel_kind: PanelKind::Viewport,
                 provider_family: provider_family_id,
                 route: ToolSurfaceRoute::ProviderOwnedLocal,
                 persistence: ToolSurfacePersistence::StableKey,
@@ -2392,6 +2444,7 @@ mod tests {
                 key: ToolSurfaceStableKey::new("runenwerk.scene.viewport").unwrap(),
                 label: "Viewport".to_string(),
                 role: ToolSurfaceRole::Primary,
+                panel_kind: PanelKind::Viewport,
                 provider_family: provider_family_id,
                 route: ToolSurfaceRoute::ProviderOwnedLocal,
                 persistence: ToolSurfacePersistence::StableKey,
@@ -3201,8 +3254,10 @@ mod tests {
         assert!(
             registry
                 .provider_descriptors()
-                .any(|descriptor| descriptor.id == TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID
-                    && descriptor.label == "Tool Suite Registry Inspector")
+                .any(
+                    |descriptor| descriptor.id == TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID
+                        && descriptor.label == "Tool Suite Registry Inspector"
+                )
         );
     }
 
@@ -3283,9 +3338,11 @@ mod tests {
 
         assert_eq!(observation.availability, frame.availability);
         assert_eq!(observation.selected_provider_id, frame.provider_id);
-        assert!(observation
-            .candidate_provider_ids
-            .contains(&MATERIAL_GRAPH_CANVAS_PROVIDER_ID));
+        assert!(
+            observation
+                .candidate_provider_ids
+                .contains(&MATERIAL_GRAPH_CANVAS_PROVIDER_ID)
+        );
         assert!(observation.support_modes.iter().any(|row| {
             row.provider_id == MATERIAL_GRAPH_CANVAS_PROVIDER_ID
                 && row.support_mode == SurfaceProviderSupportMode::StableKey
@@ -3891,7 +3948,9 @@ mod tests {
         );
 
         let text = provider_frame_text(&frame);
-        assert!(text.contains("material preview product status: active material preview product ready"));
+        assert!(
+            text.contains("material preview product status: active material preview product ready")
+        );
         assert!(text.contains("active material product label: material product 30"));
         assert!(text.contains("material preview artifact label: material artifact 32"));
         assert!(text.contains("material preview shader artifact label: shader artifact 33"));
@@ -3907,10 +3966,8 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
         let theme = ThemeTokens::default();
-        app.material_lab_runtime_mut().set_active_source_document(
-            asset_id(241),
-            material_texture_binding_source_document(),
-        );
+        app.material_lab_runtime_mut()
+            .set_active_source_document(asset_id(241), material_texture_binding_source_document());
 
         let frame = registry.resolve_frame(
             &context(&app, &shell_state, &theme),
@@ -3930,10 +3987,8 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
         let theme = ThemeTokens::default();
-        app.material_lab_runtime_mut().set_active_source_document(
-            asset_id(242),
-            material_texture_binding_source_document(),
-        );
+        app.material_lab_runtime_mut()
+            .set_active_source_document(asset_id(242), material_texture_binding_source_document());
 
         let frame = registry.resolve_frame(
             &context(&app, &shell_state, &theme),

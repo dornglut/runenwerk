@@ -20,25 +20,25 @@ use crate::{
     MaterialNodePickerViewModel, MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
     MaterialSurfaceAction, MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel,
     OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction,
-    ShellCommand,
-    SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
-    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
-    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
-    ViewportSurfaceAction, ViewportViewModel, WidgetId, WorkspaceIdentityAllocator,
-    WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame,
-    build_editor_shell_frame_with_docking_visual_state, build_entity_table_panel,
-    build_viewport_panel, dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
-    dock_split_preview_panel_widget_id, label, map_interactions_to_shell_commands,
-    panel_kind_definition_key, reduce_workspace, surface_widget_id, tab_active_indicator_widget_id,
-    tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
-    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
-    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
-    tool_surface_definition_id, tool_surface_kind_definition_key,
-    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
-    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    ShellCommand, SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute,
+    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
+    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
+    UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
+    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
+    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
+    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
+    surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
+    tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
+    tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_list_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
+    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
+    tool_surface_kind_definition_key, toolbar_workspace_active_indicator_widget_id,
+    toolbar_workspace_chrome_widget_id, toolbar_workspace_close_widget_id,
+    workspace_split_host_widget_id,
 };
 
 #[test]
@@ -2274,17 +2274,18 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
     assert!(matches!(
         create_commands.as_slice(),
         [
-            ShellCommand::CreatePanelTab {
+            ShellCommand::CreatePanelTabStableKey {
                 tab_stack_id,
-                tool_surface_kind: ToolSurfaceKind::Inspector,
+                stable_surface_key,
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
                 ..
             }
-        ] if *tab_stack_id == viewport_stack
+        ] if *tab_stack_id == viewport_stack && stable_surface_key.as_str() == "runenwerk.scene.inspector"
     ));
 }
 
 #[test]
-fn locked_tab_plus_menu_shows_all_kinds_but_routes_only_locked_kind() {
+fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
     let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
@@ -2313,49 +2314,29 @@ fn locked_tab_plus_menu_shows_all_kinds_but_routes_only_locked_kind() {
         }));
     let active_build =
         build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
-    let viewport_index = available_kinds
-        .iter()
-        .position(|kind| *kind == ToolSurfaceKind::Viewport)
-        .expect("viewport kind should be present");
-    let console_index = available_kinds
-        .iter()
-        .position(|kind| *kind == ToolSurfaceKind::Console)
-        .expect("console kind should be present");
-
     assert!(button_enabled(
         &active_build.tree.root,
-        tab_stack_new_surface_menu_item_widget_id(viewport_stack, viewport_index)
-    ));
-    assert!(!button_enabled(
-        &active_build.tree.root,
-        tab_stack_new_surface_menu_item_widget_id(viewport_stack, console_index)
+        tab_stack_new_surface_menu_item_widget_id(viewport_stack, 0)
     ));
 
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
-            items: vec![
-                UiInteraction::Activated(tab_stack_new_surface_menu_item_widget_id(
-                    viewport_stack,
-                    console_index,
-                )),
-                UiInteraction::Activated(tab_stack_new_surface_menu_item_widget_id(
-                    viewport_stack,
-                    viewport_index,
-                )),
-            ],
+            items: vec![UiInteraction::Activated(
+                tab_stack_new_surface_menu_item_widget_id(viewport_stack, 0),
+            )],
         },
         &active_build.projection_artifacts,
     );
     assert!(matches!(
         commands.as_slice(),
         [
-            ShellCommand::NoOp,
-            ShellCommand::CreatePanelTab {
+            ShellCommand::CreatePanelTabStableKey {
                 tab_stack_id,
-                tool_surface_kind: ToolSurfaceKind::Viewport,
+                stable_surface_key,
+                legacy_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
                 ..
             },
-        ] if *tab_stack_id == viewport_stack
+        ] if *tab_stack_id == viewport_stack && stable_surface_key.as_str() == "runenwerk.scene.viewport"
     ));
 }
 

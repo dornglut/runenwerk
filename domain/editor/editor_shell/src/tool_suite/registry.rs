@@ -582,6 +582,7 @@ mod tests {
             key: ToolSurfaceStableKey::new(key).unwrap(),
             label: key.to_string(),
             role: ToolSurfaceRole::Primary,
+            panel_kind: crate::PanelKind::GraphCanvas,
             provider_family: ProviderFamilyId::new(provider_family_id).unwrap(),
             route: ToolSurfaceRoute::ProviderOwnedLocal,
             persistence: ToolSurfacePersistence::StableKey,

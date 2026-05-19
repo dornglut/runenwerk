@@ -307,9 +307,9 @@ impl WorkspaceProfile {
 
     pub fn required_tool_surfaces_are_present(&self, workspace_state: &WorkspaceState) -> bool {
         self.default_surfaces.iter().all(|required_surface| {
-            workspace_state
-                .tool_surfaces()
-                .any(|surface| surface.stable_surface_key() == required_surface.stable_surface_key())
+            workspace_state.tool_surfaces().any(|surface| {
+                surface.stable_surface_key() == required_surface.stable_surface_key()
+            })
         })
     }
 
@@ -1524,6 +1524,11 @@ mod tests {
             key: ToolSurfaceStableKey::new(key).unwrap(),
             label: label.to_string(),
             role,
+            panel_kind: match role {
+                ToolSurfaceRole::Primary => crate::PanelKind::MaterialGraphCanvas,
+                ToolSurfaceRole::Inspector => crate::PanelKind::MaterialInspector,
+                ToolSurfaceRole::Preview => crate::PanelKind::MaterialPreview,
+            },
             provider_family,
             route,
             persistence: ToolSurfacePersistence::StableKey,

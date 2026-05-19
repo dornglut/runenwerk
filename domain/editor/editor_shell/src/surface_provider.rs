@@ -309,6 +309,30 @@ pub struct ResolvedSurfaceFrame {
     pub availability: SurfaceProviderAvailability,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolSurfaceCreateCandidate {
+    pub stable_surface_key: ToolSurfaceStableKey,
+    pub label: String,
+    pub panel_kind: PanelKind,
+    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+}
+
+impl ToolSurfaceCreateCandidate {
+    pub fn new(
+        stable_surface_key: ToolSurfaceStableKey,
+        label: impl Into<String>,
+        panel_kind: PanelKind,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+    ) -> Self {
+        Self {
+            stable_surface_key,
+            label: label.into(),
+            panel_kind,
+            legacy_tool_surface_kind,
+        }
+    }
+}
+
 impl ResolvedSurfaceFrame {
     pub fn diagnostic(
         request: &SurfaceProviderRequest,
@@ -354,9 +378,10 @@ pub struct EditorShellFrameModel {
     pub route_actions_by_route_target: BTreeMap<String, RoutedShellAction>,
     pub available_panel_kinds: Vec<PanelKind>,
     /// C6C shell UI compatibility boundary pending final cleanup:
-    /// authored/editor chrome still exposes enum-backed surface menus. Normal
-    /// provider requests use stable keys.
+    /// the switch-type menu still exposes enum-backed choices. Normal creation
+    /// and provider request identity use stable keys.
     pub available_tool_surface_kinds: Vec<ToolSurfaceKind>,
+    pub available_tool_surface_create_candidates: Vec<ToolSurfaceCreateCandidate>,
     pub active_toolbar_template: Option<NormalizedUiTemplate>,
     pub active_toolbar_binding: Option<EditorToolbarBinding>,
     pub active_shell_chrome_template: Option<NormalizedUiTemplate>,
@@ -374,6 +399,7 @@ impl EditorShellFrameModel {
             route_actions_by_route_target: BTreeMap::new(),
             available_panel_kinds: Vec::new(),
             available_tool_surface_kinds: Vec::new(),
+            available_tool_surface_create_candidates: Vec::new(),
             active_toolbar_template: None,
             active_toolbar_binding: None,
             active_shell_chrome_template: None,
@@ -392,6 +418,14 @@ impl EditorShellFrameModel {
     /// cleanup. Normal provider request identity is `ToolSurfaceStableKey`.
     pub fn with_available_tool_surface_kinds(mut self, kinds: Vec<ToolSurfaceKind>) -> Self {
         self.available_tool_surface_kinds = kinds;
+        self
+    }
+
+    pub fn with_available_tool_surface_create_candidates(
+        mut self,
+        candidates: Vec<ToolSurfaceCreateCandidate>,
+    ) -> Self {
+        self.available_tool_surface_create_candidates = candidates;
         self
     }
 

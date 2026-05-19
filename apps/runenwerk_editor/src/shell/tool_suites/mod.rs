@@ -2,10 +2,10 @@
 //! Purpose: Compiled-in tool-suite metadata declarations for current editor surfaces.
 
 use editor_shell::{
-    editor_surface_definitions, stable_key_for_tool_surface_kind, tool_surface_definition_id,
-    EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
+    EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
     ToolSurfaceDefinition, ToolSurfaceKind, ToolSurfacePersistence, ToolSurfaceRole,
-    ToolSurfaceRoute, ToolSurfaceStableKey,
+    ToolSurfaceRoute, ToolSurfaceStableKey, editor_surface_definitions,
+    panel_kind_for_tool_surface_kind, stable_key_for_tool_surface_kind, tool_surface_definition_id,
 };
 
 pub mod asset_tool_suite;
@@ -116,6 +116,7 @@ fn tool_surface_definition(
             .expect("saveable compiled-in surface should have a stable key"),
         label: surface_label(surface.kind).to_string(),
         role: surface.role,
+        panel_kind: panel_kind_for_tool_surface_kind(surface.kind),
         provider_family,
         route: surface.route,
         persistence: ToolSurfacePersistence::StableKey,
@@ -126,6 +127,7 @@ pub(crate) fn stable_tool_surface_definition(
     stable_key: &str,
     label: &str,
     role: ToolSurfaceRole,
+    panel_kind: PanelKind,
     route: ToolSurfaceRoute,
     provider_family: ProviderFamilyId,
 ) -> ToolSurfaceDefinition {
@@ -134,6 +136,7 @@ pub(crate) fn stable_tool_surface_definition(
             .expect("compiled-in stable tool surface key should be valid"),
         label: label.to_string(),
         role,
+        panel_kind,
         provider_family,
         route,
         persistence: ToolSurfacePersistence::StableKey,

@@ -2,7 +2,7 @@
 //! Purpose: Non-wired Material Lab tool-suite declaration.
 
 use editor_shell::{
-    EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
+    EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
     ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
     ToolSurfaceStableKey,
 };
@@ -23,6 +23,7 @@ pub fn material_lab_tool_suite() -> EditorToolSuite {
                 "runenwerk.material_lab.graph_canvas",
                 "Material Graph",
                 ToolSurfaceRole::Primary,
+                PanelKind::MaterialGraphCanvas,
                 provider_family_id.clone(),
                 ToolSurfaceRoute::ProviderOwnedGraphCanvas,
             ),
@@ -30,6 +31,7 @@ pub fn material_lab_tool_suite() -> EditorToolSuite {
                 "runenwerk.material_lab.inspector",
                 "Material Inspector",
                 ToolSurfaceRole::Inspector,
+                PanelKind::MaterialInspector,
                 provider_family_id.clone(),
                 ToolSurfaceRoute::ProviderOwnedLocal,
             ),
@@ -37,6 +39,7 @@ pub fn material_lab_tool_suite() -> EditorToolSuite {
                 "runenwerk.material_lab.preview",
                 "Material Preview",
                 ToolSurfaceRole::Preview,
+                PanelKind::MaterialPreview,
                 provider_family_id,
                 ToolSurfaceRoute::ProviderOwnedLocal,
             ),
@@ -48,6 +51,7 @@ fn material_lab_surface(
     key: &str,
     label: &str,
     role: ToolSurfaceRole,
+    panel_kind: PanelKind,
     provider_family: ProviderFamilyId,
     route: ToolSurfaceRoute,
 ) -> ToolSurfaceDefinition {
@@ -55,6 +59,7 @@ fn material_lab_surface(
         key: ToolSurfaceStableKey::new(key).unwrap(),
         label: label.to_string(),
         role,
+        panel_kind,
         provider_family,
         route,
         persistence: ToolSurfacePersistence::StableKey,

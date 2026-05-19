@@ -981,6 +981,11 @@ mod tests {
             key: ToolSurfaceStableKey::new(key).unwrap(),
             label: label.to_string(),
             role,
+            panel_kind: match role {
+                ToolSurfaceRole::Primary => crate::PanelKind::MaterialGraphCanvas,
+                ToolSurfaceRole::Inspector => crate::PanelKind::MaterialInspector,
+                ToolSurfaceRole::Preview => crate::PanelKind::MaterialPreview,
+            },
             provider_family,
             route,
             persistence: ToolSurfacePersistence::StableKey,

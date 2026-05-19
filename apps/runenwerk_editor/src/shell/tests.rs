@@ -14,14 +14,14 @@ use editor_shell::{
     SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget, SurfaceLocalAction,
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceSessionMutation, ToolSurfaceKind,
     ToolbarCommandKind, ToolbarMenuKind, UiInteraction, UiInteractionResults,
-    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
-    VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation,
-    ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis,
-    build_editor_shell_frame, map_interactions_to_shell_commands, surface_widget_id,
-    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_popup_menu_widget_id, tab_stack_reset_area_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_strip_scroll_widget_id,
-    viewport_field_component_button_widget_id, workspace_split_host_widget_id,
+    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
+    VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation, ViewportSessionMutation,
+    ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis, build_editor_shell_frame,
+    map_interactions_to_shell_commands, surface_widget_id, tab_stack_lock_type_toggle_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id,
+    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_strip_scroll_widget_id, viewport_field_component_button_widget_id,
+    workspace_split_host_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionDimensions, ExpressionProductId, ProducerHealth,
@@ -5064,10 +5064,13 @@ fn tab_plus_create_surface_menu_click_creates_selected_tab() {
         .find_map(|(widget_id, action)| {
             matches!(
                 action,
-                editor_shell::RoutedShellAction::CreatePanelTab {
+                editor_shell::RoutedShellAction::CreatePanelTabStableKey {
                     tab_stack_id,
-                    tool_surface_kind: ToolSurfaceKind::Inspector,
+                    stable_surface_key,
+                    legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
+                    ..
                 } if *tab_stack_id == viewport_stack
+                    && stable_surface_key.as_str() == "runenwerk.scene.inspector"
             )
             .then_some(*widget_id)
         })
@@ -5165,7 +5168,9 @@ fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required(
         .expect("runtime debug projection artifacts should exist");
     let split_action = artifacts
         .widget_actions_by_id
-        .get(&tab_stack_split_horizontal_button_widget_id(inspector_stack))
+        .get(&tab_stack_split_horizontal_button_widget_id(
+            inspector_stack,
+        ))
         .expect("inspector tab-stack split chrome should be routed");
     let reset_action = artifacts
         .widget_actions_by_id
@@ -5203,6 +5208,62 @@ fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required(
 }
 
 #[test]
+fn locked_inspector_tab_stack_create_menu_routes_only_stable_key_surface() {
+    let app = RunenwerkEditorApp::new();
+    let (mut shell_state, inspector_stack) = runtime_debug_inspector_shell_state(&app);
+    let key = editor_shell::ToolSurfaceStableKey::new(
+        crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
+    )
+    .expect("inspector stable key should be valid");
+    shell_state
+        .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaStableKey {
+            tab_stack_id: inspector_stack,
+            locked_stable_surface_key: Some(key.clone()),
+            legacy_locked_tool_surface_kind: None,
+        })
+        .expect("stable-key-only inspector stack should lock");
+    let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+    let artifacts = shell_state
+        .last_projection_artifacts()
+        .expect("runtime debug projection artifacts should exist");
+    let create_actions = artifacts
+        .widget_actions_by_id
+        .values()
+        .filter(|action| {
+            matches!(
+                action,
+                editor_shell::RoutedShellAction::CreatePanelTab {
+                    tab_stack_id,
+                    ..
+                } if *tab_stack_id == inspector_stack
+            ) || matches!(
+                action,
+                editor_shell::RoutedShellAction::CreatePanelTabStableKey {
+                    tab_stack_id,
+                    ..
+                } if *tab_stack_id == inspector_stack
+            )
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(create_actions.len(), 1);
+    assert!(matches!(
+        create_actions[0],
+        editor_shell::RoutedShellAction::CreatePanelTabStableKey {
+            tab_stack_id,
+            panel_kind: PanelKind::Diagnostics,
+            stable_surface_key,
+            legacy_tool_surface_kind: None,
+        } if *tab_stack_id == inspector_stack && stable_surface_key == &key
+    ));
+}
+
+#[test]
 fn inspector_switch_type_menu_does_not_emit_legacy_enum_actions() {
     let app = RunenwerkEditorApp::new();
     let (mut shell_state, inspector_stack) = runtime_debug_inspector_shell_state(&app);
@@ -5220,26 +5281,30 @@ fn inspector_switch_type_menu_does_not_emit_legacy_enum_actions() {
         .last_projection_artifacts()
         .expect("runtime debug projection artifacts should exist");
 
-    assert!(!artifacts
-        .widget_actions_by_id
-        .values()
-        .any(|action| matches!(
-            action,
-            editor_shell::RoutedShellAction::ToggleTabStackSurfaceMenu {
-                tab_stack_id,
-                ..
-            } if *tab_stack_id == inspector_stack
-        )));
-    assert!(!artifacts
-        .widget_actions_by_id
-        .values()
-        .any(|action| matches!(
-            action,
-            editor_shell::RoutedShellAction::SwitchPanelToolSurfaceKindTo {
-                panel_instance_id,
-                ..
-            } if *panel_instance_id == inspector_panel
-        )));
+    assert!(
+        !artifacts
+            .widget_actions_by_id
+            .values()
+            .any(|action| matches!(
+                action,
+                editor_shell::RoutedShellAction::ToggleTabStackSurfaceMenu {
+                    tab_stack_id,
+                    ..
+                } if *tab_stack_id == inspector_stack
+            ))
+    );
+    assert!(
+        !artifacts
+            .widget_actions_by_id
+            .values()
+            .any(|action| matches!(
+                action,
+                editor_shell::RoutedShellAction::SwitchPanelToolSurfaceKindTo {
+                    panel_instance_id,
+                    ..
+                } if *panel_instance_id == inspector_panel
+            ))
+    );
 }
 
 #[test]
@@ -5842,7 +5907,8 @@ fn workspace_layout_roundtrip_preserves_identity_after_float_cycle() {
     };
     crate::persistence::write_workspace_layout(&path, shell_state.workspace_state())
         .expect("workspace layout should write");
-    let loaded = crate::persistence::read_workspace_layout(&path).expect("workspace should load");
+    let loaded = crate::persistence::read_workspace_layout_legacy_no_registry(&path)
+        .expect("workspace should load");
     let _ = std::fs::remove_file(path);
 
     let mut restored_shell_state = RunenwerkEditorShellState::new();

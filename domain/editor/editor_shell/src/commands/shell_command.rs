@@ -136,6 +136,13 @@ pub enum ShellCommand {
         tool_surface_kind: ToolSurfaceKind,
         projection_epoch: u64,
     },
+    CreatePanelTabStableKey {
+        tab_stack_id: TabStackId,
+        panel_kind: crate::PanelKind,
+        stable_surface_key: ToolSurfaceStableKey,
+        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
+        projection_epoch: u64,
+    },
     ClosePanelTab {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
@@ -270,6 +277,9 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::CreatePanelTab {
+                projection_epoch, ..
+            }
+            | Self::CreatePanelTabStableKey {
                 projection_epoch, ..
             }
             | Self::ClosePanelTab {

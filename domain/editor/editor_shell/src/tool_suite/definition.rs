@@ -1,6 +1,8 @@
 //! File: domain/editor/editor_shell/src/tool_suite/definition.rs
 //! Purpose: App-neutral tool-suite surface declaration contracts.
 
+use crate::PanelKind;
+
 use super::{ProviderFamilyId, ToolSuiteId, ToolSurfaceStableKey};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,6 +24,7 @@ pub struct ToolSurfaceDefinition {
     pub key: ToolSurfaceStableKey,
     pub label: String,
     pub role: ToolSurfaceRole,
+    pub panel_kind: PanelKind,
     pub provider_family: ProviderFamilyId,
     pub route: ToolSurfaceRoute,
     pub persistence: ToolSurfacePersistence,

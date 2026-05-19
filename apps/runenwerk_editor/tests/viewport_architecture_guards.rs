@@ -1483,6 +1483,26 @@ fn shell_chrome_stable_key_only_surfaces_do_not_fallback_to_viewport() {
 }
 
 #[test]
+fn production_workspace_layout_readers_are_registry_aware() {
+    let dispatch =
+        read_workspace_source("apps/runenwerk_editor/src/shell/dispatch_shell_command.rs");
+    let persistence =
+        read_workspace_source("apps/runenwerk_editor/src/persistence/workspace_layout.rs");
+
+    assert!(
+        dispatch.contains("read_workspace_layout_with_metadata_and_registry")
+            && !dispatch.contains("read_workspace_layout_legacy_no_registry")
+            && !dispatch.contains("read_workspace_layout_with_metadata_legacy_no_registry"),
+        "production shell workspace load paths must use registry-aware V5 readers",
+    );
+    assert!(
+        persistence.contains("read_workspace_layout_legacy_no_registry")
+            && persistence.contains("Legacy/test compatibility reader"),
+        "no-registry readers must be explicitly named and documented as legacy/test compatibility",
+    );
+}
+
+#[test]
 fn viewport_embed_shader_uses_full_prepared_product_rect() {
     let shader = read_workspace_source("engine/src/plugins/render/renderer/mod.rs");
 
