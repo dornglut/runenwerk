@@ -111,6 +111,13 @@ pub struct EditorMaterialPreviewPublicationJournalEntry {
     pub status: ProductPublicationStatus,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PreviewSceneProductRuntimeStatus {
+    Empty,
+    Current { product_identity: String },
+    LastValidPreserved { product_identity: String },
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct MaterialLabRuntime {
     pub(super) selected_material_asset_id: Option<AssetId>,
@@ -131,6 +138,8 @@ pub struct MaterialLabRuntime {
     pub(super) publication_journal: Vec<EditorMaterialPreviewPublicationJournalEntry>,
     pub(super) last_workflow_status: Option<String>,
     pub(super) scene_material_table_shader_bundle: Option<EditorSceneMaterialTableShaderBundle>,
+    pub(super) current_preview_scene_product: Option<PreviewSceneProduct>,
+    pub(super) last_valid_preview_scene_product: Option<PreviewSceneProduct>,
 }
 
 impl MaterialLabRuntime {
@@ -338,5 +347,77 @@ impl MaterialLabRuntime {
         &self,
     ) -> Option<&EditorSceneMaterialTableShaderBundle> {
         self.scene_material_table_shader_bundle.as_ref()
+    }
+
+    pub fn current_preview_scene_product(&self) -> Option<&PreviewSceneProduct> {
+        self.current_preview_scene_product.as_ref()
+    }
+
+    pub fn last_valid_preview_scene_product(&self) -> Option<&PreviewSceneProduct> {
+        self.last_valid_preview_scene_product.as_ref()
+    }
+
+    pub fn record_preview_scene_product(
+        &mut self,
+        request_identity: &PreviewSceneProductRequestIdentity,
+        product: PreviewSceneProduct,
+    ) -> Result<(), PreviewSceneProductDiagnostic> {
+        if !request_identity.matches_product(&product) {
+            self.current_preview_scene_product = None;
+            self.clear_last_valid_preview_scene_product_unless_matches(request_identity);
+            return Err(PreviewSceneProductDiagnostic::new(
+                "material.preview_scene.stale_product",
+                "current preview scene product does not match the active preview scene request",
+            ));
+        }
+
+        self.current_preview_scene_product = Some(product.clone());
+        self.last_valid_preview_scene_product = Some(product);
+        Ok(())
+    }
+
+    pub fn record_preview_scene_product_failure(
+        &mut self,
+        request_identity: Option<&PreviewSceneProductRequestIdentity>,
+    ) -> bool {
+        self.current_preview_scene_product = None;
+        let Some(request_identity) = request_identity else {
+            self.last_valid_preview_scene_product = None;
+            return false;
+        };
+        self.clear_last_valid_preview_scene_product_unless_matches(request_identity);
+        self.last_valid_preview_scene_product.is_some()
+    }
+
+    pub fn clear_preview_scene_product(&mut self) {
+        self.current_preview_scene_product = None;
+        self.last_valid_preview_scene_product = None;
+    }
+
+    pub fn preview_scene_product_status(&self) -> PreviewSceneProductRuntimeStatus {
+        if let Some(product) = &self.current_preview_scene_product {
+            return PreviewSceneProductRuntimeStatus::Current {
+                product_identity: product.product_identity.clone(),
+            };
+        }
+        if let Some(product) = &self.last_valid_preview_scene_product {
+            return PreviewSceneProductRuntimeStatus::LastValidPreserved {
+                product_identity: product.product_identity.clone(),
+            };
+        }
+        PreviewSceneProductRuntimeStatus::Empty
+    }
+
+    fn clear_last_valid_preview_scene_product_unless_matches(
+        &mut self,
+        request_identity: &PreviewSceneProductRequestIdentity,
+    ) {
+        if !self
+            .last_valid_preview_scene_product
+            .as_ref()
+            .is_some_and(|product| request_identity.matches_product(product))
+        {
+            self.last_valid_preview_scene_product = None;
+        }
     }
 }

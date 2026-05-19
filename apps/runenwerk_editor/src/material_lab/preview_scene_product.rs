@@ -9,6 +9,7 @@ use editor_viewport::ExpressionProductId;
 use material_graph::MaterialProductId;
 
 const PREVIEW_SCENE_PRODUCT_IDENTITY_VERSION: &str = "preview-scene-product-v1";
+const PREVIEW_SCENE_PRODUCT_REQUEST_IDENTITY_VERSION: &str = "preview-scene-product-request-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PreviewSceneProductMode {
@@ -52,6 +53,88 @@ impl PreviewSceneShaderProductRef {
             material_table_identity: material_table_identity.into(),
             resource_layout_identity: resource_layout_identity.into(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewSceneShaderRequestIdentity {
+    pub shader_artifact_id: String,
+    pub shader_cache_key: ArtifactCacheKey,
+    pub shader_identity: String,
+    pub material_table_identity: String,
+    pub resource_layout_identity: String,
+}
+
+impl PreviewSceneShaderRequestIdentity {
+    pub fn from_shader(shader: &PreviewSceneShaderProductRef) -> Self {
+        Self {
+            shader_artifact_id: shader.shader_artifact_id.clone(),
+            shader_cache_key: shader.shader_cache_key.clone(),
+            shader_identity: shader.shader_identity.clone(),
+            material_table_identity: shader.material_table_identity.clone(),
+            resource_layout_identity: shader.resource_layout_identity.clone(),
+        }
+    }
+
+    pub fn matches_shader(&self, shader: &PreviewSceneShaderProductRef) -> bool {
+        self == &Self::from_shader(shader)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewSceneProductRequestIdentity {
+    pub scene_identity: String,
+    pub shader_identity: Option<PreviewSceneShaderRequestIdentity>,
+}
+
+impl PreviewSceneProductRequestIdentity {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        mode: PreviewSceneProductMode,
+        viewport_product_id: ExpressionProductId,
+        active_material_product_id: MaterialProductId,
+        active_material_artifact_cache_key: &ArtifactCacheKey,
+        material_table_identity: &str,
+        resource_layout_identity: &str,
+        shader: Option<&PreviewSceneShaderProductRef>,
+        slots: &[PreviewSceneMaterialSlot],
+        resources: &[PreviewSceneResourceSlot],
+    ) -> Self {
+        Self {
+            scene_identity: preview_scene_product_request_scene_identity(
+                mode,
+                viewport_product_id,
+                active_material_product_id,
+                active_material_artifact_cache_key,
+                material_table_identity,
+                resource_layout_identity,
+                slots,
+                resources,
+            ),
+            shader_identity: shader.map(PreviewSceneShaderRequestIdentity::from_shader),
+        }
+    }
+
+    pub fn from_product(product: &PreviewSceneProduct) -> Self {
+        Self::new(
+            product.mode,
+            product.viewport_product_id,
+            product.active_material_product_id,
+            &product.active_material_artifact_cache_key,
+            &product.material_table_identity,
+            &product.resource_layout_identity,
+            Some(&product.shader),
+            &product.slots,
+            &product.resources,
+        )
+    }
+
+    pub fn matches_product(&self, product: &PreviewSceneProduct) -> bool {
+        self.scene_identity == product.request_identity().scene_identity
+            && self
+                .shader_identity
+                .as_ref()
+                .is_none_or(|shader_identity| shader_identity.matches_shader(&product.shader))
     }
 }
 
@@ -193,6 +276,10 @@ impl PreviewSceneProduct {
             resources,
         }
     }
+
+    pub fn request_identity(&self) -> PreviewSceneProductRequestIdentity {
+        PreviewSceneProductRequestIdentity::from_product(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,12 +314,14 @@ impl PreviewSceneProductDiagnostic {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreviewSceneProductBuildOutcome {
     pub product: Option<PreviewSceneProduct>,
+    pub request_identity: Option<PreviewSceneProductRequestIdentity>,
     pub status: PreviewSceneProductBuildStatus,
 }
 
 impl PreviewSceneProductBuildOutcome {
     pub fn ready(product: PreviewSceneProduct) -> Self {
         Self {
+            request_identity: Some(product.request_identity()),
             product: Some(product),
             status: PreviewSceneProductBuildStatus::Ready,
         }
@@ -243,6 +332,20 @@ impl PreviewSceneProductBuildOutcome {
     ) -> Self {
         Self {
             product: None,
+            request_identity: None,
+            status: PreviewSceneProductBuildStatus::FailedClosed {
+                diagnostics: diagnostics.into_iter().collect(),
+            },
+        }
+    }
+
+    pub fn failed_closed_for_request(
+        request_identity: PreviewSceneProductRequestIdentity,
+        diagnostics: impl IntoIterator<Item = PreviewSceneProductDiagnostic>,
+    ) -> Self {
+        Self {
+            product: None,
+            request_identity: Some(request_identity),
             status: PreviewSceneProductBuildStatus::FailedClosed {
                 diagnostics: diagnostics.into_iter().collect(),
             },
@@ -268,121 +371,177 @@ pub fn preview_scene_product_identity(
         "version",
         PREVIEW_SCENE_PRODUCT_IDENTITY_VERSION,
     );
-    update_identity(&mut hasher, "mode", mode.identity_tag());
-    update_u64(&mut hasher, "viewport_product_id", viewport_product_id.0);
-    update_u64(
+    update_preview_scene_header_identity(
         &mut hasher,
-        "active_material_product_id",
-        active_material_product_id.raw(),
-    );
-    update_identity(
-        &mut hasher,
-        "active_material_artifact_cache_key",
-        active_material_artifact_cache_key.as_str(),
-    );
-    update_identity(
-        &mut hasher,
-        "material_table_identity",
+        mode,
+        viewport_product_id,
+        active_material_product_id,
+        active_material_artifact_cache_key,
         material_table_identity,
-    );
-    update_identity(
-        &mut hasher,
-        "resource_layout_identity",
         resource_layout_identity,
     );
     update_shader_identity(&mut hasher, shader);
-
-    update_u64(&mut hasher, "slot_count", slots.len() as u64);
-    for slot in slots {
-        update_u32(
-            &mut hasher,
-            "slot.material_slot_index",
-            slot.material_slot_index,
-        );
-        update_identity(
-            &mut hasher,
-            "slot.scene_material_slot_id",
-            &slot.scene_material_slot_id,
-        );
-        update_u64(
-            &mut hasher,
-            "slot.material_product_id",
-            slot.material_product_id.raw(),
-        );
-        update_identity(
-            &mut hasher,
-            "slot.material_artifact_cache_key",
-            slot.material_artifact_cache_key.as_str(),
-        );
-        update_identity(
-            &mut hasher,
-            "slot.scene_shader_identity",
-            &slot.scene_shader_identity,
-        );
-        update_u64(
-            &mut hasher,
-            "slot.resource_mapping_count",
-            slot.resource_slot_mappings.len() as u64,
-        );
-        for mapping in &slot.resource_slot_mappings {
-            update_u32(
-                &mut hasher,
-                "slot.mapping.local_resource_slot",
-                mapping.local_resource_slot,
-            );
-            update_u32(
-                &mut hasher,
-                "slot.mapping.table_resource_slot",
-                mapping.table_resource_slot,
-            );
-        }
-    }
-
-    update_u64(&mut hasher, "resource_count", resources.len() as u64);
-    for resource in resources {
-        update_u32(
-            &mut hasher,
-            "resource.table_resource_slot",
-            resource.table_resource_slot,
-        );
-        update_identity(
-            &mut hasher,
-            "resource.product_identity",
-            &resource.resource_product_identity,
-        );
-        update_identity(&mut hasher, "resource.kind", &resource.resource_kind);
-        update_identity(
-            &mut hasher,
-            "resource.texture_dimension",
-            &resource.texture_dimension,
-        );
-        update_identity(
-            &mut hasher,
-            "resource.format_usage_contract",
-            &resource.format_usage_contract,
-        );
-        update_identity(
-            &mut hasher,
-            "resource.sampler_contract",
-            &resource.sampler_contract,
-        );
-        update_identity(
-            &mut hasher,
-            "resource.artifact_identity",
-            &resource.artifact_identity,
-        );
-        update_identity(
-            &mut hasher,
-            "resource.artifact_cache_key",
-            resource.artifact_cache_key.as_str(),
-        );
-    }
+    update_preview_scene_slot_identities(&mut hasher, slots);
+    update_preview_scene_resource_identities(&mut hasher, resources);
 
     format!(
         "{}:{}",
         PREVIEW_SCENE_PRODUCT_IDENTITY_VERSION,
         hasher.finalize().to_hex()
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn preview_scene_product_request_scene_identity(
+    mode: PreviewSceneProductMode,
+    viewport_product_id: ExpressionProductId,
+    active_material_product_id: MaterialProductId,
+    active_material_artifact_cache_key: &ArtifactCacheKey,
+    material_table_identity: &str,
+    resource_layout_identity: &str,
+    slots: &[PreviewSceneMaterialSlot],
+    resources: &[PreviewSceneResourceSlot],
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    update_identity(
+        &mut hasher,
+        "version",
+        PREVIEW_SCENE_PRODUCT_REQUEST_IDENTITY_VERSION,
+    );
+    update_preview_scene_header_identity(
+        &mut hasher,
+        mode,
+        viewport_product_id,
+        active_material_product_id,
+        active_material_artifact_cache_key,
+        material_table_identity,
+        resource_layout_identity,
+    );
+    update_preview_scene_slot_identities(&mut hasher, slots);
+    update_preview_scene_resource_identities(&mut hasher, resources);
+
+    format!(
+        "{}:{}",
+        PREVIEW_SCENE_PRODUCT_REQUEST_IDENTITY_VERSION,
+        hasher.finalize().to_hex()
+    )
+}
+
+fn update_preview_scene_header_identity(
+    hasher: &mut blake3::Hasher,
+    mode: PreviewSceneProductMode,
+    viewport_product_id: ExpressionProductId,
+    active_material_product_id: MaterialProductId,
+    active_material_artifact_cache_key: &ArtifactCacheKey,
+    material_table_identity: &str,
+    resource_layout_identity: &str,
+) {
+    update_identity(hasher, "mode", mode.identity_tag());
+    update_u64(hasher, "viewport_product_id", viewport_product_id.0);
+    update_u64(
+        hasher,
+        "active_material_product_id",
+        active_material_product_id.raw(),
+    );
+    update_identity(
+        hasher,
+        "active_material_artifact_cache_key",
+        active_material_artifact_cache_key.as_str(),
+    );
+    update_identity(hasher, "material_table_identity", material_table_identity);
+    update_identity(hasher, "resource_layout_identity", resource_layout_identity);
+}
+
+fn update_preview_scene_slot_identities(
+    hasher: &mut blake3::Hasher,
+    slots: &[PreviewSceneMaterialSlot],
+) {
+    update_u64(hasher, "slot_count", slots.len() as u64);
+    for slot in slots {
+        update_u32(hasher, "slot.material_slot_index", slot.material_slot_index);
+        update_identity(
+            hasher,
+            "slot.scene_material_slot_id",
+            &slot.scene_material_slot_id,
+        );
+        update_u64(
+            hasher,
+            "slot.material_product_id",
+            slot.material_product_id.raw(),
+        );
+        update_identity(
+            hasher,
+            "slot.material_artifact_cache_key",
+            slot.material_artifact_cache_key.as_str(),
+        );
+        update_identity(
+            hasher,
+            "slot.scene_shader_identity",
+            &slot.scene_shader_identity,
+        );
+        update_u64(
+            hasher,
+            "slot.resource_mapping_count",
+            slot.resource_slot_mappings.len() as u64,
+        );
+        for mapping in &slot.resource_slot_mappings {
+            update_u32(
+                hasher,
+                "slot.mapping.local_resource_slot",
+                mapping.local_resource_slot,
+            );
+            update_u32(
+                hasher,
+                "slot.mapping.table_resource_slot",
+                mapping.table_resource_slot,
+            );
+        }
+    }
+}
+
+fn update_preview_scene_resource_identities(
+    hasher: &mut blake3::Hasher,
+    resources: &[PreviewSceneResourceSlot],
+) {
+    update_u64(hasher, "resource_count", resources.len() as u64);
+    for resource in resources {
+        update_u32(
+            hasher,
+            "resource.table_resource_slot",
+            resource.table_resource_slot,
+        );
+        update_identity(
+            hasher,
+            "resource.product_identity",
+            &resource.resource_product_identity,
+        );
+        update_identity(hasher, "resource.kind", &resource.resource_kind);
+        update_identity(
+            hasher,
+            "resource.texture_dimension",
+            &resource.texture_dimension,
+        );
+        update_identity(
+            hasher,
+            "resource.format_usage_contract",
+            &resource.format_usage_contract,
+        );
+        update_identity(
+            hasher,
+            "resource.sampler_contract",
+            &resource.sampler_contract,
+        );
+        update_identity(
+            hasher,
+            "resource.artifact_identity",
+            &resource.artifact_identity,
+        );
+        update_identity(
+            hasher,
+            "resource.artifact_cache_key",
+            resource.artifact_cache_key.as_str(),
+        );
+    }
 }
 
 fn update_shader_identity(hasher: &mut blake3::Hasher, shader: &PreviewSceneShaderProductRef) {
@@ -635,6 +794,7 @@ mod tests {
         let ready = PreviewSceneProductBuildOutcome::ready(product.clone());
         let waiting = PreviewSceneProductBuildOutcome {
             product: Some(product.clone()),
+            request_identity: Some(product.request_identity()),
             status: PreviewSceneProductBuildStatus::WaitingForShaderLoad {
                 product_identity: "different-status-text".to_string(),
             },

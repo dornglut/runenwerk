@@ -8,6 +8,11 @@
         CyclePolicy, EdgeDefinition, GraphDefinition, GraphId, NodeDefinition, NodeId,
         PortDefinition, PortDirection, PortId,
     };
+    use crate::material_lab::{
+        PreviewSceneMaterialSlot, PreviewSceneProduct, PreviewSceneProductMode,
+        PreviewSceneProductRequestIdentity, PreviewSceneResourceSlot,
+        PreviewSceneResourceSlotMapping, PreviewSceneShaderProductRef,
+    };
     use material_graph::{
         MaterialGraphDocument, MaterialGraphEditorState, MaterialGraphNodeLayout,
         MaterialGraphViewportState, MaterialOutputTarget, MaterialValueType,
@@ -702,6 +707,142 @@
         );
     }
 
+    #[test]
+    fn material_runtime_records_current_preview_scene_product() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        let request_identity = product.request_identity();
+
+        runtime
+            .record_preview_scene_product(&request_identity, product.clone())
+            .expect("fresh product should record");
+
+        assert_eq!(runtime.current_preview_scene_product(), Some(&product));
+        assert_eq!(runtime.last_valid_preview_scene_product(), Some(&product));
+        assert_eq!(
+            runtime.preview_scene_product_status(),
+            PreviewSceneProductRuntimeStatus::Current {
+                product_identity: product.product_identity
+            }
+        );
+    }
+
+    #[test]
+    fn material_runtime_preserves_last_valid_preview_scene_product_for_same_request() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        let request_identity = product.request_identity();
+        runtime
+            .record_preview_scene_product(&request_identity, product.clone())
+            .expect("fresh product should record");
+
+        let preserved = runtime.record_preview_scene_product_failure(Some(&request_identity));
+
+        assert!(preserved);
+        assert_eq!(runtime.current_preview_scene_product(), None);
+        assert_eq!(runtime.last_valid_preview_scene_product(), Some(&product));
+        assert_eq!(
+            runtime.preview_scene_product_status(),
+            PreviewSceneProductRuntimeStatus::LastValidPreserved {
+                product_identity: product.product_identity
+            }
+        );
+    }
+
+    #[test]
+    fn material_runtime_rejects_last_valid_preview_scene_product_for_different_resource_layout() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        let changed_layout = preview_scene_product("active", "table-a", "layout-b");
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product)
+            .expect("fresh product should record");
+
+        let preserved =
+            runtime.record_preview_scene_product_failure(Some(&changed_layout.request_identity()));
+
+        assert!(!preserved);
+        assert_eq!(runtime.current_preview_scene_product(), None);
+        assert_eq!(runtime.last_valid_preview_scene_product(), None);
+        assert_eq!(
+            runtime.preview_scene_product_status(),
+            PreviewSceneProductRuntimeStatus::Empty
+        );
+    }
+
+    #[test]
+    fn material_runtime_rejects_last_valid_preview_scene_product_for_different_material_table() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        let changed_table = preview_scene_product("active", "table-b", "layout-a");
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product)
+            .expect("fresh product should record");
+
+        let preserved =
+            runtime.record_preview_scene_product_failure(Some(&changed_table.request_identity()));
+
+        assert!(!preserved);
+        assert_eq!(runtime.current_preview_scene_product(), None);
+        assert_eq!(runtime.last_valid_preview_scene_product(), None);
+    }
+
+    #[test]
+    fn failed_scene_table_bundle_preserves_last_valid_only_for_same_request() {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        let same_request_without_shader = request_identity_without_shader(&product);
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product.clone())
+            .expect("fresh product should record");
+
+        assert!(
+            runtime.record_preview_scene_product_failure(Some(&same_request_without_shader))
+        );
+        assert_eq!(runtime.last_valid_preview_scene_product(), Some(&product));
+
+        let changed_layout = preview_scene_product("active", "table-a", "layout-b");
+        let changed_request_without_shader = request_identity_without_shader(&changed_layout);
+        assert!(
+            !runtime.record_preview_scene_product_failure(Some(&changed_request_without_shader))
+        );
+        assert_eq!(runtime.last_valid_preview_scene_product(), None);
+    }
+
+    #[test]
+    fn unresolved_explicit_scene_slot_clears_current_product_and_preserves_only_valid_same_request()
+    {
+        let mut runtime = MaterialLabRuntime::default();
+        let product = preview_scene_product("active", "table-a", "layout-a");
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product.clone())
+            .expect("fresh product should record");
+
+        assert!(!runtime.record_preview_scene_product_failure(None));
+        assert_eq!(runtime.current_preview_scene_product(), None);
+        assert_eq!(runtime.last_valid_preview_scene_product(), None);
+
+        runtime
+            .record_preview_scene_product(&product.request_identity(), product.clone())
+            .expect("fresh product should record");
+        assert!(runtime.record_preview_scene_product_failure(Some(
+            &product.request_identity()
+        )));
+        assert_eq!(runtime.last_valid_preview_scene_product(), Some(&product));
+    }
+
+    #[test]
+    fn no_v5_or_asset_persistence_for_preview_scene_product_state() {
+        let runtime_source = include_str!("runtime.rs");
+        let workspace_layout_source = include_str!("../../persistence/workspace_layout.rs");
+
+        assert!(runtime_source.contains("current_preview_scene_product"));
+        assert!(runtime_source.contains("last_valid_preview_scene_product"));
+        assert!(!workspace_layout_source.contains("PreviewSceneProduct"));
+        assert!(!workspace_layout_source.contains("current_preview_scene_product"));
+        assert!(!workspace_layout_source.contains("last_valid_preview_scene_product"));
+    }
+
     #[derive(Debug, Clone, Copy)]
     enum TexturePayloadFixture {
         Imported,
@@ -832,5 +973,83 @@
             ".runenwerk/artifacts/scene-material.wgsl",
             "scene-material-shader",
             [],
+        )
+    }
+
+    fn preview_scene_product(
+        label: &str,
+        material_table_identity: &str,
+        resource_layout_identity: &str,
+    ) -> PreviewSceneProduct {
+        let shader = PreviewSceneShaderProductRef::new(
+            format!("shader-artifact-{label}"),
+            ArtifactCacheKey::new(format!("shader-cache-{label}")),
+            format!("shader-identity-{label}"),
+            format!(".runenwerk/artifacts/material-scene-shader-{label}.wgsl"),
+            material_table_identity,
+            resource_layout_identity,
+        );
+        PreviewSceneProduct::new(
+            PreviewSceneProductMode::SceneMaterialTable,
+            ExpressionProductId(10030),
+            MaterialProductId::new(30),
+            ArtifactCacheKey::new("active-material-cache"),
+            material_table_identity,
+            resource_layout_identity,
+            shader,
+            [
+                PreviewSceneMaterialSlot::new(
+                    0,
+                    "default",
+                    MaterialProductId::new(30),
+                    ArtifactCacheKey::new("material-cache-default"),
+                    "scene-shader-default",
+                    [PreviewSceneResourceSlotMapping::new(0, 0)],
+                ),
+                PreviewSceneMaterialSlot::new(
+                    1,
+                    "assigned",
+                    MaterialProductId::new(31),
+                    ArtifactCacheKey::new("material-cache-assigned"),
+                    "scene-shader-assigned",
+                    [PreviewSceneResourceSlotMapping::new(0, 1)],
+                ),
+            ],
+            [
+                preview_scene_resource_slot(0, "albedo"),
+                preview_scene_resource_slot(1, "normal"),
+            ],
+        )
+    }
+
+    fn request_identity_without_shader(
+        product: &PreviewSceneProduct,
+    ) -> PreviewSceneProductRequestIdentity {
+        PreviewSceneProductRequestIdentity::new(
+            product.mode,
+            product.viewport_product_id,
+            product.active_material_product_id,
+            &product.active_material_artifact_cache_key,
+            &product.material_table_identity,
+            &product.resource_layout_identity,
+            None,
+            &product.slots,
+            &product.resources,
+        )
+    }
+
+    fn preview_scene_resource_slot(
+        table_resource_slot: u32,
+        label: &str,
+    ) -> PreviewSceneResourceSlot {
+        PreviewSceneResourceSlot::new(
+            table_resource_slot,
+            format!("texture-product-{label}"),
+            "Texture2D",
+            "2d",
+            "rgba8_unorm_srgb|sampled",
+            "linear_repeat",
+            format!("texture-artifact-{label}"),
+            ArtifactCacheKey::new(format!("texture-cache-{label}")),
         )
     }

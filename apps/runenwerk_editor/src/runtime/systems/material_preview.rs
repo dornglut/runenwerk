@@ -13,11 +13,14 @@ use engine::plugins::render::{
 };
 use engine::runtime::{Res, ResMut};
 
+#[cfg(test)]
+use crate::material_lab::prepared_material_resource_for_preview_with_resolved_scene_materials_and_bundle;
 use crate::material_lab::workflow::write_scene_material_table_shader_bundle;
 use crate::material_lab::{
-    EditorMaterialPreviewProduct, EditorSceneMaterialTableShaderBundle, SceneMaterialSlotProduct,
-    prepared_material_resource_for_preview,
-    prepared_material_resource_for_preview_with_resolved_scene_materials_and_bundle,
+    EditorMaterialPreviewProduct, EditorSceneMaterialTableShaderBundle, PreviewSceneProduct,
+    PreviewSceneProductBuildOutcome, PreviewSceneProductBuildStatus, PreviewSceneProductDiagnostic,
+    SceneMaterialSlotProduct, build_preview_scene_product_for_scene_material_table,
+    prepared_material_resource_for_preview, prepared_material_resource_for_preview_scene_product,
     scene_material_table_shader_build_request_for_preview,
 };
 use crate::runtime::app::{EDITOR_MATERIAL_PREVIEW_FLOW_ID, EDITOR_MATERIAL_PREVIEW_SHADER_ID};
@@ -66,14 +69,38 @@ pub fn prepare_material_preview_render_resource_system(
             };
             host.app
                 .material_lab_runtime_mut()
+                .record_preview_scene_product_failure(None);
+            host.app
+                .material_lab_runtime_mut()
                 .record_diagnostic(diagnostic.clone());
             return;
         }
     };
-    if let Some(diagnostic) = prepare_material_preview_render_resource_with_scene_materials(
+    let preview_scene_product = match build_and_record_preview_scene_product(
+        &mut host.app,
         preview.as_ref(),
         Some(&scene_material_assignments),
         &slot_products,
+        scene_table_bundle.as_ref(),
+    ) {
+        Ok(product) => product,
+        Err(diagnostic) => {
+            *material_feature = PreparedMaterialFeatureResource {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+                payload: Default::default(),
+            };
+            host.app
+                .material_lab_runtime_mut()
+                .record_diagnostic(diagnostic.clone());
+            return;
+        }
+    };
+    if let Some(diagnostic) = prepare_material_preview_render_resource_with_preview_scene_product(
+        preview.as_ref(),
+        Some(&scene_material_assignments),
+        &slot_products,
+        preview_scene_product.as_ref(),
         scene_table_bundle.as_ref(),
         &mut material_feature,
         &mut shader_registry,
@@ -100,6 +127,92 @@ pub(crate) fn prepare_material_preview_render_resource(
     )
 }
 
+pub(crate) fn prepare_material_preview_render_resource_with_preview_scene_product(
+    preview: Option<&EditorMaterialPreviewProduct>,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+    preview_scene_product: Option<&PreviewSceneProduct>,
+    scene_table_bundle: Option<&EditorSceneMaterialTableShaderBundle>,
+    material_feature: &mut PreparedMaterialFeatureResource,
+    shader_registry: &mut ShaderRegistryResource,
+) -> Option<asset::AssetDiagnosticRecord> {
+    if let Some(preview) = preview {
+        let Some(preview_scene_product) = preview_scene_product else {
+            *material_feature = PreparedMaterialFeatureResource {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+                payload: Default::default(),
+            };
+            return Some(asset::AssetDiagnosticRecord::error(
+                asset::AssetDiagnosticCode::RatificationRejected,
+                "current preview scene product is missing for material renderer handoff",
+            ));
+        };
+        shader_registry.register_shader_with_id(
+            EDITOR_MATERIAL_PREVIEW_SHADER_ID,
+            preview.shader_path.clone(),
+        );
+        shader_registry.register_shader_with_id(
+            preview.scene_shader_path.clone(),
+            preview.scene_shader_path.clone(),
+        );
+        if preview_scene_product.mode
+            == crate::material_lab::PreviewSceneProductMode::SceneMaterialTable
+        {
+            shader_registry.register_shader_with_id(
+                preview_scene_product.shader.shader_path.clone(),
+                preview_scene_product.shader.shader_path.clone(),
+            );
+        } else {
+            for slot_product in slot_products {
+                shader_registry.register_shader_with_id(
+                    slot_product.preview.scene_shader_path.clone(),
+                    slot_product.preview.scene_shader_path.clone(),
+                );
+            }
+        }
+        if shader_registry.is_loaded(EDITOR_MATERIAL_PREVIEW_SHADER_ID)
+            && preview_scene_product_shader_is_loaded(
+                preview_scene_product,
+                preview,
+                slot_products,
+                shader_registry,
+            )
+        {
+            match prepared_material_resource_for_preview_scene_product(
+                preview_scene_product,
+                preview,
+                scene_material_assignments,
+                slot_products,
+                scene_table_bundle,
+            ) {
+                Ok(resource) => {
+                    *material_feature = resource;
+                }
+                Err(diagnostic) => {
+                    *material_feature = PreparedMaterialFeatureResource {
+                        status: FeatureContributionStatus::Missing,
+                        fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+                        payload: Default::default(),
+                    };
+                    return Some(diagnostic);
+                }
+            }
+        } else if material_feature.status != FeatureContributionStatus::Ready {
+            *material_feature = PreparedMaterialFeatureResource {
+                status: FeatureContributionStatus::Missing,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+                payload: Default::default(),
+            };
+        }
+    } else {
+        *material_feature = prepared_material_resource_for_preview(None)
+            .expect("missing material preview cannot violate portable handoff limits");
+    }
+    None
+}
+
+#[cfg(test)]
 pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
     preview: Option<&EditorMaterialPreviewProduct>,
     scene_material_assignments: Option<&SceneMaterialAssignmentState>,
@@ -170,6 +283,22 @@ pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
     None
 }
 
+fn preview_scene_product_shader_is_loaded(
+    product: &PreviewSceneProduct,
+    preview: &EditorMaterialPreviewProduct,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+    shader_registry: &ShaderRegistryResource,
+) -> bool {
+    if product.mode == crate::material_lab::PreviewSceneProductMode::SceneMaterialTable {
+        return shader_registry.is_loaded(product.shader.shader_path.as_str());
+    }
+    shader_registry.is_loaded(preview.scene_shader_path.as_str())
+        && slot_products.iter().all(|slot_product| {
+            shader_registry.is_loaded(slot_product.preview.scene_shader_path.as_str())
+        })
+}
+
+#[cfg(test)]
 fn scene_shader_bundle_is_loaded(
     preview: &EditorMaterialPreviewProduct,
     slot_products: &[SceneMaterialSlotProduct<'_>],
@@ -183,6 +312,89 @@ fn scene_shader_bundle_is_loaded(
         && slot_products.iter().all(|slot_product| {
             shader_registry.is_loaded(slot_product.preview.scene_shader_path.as_str())
         })
+}
+
+fn build_and_record_preview_scene_product(
+    app: &mut crate::editor_app::RunenwerkEditorApp,
+    preview: Option<&EditorMaterialPreviewProduct>,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+    scene_table_bundle: Option<&EditorSceneMaterialTableShaderBundle>,
+) -> Result<Option<PreviewSceneProduct>, asset::AssetDiagnosticRecord> {
+    let Some(preview) = preview else {
+        app.material_lab_runtime_mut().clear_preview_scene_product();
+        return Ok(None);
+    };
+    let outcome = build_preview_scene_product_for_scene_material_table(
+        preview,
+        scene_material_assignments,
+        slot_products,
+        scene_table_bundle,
+    );
+    record_preview_scene_product_build_outcome(app.material_lab_runtime_mut(), outcome)
+}
+
+fn record_preview_scene_product_build_outcome(
+    runtime: &mut crate::material_lab::MaterialLabRuntime,
+    outcome: PreviewSceneProductBuildOutcome,
+) -> Result<Option<PreviewSceneProduct>, asset::AssetDiagnosticRecord> {
+    let request_identity = outcome.request_identity.clone();
+    if let Some(product) = outcome.product {
+        let request_identity = request_identity.unwrap_or_else(|| product.request_identity());
+        runtime
+            .record_preview_scene_product(&request_identity, product.clone())
+            .map_err(asset_diagnostic_from_preview_scene_product_diagnostic)?;
+        return Ok(Some(product));
+    }
+
+    runtime.record_preview_scene_product_failure(request_identity.as_ref());
+    Err(asset_diagnostic_from_preview_scene_product_build_status(
+        outcome.status,
+    ))
+}
+
+fn asset_diagnostic_from_preview_scene_product_build_status(
+    status: PreviewSceneProductBuildStatus,
+) -> asset::AssetDiagnosticRecord {
+    match status {
+        PreviewSceneProductBuildStatus::FailedClosed { diagnostics } => diagnostics
+            .into_iter()
+            .next()
+            .map(asset_diagnostic_from_preview_scene_product_diagnostic)
+            .unwrap_or_else(|| {
+                asset::AssetDiagnosticRecord::error(
+                    asset::AssetDiagnosticCode::RatificationRejected,
+                    "preview scene product build failed closed without diagnostics",
+                )
+            }),
+        PreviewSceneProductBuildStatus::WaitingForShaderLoad { product_identity } => {
+            asset::AssetDiagnosticRecord::error(
+                asset::AssetDiagnosticCode::RatificationRejected,
+                format!("preview scene product {product_identity} is waiting for shader load"),
+            )
+        }
+        PreviewSceneProductBuildStatus::PriorValidPreserved {
+            preserved_product_identity,
+        } => asset::AssetDiagnosticRecord::error(
+            asset::AssetDiagnosticCode::RatificationRejected,
+            format!(
+                "preview scene product {preserved_product_identity} preserved prior valid state"
+            ),
+        ),
+        PreviewSceneProductBuildStatus::Ready => asset::AssetDiagnosticRecord::error(
+            asset::AssetDiagnosticCode::RatificationRejected,
+            "preview scene product build reported ready without a product",
+        ),
+    }
+}
+
+fn asset_diagnostic_from_preview_scene_product_diagnostic(
+    diagnostic: PreviewSceneProductDiagnostic,
+) -> asset::AssetDiagnosticRecord {
+    asset::AssetDiagnosticRecord::error(
+        asset::AssetDiagnosticCode::RatificationRejected,
+        diagnostic.message,
+    )
 }
 
 fn ensure_scene_material_table_shader_bundle(

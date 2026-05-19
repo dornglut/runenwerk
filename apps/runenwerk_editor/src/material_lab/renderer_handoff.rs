@@ -16,7 +16,8 @@ use crate::material_lab::{
     EditorMaterialPreviewProduct, EditorSceneMaterialTableShaderBundle,
     MaterialRendererParameterProfile, PreviewSceneMaterialSlot, PreviewSceneProduct,
     PreviewSceneProductBuildOutcome, PreviewSceneProductDiagnostic, PreviewSceneProductMode,
-    PreviewSceneResourceSlot, PreviewSceneResourceSlotMapping, PreviewSceneShaderProductRef,
+    PreviewSceneProductRequestIdentity, PreviewSceneResourceSlot, PreviewSceneResourceSlotMapping,
+    PreviewSceneShaderProductRef,
 };
 
 const SINGLE_MATERIAL_PREVIEW_SCENE_SLOT_ID: &str = "single-material.active";
@@ -76,6 +77,14 @@ pub fn build_preview_scene_product_for_scene_material_table(
         &slots,
         resource_layout.identity.as_str(),
     );
+    let request_identity = preview_scene_product_request_identity_from_resolved_slots(
+        preview,
+        &slots,
+        material_table_identity.as_str(),
+        resource_layout.identity.as_str(),
+        &resource_layout,
+        scene_table_bundle,
+    );
 
     match build_preview_scene_product_from_resolved_slots(
         preview,
@@ -86,7 +95,10 @@ pub fn build_preview_scene_product_for_scene_material_table(
         scene_table_bundle,
     ) {
         Ok(product) => PreviewSceneProductBuildOutcome::ready(product),
-        Err(diagnostic) => PreviewSceneProductBuildOutcome::failed_closed([diagnostic]),
+        Err(diagnostic) => PreviewSceneProductBuildOutcome::failed_closed_for_request(
+            request_identity,
+            [diagnostic],
+        ),
     }
 }
 
@@ -163,6 +175,83 @@ pub fn prepared_material_resource_for_preview_with_resolved_scene_materials_and_
         }
         None => prepared_material_resource_for_preview(None),
     }
+}
+
+pub fn prepared_material_resource_for_preview_scene_product(
+    product: &PreviewSceneProduct,
+    preview: &EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+    scene_table_bundle: Option<&EditorSceneMaterialTableShaderBundle>,
+) -> Result<PreparedMaterialFeatureResource, AssetDiagnosticRecord> {
+    let payload = prepared_material_contribution_for_preview_scene_product(
+        product,
+        preview,
+        scene_material_assignments,
+        slot_products,
+        scene_table_bundle,
+    )?;
+    payload.validate_portable_limits().map_err(|error| {
+        AssetDiagnosticRecord::error(
+            AssetDiagnosticCode::RatificationRejected,
+            format!(
+                "material renderer handoff rejected portable binding limits: {}",
+                error
+            ),
+        )
+    })?;
+    Ok(PreparedMaterialFeatureResource {
+        status: FeatureContributionStatus::Ready,
+        fallback_policy: FeatureFallbackPolicy::ReuseLastGood,
+        payload,
+    })
+}
+
+pub fn prepared_material_contribution_for_preview_scene_product(
+    product: &PreviewSceneProduct,
+    preview: &EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+    scene_table_bundle: Option<&EditorSceneMaterialTableShaderBundle>,
+) -> Result<PreparedMaterialFeatureContribution, AssetDiagnosticRecord> {
+    if scene_material_assignments.is_none() {
+        let expected = single_material_preview_scene_product(preview)
+            .map_err(asset_diagnostic_from_preview_scene_product_diagnostic)?;
+        if expected.product_identity != product.product_identity {
+            return Err(stale_preview_scene_product_asset_diagnostic());
+        }
+        return Ok(
+            prepared_material_contribution_from_single_preview_scene_product(product, preview),
+        );
+    }
+
+    let slots = resolved_scene_material_slots(preview, scene_material_assignments, slot_products)?;
+    let resource_layout = resolved_scene_material_table_resource_layout(&slots);
+    let material_table_identity = resolved_scene_material_table_identity(
+        scene_material_assignments,
+        &slots,
+        resource_layout.identity.as_str(),
+    );
+    let expected = build_preview_scene_product_from_resolved_slots(
+        preview,
+        &slots,
+        material_table_identity,
+        resource_layout.identity.clone(),
+        &resource_layout,
+        scene_table_bundle,
+    )
+    .map_err(asset_diagnostic_from_preview_scene_product_diagnostic)?;
+    if expected.product_identity != product.product_identity {
+        return Err(stale_preview_scene_product_asset_diagnostic());
+    }
+
+    Ok(
+        prepared_material_contribution_from_resolved_preview_scene_product(
+            product,
+            &slots,
+            &resource_layout,
+        ),
+    )
 }
 
 pub fn prepared_material_contribution_for_preview_with_resolved_scene_materials(
@@ -552,6 +641,74 @@ fn single_material_preview_scene_product(
     Ok(product)
 }
 
+fn preview_scene_product_request_identity_from_resolved_slots(
+    active_preview: &EditorMaterialPreviewProduct,
+    slots: &[ResolvedSceneMaterialSlot<'_>],
+    material_table_identity: &str,
+    resource_layout_identity: &str,
+    resource_layout: &ResolvedSceneMaterialTableResourceLayout,
+    scene_table_bundle: Option<&EditorSceneMaterialTableShaderBundle>,
+) -> PreviewSceneProductRequestIdentity {
+    let requires_generated_bundle = requires_generated_scene_material_table_shader(slots);
+    let mode = if requires_generated_bundle {
+        PreviewSceneProductMode::SceneMaterialTable
+    } else {
+        PreviewSceneProductMode::SingleMaterial
+    };
+    let shader = if requires_generated_bundle {
+        scene_table_bundle
+            .filter(|bundle| {
+                bundle.matches_scene_table(material_table_identity, resource_layout_identity)
+            })
+            .map(|bundle| {
+                generated_scene_table_shader_ref(
+                    bundle,
+                    material_table_identity,
+                    resource_layout_identity,
+                )
+            })
+    } else {
+        Some(active_preview_scene_shader_ref(
+            active_preview,
+            material_table_identity,
+            resource_layout_identity,
+        ))
+    };
+    preview_scene_product_request_identity_from_resolved_slots_and_shader(
+        active_preview,
+        slots,
+        material_table_identity,
+        resource_layout_identity,
+        resource_layout,
+        mode,
+        shader.as_ref(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn preview_scene_product_request_identity_from_resolved_slots_and_shader(
+    active_preview: &EditorMaterialPreviewProduct,
+    slots: &[ResolvedSceneMaterialSlot<'_>],
+    material_table_identity: &str,
+    resource_layout_identity: &str,
+    resource_layout: &ResolvedSceneMaterialTableResourceLayout,
+    mode: PreviewSceneProductMode,
+    shader: Option<&PreviewSceneShaderProductRef>,
+) -> PreviewSceneProductRequestIdentity {
+    let product_slots = preview_scene_product_slots_for_resolved_slots(slots, resource_layout);
+    PreviewSceneProductRequestIdentity::new(
+        mode,
+        active_preview.viewport_product_id,
+        active_preview.product.product_id,
+        &active_preview.artifact_cache_key,
+        material_table_identity,
+        resource_layout_identity,
+        shader,
+        &product_slots,
+        &resource_layout.resources,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_preview_scene_product_from_resolved_slots(
     active_preview: &EditorMaterialPreviewProduct,
@@ -601,7 +758,27 @@ fn build_preview_scene_product_from_resolved_slots(
         )
     };
 
-    let product_slots = slots
+    let product_slots = preview_scene_product_slots_for_resolved_slots(slots, resource_layout);
+    let product = PreviewSceneProduct::new(
+        mode,
+        active_preview.viewport_product_id,
+        active_preview.product.product_id,
+        active_preview.artifact_cache_key.clone(),
+        material_table_identity,
+        resource_layout_identity,
+        shader,
+        product_slots,
+        resource_layout.resources.clone(),
+    );
+    validate_preview_scene_product(&product)?;
+    Ok(product)
+}
+
+fn preview_scene_product_slots_for_resolved_slots(
+    slots: &[ResolvedSceneMaterialSlot<'_>],
+    resource_layout: &ResolvedSceneMaterialTableResourceLayout,
+) -> Vec<PreviewSceneMaterialSlot> {
+    slots
         .iter()
         .map(|slot| {
             PreviewSceneMaterialSlot::new(
@@ -616,20 +793,7 @@ fn build_preview_scene_product_from_resolved_slots(
                     .cloned(),
             )
         })
-        .collect::<Vec<_>>();
-    let product = PreviewSceneProduct::new(
-        mode,
-        active_preview.viewport_product_id,
-        active_preview.product.product_id,
-        active_preview.artifact_cache_key.clone(),
-        material_table_identity,
-        resource_layout_identity,
-        shader,
-        product_slots,
-        resource_layout.resources.clone(),
-    );
-    validate_preview_scene_product(&product)?;
-    Ok(product)
+        .collect()
 }
 
 fn active_preview_scene_shader_ref(
@@ -718,6 +882,19 @@ fn preview_scene_resource_slot_for_resource(
 fn validate_preview_scene_product(
     product: &PreviewSceneProduct,
 ) -> Result<(), PreviewSceneProductDiagnostic> {
+    if product.shader.material_table_identity != product.material_table_identity {
+        return Err(PreviewSceneProductDiagnostic::new(
+            "material.preview_scene.shader_material_table_identity_mismatch",
+            "preview scene product shader material table identity does not match the product material table identity",
+        ));
+    }
+    if product.shader.resource_layout_identity != product.resource_layout_identity {
+        return Err(PreviewSceneProductDiagnostic::new(
+            "material.preview_scene.shader_resource_layout_identity_mismatch",
+            "preview scene product shader resource layout identity does not match the product resource layout identity",
+        ));
+    }
+
     let mut resource_slots = BTreeMap::<u32, &PreviewSceneResourceSlot>::new();
     for resource in &product.resources {
         if let Some(existing) = resource_slots.insert(resource.table_resource_slot, resource) {
@@ -788,6 +965,13 @@ fn asset_diagnostic_from_preview_scene_product_diagnostic(
     AssetDiagnosticRecord::error(
         AssetDiagnosticCode::RatificationRejected,
         diagnostic.message,
+    )
+}
+
+fn stale_preview_scene_product_asset_diagnostic() -> AssetDiagnosticRecord {
+    AssetDiagnosticRecord::error(
+        AssetDiagnosticCode::RatificationRejected,
+        "current preview scene product is stale for the active material preview request",
     )
 }
 
@@ -1520,6 +1704,27 @@ mod tests {
     }
 
     #[test]
+    fn single_material_preview_scene_product_state_does_not_require_generated_bundle() {
+        let preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+
+        let outcome =
+            build_preview_scene_product_for_scene_material_table(&preview, None, &[], None);
+
+        assert!(matches!(
+            outcome.status,
+            PreviewSceneProductBuildStatus::Ready
+        ));
+        let product = outcome.product.expect("single material product");
+        assert_eq!(product.mode, PreviewSceneProductMode::SingleMaterial);
+        assert!(
+            outcome
+                .request_identity
+                .as_ref()
+                .is_some_and(|identity| identity.matches_product(&product))
+        );
+    }
+
+    #[test]
     fn scene_material_table_preview_scene_product_requires_generated_bundle() {
         let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
         let assigned_preview = test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
@@ -1550,6 +1755,67 @@ mod tests {
         assert_eq!(
             diagnostics[0].code,
             "material.preview_scene.generated_bundle_missing"
+        );
+    }
+
+    #[test]
+    fn scene_material_table_preview_scene_product_state_requires_matching_bundle() {
+        let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let assigned_preview = test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [],
+        )
+        .expect("valid assignments");
+        let slot_products = [SceneMaterialSlotProduct {
+            slot_id: SceneMaterialSlotId::new(2),
+            preview: &assigned_preview,
+        }];
+        let stale_bundle = EditorSceneMaterialTableShaderBundle::new(
+            "stale-artifact",
+            ArtifactCacheKey::new("stale-cache"),
+            ".runenwerk/artifacts/generated/material-scene-table-shader/stale.wgsl",
+            "stale-shader",
+            "stale-material-table",
+            "stale-resource-layout",
+        );
+        let matching_bundle =
+            test_scene_table_bundle(&default_preview, &assignments, &slot_products);
+
+        let missing = build_preview_scene_product_for_scene_material_table(
+            &default_preview,
+            Some(&assignments),
+            &slot_products,
+            None,
+        );
+        assert!(missing.product.is_none());
+        assert!(missing.request_identity.is_some());
+
+        let stale = build_preview_scene_product_for_scene_material_table(
+            &default_preview,
+            Some(&assignments),
+            &slot_products,
+            Some(&stale_bundle),
+        );
+        assert!(stale.product.is_none());
+        assert!(stale.request_identity.is_some());
+
+        let ready = build_preview_scene_product_for_scene_material_table(
+            &default_preview,
+            Some(&assignments),
+            &slot_products,
+            Some(&matching_bundle),
+        );
+        let product = ready.product.expect("matching bundle should build");
+        assert_eq!(product.mode, PreviewSceneProductMode::SceneMaterialTable);
+        assert!(
+            ready
+                .request_identity
+                .as_ref()
+                .is_some_and(|identity| identity.matches_product(&product))
         );
     }
 
@@ -1819,6 +2085,83 @@ mod tests {
                 .shader_identity,
             bundle.shader_identity
         );
+    }
+
+    #[test]
+    fn stale_preview_scene_product_fails_before_renderer_handoff() {
+        let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let assigned_preview = test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [],
+        )
+        .expect("valid assignments");
+        let slot_products = [SceneMaterialSlotProduct {
+            slot_id: SceneMaterialSlotId::new(2),
+            preview: &assigned_preview,
+        }];
+        let bundle = test_scene_table_bundle(&default_preview, &assignments, &slot_products);
+        let stale_product = build_preview_scene_product_for_single_material(&default_preview)
+            .product
+            .expect("single material product");
+
+        let diagnostic = prepared_material_contribution_for_preview_scene_product(
+            &stale_product,
+            &default_preview,
+            Some(&assignments),
+            &slot_products,
+            Some(&bundle),
+        )
+        .expect_err("stale product must fail before prepared renderer handoff");
+
+        assert_eq!(diagnostic.code, AssetDiagnosticCode::RatificationRejected);
+        assert!(diagnostic.message.contains("stale"));
+    }
+
+    #[test]
+    fn stale_preview_scene_product_shader_identity_fails_before_renderer_handoff() {
+        let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let assigned_preview = test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [],
+        )
+        .expect("valid assignments");
+        let slot_products = [SceneMaterialSlotProduct {
+            slot_id: SceneMaterialSlotId::new(2),
+            preview: &assigned_preview,
+        }];
+        let bundle = test_scene_table_bundle(&default_preview, &assignments, &slot_products);
+        let mut stale_bundle = bundle.clone();
+        stale_bundle.shader_artifact_id = "stale-scene-table-artifact".to_string();
+        stale_bundle.shader_cache_key = ArtifactCacheKey::new("stale-scene-table-cache");
+        stale_bundle.shader_identity = "stale-scene-table-shader-identity".to_string();
+        let stale_product = build_preview_scene_product_for_scene_material_table(
+            &default_preview,
+            Some(&assignments),
+            &slot_products,
+            Some(&stale_bundle),
+        )
+        .product
+        .expect("stale shader product still matches the scene request shape");
+
+        let diagnostic = prepared_material_contribution_for_preview_scene_product(
+            &stale_product,
+            &default_preview,
+            Some(&assignments),
+            &slot_products,
+            Some(&bundle),
+        )
+        .expect_err("stale shader identity must fail before prepared renderer handoff");
+
+        assert_eq!(diagnostic.code, AssetDiagnosticCode::RatificationRejected);
+        assert!(diagnostic.message.contains("stale"));
     }
 
     #[test]
