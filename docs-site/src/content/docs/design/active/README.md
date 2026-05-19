@@ -66,6 +66,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)
 - [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
 - [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
+- [Runenwerk Capability Workbench Target Architecture](runenwerk-capability-workbench-target-architecture.md)
 - [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
 - [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
