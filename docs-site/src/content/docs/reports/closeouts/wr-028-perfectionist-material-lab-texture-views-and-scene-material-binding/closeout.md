@@ -17,6 +17,7 @@ related_reports:
   - ../../../reports/implementation-plans/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/plan.md
   - ../../../reports/implementation-plans/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/phase-0-governance-note.md
   - ./proof-manifest.ron
+  - ./preview-scene-product-integration-proof.md
 ---
 
 # WR-028 Perfectionist Material Lab Texture Views And Scene Material Binding Closeout
@@ -25,7 +26,9 @@ related_reports:
 
 Complete as of 2026-05-19 for the WR-028 SDF primitive scope after the
 source-to-GPU, graph-canvas, and source-backed scene material table repair
-passes.
+passes. The follow-on PreviewSceneProduct integration track is closed by
+`preview-scene-product-integration-proof.md`, which records the R2A-R2D
+model, build, runtime-state, stale-product, and presentation proof.
 
 WR-028 is deliberately not a model/mesh material-binding closeout. It closes the
 SDF primitive path: source-backed Material Graph V2 editing, real retained graph
@@ -94,6 +97,8 @@ assignment, and any future `renderable_index` ABI extension.
 
 The proof manifest is
 `docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/proof-manifest.ron`.
+The PreviewSceneProduct R2A-R2D integration proof is
+`docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/preview-scene-product-integration-proof.md`.
 
 SDF assignment/render proof:
 
