@@ -7,6 +7,13 @@ use super::super::bindings::material_resource_declarations;
 use super::super::identity::output_target_label;
 use super::WgslMaterialProgram;
 
+pub(crate) struct SceneMaterialTableProgramSlot<'a> {
+    pub(crate) slot_index: u32,
+    pub(crate) material_instance_id: String,
+    pub(crate) ir: &'a MaterialIr,
+    pub(crate) program: WgslMaterialProgram,
+}
+
 pub(crate) fn material_scene_product_wgsl(
     ir: &MaterialIr,
     program: &WgslMaterialProgram,
@@ -328,6 +335,99 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {{
         document_id = ir.document_id.raw(),
         output_target = output_target_label(ir.output_target),
         resource_declarations = resource_declarations,
+        base_color = output.base_color,
+        roughness = output.roughness,
+        metallic = output.metallic,
+        normal_strength = output.normal_strength,
+        emissive = output.emissive,
+        opacity = output.opacity,
+        material_channel = output.material_channel,
+    )
+}
+
+pub(crate) fn material_scene_table_product_wgsl(slots: &[SceneMaterialTableProgramSlot<'_>]) -> String {
+    let first = slots
+        .first()
+        .expect("scene material table compiler validates non-empty slots");
+    let base = material_scene_product_wgsl(first.ir, &first.program);
+    let Some(evaluate_start) = base.find("fn evaluate_material(ctx: MaterialEvalContext)") else {
+        return base;
+    };
+    let Some(scene_tail_start) = base.find("fn sdf_box(") else {
+        return base;
+    };
+    let mut evaluators = String::new();
+    for slot in slots {
+        evaluators.push_str(&format!(
+            "// scene material slot {} instance {}\n",
+            slot.slot_index, slot.material_instance_id
+        ));
+        evaluators.push_str(&slot_evaluator_wgsl(slot));
+        evaluators.push('\n');
+    }
+    evaluators.push_str(
+        r#"const MATERIAL_TABLE_SLOT_CAPACITY : u32 = 64u;
+
+fn material_error_output(material_slot_index: u32) -> MaterialEvalOutput {
+    var out: MaterialEvalOutput;
+    out.base_color = vec4<f32>(1.0, 0.0, 0.85, 1.0);
+    out.roughness = 1.0;
+    out.metallic = 0.0;
+    out.normal_strength = 1.0;
+    out.emissive = vec3<f32>(0.35, 0.0, 0.25);
+    out.opacity = 1.0;
+    out.material_channel = f32(material_slot_index);
+    return out;
+}
+
+fn evaluate_scene_material(material_slot_index: u32, ctx: MaterialEvalContext) -> MaterialEvalOutput {
+    switch material_slot_index {
+"#,
+    );
+    for slot in slots {
+        evaluators.push_str(&format!(
+            "        case {}u: {{ return evaluate_material_slot_{}(ctx); }}\n",
+            slot.slot_index, slot.slot_index
+        ));
+    }
+    evaluators.push_str(
+        r#"        default: { return material_error_output(material_slot_index); }
+    }
+}
+
+"#,
+    );
+    format!(
+        "{}{}{}",
+        &base[..evaluate_start],
+        evaluators,
+        &base[scene_tail_start..]
+    )
+}
+
+fn slot_evaluator_wgsl(slot: &SceneMaterialTableProgramSlot<'_>) -> String {
+    let generated_lines = if slot.program.lines.is_empty() {
+        String::new()
+    } else {
+        let mut lines = slot.program.lines.join("\n");
+        lines.push('\n');
+        lines
+    };
+    let output = &slot.program.output;
+    format!(
+        r#"fn evaluate_material_slot_{slot_index}(ctx: MaterialEvalContext) -> MaterialEvalOutput {{
+{generated_lines}    var out: MaterialEvalOutput;
+    out.base_color = {base_color};
+    out.roughness = clamp({roughness}, 0.0, 1.0);
+    out.metallic = clamp({metallic}, 0.0, 1.0);
+    out.normal_strength = max({normal_strength}, 0.0);
+    out.emissive = {emissive};
+    out.opacity = clamp({opacity}, 0.0, 1.0);
+    out.material_channel = {material_channel};
+    return out;
+}}
+"#,
+        slot_index = slot.slot_index,
         base_color = output.base_color,
         roughness = output.roughness,
         metallic = output.metallic,

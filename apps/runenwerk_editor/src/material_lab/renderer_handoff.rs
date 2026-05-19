@@ -1,5 +1,5 @@
 use asset::{AssetDiagnosticCode, AssetDiagnosticRecord};
-use editor_scene::{SceneMaterialAssignmentState, SceneMaterialSlot};
+use editor_scene::{SceneMaterialAssignmentState, SceneMaterialSlot, SceneMaterialSlotId};
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedMaterialBindingSlot,
     PreparedMaterialBindingTable, PreparedMaterialFeatureContribution,
@@ -11,6 +11,12 @@ use engine::plugins::render::{
 use material_graph::{MaterialOutputTarget, MaterialParameterKind};
 
 use crate::material_lab::{EditorMaterialPreviewProduct, MaterialRendererParameterProfile};
+
+#[derive(Debug, Clone, Copy)]
+pub struct SceneMaterialSlotProduct<'a> {
+    pub slot_id: SceneMaterialSlotId,
+    pub preview: &'a EditorMaterialPreviewProduct,
+}
 
 pub fn prepared_material_contribution_for_preview(
     preview: &EditorMaterialPreviewProduct,
@@ -38,6 +44,184 @@ pub fn prepared_material_contribution_for_preview_with_scene_materials(
             scene_material_table_identity(preview, scene_material_assignments),
         )),
     }
+}
+
+pub fn prepared_material_resource_for_preview_with_resolved_scene_materials(
+    preview: Option<&EditorMaterialPreviewProduct>,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+) -> Result<PreparedMaterialFeatureResource, AssetDiagnosticRecord> {
+    match preview {
+        Some(preview) => {
+            let payload = prepared_material_contribution_for_preview_with_resolved_scene_materials(
+                preview,
+                scene_material_assignments,
+                slot_products,
+            )?;
+            payload.validate_portable_limits().map_err(|error| {
+                AssetDiagnosticRecord::error(
+                    AssetDiagnosticCode::RatificationRejected,
+                    format!(
+                        "material renderer handoff rejected portable binding limits: {}",
+                        error
+                    ),
+                )
+            })?;
+            Ok(PreparedMaterialFeatureResource {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::ReuseLastGood,
+                payload,
+            })
+        }
+        None => prepared_material_resource_for_preview(None),
+    }
+}
+
+pub fn prepared_material_contribution_for_preview_with_resolved_scene_materials(
+    preview: &EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
+) -> Result<PreparedMaterialFeatureContribution, AssetDiagnosticRecord> {
+    if scene_material_assignments.is_none() {
+        return Ok(prepared_material_contribution_for_preview(preview));
+    }
+    let slots = resolved_scene_material_slots(preview, scene_material_assignments, slot_products)?;
+    let mut instances = Vec::new();
+    let mut seen_instances = std::collections::BTreeSet::new();
+    for resolved in &slots {
+        let material_instance_id = material_instance_id_for_slot(resolved.slot, resolved.preview);
+        if seen_instances.insert(material_instance_id.clone()) {
+            instances.push(PreparedMaterialInstanceInput {
+                material_instance_id,
+                specialization_key_fragment: resolved
+                    .preview
+                    .product
+                    .specialization_fragment
+                    .0
+                    .clone(),
+                parameter_payload: material_parameter_payload(resolved.preview),
+                texture_bindings: prepared_texture_bindings(resolved.preview),
+            });
+        }
+    }
+    let binding_slots = slots
+        .iter()
+        .map(|resolved| {
+            scene_material_binding_slot_for_preview(
+                resolved.preview,
+                resolved.material_table_index,
+                resolved.slot,
+            )
+        })
+        .collect::<Vec<_>>();
+    Ok(PreparedMaterialFeatureContribution {
+        instances,
+        binding_table: PreparedMaterialBindingTable::fixed_capacity(binding_slots)
+            .expect("editor_scene palette enforces portable material binding slot limits"),
+        scene_bundle: Some(PreparedSceneMaterialBundle::new(
+            preview.scene_shader_artifact_id.raw().to_string(),
+            preview.scene_shader_cache_key.as_str().to_string(),
+            preview.scene_shader_path.clone(),
+            preview.scene_shader_identity.clone(),
+            resolved_scene_material_table_identity(scene_material_assignments, &slots),
+        )),
+    })
+}
+
+struct ResolvedSceneMaterialSlot<'a> {
+    material_table_index: u32,
+    slot: &'a SceneMaterialSlot,
+    preview: &'a EditorMaterialPreviewProduct,
+}
+
+fn resolved_scene_material_slots<'a>(
+    default_preview: &'a EditorMaterialPreviewProduct,
+    scene_material_assignments: Option<&'a SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'a>],
+) -> Result<Vec<ResolvedSceneMaterialSlot<'a>>, AssetDiagnosticRecord> {
+    let Some(assignments) = scene_material_assignments else {
+        return Ok(Vec::new());
+    };
+    assignments
+        .palette()
+        .slots
+        .iter()
+        .enumerate()
+        .map(|(index, slot)| {
+            let preview = slot_products
+                .iter()
+                .find(|product| product.slot_id == slot.slot_id)
+                .map(|product| product.preview)
+                .or_else(|| slot.is_default.then_some(default_preview))
+                .ok_or_else(|| {
+                    AssetDiagnosticRecord::error(
+                        AssetDiagnosticCode::RatificationRejected,
+                        format!(
+                            "scene material slot {} has no resolved source-backed material product",
+                            slot.slot_id.raw()
+                        ),
+                    )
+                })?;
+            Ok(ResolvedSceneMaterialSlot {
+                material_table_index: index as u32,
+                slot,
+                preview,
+            })
+        })
+        .collect()
+}
+
+fn scene_material_binding_slot_for_preview(
+    preview: &EditorMaterialPreviewProduct,
+    material_table_index: u32,
+    slot: &SceneMaterialSlot,
+) -> PreparedMaterialBindingSlot {
+    PreparedMaterialBindingSlot::new(
+        material_table_index,
+        material_instance_id_for_slot(slot, preview),
+        preview.artifact_id.raw().to_string(),
+        preview.shader_artifact_id.raw().to_string(),
+        preview.artifact_cache_key.as_str().to_string(),
+        preview.shader_cache_key.as_str().to_string(),
+    )
+}
+
+fn material_instance_id_for_slot(
+    slot: &SceneMaterialSlot,
+    preview: &EditorMaterialPreviewProduct,
+) -> String {
+    slot.material_asset_id
+        .map(|asset_id| format!("material.asset.{}", asset_id.raw()))
+        .or_else(|| {
+            slot.source_ref.as_ref().map(|source_ref| {
+                format!(
+                    "material.source.{}.{}",
+                    source_ref.asset_id.raw(),
+                    source_ref.source_id.raw()
+                )
+            })
+        })
+        .unwrap_or_else(|| format!("material.product.{}", preview.product.product_id.raw()))
+}
+
+fn resolved_scene_material_table_identity(
+    scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slots: &[ResolvedSceneMaterialSlot<'_>],
+) -> String {
+    let mut identity = scene_material_assignments
+        .map(SceneMaterialAssignmentState::material_table_identity)
+        .unwrap_or_else(|| "scene-material-table:v1:single-preview".to_string());
+    for slot in slots {
+        identity.push_str(&format!(
+            "|table_slot={}:product={}:shader={}:material_cache={}:shader_cache={}",
+            slot.material_table_index,
+            slot.preview.product.product_id.raw(),
+            slot.preview.scene_shader_identity,
+            slot.preview.artifact_cache_key.as_str(),
+            slot.preview.shader_cache_key.as_str()
+        ));
+    }
+    identity
 }
 
 fn scene_material_binding_table(
@@ -518,6 +702,84 @@ mod tests {
         assert!(!contribution.binding_table.slots[1].prior_valid);
     }
 
+    #[test]
+    fn material_binding_table_uses_resolved_source_backed_slot_products() {
+        let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let assigned_preview = test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [SdfPrimitiveMaterialSlotAssignment::new(
+                SdfPrimitiveSourceId::new(EntityId(42)),
+                SceneMaterialSlotId::new(2),
+            )],
+        )
+        .expect("valid assignments");
+
+        let contribution = prepared_material_contribution_for_preview_with_resolved_scene_materials(
+            &default_preview,
+            Some(&assignments),
+            &[SceneMaterialSlotProduct {
+                slot_id: SceneMaterialSlotId::new(2),
+                preview: &assigned_preview,
+            }],
+        )
+        .expect("source-backed slot product should prepare");
+
+        assert_eq!(contribution.instances.len(), 2);
+        assert_eq!(
+            contribution.instances[0].material_instance_id,
+            "material.product.3"
+        );
+        assert_eq!(
+            contribution.instances[1].material_instance_id,
+            "material.asset.8"
+        );
+        assert_eq!(contribution.binding_table.slots.len(), 2);
+        assert_eq!(
+            contribution.binding_table.slots[1].formed_material_artifact_id,
+            "10"
+        );
+        assert_eq!(contribution.binding_table.slots[1].shader_artifact_id, "11");
+        assert_eq!(
+            contribution.binding_table.slots[1].material_cache_key,
+            "asset-cache-rock"
+        );
+        let scene_bundle = contribution.scene_bundle.expect("scene bundle");
+        assert!(scene_bundle.material_table_identity.contains("product=9"));
+        assert!(
+            scene_bundle
+                .material_table_identity
+                .contains("shader=scene-shader-identity-rock")
+        );
+    }
+
+    #[test]
+    fn unresolved_source_backed_scene_material_slot_fails_closed() {
+        let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [],
+        )
+        .expect("valid assignments");
+
+        let diagnostic = prepared_material_contribution_for_preview_with_resolved_scene_materials(
+            &default_preview,
+            Some(&assignments),
+            &[],
+        )
+        .expect_err("missing source-backed product must fail closed");
+
+        assert_eq!(diagnostic.code, AssetDiagnosticCode::RatificationRejected);
+        assert!(diagnostic.message.contains("slot 2"));
+        assert!(diagnostic.message.contains("no resolved source-backed material product"));
+    }
+
     fn test_resolved_texture_resource(index: u64) -> crate::material_lab::ResolvedMaterialResource {
         let descriptor = TextureDescriptor::new(
             TextureProductId::new(index + 1),
@@ -541,5 +803,38 @@ mod tests {
             sampler_policy: "linear_repeat".to_string(),
             residency_identity: format!("ktx2:texture:{index}"),
         }
+    }
+
+    fn test_preview_product_with_ids(
+        asset_id: asset::AssetId,
+        product_id: u64,
+        artifact_id: u64,
+        shader_artifact_id: u64,
+        scene_shader_artifact_id: u64,
+        label: &str,
+    ) -> EditorMaterialPreviewProduct {
+        let product = FormedMaterialProduct::new(
+            MaterialProductId::new(product_id),
+            MaterialGraphDocumentId::new(product_id + 100),
+            MaterialOutputTarget::RenderMaterial,
+            MaterialCacheKey::new(format!("material-cache-{label}")),
+        );
+        EditorMaterialPreviewProduct::new(
+            asset_id,
+            asset_source_id(product_id + 200),
+            asset_artifact_id(artifact_id),
+            ArtifactCacheKey::new(format!("asset-cache-{label}")),
+            product,
+            MaterialRendererParameterProfile::RenderMaterial,
+            asset_artifact_id(shader_artifact_id),
+            ArtifactCacheKey::new(format!("shader-cache-{label}")),
+            format!(".runenwerk/artifacts/material-shader-{label}.wgsl"),
+            format!("shader-identity-{label}"),
+            asset_artifact_id(scene_shader_artifact_id),
+            ArtifactCacheKey::new(format!("scene-shader-cache-{label}")),
+            format!(".runenwerk/artifacts/material-scene-shader-{label}.wgsl"),
+            format!("scene-shader-identity-{label}"),
+            Vec::new(),
+        )
     }
 }

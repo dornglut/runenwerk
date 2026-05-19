@@ -7,4 +7,6 @@ mod scene;
 
 pub(crate) use preview::material_program_wgsl;
 pub(crate) use program::WgslMaterialProgram;
-pub(crate) use scene::material_scene_product_wgsl;
+pub(crate) use scene::{
+    SceneMaterialTableProgramSlot, material_scene_product_wgsl, material_scene_table_product_wgsl,
+};

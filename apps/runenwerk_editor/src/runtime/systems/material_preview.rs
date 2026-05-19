@@ -13,8 +13,8 @@ use engine::plugins::render::{
 use engine::runtime::{Res, ResMut};
 
 use crate::material_lab::{
-    EditorMaterialPreviewProduct, prepared_material_resource_for_preview,
-    prepared_material_resource_for_preview_with_scene_materials,
+    EditorMaterialPreviewProduct, SceneMaterialSlotProduct, prepared_material_resource_for_preview,
+    prepared_material_resource_for_preview_with_resolved_scene_materials,
 };
 use crate::runtime::app::{EDITOR_MATERIAL_PREVIEW_FLOW_ID, EDITOR_MATERIAL_PREVIEW_SHADER_ID};
 use crate::runtime::resources::EditorHostResource;
@@ -29,9 +29,14 @@ pub fn prepare_material_preview_render_resource_system(
     mut shader_registry: ResMut<ShaderRegistryResource>,
 ) {
     let preview = host.app.material_lab_runtime().active_preview().cloned();
+    let slot_products = collect_scene_material_slot_products(
+        host.app.runtime().scene_material_assignments(),
+        host.app.material_lab_runtime(),
+    );
     if let Some(diagnostic) = prepare_material_preview_render_resource_with_scene_materials(
         preview.as_ref(),
         Some(host.app.runtime().scene_material_assignments()),
+        &slot_products,
         &mut material_feature,
         &mut shader_registry,
     ) {
@@ -50,6 +55,7 @@ pub(crate) fn prepare_material_preview_render_resource(
     prepare_material_preview_render_resource_with_scene_materials(
         preview,
         None,
+        &[],
         material_feature,
         shader_registry,
     )
@@ -58,6 +64,7 @@ pub(crate) fn prepare_material_preview_render_resource(
 pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
     preview: Option<&EditorMaterialPreviewProduct>,
     scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    slot_products: &[SceneMaterialSlotProduct<'_>],
     material_feature: &mut PreparedMaterialFeatureResource,
     shader_registry: &mut ShaderRegistryResource,
 ) -> Option<asset::AssetDiagnosticRecord> {
@@ -70,12 +77,24 @@ pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
             preview.scene_shader_path.clone(),
             preview.scene_shader_path.clone(),
         );
+        for slot_product in slot_products {
+            shader_registry.register_shader_with_id(
+                slot_product.preview.scene_shader_path.clone(),
+                slot_product.preview.scene_shader_path.clone(),
+            );
+        }
         if shader_registry.is_loaded(EDITOR_MATERIAL_PREVIEW_SHADER_ID)
             && shader_registry.is_loaded(preview.scene_shader_path.as_str())
+            && slot_products
+                .iter()
+                .all(|slot_product| {
+                    shader_registry.is_loaded(slot_product.preview.scene_shader_path.as_str())
+                })
         {
-            match prepared_material_resource_for_preview_with_scene_materials(
+            match prepared_material_resource_for_preview_with_resolved_scene_materials(
                 Some(preview),
                 scene_material_assignments,
+                &slot_products,
             ) {
                 Ok(resource) => {
                     *material_feature = resource;
@@ -105,6 +124,36 @@ pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
             .expect("missing material preview cannot violate portable handoff limits");
     }
     None
+}
+
+fn collect_scene_material_slot_products<'a>(
+    scene_material_assignments: &'a SceneMaterialAssignmentState,
+    material_runtime: &'a crate::material_lab::MaterialLabRuntime,
+) -> Vec<SceneMaterialSlotProduct<'a>> {
+    scene_material_assignments
+        .palette()
+        .slots
+        .iter()
+        .filter_map(|slot| {
+            if slot.is_default {
+                return None;
+            }
+            let preview = slot
+                .material_asset_id
+                .and_then(|asset_id| material_runtime.preview_product_for_asset(asset_id))
+                .or_else(|| {
+                    slot.source_ref.as_ref().and_then(|source_ref| {
+                        material_runtime
+                            .preview_product_for_asset(source_ref.asset_id)
+                            .filter(|preview| preview.source_id == source_ref.source_id)
+                    })
+                })?;
+            Some(SceneMaterialSlotProduct {
+                slot_id: slot.slot_id,
+                preview,
+            })
+        })
+        .collect()
 }
 
 pub fn produce_material_preview_dynamic_uploads_system(

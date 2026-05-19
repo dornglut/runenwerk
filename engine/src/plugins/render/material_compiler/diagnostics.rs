@@ -37,6 +37,7 @@ pub enum MaterialShaderCompileError {
         value: String,
         expected_type: &'static str,
     },
+    InvalidSceneMaterialTable(String),
     InvalidWgsl(String),
 }
 
@@ -89,6 +90,9 @@ impl fmt::Display for MaterialShaderCompileError {
                 formatter,
                 "material literal '{value}' cannot be compiled as {expected_type}"
             ),
+            Self::InvalidSceneMaterialTable(message) => {
+                write!(formatter, "invalid scene material table: {message}")
+            }
             Self::InvalidWgsl(message) => write!(formatter, "generated WGSL is invalid: {message}"),
         }
     }

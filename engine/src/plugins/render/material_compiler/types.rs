@@ -55,3 +55,23 @@ pub struct MaterialShaderCompileRequest<'a> {
     pub ir: &'a MaterialIr,
     pub fixture: MaterialPreviewFixture,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SceneMaterialTableCompileRequest<'a> {
+    pub slots: Vec<SceneMaterialTableSlot<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SceneMaterialTableSlot<'a> {
+    pub slot_index: u32,
+    pub material_instance_id: String,
+    pub ir: &'a MaterialIr,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompiledSceneMaterialTableShader {
+    pub shader_id: String,
+    pub wgsl: String,
+    pub identity: String,
+    pub slot_count: usize,
+}

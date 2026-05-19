@@ -305,6 +305,40 @@ fn generated_scene_wgsl_selects_material_from_hit_sdf_slot() {
 }
 
 #[test]
+fn scene_material_table_wgsl_dispatches_to_source_backed_slot_evaluators() {
+    let default_ir = ir();
+    let assigned_ir = material_channel_color_ir();
+    let shader = compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![
+            SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.10".to_string(),
+                ir: &default_ir,
+            },
+            SceneMaterialTableSlot {
+                slot_index: 1,
+                material_instance_id: "material.asset.11".to_string(),
+                ir: &assigned_ir,
+            },
+        ],
+    })
+    .expect("scene material table should compile");
+
+    assert_eq!(shader.slot_count, 2);
+    assert!(shader.wgsl.contains("fn evaluate_material_slot_0"));
+    assert!(shader.wgsl.contains("fn evaluate_material_slot_1"));
+    assert!(shader.wgsl.contains("switch material_slot_index"));
+    assert!(shader.wgsl.contains("case 0u: { return evaluate_material_slot_0(ctx); }"));
+    assert!(shader.wgsl.contains("case 1u: { return evaluate_material_slot_1(ctx); }"));
+    assert!(
+        !shader
+            .wgsl
+            .contains("slot_ctx.material_channel = f32(material_slot_index);"),
+        "scene material tables must dispatch by slot instead of rewriting material_channel"
+    );
+}
+
+#[test]
 fn compiler_rejects_missing_output_node() {
     let mut ir = ir();
     ir.nodes.retain(|node| node.op != MaterialNodeOp::PbrOutput);

@@ -76,6 +76,7 @@ pub struct EditorMaterialPreviewPublicationJournalEntry {
 pub struct MaterialLabRuntime {
     pub(super) selected_material_asset_id: Option<AssetId>,
     pub(super) active_preview: Option<EditorMaterialPreviewProduct>,
+    pub(super) preview_products_by_asset: BTreeMap<AssetId, EditorMaterialPreviewProduct>,
     pub(super) active_source_document: Option<(AssetId, material_graph::MaterialGraphDocument)>,
     pub(super) selected_graph_nodes: BTreeSet<graph::NodeId>,
     pub(super) selected_graph_edges: BTreeSet<graph::EdgeId>,
@@ -103,6 +104,13 @@ impl MaterialLabRuntime {
 
     pub fn active_preview(&self) -> Option<&EditorMaterialPreviewProduct> {
         self.active_preview.as_ref()
+    }
+
+    pub fn preview_product_for_asset(
+        &self,
+        asset_id: AssetId,
+    ) -> Option<&EditorMaterialPreviewProduct> {
+        self.preview_products_by_asset.get(&asset_id)
     }
 
     pub fn select_graph_node(&mut self, node_id: graph::NodeId) {
@@ -221,6 +229,8 @@ impl MaterialLabRuntime {
 
     pub fn set_active_preview(&mut self, preview: EditorMaterialPreviewProduct) {
         self.selected_material_asset_id = Some(preview.asset_id);
+        self.preview_products_by_asset
+            .insert(preview.asset_id, preview.clone());
         self.active_preview = Some(preview);
     }
 

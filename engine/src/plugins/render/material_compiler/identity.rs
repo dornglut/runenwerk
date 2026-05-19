@@ -2,7 +2,9 @@
 
 use material_graph::{MaterialIr, MaterialIrInputSource, MaterialOutputTarget};
 
-use super::{MATERIAL_WGSL_COMPILER_CONTRACT_VERSION, MaterialPreviewFixture};
+use super::{
+    MATERIAL_WGSL_COMPILER_CONTRACT_VERSION, MaterialPreviewFixture, SceneMaterialTableSlot,
+};
 
 pub(super) fn material_shader_identity(ir: &MaterialIr, fixture: MaterialPreviewFixture) -> String {
     let mut encoder = CanonicalShaderIdentityEncoder::default();
@@ -78,6 +80,34 @@ pub(super) fn material_scene_shader_identity(ir: &MaterialIr) -> String {
         for value in &node.values {
             encoder.field("value_key", &value.key);
             encoder.field("value_value", &value.canonical_value);
+        }
+    }
+    encoder.finish_hex()
+}
+
+pub(super) fn material_scene_table_shader_identity(
+    slots: &[SceneMaterialTableSlot<'_>],
+) -> String {
+    let mut encoder = CanonicalShaderIdentityEncoder::default();
+    encoder.field(
+        "compiler_contract",
+        &MATERIAL_WGSL_COMPILER_CONTRACT_VERSION.to_string(),
+    );
+    encoder.field("entrypoint", "scene_material_table");
+    encoder.number("slot_count", slots.len() as u64);
+    for slot in slots {
+        encoder.number("slot_index", slot.slot_index as u64);
+        encoder.field("material_instance", &slot.material_instance_id);
+        encoder.field("ir_contract", &slot.ir.contract_version.to_string());
+        encoder.field("document", &slot.ir.document_id.raw().to_string());
+        encoder.field("target", output_target_label(slot.ir.output_target));
+        for node in &slot.ir.nodes {
+            encoder.field("node_id", &node.node_id.raw().to_string());
+            encoder.field("node_op", node.op.label());
+            for value in &node.values {
+                encoder.field("value_key", &value.key);
+                encoder.field("value_value", &value.canonical_value);
+            }
         }
     }
     encoder.finish_hex()
