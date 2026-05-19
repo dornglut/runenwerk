@@ -5,7 +5,7 @@ status: completed
 owner: apps/runenwerk_editor
 layer: domain / app-runtime / editor-ui / engine-render
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-05-19
 related_designs:
   - ../../../design/active/material-lab-and-material-preview-design.md
   - ../../../design/active/editor-rendered-world-and-multi-entity-viewport-design.md
@@ -23,14 +23,15 @@ related_reports:
 
 ## Status
 
-Complete as of 2026-05-17 for the WR-028 SDF primitive scope after the
-source-to-GPU and graph-canvas repair pass.
+Complete as of 2026-05-19 for the WR-028 SDF primitive scope after the
+source-to-GPU, graph-canvas, and source-backed scene material table repair
+passes.
 
 WR-028 is deliberately not a model/mesh material-binding closeout. It closes the
 SDF primitive path: source-backed Material Graph V2 editing, real retained graph
 canvas projection and routed UX, catalog-backed live texture preview products,
 editor-scene owned SDF material assignments, generated SDF scene WGSL
-material-slot selection, renderer bundle consumption, and GPU/manual proof
+material-slot table dispatch, renderer bundle consumption, and GPU/manual proof
 evidence. `WR-029` owns model/mesh renderable identity, submesh/material-region
 assignment, and any future `renderable_index` ABI extension.
 
@@ -68,6 +69,18 @@ assignment, and any future `renderable_index` ABI extension.
   `evaluate_scene_material(march.material_slot_index, ...)`. The SDF material
   slot is carried in the typed `primitive_slot_flags.w` `u32` lane, not through
   `params_b.z` as an untyped `f32`.
+- `engine/src/plugins/render/material_compiler::compile_scene_material_table_shader`
+  compiles ordered source-backed scene material slots into one WGSL evaluator
+  per material slot and dispatches with `switch material_slot_index`. This table
+  path no longer treats `material_channel` branching as proof of source-backed
+  material selection.
+- `apps/runenwerk_editor/src/material_lab/renderer_handoff.rs` resolves
+  editor-scene material slots to prepared source-backed material products before
+  renderer handoff. Missing non-default slot products fail closed with a
+  diagnostic instead of silently binding the active preview material.
+- `apps/runenwerk_editor/src/runtime/systems/material_preview.rs` collects
+  retained Material Lab preview products for scene material slots and registers
+  their scene shaders before publishing the prepared material contribution.
 - `apps/runenwerk_editor/src/texture_preview/mod.rs` prepares live Texture2D and
   Texture3D preview products from catalog-backed `TextureProduct` or
   `GeneratedTextureProduct` payloads.
@@ -86,6 +99,17 @@ SDF assignment/render proof:
 
 - `cargo test -p editor_scene material` proves material assignment contracts and
   persistence behavior.
+- `cargo test -p engine scene_material_table_wgsl_dispatches_to_source_backed_slot_evaluators`
+  proves scene material table WGSL emits distinct per-slot evaluators and
+  dispatches from `material_slot_index` without rewriting `material_channel` as
+  the proof mechanism.
+- `cargo test -p runenwerk_editor material_binding_table_uses_resolved_source_backed_slot_products`
+  proves two scene material slots produce distinct prepared material instances,
+  shader/cache identities, and binding-table rows from resolved source-backed
+  products.
+- `cargo test -p runenwerk_editor unresolved_source_backed_scene_material_slot_fails_closed`
+  proves a non-default source-backed slot with no prepared product is rejected
+  with a diagnostic before renderer handoff.
 - `cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots`
   proves two authored SDF primitives reach viewport extraction with distinct
   material slots.
@@ -172,6 +196,9 @@ Texture preview proof:
   identity, and residency state.
 - Invalid selected texture products fail with diagnostics and do not silently
   fall back to another catalog texture.
+- Explicitly selected incompatible texture assets also fail closed with
+  `MissingTextureProduct`; global catalog fallback is used only when no asset is
+  selected.
 - Nonresident mip requests are diagnostic-only; they do not fake preview pixels.
 - The Material Graph Canvas texture picker lists catalog-backed texture
   products, filters by search text/resource kind, and routes selection through
@@ -226,6 +253,7 @@ GPU/manual capture proof:
 - `cargo test -p runenwerk_editor material_graph_node_drag_is_one_undo_transaction`
 - `cargo test -p runenwerk_editor material_graph_property_edit_groups_commit_correctly`
 - `cargo test -p runenwerk_editor texture_preview_invalid_selected_asset_does_not_fallback`
+- `cargo test -p runenwerk_editor texture_preview_selected_incompatible_asset_does_not_fallback`
 - `cargo test -p runenwerk_editor texture_viewer_gpu_proof_uses_provider_product_surface_path`
 - `cargo test -p runenwerk_editor volume_texture_viewer_gpu_proof_uses_provider_product_surface_path`
 - `cargo test -p runenwerk_editor texture_viewer_gpu_proof_rejects_direct_temp_resource_bypass`
@@ -251,7 +279,13 @@ GPU/manual capture proof:
 - `cargo test -p runenwerk_editor volume_texture_viewer --no-fail-fast`
 - `cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots`
 - `cargo test -p engine generated_scene_wgsl_selects_material_from_hit_sdf_slot`
+- `cargo test -p engine scene_material_table_wgsl_dispatches_to_source_backed_slot_evaluators`
+- `cargo test -p runenwerk_editor material_binding_table_uses_resolved_source_backed_slot_products`
+- `cargo test -p runenwerk_editor unresolved_source_backed_scene_material_slot_fails_closed`
+- `cargo test -p ui_graph_editor graph_canvas_pan_separates_incremental_updates_from_final_commit`
+- `cargo test -p editor_scene sdf_assignment_state_revision_changes_only_when_assignment_changes`
 - `cargo check -p runenwerk_editor`
+- `cargo check -p runenwerk_editor -p engine`
 - `RUNENWERK_ENABLE_GPU_SMOKE=1 cargo test -p runenwerk_editor --test viewport_gpu_truth_smoke viewport_gpu_truth_smoke -- --ignored --exact --nocapture`
 - `task planning:validate`
 - `task docs:validate`
