@@ -666,6 +666,28 @@ mod tests {
     }
 
     #[test]
+    fn preview_scene_product_identity_remains_stable_across_diagnostic_message_changes() {
+        let first =
+            PreviewSceneProductBuildOutcome::failed_closed([PreviewSceneProductDiagnostic::new(
+                "material.preview_scene.generated_bundle_stale",
+                "first diagnostic wording",
+            )]);
+        let second =
+            PreviewSceneProductBuildOutcome::failed_closed([PreviewSceneProductDiagnostic::new(
+                "material.preview_scene.generated_bundle_stale",
+                "second diagnostic wording",
+            )]);
+        let ready = PreviewSceneProductBuildOutcome::ready(baseline_product());
+
+        assert_eq!(first.product, None);
+        assert_eq!(second.product, None);
+        assert_eq!(
+            ready.product.as_ref().unwrap().product_identity,
+            baseline_product().product_identity
+        );
+    }
+
+    #[test]
     fn resource_slots_are_table_wide_and_do_not_use_local_slot_identity() {
         let product = baseline_product();
 
