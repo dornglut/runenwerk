@@ -38,11 +38,25 @@ def render_outputs(roadmap: RoadmapState) -> dict[Path, str]:
     dependency_roadmap = REPO_ROOT / roadmap.render.dependency_roadmap
     current_candidates_roadmap = REPO_ROOT / roadmap.render.current_candidates_roadmap
     triage = REPO_ROOT / roadmap.render.triage
+    archive_register = REPO_ROOT / roadmap.render.archive_register
+    deferred_register = REPO_ROOT / roadmap.render.deferred_register
     return {
         decision_register: render_decision_register(roadmap),
         dependency_roadmap: render_dependency_roadmap(roadmap),
         current_candidates_roadmap: render_current_candidates_roadmap(roadmap),
         triage: render_triage_document(triage, roadmap),
+        archive_register: render_item_register(
+            roadmap,
+            title="Roadmap Archive Register",
+            description="Completed WR roadmap rows archived out of the active execution source.",
+            items=roadmap.archived_items,
+        ),
+        deferred_register: render_item_register(
+            roadmap,
+            title="Roadmap Deferred Register",
+            description="Blocked or policy-deferred WR roadmap rows archived out of active execution.",
+            items=roadmap.deferred_items,
+        ),
     }
 
 
@@ -62,7 +76,12 @@ def render_decision_register(roadmap: RoadmapState) -> str:
         "  - ./repo-execution-priority-checklist.md",
         "  - ./roadmap-index.md",
         "  - ./roadmap-items.yaml",
+        "  - ./roadmap-archive.yaml",
+        "  - ./roadmap-deferred.yaml",
+        "  - ./roadmap-archive-register.md",
+        "  - ./roadmap-deferred-register.md",
         "  - ./schemas/roadmap-items.schema.json",
+        "  - ./schemas/roadmap-item-source.schema.json",
         "  - ./diagrams/value-weighted-dependency-roadmap.puml",
         "  - ./diagrams/current-roadmap-candidates.puml",
         "---",
@@ -78,8 +97,11 @@ def render_decision_register(roadmap: RoadmapState) -> str:
         "closeout reports, product evidence, or owning roadmaps change.",
         "",
         "The scorecard table below is generated from",
-        "[roadmap-items.yaml](./roadmap-items.yaml). Do not edit the table directly;",
-        "update the YAML source and run `task roadmap:render`.",
+        "[roadmap-items.yaml](./roadmap-items.yaml), the active execution source.",
+        "Completed and deferred rows live in",
+        "[roadmap-archive.yaml](./roadmap-archive.yaml) and",
+        "[roadmap-deferred.yaml](./roadmap-deferred.yaml). Do not edit generated",
+        "tables directly; update the YAML sources and run `task roadmap:render`.",
         "",
         "## Score Model",
         "",
@@ -102,7 +124,7 @@ def render_decision_register(roadmap: RoadmapState) -> str:
         "| ID | Track | Lane | Planning state | Completion quality | Dependency level | Gate | V | B | TC | RR/OE | DU | E | C | A-WSJF | RICE | Kano | Next evidence | Current decision |",
         "|---|---|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
     ]
-    for item in roadmap.items:
+    for item in active_register_items(roadmap):
         lines.append(
             "| "
             + " | ".join(
@@ -133,6 +155,13 @@ def render_decision_register(roadmap: RoadmapState) -> str:
     lines.extend(
         [
             "",
+            "Active views omit completed and deferred rows. Use",
+            "[roadmap-archive-register.md](./roadmap-archive-register.md) for",
+            "completed evidence and",
+            "[roadmap-deferred-register.md](./roadmap-deferred-register.md) for",
+            "blocked or deferred backlog.",
+            "",
+            "",
             "## Review Rules",
             "",
             "- Re-score after a closeout report changes the evidence for a track.",
@@ -146,13 +175,19 @@ def render_decision_register(roadmap: RoadmapState) -> str:
     return "\n".join(lines)
 
 
+def active_register_items(roadmap: RoadmapState) -> list[RoadmapItem]:
+    return list(roadmap.active_items)
+
+
 def render_dependency_roadmap(roadmap: RoadmapState) -> str:
+    view_items = list(roadmap.active_items)
+    view_ids = {item.id for item in view_items}
     levels = [
-        ("L0", "Level 0 - Completed / Support Substrate"),
-        ("L1", "Level 1 - Depends On Current Stabilization"),
-        ("L2", "Level 2 - Productization / Contract-Gated"),
-        ("L3", "Level 3 - Downstream Domain Tracks"),
-        ("L4", "Level 4 - Deferred Policy Tracks"),
+        ("L0", "Level 0 - Support Substrate"),
+        ("L1", "Level 1 - Near-Term Productization"),
+        ("L2", "Level 2 - Contract-Gated Productization"),
+        ("L3", "Level 3 - Active Domain Tracks"),
+        ("L4", "Level 4 - Active Discovery Context"),
     ]
     lines = [
         "@startuml",
@@ -175,9 +210,6 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
         "  BorderColor<<V2>> #666666",
         "  BackgroundColor<<V1>> #F5F5F5",
         "  BorderColor<<V1>> #999999",
-        "  BackgroundColor<<completed>> #EEEEEE",
-        "  BorderColor<<completed>> #666666",
-        "  FontColor<<completed>> #666666",
         "  BackgroundColor<<support_only>> #F4F4F4",
         "  BorderColor<<support_only>> #777777",
         "  FontColor<<support_only>> #666666",
@@ -192,7 +224,8 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
         "  Downward edge = dependency or sequencing gate",
         "  Scores rank comparable work only.",
         "  Gate and dependency level win before score.",
-        "  Completed and support-only nodes are context, not batch candidates.",
+        "  Archive and deferred rows live in separate registers.",
+        "  Support-only nodes remain active context, not batch candidates.",
         "",
         "  <b>Value Weight</b>",
         "  <#FFDCDC> V5 = unlocks current focus or many downstream tracks",
@@ -211,7 +244,7 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
         "",
     ]
     for level, title in levels:
-        level_items = [item for item in roadmap.items if item.dependency_level == level]
+        level_items = [item for item in view_items if item.dependency_level == level]
         if not level_items:
             continue
         lines.append(f'package "{title}" {{')
@@ -223,6 +256,8 @@ def render_dependency_roadmap(roadmap: RoadmapState) -> str:
 
     by_id = roadmap.by_id
     for edge in roadmap.edges:
+        if edge.source not in view_ids or edge.target not in view_ids:
+            continue
         source = by_id[edge.source].alias
         target = by_id[edge.target].alias
         lines.append(f"{source} -down-> {target} : {edge.label}")
@@ -252,7 +287,8 @@ def render_current_candidates_roadmap(roadmap: RoadmapState) -> str:
     candidates = select_batch_candidates(roadmap)
     candidate_ids = {item.id for item in candidates}
     dependency_ids = {dependency for item in candidates for dependency in item.dependencies}
-    dependencies = [item for item in roadmap.items if item.id in dependency_ids and item.id not in candidate_ids]
+    dependencies = [item for item in roadmap.active_items if item.id in dependency_ids and item.id not in candidate_ids]
+    active_dependency_ids = {item.id for item in dependencies}
     by_id = roadmap.by_id
     lines = [
         "@startuml",
@@ -297,7 +333,7 @@ def render_current_candidates_roadmap(roadmap: RoadmapState) -> str:
     lines.append("")
     for item in candidates:
         for dependency in item.dependencies:
-            if dependency in by_id:
+            if dependency in active_dependency_ids:
                 lines.append(f"{by_id[dependency].alias} -down-> {item.alias} : dependency context")
     lines.extend(["", "@enduml", ""])
     return "\n".join(lines)
@@ -340,12 +376,11 @@ def render_triage_document(path: Path, roadmap: RoadmapState) -> str:
 
 
 def render_triage_status(roadmap: RoadmapState) -> str:
+    active_items = roadmap.active_items
     groups = {
-        "current_candidate": [item for item in roadmap.items if item.planning_state == "current_candidate"],
-        "support_only": [item for item in roadmap.items if item.planning_state == "support_only"],
-        "ready_next": [item for item in roadmap.items if item.planning_state == "ready_next"],
-        "completed": [item for item in roadmap.items if item.planning_state == "completed"],
-        "blocked_deferred": [item for item in roadmap.items if item.planning_state == "blocked_deferred"],
+        "current_candidate": [item for item in active_items if item.planning_state == "current_candidate"],
+        "support_only": [item for item in active_items if item.planning_state == "support_only"],
+        "ready_next": [item for item in active_items if item.planning_state == "ready_next"],
     }
     lines = [
         "## Current Candidate",
@@ -380,26 +415,73 @@ def render_triage_status(roadmap: RoadmapState) -> str:
     lines.extend(
         [
             "",
-            "## Completed Evidence",
+            "## Archived And Deferred Registers",
             "",
-            "| ID | Track | Priority | Value | Blocker | Score | Completion quality | Quality gaps | Current decision | Evidence |",
-            "|---|---|---:|---:|---:|---:|---|---|---|---|",
+            f"- Completed evidence: [{repo_path(REPO_ROOT / roadmap.render.archive_register)}]({relative_workspace_link(roadmap.render.archive_register)})",
+            f"- Deferred backlog: [{repo_path(REPO_ROOT / roadmap.render.deferred_register)}]({relative_workspace_link(roadmap.render.deferred_register)})",
         ]
     )
-    for item in groups["completed"]:
-        quality_gaps = "<br>".join(item.known_quality_gaps) if item.known_quality_gaps else "None recorded"
-        lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.completion_quality} | {quality_gaps} | {item.current_decision} | {item.next_evidence} |")
-    lines.extend(
-        [
-            "",
-            "## Blocked Or Deferred",
-            "",
-            "| ID | Track | Priority | Value | Blocker | Score | Why it is not ready now |",
-            "|---|---|---:|---:|---:|---:|---|",
-        ]
-    )
-    for item in groups["blocked_deferred"]:
-        lines.append(f"| {item.id} | {item.title} | {item.priority} | {item.value_label} | {item.blocker_label} | {item.score:.1f} | {item.why_not_ready} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def relative_workspace_link(path: str) -> str:
+    prefix = "docs-site/src/content/docs/workspace/"
+    return f"./{path.removeprefix(prefix)}"
+
+
+def render_item_register(
+    roadmap: RoadmapState,
+    *,
+    title: str,
+    description: str,
+    items: list[RoadmapItem],
+) -> str:
+    lines = [
+        "---",
+        f"title: {title}",
+        f"description: {description}",
+        "status: active",
+        "owner: workspace",
+        "layer: workspace",
+        "canonical: true",
+        f"last_reviewed: {roadmap.roadmap.last_reviewed}",
+        "related:",
+        "  - ./roadmap-items.yaml",
+        "  - ./roadmap-archive.yaml",
+        "  - ./roadmap-deferred.yaml",
+        "  - ./roadmap-decision-register.md",
+        "---",
+        "",
+        f"# {title}",
+        "",
+        description,
+        "",
+        "| ID | Track | Lane | Planning state | Completion quality | Dependency level | Gate | V | B | Score | Current decision | Evidence / blocker |",
+        "|---|---|---|---|---|---:|---|---:|---:|---:|---|---|",
+    ]
+    for item in items:
+        evidence_or_blocker = item.next_evidence if item.planning_state == "completed" else item.why_not_ready
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.id,
+                    item.title,
+                    item.lane,
+                    item.planning_state,
+                    item.completion_quality,
+                    item.dependency_level,
+                    item.gate,
+                    str(item.value),
+                    str(item.blocker),
+                    f"{item.score:.1f}",
+                    item.current_decision,
+                    evidence_or_blocker,
+                ]
+            )
+            + " |"
+        )
     lines.append("")
     return "\n".join(lines)
 

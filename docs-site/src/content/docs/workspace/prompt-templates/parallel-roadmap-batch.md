@@ -36,16 +36,17 @@ Scope:
 Phase 1: propose, do not implement.
 1. Read AGENTS.md, AI_GUIDE.md, and the root architecture docs.
 2. Read workspace/parallel-roadmap-batch-automation.md.
-3. Read workspace/roadmap-items.yaml as the structured source of truth.
+3. Read workspace/roadmap-items.yaml as the active execution source of truth.
 4. Run `task roadmap:validate`.
 5. Read workspace/roadmap-decision-register.md.
 6. Read workspace/design-implementation-triage.md.
 7. Read workspace/repo-execution-priority-checklist.md.
-8. Inspect current git state and relevant owning roadmaps.
-9. Identify work that is parallelizable at the same dependency level.
-10. Exclude blocked B5 work and designs without accepted owners.
-11. Produce a batch proposal with worker prompts, write scopes, validations, stop conditions, and coordinator-level docs updates.
-12. Stop for explicit user approval.
+8. Read workspace/roadmap-archive.yaml and workspace/roadmap-deferred.yaml only for dependency, evidence, and policy context.
+9. Inspect current git state and relevant owning roadmaps.
+10. Identify work that is parallelizable at the same dependency level.
+11. Exclude blocked B5 work and designs without accepted owners.
+12. Produce a batch proposal with worker prompts, write scopes, validations, stop conditions, and coordinator-level docs updates.
+13. Stop for explicit user approval.
 
 Phase 2: execute after approval.
 1. Create or name an integration branch.
@@ -54,7 +55,7 @@ Phase 2: execute after approval.
 4. Require every worker to inspect, implement, validate, and report exact files/functions/modules.
 5. Review the combined diff before accepting the batch.
 6. Run focused and broad validation.
-7. Update roadmap-items.yaml first, then run `task roadmap:render`.
+7. Update the owning roadmap YAML source first, then run `task roadmap:render`.
 8. Run `task roadmap:check` and `task puml:validate`.
 9. Update owning roadmaps, lifecycle links, and closeout evidence.
 10. Report completed slices, blockers, and the next recommended batch.

@@ -182,6 +182,11 @@ tasks:
     cmds:
       - uv run python tools/workflow/ai_task.py parallel-roadmap-batch {{.CLI_ARGS}}
 
+  ai:goal:
+    desc: Generate a production-track Codex /goal coordinator prompt.
+    cmds:
+      - uv run python tools/workflow/production_goal.py goal {{.CLI_ARGS}}
+
   ai:closeout:
     desc: Generate a phase closeout prompt/checklist.
     cmds:

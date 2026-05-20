@@ -57,7 +57,7 @@ def propose(
     level: str | None = typer.Option(None, help="Dependency level such as L0."),
     include_discovery: bool = typer.Option(False, help="Include B3-B4 discovery work."),
     allow_scope_conflicts: bool = typer.Option(False, help="Allow overlapping write scopes."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     roadmap = load_roadmap(source)
     level_from_scope, item_ids = parse_scope_selector(scope)
@@ -100,7 +100,7 @@ def kickoff(
     out: Path | None = typer.Option(None, help="Batch manifest path."),
     batch_id: str | None = typer.Option(None, help="Stable batch id."),
     approve: bool = typer.Option(False, help="Approve the generated batch immediately."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     if not next and scope == "<level/items>":
         console.print("[red]batch kickoff failed[/red]")
@@ -156,7 +156,7 @@ def continue_batch(
         help="Continue with all currently eligible roadmap candidates, not only still-current items from the source batch.",
     ),
     force: bool = typer.Option(False, help="Allow overwriting an existing --out manifest."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     manifest = load_batch_manifest(batch)
     roadmap = load_roadmap(source)
@@ -197,7 +197,7 @@ def continue_batch(
 @app.command()
 def approve(
     batch: Path = typer.Option(..., help="Batch manifest path."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     manifest = load_batch_manifest(batch)
     roadmap = load_roadmap(source)
@@ -217,7 +217,7 @@ def worker_prompt(
     batch: Path = typer.Option(..., help="Batch manifest path."),
     item: str = typer.Option(..., help="Roadmap item ID."),
     write: bool = typer.Option(False, help="Write to the manifest prompt_path instead of stdout."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     roadmap = load_roadmap(source)
     manifest = load_batch_manifest(batch)
@@ -226,7 +226,7 @@ def worker_prompt(
         raise WorkflowError(f"{item} is not part of batch {manifest.id}")
     roadmap_item = roadmap.by_id.get(item)
     if roadmap_item is None:
-        raise WorkflowError(f"{item} is not present in roadmap source")
+        raise WorkflowError(f"{item} is not present in combined roadmap sources")
     prompt = render_worker_prompt(manifest, roadmap_item, batch_item)
     if write:
         target = REPO_ROOT / batch_item.prompt_path
@@ -244,7 +244,7 @@ def prepare(
     flat_worktrees: bool = typer.Option(False, help="Place worktrees directly under --root by item id."),
     allow_unapproved: bool = typer.Option(False, help="Allow preparing a proposed batch."),
     dry_run: bool = typer.Option(False, help="Print worktree actions without executing git."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     manifest = load_batch_manifest(batch)
     if manifest.approval_state != "approved" and not allow_unapproved:
@@ -263,7 +263,7 @@ def prepare(
         if not prompt_target.exists():
             roadmap_item = roadmap.by_id.get(item.id)
             if roadmap_item is None:
-                raise WorkflowError(f"{item.id} is not present in roadmap source")
+                raise WorkflowError(f"{item.id} is not present in combined roadmap sources")
             if dry_run:
                 console.print(f"would write worker prompt: {repo_path(prompt_target)}")
             else:
@@ -315,7 +315,7 @@ def validate(
     batch: Path = typer.Option(..., help="Batch manifest path."),
     item: str | None = typer.Option(None, help="Limit worker validation to one WR item."),
     write: bool = typer.Option(False, help="Record the host validation result in batch.toml."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     manifest = load_batch_manifest(batch)
     roadmap = load_roadmap(source)
@@ -445,7 +445,7 @@ def finalize(
     write: bool = typer.Option(False, help="Write batch.md after finalization."),
     cleanup: bool = typer.Option(True, "--cleanup/--no-cleanup", help="Remove integrated worker worktrees and branches."),
     keep_branches: bool = typer.Option(False, help="Preserve worker branches after worktree cleanup."),
-    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
     manifest = load_batch_manifest(batch)
     roadmap = load_roadmap(source)

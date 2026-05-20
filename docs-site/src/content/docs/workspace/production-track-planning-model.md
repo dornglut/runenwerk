@@ -106,8 +106,9 @@ Normal long-term planning follows this order:
    first.
 3. If the milestone is `ready_next` or `active`, use its WR links to inspect the
    legal roadmap rows.
-4. Use `roadmap-items.yaml` and `task batch:kickoff -- --next` for execution
-   selection.
+4. Use active `roadmap-items.yaml` rows and `task batch:kickoff -- --next` for
+   execution selection; use the archive and deferred roadmap sources only to
+   resolve historical links, dependencies, and evidence gates.
 5. After implementation closeout, update roadmap evidence first, then update
    production milestone state only when acceptance and evidence gates are true.
 

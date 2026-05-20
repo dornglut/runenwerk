@@ -10,6 +10,8 @@ related:
   - ./architecture-governance-review.md
   - ./design-implementation-triage.md
   - ./roadmap-items.yaml
+  - ./roadmap-archive.yaml
+  - ./roadmap-deferred.yaml
   - ./roadmap-decision-register.md
   - ./repo-execution-priority-checklist.md
   - ./roadmap-index.md

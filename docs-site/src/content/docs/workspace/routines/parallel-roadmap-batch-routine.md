@@ -10,6 +10,8 @@ related_docs:
   - ../parallel-roadmap-batch-automation.md
   - ../prompt-templates/parallel-roadmap-batch.md
   - ../roadmap-items.yaml
+  - ../roadmap-archive.yaml
+  - ../roadmap-deferred.yaml
   - ../roadmap-decision-register.md
   - ../design-implementation-triage.md
   - ../repo-execution-priority-checklist.md
@@ -39,7 +41,9 @@ Before execution:
    - `git branch --show-current`
    - relevant `git diff --stat`
 2. Read the workspace sources of truth:
-   - `roadmap-items.yaml`
+   - `roadmap-items.yaml` for active execution rows
+   - `roadmap-archive.yaml` for completed dependency and evidence context
+   - `roadmap-deferred.yaml` for blocked or policy-deferred context
    - `roadmap-decision-register.md`
    - `design-implementation-triage.md`
    - `repo-execution-priority-checklist.md`
@@ -62,7 +66,7 @@ Before execution:
    workspace, use one integration branch and review the combined diff.
 9. Integrate worker outputs by ownership area.
 10. Run focused validation, then broader validation when contracts cross domains.
-11. Update `roadmap-items.yaml` first, then run `task roadmap:render`.
+11. Update the owning roadmap YAML source first, then run `task roadmap:render`.
 12. Run `task roadmap:check`, `task puml:validate`, and `task docs:validate`.
 13. Update owning roadmap docs, lifecycle links, and closeout notes.
 14. When finalized items still have `roadmap_outcome=slice_landed_item_still_current`,
@@ -76,7 +80,8 @@ Every completed batch should update at least one coordinator-level source of
 truth:
 
 - `repo-execution-priority-checklist.md` for operational status;
-- `roadmap-items.yaml` for evidence, score, gate, and current decision;
+- `roadmap-items.yaml`, `roadmap-archive.yaml`, or `roadmap-deferred.yaml` for
+  evidence, score, gate, and current decision;
 - generated `roadmap-decision-register.md` for evidence and current decision;
 - generated `design-implementation-triage.md` for implement-now/ready-next movement;
 - owning roadmap docs when a phase checkbox or status changes.

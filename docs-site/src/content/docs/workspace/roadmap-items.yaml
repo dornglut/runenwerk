@@ -1,65 +1,16 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-16'
+  last_reviewed: '2026-05-20'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
   dependency_roadmap: docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
   current_candidates_roadmap: docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
   triage: docs-site/src/content/docs/workspace/design-implementation-triage.md
+  archive_register: docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  deferred_register: docs-site/src/content/docs/workspace/roadmap-deferred-register.md
 items:
-- id: WR-001
-  title: Post-Phase 6D product-job and Draw cache follow-up
-  diagram_title: Post-Phase 6D product-job / Draw bridge
-  alias: DRAWNEXT
-  lane: Core delivery
-  dependency_level: L0
-  gate: Continue next slice
-  planning_state: completed
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 4
-  rr_oe: 4
-  du: 5
-  effort: 3
-  confidence: 0.8
-  expected_score: 4.8
-  rice: Candidate after Draw reach exists
-  kano: Performance
-  dependencies:
-  - WR-002
-  - WR-003
-  - WR-004
-  - WR-005
-  write_scopes:
-  - apps/runenwerk_draw
-  - engine/src/runtime
-  - docs-site/src/content/docs/reports/batches/2026-05-14-wr-001-product-job-draw-bridge/batch.toml
-  validations:
-  - cargo test -p runenwerk_draw --test app_shell
-  - cargo test -p engine
-  next_evidence: 2026-05-15 DRF3 preview/final product-surface bridge landed through docs-site/src/content/docs/reports/batches/2026-05-14-wr-001-product-job-draw-bridge/batch.toml
-    and WR-006 completed DRF4/DRF5 GPU proof and promotion; remaining WR-001 work needs fresh runtime product-job evidence
-    before reactivation.
-  current_decision: DRF3 landed through the WR-001 batch; keep any remaining WR-001 work as a bounded follow-up and do not
-    reopen procgen bake/rollback.
-  current_call: Continue only if the next bounded slice has fresh product-job evidence. The 2026-05-15 WR-001 batch bridged
-    preview and final Draw tile surfaces through existing render APIs, and WR-006 has since completed the dependent GPU proof
-    and promotion slice.
-  first_move: Continue from runtime-product-job-executor-roadmap.md, runenwerk-draw/roadmap.md, and sdf-first-execution-roadmap.md.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Remaining WR-001 work needs fresh runtime product-job evidence before reactivation.
-  completion_audit: ""
-  diagram_call:
-  - DRF3 bridge landed
-  - WR-006 GPU proof complete
-  ddd_owner: apps/runenwerk_draw with engine runtime product-job support
-  adr_requirement: No new ADR for the next bounded slice; require ADR only if product-job ownership changes.
-  fitness_function_requirement: Focused Draw/runtime tests plus roadmap render check.
-  ownership_mode: Stream-aligned Draw work with enabling engine support.
 - id: WR-002
   title: ECS/runtime convergence support for product jobs and diagnostics
   diagram_title: ECS/runtime support
@@ -223,105 +174,6 @@ items:
   fitness_function_requirement: Strict docs validation, link checks, crate-doc coverage, batch manifest checks, and lifecycle
     status checks.
   ownership_mode: Enabling documentation cleanup.
-- id: WR-006
-  title: Runenwerk Draw DRF4 through DRF5
-  diagram_title: Draw DRF4-DRF5
-  alias: DRAW
-  lane: Core delivery
-  dependency_level: L1
-  gate: Completed
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 3
-  rr_oe: 3
-  du: 4
-  effort: 5
-  confidence: 0.8
-  expected_score: 2.2
-  rice: Candidate after workflow reach exists
-  kano: Performance
-  dependencies:
-  - WR-001
-  - WR-003
-  write_scopes:
-  - apps/runenwerk_draw
-  - engine/src/plugins/render
-  - docs-site/src/content/docs/reports/closeouts/wr-006-draw-drf4-drf5/closeout.md
-  validations:
-  - cargo test -p runenwerk_draw
-  - cargo test -p engine
-  next_evidence: 2026-05-15 WR-006 landed DRF4 GPU ink proof and DRF5 GPU promotion/fallback through public render-flow/product-surface
-    APIs; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-006-draw-drf4-drf5/closeout.md.
-  current_decision: DRF4 and DRF5 are complete; keep CPU tile formation canonical while future Draw work builds on validated
-    GPU promotion/fallback.
-  current_call: Completed through the 2026-05-15 WR-006 batch. Do not reopen this slice unless GPU validation or CPU fallback
-    evidence regresses.
-  first_move: Use apps/runenwerk-draw/roadmap.md and the 2026-05-15 WR-006 batch closeout for follow-up context.
-  main_blocker: Complete; future Draw work should preserve CPU truth and public render-flow/product-surface boundaries.
-  completion_quality: runtime_proven
-  known_quality_gaps: []
-  completion_audit: ""
-  diagram_call:
-  - GPU proof landed
-  - GPU promotion, CPU fallback landed
-  ddd_owner: apps/runenwerk_draw with render product-surface contracts
-  adr_requirement: No new ADR if existing render product-surface decision holds.
-  fitness_function_requirement: Draw public flow proof tests and CPU fallback tests.
-  ownership_mode: Stream-aligned Draw owner with render enabling support.
-- id: WR-007
-  title: Multiplayer replication Phase 1 to Phase 3
-  diagram_title: Net replication Phase 1-3
-  alias: NET
-  lane: Core delivery
-  dependency_level: L1
-  gate: Completed
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 2
-  rr_oe: 4
-  du: 4
-  effort: 8
-  confidence: 0.8
-  expected_score: 1.4
-  rice: N/A
-  kano: Neutral
-  dependencies:
-  - WR-001
-  write_scopes:
-  - net
-  - engine/src/plugins/net
-  - engine/tests/network_plugins
-  - domain/ecs
-  - docs-site/src/content/docs/reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md
-  validations:
-  - cargo test -p engine_net
-  - cargo test -p engine --test network_plugins
-  - cargo test -p ecs
-  - cargo test -p scheduler
-  next_evidence: 2026-05-15 Phase 1-3 landed ACK/baseline hardening, delta lifecycle normalization, and engine bridge baseline
-    convergence; closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-007-multiplayer-replication-phase-1-3/closeout.md.
-  current_decision: Phase 1-3 is complete; future replication work should build on the accepted ACK/baseline outcome contract
-    and engine bridge checkpoint behavior instead of reopening ad hoc baseline mutation.
-  current_call: Completed through the 2026-05-15 WR-007 batches. Do not broaden replication scope until the next roadmap row
-    has fresh declarative replication or ECS component extraction evidence.
-  first_move: Use net/multiplayer-replication-implementation-roadmap.md and the 2026-05-15 batch closeouts for follow-up context.
-  main_blocker: Complete; future work should preserve the single ACK/baseline outcome contract across engine_net runtimes
-    and engine plugin checkpoints.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Future replication rows still need declarative replication and ECS component extraction evidence before broader completion claims.
-  completion_audit: ""
-  diagram_call:
-  - ACK hardening complete
-  - bridge convergence complete
-  ddd_owner: net replication with ECS authority metadata
-  adr_requirement: No new ADR for Phase 1-3 hardening unless authority ownership changes.
-  fitness_function_requirement: Replication lifecycle tests and ECS authority diagnostics.
-  ownership_mode: Stream-aligned net owner with ECS enabling support.
 - id: WR-008
   title: Native tablet input backend arbitration and diagnostics
   diagram_title: Native tablet input
@@ -437,608 +289,6 @@ items:
   adr_requirement: ADR only if data-driven fragments become a cross-domain contract.
   fitness_function_requirement: Render fragment flow and hot-reload diagnostics tests.
   ownership_mode: Complicated-subsystem render owner.
-- id: WR-011
-  title: Gameplay Graph ATR IR and ECS lowering
-  diagram_title: Gameplay Graph ATR IR
-  alias: GAMEPLAY
-  lane: Contract
-  dependency_level: L2
-  gate: Domain contract gate
-  planning_state: blocked_deferred
-  priority: P2
-  value: 4
-  blocker: 4
-  tc: 2
-  rr_oe: 4
-  du: 4
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.3
-  rice: N/A
-  kano: Neutral
-  dependencies:
-  - WR-001
-  - WR-007
-  - WR-012
-  write_scopes:
-  - domain/gameplay
-  - domain/ecs
-  validations:
-  - cargo test -p ecs
-  next_evidence: domain/gameplay event, action, state, quest, authority, and lowering contracts.
-  current_decision: Blocked until narrower gameplay contracts exist.
-  why_not_ready: Missing domain/gameplay/events, domain/gameplay/actions, domain/gameplay/state, and domain/gameplay/quests;
-    SDF physics relation readiness and authority diagnostics also need owning contracts.
-  diagram_call:
-  - first compiler and ECS lowering
-  - after gameplay contracts
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Gameplay graph lowering requires accepted gameplay contract ownership before implementation.
-  ddd_owner: future domain/gameplay
-  adr_requirement: ADR or accepted design required before implementation.
-  fitness_function_requirement: Dependency-direction and gameplay lowering fitness functions required.
-  ownership_mode: Complicated subsystem not yet owned.
-- id: WR-012
-  title: Neutral graph substrate boundary
-  diagram_title: Neutral graph substrate
-  alias: SEMGRAPH
-  lane: Core support
-  dependency_level: L0
-  gate: Completed
-  planning_state: completed
-  priority: P2
-  value: 3
-  blocker: 2
-  tc: 2
-  rr_oe: 3
-  du: 3
-  effort: 5
-  confidence: 0.8
-  expected_score: 1.8
-  rice: N/A
-  kano: Neutral
-  dependencies: []
-  write_scopes:
-  - domain/graph
-  - docs-site/src/content/docs/adr
-  - docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md
-  - docs-site/src/content/docs/reports/closeouts/wr-012-neutral-graph-substrate-boundary/closeout.md
-  validations:
-  - cargo test -p graph
-  - task docs:validate
-  next_evidence: 2026-05-16 ADR 0010 accepted the graph substrate/canvas boundary and preserved the former draft rationale;
-    closeout evidence is recorded in docs-site/src/content/docs/reports/closeouts/wr-012-neutral-graph-substrate-boundary/closeout.md.
-  current_decision: Graph substrate policy is complete; future semantic graph work must start from one concrete owning domain
-    and one formed product target, not a broad graph platform.
-  current_call: Completed policy gate. Use domain/graph as structural support only; do not reopen it as a semantic graph runtime
-    or editor canvas authority.
-  first_move: For future semantic graph work, choose a concrete owning domain and consume ADR 0010 instead of changing domain/graph
-    ownership.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - This is a policy and substrate boundary closeout; future semantic graph products still need owning-domain implementation evidence.
-  completion_audit: ""
-  diagram_call:
-  - graph substrate accepted
-  - semantic meaning stays domain-owned
-  decision_gates:
-  - kind: adr
-    path: docs-site/src/content/docs/adr/accepted/0010-graph-substrate-canvas-boundary.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Neutral graph substrate ownership must stay accepted before semantic graph work depends on it.
-  ddd_owner: domain/graph as neutral substrate; concrete semantic domains own meaning
-  adr_requirement: Accepted ADR 0010 is in force; new ADR/design required only if graph substrate ownership changes.
-  fitness_function_requirement: Graph validation/traversal tests and dependency-direction checks.
-  ownership_mode: Complicated-subsystem support owned by domain graph maintainers.
-- id: WR-013
-  title: Scripting and runtime gameplay bridge
-  diagram_title: Scripting/runtime bridge
-  alias: SCRIPTING
-  lane: Contract
-  dependency_level: L3
-  gate: Domain contract gate
-  planning_state: blocked_deferred
-  priority: P2
-  value: 3
-  blocker: 4
-  tc: 2
-  rr_oe: 3
-  du: 3
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.3
-  rice: N/A
-  kano: Neutral
-  dependencies:
-  - WR-011
-  write_scopes:
-  - engine
-  - domain/gameplay
-  - adapters
-  validations:
-  - cargo check --workspace
-  next_evidence: Language-neutral runtime boundary and formed gameplay products.
-  current_decision: Rhai can be first adapter only after the domain contract exists.
-  why_not_ready: It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai
-    can be the first adapter only after the domain contract exists.
-  diagram_call:
-  - language-neutral contract,
-  - first adapter later
-  ddd_owner: future gameplay runtime boundary
-  adr_requirement: ADR required for scripting runtime boundary.
-  fitness_function_requirement: Adapter boundary and dependency-direction fitness functions required.
-  ownership_mode: Platform/enabling work after domain contract.
-- id: WR-014
-  title: Particles, physics, animation, and world-process product tracks
-  diagram_title: Particles / physics / animation / world processes
-  alias: M6FUTURE
-  lane: Contract
-  dependency_level: L3
-  gate: Product contract gate
-  planning_state: blocked_deferred
-  priority: P3
-  value: 3
-  blocker: 4
-  tc: 1
-  rr_oe: 3
-  du: 3
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.2
-  rice: N/A
-  kano: Neutral
-  dependencies:
-  - WR-001
-  write_scopes:
-  - domain
-  - engine
-  validations:
-  - cargo check --workspace
-  next_evidence: Owning domain docs and formed product contracts.
-  current_decision: Follow product-job, query snapshot, and publication substrate maturity.
-  why_not_ready: Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query
-    snapshot/publication barrier substrate.
-  diagram_call:
-  - formed product contracts
-  - and product substrate first
-  ddd_owner: unassigned future product domains
-  adr_requirement: Accepted design or ADR required per product track.
-  fitness_function_requirement: Product boundary and dependency-direction checks required.
-  ownership_mode: Discovery until domain owners exist.
-- id: WR-015
-  title: SDF character, vegetation, atmosphere, water, VFX, and influence AI drafts
-  diagram_title: Remaining SDF detail drafts
-  alias: SDFDETAIL
-  lane: Deferred
-  dependency_level: L4
-  gate: Policy deferred
-  planning_state: blocked_deferred
-  priority: P3
-  value: 2
-  blocker: 5
-  tc: 1
-  rr_oe: 2
-  du: 2
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.2
-  rice: N/A
-  kano: Exciter
-  dependencies:
-  - WR-014
-  write_scopes:
-  - docs-site/src/content/docs/design/deferred
-  validations:
-  - task docs:validate
-  next_evidence: Active design, ADR, or roadmap promotion. SDF prefab composition has moved to WR-022 and is no longer part
-    of this deferred bucket.
-  current_decision: Keep remaining deferred drafts until product ownership and handoff contracts are promoted.
-  why_not_ready: These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership,
-    renderer/runtime handoff, query policy, and authority contracts are promoted.
-  diagram_call:
-  - character, vegetation,
-  - atmosphere, water, VFX, AI
-  ddd_owner: deferred SDF product domains
-  adr_requirement: Promotion requires accepted design or ADR.
-  fitness_function_requirement: Docs lifecycle checks before implementation.
-  ownership_mode: Deferred discovery.
-- id: WR-016
-  title: Compiled-reactive UI and ECS-driven UI execution strategies
-  diagram_title: Alternate UI execution
-  alias: UIALT
-  lane: Deferred
-  dependency_level: L4
-  gate: Policy deferred
-  planning_state: blocked_deferred
-  priority: P3
-  value: 2
-  blocker: 5
-  tc: 1
-  rr_oe: 2
-  du: 1
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.1
-  rice: N/A
-  kano: Neutral
-  dependencies:
-  - WR-004
-  - WR-025
-  write_scopes:
-  - domain/ui
-  - docs-site/src/content/docs/design/deferred
-  validations:
-  - task docs:validate
-  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target, formation
-    product, invalidation/debug model, command boundary, and guard suite.
-  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract layer
-    for retained UI first, not permission to implement alternate execution.
-  why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new
-    active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts.
-  diagram_call:
-  - compiled-reactive or ECS-driven
-  - only after ADR/design promotion
-  ddd_owner: domain/ui
-  adr_requirement: Accepted ADR required to change UI execution default after Interaction V2 contracts exist.
-  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and Interaction
-    V2 contract consumption checks required before implementation.
-  ownership_mode: Deferred architecture exploration.
-- id: WR-017
-  title: Gameplay actions, powers, runtime, and power editor
-  diagram_title: Gameplay powers/actions
-  alias: POWERS
-  lane: Deferred
-  dependency_level: L4
-  gate: Policy deferred
-  planning_state: blocked_deferred
-  priority: P3
-  value: 2
-  blocker: 5
-  tc: 1
-  rr_oe: 2
-  du: 2
-  effort: 13
-  confidence: 0.3
-  expected_score: 0.2
-  rice: N/A
-  kano: Exciter
-  dependencies:
-  - WR-011
-  write_scopes:
-  - domain/gameplay
-  - apps/runenwerk_editor
-  - docs-site/src/content/docs/design/deferred
-  validations:
-  - task docs:validate
-  next_evidence: Narrower gameplay graph and domain contract sequence.
-  current_decision: Keep deferred behind gameplay contract work.
-  why_not_ready: These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and
-    domain contract sequence.
-  diagram_call:
-  - runtime and editor power authoring
-  - after narrower gameplay contracts
-  ddd_owner: future domain/gameplay with editor product support
-  adr_requirement: Accepted gameplay design/ADR required before implementation.
-  fitness_function_requirement: Gameplay dependency-direction and editor boundary checks required.
-  ownership_mode: Deferred stream-aligned product work.
-- id: WR-018
-  title: Rendered World V1
-  diagram_title: Rendered World V1
-  alias: RENDERWORLD
-  lane: Core delivery
-  dependency_level: L1
-  gate: Completed
-  planning_state: completed
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 4
-  rr_oe: 5
-  du: 5
-  effort: 5
-  confidence: 0.8
-  expected_score: 3.0
-  rice: SDF-first editor world reach
-  kano: Basic
-  dependencies:
-  - WR-003
-  - WR-004
-  write_scopes:
-  - apps/runenwerk_editor/src/runtime
-  - assets/shaders
-  - docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
-  - docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md
-  validations:
-  - cargo check -p runenwerk_editor
-  - cargo test -p runenwerk_editor viewport
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task docs:validate
-  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-018-rendered-world-v1/closeout.md.
-    Multi-entity SDF primitive extraction, scene-product shader packet use, CPU picking from the render-state packet, picking
-    shader packet decode, and viewport render-job uniform override tests are implemented and validated.
-  current_decision: All editor SDF primitive entities now render and pick through one app-runtime extracted viewport scene
-    packet before material, prefab, terrain, or field visualization production work expands.
-  current_call: Completed through the 2026-05-16 WR-018 rendered-world V1 closeout. Do not reopen this slice unless storage-buffer
-    packet expansion or a later product producer requires a new bounded render-flow contract.
-  first_move: For follow-up viewport product work, consume EditorViewportSceneRenderPacket and the viewport product target
-    registry instead of adding another scene extraction or parallel viewer path.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Storage-buffer scene packet expansion and later product producers remain future bounded render-flow work.
-  - Windowed GPU truth smoke remains environment-gated and does not make this row perfectionist verified.
-  completion_audit: ""
-  diagram_call:
-  - multi-entity SDF packet
-  - render/picking consistency
-  ddd_owner: apps/runenwerk_editor runtime with render product-surface support
-  adr_requirement: No new ADR while implementation stays inside editor viewport projection contracts.
-  fitness_function_requirement: Renderer packet ordering, picking consistency, viewport statistics, and shader serialization
-    checks.
-  ownership_mode: Stream-aligned editor work with render enabling support.
-- id: WR-019
-  title: Field Visualizer product workflow
-  diagram_title: Field Visualizer workflow
-  alias: FIELDVIS
-  lane: Product workflow
-  dependency_level: L2
-  gate: After rendered-world V1
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 3
-  rr_oe: 4
-  du: 4
-  effort: 5
-  confidence: 0.8
-  expected_score: 2.4
-  rice: Product debug workflow after viewport packet stability
-  kano: Performance
-  dependencies:
-  - WR-018
-  - WR-003
-  write_scopes:
-  - apps/runenwerk_editor
-  - domain/editor
-  - docs-site/src/content/docs/design/active
-  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
-  - docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md
-  validations:
-  - cargo test -p runenwerk_editor viewport
-  - cargo test -p engine render_product_selection
-  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md.
-    Viewport-owned field visualizer settings, granular patch actions, product-aware slice bounds, routed controls, persisted
-    hydration, stable product target identity, and strict diagnostics are implemented and validated.
-  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-019-field-visualizer-product-workflow/closeout.md.
-    Viewport-owned field visualizer settings, granular patch actions, product-aware slice bounds, routed controls, persisted
-    hydration, stable product target identity, and strict diagnostics are implemented and validated.
-  current_call: Plan immediately after rendered-world V1 stabilizes the packet/product handoff; this is the first FR-2 product-producer
-    follow-up in the fully featured renderer roadmap.
-  main_blocker: Rendered-world V1 must first prove the viewport packet/product handoff and product target selection path.
-  first_move: Implement from field-visualizer-product-workflow-design.md using existing viewport product target state and
-    the FR-2 sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Field producers remain product-debug workflow evidence, not a full field-authoring or simulation product family.
-  - Windowed GPU truth smoke remains environment-gated and does not make this row perfectionist verified.
-  completion_audit: ""
-  diagram_call:
-  - product-backed field debug
-  - no parallel viewer path
-  ddd_owner: apps/runenwerk_editor viewport workflow with engine render product contracts
-  adr_requirement: No ADR unless field products become authoritative domain truth in the editor shell.
-  fitness_function_requirement: Product selection, unavailable diagnostics, and session persistence tests.
-  ownership_mode: Stream-aligned editor workflow with render/product enabling support.
-- id: WR-020
-  title: Source-backed Asset Core Contracts
-  diagram_title: Source-backed Asset Core
-  alias: ASSETCORE
-  lane: Core support
-  dependency_level: L1
-  gate: Completed
-  planning_state: completed
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 4
-  rr_oe: 5
-  du: 5
-  effort: 8
-  confidence: 0.8
-  expected_score: 1.9
-  rice: Stable asset identity before material and prefab implementation
-  kano: Basic
-  dependencies:
-  - WR-018
-  write_scopes:
-  - domain/asset
-  - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
-  - docs-site/src/content/docs/reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md
-  validations:
-  - cargo test -p asset
-  - cargo check -p runenwerk_editor
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task docs:validate
-  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-020-source-backed-asset-core-contracts/closeout.md.
-    Domain-owned project catalog descriptors, importer-aware source descriptors, deterministic import plans, dependency graph
-    contracts, diagnostics, ratification, and prior-valid artifact preservation are implemented and validated in domain/asset.
-    WR-026 editor adapters remain downstream.
-  current_decision: Source-backed asset semantic truth now lives in domain/asset for SDF graph, field product, material graph/material,
-    UI definition, and prefab descriptor families before broad external import work or editor adapter expansion.
-  current_call: Completed through the 2026-05-16 WR-020 source-backed asset core closeout. Do not reopen this slice for editor
-    app load/save, import orchestration, diagnostics UI, or provider wiring; that remains WR-026 adapter work.
-  main_blocker: Completed core contract. Follow-up editor adapter implementation requires a separate selected roadmap slice.
-  first_move: For WR-026 or later consumers, use the landed domain/asset project catalog descriptor, source/import-plan, dependency,
-    ratification, diagnostics, and prior-valid preservation APIs instead of adding semantic asset truth in apps.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Editor adapter execution, external importer execution, cache garbage collection, and runtime hot reload remain downstream adapter/product work.
-  completion_audit: ""
-  diagram_call:
-  - deterministic import
-  - domain-owned asset truth
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
-    required_status: active
-    applies_to: implementation
-    reason: Source-backed asset work must follow the active asset pipeline ownership design.
-  ddd_owner: domain/asset with editor adapters as consumers
-  adr_requirement: ADR only if source/catalog ownership moves out of domain/asset or into engine runtime.
-  fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, ratification, and
-    diagnostics tests.
-  ownership_mode: Enabling platform support for editor product workflows.
-- id: WR-026
-  title: Source-backed Asset Editor Adapters
-  diagram_title: Asset editor adapters
-  alias: ASSETADAPT
-  lane: Core support
-  dependency_level: L2
-  gate: After asset core contracts
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 3
-  rr_oe: 4
-  du: 4
-  effort: 5
-  confidence: 0.8
-  expected_score: 2.4
-  rice: Editor catalog workflow after domain asset identity stabilizes
-  kano: Basic
-  dependencies:
-  - WR-020
-  write_scopes:
-  - apps/runenwerk_editor/src/asset_pipeline
-  - apps/runenwerk_editor/src/editor_app/state.rs
-  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
-  - apps/runenwerk_editor/src/shell/providers
-  - domain/editor
-  - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
-  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
-  - docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-026-source-backed-asset-editor-adapters/plan.md
-  validations:
-  - cargo test -p runenwerk_editor asset
-  - cargo test -p runenwerk_editor catalog
-  - task docs:validate
-  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
-    after implementation and validation.
-  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
-    after implementation and validation.
-  current_call: Ready-next only after the WR-020 closeout; implement only through the accepted WR-026 contract with expanded
-    adapter, provider, shell dispatch, app state, and closeout write scopes. Adapter outputs feed later renderer consumers
-    but do not move asset truth into renderer code.
-  main_blocker: Explicit WR-026 execution direction and accepted implementation contract are now present; remaining gate is
-    roadmap promotion plus rendered and validated write-scope evidence before product code changes.
-  first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app
-    state; keep renderer-facing consumers aligned with engine/roadmaps/fully-featured-renderer-roadmap.md.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Later material, prefab, external importer, cache-GC, and runtime hot-reload consumers still need product-specific evidence.
-  completion_audit: ""
-  diagram_call:
-  - editor adapter wiring
-  - prior-valid artifacts
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
-    required_status: active
-    applies_to: implementation
-    reason: Editor adapters must follow the active asset pipeline ownership design.
-  ddd_owner: apps/runenwerk_editor asset workflow adapting domain/asset contracts
-  adr_requirement: No ADR for adapter wiring; ADR required if editor app becomes asset semantic owner.
-  fitness_function_requirement: Catalog round trip, deterministic job orchestration, failed import preservation, and diagnostics
-    tests.
-  ownership_mode: Stream-aligned editor workflow over domain/asset platform contracts.
-- id: WR-021
-  title: Material Lab and material preview products
-  diagram_title: Material Lab
-  alias: MATLAB
-  lane: Product workflow
-  dependency_level: L3
-  gate: After rendered-world V1 and Field Visualizer
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 3
-  rr_oe: 4
-  du: 4
-  effort: 8
-  confidence: 0.5
-  expected_score: 0.9
-  rice: Material authoring after render/product handoff stabilizes
-  kano: Performance
-  dependencies:
-  - WR-018
-  - WR-019
-  - WR-026
-  write_scopes:
-  - Cargo.lock
-  - Cargo.toml
-  - apps/runenwerk_editor
-  - foundation/resource_ref
-  - domain/graph
-  - domain/asset
-  - domain/ui/ui_graph_editor
-  - domain/editor
-  - domain/material_graph
-  - engine/src/plugins/render
-  - docs-site/src/content/docs/design/active
-  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-021-material-lab-and-material-preview-products/plan.md
-  - docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md
-  validations:
-  - cargo test -p ui_graph_editor
-  - cargo test -p resource_ref
-  - cargo test -p graph
-  - cargo test -p material_graph
-  - cargo test -p engine material_compiler
-  - cargo test -p editor_shell material
-  - cargo test -p runenwerk_editor material
-  - cargo test -p runenwerk_editor viewport
-  - task docs:validate
-  next_evidence: Completed after the WR-021 perfectionist repair. Evidence now covers source-owned V2 material graph layout,
-    direct source-document Material Lab projection, ui_graph_editor shell contracts, immediate source edit ratification refresh,
-    topologically ordered executable IR, generated preview/scene shader artifacts, KTX2-backed typed texture descriptors,
-    exact generated shader load gating, generated default scene material bootstrap, PreparedSceneMaterialBundle consumption,
-    group-1 GPU-resident material texture/sampler bind groups, runtime scene packet material slot indices, dedicated
-    material-preview producer output, selected-primary viewport presentation, prior-valid material handoff preservation, and
-    mandatory GPU proof for generated scene and preview shaders sampling Texture2D and Texture3D KTX2 resources.
-  current_decision: WR-021 is completed by the superseding closeout at docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md.
-    The accepted product spine is source MaterialGraph V2 -> ratification -> typed executable IR -> generated WGSL -> validated
-    shader artifacts -> KTX2 texture residency -> scene material slots -> material preview product -> viewport selection -> GPU
-    pixel evidence. Dynamic plugins, multiple material catalogs, and richer visual polish remain later slices.
-  current_call: Do not make canvas state material truth; material source documents own material state and renderer code consumes
-    prepared preview/material products only.
-  main_blocker: Completed; no active blocker remains for WR-021.
-  first_move: Continue from material-lab-and-material-preview-design.md after WR-018 and WR-019 evidence lands, using FR-4
-    sequencing from engine/roadmaps/fully-featured-renderer-roadmap.md.
-  completion_quality: runtime_proven
-  known_quality_gaps:
-  - WR-028 supersedes the inherited rich Material Lab graph, live texture view, SDF assignment persistence, and SDF per-hit
-    material-selection gaps for the SDF primitive path.
-  - Model/mesh material binding is not closed by WR-021 or WR-028; WR-029 owns model/mesh source identity, submesh/material-region
-    assignment, and renderable_index ABI semantics.
-  completion_audit: ""
-  diagram_call:
-  - source-backed material graph
-  - preview product handoff
-  ddd_owner: apps/runenwerk_editor material workflow with domain/editor material document ownership
-  adr_requirement: ADR only if material graph ownership moves into a new domain crate.
-  fitness_function_requirement: Material document round trip, lowering diagnostics, preview product, and render handoff tests.
-  ownership_mode: Stream-aligned material tooling after render/product foundation.
 - id: WR-022
   title: SDF Prefab V2
   diagram_title: SDF Prefab V2
@@ -1189,257 +439,14 @@ items:
   fitness_function_requirement: Popup layout, submenu anchor, active indicator, statistics projection, and named Interaction
     V2 slice-consumption guard tests.
   ownership_mode: Stream-aligned editor shell guardrail work.
-- id: WR-025
-  title: UI Runtime V2 and interaction formation
-  diagram_title: UI Runtime V2 interaction formation
-  alias: UIV2
-  lane: Architecture guardrail
-  dependency_level: L1
-  gate: Accepted architecture gate
-  planning_state: completed
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 4
-  rr_oe: 5
-  du: 4
-  effort: 3
-  confidence: 0.8
-  expected_score: 4.8
-  rice: Prevent repeated editor UI contract regressions
-  kano: Basic
-  dependencies:
-  - WR-004
-  write_scopes:
-  - domain/ui/ui_definition
-  - domain/ui/ui_tree
-  - domain/ui/ui_runtime
-  - domain/editor/editor_shell
-  - apps/runenwerk_editor/src/runtime/systems/input_bridge.rs
-  - apps/runenwerk_editor/tests/viewport_architecture_guards.rs
-  - docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md
-  - docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md
-  - docs-site/src/content/docs/adr/accepted/0009-ui-interaction-formation-v2.md
-  - docs-site/src/content/docs/domain/ui/README.md
-  - docs-site/src/content/docs/domain/ui/architecture.md
-  - docs-site/src/content/docs/domain/ui/roadmap.md
-  - docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
-  - docs-site/src/content/docs/reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md
-  - docs-site/src/content/docs/workspace/roadmap-items.yaml
-  validations:
-  - cargo test -p ui_definition
-  - cargo test -p ui_runtime scroll
-  - cargo test -p ui_runtime popup
-  - cargo test -p ui_runtime menu
-  - cargo test -p editor_shell
-  - cargo test -p runenwerk_editor viewport
-  - cargo test -p runenwerk_editor input_bridge
-  - cargo check -p runenwerk_editor
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task docs:validate
-  next_evidence: 2026-05-15 WR-025 batches landed named retained UI migration slices for IV2-menu-stack, IV2-scroll-ownership,
-    IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration. The 2026-05-15 WR-025
-    doctrine repair adds explicit invalid dock/drop target semantics, non-dismissible viewport chrome/status popup policy,
-    and behavior guards for viewport status dispatch. Next retained UI polish should consume those contracts rather than add
-    local interaction policy.
-  current_decision: Accepted ADR 0009 inserts an execution-neutral interaction formation layer before retained UI products
-    while keeping retained UI as the first execution target and renderer output as derived product data.
-  current_call: Completed through the 2026-05-15 WR-025 batches and doctrine repair closeout. Do not reopen this architecture
-    gate unless a new retained UI regression needs a named Interaction V2 contract or a future execution target has an accepted
-    ADR/design.
-  first_move: For follow-up retained UI polish, consume the landed generic menu-stack, scroll-ownership, menu-sizing, chrome-slot,
-    dock/drop-zone, and status/viewport arbitration spine before changing popup dismissal, focus return, popup layering, submenu
-    anchoring, viewport wheel fallback, popup clamp, item fill, tab/workspace close and active-indicator placement, tab reorder/drop-zone
-    precedence, or status/viewport-input behavior.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - WR-024 retained UI polish remains the next product-facing shell polish slice.
-  - Alternate UI execution strategies remain deferred behind separate ADR or accepted design evidence.
-  completion_audit: ""
-  diagram_call:
-  - retained UI first
-  - named interaction slices
-  ddd_owner: domain/ui with domain/editor/editor_shell and runenwerk_editor adapters
-  adr_requirement: Accepted ADR 0009 is in force for Interaction V2. Any alternate UI execution target still requires a separate
-    accepted ADR or active design before code.
-  fitness_function_requirement: Definition validation, ui_runtime, editor_shell, and app guard tests for popup/menu layer
-    order, scroll clipping, wheel ownership and boundary propagation, outside-dismiss, focus return, split-border precedence,
-    dock-drag/drop-zone precedence and invalid-target exclusion, radial/menu hit testing where applicable, viewport status
-    dispatch rejection, viewport input arbitration, and screenshot or primitive-order visual/frame-order regressions.
-  ownership_mode: Complicated-subsystem domain UI architecture with stream-aligned editor shell migration.
-- id: WR-027
-  title: Completion Quality And Perfectionist Audit Gate
-  diagram_title: Completion quality gate
-  alias: QUALITY
-  lane: Guardrail
-  dependency_level: L1
-  gate: Completed
-  planning_state: completed
-  priority: P0
-  value: 5
-  blocker: 1
-  tc: 4
-  rr_oe: 5
-  du: 5
-  effort: 5
-  confidence: 0.8
-  expected_score: 3.0
-  rice: Prevent completed roadmap rows and production milestones from overclaiming perfectionist quality.
-  kano: Basic
-  dependencies:
-  - WR-021
-  write_scopes:
-  - tools/workflow
-  - engine/src/plugins/render/material_compiler
-  - engine/tests/material_compiler_architecture.rs
-  - docs-site/src/content/docs/workspace/roadmap-items.yaml
-  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
-  - docs-site/src/content/docs/workspace/design-implementation-triage.md
-  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
-  - docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json
-  - docs-site/src/content/docs/workspace/production-tracks.yaml
-  - docs-site/src/content/docs/workspace/production-milestone-register.md
-  - docs-site/src/content/docs/workspace/production-track-index.md
-  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
-  - docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json
-  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
-  - docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
-  - docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md
-  - docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md
-  - docs-site/src/content/docs/reports/closeouts/wr-027-completion-quality-and-perfectionist-audit-gate/closeout.md
-  validations:
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task production:render
-  - task production:validate
-  - task production:check
-  - task docs:validate
-  - cargo test -p engine material_compiler
-  - cargo check -p runenwerk_editor
-  next_evidence: 2026-05-17 completion quality metadata, validation, generated docs, perfectionist audit report, workflow
-    gate docs, and material compiler module-structure repair landed with closeout evidence in docs-site/src/content/docs/reports/closeouts/wr-027-completion-quality-and-perfectionist-audit-gate/closeout.md.
-  current_decision: Completed roadmap rows now carry an explicit completion quality tier, known quality gaps, and optional
-    audit reference so completed history remains honest without implying perfectionist verification.
-  current_call: Use this gate before claiming future completed work is perfectionist verified; runtime-proven and bounded-contract
-    rows must keep known gaps visible until a completed audit clears them.
-  main_blocker: Complete; future rows must keep completion_quality, known_quality_gaps, and completion_audit accurate.
-  first_move: For future closeouts, run the Perfectionist Closeout Audit gate before promotion and record any residual gaps
-    as roadmap follow-up work instead of hiding them in completed prose.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Existing completed rows were classified honestly, but most have not been individually audited to perfectionist_verified.
-  - WR-028 now owns the explicit Material Lab perfectionist follow-up for rich visual graph editing, live texture views, and
-    per-object scene material binding.
-  completion_audit: ""
-  diagram_call:
-  - completion quality visible
-  - compiler structure repaired
-  ddd_owner: workspace workflow with engine render compiler support
-  adr_requirement: No ADR; this is workflow quality metadata and behavior-preserving compiler module cleanup.
-  fitness_function_requirement: Roadmap and production validation, generated docs checks, workflow tests, compiler tests,
-    material compiler architecture guard, and runenwerk_editor compile check.
-  ownership_mode: Enabling guardrail work over workspace workflow and engine render compiler structure.
-- id: WR-028
-  title: Perfectionist Material Lab Texture Views And Scene Material Binding
-  diagram_title: Material texture visibility
-  alias: MATVIS
-  lane: Product workflow
-  dependency_level: L3
-  gate: Perfectionist repair after WR-021 and WR-027
-  planning_state: completed
-  priority: P0
-  value: 5
-  blocker: 1
-  tc: 5
-  rr_oe: 5
-  du: 5
-  effort: 13
-  confidence: 0.8
-  expected_score: 1.2
-  rice: Make material authoring and assignment honestly visible, editable, and renderer-consumed.
-  kano: Basic
-  dependencies:
-  - WR-021
-  - WR-027
-  write_scopes:
-  - domain/ui/ui_graph_editor
-  - domain/editor/editor_shell
-  - domain/editor/editor_scene
-  - domain/material_graph
-  - domain/asset
-  - domain/texture
-  - apps/runenwerk_editor/src/material_lab
-  - apps/runenwerk_editor/src/runtime/viewport
-  - engine/src/plugins/render
-  - docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md
-  - docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/plan.md
-  - docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/closeout.md
-  validations:
-  - cargo test -p ui_graph_editor
-  - cargo test -p editor_shell material
-  - cargo test -p editor_scene material
-  - cargo test -p material_graph
-  - cargo test -p asset texture
-  - cargo test -p texture
-  - cargo test -p engine material_compiler
-  - cargo test -p engine generated_scene_wgsl_selects_material_from_hit_sdf_slot
-  - cargo test -p runenwerk_editor material
-  - cargo test -p runenwerk_editor texture_preview
-  - cargo test -p runenwerk_editor volume_texture_viewer
-  - cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots
-  - cargo check -p runenwerk_editor
-  - task docs:validate
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  next_evidence: WR-028 closeout and proof manifest now record source-backed MaterialGraphSourceFileV2 texture edits flowing
-    through lowering, product generation, shader/material-table identity changes, and preview/scene GPU captures. WR-029 still
-    owns model/mesh material binding.
-  current_decision: WR-028 is SDF-scoped and perfectionist-verified after repairing the source-to-GPU material graph proof and
-    graph canvas UX evidence. WR-021 remains runtime-proven history; WR-029 carries model/mesh material binding forward.
-  current_call: Completed for rich graph canvas UX, live texture views, editor-scene-owned SDF material assignments, generated
-    SDF scene material selection, renderer consumption, and source-backed GPU/manual proof evidence. Do not claim model/mesh
-    material binding.
-  main_blocker: None for WR-028 SDF scope. Model/mesh material binding remains a WR-029 gate.
-  first_move: Use the repaired closeout and proof manifest for audit; keep WR-029 separate for model/mesh source identity and
-    material-region ownership.
-  diagram_call:
-  - graph texture views
-  - scene material slots
-  - GPU proof required
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
-    required_status: active
-    applies_to: implementation
-    reason: Material Lab source truth and projection boundaries must stay aligned with the active design.
-  - kind: design
-    path: docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
-    required_status: active
-    applies_to: implementation
-    reason: Scene material assignment must preserve app-owned viewport scene extraction and renderer-consumed prepared packets.
-  ddd_owner: apps/runenwerk_editor material workflow with domain/material_graph, editor_scene, editor_shell, and engine render support
-  adr_requirement: Architecture governance required before implementation; ADR required if model/mesh material ownership, material
-    graph source truth, or renderer material ABI changes exceed the active designs.
-  fitness_function_requirement: Rich graph interaction tests, texture descriptor/residency tests, per-object material slot
-    consumption tests, renderer material bundle guards, and mandatory GPU pixel evidence.
-  ownership_mode: Stream-aligned material product repair over domain graph/material contracts and engine render prepared-data contracts.
-  completion_quality: perfectionist_verified
-  known_quality_gaps: []
-  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/closeout.md
 - id: WR-029
   title: Model Mesh Material Binding
   diagram_title: Model mesh materials
   alias: MESHMAT
   lane: Product workflow
   dependency_level: L3
-  gate: WR-028 handoff
-  planning_state: blocked_deferred
+  gate: After WR-030 model/mesh pixel proof
+  planning_state: ready_next
   priority: P1
   value: 4
   blocker: 3
@@ -1453,43 +460,581 @@ items:
   kano: Basic
   dependencies:
   - WR-028
+  - WR-030
   write_scopes:
+  - domain/asset
   - domain/editor/editor_scene
+  - domain/editor/editor_persistence
+  - domain/editor/editor_shell
+  - apps/runenwerk_editor/src/persistence/runtime.rs
+  - apps/runenwerk_editor/src/asset_pipeline
   - apps/runenwerk_editor/src/material_lab
-  - apps/runenwerk_editor/src/runtime/viewport
+  - apps/runenwerk_editor/src/runtime/resources.rs
+  - apps/runenwerk_editor/src/runtime/systems/frame_submit.rs
+  - apps/runenwerk_editor/src/runtime/systems/material_preview.rs
+  - apps/runenwerk_editor/src/shell/providers
   - engine/src/plugins/render
-  - docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
   - docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md
   validations:
+  - cargo test -p asset foreign_mesh
+  - cargo test -p asset foreign_reference_payload_carries_material_region_descriptors
+  - cargo test -p editor_scene model_mesh_material_assignment_survives_save_reload
+  - cargo test -p editor_scene model_mesh_material_table_identity_changes_when_assignment_changes
+  - cargo test -p editor_persistence model_mesh_material_assignment_rejects_transient_identity
+  - cargo test -p editor_shell material_graph_surface_routes_model_mesh_region_slot_assignment
+  - cargo test -p runenwerk_editor foreign_mesh
+  - cargo test -p runenwerk_editor model_mesh
+  - cargo test -p engine model_mesh_surface_material_selection
+  - cargo test -p engine material_pass_provenance_exposes_model_mesh_selection_table
+  - cargo test -p engine non_material_pass_provenance_keeps_model_mesh_selection_out_of_pass_scope
+  - cargo test -p runenwerk_editor model_mesh_renderable_uses_source_backed_material_slot
+  - cargo test -p runenwerk_editor model_mesh_material_selection_packet_reaches_material_feature_payload
+  - cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots
+  - cargo test -p runenwerk_editor material_graph_canvas_actions_are_epoch_guarded
   - task docs:validate
   - task roadmap:validate
   - task production:validate
   - task planning:validate
   - cargo check -p runenwerk_editor
-  next_evidence: Promote the WR-029 planning stub into an accepted implementation contract or ADR for model/mesh source identity,
-    submesh/material-region assignment, and renderer ABI extension.
-  current_decision: Split from WR-028 so SDF primitive material completion does not accidentally claim model/mesh support.
-  current_call: Do not implement until stable model/mesh renderable identity and submesh/material-region source ownership are
-    designed and accepted.
-  main_blocker: Needs accepted model/mesh material identity and renderer ABI contract.
-  why_not_ready: Model/mesh source identity, submesh/material-region assignment, and renderable_index ABI semantics are not yet accepted.
-  first_move: Start from docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md
-    and decide stable model/mesh material source identity before product code.
+  next_evidence: Phase 1-3 code evidence is accepted for model/mesh identity, persistence, workflow projection, prepared transport,
+    shader lane, and pass provenance. Next evidence must come from WR-030 visible Mesh Preview model/mesh pixel proof plus
+    refreshed WR-028 SDF non-regression.
+  current_decision: WR-029 is ready-next, not current, because Phase 4 depends on WR-030. Keep the accepted implementation
+    contract active and preserve the landed Phase 1-3 code evidence, but do not close model/mesh material binding without
+    source-backed visible pixel proof.
+  current_call: Ready-next only. Do not claim WR-029 complete until WR-030 produces visible source-backed model/mesh pixels
+    through a material-consuming pass, WR-028 SDF non-regression proof is refreshed, and closeout evidence names the consuming
+    renderer module.
+  main_blocker: WR-030 must prove visible model/mesh pixels from PreparedModelMeshMaterialSelection and the scene material
+    table before WR-029 can close.
+  why_not_ready: Model/mesh material binding has accepted/code-backed identity, persistence, workflow, prepared transport,
+    shader lane, and provenance evidence, but it is not closeable until WR-030 lands visible pixel proof and WR-028 SDF non-regression
+    evidence.
+  first_move: Finish WR-030 Mesh Preview material-consuming pass pixel proof, refresh WR-028 SDF non-regression, then promote
+    WR-029 for final closeout if model/mesh material pixels are proven.
   diagram_call:
-  - model mesh identity
-  - submesh material regions
-  - renderer ABI extension
+  - ready after WR-030
+  - model mesh material closeout
+  - SDF non-regression required
   decision_gates:
   - kind: design
     path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
     required_status: active
-    applies_to: discovery
+    applies_to: implementation
     reason: WR-029 must preserve WR-028 SDF boundaries while extending material binding to model/mesh renderables.
-  ddd_owner: future model/mesh material workflow owner with editor_scene and engine render support
-  adr_requirement: ADR or accepted implementation contract required before model/mesh material binding implementation.
-  fitness_function_requirement: Save/reload material-region assignments, renderer ABI tests, generated shader selection by model/mesh
-    material region, and GPU pixel proof.
-  ownership_mode: Deferred product workflow extension over model/mesh source identity and engine render material binding.
+  ddd_owner: editor_scene model/mesh material assignment owner with app material workflow and engine render support
+  adr_requirement: Accepted implementation contract is required before model/mesh material binding implementation; ADR required
+    if review changes source-truth ownership, dependency direction, or renderer ABI beyond the contract.
+  fitness_function_requirement: Save/reload material-region assignments, renderer ABI tests, generated shader selection by
+    model/mesh material region, and GPU pixel proof.
+  ownership_mode: Current product workflow implementation over model/mesh source identity and engine render material binding.
+- id: WR-030
+  title: Model Mesh Renderable Scene Contract
+  diagram_title: Model mesh renderable scene
+  alias: MESHRND
+  lane: Product workflow
+  dependency_level: L3
+  gate: Current Mesh Preview pixel proof
+  planning_state: current_candidate
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.0
+  rice: Provide the source-backed model/mesh preview surface required before WR-029 can honestly claim model/mesh material
+    pixels.
+  kano: Basic
+  dependencies:
+  - WR-028
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-030-model-mesh-renderable-scene-contract/plan.md
+  - docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+  - docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+  - domain/asset
+  - domain/editor/editor_scene
+  - domain/editor/editor_persistence
+  - domain/editor/editor_shell
+  - apps/runenwerk_editor/src/material_lab
+  - apps/runenwerk_editor/src/runtime/resources.rs
+  - apps/runenwerk_editor/src/runtime/systems/frame_submit.rs
+  - apps/runenwerk_editor/src/runtime/systems/material_preview.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - engine/src/plugins/render
+  validations:
+  - cargo test -p asset foreign_mesh
+  - cargo test -p runenwerk_editor model_mesh
+  - cargo test -p runenwerk_editor wr029_phase4_requires_real_model_mesh_renderable_contract_before_pixel_claim
+  - cargo test -p runenwerk_editor model_mesh_preview_packet_uses_source_backed_material_regions
+  - cargo test -p runenwerk_editor model_mesh_material_selection_packet_serializes_scene_product_uniform_regions
+  - cargo test -p runenwerk_editor model_mesh_material_selection_packet_reaches_material_feature_payload
+  - cargo test -p engine model_mesh_surface_material_selection
+  - cargo test -p engine model_mesh_renderable_surface_rejects_transient_identity
+  - cargo test -p engine model_mesh_preview_pass_provenance_exposes_selected_material_region
+  - cargo test -p engine generated_scene_wgsl_renders_model_mesh_regions_from_material_selection_lane
+  - cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots
+  - cargo check -p runenwerk_editor
+  - task docs:validate
+  - task roadmap:validate
+  - task planning:validate
+  next_evidence: 'Current candidate: prove the source-backed Mesh Preview material-consuming pass with changed visible model/mesh
+    pixels, selected material-region provenance, and refreshed WR-028 SDF non-regression evidence.'
+  current_decision: WR-030 is the current implementation row because the code-backed WR-029 Phase 1-3 material assignment
+    path still lacks the visible model/mesh pixel proof required before WR-029 can close.
+  current_call: 'Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must
+    resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance
+    and WR-028 SDF non-regression.'
+  first_move: Wire the app-owned Mesh Preview packet into an actual material-consuming render pass, capture GPU/manual pixel
+    evidence for a source-backed model/mesh material-region assignment change, and record the consuming pass evidence.
+  main_blocker: Needs visible Mesh Preview model/mesh pixels from the selected scene material table entry; descriptor/status
+    rows and SDF pixels are not sufficient proof.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - current model mesh pixel proof
+  - Mesh Preview material pass
+  - WR-029 closeout prerequisite
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-030-model-mesh-renderable-scene-contract/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-030 implementation must follow the accepted Mesh Preview product-surface contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Material Lab source truth and scene material assignment boundaries must stay explicit.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-030 must not accidentally expand the SDF-only authored scene contract into general mesh extraction.
+  ddd_owner: editor_scene authored renderable contract with app runtime extraction and engine render support
+  adr_requirement: No ADR for the Mesh Preview product surface while source ownership and dependency direction remain unchanged;
+    ADR required before general mesh scene extraction, renderer-owned scene truth, or broader renderer ABI semantics.
+  fitness_function_requirement: Source-backed Mesh Preview projection, material table selection, pass-consumption evidence,
+    full-editor and standalone-workbench surface coverage, SDF non-regression, and GPU/manual pixel proof.
+  ownership_mode: Stream-aligned Material Lab product workflow with enabling app-runtime and engine-render support.
+- id: WR-031
+  title: Workbench Clean-Break Governance And ADR
+  diagram_title: Workbench clean-break ADR
+  alias: WBCAPADR
+  lane: Platform foundation
+  dependency_level: L1
+  gate: Current governance gate
+  planning_state: current_candidate
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 3
+  confidence: 0.8
+  expected_score: 4.5
+  rice: Accept the breaking Workbench decision before deleting compatibility paths.
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/adr
+  - docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - task docs:validate
+  - task roadmap:validate
+  - task production:validate
+  - task planning:validate
+  next_evidence: Accepted ADR 0012 and roadmap/production records that explicitly approve dropping legacy Workbench persisted layout support.
+  current_decision: Run architecture governance and accept the breaking Workbench clean-break ADR before code removes legacy profile or persistence paths.
+  current_call: Implement the governance source records for PT-WB-CAP and make legacy compatibility removal an intentional platform decision.
+  first_move: Run architecture governance, accept ADR 0012, add PT-WB-CAP, and sequence WR-032 through WR-040.
+  main_blocker: Code removal without accepted decision evidence would violate the repository architecture workflow.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - clean-break ADR
+  - no legacy persistence support
+  ddd_owner: domain/editor/editor_shell with apps/runenwerk_editor Workbench host
+  adr_requirement: Accepted ADR 0012 is required and is the authority for dropping compatibility.
+  fitness_function_requirement: Architecture governance output, ADR acceptance, roadmap validation, production validation, planning validation, and docs validation.
+  ownership_mode: Enabling platform governance for stream-aligned Workbench implementation.
+- id: WR-032
+  title: Typed Suite, Surface, Profile, And Provider Handles
+  diagram_title: Typed Workbench handles
+  alias: WBCAPHANDLE
+  lane: Platform foundation
+  dependency_level: L1
+  gate: After WR-031 clean-break ADR
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: Add typed composition handles before removing old enum authority.
+  kano: Basic
+  dependencies:
+  - WR-031
+  write_scopes:
+  - domain/editor/editor_shell/src/tool_suite
+  - domain/editor/editor_shell/src/workspace
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  validations:
+  - cargo test -p editor_shell tool_suite
+  - cargo test -p editor_shell workspace_profile
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  next_evidence: SuiteRef, SurfaceRef, ProfileRef, ProviderBundle, WorkbenchCompositionBuilder, and ToolSuiteProfileDefinition with exact stable-key tests.
+  current_decision: Tool suites export typed handles; raw strings stay localized to declarations.
+  current_call: Replace ad hoc suite/profile/provider construction with typed composition handles and provider bundles.
+  main_blocker: WR-031 clean-break ADR and planning records must validate before code promotes typed handles into host presets.
+  first_move: Add handle types and builder contracts in editor_shell, then switch Workbench host presets to the builder.
+  diagram_call:
+  - typed handles
+  - provider bundle
+  ddd_owner: domain/editor/editor_shell tool_suite and workspace
+  adr_requirement: ADR 0012 governs the clean authority boundary.
+  fitness_function_requirement: Stable-key exactness tests, duplicate provider rejection, unknown provider-family rejection, and Workbench host construction tests.
+  ownership_mode: Complicated-subsystem platform foundation owned by editor shell.
+- id: WR-033
+  title: Remove Legacy Tool Surface Identity
+  diagram_title: Remove legacy identity
+  alias: WBCAPNOLEG
+  lane: Platform foundation
+  dependency_level: L1
+  gate: After WR-032 typed handles
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.2
+  rice: Delete ToolSurfaceKind as Workbench authority instead of preserving compatibility.
+  kano: Basic
+  dependencies:
+  - WR-032
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/surface_provider.rs
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/runtime/systems
+  validations:
+  - cargo test -p editor_shell tool_suite
+  - cargo test -p editor_shell workspace_profile
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo test -p runenwerk_editor material_lab_workbench
+  - cargo check -p runenwerk_editor
+  next_evidence: No Workbench code references ToolSurfaceKind, stable-key reverse mapping helpers, or legacy material/texture/diagnostics profile constructors.
+  current_decision: Remove ToolSurfaceKind as Workbench identity and do not introduce a replacement compatibility enum.
+  current_call: Delete legacy stable-key reverse mapping helpers and route Material Lab only through typed suite/profile/provider data.
+  main_blocker: WR-032 typed handles must land before removing legacy enum call sites.
+  first_move: Remove legacy fields from ToolSurfaceState, SurfaceProviderRequest, frame artifacts, create candidates, and shell commands.
+  diagram_call:
+  - no compatibility enum
+  - stable key authority
+  ddd_owner: domain/editor/editor_shell with apps/runenwerk_editor shell providers
+  adr_requirement: ADR 0012 is mandatory because this intentionally breaks persisted layouts.
+  fitness_function_requirement: Source guard rejecting ToolSurfaceKind in Workbench code plus focused provider/profile/Material Lab tests.
+  ownership_mode: Stream-aligned breaking cleanup with editor shell as owner.
+- id: WR-034
+  title: Registry-Backed Workspace Profiles
+  diagram_title: Registry-backed profiles
+  alias: WBCAPPROF
+  lane: Platform foundation
+  dependency_level: L1
+  gate: After WR-033 legacy identity removal
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.7
+  rice: Build workspace profiles only from installed suite/profile definitions.
+  kano: Basic
+  dependencies:
+  - WR-033
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace/profile.rs
+  - domain/editor/editor_shell/src/workspace/state.rs
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  validations:
+  - cargo test -p editor_shell workspace_profile
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  next_evidence: Central legacy default profile authority deleted and replaced by Workbench composition data.
+  current_decision: Installed suites and profile definitions own default workspace composition.
+  current_call: Make full editor and Material Lab profiles registry-backed rather than enum-backed.
+  main_blocker: WR-033 must remove legacy surface identity before profiles can become registry-only.
+  first_move: Move default surface lists into ToolSuiteProfileDefinition declarations and build profiles through WorkbenchCompositionBuilder.
+  diagram_call:
+  - profile declarations
+  - installed suites only
+  ddd_owner: domain/editor/editor_shell workspace profile
+  adr_requirement: ADR 0012 applies to profile compatibility removal.
+  fitness_function_requirement: Registry-backed profile tests for full editor and Material Lab workspace mounting.
+  ownership_mode: Complicated-subsystem profile foundation.
+- id: WR-035
+  title: Clean Persistence Format
+  diagram_title: Stable-only persistence
+  alias: WBCAPPERSIST
+  lane: Platform foundation
+  dependency_level: L1
+  gate: After WR-034 registry profiles
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.9
+  rice: Replace legacy workspace persistence with stable-key-only schema.
+  kano: Basic
+  dependencies:
+  - WR-034
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace/persisted.rs
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  validations:
+  - cargo test -p editor_shell workspace_profile
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  next_evidence: Old persisted layouts fail with unsupported-schema diagnostics and new stable-key-only layouts round trip.
+  current_decision: Old workspace files are unsupported, not migrated.
+  current_call: Remove persisted legacy surface-kind fields and compatibility loaders.
+  main_blocker: WR-034 registry-backed profiles must exist before persistence can reject old schemas safely.
+  first_move: Delete V1-V4 migration loaders and V5 legacy fallback fields, then add unsupported-schema tests.
+  diagram_call:
+  - stable-key persistence
+  - old schema unsupported
+  ddd_owner: domain/editor/editor_shell workspace persistence with app persistence adapter
+  adr_requirement: ADR 0012 is the breaking persistence decision.
+  fitness_function_requirement: Unsupported old schema diagnostic test and stable-key-only round-trip test.
+  ownership_mode: Stream-aligned persistence cleanup.
+- id: WR-036
+  title: Material Lab Clean Migration Proof
+  diagram_title: Material Lab clean proof
+  alias: WBCAPMAT
+  lane: Product workflow
+  dependency_level: L2
+  gate: After WR-035 clean persistence
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.7
+  rice: Prove Material Lab mounts through the clean Workbench model in both host modes.
+  kano: Basic
+  dependencies:
+  - WR-035
+  write_scopes:
+  - apps/runenwerk_editor/src/material_lab
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/providers
+  validations:
+  - cargo test -p runenwerk_editor material_lab_workbench
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  next_evidence: Material Lab full-editor and standalone Workbench tests resolve without legacy kind metadata.
+  current_decision: Material Lab is the proof surface for the clean registry foundation.
+  current_call: Mount graph, inspector, preview, texture, asset, diagnostics, and console surfaces through typed handles and provider bundles.
+  main_blocker: WR-035 clean persistence must be in place before Material Lab can prove no legacy metadata is required.
+  first_move: Add host-preset tests that inspect Material Lab mounted requests and provider resolution without legacy surface metadata.
+  diagram_call:
+  - Material Lab standalone
+  - no legacy route metadata
+  ddd_owner: apps/runenwerk_editor Material Lab with editor_shell Workbench contracts
+  adr_requirement: ADR 0012 applies to Material Lab route and persistence cleanup.
+  fitness_function_requirement: Material Lab surface resolution tests and full-editor/standalone Workbench host tests.
+  ownership_mode: Stream-aligned product workflow proof.
+- id: WR-037
+  title: Host Capability Policy
+  diagram_title: Host capability policy
+  alias: WBCAPPOLICY
+  lane: Platform policy
+  dependency_level: L2
+  gate: After WR-036 clean foundation proof
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.7
+  rice: Add host allow/deny policy for command, product, and resource capabilities.
+  kano: Basic
+  dependencies:
+  - WR-036
+  write_scopes:
+  - domain/editor/editor_shell/src/tool_suite
+  - apps/runenwerk_editor/src/shell
+  validations:
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  next_evidence: Constrained host denies a command capability before app/domain mutation.
+  current_decision: Providers propose; hosts allow or deny; domains still validate semantics.
+  current_call: Add CommandCapabilityKey, ProductCapabilityKey, ResourceCapabilityKey, and HostCapabilityPolicy.
+  main_blocker: WR-036 must prove clean Material Lab mounting before host policy becomes the next mutation gate.
+  first_move: Introduce capability keys and policy checks at the provider proposal dispatch boundary.
+  diagram_call:
+  - host policy gate
+  - command/product/resource keys
+  ddd_owner: domain/editor/editor_shell capability contracts with app shell dispatch
+  adr_requirement: ADR 0012 and the capability Workbench target design govern policy direction.
+  fitness_function_requirement: Denied command mutation test and policy allow/deny unit tests.
+  ownership_mode: Enabling platform policy.
+- id: WR-038
+  title: Product And Service Capability Declarations
+  diagram_title: Product and service plane
+  alias: WBCAPPLANE
+  lane: Platform policy
+  dependency_level: L2
+  gate: After WR-037 host policy
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.1
+  rice: Let suites declare product and service needs without moving semantics into editor_shell.
+  kano: Performance
+  dependencies:
+  - WR-037
+  write_scopes:
+  - domain/editor/editor_shell/src/tool_suite
+  - docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md
+  validations:
+  - cargo test -p editor_shell tool_suite
+  - task docs:validate
+  next_evidence: Product and service declaration design accepted enough for implementation without semantic ownership leakage.
+  current_decision: Product/service declarations stay declarative; product semantics stay in owning domains.
+  current_call: Design the product and service capability plane before code moves beyond keys and policy.
+  main_blocker: WR-037 host policy must exist before product and service declarations can be enforced.
+  first_move: Extend the active capability Workbench design with product/service declaration boundaries and validation examples.
+  diagram_call:
+  - product declarations
+  - service declarations
+  ddd_owner: editor_shell tool_suite contracts with owning product domains
+  adr_requirement: ADR required only if product semantic ownership or service process authority changes.
+  fitness_function_requirement: Design validation plus tool-suite declaration tests once implementation starts.
+  ownership_mode: Enabling platform design.
+- id: WR-039
+  title: Multi-Host Presets
+  diagram_title: Multi-host presets
+  alias: WBCAPHOST
+  lane: Platform host
+  dependency_level: L2
+  gate: After WR-037 host policy
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.6
+  rice: Full editor, Material Lab, headless validation, and constrained hosts share one clean model.
+  kano: Basic
+  dependencies:
+  - WR-037
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - domain/editor/editor_shell/src/tool_suite
+  validations:
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  next_evidence: Host presets differ only by suite/profile/provider bundle and capability policy.
+  current_decision: Host presets are Workbench composition data, not app forks or legacy route branches.
+  current_call: Define full editor, standalone Material Lab, headless validation, and constrained host presets from the same builder.
+  main_blocker: WR-037 host policy must land before constrained and headless presets can be meaningful.
+  first_move: Add preset constructors and tests proving the installed suites, profiles, providers, and policies are explicit.
+  diagram_call:
+  - full editor preset
+  - Material Lab preset
+  - constrained/headless presets
+  ddd_owner: apps/runenwerk_editor Workbench host with editor_shell composition contracts
+  adr_requirement: ADR 0012 blocks reintroducing legacy identity in host presets.
+  fitness_function_requirement: Workbench host preset tests for suite/profile/provider/policy composition.
+  ownership_mode: Stream-aligned app host implementation.
+- id: WR-040
+  title: External Component Sandbox Design
+  diagram_title: External sandbox design
+  alias: WBCAPSBOX
+  lane: Platform security
+  dependency_level: L3
+  gate: Policy deferred until sandbox/security design acceptance
+  planning_state: support_only
+  priority: P2
+  value: 3
+  blocker: 5
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.7
+  rice: Design-only row for future external components.
+  kano: Basic
+  dependencies:
+  - WR-037
+  - WR-038
+  write_scopes:
+  - docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Accepted sandbox/security design before any external dynamic component implementation.
+  current_decision: External components stay blocked until sandbox, package trust, permissions, unload/reload, and diagnostics are accepted.
+  current_call: Keep this as design-only future work.
+  main_blocker: No accepted sandbox/security design exists.
+  first_move: Draft external component threat model, trust boundary, process/ABI options, permissions, diagnostics, and rollback design.
+  diagram_call:
+  - external components blocked
+  - sandbox decision required
+  ddd_owner: workspace security/design with editor shell and app host input
+  adr_requirement: Accepted sandbox/security ADR or design required before implementation.
+  fitness_function_requirement: Docs and planning validation only until implementation is unblocked.
+  ownership_mode: Blocked platform security design.
 edges:
 - source: WR-002
   target: WR-001
@@ -1605,3 +1150,36 @@ edges:
 - source: WR-028
   target: WR-029
   label: model mesh material binding handoff
+- source: WR-028
+  target: WR-030
+  label: model mesh renderable proof prerequisite
+- source: WR-030
+  target: WR-029
+  label: model mesh pixel proof prerequisite
+- source: WR-031
+  target: WR-032
+  label: clean-break ADR before typed handles
+- source: WR-032
+  target: WR-033
+  label: typed handles before legacy deletion
+- source: WR-033
+  target: WR-034
+  label: legacy identity removed before registry profiles
+- source: WR-034
+  target: WR-035
+  label: registry profiles before persistence cleanup
+- source: WR-035
+  target: WR-036
+  label: clean persistence before Material Lab proof
+- source: WR-036
+  target: WR-037
+  label: clean foundation before host policy
+- source: WR-037
+  target: WR-038
+  label: policy before product and service plane
+- source: WR-037
+  target: WR-039
+  label: host policy before multi-host presets
+- source: WR-038
+  target: WR-040
+  label: product and service plane before external sandbox

@@ -63,7 +63,9 @@ tracks:
         known_quality_gaps:
           - PM-SDF-OW-001 is completed as a bounded product-spine milestone; linked WR rows are not all perfectionist_verified.
           - WR-028 closes the visible Material Lab SDF primitive follow-up; WR-029 remains open for model/mesh material binding.
-          - Model/mesh source identity, submesh/material-region assignment, and renderable_index ABI semantics are not yet accepted.
+          - Model/mesh source identity, submesh/material-region assignment, prepared transport, shader lane, and pass provenance
+            are accepted/code-backed through WR-029 Phase 1-3, but WR-030 still owns visible model/mesh pixel proof before
+            WR-029 can close.
         completion_audit: ""
       - id: PM-SDF-OW-002
         title: Open world substrate design
@@ -251,3 +253,121 @@ tracks:
         acceptance_criteria:
           - A player can move through an SDF field, observe day/night, affect vegetation, approach prefabs, see water/wetness, encounter enemies, and inspect diagnostics.
           - LOD, freshness, fallback, residency, and product-lineage diagnostics are stable enough for continued production.
+  - id: PT-WB-CAP
+    title: Capability Workbench Platform
+    state: active
+    owner: editor
+    strategic_goal: Replace legacy Workbench tool-surface compatibility with a registry-owned capability platform that can host the full editor, standalone Material Lab, constrained hosts, and headless validation through one typed composition model.
+    success_criteria:
+      - Workbench identity, profile construction, provider requests, and persistence use typed suite/profile/provider declarations and stable surface keys only.
+      - Material Lab mounts in full-editor and standalone hosts without legacy tool-surface metadata.
+      - Host command, product, and resource policy is enforced before provider proposals mutate app or domain state.
+      - External dynamic components remain blocked until sandbox and security design is accepted.
+    milestones:
+      - id: PM-WB-CAP-001
+        title: Clean Registry-Owned Workbench Foundation
+        kind: implementation
+        state: active
+        goal: Remove legacy tool-surface identity and replace it with typed suite, profile, provider, and registry-backed workspace composition.
+        outcome: Workbench state, profiles, providers, persistence, and Material Lab routes are stable-key-only with no compatibility enum or V5 legacy fallback metadata.
+        dependencies: []
+        roadmap_links:
+          - WR-031
+          - WR-032
+          - WR-033
+          - WR-034
+          - WR-035
+          - WR-036
+        design_gates:
+          - kind: adr
+            path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
+            required_status: accepted
+            reason: The clean break intentionally drops legacy persisted workspace support.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
+            required_status: active
+            reason: The registry-owned Workbench implementation must follow the active tool-suite host design.
+        evidence_gates: []
+        acceptance_criteria:
+          - ToolSurfaceKind is removed from Workbench identity, profile construction, provider requests, persisted layout authority, and Material Lab routing.
+          - Old persisted workspace schemas fail with a clear unsupported-schema diagnostic.
+          - Full-editor and standalone Material Lab profiles mount from registry-backed composition data.
+      - id: PM-WB-CAP-002
+        title: Host Capability Policy
+        kind: implementation
+        state: ready_next
+        goal: Add host allow/deny policy for command, product, and resource capabilities after the clean registry foundation exists.
+        outcome: Provider proposals pass through host policy before app or domain mutation.
+        dependencies:
+          - PM-WB-CAP-001
+        roadmap_links:
+          - WR-037
+        design_gates:
+          - kind: adr
+            path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
+            required_status: accepted
+            reason: Host policy depends on registry-owned identity and stable declarations.
+        evidence_gates: []
+        acceptance_criteria:
+          - Constrained hosts can deny command capabilities before app/domain mutation.
+          - Product and resource capability keys are declared separately from provider UI routes.
+      - id: PM-WB-CAP-003
+        title: Product And Service Capability Plane
+        kind: design
+        state: ready_next
+        goal: Add product and service capability declarations without moving product semantics into editor_shell.
+        outcome: Suites declare product and service needs while domains keep semantic validation authority.
+        dependencies:
+          - PM-WB-CAP-001
+          - PM-WB-CAP-002
+        roadmap_links:
+          - WR-038
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md
+            required_status: active
+            reason: Product and service planes must preserve host policy and domain-owned truth.
+        evidence_gates: []
+        acceptance_criteria:
+          - Product and service needs are declarative Workbench capability data.
+          - Product semantics stay in owning domains and formed product contracts.
+      - id: PM-WB-CAP-004
+        title: Multi-Host Workbench Modes
+        kind: implementation
+        state: ready_next
+        goal: Define full editor, standalone Material Lab, headless validation, and constrained host presets from the same clean Workbench model.
+        outcome: Hosts differ by suite/profile/provider bundle and policy, not by forked app-specific compatibility paths.
+        dependencies:
+          - PM-WB-CAP-001
+          - PM-WB-CAP-002
+        roadmap_links:
+          - WR-039
+        design_gates:
+          - kind: adr
+            path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
+            required_status: accepted
+            reason: Multi-host modes must not restore legacy surface-kind identity.
+        evidence_gates: []
+        acceptance_criteria:
+          - Full editor and Material Lab host presets are built from the same composition builder.
+          - Headless and constrained presets deny unsupported capabilities rather than hiding legacy routes.
+      - id: PM-WB-CAP-005
+        title: External Component Readiness
+        kind: design
+        state: blocked
+        goal: Keep external dynamic components blocked until sandboxing, package trust, permissions, unload/reload, and security are accepted.
+        outcome: Future external component work has a design-only row and cannot bypass host policy.
+        dependencies:
+          - PM-WB-CAP-002
+          - PM-WB-CAP-003
+        roadmap_links:
+          - WR-040
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md
+            required_status: active
+            reason: External readiness must follow the capability Workbench target architecture.
+        evidence_gates: []
+        acceptance_criteria:
+          - No external dynamic component implementation lands before sandbox/security acceptance.
+          - The design names trust boundaries, permissions, process/ABI options, diagnostics, and rollback behavior.

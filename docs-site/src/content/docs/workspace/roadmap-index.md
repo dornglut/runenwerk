@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-20
 ---
 
 # Workspace Roadmap Index
@@ -25,8 +25,11 @@ Operational execution checklist:
 - [workspace/production-track-index.md](./production-track-index.md)
 - [workspace/production-milestone-register.md](./production-milestone-register.md)
 - [workspace/roadmap-items.yaml](./roadmap-items.yaml)
+- [workspace/roadmap-archive.yaml](./roadmap-archive.yaml)
+- [workspace/roadmap-deferred.yaml](./roadmap-deferred.yaml)
 - [workspace/schemas/production-tracks.schema.json](./schemas/production-tracks.schema.json)
 - [workspace/schemas/roadmap-items.schema.json](./schemas/roadmap-items.schema.json)
+- [workspace/schemas/roadmap-item-source.schema.json](./schemas/roadmap-item-source.schema.json)
 - [workspace/schemas/batch-manifest.schema.json](./schemas/batch-manifest.schema.json)
 - [workspace/diagrams/production-track-roadmap.puml](./diagrams/production-track-roadmap.puml)
 - [workspace/diagrams/codex-roadmap-orchestration-target.puml](./diagrams/codex-roadmap-orchestration-target.puml)
@@ -57,8 +60,12 @@ Operational execution checklist:
   - [workspace/production-track-index.md](./production-track-index.md)
 - Generated production milestone register:
   - [workspace/production-milestone-register.md](./production-milestone-register.md)
-- Structured workspace roadmap source:
+- Active workspace roadmap source:
   - [workspace/roadmap-items.yaml](./roadmap-items.yaml)
+- Completed workspace roadmap archive:
+  - [workspace/roadmap-archive.yaml](./roadmap-archive.yaml)
+- Deferred workspace roadmap backlog:
+  - [workspace/roadmap-deferred.yaml](./roadmap-deferred.yaml)
 - Workspace roadmap scorecard and decision register:
   - [workspace/roadmap-decision-register.md](./roadmap-decision-register.md)
 - Documentation governance cleanup closeout:
@@ -138,26 +145,23 @@ Operational execution checklist:
 
 ## Current Focus
 
-- No current implementation candidate is selected by this closeout.
-- `WR-018` rendered-world V1 is completed evidence: editor SDF primitive
-  rendering and CPU/GPU picking share one extracted viewport scene packet.
-- `WR-020` source-backed asset core is completed evidence: project catalog
-  descriptors, importer-aware source descriptors, deterministic import plans,
-  dependency graph contracts, diagnostics, ratification, and prior-valid
-  artifact preservation live in `domain/asset`.
-- `WR-026` editor adapters remain downstream and must not start until the
-  domain-owned source/catalog contracts are selected for adapter consumption in
-  a separate roadmap slice.
-- `WR-025` is completed evidence for the named Interaction V2 retained-slice
-  catalog: menu stack, scroll ownership, menu sizing, chrome slots,
-  dock/drop-zones, and status/viewport arbitration.
-- `WR-024` is ready-next after `WR-025`: keep viewport statistics, popup
-  contrast, scrollable popup content, submenu anchoring, close affordances, and
-  active indicators as retained-UI implementation slices that consume the
-  landed Interaction V2 contracts.
-- `WR-007` is completed evidence; the next net implementation phase is Phase 4
-  standard ECS component extraction and apply, and it should not start until it
-  is selected as a fresh roadmap slice.
+- `WR-030` is the current implementation candidate. Its first move is the Mesh
+  Preview material-consuming pass and visible source-backed model/mesh pixel
+  proof required before the model/mesh material lane can close.
+- `WR-029` is ready-next after the Mesh Preview proof. Phase 1-3 are accepted
+  and code-backed for source identity, material-region assignment, prepared
+  transport, shader lane, and pass provenance, but Phase 4 still needs
+  `WR-030` pixel proof plus `WR-028` SDF non-regression evidence.
+- `WR-024` remains ready-next after the landed Interaction V2 baselines: keep
+  viewport statistics, popup contrast, scrollable popup content, submenu
+  anchoring, close affordances, and active indicators as retained-UI
+  implementation slices.
+- Completed WR baselines are preserved in
+  [`roadmap-archive.yaml`](./roadmap-archive.yaml); only direct active
+  dependencies appear in generated active roadmap views as baseline context.
+- Deferred policy gates are preserved in
+  [`roadmap-deferred.yaml`](./roadmap-deferred.yaml) and should re-enter active
+  execution only through accepted intake or promotion evidence.
 - Use the roadmap decision register to compare same-gate, same-level candidates;
   blocker gates and owning roadmap order still win before score.
 - Keep editor/UI cross-doc sequencing aligned with shipped behavior while the

@@ -93,6 +93,8 @@ def batch_manifest_errors(path: Path, manifest: BatchManifest) -> list[str]:
     errors: list[str] = []
     finalized = manifest.integration_status in {"merged", "integrated"} and manifest.closeout_status == "completed"
     for item in manifest.items:
+        if item.prompt_path and not (REPO_ROOT / item.prompt_path).exists():
+            errors.append(f"{repo_path(path)}:{item.id}: prompt_path does not exist: {item.prompt_path}")
         if item.worktree and item.worktree_cleanup:
             errors.append(f"{repo_path(path)}:{item.id}: records both worktree and cleanup state")
         if item.worktree:

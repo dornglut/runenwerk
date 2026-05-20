@@ -24,6 +24,7 @@ Use these templates when a task benefits from a repeatable instruction shape but
 - [Commit Organization](./commit-organization.md)
 - [Crate Design](./crate-design.md)
 - [Documentation Refactor](./docs-refactor.md)
+- [Goal Execution](./goal-execution.md)
 - [Implementation Batch](./implementation-batch.md)
 - [New Design Intake](./new-design-intake.md)
 - [Parallel Roadmap Batch](./parallel-roadmap-batch.md)

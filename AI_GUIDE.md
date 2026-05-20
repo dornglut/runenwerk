@@ -19,11 +19,15 @@ For new Codex threads, use the one-line repo workflow commands first:
 ```text
 Run task batch:kickoff -- --next and follow the generated workflow.
 Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+Run task ai:goal -- --track "<PT-ID>" and use the generated /goal coordinator prompt for full production-track work.
 ```
 
 Use `task batch:kickoff -- --next` for existing roadmap implementation work.
 Use `task roadmap:intake` for new designs or change ideas that need roadmap
 review before implementation.
+Use `task ai:goal -- --track <PT-ID>` only for production-track coordination;
+it must still execute one legal milestone or WR slice at a time and must not
+bypass production or roadmap gates.
 
 Read the relevant root docs:
 
@@ -58,6 +62,7 @@ task batch:kickoff -- --next
 task roadmap:validate
 task batch:propose -- --goal "<batch goal>" --scope "L0"
 task ai:parallel-roadmap-batch -- --task "<batch goal>" --scope "<WR rows or roadmap docs>"
+task ai:goal -- --track "<PT-ID>"
 ```
 
 Roadmap rows are structured in

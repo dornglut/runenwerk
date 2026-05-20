@@ -10,6 +10,8 @@ related:
   - ../production-track-planning-model.md
   - ../production-tracks.yaml
   - ../roadmap-items.yaml
+  - ../roadmap-archive.yaml
+  - ../roadmap-deferred.yaml
 ---
 
 # Production Implementation Contract
@@ -120,8 +122,8 @@ completion quality:
 The closeout plan must name:
 
 - the exact audit path, when perfectionist verification is intended;
-- any known quality gaps that must stay visible in `roadmap-items.yaml` or
-  `production-tracks.yaml`;
+- any known quality gaps that must stay visible in the active roadmap source,
+  roadmap archive/deferred sources, or `production-tracks.yaml`;
 - the anti-drift guard tests that prevent descriptor-only, prepared-data-only,
   status-panel-only, fallback-only, pseudo, or unconsumed-contract completion
   claims;

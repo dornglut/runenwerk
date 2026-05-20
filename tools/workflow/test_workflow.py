@@ -45,12 +45,20 @@ from production_plan import (
     resolve_plan_context,
     write_contract_scaffold,
 )
+from production_goal import (
+    GoalScope,
+    app as production_goal_app,
+    build_goal_steps,
+    find_track,
+    render_track_goal,
+)
 from roadmap_state import (
     REPO_ROOT,
     BatchManifest,
     RoadmapState,
     WorkflowError,
     changed_files_for_worktree,
+    combine_roadmap_data,
     document_frontmatter_status,
     load_batch_manifest,
     load_roadmap,
@@ -63,9 +71,11 @@ from roadmap_state import (
     validate_completion_quality,
     validate_changed_paths,
     validate_existing_write_scope_paths,
+    validate_roadmap_with_json_schema,
     validate_write_scopes,
     write_schema_files,
 )
+from ai_task import build_shapes
 from repo_hygiene import batch_manifest_errors, local_branches
 from roadmap_intake import (
     apply_intake_proposal,
@@ -519,7 +529,7 @@ def test_production_plan_unknown_wr_fails(tmp_path: Path) -> None:
     write_yaml(production_path, valid_production_state())
     write_yaml(roadmap_path, valid_state())
 
-    with pytest.raises(WorkflowError, match="not present in roadmap source"):
+    with pytest.raises(WorkflowError, match="not present in combined roadmap sources"):
         resolve_plan_context("PM-TEST-001", "WR-999", production_source=production_path, roadmap_source=roadmap_path)
 
 
@@ -581,6 +591,162 @@ def test_default_contract_path_uses_wr_id_and_title_slug() -> None:
     assert repo_path(default_contract_path(context.roadmap_item)).endswith(
         "docs-site/src/content/docs/reports/implementation-plans/wr-001-wr-001-title/plan.md"
     )
+
+
+def test_production_goal_unknown_track_fails(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-MISSING",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "PT-MISSING: not present in production tracks source" in result.stdout
+
+
+def test_production_goal_renders_active_track_with_wr_links() -> None:
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track)
+
+    assert "Production Track /goal Kickoff: PT-TEST" in rendered
+    assert "PM-TEST-001 - PM-TEST-001 title" in rendered
+    assert "WR-001 WR-001 title: write_implementation_contract" in rendered
+    assert "cargo test -p test" in rendered
+    assert "tools/workflow" in rendered
+    assert "Ready-to-paste /goal Prompt" in rendered
+
+
+def test_production_goal_full_scope_keeps_complete_track_prompt() -> None:
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track)
+
+    assert "/goal Complete production track PT-TEST - Test production track." in rendered
+    assert "The production track is complete only when every milestone is completed" in rendered
+
+
+def test_production_goal_completed_milestone_renders_evidence_verification() -> None:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["state"] = "completed"
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track)
+
+    assert "- Next legal action: verify_completed_evidence" in rendered
+    assert "completed production milestones must include evidence gates" in rendered
+
+
+def test_production_goal_designing_milestone_renders_design_first() -> None:
+    production_data = valid_production_state()
+    milestone = production_data["tracks"][0]["milestones"][0]
+    milestone["kind"] = "design"
+    milestone["state"] = "designing"
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    steps = build_goal_steps(planning, roadmap, track)
+
+    assert steps[0].next_action == "write_or_accept_design_before_implementation"
+
+
+def test_production_goal_active_milestone_uses_wr_action_classification() -> None:
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    steps = build_goal_steps(planning, roadmap, track)
+
+    assert steps[0].roadmap_actions[0].action == "write_implementation_contract"
+    assert steps[0].next_action == "execute_next_wr_implementation_contract"
+
+
+def test_production_goal_non_deferred_scope_preserves_blocked_milestones() -> None:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"].append(
+        production_milestone(
+            "PM-TEST-003",
+            kind="design",
+            state="blocked",
+            dependencies=["PM-TEST-002"],
+        )
+    )
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track, scope=GoalScope.non_deferred)
+
+    assert "/goal Complete the non-deferred scope of production track PT-TEST - Test production track." in rendered
+    assert "Do not implement blocked or deferred milestones; preserve them as explicit deferred gaps." in rendered
+    assert "Preserved out-of-scope milestones:" in rendered
+    assert "- PM-TEST-003: blocked - PM-TEST-003 title" in rendered
+    assert "- Bounded goal scope: preserved out of scope; do not implement for `--scope non-deferred`." in rendered
+    assert "- PM-TEST-003: wait_for_dependency_completion (preserved out of scope: blocked)" in rendered
+    assert "PM-TEST-003: state is 'blocked', expected 'completed'" not in rendered
+
+
+def test_production_goal_invalid_scope_fails(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-TEST",
+            "--scope",
+            "sideways",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "invalid" in result.output.lower()
+
+
+def test_production_goal_completion_prompt_includes_render_validate_check_gates() -> None:
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track)
+
+    assert "task production:render" in rendered
+    assert "task production:validate" in rendered
+    assert "task production:check" in rendered
+    assert "task roadmap:render" in rendered
+    assert "task roadmap:validate" in rendered
+    assert "task roadmap:check" in rendered
+
+
+def test_ai_task_list_includes_goal_shape() -> None:
+    assert "goal" in build_shapes()
 
 
 def test_document_frontmatter_status_handles_crlf(tmp_path: Path) -> None:
@@ -651,29 +817,113 @@ def test_render_check_can_detect_stale_files() -> None:
 
 def test_generated_roadmap_diagrams_separate_dependency_truth_from_candidates() -> None:
     state = valid_state()
-    state["items"][0]["planning_state"] = "completed"
-    state["items"][1]["blocker"] = 2
-    state["items"][1]["gate"] = "Ready next"
-    state["items"][1]["planning_state"] = "current_candidate"
-    roadmap = RoadmapState.model_validate(state)
+    active_item = item(
+        "WR-002",
+        blocker=2,
+        dependencies=["WR-001"],
+        write_scopes=["docs-site"],
+    )
+    active_item["gate"] = "Ready next"
+    state["items"] = [active_item]
+    state["edges"] = [{"source": "WR-001", "target": "WR-002", "label": "depends"}]
+    archived = {
+        "version": state["version"],
+        "roadmap": state["roadmap"],
+        "items": [item("WR-001", planning_state="completed", dependencies=[], write_scopes=["tools/workflow"])],
+    }
+    roadmap = RoadmapState.model_validate(
+        combine_roadmap_data(
+            state,
+            archive_data=archived,
+            deferred_data={"version": state["version"], "roadmap": state["roadmap"], "items": []},
+        )
+    )
 
     dependency = render_dependency_roadmap(roadmap)
     candidates = render_current_candidates_roadmap(roadmap)
 
-    assert "Level 0 - Completed / Support Substrate" in dependency
+    assert "Level 0 - Support Substrate" in dependency
     assert "Parallel" + " Now" not in dependency
-    assert "state=completed" in dependency
+    assert "state=completed" not in dependency
+    assert "WR-001" not in dependency
     assert "Current Implementation Candidates" in candidates
     assert "state=current_candidate" in candidates
-    assert "state=completed" in candidates
+    assert "state=completed" not in candidates
+    assert "Immediate Dependency Context" not in candidates
+    assert "WR-001" not in candidates
 
 
 def test_schema_generation_check_detects_missing_files() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        from roadmap_state import BATCH_SCHEMA, ROADMAP_SCHEMA
+        from roadmap_state import BATCH_SCHEMA, ROADMAP_ITEM_SOURCE_SCHEMA, ROADMAP_SCHEMA
 
         assert ROADMAP_SCHEMA.name == "roadmap-items.schema.json"
+        assert ROADMAP_ITEM_SOURCE_SCHEMA.name == "roadmap-item-source.schema.json"
         assert BATCH_SCHEMA.name == "batch-manifest.schema.json"
+
+
+def test_split_roadmap_sources_combine_active_archive_and_deferred_rows() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        state = valid_state()
+        state["items"] = [
+            item("WR-030", dependencies=["WR-001"], write_scopes=["tools/workflow"]),
+        ]
+        state["edges"] = [{"source": "WR-001", "target": "WR-030", "label": "baseline"}]
+        archive = {
+            "version": state["version"],
+            "roadmap": state["roadmap"],
+            "items": [item("WR-001", planning_state="completed", blocker=1, dependencies=[])],
+        }
+        deferred = {
+            "version": state["version"],
+            "roadmap": state["roadmap"],
+            "items": [item("WR-011", planning_state="blocked_deferred", blocker=5, dependencies=[])],
+        }
+        source = root / "roadmap-items.yaml"
+        source.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+        (root / "roadmap-archive.yaml").write_text(yaml.safe_dump(archive, sort_keys=False), encoding="utf-8")
+        (root / "roadmap-deferred.yaml").write_text(yaml.safe_dump(deferred, sort_keys=False), encoding="utf-8")
+
+        roadmap = load_roadmap(source)
+        validate_roadmap_with_json_schema(source)
+
+        assert [item.id for item in roadmap.active_items] == ["WR-030"]
+        assert [item.id for item in roadmap.archived_items] == ["WR-001"]
+        assert [item.id for item in roadmap.deferred_items] == ["WR-011"]
+        assert sorted(roadmap.by_id) == ["WR-001", "WR-011", "WR-030"]
+
+
+def test_split_roadmap_sources_reject_completed_or_deferred_active_rows() -> None:
+    state = valid_state()
+    state["items"][0]["planning_state"] = "completed"
+    combined = combine_roadmap_data(
+        state,
+        archive_data={"version": state["version"], "roadmap": state["roadmap"], "items": []},
+        deferred_data={"version": state["version"], "roadmap": state["roadmap"], "items": []},
+    )
+
+    with pytest.raises(ValueError, match="active roadmap source must not contain completed items"):
+        RoadmapState.model_validate(combined)
+
+
+def test_split_roadmap_sources_reject_wrong_archive_or_deferred_states() -> None:
+    state = valid_state()
+    state["items"] = [item("WR-030", dependencies=[])]
+    state["edges"] = []
+    archive = {
+        "version": state["version"],
+        "roadmap": state["roadmap"],
+        "items": [item("WR-001", planning_state="ready_next", blocker=2, dependencies=[])],
+    }
+    combined = combine_roadmap_data(
+        state,
+        archive_data=archive,
+        deferred_data={"version": state["version"], "roadmap": state["roadmap"], "items": []},
+    )
+
+    with pytest.raises(ValueError, match="archive source items must be completed"):
+        RoadmapState.model_validate(combined)
 
 
 def test_batch_manifest_and_worker_prompt() -> None:
@@ -708,6 +958,18 @@ def test_batch_kickoff_defaults_to_current_candidates() -> None:
         "task batch:scope-check -- --batch reports/batch-test/batch.toml",
         "task batch:finalize -- --batch reports/batch-test/batch.toml --target main --write --cleanup",
     ]
+
+
+def test_current_repository_next_batch_selects_wr030_not_wr029() -> None:
+    roadmap = load_roadmap()
+    selected = select_batch_candidates(roadmap)
+    dependency_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml").read_text(encoding="utf-8")
+    candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
+
+    assert [item.id for item in selected] == ["WR-030"]
+    assert roadmap.by_id["WR-029"].planning_state == "ready_next"
+    assert "state=completed" not in dependency_puml
+    assert "state=completed" not in candidates_puml
 
 
 def test_batch_kickoff_writes_manifest_from_cli() -> None:
@@ -1236,7 +1498,9 @@ def test_hygiene_rejects_finalized_manifest_with_stale_worktree() -> None:
         [roadmap.items[0]],
         Path("docs-site/src/content/docs/reports/batches/batch-test"),
     )
-    item_with_stale_worktree = manifest.items[0].model_copy(update={"worktree": "worker"})
+    item_with_stale_worktree = manifest.items[0].model_copy(
+        update={"worktree": "worker", "prompt_path": "docs-site/src/content/docs/workspace/roadmap-index.md"}
+    )
     finalized = manifest.model_copy(
         update={"integration_status": "merged", "closeout_status": "completed", "items": [item_with_stale_worktree]}
     )
@@ -1244,6 +1508,23 @@ def test_hygiene_rejects_finalized_manifest_with_stale_worktree() -> None:
     assert batch_manifest_errors(Path("reports/batch-test/batch.toml"), finalized) == [
         "reports/batch-test/batch.toml:WR-001: finalized batch still records active worktree "
         + str((REPO_ROOT / "worker")).replace("\\", "/")
+    ]
+
+
+def test_hygiene_rejects_missing_batch_prompt_path() -> None:
+    roadmap = RoadmapState.model_validate(valid_state())
+    manifest = build_manifest(
+        "batch-test",
+        "test",
+        [roadmap.items[0]],
+        Path("docs-site/src/content/docs/reports/batches/batch-test"),
+    )
+    item_with_missing_prompt = manifest.items[0].model_copy(update={"prompt_path": "docs-site/src/content/docs/reports/batches/missing/prompts/wr-001.md"})
+    manifest = manifest.model_copy(update={"items": [item_with_missing_prompt]})
+
+    assert batch_manifest_errors(Path("reports/batch-test/batch.toml"), manifest) == [
+        "reports/batch-test/batch.toml:WR-001: prompt_path does not exist: "
+        "docs-site/src/content/docs/reports/batches/missing/prompts/wr-001.md"
     ]
 
 

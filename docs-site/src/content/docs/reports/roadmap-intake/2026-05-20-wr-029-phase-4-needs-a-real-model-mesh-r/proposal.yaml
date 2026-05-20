@@ -1,0 +1,59 @@
+version: 1
+idea: 'WR-029 Phase 4 needs a real model/mesh renderable scene contract before GPU pixel proof: current editor viewport scene
+  persistence and extraction only own SDF primitives, while the rendered-world design explicitly excludes general mesh scene
+  extraction. Add an implementation candidate for source-backed foreign mesh renderable fixture or Mesh Preview surface that
+  carries SceneModelMeshMaterialRegionSourceId through app runtime into an actual material-consuming render pass, then use
+  that pass for WR-029 visible pixel proof without weakening WR-028 SDF.'
+source_path: ''
+owner: ''
+created_at: '2026-05-20'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-030
+  title: Model Mesh Renderable Scene Contract
+  diagram_title: Model mesh renderable scene
+  alias: MESHRND
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes: []
+  validations: []
+  next_evidence: Review whether WR-030 should become the prerequisite renderable-scene slice for WR-029 Phase 4 GPU pixel proof.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep WR-029 Phase 4 open until a real source-backed model/mesh renderable path, not an SDF or status-panel proxy, exists.
+  first_move: Run architecture governance review, then decide whether the first implementation surface is an authored foreign-mesh renderable fixture or a Mesh Preview product surface.
+  main_blocker: The active viewport scene contract persists and extracts SDF primitives only, and the rendered-world design explicitly excludes general mesh scene extraction.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, dependency review, or validation scoping.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - source-backed model mesh renderable
+  - material-consuming pass
+  - pixel proof prerequisite
+  decision_gates: []
+  ddd_owner: editor_scene authored renderable contract with app runtime extraction and engine render support
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define source-backed renderable fixture, material table selection, pass-consumption evidence, and GPU pixel proof before promotion.
+  ownership_mode: Blocked intake for WR-029 Phase 4 prerequisite.
+edges: []

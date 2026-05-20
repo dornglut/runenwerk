@@ -105,9 +105,12 @@ For approved concurrent roadmap work, use the parallel roadmap batch routine.
 The coordinator must first propose candidate roadmap rows, disjoint write
 scopes, worker prompts, validation, and closeout docs, then wait for explicit
 user approval before spawning or coordinating workers.
-Use `docs-site/src/content/docs/workspace/roadmap-items.yaml` as the structured
-roadmap source and `task roadmap:render` to update
-generated roadmap tables and PUML after roadmap evidence changes.
+Use `docs-site/src/content/docs/workspace/roadmap-items.yaml` as the active
+roadmap execution source. Completed rows live in
+`docs-site/src/content/docs/workspace/roadmap-archive.yaml`, deferred rows live
+in `docs-site/src/content/docs/workspace/roadmap-deferred.yaml`, and
+`task roadmap:render` updates generated roadmap tables and PUML after roadmap
+evidence changes.
 Use `docs-site/src/content/docs/workspace/production-tracks.yaml` as the
 structured long-term production planning source. Production tracks guide
 sequencing and outcome selection; the WR roadmap still governs implementation

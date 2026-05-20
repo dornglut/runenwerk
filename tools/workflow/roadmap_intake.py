@@ -28,11 +28,13 @@ from roadmap_state import (
     RoadmapState,
     StrictModel,
     WorkflowError,
+    combine_roadmap_data,
     decision_gate_errors,
     load_roadmap,
     load_yaml,
     normalize_repo_path,
     repo_path,
+    split_source_paths,
     validate_existing_write_scope_paths,
     validate_puml_files,
     validate_write_scopes,
@@ -248,31 +250,60 @@ def load_intake_proposal(path: Path) -> RoadmapIntakeProposal:
 
 def apply_intake_proposal(proposal_path: Path, *, source: Path = ROADMAP_SOURCE, skip_checks: bool = False) -> RoadmapState:
     proposal = load_intake_proposal(proposal_path)
-    data = load_yaml(source)
-    updated_data = roadmap_data_with_proposal(data, proposal)
+    active_data, archive_data, deferred_data = load_split_data_for_write(source)
+    proposal_update = roadmap_data_with_proposal(
+        active_data,
+        proposal,
+        archive_data=archive_data,
+        deferred_data=deferred_data,
+    )
+    if isinstance(proposal_update, tuple):
+        updated_data, updated_archive_data, updated_deferred_data = proposal_update
+    else:
+        updated_data, updated_archive_data, updated_deferred_data = proposal_update, None, None
     try:
-        roadmap = RoadmapState.model_validate(updated_data)
+        roadmap = RoadmapState.model_validate(
+            combine_roadmap_data(
+                updated_data,
+                source,
+                archive_data=updated_archive_data,
+                deferred_data=updated_deferred_data,
+            )
+        )
     except ValueError as error:
         raise WorkflowError(str(error)) from error
     errors = validate_intake_item_scopes(proposal.item)
     if errors:
         raise WorkflowError("\n".join(errors))
     write_roadmap_data(source, updated_data)
+    archive_path, deferred_path = split_source_paths(source)
+    if updated_archive_data is not None:
+        write_roadmap_data(archive_path, updated_archive_data)
+    if updated_deferred_data is not None:
+        write_roadmap_data(deferred_path, updated_deferred_data)
     render_and_check(roadmap, skip_checks=skip_checks)
     return roadmap
 
 
-def roadmap_data_with_proposal(data: dict, proposal: RoadmapIntakeProposal) -> dict:
+def roadmap_data_with_proposal(
+    data: dict,
+    proposal: RoadmapIntakeProposal,
+    *,
+    archive_data: dict | None = None,
+    deferred_data: dict | None = None,
+) -> dict | tuple[dict, dict | None, dict | None]:
     item_data = proposal.item.model_dump(mode="json", exclude={"score"})
-    items = list(data.get("items", []))
-    replaced = False
-    for index, existing in enumerate(items):
-        if existing.get("id") == proposal.item.id:
-            items[index] = item_data
-            replaced = True
-            break
-    if not replaced:
-        items.append(item_data)
+    target_data = source_data_for_planning_state(
+        proposal.item.planning_state,
+        active_data=data,
+        archive_data=archive_data,
+        deferred_data=deferred_data,
+    )
+
+    for source_data in (data, archive_data, deferred_data):
+        if source_data is not None:
+            source_data["items"] = [item for item in source_data.get("items", []) if item.get("id") != proposal.item.id]
+    target_data["items"] = [*list(target_data.get("items", [])), item_data]
 
     edges = list(data.get("edges", []))
     existing_edges = {(edge.get("source"), edge.get("target")) for edge in edges}
@@ -283,10 +314,25 @@ def roadmap_data_with_proposal(data: dict, proposal: RoadmapIntakeProposal) -> d
             existing_edges.add(key)
 
     updated = dict(data)
-    updated["items"] = items
     updated["edges"] = edges
     updated["roadmap"] = {**updated.get("roadmap", {}), "last_reviewed": dt.date.today().isoformat()}
-    return updated
+    if archive_data is None and deferred_data is None:
+        return updated
+    return updated, archive_data, deferred_data
+
+
+def source_data_for_planning_state(
+    state: PlanningState,
+    *,
+    active_data: dict,
+    archive_data: dict | None,
+    deferred_data: dict | None,
+) -> dict:
+    if state == "completed":
+        return archive_data if archive_data is not None else active_data
+    if state == "blocked_deferred":
+        return deferred_data if deferred_data is not None else active_data
+    return active_data
 
 
 def validate_intake_item_scopes(item: RoadmapItem) -> list[str]:
@@ -305,10 +351,17 @@ def promote_roadmap_item(
         raise WorkflowError("roadmap item id must match WR-000")
     if not evidence.strip():
         raise WorkflowError("promotion evidence is required")
-    data = load_yaml(source)
-    updated_data = roadmap_data_with_promotion(data, item_id=item_id, state=state, evidence=evidence.strip())
+    data, archive_data, deferred_data = load_split_data_for_write(source)
+    roadmap_before = RoadmapState.model_validate(combine_roadmap_data(data, source))
+    updated_data = roadmap_data_with_promotion(
+        data,
+        item_id=item_id,
+        state=state,
+        evidence=evidence.strip(),
+        roadmap=roadmap_before,
+    )
     try:
-        roadmap = RoadmapState.model_validate(updated_data)
+        roadmap = RoadmapState.model_validate(combine_roadmap_data(updated_data, source))
     except ValueError as error:
         raise WorkflowError(str(error)) from error
     conflicts = validate_write_scopes([item for item in roadmap.items if item.can_enter_implementation_batch])
@@ -322,12 +375,24 @@ def promote_roadmap_item(
     return roadmap
 
 
-def roadmap_data_with_promotion(data: dict, *, item_id: str, state: PlanningState, evidence: str) -> dict:
+def roadmap_data_with_promotion(
+    data: dict,
+    *,
+    item_id: str,
+    state: PlanningState,
+    evidence: str,
+    roadmap: RoadmapState | None = None,
+) -> dict:
     items = list(data.get("items", []))
-    by_id = {item.get("id"): item for item in items}
-    if item_id not in by_id:
-        raise WorkflowError(f"{item_id}: not present in roadmap source")
-    target = dict(by_id[item_id])
+    active_by_id = {item.get("id"): item for item in items}
+    if item_id not in active_by_id:
+        raise WorkflowError(f"{item_id}: not present in active roadmap source")
+    by_id = (
+        {item.id: item for item in roadmap.items}
+        if roadmap is not None
+        else {existing_id: RoadmapItem.model_validate(item) for existing_id, item in active_by_id.items()}
+    )
+    target = dict(active_by_id[item_id])
     if state == "current_candidate":
         blocker = int(target.get("blocker", 5))
         if blocker > 2:
@@ -335,7 +400,8 @@ def roadmap_data_with_promotion(data: dict, *, item_id: str, state: PlanningStat
         invalid_dependencies = [
             dependency
             for dependency in target.get("dependencies", [])
-            if by_id.get(dependency, {}).get("planning_state") not in {"completed", "support_only"}
+            if (by_id.get(dependency).planning_state if by_id.get(dependency) is not None else None)
+            not in {"completed", "support_only"}
         ]
         if invalid_dependencies:
             raise WorkflowError(
@@ -364,6 +430,14 @@ def roadmap_data_with_promotion(data: dict, *, item_id: str, state: PlanningStat
 
 def write_roadmap_data(source: Path, data: dict) -> None:
     source.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=False, width=120), encoding="utf-8", newline="\n")
+
+
+def load_split_data_for_write(source: Path) -> tuple[dict, dict | None, dict | None]:
+    active_data = load_yaml(source)
+    archive_path, deferred_path = split_source_paths(source)
+    archive_data = load_yaml(archive_path) if archive_path.exists() else None
+    deferred_data = load_yaml(deferred_path) if deferred_path.exists() else None
+    return active_data, archive_data, deferred_data
 
 
 def render_and_check(roadmap: RoadmapState, *, skip_checks: bool = False) -> None:

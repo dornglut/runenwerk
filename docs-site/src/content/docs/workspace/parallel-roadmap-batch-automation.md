@@ -9,7 +9,10 @@ last_reviewed: 2026-05-14
 related:
   - ./planning-and-implementation-workflow.md
   - ./roadmap-items.yaml
+  - ./roadmap-archive.yaml
+  - ./roadmap-deferred.yaml
   - ./schemas/roadmap-items.schema.json
+  - ./schemas/roadmap-item-source.schema.json
   - ./schemas/batch-manifest.schema.json
   - ./roadmap-decision-register.md
   - ./design-implementation-triage.md
@@ -55,12 +58,15 @@ workflow automation, worker/subagent execution, validation, and closeout docs.
 
 Use these sources in order:
 
-1. [roadmap-items.yaml](./roadmap-items.yaml)
+1. [roadmap-items.yaml](./roadmap-items.yaml), the active execution source
 2. [roadmap-decision-register.md](./roadmap-decision-register.md)
 3. [design-implementation-triage.md](./design-implementation-triage.md)
 4. [repo-execution-priority-checklist.md](./repo-execution-priority-checklist.md)
 5. owning app, domain, engine, or net roadmaps;
-6. current code truth and validation state.
+6. [roadmap-archive.yaml](./roadmap-archive.yaml) and
+   [roadmap-deferred.yaml](./roadmap-deferred.yaml) when validating historical
+   dependencies, production links, or evidence gates;
+7. current code truth and validation state.
 
 New designs enter the same system through architecture governance review first.
 Until the design has an accepted owner, dependency level, gate, value/blocker

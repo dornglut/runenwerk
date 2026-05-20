@@ -1,0 +1,242 @@
+version: 1
+roadmap:
+  title: Runenwerk Value-Weighted Dependency Roadmap Deferred Backlog
+  last_reviewed: '2026-05-20'
+  owner: workspace
+items:
+- id: WR-011
+  title: Gameplay Graph ATR IR and ECS lowering
+  diagram_title: Gameplay Graph ATR IR
+  alias: GAMEPLAY
+  lane: Contract
+  dependency_level: L2
+  gate: Domain contract gate
+  planning_state: blocked_deferred
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.3
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-001
+  - WR-007
+  - WR-012
+  write_scopes:
+  - domain/gameplay
+  - domain/ecs
+  validations:
+  - cargo test -p ecs
+  next_evidence: domain/gameplay event, action, state, quest, authority, and lowering contracts.
+  current_decision: Blocked until narrower gameplay contracts exist.
+  why_not_ready: Missing domain/gameplay/events, domain/gameplay/actions, domain/gameplay/state, and domain/gameplay/quests;
+    SDF physics relation readiness and authority diagnostics also need owning contracts.
+  diagram_call:
+  - first compiler and ECS lowering
+  - after gameplay contracts
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Gameplay graph lowering requires accepted gameplay contract ownership before implementation.
+  ddd_owner: future domain/gameplay
+  adr_requirement: ADR or accepted design required before implementation.
+  fitness_function_requirement: Dependency-direction and gameplay lowering fitness functions required.
+  ownership_mode: Complicated subsystem not yet owned.
+- id: WR-013
+  title: Scripting and runtime gameplay bridge
+  diagram_title: Scripting/runtime bridge
+  alias: SCRIPTING
+  lane: Contract
+  dependency_level: L3
+  gate: Domain contract gate
+  planning_state: blocked_deferred
+  priority: P2
+  value: 3
+  blocker: 4
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.3
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-011
+  write_scopes:
+  - engine
+  - domain/gameplay
+  - adapters
+  validations:
+  - cargo check --workspace
+  next_evidence: Language-neutral runtime boundary and formed gameplay products.
+  current_decision: Rhai can be first adapter only after the domain contract exists.
+  why_not_ready: It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai
+    can be the first adapter only after the domain contract exists.
+  diagram_call:
+  - language-neutral contract,
+  - first adapter later
+  ddd_owner: future gameplay runtime boundary
+  adr_requirement: ADR required for scripting runtime boundary.
+  fitness_function_requirement: Adapter boundary and dependency-direction fitness functions required.
+  ownership_mode: Platform/enabling work after domain contract.
+- id: WR-014
+  title: Particles, physics, animation, and world-process product tracks
+  diagram_title: Particles / physics / animation / world processes
+  alias: M6FUTURE
+  lane: Contract
+  dependency_level: L3
+  gate: Product contract gate
+  planning_state: blocked_deferred
+  priority: P3
+  value: 3
+  blocker: 4
+  tc: 1
+  rr_oe: 3
+  du: 3
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-001
+  write_scopes:
+  - domain
+  - engine
+  validations:
+  - cargo check --workspace
+  next_evidence: Owning domain docs and formed product contracts.
+  current_decision: Follow product-job, query snapshot, and publication substrate maturity.
+  why_not_ready: Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query
+    snapshot/publication barrier substrate.
+  diagram_call:
+  - formed product contracts
+  - and product substrate first
+  ddd_owner: unassigned future product domains
+  adr_requirement: Accepted design or ADR required per product track.
+  fitness_function_requirement: Product boundary and dependency-direction checks required.
+  ownership_mode: Discovery until domain owners exist.
+- id: WR-015
+  title: SDF character, vegetation, atmosphere, water, VFX, and influence AI drafts
+  diagram_title: Remaining SDF detail drafts
+  alias: SDFDETAIL
+  lane: Deferred
+  dependency_level: L4
+  gate: Policy deferred
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 2
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Exciter
+  dependencies:
+  - WR-014
+  write_scopes:
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  next_evidence: Active design, ADR, or roadmap promotion. SDF prefab composition has moved to WR-022 and is no longer part
+    of this deferred bucket.
+  current_decision: Keep remaining deferred drafts until product ownership and handoff contracts are promoted.
+  why_not_ready: These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership,
+    renderer/runtime handoff, query policy, and authority contracts are promoted.
+  diagram_call:
+  - character, vegetation,
+  - atmosphere, water, VFX, AI
+  ddd_owner: deferred SDF product domains
+  adr_requirement: Promotion requires accepted design or ADR.
+  fitness_function_requirement: Docs lifecycle checks before implementation.
+  ownership_mode: Deferred discovery.
+- id: WR-016
+  title: Compiled-reactive UI and ECS-driven UI execution strategies
+  diagram_title: Alternate UI execution
+  alias: UIALT
+  lane: Deferred
+  dependency_level: L4
+  gate: Policy deferred
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.1
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-004
+  - WR-025
+  write_scopes:
+  - domain/ui
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target, formation
+    product, invalidation/debug model, command boundary, and guard suite.
+  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract layer
+    for retained UI first, not permission to implement alternate execution.
+  why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new
+    active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts.
+  diagram_call:
+  - compiled-reactive or ECS-driven
+  - only after ADR/design promotion
+  ddd_owner: domain/ui
+  adr_requirement: Accepted ADR required to change UI execution default after Interaction V2 contracts exist.
+  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and Interaction
+    V2 contract consumption checks required before implementation.
+  ownership_mode: Deferred architecture exploration.
+- id: WR-017
+  title: Gameplay actions, powers, runtime, and power editor
+  diagram_title: Gameplay powers/actions
+  alias: POWERS
+  lane: Deferred
+  dependency_level: L4
+  gate: Policy deferred
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 2
+  effort: 13
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Exciter
+  dependencies:
+  - WR-011
+  write_scopes:
+  - domain/gameplay
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/design/deferred
+  validations:
+  - task docs:validate
+  next_evidence: Narrower gameplay graph and domain contract sequence.
+  current_decision: Keep deferred behind gameplay contract work.
+  why_not_ready: These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and
+    domain contract sequence.
+  diagram_call:
+  - runtime and editor power authoring
+  - after narrower gameplay contracts
+  ddd_owner: future domain/gameplay with editor product support
+  adr_requirement: Accepted gameplay design/ADR required before implementation.
+  fitness_function_requirement: Gameplay dependency-direction and editor boundary checks required.
+  ownership_mode: Deferred stream-aligned product work.

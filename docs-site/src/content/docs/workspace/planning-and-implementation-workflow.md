@@ -35,6 +35,8 @@ task --list
 task batch:kickoff -- --next
 task roadmap:intake -- --idea "<design or change idea>"
 task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
+task ai:goal -- --track "<PT-ID>"
+task ai:goal -- --track "<PT-ID>" --scope non-deferred
 task production:validate
 task production:check
 task ai:architecture-governance -- --task "<decision>" --scope "<crate/files/subsystem>"
@@ -60,9 +62,10 @@ Validation commands execute checks:
 
 - `task docs:validate` runs the repository docs validation.
 - `task ci:local` runs the full local host validation pipeline.
-- `task roadmap:validate` checks `roadmap-items.yaml` score math,
-  dependencies, gates, write-scope overlap, completion evidence, and
-  completion-quality claims.
+- `task roadmap:validate` checks the active `roadmap-items.yaml` source plus
+  `roadmap-archive.yaml` and `roadmap-deferred.yaml` for score math,
+  dependencies, split-source ownership, gates, write-scope overlap, completion
+  evidence, and completion-quality claims.
 - `task roadmap:check` rejects stale generated roadmap Markdown
   and PUML.
 - `task production:validate` checks `production-tracks.yaml` structure,
@@ -73,6 +76,10 @@ Validation commands execute checks:
 - `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` prints a
   readiness report and reusable implementation-contract prompt for one
   production milestone and WR row.
+- `task ai:goal -- --track <PT-ID>` prints a production-track scoped Codex
+  `/goal` coordinator prompt. Add `--scope non-deferred` when blocked or
+  deferred milestones should remain explicit out-of-scope gaps. It is read-only
+  and must coordinate one legal milestone or WR slice at a time.
 - `task planning:validate` runs the roadmap, production, and docs planning
   gates together.
 - `task puml:validate` validates workspace PlantUML diagrams with PlantUML.
@@ -102,13 +109,21 @@ Run task planning:validate before changing production or roadmap planning state.
 Run task production:plan -- --milestone PM-SDF-OW-001 --roadmap WR-019 before writing a substantial production implementation contract.
 ```
 
+```text
+Run task ai:goal -- --track PT-SDF-OW to generate a full production-track /goal coordinator prompt.
+```
+
+```text
+Run task ai:goal -- --track PT-WB-CAP --scope non-deferred to generate a bounded production-track /goal coordinator prompt.
+```
+
 `batch:kickoff` creates the proposed batch from current `planning_state=current_candidate`
 items and prints the exact approve, prepare, validate, worker prompt, scope-check,
 and closeout commands. It does not approve implementation unless `--approve` is
 explicitly passed.
 
-`roadmap:intake` creates a review proposal for new ideas. It does not edit
-`roadmap-items.yaml`; accepted proposals are applied with
+`roadmap:intake` creates a review proposal for new ideas. It does not edit the
+roadmap YAML sources; accepted proposals are applied with
 `task roadmap:apply-intake -- --proposal <proposal.yaml>`, then rendered and
 validated.
 
@@ -134,6 +149,17 @@ and that path must be included in the row's `write_scopes`. They must also set
 `completion_quality`, list any `known_quality_gaps`, and only claim
 `perfectionist_verified` when a completed audit path exists and the gap list is
 empty.
+
+For full product-track persistence, use `task ai:goal -- --track <PT-ID>` to
+generate the coordinator prompt. For bounded track execution that must keep
+blocked or deferred milestones out of scope, use
+`task ai:goal -- --track <PT-ID> --scope non-deferred`. The generated `/goal`
+must follow the finite milestone list in `production-tracks.yaml`, use linked
+WR rows from the active roadmap source, stop at unmet design or evidence gates,
+and rerun after each bounded milestone or WR slice. A production track may only
+be completed after every milestone has completed evidence, linked WR rows
+satisfy completion-quality rules across active, archive, and deferred roadmap
+sources, and production plus roadmap render/validate/check gates pass.
 
 Use workflow commands to automate Codex prompt, checklist, and gate setup, not
 blind mutation. A typical architecture-sensitive flow is:

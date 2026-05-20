@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+  component "WR-030 Model mesh renderable scene\nstate=current_candidate\nscore=1.0 V4 B2\ncall=current model mesh pixel proof\nMesh Preview material pass\nWR-029 closeout prerequisite" as MESHRND <<candidate>>
 
 }
 

@@ -51,6 +51,19 @@ package "PT-SDF-OW SDF-first open-world playable vertical" {
 
 }
 
+package "PT-WB-CAP Capability Workbench Platform" {
+  component "PM-WB-CAP-001 Clean Registry-Owned Workbench Foundation\nkind=implementation\nstate=active\nWR=WR-031, WR-032, WR-033, WR-034, WR-035, WR-036" as PM_WB_CAP_001 <<active>>
+
+  component "PM-WB-CAP-002 Host Capability Policy\nkind=implementation\nstate=ready_next\nWR=WR-037" as PM_WB_CAP_002 <<ready_next>>
+
+  component "PM-WB-CAP-003 Product And Service Capability Plane\nkind=design\nstate=ready_next\nWR=WR-038" as PM_WB_CAP_003 <<ready_next>>
+
+  component "PM-WB-CAP-004 Multi-Host Workbench Modes\nkind=implementation\nstate=ready_next\nWR=WR-039" as PM_WB_CAP_004 <<ready_next>>
+
+  component "PM-WB-CAP-005 External Component Readiness\nkind=design\nstate=blocked\nWR=WR-040" as PM_WB_CAP_005 <<blocked>>
+
+}
+
 PM_SDF_OW_001 -down-> PM_SDF_OW_002 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_003 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_004 : production prerequisite
@@ -64,5 +77,12 @@ PM_SDF_OW_006 -down-> PM_SDF_OW_008 : production prerequisite
 PM_SDF_OW_005 -down-> PM_SDF_OW_009 : production prerequisite
 PM_SDF_OW_007 -down-> PM_SDF_OW_009 : production prerequisite
 PM_SDF_OW_008 -down-> PM_SDF_OW_009 : production prerequisite
+PM_WB_CAP_001 -down-> PM_WB_CAP_002 : production prerequisite
+PM_WB_CAP_001 -down-> PM_WB_CAP_003 : production prerequisite
+PM_WB_CAP_002 -down-> PM_WB_CAP_003 : production prerequisite
+PM_WB_CAP_001 -down-> PM_WB_CAP_004 : production prerequisite
+PM_WB_CAP_002 -down-> PM_WB_CAP_004 : production prerequisite
+PM_WB_CAP_002 -down-> PM_WB_CAP_005 : production prerequisite
+PM_WB_CAP_003 -down-> PM_WB_CAP_005 : production prerequisite
 
 @enduml

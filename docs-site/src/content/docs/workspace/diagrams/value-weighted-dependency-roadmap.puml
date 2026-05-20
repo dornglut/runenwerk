@@ -18,9 +18,6 @@ skinparam component {
   BorderColor<<V2>> #666666
   BackgroundColor<<V1>> #F5F5F5
   BorderColor<<V1>> #999999
-  BackgroundColor<<completed>> #EEEEEE
-  BorderColor<<completed>> #666666
-  FontColor<<completed>> #666666
   BackgroundColor<<support_only>> #F4F4F4
   BorderColor<<support_only>> #777777
   FontColor<<support_only>> #666666
@@ -35,7 +32,8 @@ legend right
   Downward edge = dependency or sequencing gate
   Scores rank comparable work only.
   Gate and dependency level win before score.
-  Completed and support-only nodes are context, not batch candidates.
+  Archive and deferred rows live in separate registers.
+  Support-only nodes remain active context, not batch candidates.
 
   <b>Value Weight</b>
   <#FFDCDC> V5 = unlocks current focus or many downstream tracks
@@ -52,9 +50,7 @@ legend right
   B5 = policy-deferred blocker
 endlegend
 
-package "Level 0 - Completed / Support Substrate" {
-  component "WR-001 Post-Phase 6D product-job / Draw bridge\nstate=completed\nscore=4.8 gate=continue next slice\nV5 B2\ncall=DRF3 bridge landed\nWR-006 GPU proof complete" as DRAWNEXT <<completed>>
-
+package "Level 0 - Support Substrate" {
   component "WR-002 ECS/runtime support\nstate=support_only\nscore=2.7 gate=supporting now\nV4 B2\ncall=F2 lifecycle and\nF3 plan reporting" as ECSRUNTIME <<support_only>>
 
   component "WR-003 Render contract follow-ups\nstate=support_only\nscore=2.4 gate=supporting now\nV4 B2\ncall=product selection and\nruntime-derived residency only" as RENDER <<support_only>>
@@ -63,105 +59,66 @@ package "Level 0 - Completed / Support Substrate" {
 
   component "WR-005 Design lifecycle cleanup\nstate=support_only\nscore=4.0 gate=docs now\nV3 B1\ncall=implemented lifecycle promoted\nstrict docs validation" as DOCS <<support_only>>
 
-  component "WR-012 Neutral graph substrate\nstate=completed\nscore=1.8 gate=completed\nV3 B2\ncall=graph substrate accepted\nsemantic meaning stays domain-owned" as SEMGRAPH <<completed>>
-
 }
 
-package "Level 1 - Depends On Current Stabilization" {
-  component "WR-006 Draw DRF4-DRF5\nstate=completed\nscore=2.2 gate=completed\nV4 B2\ncall=GPU proof landed\nGPU promotion, CPU fallback landed" as DRAW <<completed>>
-
-  component "WR-007 Net replication Phase 1-3\nstate=completed\nscore=1.4 gate=completed\nV4 B2\ncall=ACK hardening complete\nbridge convergence complete" as NET <<completed>>
-
+package "Level 1 - Near-Term Productization" {
   component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
-
-  component "WR-018 Rendered World V1\nstate=completed\nscore=3.0 gate=completed\nV5 B2\ncall=multi-entity SDF packet\nrender/picking consistency" as RENDERWORLD <<completed>>
-
-  component "WR-020 Source-backed Asset Core\nstate=completed\nscore=1.9 gate=completed\nV5 B2\ncall=deterministic import\ndomain-owned asset truth" as ASSETCORE <<completed>>
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
-  component "WR-025 UI Runtime V2 interaction formation\nstate=completed\nscore=4.8 gate=accepted architecture gate\nV5 B2\ncall=retained UI first\nnamed interaction slices" as UIV2 <<completed>>
+  component "WR-031 Workbench clean-break ADR\nstate=current_candidate\nscore=4.5 gate=current governance gate\nV4 B3\ncall=clean-break ADR\nno legacy persistence support" as WBCAPADR <<V4>>
 
-  component "WR-027 Completion quality gate\nstate=completed\nscore=3.0 gate=completed\nV5 B1\ncall=completion quality visible\ncompiler structure repaired" as QUALITY <<completed>>
+  component "WR-032 Typed Workbench handles\nstate=ready_next\nscore=2.7 gate=after wr-031 clean-break adr\nV4 B3\ncall=typed handles\nprovider bundle" as WBCAPHANDLE <<V4>>
+
+  component "WR-033 Remove legacy identity\nstate=ready_next\nscore=1.2 gate=after wr-032 typed handles\nV4 B3\ncall=no compatibility enum\nstable key authority" as WBCAPNOLEG <<V4>>
+
+  component "WR-034 Registry-backed profiles\nstate=ready_next\nscore=1.7 gate=after wr-033 legacy identity removal\nV4 B3\ncall=profile declarations\ninstalled suites only" as WBCAPPROF <<V4>>
+
+  component "WR-035 Stable-only persistence\nstate=ready_next\nscore=1.9 gate=after wr-034 registry profiles\nV4 B3\ncall=stable-key persistence\nold schema unsupported" as WBCAPPERSIST <<V4>>
 
 }
 
-package "Level 2 - Productization / Contract-Gated" {
+package "Level 2 - Contract-Gated Productization" {
   component "WR-009 Native multi-window editor\nstate=ready_next\nscore=0.7 gate=runtime gate\nV3 B3\ncall=window-scoped runtime,\ninput, UI frame, swapchain" as WINDOW <<V3>>
 
   component "WR-010 Render fragments R10\nstate=ready_next\nscore=0.7 gate=product priority gate\nV3 B3\ncall=fragment assets, merge,\nhot reload, inspection" as FRAGMENTS <<V3>>
 
-  component "WR-011 Gameplay Graph ATR IR\nstate=blocked_deferred\nscore=0.3 gate=domain contract gate\nV4 B4\ncall=first compiler and ECS lowering\nafter gameplay contracts" as GAMEPLAY <<V4>>
+  component "WR-036 Material Lab clean proof\nstate=ready_next\nscore=1.7 gate=after wr-035 clean persistence\nV4 B3\ncall=Material Lab standalone\nno legacy route metadata" as WBCAPMAT <<V4>>
 
-  component "WR-019 Field Visualizer workflow\nstate=completed\nscore=2.4 gate=after rendered-world v1\nV4 B2\ncall=product-backed field debug\nno parallel viewer path" as FIELDVIS <<completed>>
+  component "WR-037 Host capability policy\nstate=ready_next\nscore=1.7 gate=after wr-036 clean foundation proof\nV4 B3\ncall=host policy gate\ncommand/product/resource keys" as WBCAPPOLICY <<V4>>
 
-  component "WR-026 Asset editor adapters\nstate=completed\nscore=2.4 gate=after asset core contracts\nV4 B2\ncall=editor adapter wiring\nprior-valid artifacts" as ASSETADAPT <<completed>>
+  component "WR-038 Product and service plane\nstate=ready_next\nscore=1.1 gate=after wr-037 host policy\nV4 B2\ncall=product declarations\nservice declarations" as WBCAPPLANE <<V4>>
+
+  component "WR-039 Multi-host presets\nstate=ready_next\nscore=1.6 gate=after wr-037 host policy\nV4 B3\ncall=full editor preset\nMaterial Lab preset\nconstrained/headless presets" as WBCAPHOST <<V4>>
 
 }
 
-package "Level 3 - Downstream Domain Tracks" {
-  component "WR-013 Scripting/runtime bridge\nstate=blocked_deferred\nscore=0.3 gate=domain contract gate\nV3 B4\ncall=language-neutral contract,\nfirst adapter later" as SCRIPTING <<V3>>
-
-  component "WR-014 Particles / physics / animation / world processes\nstate=blocked_deferred\nscore=0.2 gate=product contract gate\nV3 B4\ncall=formed product contracts\nand product substrate first" as M6FUTURE <<V3>>
-
-  component "WR-021 Material Lab\nstate=completed\nscore=0.9 gate=after rendered-world v1 and field visualizer\nV4 B2\ncall=source-backed material graph\npreview product handoff" as MATLAB <<completed>>
-
+package "Level 3 - Active Domain Tracks" {
   component "WR-022 SDF Prefab V2\nstate=ready_next\nscore=0.8 gate=v2 gated\nV4 B3\ncall=active design now\nruntime instancing V2" as PREFABV2 <<V4>>
 
   component "WR-023 ECS Parallel Execution\nstate=ready_next\nscore=0.5 gate=design first\nV3 B2\ncall=ECS remains serial now\ndeterministic parallel design" as ECSPAR <<V3>>
 
-  component "WR-028 Material texture visibility\nstate=completed\nscore=1.2 gate=perfectionist repair after wr-021 and wr-027\nV5 B1\ncall=graph texture views\nscene material slots\nGPU proof required" as MATVIS <<completed>>
+  component "WR-029 Model mesh materials\nstate=ready_next\nscore=1.1 gate=after wr-030 model/mesh pixel proof\nV4 B3\ncall=ready after WR-030\nmodel mesh material closeout\nSDF non-regression required" as MESHMAT <<V4>>
 
-  component "WR-029 Model mesh materials\nstate=blocked_deferred\nscore=1.1 gate=wr-028 handoff\nV4 B3\ncall=model mesh identity\nsubmesh material regions\nrenderer ABI extension" as MESHMAT <<V4>>
+  component "WR-030 Model mesh renderable scene\nstate=current_candidate\nscore=1.0 gate=current mesh preview pixel proof\nV4 B2\ncall=current model mesh pixel proof\nMesh Preview material pass\nWR-029 closeout prerequisite" as MESHRND <<V4>>
 
-}
-
-package "Level 4 - Deferred Policy Tracks" {
-  component "WR-015 Remaining SDF detail drafts\nstate=blocked_deferred\nscore=0.2 gate=policy deferred\nV2 B5\ncall=character, vegetation,\natmosphere, water, VFX, AI" as SDFDETAIL <<V2>>
-
-  component "WR-016 Alternate UI execution\nstate=blocked_deferred\nscore=0.1 gate=policy deferred\nV2 B5\ncall=compiled-reactive or ECS-driven\nonly after ADR/design promotion" as UIALT <<V2>>
-
-  component "WR-017 Gameplay powers/actions\nstate=blocked_deferred\nscore=0.2 gate=policy deferred\nV2 B5\ncall=runtime and editor power authoring\nafter narrower gameplay contracts" as POWERS <<V2>>
+  component "WR-040 External sandbox design\nstate=support_only\nscore=0.7 gate=policy deferred until sandbox/security design acceptance\nV3 B5\ncall=external components blocked\nsandbox decision required" as WBCAPSBOX <<support_only>>
 
 }
 
-ECSRUNTIME -down-> DRAWNEXT : product-job substrate
-RENDER -down-> DRAWNEXT : product consumers only
-UIGUARDS -down-> DRAWNEXT : surface/projection safety
-DOCS -down-> DRAWNEXT : roadmap alignment
-DRAWNEXT -down-> DRAW : post-DRF3 sequence
-RENDER -down-> DRAW : product-surface APIs
-DRAW -down-> TABLET : production input acceptance
-DRAWNEXT -down-> NET : product authority context
-NET -down-> GAMEPLAY : replication metadata / authority
-DRAWNEXT -down-> GAMEPLAY : formed products first
-SEMGRAPH -down-> GAMEPLAY : graph policy specialization
-GAMEPLAY -down-> SCRIPTING : formed gameplay products first
-DRAWNEXT -down-> M6FUTURE : shared product substrate
-M6FUTURE -down-> SDFDETAIL : product family contracts
 RENDER -down-> WINDOW : render surface foundation
 RENDER -down-> FRAGMENTS : aliases / invocations / inspection
-GAMEPLAY -down-> POWERS : narrower gameplay contracts
-UIGUARDS -down-> UIALT : retained UI path remains default
-UIV2 -down-> UIALT : formed interaction contracts first
-RENDER -down-> RENDERWORLD : render product-surface support
-UIGUARDS -down-> RENDERWORLD : editor projection guards
-RENDERWORLD -down-> FIELDVIS : viewport packet/product handoff
-RENDER -down-> FIELDVIS : product target selection
-RENDERWORLD -down-> ASSETCORE : source identity for rendered products
-ASSETCORE -down-> ASSETADAPT : domain asset contracts before app adapters
-RENDERWORLD -down-> MATLAB : preview render handoff
-FIELDVIS -down-> MATLAB : debug product controls
-ASSETADAPT -down-> MATLAB : material document adapter identity
-RENDERWORLD -down-> PREFABV2 : prefab render foundation
-ASSETADAPT -down-> PREFABV2 : prefab source adapter identity
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
-UIGUARDS -down-> UIV2 : UI guard substrate
-UIV2 -down-> SHELLPOLISH : interaction contract spine
-MATLAB -down-> QUALITY : quality gate after runtime proof
-MATLAB -down-> MATVIS : material visibility and binding repair
-QUALITY -down-> MATVIS : perfectionist gate before closeout
-MATVIS -down-> MESHMAT : model mesh material binding handoff
+MESHRND -down-> MESHMAT : model mesh pixel proof prerequisite
+WBCAPADR -down-> WBCAPHANDLE : clean-break ADR before typed handles
+WBCAPHANDLE -down-> WBCAPNOLEG : typed handles before legacy deletion
+WBCAPNOLEG -down-> WBCAPPROF : legacy identity removed before registry profiles
+WBCAPPROF -down-> WBCAPPERSIST : registry profiles before persistence cleanup
+WBCAPPERSIST -down-> WBCAPMAT : clean persistence before Material Lab proof
+WBCAPMAT -down-> WBCAPPOLICY : clean foundation before host policy
+WBCAPPOLICY -down-> WBCAPPLANE : policy before product and service plane
+WBCAPPOLICY -down-> WBCAPHOST : host policy before multi-host presets
+WBCAPPLANE -down-> WBCAPSBOX : product and service plane before external sandbox
 
 @enduml

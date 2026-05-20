@@ -26,8 +26,11 @@ from rich.table import Table
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROADMAP_SOURCE = REPO_ROOT / "docs-site/src/content/docs/workspace/roadmap-items.yaml"
+ROADMAP_ARCHIVE_SOURCE = REPO_ROOT / "docs-site/src/content/docs/workspace/roadmap-archive.yaml"
+ROADMAP_DEFERRED_SOURCE = REPO_ROOT / "docs-site/src/content/docs/workspace/roadmap-deferred.yaml"
 SCHEMA_DIR = REPO_ROOT / "docs-site/src/content/docs/workspace/schemas"
 ROADMAP_SCHEMA = SCHEMA_DIR / "roadmap-items.schema.json"
+ROADMAP_ITEM_SOURCE_SCHEMA = SCHEMA_DIR / "roadmap-item-source.schema.json"
 BATCH_SCHEMA = SCHEMA_DIR / "batch-manifest.schema.json"
 
 ALLOWED_EFFORTS = {1, 2, 3, 5, 8, 13}
@@ -72,6 +75,8 @@ class RenderTargets(StrictModel):
     dependency_roadmap: str
     current_candidates_roadmap: str
     triage: str
+    archive_register: str = "docs-site/src/content/docs/workspace/roadmap-archive-register.md"
+    deferred_register: str = "docs-site/src/content/docs/workspace/roadmap-deferred-register.md"
 
 
 class RoadmapEdge(StrictModel):
@@ -227,6 +232,9 @@ class RoadmapState(StrictModel):
     render: RenderTargets
     items: list[RoadmapItem]
     edges: list[RoadmapEdge]
+    archived_item_ids: list[str] = Field(default_factory=list)
+    deferred_item_ids: list[str] = Field(default_factory=list)
+    split_sources_enabled: bool = False
 
     @model_validator(mode="after")
     def validate_graph(self) -> RoadmapState:
@@ -240,6 +248,34 @@ class RoadmapState(StrictModel):
             raise ValueError(f"duplicate roadmap item ids: {', '.join(sorted(set(duplicate_ids)))}")
 
         item_ids = {item.id for item in self.items}
+        archived_ids = set(self.archived_item_ids)
+        deferred_ids = set(self.deferred_item_ids)
+        source_errors: list[str] = []
+        unknown_archived = sorted(archived_ids - item_ids)
+        unknown_deferred = sorted(deferred_ids - item_ids)
+        overlap = sorted(archived_ids & deferred_ids)
+        if unknown_archived:
+            source_errors.append(f"archived item ids are not present: {', '.join(unknown_archived)}")
+        if unknown_deferred:
+            source_errors.append(f"deferred item ids are not present: {', '.join(unknown_deferred)}")
+        if overlap:
+            source_errors.append(f"item ids appear in both archive and deferred sources: {', '.join(overlap)}")
+        if self.split_sources_enabled:
+            for item in self.items:
+                if item.id in archived_ids and item.planning_state != "completed":
+                    source_errors.append(f"{item.id}: archive source items must be completed")
+                elif item.id in deferred_ids and item.planning_state != "blocked_deferred":
+                    source_errors.append(f"{item.id}: deferred source items must be blocked_deferred")
+                elif item.id not in archived_ids and item.id not in deferred_ids and item.planning_state in {
+                    "completed",
+                    "blocked_deferred",
+                }:
+                    source_errors.append(
+                        f"{item.id}: active roadmap source must not contain {item.planning_state} items"
+                    )
+        if source_errors:
+            raise ValueError("; ".join(source_errors))
+
         dependency_map = {item.id: set(item.dependencies) for item in self.items}
         errors: list[str] = []
         for item in self.items:
@@ -260,6 +296,28 @@ class RoadmapState(StrictModel):
     @property
     def by_id(self) -> dict[str, RoadmapItem]:
         return {item.id: item for item in self.items}
+
+    @property
+    def active_items(self) -> list[RoadmapItem]:
+        archived_ids = set(self.archived_item_ids)
+        deferred_ids = set(self.deferred_item_ids)
+        return [item for item in self.items if item.id not in archived_ids and item.id not in deferred_ids]
+
+    @property
+    def archived_items(self) -> list[RoadmapItem]:
+        archived_ids = set(self.archived_item_ids)
+        return [item for item in self.items if item.id in archived_ids]
+
+    @property
+    def deferred_items(self) -> list[RoadmapItem]:
+        deferred_ids = set(self.deferred_item_ids)
+        return [item for item in self.items if item.id in deferred_ids]
+
+
+class RoadmapItemSource(StrictModel):
+    version: int
+    roadmap: RoadmapMeta
+    items: list[RoadmapItem]
 
 
 class BatchItem(StrictModel):
@@ -333,15 +391,74 @@ def load_yaml(path: Path) -> dict:
 
 def load_roadmap(path: Path = ROADMAP_SOURCE) -> RoadmapState:
     data = load_yaml(path)
-    return RoadmapState.model_validate(data)
+    return RoadmapState.model_validate(combine_roadmap_data(data, path))
+
+
+def combine_roadmap_data(
+    active_data: dict,
+    source: Path = ROADMAP_SOURCE,
+    *,
+    archive_data: dict | None = None,
+    deferred_data: dict | None = None,
+) -> dict:
+    archive_path, deferred_path = split_source_paths(source)
+    split_sources_enabled = (
+        archive_data is not None
+        or deferred_data is not None
+        or archive_path.exists()
+        or deferred_path.exists()
+    )
+    if not split_sources_enabled:
+        return active_data
+
+    if archive_data is None:
+        archive_data = load_split_item_source(archive_path) if archive_path.exists() else empty_split_source(active_data)
+    if deferred_data is None:
+        deferred_data = load_split_item_source(deferred_path) if deferred_path.exists() else empty_split_source(active_data)
+    archived_items = list(archive_data.get("items", []))
+    deferred_items = list(deferred_data.get("items", []))
+    combined = dict(active_data)
+    combined["items"] = [*list(active_data.get("items", [])), *archived_items, *deferred_items]
+    combined["archived_item_ids"] = [item.get("id", "") for item in archived_items]
+    combined["deferred_item_ids"] = [item.get("id", "") for item in deferred_items]
+    combined["split_sources_enabled"] = True
+    return combined
+
+
+def split_source_paths(source: Path = ROADMAP_SOURCE) -> tuple[Path, Path]:
+    return source.with_name("roadmap-archive.yaml"), source.with_name("roadmap-deferred.yaml")
+
+
+def load_split_item_source(path: Path) -> dict:
+    data = load_yaml(path)
+    try:
+        RoadmapItemSource.model_validate(data)
+    except ValueError as error:
+        raise WorkflowError(f"{repo_path(path)} is not a valid roadmap item source: {error}") from error
+    return data
+
+
+def empty_split_source(active_data: dict) -> dict:
+    return {
+        "version": active_data.get("version", 1),
+        "roadmap": active_data.get("roadmap", {}),
+        "items": [],
+    }
 
 
 def validate_roadmap_with_json_schema(path: Path = ROADMAP_SOURCE) -> None:
     data = load_yaml(path)
     try:
         validate_json_schema(instance=data, schema=RoadmapState.model_json_schema())
+        archive_path, deferred_path = split_source_paths(path)
+        for split_path in (archive_path, deferred_path):
+            if split_path.exists():
+                validate_json_schema(instance=load_yaml(split_path), schema=RoadmapItemSource.model_json_schema())
+        load_roadmap(path)
     except ValidationError as error:
         raise WorkflowError(f"JSON Schema validation failed for {repo_path(path)}: {error.message}") from error
+    except ValueError as error:
+        raise WorkflowError(str(error)) from error
 
 
 def load_batch_manifest(path: Path) -> BatchManifest:
@@ -378,7 +495,7 @@ def select_batch_candidates(
             raise WorkflowError(f"unknown roadmap item ids: {', '.join(missing)}")
         candidates = [by_id[item_id] for item_id in item_ids]
     else:
-        candidates = list(roadmap.items)
+        candidates = list(roadmap.active_items)
         if level:
             candidates = [item for item in candidates if item.dependency_level == level]
 
@@ -531,6 +648,7 @@ def parse_scope_selector(scope: str) -> tuple[str | None, tuple[str, ...]]:
 def write_schema_files(check: bool = False) -> list[str]:
     schemas = {
         ROADMAP_SCHEMA: RoadmapState.model_json_schema(),
+        ROADMAP_ITEM_SOURCE_SCHEMA: RoadmapItemSource.model_json_schema(),
         BATCH_SCHEMA: BatchManifest.model_json_schema(),
     }
     stale: list[str] = []
@@ -724,7 +842,14 @@ def roadmap_generated_output_paths() -> list[str]:
     if not isinstance(render, dict):
         return []
     outputs: list[str] = []
-    for key in ("decision_register", "dependency_roadmap", "current_candidates_roadmap", "triage"):
+    for key in (
+        "decision_register",
+        "dependency_roadmap",
+        "current_candidates_roadmap",
+        "triage",
+        "archive_register",
+        "deferred_register",
+    ):
         value = render.get(key)
         if isinstance(value, str):
             outputs.append(normalize_repo_path(value))

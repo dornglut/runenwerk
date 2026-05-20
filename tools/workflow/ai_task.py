@@ -244,6 +244,46 @@ def build_shapes() -> dict[str, WorkflowShape]:
                 "The task expands into later phases or unrelated domains.",
             ),
         ),
+        "goal": WorkflowShape(
+            name="goal",
+            description="Generate a production-track Codex /goal coordinator prompt.",
+            primary_docs=common_docs
+            + (
+                "docs-site/src/content/docs/workspace/production-track-planning-model.md",
+                "docs-site/src/content/docs/workspace/production-tracks.yaml",
+                "docs-site/src/content/docs/workspace/roadmap-items.yaml",
+                "docs-site/src/content/docs/workspace/prompt-templates/goal-execution.md",
+            ),
+            prompt=dedent(
+                """\
+                Generate a Runenwerk production-track /goal coordinator prompt.
+
+                Track:
+                - {task}
+
+                Scope:
+                - {scope}
+
+                Requirements:
+                1. Run the stable command instead of hand-writing the track prompt:
+                   task ai:goal -- --track <PT-ID>
+                2. Use production-tracks.yaml as the production sequencing source.
+                3. Use roadmap-items.yaml as the WR execution authority.
+                4. Coordinate one legal milestone or WR slice at a time.
+                5. Do not claim track completion until evidence gates, completion-quality rules, production render/check/validate, and roadmap render/check/validate pass.
+                """
+            ),
+            validation=(
+                "task ai:goal -- --track <PT-ID>",
+                "task production:validate",
+                "task roadmap:validate",
+            ),
+            stop_conditions=(
+                "The production track id is unknown.",
+                "A milestone dependency is incomplete.",
+                "A design, ADR, WR, validation, or closeout gate is missing.",
+            ),
+        ),
         "milestone": WorkflowShape(
             name="milestone",
             description="Implement a named roadmap/design milestone end to end.",

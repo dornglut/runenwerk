@@ -65,6 +65,10 @@ Run task batch:kickoff -- --next and follow the generated workflow.
 Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
 ```
 
+```text
+Run task ai:goal -- --track PT-SDF-OW and use the generated /goal coordinator prompt.
+```
+
 `batch:kickoff` creates the next approved-roadmap batch proposal from
 `planning_state=current_candidate` rows in
 `docs-site/src/content/docs/workspace/roadmap-items.yaml` and prints the exact
@@ -80,6 +84,7 @@ Lower-level prompt and checklist helpers are still available:
 
 ```bash
 task ai:list
+task ai:goal -- --track "<PT-ID>"
 task ai:implementation -- --task "<task>" --scope "<scope>"
 task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap/design>"
 ```

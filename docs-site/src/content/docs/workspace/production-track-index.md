@@ -29,6 +29,7 @@ dependency-checked execution graph.
 | ID | Track | State | Owner | Strategic goal | Success criteria |
 |---|---|---|---|---|---|
 | PT-SDF-OW | SDF-first open-world playable vertical | active | workspace | Prove the SDF-first field-world architecture through a playable, visible, inspectable open world. | Player movement, world rendering, strict query products, diagnostics, and content products are integrated through production contracts.<br>Deferred world capabilities move through design gates before implementation, not through one-off prototype shortcuts.<br>The track remains extensible for caves, multiplayer, richer simulation, advanced VFX, and gameplay systems. |
+| PT-WB-CAP | Capability Workbench Platform | active | editor | Replace legacy Workbench tool-surface compatibility with a registry-owned capability platform that can host the full editor, standalone Material Lab, constrained hosts, and headless validation through one typed composition model. | Workbench identity, profile construction, provider requests, and persistence use typed suite/profile/provider declarations and stable surface keys only.<br>Material Lab mounts in full-editor and standalone hosts without legacy tool-surface metadata.<br>Host command, product, and resource policy is enforced before provider proposals mutate app or domain state.<br>External dynamic components remain blocked until sandbox and security design is accepted. |
 
 ## Current Milestone States
 
@@ -45,3 +46,13 @@ dependency-checked execution graph.
 | PM-SDF-OW-007 | Water and wetness fields | design | designing | WR-014, WR-015 | Water is a field product family with explicit interaction and render handoff. |
 | PM-SDF-OW-008 | Enemy and influence AI proof | design | designing | WR-011, WR-014, WR-015, WR-022 | Enemy behavior uses explicit gameplay/influence contracts without requiring the full gameplay graph first. |
 | PM-SDF-OW-009 | Production hardening and playable evidence | hardening | designing | WR-018, WR-019, WR-021, WR-022 | The first production vertical is complete only when the combined acceptance criteria are observed and documented. |
+
+### PT-WB-CAP - Capability Workbench Platform
+
+| ID | Milestone | Kind | State | Roadmap links | Outcome |
+|---|---|---|---|---|---|
+| PM-WB-CAP-001 | Clean Registry-Owned Workbench Foundation | implementation | active | WR-031, WR-032, WR-033, WR-034, WR-035, WR-036 | Workbench state, profiles, providers, persistence, and Material Lab routes are stable-key-only with no compatibility enum or V5 legacy fallback metadata. |
+| PM-WB-CAP-002 | Host Capability Policy | implementation | ready_next | WR-037 | Provider proposals pass through host policy before app or domain mutation. |
+| PM-WB-CAP-003 | Product And Service Capability Plane | design | ready_next | WR-038 | Suites declare product and service needs while domains keep semantic validation authority. |
+| PM-WB-CAP-004 | Multi-Host Workbench Modes | implementation | ready_next | WR-039 | Hosts differ by suite/profile/provider bundle and policy, not by forked app-specific compatibility paths. |
+| PM-WB-CAP-005 | External Component Readiness | design | blocked | WR-040 | Future external component work has a design-only row and cannot bypass host policy. |

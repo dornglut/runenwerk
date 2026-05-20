@@ -73,7 +73,7 @@ def resolve_plan_context(
     track, milestone = find_milestone(planning, milestone_id)
     roadmap_item = roadmap.by_id.get(roadmap_id)
     if roadmap_item is None:
-        raise WorkflowError(f"{roadmap_id}: not present in roadmap source")
+        raise WorkflowError(f"{roadmap_id}: not present in combined roadmap sources")
     if roadmap_id not in milestone.roadmap_links:
         raise WorkflowError(f"{roadmap_id}: not linked by production milestone {milestone_id}")
     return ProductionPlanContext(
@@ -287,7 +287,7 @@ def plan(
     write_scaffold: bool = typer.Option(False, "--write-scaffold", help="Write a draft contract scaffold."),
     force: bool = typer.Option(False, "--force", help="Overwrite an existing scaffold path."),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
-    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
     out: Path | None = typer.Option(None, help="Optional implementation contract path."),
 ) -> None:
     try:

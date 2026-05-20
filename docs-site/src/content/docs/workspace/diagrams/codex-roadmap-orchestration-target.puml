@@ -9,8 +9,8 @@ skinparam defaultFontName Monospaced
 
 actor User
 
-database "roadmap-items.yaml\ncanonical WR data" as RoadmapYaml
-component "roadmap_state.py validate\nscore, gate, deps,\nwrite scopes" as Validate
+database "roadmap YAML sources\nactive/archive/deferred WR data" as RoadmapYaml
+component "roadmap_state.py validate\nscore, gate, deps,\nsplit sources,\nwrite scopes" as Validate
 component "generate_roadmap_docs.py\nMarkdown + PUML sync" as Render
 component "propose-batch\nbatch.toml" as Propose
 component "worker-prompt\nbounded prompts" as Prompts

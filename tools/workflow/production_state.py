@@ -296,6 +296,7 @@ def validate_design_gates(state: ProductionPlanningState) -> list[str]:
 
 
 def validate_roadmap_links(state: ProductionPlanningState, roadmap_path: Path = ROADMAP_SOURCE) -> list[str]:
+    # load_roadmap resolves the active, archive, and deferred WR sources together.
     roadmap = load_roadmap(roadmap_path)
     roadmap_ids = set(roadmap.by_id)
     errors: list[str] = []
@@ -326,6 +327,7 @@ def validate_completion_quality(
     roadmap_path: Path = ROADMAP_SOURCE,
     repo_root: Path = REPO_ROOT,
 ) -> list[str]:
+    # Completed production evidence can link archived WR rows after roadmap cleanup.
     roadmap = load_roadmap(roadmap_path)
     errors: list[str] = []
     for milestone in state.by_milestone_id.values():
