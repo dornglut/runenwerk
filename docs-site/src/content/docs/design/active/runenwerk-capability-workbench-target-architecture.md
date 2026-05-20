@@ -5,11 +5,16 @@ status: active
 owner: editor
 layer: cross-domain
 canonical: false
-last_reviewed: 2026-05-19
+last_reviewed: 2026-05-20
 related_docs:
   - ../../guidelines/authority-centered-boundary-architecture.md
 related_designs:
   - ./editor-tool-suite-registry-and-workbench-host-design.md
+related_roadmaps:
+  - ../../workspace/roadmap-items.yaml
+  - ../../workspace/production-tracks.yaml
+related_reports:
+  - ../../reports/implementation-plans/wr-038-product-and-service-capability-declarations/plan.md
 ---
 
 # Runenwerk Capability Workbench Target Architecture
@@ -577,6 +582,159 @@ world-product generation
 - Host supervises lifecycle.
 - Services/components are restartable or fail safely.
 - External components require sandboxing and explicit capability policy.
+
+### 5.8 Product And Service Capability Plane
+
+#### Purpose
+
+Declare product and service needs without moving product semantics, product
+formation, service execution, or domain validation into `editor_shell`.
+
+This plane is the WR-038 design boundary. It makes product and service needs
+inspectable and policy-checkable, but it does not implement service protocols,
+process ABIs, sandboxing, external component loading, or runtime service
+orchestration.
+
+Canonical PlantUML source for this plane:
+[diagrams/capability-workbench-product-service-plane.puml](diagrams/capability-workbench-product-service-plane.puml).
+
+#### Product Declarations
+
+Product declarations are suite-owned intent records keyed by
+`ProductCapabilityKey`.
+
+They may describe:
+
+```text
+product capability key
+owning suite/cell
+declaring surface or profile
+required source/domain owner
+expected product family
+formation mode preference
+diagnostic/status labels
+documentation links
+```
+
+They must not describe:
+
+```text
+domain product semantics
+renderer ABI details
+cache storage format
+formed product payload shape
+fallback success behavior
+domain validation rules
+```
+
+`ProductCapabilityKey` is permission and declaration vocabulary. It is not a
+product descriptor, not a renderer product id, not a cache key, and not a
+semantic domain type.
+
+#### Service Dependencies
+
+Service declarations are dependency records keyed by `ToolServiceKey`.
+
+They may describe:
+
+```text
+service key
+owning suite/cell
+requested workload category
+required product or resource capabilities
+required host trust zone
+expected status conditions
+documentation links
+```
+
+They must not define:
+
+```text
+process ABI
+wire protocol
+sandbox runtime
+external component lifecycle
+service-owned source mutation
+service-owned product semantics
+```
+
+`ToolServiceKey` identifies a desired service dependency. It is not permission
+by itself. Host policy must still allow the service invocation, and domain or
+product validation must still accept the inputs and outputs.
+
+#### Enforcement Chain
+
+Product and service requests follow one chain:
+
+```text
+suite declares
+  -> host allows or denies
+  -> domain validates source semantics
+  -> app or supervised service forms candidate product
+  -> domain/product contract validates adoption where required
+  -> diagnostics record observed status
+```
+
+The chain keeps authorities separate:
+
+- suites declare intent;
+- hosts allow or deny capabilities;
+- domains own semantics and validation;
+- apps/services form products under supervision;
+- diagnostics explain status and failure reasons.
+
+#### Material Lab Example
+
+Material Lab may declare product capabilities such as:
+
+```text
+runenwerk.material_lab.product.preview_material
+runenwerk.material_lab.product.runtime_material
+```
+
+Those declarations mean Material Lab can ask the host to form or publish those
+product families. They do not make `editor_shell` own material semantics,
+shader lowering, material graph validation, texture binding rules, renderer
+payload layout, or prior-valid preservation behavior.
+
+Material Lab may declare future service dependencies such as:
+
+```text
+runenwerk.material_lab.service.material_compilation
+runenwerk.material_lab.service.preview_formation
+```
+
+Those declarations mean a host can inspect that Material Lab wants supervised
+material compilation or preview formation. They do not choose an execution
+protocol and do not authorize an external component. In the current slice,
+service declarations are metadata only.
+
+#### Required Future Interface Direction
+
+Future implementation may add these app-neutral declaration types under
+`domain/editor/editor_shell/src/tool_suite`:
+
+```text
+ToolServiceKey
+ToolSuiteProductDeclaration
+ToolSuiteServiceDependency
+```
+
+`editor_shell` may validate stable identity, duplicate declarations, unknown
+references, host policy decisions, and diagnostic vocabulary. It must not
+import material, texture, procgen, render, runtime, app provider, or app service
+types to define product or service declarations.
+
+#### Invariants
+
+- Product and service declarations are not permission grants.
+- Product semantics stay in owning domains and product contracts.
+- Service execution stays behind host policy and supervised execution.
+- Services cannot mutate source truth directly.
+- External service/component execution remains deferred until sandbox/security
+  design is accepted.
+- Diagnostics must make denied, missing, failed, and unavailable product or
+  service states visible.
 
 ## 6. Maturity Layers
 
