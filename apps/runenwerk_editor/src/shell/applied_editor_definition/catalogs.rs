@@ -9,11 +9,11 @@ use editor_definition::{
     EditorToolSurfaceRegistryDefinition, editor_definition_has_blocking_diagnostics,
     validate_editor_bindings,
 };
-use editor_shell::{ToolSurfaceKind, WorkspaceState};
+use editor_shell::{ToolSurfaceStableKey, WorkspaceState};
 use ui_definition::{NormalizedUiTemplate, UiDefinitionDiagnostic, UiTemplateId};
 
 use super::compatibility::{
-    known_panel_kinds_in_authored_order, known_tool_surface_kinds_in_authored_order,
+    known_panel_kinds_in_authored_order, known_tool_surface_keys_in_authored_order,
     panel_registry_compatible_with_tool_surfaces, panel_registry_covers_workspace,
     tool_surface_registry_covers_panel_defaults, tool_surface_registry_covers_workspace,
 };
@@ -74,10 +74,10 @@ impl ActiveEditorDefinitionCatalogs {
         self.tool_surface_registry.as_ref()
     }
 
-    pub fn available_tool_surface_kinds(&self) -> Vec<ToolSurfaceKind> {
+    pub fn available_tool_surface_keys(&self) -> Vec<ToolSurfaceStableKey> {
         self.tool_surface_registry
             .as_ref()
-            .map(known_tool_surface_kinds_in_authored_order)
+            .map(known_tool_surface_keys_in_authored_order)
             .unwrap_or_default()
     }
 

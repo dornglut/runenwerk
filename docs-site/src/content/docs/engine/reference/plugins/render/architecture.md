@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-21
 ---
 
 # Render Plugin Architecture
@@ -25,7 +25,7 @@ last_reviewed: 2026-05-07
 - pass builders: `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, `builtin_ui_composite_pass`
 - typed handles: storage arrays, uniforms, ping-pong handles
 - flow-owned render targets: color targets, depth targets, history textures
-- staged product-surface contracts: target aliases, dynamic texture target descriptors, prepared offscreen views, and prepared flow invocations
+- implemented product-surface contracts: target aliases, dynamic texture target descriptors, prepared offscreen views, and prepared flow invocations
 - GPU params derives: `GpuUniform`, `GpuStorage`, `GpuParams`, `ToGpuValue`
 - ECS-first state projection with `Resource`-bound state APIs
 
@@ -40,7 +40,7 @@ last_reviewed: 2026-05-07
 - Feature prepared payload handoff resources are explicit (`PreparedDrawFeatureResource`, `PreparedMaterialFeatureResource`, `PreparedDeformationFeatureResource`) and consumed only in `RenderPrepare`.
 - Active runtime validation accepts typed surface-color/UI/history semantics; external imports are compatibility-only.
 - Runtime-backed graphics depth uses flow-owned depth targets. Imported surface-depth declarations remain compatibility metadata until the renderer exposes a prepared surface-depth texture.
-- Active execute path is still conservative for product surfaces: prepared packets can describe offscreen views and dynamic targets, but renderer-owned dynamic target cache allocation and target-alias pass execution remain render product surface bundle work.
+- Product-surface foundation behavior is implemented: prepared packets can describe offscreen product views and dynamic targets, renderer-owned dynamic target cache allocation realizes them, and target-alias pass execution binds them per prepared invocation. Broader native multi-surface and multi-swapchain presentation remains future work owned by the multi-window design.
 
 ## Inspection Boundary
 

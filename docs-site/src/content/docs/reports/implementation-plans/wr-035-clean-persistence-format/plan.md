@@ -19,6 +19,7 @@ related_reports:
   - ../wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
   - ../wr-033-remove-legacy-tool-surface-identity/plan.md
   - ../wr-034-registry-backed-workspace-profiles/plan.md
+  - ../../closeouts/wr-034-registry-backed-workspace-profiles/closeout.md
 ---
 
 # WR-035 Clean Persistence Format Contract
@@ -43,7 +44,7 @@ persistence cleanup pass.
   persisted workspace schemas to fail with a clear unsupported-schema
   diagnostic and requires Workbench persistence to be stable-key-only.
 - `docs-site/src/content/docs/workspace/roadmap-items.yaml` owns `WR-035`.
-  The row is `ready_next`, blocker `B3`, depends on `WR-034`, and names
+  The row is `ready_next`, blocker `B2`, depends on completed `WR-034`, and names
   deletion of V1-V4 migration loaders, V5 legacy fallback fields, unsupported
   old-schema tests, and stable-key-only round-trip tests as required evidence.
 - `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
@@ -54,8 +55,13 @@ persistence cleanup pass.
   surface-kind fields to fail with diagnostics rather than migrate through
   compatibility metadata.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-034-registry-backed-workspace-profiles/plan.md`
-  records the prerequisite registry-backed profile contract. WR-034 must be
-  completed before persistence can safely reject old schemas.
+  records the prerequisite registry-backed profile contract.
+- `docs-site/src/content/docs/reports/closeouts/wr-034-registry-backed-workspace-profiles/closeout.md`
+  records completed WR-034 closeout evidence. Full-editor and standalone
+  Material Lab workspace profiles now build from installed Workbench profile
+  declarations and host-owned registry-resolved stable surface keys, so WR-035
+  can remove old persistence compatibility without removing the normal profile
+  authority.
 
 Readiness checks completed for this contract:
 
@@ -66,21 +72,19 @@ Readiness checks completed for this contract:
 - `task docs:validate` passed after this contract was added.
 - `task planning:validate` passed after this contract was added, covering
   roadmap validation/check, production validation/check, and docs validation.
-- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` passed after this
-  contract was added and preserved PM-WB-CAP-001 as `active` with
-  `prepare_wr_promotion_contract`; WR-035 remains `ready_next` behind WR-034.
+- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` was rerun after
+  WR-034 closeout and selected PM-WB-CAP-001 next legal action as
+  `repair_wr_promotion_metadata`; WR-035 is now the dependency-order candidate
+  for promotion metadata repair.
 
 ## Readiness
 
-Promotion verdict: WR-035 can carry a decision-complete promotion and
-implementation-readiness contract, but it cannot honestly be promoted or
-implemented yet.
+Promotion verdict: WR-035 can be promoted to `current_candidate` after this
+metadata refresh validates. WR-034 is completed with closeout evidence, ADR
+0012 remains accepted, and the active Workbench host design remains active.
 
 Blocking conditions before code starts:
 
-- WR-034 is still `ready_next`, not completed. WR-035 depends on
-  registry-backed profiles so old layouts can be rejected without losing the
-  only normal profile/default workspace authority.
 - PM-WB-CAP-001 is still `active`, not completed.
 - WR-035 is a breaking persistence cleanup. The implementation must keep ADR
   0012 as the authority for rejecting old layouts instead of introducing an
@@ -291,11 +295,34 @@ Closeout result:
 
 - No Rust product code changed.
 - Roadmap evidence changed only to repair WR-035 write scopes. The row remains
-  `ready_next` with blocker `B3`.
+  `ready_next`.
 - No production-track state changed.
-- WR-035 remains blocked for implementation by WR-034 completion.
+- WR-035 remained blocked for implementation by WR-034 completion when this
+  contract-writing action was originally completed.
 - Downstream PM-WB-CAP milestones remain dependency-waiting and must not be
   implemented from this contract alone.
+
+## Promotion Readiness Refresh
+
+Status as of 2026-05-20: refreshed after WR-034 completion.
+
+Readiness evidence:
+
+- WR-034 has completed closeout evidence at
+  `docs-site/src/content/docs/reports/closeouts/wr-034-registry-backed-workspace-profiles/closeout.md`.
+- `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-035`
+  reports `write_promotion_contract` and a promotable preflight for WR-035.
+- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` reports
+  PM-WB-CAP-001 next legal action as `repair_wr_promotion_metadata`, with
+  WR-035 as the ready-next dependency-order row.
+
+Promotion action:
+
+- Promote WR-035 to `current_candidate` with evidence that WR-034 is completed
+  and this promotion contract has been refreshed.
+- Run roadmap and production render/validate/check gates after promotion.
+- Rerun `task ai:goal -- --track PT-WB-CAP --scope non-deferred` before any
+  WR-035 product-code implementation.
 
 ## Perfectionist Closeout Audit
 

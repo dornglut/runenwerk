@@ -20,6 +20,8 @@ related_reports:
   - ../wr-033-remove-legacy-tool-surface-identity/plan.md
   - ../wr-034-registry-backed-workspace-profiles/plan.md
   - ../wr-035-clean-persistence-format/plan.md
+  - ../../closeouts/wr-034-registry-backed-workspace-profiles/closeout.md
+  - ../../closeouts/wr-035-clean-persistence-format/closeout.md
 ---
 
 # WR-036 Material Lab Clean Migration Proof Contract
@@ -33,9 +35,9 @@ modes. Graph, inspector, preview, texture, asset, diagnostics, and console
 surfaces must resolve through typed handles and provider bundles without
 legacy tool-surface metadata.
 
-This contract does not implement product code, promote roadmap state, or close
-`WR-036`. It records the dependency and ownership conditions for a later
-Material Lab migration proof after WR-035 clean persistence is complete.
+This contract does not implement product code or close `WR-036`. It records
+the dependency, ownership, and promotion conditions for the next Material Lab
+migration proof now that WR-035 clean persistence is complete.
 
 ## Source Of Truth
 
@@ -44,8 +46,8 @@ Material Lab migration proof after WR-035 clean persistence is complete.
   Material Lab to mount in full-editor and standalone hosts without legacy
   tool-surface metadata.
 - `docs-site/src/content/docs/workspace/roadmap-items.yaml` owns `WR-036`.
-  The row is `ready_next`, blocker `B3`, depends on `WR-035`, and names
-  Material Lab full-editor and standalone Workbench tests as required
+  The row is `ready_next`, blocker `B2`, depends on completed `WR-035`, and
+  names Material Lab full-editor and standalone Workbench tests as required
   evidence.
 - `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
   is accepted and forbids restoring legacy surface-kind identity as a
@@ -53,37 +55,35 @@ Material Lab migration proof after WR-035 clean persistence is complete.
 - `docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md`
   is active and requires Workbench suites, profiles, provider requests, and
   hosted composition to be registry-owned.
-- `docs-site/src/content/docs/reports/implementation-plans/wr-035-clean-persistence-format/plan.md`
-  records the prerequisite clean persistence contract. WR-035 must be
-  completed before Material Lab can prove no legacy metadata is required.
+- `docs-site/src/content/docs/reports/closeouts/wr-035-clean-persistence-format/closeout.md`
+  records completed clean persistence evidence. App workspace layout reads
+  reject V1-V4 workspace files, V5 reads reject legacy fallback metadata, and
+  new V5 saves omit legacy fallback fields.
 
 Readiness checks completed for this contract:
 
 - `task ai:goal -- --track PT-WB-CAP --scope non-deferred` classified
-  PM-WB-CAP-001 next legal action as `prepare_wr_promotion_contract`.
+  PM-WB-CAP-001 next legal action as `prepare_wr_promotion_contract` after
+  WR-035 was archived with closeout evidence.
 - `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-036`
-  classified WR-036 next action as `write_promotion_contract`.
-- `task docs:validate` passed after this contract was added.
-- `task planning:validate` passed after this contract was added, covering
-  roadmap validation/check, production validation/check, and docs validation.
-- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` passed after this
-  contract was added and preserved PM-WB-CAP-001 as `active` with
-  `prepare_wr_promotion_contract`; WR-036 remains `ready_next` behind WR-035.
+  classified WR-036 next action as `write_promotion_contract` and reported
+  promotion preflight as promotable.
 
 ## Readiness
 
-Promotion verdict: WR-036 can carry a decision-complete promotion and
-implementation-readiness contract, but it cannot honestly be promoted or
-implemented yet.
+Promotion verdict: WR-036 is promotable after this contract refresh. Product
+code must not start until the roadmap row is promoted to `current_candidate`,
+validation passes, and `task ai:goal -- --track PT-WB-CAP --scope non-deferred`
+selects `execute_next_wr_implementation_contract`.
 
 Blocking conditions before code starts:
 
-- WR-035 is still `ready_next`, not completed. WR-036 depends on the clean
-  persistence format so the Material Lab proof can demonstrate that no legacy
-  persisted metadata is needed.
-- PM-WB-CAP-001 is still `active`, not completed.
-- The WR-036 roadmap write scopes were repaired on 2026-05-20 to cover the
-  app construction path required by this contract:
+- WR-035 is completed with closeout evidence, and the clean persistence gates
+  passed after archival. Do not reopen WR-035 for Material Lab proof work.
+- WR-036 is still `ready_next`, so implementation cannot begin until the
+  roadmap promotion step and the scoped goal rerun select implementation.
+- The WR-036 roadmap write scopes cover the app construction path required by
+  this contract:
   `apps/runenwerk_editor/src/editor_app/state.rs` and this contract path are
   now listed alongside `apps/runenwerk_editor/src/material_lab`,
   `apps/runenwerk_editor/src/shell/workbench_host.rs`, and
@@ -216,8 +216,8 @@ true:
 5. If provider support still depends on
    `stable_key_or_legacy_kind_support`, narrow only the Material Lab proof path
    so the active requests and selected providers are stable-key-supported. Do
-   not remove legacy provider fallback until WR-033 and WR-035 are completed
-   and their write scopes allow it.
+   not remove unrelated legacy provider fallback outside the WR-036 write
+   scopes.
 6. Touch `apps/runenwerk_editor/src/material_lab` runtime modules only if the
    frame-building proof needs deterministic Material Lab runtime setup.
 7. Run the required validation and write closeout evidence under
@@ -284,9 +284,11 @@ Closeout for this contract-writing action records:
 - `task docs:validate` result;
 - `task planning:validate` result;
 - `task ai:goal -- --track PT-WB-CAP --scope non-deferred` rerun result;
-- confirmation that no product code, roadmap planning state, or production
-  state changed; roadmap evidence changed only to repair WR-036 write scopes;
-- remaining blockers: WR-035 completion before WR-036 code implementation.
+- confirmation that no product code or production state changed;
+- confirmation that roadmap state changed only through the WR-036 promotion
+  preflight command, if promotion is executed after this contract refresh;
+- remaining blocker before product code: WR-036 must be selected by the next
+  scoped goal rerun as the current implementation contract.
 
 The expected completion-quality tier for the contract-writing action is
 `bounded_contract`. WR-036 itself remains incomplete until implementation,
@@ -295,7 +297,7 @@ production render/validate/check complete.
 
 ## Contract-Writing Closeout Evidence
 
-Status as of 2026-05-20: completed for the contract-writing action only.
+Status as of 2026-05-20: refreshed for the promotion-contract action only.
 
 Changed artifact:
 
@@ -303,22 +305,28 @@ Changed artifact:
 
 Validation:
 
-- `task docs:validate` passed after the contract was added.
-- `task planning:validate` passed after the contract was added, covering
-  roadmap validation/check, production validation/check, and docs validation.
-  It was rerun after the WR-036 roadmap write scopes were repaired to include
-  app construction ownership and this contract path.
-- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` was rerun after
-  validation and still reported PM-WB-CAP-001 next legal action as
-  `prepare_wr_promotion_contract`.
+- `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-036`
+  reported WR-035 completed, WR-036 `ready_next`, and promotion preflight
+  status `promotable`.
+- `task roadmap:promote -- --id WR-036 --state current_candidate --evidence
+  "<accepted evidence>"` promoted WR-036 to `current_candidate`.
+- `task roadmap:render`, `task roadmap:validate`, `task roadmap:check`,
+  `task production:render`, `task production:validate`,
+  `task production:check`, and `task docs:validate` passed after promotion.
+- `task planning:validate` and
+  `task ai:goal -- --track PT-WB-CAP --scope non-deferred` are required after
+  this closeout evidence update.
 
 Closeout result:
 
 - No Rust product code changed.
-- Roadmap evidence changed only to repair WR-036 write scopes. The row remains
-  `ready_next` with blocker `B3`.
+- Roadmap evidence changed only to promote WR-036 from `ready_next` to
+  `current_candidate` using the accepted promotion evidence from
+  `task production:plan` and to remove stale WR-035 dependency wording from
+  the WR-036 row.
 - No production-track state changed.
-- WR-036 remains blocked for implementation by WR-035 completion.
+- WR-036 remains incomplete until the scoped goal command selects
+  `execute_next_wr_implementation_contract`.
 - Downstream PM-WB-CAP milestones remain dependency-waiting and must not be
   implemented from this contract alone.
 

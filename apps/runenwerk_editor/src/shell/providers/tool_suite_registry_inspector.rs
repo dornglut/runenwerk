@@ -47,6 +47,7 @@ impl EditorSurfaceProvider for ToolSuiteRegistryInspectorProvider {
         let host = context.app.workbench_host();
         let view_model = build_tool_suite_registry_inspector_view_model(
             host.tool_suite_registry(),
+            host.workspace_profile_registry(),
             host.provider_family_provider_map(),
             host.provider_registry(),
             context.shell_state,
@@ -248,6 +249,7 @@ pub(super) enum ToolSuiteRegistryInspectorMetadataStatus {
 
 pub(super) fn build_tool_suite_registry_inspector_view_model(
     tool_suite_registry: &ToolSuiteRegistry,
+    workspace_profile_registry: &WorkspaceProfileRegistry,
     provider_family_provider_map: &ProviderFamilyProviderMap,
     provider_registry: &EditorSurfaceProviderRegistry,
     shell_state: &RunenwerkEditorShellState,
@@ -300,6 +302,7 @@ pub(super) fn build_tool_suite_registry_inspector_view_model(
         shell_state,
         document_context,
         tool_suite_registry,
+        workspace_profile_registry,
         provider_family_provider_map,
         provider_registry,
     );
@@ -755,6 +758,7 @@ fn mounted_surface_rows(
     shell_state: &RunenwerkEditorShellState,
     document_context: SurfaceDocumentContext,
     tool_suite_registry: &ToolSuiteRegistry,
+    workspace_profile_registry: &WorkspaceProfileRegistry,
     provider_family_provider_map: &ProviderFamilyProviderMap,
     provider_registry: &EditorSurfaceProviderRegistry,
 ) -> Vec<ToolSuiteRegistryInspectorMountedSurfaceRow> {
@@ -769,8 +773,11 @@ fn mounted_surface_rows(
             .workspace_state()
             .panel(request.panel_instance_id)
             .map(|panel| panel.panel_kind)?;
-        let observation = provider_registry
-            .observe_resolution_for_request(&request, Some(provider_family_provider_map));
+        let observation = provider_registry.observe_resolution_for_request(
+            &request,
+            workspace_profile_registry,
+            Some(provider_family_provider_map),
+        );
         Some(ToolSuiteRegistryInspectorMountedSurfaceRow {
             workspace_profile_id: request.workspace_profile_id,
             panel_instance_id: request.panel_instance_id,
@@ -778,7 +785,7 @@ fn mounted_surface_rows(
             tab_stack_id: request.tab_stack_id,
             tool_surface_instance_id: request.tool_surface_instance_id,
             stable_surface_key: request.stable_surface_key.as_str().to_string(),
-            legacy_tool_surface_kind: request.legacy_tool_surface_kind,
+            legacy_tool_surface_kind: tool_surface_kind_for_stable_key(&request.stable_surface_key),
             provider_family_id: request
                 .provider_family_id
                 .as_ref()
@@ -923,13 +930,9 @@ fn live_workspace_preview_error_rows(
                     .and_then(|panel_id| tab_stack_id_for_panel(workspace_state, panel_id)),
                 tool_surface_instance_id: Some(surface.id),
                 stable_surface_key: surface.stable_surface_key().as_str().to_string(),
-                legacy_tool_surface_kind: surface
-                    .legacy_tool_surface_kind()
-                    .map(|kind| format!("{kind:?}")),
+                legacy_tool_surface_kind: None,
                 v5_primary_identity: surface.stable_surface_key().as_str().to_string(),
-                legacy_metadata_status: legacy_metadata_status(
-                    surface.legacy_tool_surface_kind().is_some(),
-                ),
+                legacy_metadata_status: legacy_metadata_status(false),
                 validation_status: ToolSuiteRegistryInspectorPersistenceValidationStatus::Error,
                 diagnostics: vec![
                     diagnostic_row(
@@ -1192,6 +1195,7 @@ mod tests {
 
         build_tool_suite_registry_inspector_view_model(
             app.workbench_host().tool_suite_registry(),
+            app.workbench_host().workspace_profile_registry(),
             app.workbench_host().provider_family_provider_map(),
             app.workbench_host().provider_registry(),
             &shell_state,
@@ -1205,6 +1209,7 @@ mod tests {
     ) -> ToolSuiteRegistryInspectorViewModel {
         build_tool_suite_registry_inspector_view_model(
             app.workbench_host().tool_suite_registry(),
+            app.workbench_host().workspace_profile_registry(),
             app.workbench_host().provider_family_provider_map(),
             app.workbench_host().provider_registry(),
             shell_state,
@@ -1239,7 +1244,6 @@ mod tests {
                     "runenwerk.material_lab.preview",
                 )
                 .expect("test stable key should be valid"),
-                legacy_tool_surface_kind: Some(ToolSurfaceKind::Console),
             },
         )
         .expect("test workspace should accept compatibility metadata before V5 validation")
@@ -1264,7 +1268,6 @@ mod tests {
                     "runenwerk.unknown.surface",
                 )
                 .expect("test stable key should be syntactically valid"),
-                legacy_tool_surface_kind: None,
             },
         )
         .expect("test workspace should accept stable-key-native unknown registry key")
@@ -1327,6 +1330,7 @@ mod tests {
 
         let view_model = build_tool_suite_registry_inspector_view_model(
             app.workbench_host().tool_suite_registry(),
+            app.workbench_host().workspace_profile_registry(),
             app.workbench_host().provider_family_provider_map(),
             app.workbench_host().provider_registry(),
             &shell_state,

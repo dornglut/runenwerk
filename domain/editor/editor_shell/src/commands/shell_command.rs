@@ -6,8 +6,8 @@ use editor_core::DocumentId;
 use crate::{
     DockSplitSide, EditorDomainMutation, MaterialSurfaceAction, PanelHostId, PanelInstanceId,
     SurfaceSessionMutation, TabStackId, TextureSurfaceAction, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolSurfaceStableKey, ToolbarCommandKind, ToolbarMenuKind, WidgetId,
-    WorkspaceProfileId, WorkspaceSplitAxis,
+    ToolSurfaceStableKey, ToolbarCommandKind, ToolbarMenuKind, WidgetId, WorkspaceProfileId,
+    WorkspaceSplitAxis,
 };
 use crate::{SurfaceInteraction, SurfaceLocalAction, SurfaceProviderId};
 
@@ -126,21 +126,10 @@ pub enum ShellCommand {
         destination: TabDropDestination,
         projection_epoch: u64,
     },
-    SwitchPanelToolSurfaceKind {
-        panel_instance_id: PanelInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
-        projection_epoch: u64,
-    },
-    CreatePanelTab {
-        tab_stack_id: TabStackId,
-        tool_surface_kind: ToolSurfaceKind,
-        projection_epoch: u64,
-    },
     CreatePanelTabStableKey {
         tab_stack_id: TabStackId,
         panel_kind: crate::PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
         projection_epoch: u64,
     },
     ClosePanelTab {
@@ -153,18 +142,11 @@ pub enum ShellCommand {
         keep_panel_instance_id: PanelInstanceId,
         projection_epoch: u64,
     },
-    SplitTabStackArea {
-        tab_stack_id: TabStackId,
-        axis: WorkspaceSplitAxis,
-        tool_surface_kind: ToolSurfaceKind,
-        projection_epoch: u64,
-    },
     SplitTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         axis: WorkspaceSplitAxis,
         panel_kind: crate::PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
         projection_epoch: u64,
     },
     DuplicateTabStackArea {
@@ -175,27 +157,15 @@ pub enum ShellCommand {
         tab_stack_id: TabStackId,
         projection_epoch: u64,
     },
-    ResetTabStackArea {
-        tab_stack_id: TabStackId,
-        tool_surface_kind: ToolSurfaceKind,
-        projection_epoch: u64,
-    },
     ResetTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         panel_kind: crate::PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
-        projection_epoch: u64,
-    },
-    LockTabStackAreaType {
-        tab_stack_id: TabStackId,
-        locked_tool_surface_kind: Option<ToolSurfaceKind>,
         projection_epoch: u64,
     },
     LockTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         locked_stable_surface_key: Option<ToolSurfaceStableKey>,
-        legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
         projection_epoch: u64,
     },
     ActivateDocumentTab {
@@ -273,12 +243,6 @@ impl ShellCommand {
             | Self::CommitTabDrop {
                 projection_epoch, ..
             }
-            | Self::SwitchPanelToolSurfaceKind {
-                projection_epoch, ..
-            }
-            | Self::CreatePanelTab {
-                projection_epoch, ..
-            }
             | Self::CreatePanelTabStableKey {
                 projection_epoch, ..
             }
@@ -286,9 +250,6 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::CloseOtherPanelTabs {
-                projection_epoch, ..
-            }
-            | Self::SplitTabStackArea {
                 projection_epoch, ..
             }
             | Self::SplitTabStackAreaStableKey {
@@ -300,13 +261,7 @@ impl ShellCommand {
             | Self::CloseTabStackArea {
                 projection_epoch, ..
             }
-            | Self::ResetTabStackArea {
-                projection_epoch, ..
-            }
             | Self::ResetTabStackAreaStableKey {
-                projection_epoch, ..
-            }
-            | Self::LockTabStackAreaType {
                 projection_epoch, ..
             }
             | Self::LockTabStackAreaStableKey {

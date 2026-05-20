@@ -1,27 +1,27 @@
 use editor_core::{
-    ChangeOrigin, ComponentTypeId, EntityId, RealityVersion, SelectionTarget, SessionChangeKind,
-    WorkflowEventKind,
+    ChangeOrigin, ComponentTypeId, EditorMutationError, EntityId, RealityVersion, SelectionTarget,
+    SessionChangeKind, WorkflowEventKind,
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_shell::{
     BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
-    DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope,
+    CommandCapabilityKey, DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope,
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
     EditorDomainMutation, EntityTableComponentFilter, EntityTableHierarchyFilter,
-    EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID,
-    OUTLINER_LIST_WIDGET_ID, OutlinerDomainMutation, PanelKind, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-    RoutedShellAction, SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget,
-    SurfaceLocalAction, SurfaceProviderAvailability, SurfaceProviderId, SurfaceSessionMutation,
-    ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, UiInteraction, UiInteractionResults,
-    VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
-    VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation, ViewportSessionMutation,
-    ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis, build_editor_shell_frame,
-    map_interactions_to_shell_commands, surface_widget_id, tab_stack_lock_type_toggle_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_popup_menu_widget_id,
-    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_strip_scroll_widget_id, viewport_field_component_button_widget_id,
-    workspace_split_host_widget_id,
+    EntityTableSessionMutation, EntityTableSurfaceAction, HostCapabilityPolicy,
+    InspectorSessionMutation, LEFT_RIGHT_SPLIT_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
+    MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_LIST_WIDGET_ID, OutlinerDomainMutation, PanelKind,
+    RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, RoutedShellAction, SCENE_WORKSPACE_PROFILE_ID,
+    ShellCommand, StructuralCommandTarget, SurfaceLocalAction, SurfaceProviderAvailability,
+    SurfaceProviderId, SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind,
+    ToolbarMenuKind, UiInteraction, UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation,
+    ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis,
+    build_editor_shell_frame, map_interactions_to_shell_commands, surface_widget_id,
+    tab_stack_lock_type_toggle_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_popup_menu_widget_id, tab_stack_reset_area_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_strip_scroll_widget_id,
+    viewport_field_component_button_widget_id, workspace_split_host_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionDimensions, ExpressionProductId, ProducerHealth,
@@ -30,6 +30,7 @@ use editor_viewport::{
     ViewportId, ViewportPresentationState,
 };
 use engine::plugins::render::UiFontAtlasResource;
+use std::sync::Arc;
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerButton, PointerEvent, PointerEventKind,
     UiInputEvent,
@@ -51,8 +52,8 @@ use crate::runtime::viewport::{
 };
 use crate::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellController, RunenwerkEditorShellState,
-    SELECT_TOOL_ID, TRANSLATE_TOOL_ID, active_document_context, active_route_actions_by_target,
-    build_editor_shell_frame_model, dispatch_shell_command,
+    RunenwerkWorkbenchHost, SELECT_TOOL_ID, TRANSLATE_TOOL_ID, active_document_context,
+    active_route_actions_by_target, build_editor_shell_frame_model, dispatch_shell_command,
     dispatch_shell_command_with_viewport_commands,
 };
 
@@ -995,7 +996,9 @@ fn panel_registry_activation_rejects_unknown_default_tool_surface() {
             let default_tool_surface = panel
                 .active_tool_surface
                 .and_then(|surface_id| host.shell_state.workspace_state().tool_surface(surface_id))
-                .and_then(|surface| surface.legacy_tool_surface_kind())
+                .and_then(|surface| {
+                    editor_shell::tool_surface_kind_for_stable_key(surface.stable_surface_key())
+                })
                 .map(|kind| editor_shell::tool_surface_kind_definition_key(kind).to_string())
                 .unwrap_or_else(|| "placeholder".to_string());
             editor_definition::EditorPanelDefinition {
@@ -1032,7 +1035,7 @@ fn panel_registry_activation_rejects_unknown_default_tool_surface() {
 }
 
 #[test]
-fn active_tool_surface_kinds_preserve_authored_order_and_dedup_known_ids() {
+fn active_tool_surface_candidates_preserve_authored_order_and_dedup_known_ids() {
     let mut host = EditorHostResource::default();
     let workspace = host.shell_state.workspace_state().clone();
     host.shell_state
@@ -1066,13 +1069,17 @@ fn active_tool_surface_kinds_preserve_authored_order_and_dedup_known_ids() {
     );
 
     assert_eq!(
-        frame_model.available_tool_surface_kinds,
+        frame_model
+            .available_tool_surface_create_candidates
+            .iter()
+            .map(|candidate| candidate.stable_surface_key.as_str())
+            .collect::<Vec<_>>(),
         vec![
-            ToolSurfaceKind::Viewport,
-            ToolSurfaceKind::Outliner,
-            ToolSurfaceKind::EntityTable,
-            ToolSurfaceKind::Inspector,
-            ToolSurfaceKind::Console,
+            "runenwerk.scene.viewport",
+            "runenwerk.scene.outliner",
+            "runenwerk.scene.entity_table",
+            "runenwerk.scene.inspector",
+            "runenwerk.editor.console",
         ],
         "future switch/create choices should preserve first-seen authored order, skip unknown ids, and dedup known ids",
     );
@@ -1116,14 +1123,18 @@ fn tool_surface_registry_activation_updates_future_creation_surface_kinds() {
 
     assert_eq!(activated, 1);
     assert_eq!(
-        frame_model.available_tool_surface_kinds,
+        frame_model
+            .available_tool_surface_create_candidates
+            .iter()
+            .map(|candidate| candidate.stable_surface_key.as_str())
+            .collect::<Vec<_>>(),
         vec![
-            ToolSurfaceKind::Outliner,
-            ToolSurfaceKind::EntityTable,
-            ToolSurfaceKind::Viewport,
-            ToolSurfaceKind::Inspector,
-            ToolSurfaceKind::Console,
-            ToolSurfaceKind::DefinitionValidation,
+            "runenwerk.scene.outliner",
+            "runenwerk.scene.entity_table",
+            "runenwerk.scene.viewport",
+            "runenwerk.scene.inspector",
+            "runenwerk.editor.console",
+            "runenwerk.editor_design.definition_validation",
         ],
         "activated tool-surface registry should feed future switch/create choices",
     );
@@ -2037,6 +2048,140 @@ fn provider_id_mismatch_on_local_action_is_rejected_without_mutation() {
 }
 
 #[test]
+fn workbench_host_allow_all_accepts_provider_surface_session_mutation() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let (entity_table_panel, entity_table_stack) =
+        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::EntityTable);
+    let entity_table_surface =
+        surface_id_by_kind(shell_state.workspace_state(), PanelKind::EntityTable);
+    shell_state
+        .apply_workspace_mutation(WorkspaceMutation::SetTabStackActivePanel {
+            tab_stack_id: entity_table_stack,
+            active_panel: Some(entity_table_panel),
+        })
+        .expect("entity table tab should activate");
+
+    let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let projection_epoch = shell_state.current_projection_epoch();
+    RunenwerkEditorShellController::dispatch_commands(
+        &mut app,
+        &mut shell_state,
+        vec![entity_table_search_provider_command(
+            entity_table_panel,
+            entity_table_stack,
+            entity_table_surface,
+            projection_epoch,
+            "allowed",
+        )],
+        &registry,
+        None,
+        None,
+        None,
+    )
+    .expect("allow-all workbench host policy should preserve provider mutation dispatch");
+
+    assert_eq!(
+        app.surface_sessions()
+            .session(entity_table_surface)
+            .expect("entity table surface session should be created")
+            .entity_table_ui_state
+            .search_query(),
+        "allowed"
+    );
+}
+
+#[test]
+fn workbench_host_policy_denies_provider_surface_session_before_mutation() {
+    let denied_command = CommandCapabilityKey::new("runenwerk.surface.session_mutation").unwrap();
+    let mut app = RunenwerkEditorApp::new();
+    app.workbench_host = Arc::new(
+        RunenwerkWorkbenchHost::new()
+            .expect("default workbench host should build")
+            .with_host_capability_policy(
+                HostCapabilityPolicy::allow_all().deny_command(denied_command),
+            ),
+    );
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let (entity_table_panel, entity_table_stack) =
+        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::EntityTable);
+    let entity_table_surface =
+        surface_id_by_kind(shell_state.workspace_state(), PanelKind::EntityTable);
+    shell_state
+        .apply_workspace_mutation(WorkspaceMutation::SetTabStackActivePanel {
+            tab_stack_id: entity_table_stack,
+            active_panel: Some(entity_table_panel),
+        })
+        .expect("entity table tab should activate");
+
+    let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
+    let theme = ThemeTokens::default();
+    let atlas = UiFontAtlasResource::default();
+    let _ =
+        RunenwerkEditorShellController::build_frame(&app, &mut shell_state, bounds, &theme, &atlas);
+
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let projection_epoch = shell_state.current_projection_epoch();
+    let result = RunenwerkEditorShellController::dispatch_commands(
+        &mut app,
+        &mut shell_state,
+        vec![entity_table_search_provider_command(
+            entity_table_panel,
+            entity_table_stack,
+            entity_table_surface,
+            projection_epoch,
+            "blocked",
+        )],
+        &registry,
+        None,
+        None,
+        None,
+    );
+
+    assert_eq!(
+        result,
+        Err(EditorMutationError::session_rejected(
+            "host capability policy denied provider proposal"
+        ))
+    );
+    assert!(
+        app.surface_sessions()
+            .session(entity_table_surface)
+            .map(|session| session.entity_table_ui_state.search_query().is_empty())
+            .unwrap_or(true),
+        "denied provider proposal must not create or mutate the entity-table session",
+    );
+}
+
+fn entity_table_search_provider_command(
+    panel_instance_id: editor_shell::PanelInstanceId,
+    tab_stack_id: editor_shell::TabStackId,
+    tool_surface_instance_id: editor_shell::ToolSurfaceInstanceId,
+    projection_epoch: u64,
+    text: &str,
+) -> ShellCommand {
+    ShellCommand::DispatchSurfaceLocalAction {
+        provider_id: SurfaceProviderId::try_from_raw(2).unwrap(),
+        tool_surface_instance_id,
+        target: StructuralCommandTarget {
+            panel_instance_id,
+            active_tool_surface: Some(tool_surface_instance_id),
+            tab_stack_id,
+        },
+        action: SurfaceLocalAction::EntityTable(EntityTableSurfaceAction::AppendSearchText {
+            text: text.to_string(),
+        }),
+        projection_epoch,
+    }
+}
+
+#[test]
 fn dispatch_shell_command_selects_viewport_product_when_available() {
     let mut app = RunenwerkEditorApp::new();
     let mut viewport_presentations = ViewportPresentationStateResource::default();
@@ -2878,207 +3023,6 @@ fn provider_local_viewport_field_controls_are_routed_actions() {
         })) if *routed_viewport == viewport_id
             && *patch == ViewportFieldVisualizerSettingsPatch::StepSliceIndex(1)
     ));
-}
-
-#[test]
-fn editor_type_switch_replaces_mounted_surface_without_changing_panel_identity() {
-    let mut app = RunenwerkEditorApp::new();
-    let mut shell_state = RunenwerkEditorShellState::new();
-    let (viewport_panel, _) =
-        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
-    let before_surface = shell_state
-        .workspace_state()
-        .panel(viewport_panel)
-        .and_then(|panel| panel.active_tool_surface)
-        .expect("viewport panel should have active surface");
-
-    dispatch_shell_command(
-        &mut app,
-        Some(&mut shell_state),
-        ShellCommand::SwitchPanelToolSurfaceKind {
-            panel_instance_id: viewport_panel,
-            tool_surface_kind: editor_shell::ToolSurfaceKind::Inspector,
-            projection_epoch: 1,
-        },
-        None,
-        None,
-        None,
-        Some(1),
-    )
-    .expect("editor type switch should dispatch");
-
-    let panel = shell_state
-        .workspace_state()
-        .panel(viewport_panel)
-        .expect("panel identity should remain");
-    let after_surface = panel
-        .active_tool_surface
-        .expect("switched panel should mount new surface");
-    assert_ne!(before_surface, after_surface);
-    assert_eq!(
-        shell_state
-            .workspace_state()
-            .tool_surface(after_surface)
-            .and_then(|surface| surface.legacy_tool_surface_kind()),
-        Some(editor_shell::ToolSurfaceKind::Inspector)
-    );
-    assert_eq!(
-        shell_state
-            .workspace_state()
-            .tool_surface(before_surface)
-            .map(|surface| surface.mount),
-        Some(editor_shell::ToolSurfaceMount::Unmounted)
-    );
-    assert!(
-        app.surface_sessions().session(before_surface).is_none(),
-        "switched-out surface session should be pruned"
-    );
-}
-
-#[test]
-fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessions() {
-    let mut app = RunenwerkEditorApp::new();
-    let mut shell_state = RunenwerkEditorShellState::new();
-    let (viewport_panel, _) =
-        panel_and_stack_by_kind(shell_state.workspace_state(), PanelKind::Viewport);
-    let before_surface = shell_state
-        .workspace_state()
-        .panel(viewport_panel)
-        .and_then(|panel| panel.active_tool_surface)
-        .expect("viewport panel should have active surface");
-    app.surface_sessions_mut()
-        .session_mut(before_surface)
-        .viewport_details_visible = true;
-
-    dispatch_shell_command(
-        &mut app,
-        Some(&mut shell_state),
-        ShellCommand::SwitchPanelToolSurfaceKind {
-            panel_instance_id: viewport_panel,
-            tool_surface_kind: editor_shell::ToolSurfaceKind::Viewport,
-            projection_epoch: 1,
-        },
-        None,
-        None,
-        None,
-        Some(1),
-    )
-    .expect("same-kind editor type switch should dispatch through mounted surface seam");
-
-    let after_surface = shell_state
-        .workspace_state()
-        .panel(viewport_panel)
-        .and_then(|panel| panel.active_tool_surface)
-        .expect("switched panel should mount a replacement surface");
-    assert_ne!(before_surface, after_surface);
-    assert!(
-        app.surface_sessions().session(before_surface).is_none(),
-        "old surface-local state should be pruned after replacement"
-    );
-    assert_eq!(
-        app.surface_sessions()
-            .session(after_surface)
-            .map(|session| session.viewport_details_visible),
-        None,
-        "replacement surface should not inherit old viewport details state"
-    );
-
-    let frame_model = build_editor_shell_frame_model(
-        &app,
-        &shell_state,
-        app.surface_provider_registry(),
-        &ThemeTokens::default(),
-        None,
-        None,
-        None,
-    );
-    let viewport_frame = frame_model
-        .surface(after_surface)
-        .expect("replacement viewport surface should resolve a provider frame");
-    assert_eq!(viewport_frame.panel_instance_id, viewport_panel);
-    assert_eq!(viewport_frame.title, "Viewport");
-    assert_eq!(
-        viewport_frame.availability,
-        SurfaceProviderAvailability::Available
-    );
-    let mut viewport_observations = ViewportArtifactObservationResource::default();
-    let observed_viewport_id = ViewportId(77);
-    viewport_observations.upsert_frame(ArtifactObservationFrame::new(
-        observed_viewport_id,
-        app.runtime().current_scene_reality_version(),
-    ));
-    let mut viewport_instances = ViewportInstanceRegistryResource::default();
-    viewport_instances.sync_from_workspace_state(shell_state.workspace_state());
-    let frame_model = build_editor_shell_frame_model(
-        &app,
-        &shell_state,
-        app.surface_provider_registry(),
-        &ThemeTokens::default(),
-        Some(&viewport_observations),
-        None,
-        Some(&viewport_instances),
-    );
-    let viewport_frame = frame_model
-        .surface(after_surface)
-        .expect("unbound replacement viewport surface should still resolve");
-    let expected_viewport_id = viewport_instances
-        .viewport_for_tool_surface(after_surface)
-        .expect("replacement viewport surface should have explicit runtime viewport identity");
-    assert!(
-        ui_tree_contains_viewport_embed(&viewport_frame.artifact.root, expected_viewport_id),
-        "unbound replacement viewport surface should use its own deterministic viewport id"
-    );
-    assert!(
-        !ui_tree_contains_viewport_embed(&viewport_frame.artifact.root, observed_viewport_id),
-        "unbound replacement viewport surface must not inherit an unrelated observed viewport id"
-    );
-
-    dispatch_shell_command(
-        &mut app,
-        Some(&mut shell_state),
-        ShellCommand::SwitchPanelToolSurfaceKind {
-            panel_instance_id: viewport_panel,
-            tool_surface_kind: editor_shell::ToolSurfaceKind::Placeholder,
-            projection_epoch: 2,
-        },
-        None,
-        None,
-        None,
-        Some(2),
-    )
-    .expect("placeholder editor type switch should still use mounted surface seam");
-
-    let placeholder_surface = shell_state
-        .workspace_state()
-        .panel(viewport_panel)
-        .and_then(|panel| panel.active_tool_surface)
-        .expect("placeholder switch should mount a diagnostics fallback surface");
-    let frame_model = build_editor_shell_frame_model(
-        &app,
-        &shell_state,
-        app.surface_provider_registry(),
-        &ThemeTokens::default(),
-        None,
-        None,
-        None,
-    );
-    let placeholder_frame = frame_model
-        .surface(placeholder_surface)
-        .expect("placeholder mounted surface should resolve a diagnostic frame");
-    assert_eq!(placeholder_frame.panel_instance_id, viewport_panel);
-    assert_eq!(
-        placeholder_frame.surface_kind,
-        Some(editor_shell::ToolSurfaceKind::Placeholder)
-    );
-    assert_eq!(
-        placeholder_frame.stable_surface_key.as_str(),
-        "runenwerk.diagnostics.placeholder"
-    );
-    assert_eq!(
-        placeholder_frame.availability,
-        SurfaceProviderAvailability::Available
-    );
-    assert!(placeholder_frame.routes.is_empty());
 }
 
 #[test]
@@ -5205,7 +5149,6 @@ fn tab_plus_create_surface_menu_click_creates_selected_tab() {
                 editor_shell::RoutedShellAction::CreatePanelTabStableKey {
                     tab_stack_id,
                     stable_surface_key,
-                    legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
                     ..
                 } if *tab_stack_id == viewport_stack
                     && stable_surface_key.as_str() == "runenwerk.scene.inspector"
@@ -5254,8 +5197,8 @@ fn tab_plus_create_surface_menu_click_creates_selected_tab() {
         .and_then(|surface_id| shell_state.workspace_state().tool_surface(surface_id))
         .expect("active panel should have a mounted tool surface");
     assert_eq!(
-        active_surface.legacy_tool_surface_kind(),
-        Some(ToolSurfaceKind::Inspector)
+        active_surface.stable_surface_key().as_str(),
+        crate::shell::tool_suites::SCENE_INSPECTOR_SURFACE_KEY
     );
     assert!(
         shell_state.active_tab_stack_popup_menu().is_none(),
@@ -5285,7 +5228,6 @@ fn inspector_tab_stack_lock_uses_stable_key() {
         lock_action,
         editor_shell::RoutedShellAction::LockTabStackAreaStableKey {
             locked_stable_surface_key: Some(key),
-            legacy_locked_tool_surface_kind: None,
             ..
         } if key.as_str() == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
     ));
@@ -5315,20 +5257,11 @@ fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required(
         .get(&tab_stack_reset_area_button_widget_id(inspector_stack))
         .expect("inspector tab-stack reset chrome should be routed");
 
-    assert!(!matches!(
-        split_action,
-        editor_shell::RoutedShellAction::SplitTabStackArea { .. }
-    ));
-    assert!(!matches!(
-        reset_action,
-        editor_shell::RoutedShellAction::ResetTabStackArea { .. }
-    ));
     assert!(matches!(
         split_action,
         editor_shell::RoutedShellAction::SplitTabStackAreaStableKey {
             stable_surface_key,
             panel_kind: PanelKind::Diagnostics,
-            legacy_tool_surface_kind: None,
             ..
         } if stable_surface_key.as_str()
             == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
@@ -5338,7 +5271,6 @@ fn inspector_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required(
         editor_shell::RoutedShellAction::ResetTabStackAreaStableKey {
             stable_surface_key,
             panel_kind: PanelKind::Diagnostics,
-            legacy_tool_surface_kind: None,
             ..
         } if stable_surface_key.as_str()
             == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
@@ -5357,7 +5289,6 @@ fn locked_inspector_tab_stack_create_menu_routes_only_stable_key_surface() {
         .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaStableKey {
             tab_stack_id: inspector_stack,
             locked_stable_surface_key: Some(key.clone()),
-            legacy_locked_tool_surface_kind: None,
         })
         .expect("stable-key-only inspector stack should lock");
     let bounds = UiRect::new(0.0, 0.0, 1400.0, 840.0);
@@ -5375,12 +5306,6 @@ fn locked_inspector_tab_stack_create_menu_routes_only_stable_key_surface() {
         .filter(|action| {
             matches!(
                 action,
-                editor_shell::RoutedShellAction::CreatePanelTab {
-                    tab_stack_id,
-                    ..
-                } if *tab_stack_id == inspector_stack
-            ) || matches!(
-                action,
                 editor_shell::RoutedShellAction::CreatePanelTabStableKey {
                     tab_stack_id,
                     ..
@@ -5396,7 +5321,6 @@ fn locked_inspector_tab_stack_create_menu_routes_only_stable_key_surface() {
             tab_stack_id,
             panel_kind: PanelKind::Diagnostics,
             stable_surface_key,
-            legacy_tool_surface_kind: None,
         } if *tab_stack_id == inspector_stack && stable_surface_key == &key
     ));
 }
@@ -5431,18 +5355,7 @@ fn inspector_switch_type_menu_does_not_emit_legacy_enum_actions() {
                 } if *tab_stack_id == inspector_stack
             ))
     );
-    assert!(
-        !artifacts
-            .widget_actions_by_id
-            .values()
-            .any(|action| matches!(
-                action,
-                editor_shell::RoutedShellAction::SwitchPanelToolSurfaceKindTo {
-                    panel_instance_id,
-                    ..
-                } if *panel_instance_id == inspector_panel
-            ))
-    );
+    let _ = inspector_panel;
 }
 
 #[test]
@@ -5832,19 +5745,22 @@ fn dragging_dynamic_split_border_updates_workspace_fraction() {
             let new_panel_id = allocator.allocate_panel_instance_id();
             let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
             Ok((
-                WorkspaceMutation::split_tab_stack_area_legacy(
-                    viewport_stack_id,
-                    WorkspaceSplitAxis::Horizontal,
+                WorkspaceMutation::SplitTabStackArea {
+                    tab_stack_id: viewport_stack_id,
+                    axis: WorkspaceSplitAxis::Horizontal,
                     split_host_id,
                     first_child_host_id,
                     second_child_host_id,
                     new_tab_stack_id,
                     new_panel_id,
-                    PanelKind::Inspector,
+                    new_panel_kind: PanelKind::Inspector,
                     new_tool_surface_id,
-                    ToolSurfaceKind::Inspector,
-                    0.45,
-                )?,
+                    new_stable_surface_key: editor_shell::stable_key_for_tool_surface_kind(
+                        ToolSurfaceKind::Inspector,
+                    )
+                    .expect("inspector should have stable key"),
+                    fraction: 0.45,
+                },
                 split_host_id,
             ))
         })
@@ -5920,19 +5836,22 @@ fn dragging_dynamic_inspector_split_border_from_tab_strip_resizes_area() {
             let new_panel_id = allocator.allocate_panel_instance_id();
             let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
             Ok((
-                WorkspaceMutation::split_tab_stack_area_legacy(
-                    inspector_stack_id,
-                    WorkspaceSplitAxis::Horizontal,
+                WorkspaceMutation::SplitTabStackArea {
+                    tab_stack_id: inspector_stack_id,
+                    axis: WorkspaceSplitAxis::Horizontal,
                     split_host_id,
                     first_child_host_id,
                     second_child_host_id,
                     new_tab_stack_id,
                     new_panel_id,
-                    PanelKind::Console,
+                    new_panel_kind: PanelKind::Console,
                     new_tool_surface_id,
-                    ToolSurfaceKind::Console,
-                    0.3,
-                )?,
+                    new_stable_surface_key: editor_shell::stable_key_for_tool_surface_kind(
+                        ToolSurfaceKind::Console,
+                    )
+                    .expect("console should have stable key"),
+                    fraction: 0.3,
+                },
                 split_host_id,
             ))
         })
@@ -6234,17 +6153,6 @@ fn active_dock_side_candidate_count(shell_state: &RunenwerkEditorShellState) -> 
         .count()
 }
 
-fn ui_tree_contains_viewport_embed(node: &editor_shell::UiNode, viewport_id: ViewportId) -> bool {
-    matches!(
-        &node.kind,
-        editor_shell::UiNodeKind::ViewportSurfaceEmbed(embed)
-            if embed.viewport_id == viewport_id.0
-    ) || node
-        .children
-        .iter()
-        .any(|child| ui_tree_contains_viewport_embed(child, viewport_id))
-}
-
 fn center_of_widget(
     layouts: &editor_shell::ComputedLayoutMap,
     widget_id: editor_shell::WidgetId,
@@ -6263,8 +6171,8 @@ fn runtime_debug_inspector_shell_state(
     app: &RunenwerkEditorApp,
 ) -> (RunenwerkEditorShellState, editor_shell::TabStackId) {
     let host = app.workbench_host();
-    let profile_registry = editor_shell::default_workspace_profile_registry();
-    let profile = profile_registry
+    let profile = host
+        .workspace_profile_registry()
         .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
         .expect("runtime debug profile should exist");
     let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
@@ -6289,8 +6197,11 @@ fn runtime_debug_inspector_shell_state(
     )
     .expect("inspector panel should become active in its tab stack");
     let mut shell_state =
-        RunenwerkEditorShellState::new_with_tool_surface_registry(host.tool_surface_registry())
-            .expect("shell state should build through hosted registry");
+        RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+            host.workspace_profile_registry(),
+            host.tool_surface_registry(),
+        )
+        .expect("shell state should build through hosted registry");
 
     shell_state.set_active_workspace_profile_id(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID);
     shell_state.replace_workspace_state(workspace);

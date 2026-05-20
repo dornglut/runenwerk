@@ -377,13 +377,56 @@ Closeout result:
 - Downstream PM-WB-CAP milestones remain dependency-waiting and must not be
   implemented from this contract alone.
 
+## Implementation Closeout Evidence
+
+Status as of 2026-05-20: completed for the bounded WR-032 implementation
+slice.
+
+Changed artifacts:
+
+- `domain/editor/editor_shell/src/tool_suite/definition.rs`
+- `domain/editor/editor_shell/src/tool_suite/registry.rs`
+- `apps/runenwerk_editor/src/shell/workbench_host.rs`
+- `apps/runenwerk_editor/src/shell/tool_suites/mod.rs`
+- `apps/runenwerk_editor/src/material_lab/tool_suite.rs`
+- `docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md`
+
+Implementation evidence:
+
+- `EditorToolSuite`, `ProviderFamilyDefinition`, and
+  `ToolSurfaceDefinition` now have typed constructor paths.
+- `WorkbenchCompositionBuilder` rejects duplicate profile refs and unknown
+  profile default surfaces before building a host composition.
+- `RunenwerkWorkbenchHost` carries typed profile definitions for full-editor
+  and Material Lab host modes and feeds them through the same composition
+  builder used for suites, provider bundles, and host policy.
+- Shell suite and Material Lab declarations now route through typed
+  constructors instead of direct struct literals.
+
+Validation:
+
+- `cargo test -p editor_shell tool_suite` passed with 31 matching tests.
+- `cargo test -p editor_shell workspace::profile` passed with 26 matching
+  tests.
+- `cargo test -p runenwerk_editor workbench_host` passed with 39 matching
+  tests.
+- `cargo check -p runenwerk_editor` passed.
+
+Closeout result:
+
+- WR-032 is ready to archive as `completed` with completion quality
+  `bounded_contract`.
+- PM-WB-CAP-001 remains active. WR-033, WR-034, WR-035, and WR-036 still own
+  the remaining clean-foundation work.
+
 ## Perfectionist Closeout Audit
 
-This contract-writing action cannot honestly be `perfectionist_verified`
-because it deliberately does not implement typed handle consumption. The known
-quality gap is intentional: typed Workbench composition still needs the later
-implementation pass after WR-031 completion and the recorded write-scope
-repair.
+The completed WR-032 implementation cannot honestly be
+`perfectionist_verified` because it deliberately leaves the clean-break chain
+to downstream rows. Typed Workbench composition is now implemented for the
+bounded suite/profile/provider foundation, but legacy identity removal,
+registry-only profile authority, clean persistence, and Material Lab clean
+migration proof remain visible WR-033 through WR-036 work.
 
 The later implementation closeout must guard against:
 

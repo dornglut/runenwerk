@@ -15,9 +15,9 @@ use crate::{
     InspectorSurfaceAction, MaterialSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction,
     PanelInstanceId, PanelKind, ProviderFamilyId, RoutedShellAction, SdfOperationDomainMutation,
     SdfOperationSessionMutation, SdfOperationSurfaceAction, StructuralCommandTarget, TabStackId,
-    TextureSurfaceAction, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceRoute,
-    ToolSurfaceStableKey, ToolbarViewModel, UiNode, ViewportDomainMutation,
-    ViewportSessionMutation, ViewportSurfaceAction, WidgetId, WorkspaceSurfaceIdentityError,
+    TextureSurfaceAction, ToolSurfaceInstanceId, ToolSurfaceRoute, ToolSurfaceStableKey,
+    ToolbarViewModel, UiNode, ViewportDomainMutation, ViewportSessionMutation,
+    ViewportSurfaceAction, WidgetId,
 };
 
 #[id]
@@ -89,7 +89,6 @@ pub struct SurfaceProviderRequest {
     pub tab_stack_id: TabStackId,
     pub tool_surface_instance_id: ToolSurfaceInstanceId,
     pub stable_surface_key: ToolSurfaceStableKey,
-    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     pub provider_family_id: Option<ProviderFamilyId>,
     pub surface_route: Option<ToolSurfaceRoute>,
     pub surface_definition_id: SurfaceDefinitionId,
@@ -103,18 +102,6 @@ impl SurfaceProviderRequest {
 
     pub fn stable_key(&self) -> &ToolSurfaceStableKey {
         &self.stable_surface_key
-    }
-
-    pub const fn legacy_kind(&self) -> Option<ToolSurfaceKind> {
-        self.legacy_tool_surface_kind
-    }
-
-    pub fn legacy_kind_or_error(&self) -> Result<ToolSurfaceKind, WorkspaceSurfaceIdentityError> {
-        self.legacy_tool_surface_kind.ok_or_else(|| {
-            WorkspaceSurfaceIdentityError::MissingLegacyCompatibilityKind {
-                stable_surface_key: self.stable_surface_key.clone(),
-            }
-        })
     }
 
     pub fn matches_stable_key(&self, expected: &str) -> bool {
@@ -295,11 +282,6 @@ pub struct ResolvedSurfaceFrame {
     pub surface_instance_id: ToolSurfaceInstanceId,
     pub panel_instance_id: PanelInstanceId,
     pub tab_stack_id: TabStackId,
-    /// C6C shell UI compatibility boundary pending final cleanup: frame
-    /// artifacts keep the legacy kind only for enum-backed labels and commands
-    /// that have not been retired yet. `stable_surface_key` is the surface
-    /// identity.
-    pub surface_kind: Option<ToolSurfaceKind>,
     pub stable_surface_key: ToolSurfaceStableKey,
     pub surface_definition_id: SurfaceDefinitionId,
     pub provider_id: Option<SurfaceProviderId>,
@@ -314,7 +296,6 @@ pub struct ToolSurfaceCreateCandidate {
     pub stable_surface_key: ToolSurfaceStableKey,
     pub label: String,
     pub panel_kind: PanelKind,
-    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 impl ToolSurfaceCreateCandidate {
@@ -322,13 +303,11 @@ impl ToolSurfaceCreateCandidate {
         stable_surface_key: ToolSurfaceStableKey,
         label: impl Into<String>,
         panel_kind: PanelKind,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     ) -> Self {
         Self {
             stable_surface_key,
             label: label.into(),
             panel_kind,
-            legacy_tool_surface_kind,
         }
     }
 }
@@ -344,7 +323,6 @@ impl ResolvedSurfaceFrame {
             surface_instance_id: request.tool_surface_instance_id,
             panel_instance_id: request.panel_instance_id,
             tab_stack_id: request.tab_stack_id,
-            surface_kind: request.legacy_tool_surface_kind,
             stable_surface_key: request.stable_surface_key.clone(),
             surface_definition_id: request.surface_definition_id,
             provider_id: None,
@@ -377,10 +355,6 @@ pub struct EditorShellFrameModel {
     pub active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
     pub route_actions_by_route_target: BTreeMap<String, RoutedShellAction>,
     pub available_panel_kinds: Vec<PanelKind>,
-    /// C6C shell UI compatibility boundary pending final cleanup:
-    /// the switch-type menu still exposes enum-backed choices. Normal creation
-    /// and provider request identity use stable keys.
-    pub available_tool_surface_kinds: Vec<ToolSurfaceKind>,
     pub available_tool_surface_create_candidates: Vec<ToolSurfaceCreateCandidate>,
     pub active_toolbar_template: Option<NormalizedUiTemplate>,
     pub active_toolbar_binding: Option<EditorToolbarBinding>,
@@ -398,7 +372,6 @@ impl EditorShellFrameModel {
             active_tab_stack_popup_menu: None,
             route_actions_by_route_target: BTreeMap::new(),
             available_panel_kinds: Vec::new(),
-            available_tool_surface_kinds: Vec::new(),
             available_tool_surface_create_candidates: Vec::new(),
             active_toolbar_template: None,
             active_toolbar_binding: None,
@@ -411,13 +384,6 @@ impl EditorShellFrameModel {
         popup_menu: Option<ActiveTabStackPopupMenu>,
     ) -> Self {
         self.active_tab_stack_popup_menu = popup_menu;
-        self
-    }
-
-    /// C6B legacy boundary for enum-backed shell surface menus pending final
-    /// cleanup. Normal provider request identity is `ToolSurfaceStableKey`.
-    pub fn with_available_tool_surface_kinds(mut self, kinds: Vec<ToolSurfaceKind>) -> Self {
-        self.available_tool_surface_kinds = kinds;
         self
     }
 
@@ -534,7 +500,7 @@ mod tests {
     };
 
     #[test]
-    fn surface_provider_request_can_carry_stable_key_metadata_without_losing_legacy_kind() {
+    fn surface_provider_request_carries_stable_key_metadata() {
         let stable_surface_key =
             ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
         let provider_family_id = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
@@ -549,17 +515,12 @@ mod tests {
             tab_stack_id: TabStackId::try_from_raw(1).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
             stable_surface_key: stable_surface_key.clone(),
-            legacy_tool_surface_kind: Some(ToolSurfaceKind::MaterialGraphCanvas),
             provider_family_id: Some(provider_family_id.clone()),
             surface_route: Some(ToolSurfaceRoute::ProviderOwnedGraphCanvas),
             surface_definition_id: MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
             capabilities: SurfaceCapabilitySet::new(true, true, true, false),
         };
 
-        assert_eq!(
-            request.legacy_kind(),
-            Some(ToolSurfaceKind::MaterialGraphCanvas)
-        );
         assert_eq!(request.stable_key(), &stable_surface_key);
         assert_eq!(
             request.provider_family_id.as_ref(),
@@ -574,10 +535,7 @@ mod tests {
 
     #[test]
     fn surface_provider_request_matches_stable_key() {
-        let request = material_graph_request_with_stable_key(
-            "runenwerk.material_lab.graph_canvas",
-            Some(ToolSurfaceKind::MaterialGraphCanvas),
-        );
+        let request = material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas");
 
         assert!(request.matches_stable_key("runenwerk.material_lab.graph_canvas"));
         assert!(request.matches_any_stable_key(&[
@@ -592,10 +550,7 @@ mod tests {
 
     #[test]
     fn mounted_surface_request_requires_stable_key() {
-        let request = material_graph_request_with_stable_key(
-            "runenwerk.material_lab.graph_canvas",
-            Some(ToolSurfaceKind::MaterialGraphCanvas),
-        );
+        let request = material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas");
 
         assert_eq!(
             request.stable_surface_key.as_str(),
@@ -605,10 +560,7 @@ mod tests {
 
     #[test]
     fn provider_request_stable_key_helper_returns_authority() {
-        let request = material_graph_request_with_stable_key(
-            "runenwerk.material_lab.graph_canvas",
-            Some(ToolSurfaceKind::MaterialGraphCanvas),
-        );
+        let request = material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas");
 
         assert_eq!(
             request.stable_key().as_str(),
@@ -617,21 +569,24 @@ mod tests {
     }
 
     #[test]
-    fn surface_provider_request_legacy_kind_is_optional() {
-        let request =
-            material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas", None);
+    fn surface_provider_request_has_no_live_legacy_kind_field() {
+        let request = material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas");
 
         assert!(request.matches_stable_key("runenwerk.material_lab.graph_canvas"));
-        assert_eq!(request.legacy_kind(), None);
-        assert!(request.legacy_kind_or_error().is_err());
+        let source = include_str!("surface_provider.rs");
+        let request_struct = source
+            .split("pub struct SurfaceProviderRequest")
+            .nth(1)
+            .and_then(|rest| rest.split("impl SurfaceProviderRequest").next())
+            .expect("SurfaceProviderRequest source block should exist");
+
+        assert!(!request_struct.contains("legacy_tool_surface_kind"));
     }
 
     #[test]
-    fn provider_request_legacy_kind_absent_does_not_panic() {
-        let request =
-            material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas", None);
+    fn provider_request_stable_key_matching_does_not_panic_for_invalid_input() {
+        let request = material_graph_request_with_stable_key("runenwerk.material_lab.graph_canvas");
 
-        assert_eq!(request.legacy_kind(), None);
         assert!(!request.matches_stable_key("not a valid stable key"));
     }
 
@@ -646,27 +601,21 @@ mod tests {
 
         assert!(request_struct.contains("pub stable_surface_key: ToolSurfaceStableKey"));
         assert!(!request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"));
+        assert!(!request_struct.contains("pub legacy_tool_surface_kind"));
     }
 
     #[test]
-    fn support_mode_prefers_stable_key_over_legacy() {
-        assert_eq!(
-            SurfaceProviderSupportMode::LegacyKind.preferred(SurfaceProviderSupportMode::StableKey),
-            SurfaceProviderSupportMode::StableKey
-        );
+    fn support_mode_prefers_stable_key() {
         assert_eq!(
             SurfaceProviderSupportMode::Unsupported
-                .preferred(SurfaceProviderSupportMode::LegacyKind),
-            SurfaceProviderSupportMode::LegacyKind
+                .preferred(SurfaceProviderSupportMode::StableKey),
+            SurfaceProviderSupportMode::StableKey
         );
         assert!(SurfaceProviderSupportMode::StableKey.is_supported());
         assert!(!SurfaceProviderSupportMode::Unsupported.is_supported());
     }
 
-    fn material_graph_request_with_stable_key(
-        stable_key: &str,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
-    ) -> SurfaceProviderRequest {
+    fn material_graph_request_with_stable_key(stable_key: &str) -> SurfaceProviderRequest {
         SurfaceProviderRequest {
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
@@ -677,7 +626,6 @@ mod tests {
             tab_stack_id: TabStackId::try_from_raw(1).unwrap(),
             tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
             stable_surface_key: ToolSurfaceStableKey::new(stable_key).unwrap(),
-            legacy_tool_surface_kind,
             provider_family_id: Some(ProviderFamilyId::new("runenwerk.material_lab").unwrap()),
             surface_route: Some(ToolSurfaceRoute::ProviderOwnedGraphCanvas),
             surface_definition_id: MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,

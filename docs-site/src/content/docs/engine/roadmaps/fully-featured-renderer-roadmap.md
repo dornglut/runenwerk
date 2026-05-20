@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime / editor-product-integration
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-21
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
@@ -14,6 +14,7 @@ related_designs:
   - ../../design/active/field-visualizer-product-workflow-design.md
   - ../../design/active/material-lab-and-material-preview-design.md
   - ../../design/active/render-fragment-data-driven-maturity-design.md
+  - ../../design/active/render-product-graph-platform-design.md
 related_roadmaps:
   - ./render-final-architecture-migration.md
   - ../plugins/render/docs/roadmap.md
@@ -189,6 +190,31 @@ first.
 - `WR-010` implements FR-7 render fragments and data-driven maturity.
 - `WR-014` and later product-family rows can feed FR-6 only after their owning
   domain product contracts are accepted.
+
+## Production Track Mapping
+
+`PT-RENDER-PG` is the production planning layer for this roadmap. It guides
+sequencing but does not replace the WR roadmap as the legal execution graph.
+
+- `FR-0` maps to `PM-RENDER-PG-001` for doctrine, docs reconciliation, and
+  production-track alignment.
+- `FR-1` maps to `PM-RENDER-PG-002` for render contract hardening and API
+  ergonomics.
+- `FR-2` maps to `PM-RENDER-PG-005` for shared product-surface hardening.
+- `FR-3` remains deferred to product-family designs and future renderer WR
+  rows; `PT-RENDER-PG` defines the handoff boundary but does not implement SDF
+  brick/page-table, clipmap, or raymarch acceleration work by itself.
+- `FR-4` maps to `PM-RENDER-PG-005` plus material/product roadmap rows; material
+  truth stays outside the renderer.
+- `FR-5` maps to `PM-RENDER-PG-004` and `PM-RENDER-PG-005` for history,
+  lifetime, and product-surface validation.
+- `FR-6` remains deferred to product-family designs plus
+  `PM-RENDER-PG-005`; atmosphere, water, VFX, animation, and vegetation must
+  first have owning product contracts.
+- `FR-7` maps to `PM-RENDER-PG-007` for render fragments, hot reload,
+  validation, provenance, and last-good behavior.
+- `FR-8` maps to `PM-RENDER-PG-008` for production diagnostics, inspection,
+  examples, budgets, and closeout evidence.
 
 ## Validation Expectations
 

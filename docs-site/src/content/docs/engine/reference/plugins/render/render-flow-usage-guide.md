@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-05-21
 ---
 
 # Render Flow Usage Guide
@@ -189,7 +189,7 @@ let flow = RenderFlow::new("product.flow")
     .validate()?;
 ```
 
-Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape; active runtime execution must stay on flow-owned targets until target alias validation and renderer resolution are landed:
+Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape. Active runtime execution resolves target aliases per prepared invocation and uses the renderer-owned dynamic target cache for requested product targets:
 
 ```rust
 use engine::plugins::render::{
@@ -297,7 +297,9 @@ Advanced feature-tagged pass note:
 
 Current multi-view scope:
 
-- active runtime execution is single-view only; prepare may carry view containers, but multi-view execution remains explicitly deferred.
+- prepared offscreen product views and per-flow prepared invocations are active through the product-surface path.
+- broader native OS multi-window and multi-swapchain presentation remains separate future work.
+- finer-grained view-scoped pass subset scheduling should stay explicit through pass scoping and compiled view masks rather than cloned flows.
 
 ## Related Examples
 

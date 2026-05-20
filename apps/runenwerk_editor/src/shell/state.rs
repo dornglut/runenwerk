@@ -4,10 +4,10 @@ use editor_shell::{
     DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
     MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId, SCENE_WORKSPACE_PROFILE_ID,
     ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId,
-    ToolSurfaceKind, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
-    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
+    ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId, WorkspaceId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId, WorkspaceProfileRegistry,
     WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis, WorkspaceState,
-    WorkspaceStateError, default_workspace_profile_registry, reduce_workspace,
+    WorkspaceStateError, reduce_workspace,
 };
 use ui_math::{UiPoint, UiRect};
 
@@ -89,28 +89,32 @@ impl Default for RunenwerkEditorShellState {
 
 impl RunenwerkEditorShellState {
     pub fn new() -> Self {
-        let mut identity_allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = identity_allocator.allocate_workspace_id();
-        let profile_registry = default_workspace_profile_registry();
-        let active_workspace_profile_id = profile_registry.default_profile_id();
-        let workspace_state = profile_registry
-            .default_profile()
-            .expect("default workspace profile should exist")
-            .build_default_workspace_state(workspace_id, &mut identity_allocator);
-        debug_assert!(workspace_state.validate_integrity().is_ok());
-        Self::from_bootstrapped_workspace(
-            identity_allocator,
-            active_workspace_profile_id,
-            workspace_state,
+        let host = crate::shell::RunenwerkWorkbenchHost::new()
+            .expect("default workbench host composition must build");
+        Self::new_with_workspace_profile_registry_and_tool_surface_registry(
+            host.workspace_profile_registry(),
+            host.tool_surface_registry(),
         )
+        .expect("default workspace should build from the default workbench host registry")
     }
 
     pub fn new_with_tool_surface_registry(
         registry: &ToolSurfaceRegistry,
     ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
+        let host = crate::shell::RunenwerkWorkbenchHost::new()
+            .expect("default workbench host composition must build");
+        Self::new_with_workspace_profile_registry_and_tool_surface_registry(
+            host.workspace_profile_registry(),
+            registry,
+        )
+    }
+
+    pub fn new_with_workspace_profile_registry_and_tool_surface_registry(
+        profile_registry: &WorkspaceProfileRegistry,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
         let mut identity_allocator = WorkspaceIdentityAllocator::new();
         let workspace_id = identity_allocator.allocate_workspace_id();
-        let profile_registry = default_workspace_profile_registry();
         let active_workspace_profile_id = profile_registry.default_profile_id();
         let workspace_state = profile_registry
             .default_profile()
@@ -132,9 +136,22 @@ impl RunenwerkEditorShellState {
         profile_id: WorkspaceProfileId,
         registry: &ToolSurfaceRegistry,
     ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
+        let host = crate::shell::RunenwerkWorkbenchHost::new()
+            .expect("default workbench host composition must build");
+        Self::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
+            profile_id,
+            host.workspace_profile_registry(),
+            registry,
+        )
+    }
+
+    pub fn new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
+        profile_id: WorkspaceProfileId,
+        profile_registry: &WorkspaceProfileRegistry,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
         let mut identity_allocator = WorkspaceIdentityAllocator::new();
         let workspace_id = identity_allocator.allocate_workspace_id();
-        let profile_registry = default_workspace_profile_registry();
         let profile = profile_registry.profile(profile_id).ok_or(
             WorkspaceProfileRegistryBackedBuildError::UnknownWorkspaceProfile { profile_id },
         )?;
@@ -473,24 +490,6 @@ impl RunenwerkEditorShellState {
         self.workspace_state = next_workspace_state;
         self.clear_cached_projection();
         Ok(value)
-    }
-
-    pub fn switch_panel_tool_surface_kind(
-        &mut self,
-        panel_instance_id: PanelInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
-    ) -> Result<ToolSurfaceInstanceId, WorkspaceStateError> {
-        self.try_apply_workspace_mutation_with_allocations(|allocator| {
-            let tool_surface_id = allocator.allocate_tool_surface_instance_id();
-            Ok((
-                WorkspaceMutation::replace_panel_tool_surface_kind_legacy(
-                    panel_instance_id,
-                    tool_surface_id,
-                    tool_surface_kind,
-                )?,
-                tool_surface_id,
-            ))
-        })
     }
 
     pub fn docking_visual_state(&self) -> DockingInteractionVisualState {

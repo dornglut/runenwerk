@@ -2,10 +2,10 @@
 //! Purpose: Compiled-in tool-suite metadata declarations for current editor surfaces.
 
 use editor_shell::{
-    EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
-    ToolSurfaceDefinition, ToolSurfaceKind, ToolSurfacePersistence, ToolSurfaceRole,
-    ToolSurfaceRoute, ToolSurfaceStableKey, editor_surface_definitions,
-    panel_kind_for_tool_surface_kind, stable_key_for_tool_surface_kind, tool_surface_definition_id,
+    EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef, SurfaceRef,
+    ToolSuiteId, ToolSurfaceDefinition, ToolSurfaceKind, ToolSurfaceRole, ToolSurfaceRoute,
+    ToolSurfaceStableKey, editor_surface_definitions, panel_kind_for_tool_surface_kind,
+    stable_key_for_tool_surface_kind, tool_surface_definition_id,
 };
 
 pub mod asset_tool_suite;
@@ -93,34 +93,35 @@ pub(crate) fn tool_suite(
     let provider_family_id = ProviderFamilyId::new(suite_id.as_str())
         .expect("compiled-in provider family should be valid");
 
-    EditorToolSuite {
-        suite_id,
-        label: label.to_string(),
-        provider_families: vec![ProviderFamilyDefinition {
-            id: provider_family_id.clone(),
-            label: label.to_string(),
-        }],
-        surfaces: surfaces
+    EditorToolSuite::new(
+        SuiteRef::new(suite_id),
+        label,
+        vec![ProviderFamilyDefinition::new(
+            provider_family_id.clone(),
+            label,
+        )],
+        surfaces
             .iter()
             .map(|surface| tool_surface_definition(*surface, provider_family_id.clone()))
             .collect(),
-    }
+    )
 }
 
 fn tool_surface_definition(
     surface: ToolSuiteSurface,
     provider_family: ProviderFamilyId,
 ) -> ToolSurfaceDefinition {
-    ToolSurfaceDefinition {
-        key: stable_key_for_tool_surface_kind(surface.kind)
-            .expect("saveable compiled-in surface should have a stable key"),
-        label: surface_label(surface.kind).to_string(),
-        role: surface.role,
-        panel_kind: panel_kind_for_tool_surface_kind(surface.kind),
+    ToolSurfaceDefinition::new(
+        SurfaceRef::new(
+            stable_key_for_tool_surface_kind(surface.kind)
+                .expect("saveable compiled-in surface should have a stable key"),
+        ),
+        surface_label(surface.kind),
+        surface.role,
+        panel_kind_for_tool_surface_kind(surface.kind),
         provider_family,
-        route: surface.route,
-        persistence: ToolSurfacePersistence::StableKey,
-    }
+        surface.route,
+    )
 }
 
 pub(crate) fn stable_tool_surface_definition(
@@ -131,16 +132,17 @@ pub(crate) fn stable_tool_surface_definition(
     route: ToolSurfaceRoute,
     provider_family: ProviderFamilyId,
 ) -> ToolSurfaceDefinition {
-    ToolSurfaceDefinition {
-        key: ToolSurfaceStableKey::new(stable_key)
-            .expect("compiled-in stable tool surface key should be valid"),
-        label: label.to_string(),
+    ToolSurfaceDefinition::new(
+        SurfaceRef::new(
+            ToolSurfaceStableKey::new(stable_key)
+                .expect("compiled-in stable tool surface key should be valid"),
+        ),
+        label,
         role,
         panel_kind,
         provider_family,
         route,
-        persistence: ToolSurfacePersistence::StableKey,
-    }
+    )
 }
 
 fn surface_label(kind: ToolSurfaceKind) -> &'static str {
@@ -157,7 +159,8 @@ mod tests {
     use std::collections::BTreeSet;
 
     use editor_shell::{
-        saveable_tool_surface_stable_key_candidates, tool_surface_kind_for_stable_key,
+        ToolSurfacePersistence, saveable_tool_surface_stable_key_candidates,
+        tool_surface_kind_for_stable_key,
     };
 
     use super::*;

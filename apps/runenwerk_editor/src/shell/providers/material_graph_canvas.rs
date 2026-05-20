@@ -773,7 +773,6 @@ mod tests {
                 super::MATERIAL_GRAPH_CANVAS_SURFACE_KEY,
             )
             .unwrap(),
-            legacy_tool_surface_kind: Some(ToolSurfaceKind::MaterialGraphCanvas),
             provider_family_id: None,
             surface_route: None,
             surface_definition_id: editor_shell::MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,

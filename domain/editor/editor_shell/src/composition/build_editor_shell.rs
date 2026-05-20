@@ -35,31 +35,27 @@ use crate::{
     FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
     MODELLING_WORKSPACE_PROFILE_ID, PanelInstanceId, PanelKind, ROOT_WIDGET_ID,
     SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId,
-    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceStableKey,
-    ToolbarCommandKind, ToolbarMenuKind, VIEWPORT_CANVAS_WIDGET_ID,
-    VIEWPORT_DETAILS_LABEL_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
-    VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID,
-    VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID,
-    VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID,
-    VIEWPORT_SURFACE_EMBED_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
-    VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID, VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
-    VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
-    WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
-    build_defined_toolbar_with_template, dock_split_preview_label_widget_id,
-    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id,
-    panel_kind_for_tool_surface_kind, stable_key_for_tool_surface_kind, surface_widget_id,
-    tab_active_indicator_widget_id, tab_chrome_widget_id, tab_close_button_widget_id,
-    tab_stack_action_menu_list_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_action_menu_scroll_widget_id, tab_stack_close_area_button_widget_id,
-    tab_stack_container_widget_id, tab_stack_content_widget_id,
-    tab_stack_duplicate_button_widget_id, tab_stack_lock_type_toggle_widget_id,
-    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_list_widget_id,
-    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_surface_menu_scroll_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_reset_area_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_split_vertical_button_widget_id,
-    tab_stack_surface_menu_item_widget_id, tab_stack_surface_menu_list_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
-    tab_stack_surface_submenu_anchor_widget_id, tab_strip_scroll_widget_id,
+    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceStableKey, ToolbarCommandKind,
+    ToolbarMenuKind, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID,
+    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+    VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_LABEL_WIDGET_ID,
+    VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
+    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID, VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId,
+    WorkspaceProfileId, WorkspaceSplitAxis, WorkspaceState,
+    build_defined_toolbar_menu_popup_with_binding, build_defined_toolbar_with_template,
+    dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
+    dock_split_preview_panel_widget_id, surface_widget_id, tab_active_indicator_widget_id,
+    tab_chrome_widget_id, tab_close_button_widget_id, tab_stack_action_menu_list_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_action_menu_scroll_widget_id,
+    tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
+    tab_stack_content_widget_id, tab_stack_duplicate_button_widget_id,
+    tab_stack_lock_type_toggle_widget_id, tab_stack_new_surface_menu_item_widget_id,
+    tab_stack_new_surface_menu_list_widget_id, tab_stack_new_surface_menu_popup_widget_id,
+    tab_stack_new_surface_menu_scroll_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_reset_area_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_split_vertical_button_widget_id, tab_strip_scroll_widget_id,
 };
 use crate::{EditorShellFrameModel, ToolSurfaceCreateCandidate};
 
@@ -116,44 +112,20 @@ pub enum RoutedShellAction {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
     },
-    // C6C shell UI compatibility boundary pending final cleanup: these
-    // enum-backed surface-menu actions are retained for existing shell commands
-    // while workspace state, reducers, projection, and provider requests are
-    // stable-key authoritative.
-    SwitchPanelToolSurfaceKind {
-        tab_stack_id: TabStackId,
-        panel_instance_id: Option<PanelInstanceId>,
-        tool_surface_kinds: Vec<ToolSurfaceKind>,
-    },
-    SwitchPanelToolSurfaceKindTo {
-        panel_instance_id: PanelInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
-    },
-    CreatePanelTab {
-        tab_stack_id: TabStackId,
-        tool_surface_kind: ToolSurfaceKind,
-    },
     CreatePanelTabStableKey {
         tab_stack_id: TabStackId,
         panel_kind: PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     },
     ClosePanelTab {
         tab_stack_id: TabStackId,
         panel_instance_id: PanelInstanceId,
-    },
-    SplitTabStackArea {
-        tab_stack_id: TabStackId,
-        axis: WorkspaceSplitAxis,
-        tool_surface_kind: ToolSurfaceKind,
     },
     SplitTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         axis: WorkspaceSplitAxis,
         panel_kind: PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     },
     DuplicateTabStackArea {
         tab_stack_id: TabStackId,
@@ -161,24 +133,14 @@ pub enum RoutedShellAction {
     CloseTabStackArea {
         tab_stack_id: TabStackId,
     },
-    ResetTabStackArea {
-        tab_stack_id: TabStackId,
-        tool_surface_kind: ToolSurfaceKind,
-    },
     ResetTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         panel_kind: PanelKind,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
-    },
-    LockTabStackAreaType {
-        tab_stack_id: TabStackId,
-        locked_tool_surface_kind: Option<ToolSurfaceKind>,
     },
     LockTabStackAreaStableKey {
         tab_stack_id: TabStackId,
         locked_stable_surface_key: Option<ToolSurfaceStableKey>,
-        legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
     },
     DispatchSurfaceLocalAction {
         provider_id: SurfaceProviderId,
@@ -692,19 +654,11 @@ fn build_tab_stack_popup_menus(
                     theme,
                 )]
             }
-            TabStackPopupMenuKind::SurfaceKinds => vec![
-                build_tab_stack_action_menu_popup(
-                    stack,
-                    tab_stack_container_widget_id(active_menu.tab_stack_id),
-                    theme,
-                ),
-                build_tab_stack_surface_menu_popup(
-                    stack,
-                    active_menu.anchor_widget_id,
-                    theme,
-                    &available_tool_surface_kinds(frame_model),
-                ),
-            ],
+            TabStackPopupMenuKind::SurfaceKinds => vec![build_tab_stack_action_menu_popup(
+                stack,
+                tab_stack_container_widget_id(active_menu.tab_stack_id),
+                theme,
+            )],
             TabStackPopupMenuKind::CreateSurface => {
                 vec![build_tab_stack_create_surface_menu_popup(
                     stack,
@@ -757,25 +711,9 @@ fn tab_stack_popup_interaction_model(
                 tab_stack_action_menu_popup_widget_id(active_menu.tab_stack_id),
                 tab_stack_action_menu_list_widget_id(active_menu.tab_stack_id),
             );
-            push_tab_stack_menu_scope(
-                &mut model,
-                tab_stack_surface_kind_scope_id(active_menu.tab_stack_id),
-                tab_stack_surface_menu_popup_widget_id(active_menu.tab_stack_id),
-                active_menu.anchor_widget_id,
-                Some(parent_scope),
-            );
-            push_tab_stack_menu_sizing(
-                &mut model,
-                tab_stack_surface_menu_popup_widget_id(active_menu.tab_stack_id),
-                tab_stack_surface_menu_list_widget_id(active_menu.tab_stack_id),
-            );
             push_tab_stack_scroll_owner(
                 &mut model,
                 tab_stack_action_menu_scroll_widget_id(active_menu.tab_stack_id),
-            );
-            push_tab_stack_scroll_owner(
-                &mut model,
-                tab_stack_surface_menu_scroll_widget_id(active_menu.tab_stack_id),
             );
         }
         TabStackPopupMenuKind::CreateSurface => {
@@ -970,7 +908,7 @@ fn viewport_surface_interaction_model(
     for surface in frame_model
         .surfaces
         .values()
-        .filter(|surface| surface.surface_kind == Some(ToolSurfaceKind::Viewport))
+        .filter(|surface| surface.stable_surface_key.as_str() == "runenwerk.scene.viewport")
     {
         push_viewport_popup_interactions(
             &mut model,
@@ -1169,10 +1107,6 @@ fn tab_stack_area_action_scope_id(tab_stack_id: TabStackId) -> String {
     format!("tab_stack.{}.area_actions", tab_stack_id.raw())
 }
 
-fn tab_stack_surface_kind_scope_id(tab_stack_id: TabStackId) -> String {
-    format!("tab_stack.{}.surface_kinds", tab_stack_id.raw())
-}
-
 fn tab_stack_create_surface_scope_id(tab_stack_id: TabStackId) -> String {
     format!("tab_stack.{}.create_surface", tab_stack_id.raw())
 }
@@ -1215,14 +1149,6 @@ fn build_tab_stack_action_menu_popup(
             text_style.clone(),
         ),
     ];
-    if tab_stack_supports_legacy_switch_menu(tab_stack) {
-        children.push(tab_stack_action_menu_item(
-            tab_stack_surface_submenu_anchor_widget_id(tab_stack_id),
-            "Switch Type",
-            theme,
-            text_style.clone(),
-        ));
-    }
     children.extend([
         tab_stack_action_menu_item(
             tab_stack_lock_type_toggle_widget_id(tab_stack_id),
@@ -1253,51 +1179,6 @@ fn build_tab_stack_action_menu_popup(
     root.children.push(scrollable_shell_popup_menu_content(
         tab_stack_action_menu_scroll_widget_id(tab_stack_id),
         tab_stack_action_menu_list_widget_id(tab_stack_id),
-        theme,
-        children,
-    ));
-    root
-}
-
-fn build_tab_stack_surface_menu_popup(
-    tab_stack: &ProjectedTabStackSlot,
-    anchor_widget_id: WidgetId,
-    theme: &ThemeTokens,
-    tool_surface_kinds: &[ToolSurfaceKind],
-) -> UiNode {
-    // C6C shell UI compatibility boundary pending final cleanup: labels for
-    // the existing enum-backed surface switcher are still sourced from
-    // ToolSurfaceKind.
-    let text_style = compact_shell_text_style(theme);
-    let children = tool_surface_kinds
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(index, kind)| {
-            tab_stack_action_menu_item(
-                tab_stack_surface_menu_item_widget_id(tab_stack.tab_stack_id, index),
-                tool_surface_kind_label(kind),
-                theme,
-                text_style.clone(),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let popup_theme = contrast_popup_theme(theme);
-    let mut root = UiNode::with_children(
-        tab_stack_surface_menu_popup_widget_id(tab_stack.tab_stack_id),
-        UiNodeKind::Popup(PopupNode::anchored_outside(
-            anchor_widget_id,
-            PopupSide::Right,
-            PopupAlign::Start,
-            PopupFlipPolicy::FlipToFit,
-            popup_theme,
-        )),
-        Vec::new(),
-    );
-    root.children.push(scrollable_shell_popup_menu_content(
-        tab_stack_surface_menu_scroll_widget_id(tab_stack.tab_stack_id),
-        tab_stack_surface_menu_list_widget_id(tab_stack.tab_stack_id),
         theme,
         children,
     ));
@@ -1699,120 +1580,10 @@ pub(super) fn panel_kind_label(panel_kind: PanelKind) -> &'static str {
     }
 }
 
-pub(super) fn shell_tool_surface_kinds() -> Vec<ToolSurfaceKind> {
-    vec![
-        ToolSurfaceKind::Outliner,
-        ToolSurfaceKind::EntityTable,
-        ToolSurfaceKind::Viewport,
-        ToolSurfaceKind::Inspector,
-        ToolSurfaceKind::Console,
-        ToolSurfaceKind::AssetBrowser,
-        ToolSurfaceKind::ImportInspector,
-        ToolSurfaceKind::FieldProductViewer,
-        ToolSurfaceKind::SdfBrushBrowser,
-        ToolSurfaceKind::GraphCanvas,
-        ToolSurfaceKind::Diagnostics,
-        ToolSurfaceKind::RuntimeDebug,
-        ToolSurfaceKind::FieldLayerStack,
-        ToolSurfaceKind::SdfGraphCanvas,
-        ToolSurfaceKind::MaterialGraphCanvas,
-        ToolSurfaceKind::MaterialInspector,
-        ToolSurfaceKind::MaterialPreview,
-        ToolSurfaceKind::TextureViewer,
-        ToolSurfaceKind::VolumeTextureViewer,
-        ToolSurfaceKind::ProcgenGraphCanvas,
-        ToolSurfaceKind::ProcgenPreview,
-        ToolSurfaceKind::GameplayGraphCanvas,
-        ToolSurfaceKind::GameplayCompilerDiagnostics,
-        ToolSurfaceKind::ParticleGraphCanvas,
-        ToolSurfaceKind::ParticlePreview,
-        ToolSurfaceKind::PhysicsAuthoring,
-        ToolSurfaceKind::PhysicsDebug,
-        ToolSurfaceKind::Timeline,
-        ToolSurfaceKind::CurveEditor,
-        ToolSurfaceKind::AnimationGraphCanvas,
-        ToolSurfaceKind::SimulationPreview,
-        ToolSurfaceKind::SimulationDiagnostics,
-    ]
-}
-
-fn available_tool_surface_kinds(frame_model: &EditorShellFrameModel) -> Vec<ToolSurfaceKind> {
-    if frame_model.available_tool_surface_kinds.is_empty() {
-        shell_tool_surface_kinds()
-    } else {
-        frame_model.available_tool_surface_kinds.clone()
-    }
-}
-
 fn available_tool_surface_create_candidates(
     frame_model: &EditorShellFrameModel,
 ) -> Vec<ToolSurfaceCreateCandidate> {
-    if !frame_model
-        .available_tool_surface_create_candidates
-        .is_empty()
-    {
-        return frame_model.available_tool_surface_create_candidates.clone();
-    }
-    available_tool_surface_kinds(frame_model)
-        .into_iter()
-        .filter_map(|kind| {
-            Some(ToolSurfaceCreateCandidate::new(
-                stable_key_for_tool_surface_kind(kind)?,
-                tool_surface_kind_label(kind),
-                panel_kind_for_tool_surface_kind(kind),
-                Some(kind),
-            ))
-        })
-        .collect()
-}
-
-pub(super) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
-    match kind {
-        ToolSurfaceKind::Outliner => "Outliner",
-        ToolSurfaceKind::EntityTable => "Entities",
-        ToolSurfaceKind::Viewport => "Viewport",
-        ToolSurfaceKind::Inspector => "Inspector",
-        ToolSurfaceKind::Console => "Console",
-        ToolSurfaceKind::EditorDesignOutliner => "Definitions",
-        ToolSurfaceKind::UiHierarchy => "UI Hierarchy",
-        ToolSurfaceKind::UiCanvas => "UI Canvas",
-        ToolSurfaceKind::StyleInspector => "Style Inspector",
-        ToolSurfaceKind::Bindings => "Bindings",
-        ToolSurfaceKind::DockLayoutPreview => "Layout Preview",
-        ToolSurfaceKind::ThemeEditor => "Theme Editor",
-        ToolSurfaceKind::ShortcutEditor => "Shortcut Editor",
-        ToolSurfaceKind::MenuEditor => "Menu Editor",
-        ToolSurfaceKind::DefinitionValidation => "Validation",
-        ToolSurfaceKind::CommandDiff => "Command Diff",
-        ToolSurfaceKind::AssetBrowser => "Asset Browser",
-        ToolSurfaceKind::ImportInspector => "Import Inspector",
-        ToolSurfaceKind::FieldProductViewer => "Field Product Viewer",
-        ToolSurfaceKind::SdfBrushBrowser => "SDF Brush Browser",
-        ToolSurfaceKind::GraphCanvas => "Graph Canvas",
-        ToolSurfaceKind::Diagnostics => "Diagnostics",
-        ToolSurfaceKind::RuntimeDebug => "Runtime Debug",
-        ToolSurfaceKind::FieldLayerStack => "Field Layer Stack",
-        ToolSurfaceKind::SdfGraphCanvas => "SDF Graph Canvas",
-        ToolSurfaceKind::MaterialGraphCanvas => "Material Graph Canvas",
-        ToolSurfaceKind::MaterialInspector => "Material Inspector",
-        ToolSurfaceKind::MaterialPreview => "Material Preview",
-        ToolSurfaceKind::TextureViewer => "Texture Viewer",
-        ToolSurfaceKind::VolumeTextureViewer => "Volume Texture Viewer",
-        ToolSurfaceKind::ProcgenGraphCanvas => "Procgen Graph Canvas",
-        ToolSurfaceKind::ProcgenPreview => "Procgen Preview",
-        ToolSurfaceKind::GameplayGraphCanvas => "Gameplay Graph Canvas",
-        ToolSurfaceKind::GameplayCompilerDiagnostics => "Gameplay Compiler Diagnostics",
-        ToolSurfaceKind::ParticleGraphCanvas => "Particle Graph Canvas",
-        ToolSurfaceKind::ParticlePreview => "Particle Preview",
-        ToolSurfaceKind::PhysicsAuthoring => "Physics Authoring",
-        ToolSurfaceKind::PhysicsDebug => "Physics Debug",
-        ToolSurfaceKind::Timeline => "Timeline",
-        ToolSurfaceKind::CurveEditor => "Curve Editor",
-        ToolSurfaceKind::AnimationGraphCanvas => "Animation Graph Canvas",
-        ToolSurfaceKind::SimulationPreview => "Simulation Preview",
-        ToolSurfaceKind::SimulationDiagnostics => "Simulation Diagnostics",
-        ToolSurfaceKind::Placeholder => "Placeholder",
-    }
+    frame_model.available_tool_surface_create_candidates.clone()
 }
 
 fn build_empty_stack_placeholder(id: WidgetId, label_text: &str, theme: &ThemeTokens) -> UiNode {
@@ -1871,15 +1642,9 @@ fn build_frame_widget_routes(
         );
     }
 
-    let tool_surface_kinds = available_tool_surface_kinds(frame_model);
     let create_candidates = available_tool_surface_create_candidates(frame_model);
     for stack in projected_tab_stacks_for_routes(workspace_projection) {
-        register_tab_stack_chrome_routes(
-            &mut actions,
-            stack,
-            &tool_surface_kinds,
-            &create_candidates,
-        );
+        register_tab_stack_chrome_routes(&mut actions, stack, &create_candidates);
     }
 
     for surface in frame_model.surfaces.values() {
@@ -2051,15 +1816,6 @@ fn projected_tab_stacks_for_routes(
 struct TabStackChromeSurfaceTarget {
     panel_kind: PanelKind,
     stable_surface_key: ToolSurfaceStableKey,
-    legacy_tool_surface_kind: Option<ToolSurfaceKind>,
-}
-
-fn tab_stack_supports_legacy_switch_menu(stack: &ProjectedTabStackSlot) -> bool {
-    stack
-        .active_panel
-        .as_ref()
-        .and_then(|panel| panel.legacy_active_tool_surface_kind)
-        .is_some()
 }
 
 fn tab_stack_chrome_surface_target(
@@ -2071,15 +1827,13 @@ fn tab_stack_chrome_surface_target(
         return Some(TabStackChromeSurfaceTarget {
             panel_kind: active_panel.panel_kind,
             stable_surface_key,
-            legacy_tool_surface_kind: active_panel.legacy_active_tool_surface_kind,
         });
     }
 
-    let legacy_tool_surface_kind = stack.legacy_locked_tool_surface_kind?;
+    let locked_stable_surface_key = stack.locked_stable_surface_key.clone()?;
     Some(TabStackChromeSurfaceTarget {
-        panel_kind: panel_kind_for_tool_surface_kind(legacy_tool_surface_kind),
-        stable_surface_key: stable_key_for_tool_surface_kind(legacy_tool_surface_kind)?,
-        legacy_tool_surface_kind: Some(legacy_tool_surface_kind),
+        panel_kind: PanelKind::Placeholder,
+        stable_surface_key: locked_stable_surface_key,
     })
 }
 
@@ -2089,9 +1843,6 @@ fn create_candidate_allowed_for_tab_stack(
 ) -> bool {
     if let Some(locked_key) = stack.locked_stable_surface_key.as_ref() {
         return locked_key == &candidate.stable_surface_key;
-    }
-    if let Some(locked_kind) = stack.legacy_locked_tool_surface_kind {
-        return candidate.legacy_tool_surface_kind == Some(locked_kind);
     }
     true
 }
@@ -2110,13 +1861,9 @@ fn create_candidates_for_tab_stack(
 fn register_tab_stack_chrome_routes(
     actions: &mut BTreeMap<WidgetId, RoutedShellAction>,
     stack: &ProjectedTabStackSlot,
-    tool_surface_kinds: &[ToolSurfaceKind],
     create_candidates: &[ToolSurfaceCreateCandidate],
 ) {
-    // C6D shell chrome boundary: switch-type is still legacy compatibility.
-    // Create/split/reset/lock use stable-key authority.
     let surface_target = tab_stack_chrome_surface_target(stack);
-    let supports_legacy_switch_menu = tab_stack_supports_legacy_switch_menu(stack);
     let tab_create_candidates = create_candidates_for_tab_stack(stack, create_candidates);
     if !tab_create_candidates.is_empty() {
         actions.insert(
@@ -2127,26 +1874,6 @@ fn register_tab_stack_chrome_routes(
             },
         );
     }
-    if supports_legacy_switch_menu {
-        actions.insert(
-            tab_stack_surface_submenu_anchor_widget_id(stack.tab_stack_id),
-            RoutedShellAction::ToggleTabStackSurfaceMenu {
-                tab_stack_id: stack.tab_stack_id,
-                anchor_widget_id: tab_stack_surface_submenu_anchor_widget_id(stack.tab_stack_id),
-            },
-        );
-    }
-    if supports_legacy_switch_menu && let Some(active_panel) = &stack.active_panel {
-        for (index, tool_surface_kind) in tool_surface_kinds.iter().copied().enumerate() {
-            actions.insert(
-                tab_stack_surface_menu_item_widget_id(stack.tab_stack_id, index),
-                RoutedShellAction::SwitchPanelToolSurfaceKindTo {
-                    panel_instance_id: active_panel.panel_instance_id,
-                    tool_surface_kind,
-                },
-            );
-        }
-    }
     for (index, candidate) in tab_create_candidates.iter().enumerate() {
         actions.insert(
             tab_stack_new_surface_menu_item_widget_id(stack.tab_stack_id, index),
@@ -2154,7 +1881,6 @@ fn register_tab_stack_chrome_routes(
                 tab_stack_id: stack.tab_stack_id,
                 panel_kind: candidate.panel_kind,
                 stable_surface_key: candidate.stable_surface_key.clone(),
-                legacy_tool_surface_kind: candidate.legacy_tool_surface_kind,
             },
         );
     }
@@ -2166,7 +1892,6 @@ fn register_tab_stack_chrome_routes(
                 axis: WorkspaceSplitAxis::Horizontal,
                 panel_kind: surface_target.panel_kind,
                 stable_surface_key: surface_target.stable_surface_key.clone(),
-                legacy_tool_surface_kind: surface_target.legacy_tool_surface_kind,
             },
         );
         actions.insert(
@@ -2176,7 +1901,6 @@ fn register_tab_stack_chrome_routes(
                 axis: WorkspaceSplitAxis::Vertical,
                 panel_kind: surface_target.panel_kind,
                 stable_surface_key: surface_target.stable_surface_key.clone(),
-                legacy_tool_surface_kind: surface_target.legacy_tool_surface_kind,
             },
         );
     }
@@ -2193,7 +1917,6 @@ fn register_tab_stack_chrome_routes(
                 tab_stack_id: stack.tab_stack_id,
                 panel_kind: surface_target.panel_kind,
                 stable_surface_key: surface_target.stable_surface_key.clone(),
-                legacy_tool_surface_kind: surface_target.legacy_tool_surface_kind,
             },
         );
         actions.insert(
@@ -2204,11 +1927,6 @@ fn register_tab_stack_chrome_routes(
                     None
                 } else {
                     Some(surface_target.stable_surface_key)
-                },
-                legacy_locked_tool_surface_kind: if stack.locked_stable_surface_key.is_some() {
-                    None
-                } else {
-                    surface_target.legacy_tool_surface_kind
                 },
             },
         );
@@ -2275,18 +1993,13 @@ mod tests {
         ToolSurfaceStableKey::new(value).expect("test stable key should be valid")
     }
 
-    fn stack_with_active_surface(
-        key: &str,
-        panel_kind: PanelKind,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
-    ) -> ProjectedTabStackSlot {
+    fn stack_with_active_surface(key: &str, panel_kind: PanelKind) -> ProjectedTabStackSlot {
         let tab_stack_id = tab_stack_id(10);
         let panel = ProjectedPanelSlot {
             panel_instance_id: panel_id(11),
             panel_kind,
             active_tool_surface: Some(surface_id(12)),
             active_stable_surface_key: Some(stable_key(key)),
-            legacy_active_tool_surface_kind: legacy_tool_surface_kind,
             tab_stack_id,
         };
         ProjectedTabStackSlot {
@@ -2302,7 +2015,6 @@ mod tests {
             }],
             active_panel: Some(panel),
             locked_stable_surface_key: None,
-            legacy_locked_tool_surface_kind: None,
         }
     }
 
@@ -2313,49 +2025,40 @@ mod tests {
                 stable_key("runenwerk.scene.viewport"),
                 "Viewport",
                 PanelKind::Viewport,
-                Some(ToolSurfaceKind::Viewport),
             ),
             ToolSurfaceCreateCandidate::new(
                 stable_key(STABLE_KEY_ONLY_TEST_SURFACE),
                 "Stable Only",
                 PanelKind::Diagnostics,
-                None,
             ),
         ];
-        register_tab_stack_chrome_routes(
-            &mut actions,
-            stack,
-            &[ToolSurfaceKind::Viewport],
-            &create_candidates,
-        );
+        register_tab_stack_chrome_routes(&mut actions, stack, &create_candidates);
         actions
     }
 
     #[test]
     fn shell_chrome_does_not_fallback_stable_key_only_surface_to_viewport() {
-        let stack =
-            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics, None);
+        let stack = stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics);
         let actions = chrome_actions_for(&stack);
 
         assert!(!actions.values().any(|action| matches!(
             action,
-            RoutedShellAction::SplitTabStackArea {
-                tool_surface_kind: ToolSurfaceKind::Viewport,
+            RoutedShellAction::SplitTabStackAreaStableKey {
+                stable_surface_key,
                 ..
-            } | RoutedShellAction::ResetTabStackArea {
-                tool_surface_kind: ToolSurfaceKind::Viewport,
+            } | RoutedShellAction::ResetTabStackAreaStableKey {
+                stable_surface_key,
                 ..
-            } | RoutedShellAction::LockTabStackAreaType {
-                locked_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
+            } | RoutedShellAction::LockTabStackAreaStableKey {
+                locked_stable_surface_key: Some(stable_surface_key),
                 ..
-            }
+            } if stable_surface_key.as_str() == "runenwerk.scene.viewport"
         )));
     }
 
     #[test]
     fn stable_key_only_tab_stack_lock_uses_stable_key() {
-        let stack =
-            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics, None);
+        let stack = stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics);
         let actions = chrome_actions_for(&stack);
 
         let lock_action = actions
@@ -2366,85 +2069,23 @@ mod tests {
             lock_action,
             RoutedShellAction::LockTabStackAreaStableKey {
                 locked_stable_surface_key: Some(key),
-                legacy_locked_tool_surface_kind: None,
                 ..
             } if key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
     }
 
     #[test]
-    fn stable_key_only_tab_stack_split_or_reset_fails_closed_if_legacy_only_path_required() {
-        let stack =
-            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics, None);
+    fn stable_key_only_tab_stack_split_and_reset_use_stable_key() {
+        let stack = stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics);
         let actions = chrome_actions_for(&stack);
 
-        assert!(!matches!(
+        assert!(matches!(
             actions.get(&tab_stack_split_horizontal_button_widget_id(
                 stack.tab_stack_id
             )),
-            Some(RoutedShellAction::SplitTabStackArea { .. })
-        ));
-        assert!(!matches!(
-            actions.get(&tab_stack_reset_area_button_widget_id(stack.tab_stack_id)),
-            Some(RoutedShellAction::ResetTabStackArea { .. })
-        ));
-    }
-
-    #[test]
-    fn stable_key_only_surface_switch_type_is_disabled_or_omitted() {
-        let stack =
-            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics, None);
-        let actions = chrome_actions_for(&stack);
-
-        assert!(!matches!(
-            actions.get(&tab_stack_surface_submenu_anchor_widget_id(
-                stack.tab_stack_id
-            )),
-            Some(RoutedShellAction::ToggleTabStackSurfaceMenu { .. })
-        ));
-        assert!(!actions.values().any(|action| matches!(
-            action,
-            RoutedShellAction::SwitchPanelToolSurfaceKindTo { .. }
-        )));
-    }
-
-    #[test]
-    fn stable_key_only_locked_stack_create_menu_routes_only_matching_stable_key() {
-        let mut stack =
-            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics, None);
-        stack.locked_stable_surface_key = Some(stable_key(STABLE_KEY_ONLY_TEST_SURFACE));
-        let actions = chrome_actions_for(&stack);
-
-        assert!(!actions.values().any(|action| matches!(
-            action,
-            RoutedShellAction::CreatePanelTab {
-                tool_surface_kind: ToolSurfaceKind::Viewport,
-                ..
-            }
-        )));
-        assert!(matches!(
-            actions.get(&tab_stack_new_surface_menu_item_widget_id(stack.tab_stack_id, 0)),
-            Some(RoutedShellAction::CreatePanelTabStableKey {
-                stable_surface_key,
-                panel_kind: PanelKind::Diagnostics,
-                legacy_tool_surface_kind: None,
-                ..
-            }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
-        ));
-    }
-
-    #[test]
-    fn stable_key_surface_chrome_command_preserves_surface_identity() {
-        let stack =
-            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics, None);
-        let actions = chrome_actions_for(&stack);
-
-        assert!(matches!(
-            actions.get(&tab_stack_split_horizontal_button_widget_id(stack.tab_stack_id)),
             Some(RoutedShellAction::SplitTabStackAreaStableKey {
                 stable_surface_key,
                 panel_kind: PanelKind::Diagnostics,
-                legacy_tool_surface_kind: None,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
@@ -2453,53 +2094,73 @@ mod tests {
             Some(RoutedShellAction::ResetTabStackAreaStableKey {
                 stable_surface_key,
                 panel_kind: PanelKind::Diagnostics,
-                legacy_tool_surface_kind: None,
                 ..
             }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
     }
 
     #[test]
-    fn legacy_surface_switch_type_menu_still_emits_legacy_actions() {
-        let stack = stack_with_active_surface(
-            "runenwerk.scene.viewport",
-            PanelKind::Viewport,
-            Some(ToolSurfaceKind::Viewport),
+    fn surface_switch_type_menu_is_removed_from_stable_key_chrome() {
+        let stack = stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics);
+        let actions = chrome_actions_for(&stack);
+
+        assert!(
+            !actions.values().any(|action| matches!(
+                action,
+                RoutedShellAction::ToggleTabStackSurfaceMenu { .. }
+            ))
         );
+    }
+
+    #[test]
+    fn stable_key_only_locked_stack_create_menu_routes_only_matching_stable_key() {
+        let mut stack =
+            stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics);
+        stack.locked_stable_surface_key = Some(stable_key(STABLE_KEY_ONLY_TEST_SURFACE));
         let actions = chrome_actions_for(&stack);
 
         assert!(matches!(
-            actions.get(&tab_stack_surface_submenu_anchor_widget_id(
-                stack.tab_stack_id
-            )),
-            Some(RoutedShellAction::ToggleTabStackSurfaceMenu { .. })
-        ));
-        assert!(matches!(
-            actions.get(&tab_stack_surface_menu_item_widget_id(
-                stack.tab_stack_id,
-                0
-            )),
-            Some(RoutedShellAction::SwitchPanelToolSurfaceKindTo {
-                tool_surface_kind: ToolSurfaceKind::Viewport,
+            actions.get(&tab_stack_new_surface_menu_item_widget_id(stack.tab_stack_id, 0)),
+            Some(RoutedShellAction::CreatePanelTabStableKey {
+                stable_surface_key,
+                panel_kind: PanelKind::Diagnostics,
                 ..
-            })
+            }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
         ));
     }
 
     #[test]
-    fn legacy_surface_chrome_commands_still_work_for_legacy_metadata_surfaces() {
-        let stack = stack_with_active_surface(
-            "runenwerk.scene.viewport",
-            PanelKind::Viewport,
-            Some(ToolSurfaceKind::Viewport),
-        );
+    fn stable_key_surface_chrome_command_preserves_surface_identity() {
+        let stack = stack_with_active_surface(STABLE_KEY_ONLY_TEST_SURFACE, PanelKind::Diagnostics);
+        let actions = chrome_actions_for(&stack);
+
+        assert!(matches!(
+            actions.get(&tab_stack_split_horizontal_button_widget_id(stack.tab_stack_id)),
+            Some(RoutedShellAction::SplitTabStackAreaStableKey {
+                stable_surface_key,
+                panel_kind: PanelKind::Diagnostics,
+                ..
+            }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
+        ));
+        assert!(matches!(
+            actions.get(&tab_stack_reset_area_button_widget_id(stack.tab_stack_id)),
+            Some(RoutedShellAction::ResetTabStackAreaStableKey {
+                stable_surface_key,
+                panel_kind: PanelKind::Diagnostics,
+                ..
+            }) if stable_surface_key.as_str() == STABLE_KEY_ONLY_TEST_SURFACE
+        ));
+    }
+
+    #[test]
+    fn viewport_surface_chrome_commands_use_stable_key_identity() {
+        let stack = stack_with_active_surface("runenwerk.scene.viewport", PanelKind::Viewport);
         let actions = chrome_actions_for(&stack);
 
         assert!(actions.values().any(|action| matches!(
             action,
             RoutedShellAction::CreatePanelTabStableKey {
                 stable_surface_key,
-                legacy_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
                 ..
             } if stable_surface_key.as_str() == "runenwerk.scene.viewport"
         )));
@@ -2507,7 +2168,6 @@ mod tests {
             actions.get(&tab_stack_split_horizontal_button_widget_id(stack.tab_stack_id)),
             Some(RoutedShellAction::SplitTabStackAreaStableKey {
                 stable_surface_key,
-                legacy_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
                 ..
             }) if stable_surface_key.as_str() == "runenwerk.scene.viewport"
         ));

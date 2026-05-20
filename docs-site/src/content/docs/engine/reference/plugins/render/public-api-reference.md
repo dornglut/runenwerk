@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-21
 ---
 
 # Render Public API Reference
@@ -220,7 +220,8 @@ Pipeline-key specialization/runtime contract:
 Current multi-view contract:
 
 - prepared frame packets can carry main-surface and offscreen product views plus per-flow invocations.
-- active renderer execution for dynamic target aliases remains part of the render product surface bundle; avoid cloning flows or suffixing static labels as a substitute.
+- active renderer execution resolves dynamic target aliases through the render product-surface foundation; avoid cloning flows or suffixing static labels as a substitute.
+- native OS multi-window and multi-swapchain presentation is a separate future surface-scoped runtime capability.
 
 Flow-owned color target format contract:
 

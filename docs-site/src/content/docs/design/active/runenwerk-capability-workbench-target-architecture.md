@@ -181,6 +181,52 @@ source truth
 
 Render and runtime systems consume formed products. They do not own authoring source truth.
 
+### 2.5.1 Product And Service Declarations Are Requests, Not Authority
+
+Tool suites may declare product and service needs as stable Workbench metadata.
+Those declarations make dependencies discoverable to hosts, planners, and
+validation tools, but they do not grant permission and they do not define
+product semantics.
+
+The declaration boundary is:
+
+```text
+ToolSuite capability declaration:
+  product need  -> ProductCapabilityKey + label
+  service need  -> ToolServiceKey + label
+
+Host policy:
+  allows or denies declared needs for a specific host mode
+
+Owning domain:
+  validates product semantics, source truth, lowering, and product formation
+
+Service owner:
+  validates process/runtime behavior, IO, diagnostics, and lifecycle
+```
+
+Example:
+
+```text
+Material Lab declares:
+  product need: runenwerk.material.preview_product
+  service need: runenwerk.material.preview_builder
+
+Full editor host:
+  can allow both needs
+
+Headless validation host:
+  can allow preview_builder while denying interactive preview presentation
+
+domain/material_graph:
+  still owns material graph validity and preview product descriptors
+```
+
+Declarations are intentionally weaker than implementation contracts. They
+answer "what does this suite need?" and leave "is this operation allowed?" to
+host policy and "is this product/service request valid?" to the owning domain
+or service owner.
+
 ### 2.6 Desired State And Observed Status Are Separate
 
 Workbench state should be reconciled, not mutated by uncontrolled side effects.

@@ -204,14 +204,6 @@ fn command_for_activation(
             tab_stack_id: *tab_stack_id,
             anchor_widget_id: *anchor_widget_id,
         },
-        RoutedShellAction::SwitchPanelToolSurfaceKindTo {
-            panel_instance_id,
-            tool_surface_kind,
-        } => ShellCommand::SwitchPanelToolSurfaceKind {
-            panel_instance_id: *panel_instance_id,
-            tool_surface_kind: *tool_surface_kind,
-            projection_epoch: routing.projection_epoch,
-        },
         RoutedShellAction::RunToolbarCommand { command, enabled } => {
             if *enabled {
                 ShellCommand::RunToolbarCommand { command: *command }
@@ -283,24 +275,14 @@ fn command_for_activation(
             panel_instance_id: *panel_instance_id,
             projection_epoch: routing.projection_epoch,
         },
-        RoutedShellAction::CreatePanelTab {
-            tab_stack_id,
-            tool_surface_kind,
-        } => ShellCommand::CreatePanelTab {
-            tab_stack_id: *tab_stack_id,
-            tool_surface_kind: *tool_surface_kind,
-            projection_epoch: routing.projection_epoch,
-        },
         RoutedShellAction::CreatePanelTabStableKey {
             tab_stack_id,
             panel_kind,
             stable_surface_key,
-            legacy_tool_surface_kind,
         } => ShellCommand::CreatePanelTabStableKey {
             tab_stack_id: *tab_stack_id,
             panel_kind: *panel_kind,
             stable_surface_key: stable_surface_key.clone(),
-            legacy_tool_surface_kind: *legacy_tool_surface_kind,
             projection_epoch: routing.projection_epoch,
         },
         RoutedShellAction::ClosePanelTab {
@@ -311,28 +293,16 @@ fn command_for_activation(
             panel_instance_id: *panel_instance_id,
             projection_epoch: routing.projection_epoch,
         },
-        RoutedShellAction::SplitTabStackArea {
-            tab_stack_id,
-            axis,
-            tool_surface_kind,
-        } => ShellCommand::SplitTabStackArea {
-            tab_stack_id: *tab_stack_id,
-            axis: *axis,
-            tool_surface_kind: *tool_surface_kind,
-            projection_epoch: routing.projection_epoch,
-        },
         RoutedShellAction::SplitTabStackAreaStableKey {
             tab_stack_id,
             axis,
             panel_kind,
             stable_surface_key,
-            legacy_tool_surface_kind,
         } => ShellCommand::SplitTabStackAreaStableKey {
             tab_stack_id: *tab_stack_id,
             axis: *axis,
             panel_kind: *panel_kind,
             stable_surface_key: stable_surface_key.clone(),
-            legacy_tool_surface_kind: *legacy_tool_surface_kind,
             projection_epoch: routing.projection_epoch,
         },
         RoutedShellAction::DuplicateTabStackArea { tab_stack_id } => {
@@ -345,45 +315,24 @@ fn command_for_activation(
             tab_stack_id: *tab_stack_id,
             projection_epoch: routing.projection_epoch,
         },
-        RoutedShellAction::ResetTabStackArea {
-            tab_stack_id,
-            tool_surface_kind,
-        } => ShellCommand::ResetTabStackArea {
-            tab_stack_id: *tab_stack_id,
-            tool_surface_kind: *tool_surface_kind,
-            projection_epoch: routing.projection_epoch,
-        },
         RoutedShellAction::ResetTabStackAreaStableKey {
             tab_stack_id,
             panel_kind,
             stable_surface_key,
-            legacy_tool_surface_kind,
         } => ShellCommand::ResetTabStackAreaStableKey {
             tab_stack_id: *tab_stack_id,
             panel_kind: *panel_kind,
             stable_surface_key: stable_surface_key.clone(),
-            legacy_tool_surface_kind: *legacy_tool_surface_kind,
-            projection_epoch: routing.projection_epoch,
-        },
-        RoutedShellAction::LockTabStackAreaType {
-            tab_stack_id,
-            locked_tool_surface_kind,
-        } => ShellCommand::LockTabStackAreaType {
-            tab_stack_id: *tab_stack_id,
-            locked_tool_surface_kind: *locked_tool_surface_kind,
             projection_epoch: routing.projection_epoch,
         },
         RoutedShellAction::LockTabStackAreaStableKey {
             tab_stack_id,
             locked_stable_surface_key,
-            legacy_locked_tool_surface_kind,
         } => ShellCommand::LockTabStackAreaStableKey {
             tab_stack_id: *tab_stack_id,
             locked_stable_surface_key: locked_stable_surface_key.clone(),
-            legacy_locked_tool_surface_kind: *legacy_locked_tool_surface_kind,
             projection_epoch: routing.projection_epoch,
         },
-        RoutedShellAction::SwitchPanelToolSurfaceKind { .. } => ShellCommand::NoOp,
         RoutedShellAction::DispatchSurfaceLocalAction {
             provider_id,
             tool_surface_instance_id,
@@ -436,20 +385,6 @@ fn command_for_select_change(
     routing: &ShellProjectionArtifacts,
 ) -> ShellCommand {
     match routing.widget_actions_by_id.get(&widget_id) {
-        Some(RoutedShellAction::SwitchPanelToolSurfaceKind {
-            panel_instance_id: Some(panel_instance_id),
-            tool_surface_kinds,
-            ..
-        }) => {
-            let Some(tool_surface_kind) = tool_surface_kinds.get(index).copied() else {
-                return ShellCommand::NoOp;
-            };
-            ShellCommand::SwitchPanelToolSurfaceKind {
-                panel_instance_id: *panel_instance_id,
-                tool_surface_kind,
-                projection_epoch: routing.projection_epoch,
-            }
-        }
         Some(RoutedShellAction::DispatchSurfaceLocalAction {
             provider_id,
             tool_surface_instance_id,
@@ -522,27 +457,13 @@ fn command_for_toggle(
     routing: &ShellProjectionArtifacts,
 ) -> ShellCommand {
     match routing.widget_actions_by_id.get(&widget_id) {
-        Some(RoutedShellAction::LockTabStackAreaType {
-            tab_stack_id,
-            locked_tool_surface_kind,
-        }) => ShellCommand::LockTabStackAreaType {
-            tab_stack_id: *tab_stack_id,
-            locked_tool_surface_kind: checked.then_some(*locked_tool_surface_kind).flatten(),
-            projection_epoch: routing.projection_epoch,
-        },
         Some(RoutedShellAction::LockTabStackAreaStableKey {
             tab_stack_id,
             locked_stable_surface_key,
-            legacy_locked_tool_surface_kind,
         }) => ShellCommand::LockTabStackAreaStableKey {
             tab_stack_id: *tab_stack_id,
             locked_stable_surface_key: if checked {
                 locked_stable_surface_key.clone()
-            } else {
-                None
-            },
-            legacy_locked_tool_surface_kind: if checked {
-                *legacy_locked_tool_surface_kind
             } else {
                 None
             },

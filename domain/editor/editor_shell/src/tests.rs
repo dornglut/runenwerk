@@ -23,20 +23,21 @@ use crate::{
     PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction, ShellCommand,
     SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
-    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
-    ViewportSurfaceAction, ViewportViewModel, WidgetId, WorkspaceIdentityAllocator,
-    WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame,
-    build_editor_shell_frame_with_docking_visual_state, build_entity_table_panel,
-    build_viewport_panel, dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
-    dock_split_preview_panel_widget_id, label, map_interactions_to_shell_commands,
-    panel_kind_definition_key, reduce_workspace, surface_widget_id, tab_active_indicator_widget_id,
+    ToolSurfaceCreateCandidate, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
+    UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
+    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
+    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
+    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
+    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
+    stable_key_for_tool_surface_kind, surface_widget_id, tab_active_indicator_widget_id,
     tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
     tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
     tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
     tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
     tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
     tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
-    tool_surface_definition_id, tool_surface_kind_definition_key,
+    tool_surface_definition_id, tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
@@ -152,14 +153,14 @@ fn reducer_normal_mutations_do_not_reintroduce_tool_surface_kind_authority_field
                 .lines()
                 .map(str::trim)
                 .any(|line| line == forbidden),
-            "normal reducer mutations must not carry ToolSurfaceKind authority field `{forbidden}`; use stable keys plus named legacy wrappers"
+            "normal reducer mutations must not carry ToolSurfaceKind authority field `{forbidden}`; use stable keys"
         );
     }
 
     assert!(enum_block.contains("stable_surface_key: ToolSurfaceStableKey"));
     assert!(enum_block.contains("locked_stable_surface_key: Option<ToolSurfaceStableKey>"));
-    assert!(source.contains("add_panel_tab_legacy"));
-    assert!(source.contains("replace_panel_tool_surface_kind_legacy"));
+    assert!(!source.contains("add_panel_tab_legacy"));
+    assert!(!source.contains("replace_panel_tool_surface_kind_legacy"));
 }
 
 #[test]
@@ -180,7 +181,7 @@ fn tool_surface_kind_usage_is_boundary_only_guard() {
     normal_workspace_mutations_do_not_use_tool_surface_kind_authority_guard();
     profile_default_surfaces_do_not_use_tool_surface_kind_authority_guard();
     provider_request_does_not_require_tool_surface_kind_guard();
-    shell_menu_enum_compatibility_is_marked_pending_final_cleanup();
+    shell_menu_actions_are_stable_key_only();
     normal_surface_classifiers_use_stable_keys_when_available();
     app_command_surface_contract_lookup_is_legacy_named();
     no_unmarked_tool_surface_kind_usage_in_normal_path_guard();
@@ -224,6 +225,9 @@ fn stable_key_authority_is_end_to_end_guard() {
     );
     assert!(profile_struct.contains("pub default_surfaces: Vec<WorkspaceDefaultToolSurface>"));
     assert!(!profile_struct.contains("default_tool_surfaces: Vec<ToolSurfaceKind>"));
+    assert!(!profile_source.contains("compiled_in_legacy_workspace_profile"));
+    assert!(!profile_source.contains("m6_workspace_profile("));
+    assert!(!profile_source.contains("compiled_in_legacy_default_surface"));
 
     assert!(
         projection_source.contains("pub active_stable_surface_key: Option<ToolSurfaceStableKey>")
@@ -239,6 +243,7 @@ fn stable_key_authority_is_end_to_end_guard() {
     );
     assert!(app_provider_source.contains("provider_family_provider_map"));
     assert!(app_provider_source.contains("resolve_frame_with_provider_family_map"));
+    assert!(app_provider_source.contains("workspace_profile_registry"));
     assert!(app_provider_source.contains("SurfaceProviderSupportMode::StableKey"));
     assert!(app_provider_source.contains("preferred_support_mode"));
     assert!(app_provider_source.contains(".preferred(supported.support_mode)"));
@@ -275,9 +280,9 @@ fn tool_surface_kind_is_legacy_boundary_only_guard() {
     assert!(persisted_source.contains("persisted_v5_stable_surface_key_for_surface"));
 
     assert!(definition_form_source.contains("authored_legacy_surface_key_still_resolves"));
-    assert!(definition_form_source.contains("ToolSurfaceState::new_legacy"));
-    assert!(reducer_source.contains("add_panel_tab_legacy"));
-    assert!(reducer_source.contains("replace_panel_tool_surface_kind_legacy"));
+    assert!(definition_form_source.contains("ToolSurfaceState::new_with_stable_key"));
+    assert!(!reducer_source.contains("add_panel_tab_legacy"));
+    assert!(!reducer_source.contains("replace_panel_tool_surface_kind_legacy"));
     assert!(profile_source.contains("pub fn new_legacy"));
 
     assert!(controller_source.contains("tab_stack_chrome_surface_target_pending_c6"));
@@ -317,7 +322,7 @@ fn surface_provider_request_requires_stable_key_guard() {
     );
 
     assert!(request_struct.contains("pub stable_surface_key: ToolSurfaceStableKey"));
-    assert!(request_struct.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>"));
+    assert!(!request_struct.contains("pub legacy_tool_surface_kind"));
     assert!(request_struct.contains("pub provider_family_id: Option<ProviderFamilyId>"));
     assert!(request_struct.contains("pub surface_route: Option<ToolSurfaceRoute>"));
     assert!(!request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"));
@@ -400,10 +405,10 @@ fn public_tool_surface_kind_apis_are_legacy_labeled_guard() {
     }
 
     let surface_provider_source = include_str!("surface_provider.rs");
-    assert_legacy_boundary_doc(
-        surface_provider_source,
-        "pub fn with_available_tool_surface_kinds",
+    assert!(
+        surface_provider_source.contains("pub fn with_available_tool_surface_create_candidates")
     );
+    assert!(!surface_provider_source.contains("pub fn with_available_tool_surface_kinds"));
 }
 
 #[test]
@@ -417,13 +422,13 @@ fn normal_tool_surface_state_does_not_use_tool_surface_kind_authority_guard() {
     );
 
     assert!(struct_block.contains("pub stable_surface_key: ToolSurfaceStableKey"));
-    assert!(struct_block.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>"));
+    assert!(!struct_block.contains("pub legacy_tool_surface_kind"));
     assert!(
         !struct_block.contains("pub tool_surface_kind: ToolSurfaceKind"),
         "ToolSurfaceState must not reintroduce ToolSurfaceKind authority"
     );
     assert!(source.contains("pub fn new_with_stable_key"));
-    assert!(source.contains("pub fn new_legacy"));
+    assert!(!source.contains("pub fn new_legacy"));
     assert!(source.contains("pub panel_kind: PanelKind"));
 }
 
@@ -455,9 +460,7 @@ fn profile_default_surfaces_do_not_use_tool_surface_kind_authority_guard() {
     );
     assert!(default_surface_block.contains("pub stable_surface_key: ToolSurfaceStableKey"));
     assert!(default_surface_block.contains("pub panel_kind: PanelKind"));
-    assert!(
-        default_surface_block.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>")
-    );
+    assert!(!default_surface_block.contains("pub legacy_tool_surface_kind"));
     assert!(source.contains("pub fn new_legacy"));
 }
 
@@ -472,7 +475,7 @@ fn provider_request_does_not_require_tool_surface_kind_guard() {
     );
 
     assert!(request_struct.contains("pub stable_surface_key: ToolSurfaceStableKey"));
-    assert!(request_struct.contains("pub legacy_tool_surface_kind: Option<ToolSurfaceKind>"));
+    assert!(!request_struct.contains("pub legacy_tool_surface_kind"));
     assert!(
         !request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"),
         "SurfaceProviderRequest must not require ToolSurfaceKind"
@@ -480,19 +483,21 @@ fn provider_request_does_not_require_tool_surface_kind_guard() {
 }
 
 #[test]
-fn shell_menu_enum_compatibility_is_marked_pending_final_cleanup() {
+fn shell_menu_actions_are_stable_key_only() {
     let surface_provider_source = include_str!("surface_provider.rs");
     let composition_source = include_str!("composition/build_editor_shell.rs");
+    let request_struct = source_block_between(
+        surface_provider_source,
+        "pub struct SurfaceProviderRequest {",
+        "impl SurfaceProviderRequest",
+        "SurfaceProviderRequest",
+    );
 
-    assert!(
-        surface_provider_source
-            .contains("C6C shell UI compatibility boundary pending final cleanup")
-    );
-    assert!(
-        composition_source.contains("C6C shell UI compatibility boundary pending final cleanup")
-    );
-    assert!(composition_source.contains("RoutedShellAction::SwitchPanelToolSurfaceKindTo"));
-    assert!(composition_source.contains("RoutedShellAction::CreatePanelTab"));
+    assert!(!request_struct.contains("legacy_tool_surface_kind"));
+    assert!(!composition_source.contains("RoutedShellAction::SwitchPanelToolSurfaceKindTo"));
+    assert!(!composition_source.contains("RoutedShellAction::CreatePanelTab {"));
+    assert!(composition_source.contains("RoutedShellAction::CreatePanelTabStableKey"));
+    assert!(composition_source.contains("RoutedShellAction::SplitTabStackAreaStableKey"));
 }
 
 #[test]
@@ -520,11 +525,11 @@ fn app_command_surface_contract_lookup_is_legacy_named() {
 
     assert!(dispatch_source.contains("pub(crate) struct LegacySurfaceCommandContract"));
     assert!(dispatch_source.contains("pub(crate) fn resolve_legacy_surface_command_contract"));
-    assert!(dispatch_source.contains("C6C command-dispatch compatibility boundary"));
+    assert!(dispatch_source.contains("C6C legacy app-command compatibility boundary"));
     assert!(
         dispatch_source.contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
     );
-    assert!(dispatch_source.contains("or_else(|| surface.legacy_tool_surface_kind())"));
+    assert!(!dispatch_source.contains("legacy_tool_surface_kind"));
 }
 
 #[test]
@@ -554,10 +559,10 @@ fn no_unmarked_tool_surface_kind_usage_in_normal_path_guard() {
         "SurfaceProviderRequest",
     );
     assert!(!request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"));
+    assert!(!request_struct.contains("pub legacy_tool_surface_kind"));
     assert!(!composition_source.contains("C5 shell UI compatibility boundary pending C6"));
-    assert!(
-        composition_source.contains("C6C shell UI compatibility boundary pending final cleanup")
-    );
+    assert!(!composition_source.contains("RoutedShellAction::SwitchPanelToolSurfaceKindTo"));
+    assert!(composition_source.contains("RoutedShellAction::CreatePanelTabStableKey"));
 }
 
 fn source_block_between<'a>(source: &'a str, start: &str, end: &str, label: &str) -> &'a str {
@@ -2043,7 +2048,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
                 axis: split_axis,
                 panel_kind: split_panel_kind,
                 stable_surface_key: split_surface_key,
-                legacy_tool_surface_kind: split_legacy_kind,
                 projection_epoch: split_epoch,
             },
             ShellCommand::ClosePanelTab {
@@ -2057,7 +2061,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
             && *split_axis == WorkspaceSplitAxis::Horizontal
             && *split_panel_kind == PanelKind::Viewport
             && split_surface_key.as_str() == "runenwerk.scene.viewport"
-            && *split_legacy_kind == Some(ToolSurfaceKind::Viewport)
             && *split_epoch == projection_epoch
             && *close_stack == viewport_stack
             && *close_panel == viewport_panel
@@ -2169,7 +2172,6 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
                 axis: split_axis,
                 panel_kind: split_panel_kind,
                 stable_surface_key: split_surface_key,
-                legacy_tool_surface_kind: split_legacy_kind,
                 projection_epoch: split_epoch,
             },
         ] if *tab_stack_id == viewport_stack
@@ -2178,7 +2180,6 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
             && *split_axis == WorkspaceSplitAxis::Horizontal
             && *split_panel_kind == PanelKind::Viewport
             && split_surface_key.as_str() == "runenwerk.scene.viewport"
-            && *split_legacy_kind == Some(ToolSurfaceKind::Viewport)
             && *split_epoch == projection_epoch
     ));
 }
@@ -2287,8 +2288,9 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
         ToolSurfaceKind::Inspector,
         ToolSurfaceKind::Console,
     ];
+    let available_candidates = create_candidates_for_kinds(&available_kinds);
     let frame_model = frame_model_for_workspace(&workspace)
-        .with_available_tool_surface_kinds(available_kinds.clone());
+        .with_available_tool_surface_create_candidates(available_candidates);
     let inactive_build =
         build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
 
@@ -2344,7 +2346,6 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
             ShellCommand::CreatePanelTabStableKey {
                 tab_stack_id,
                 stable_surface_key,
-                legacy_tool_surface_kind: Some(ToolSurfaceKind::Inspector),
                 ..
             }
         ] if *tab_stack_id == viewport_stack && stable_surface_key.as_str() == "runenwerk.scene.inspector"
@@ -2358,11 +2359,10 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
     let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
     let workspace = reduce_workspace(
         &workspace,
-        WorkspaceMutation::lock_tab_stack_area_type_legacy(
-            viewport_stack,
-            Some(ToolSurfaceKind::Viewport),
-        )
-        .expect("legacy wrapper should create lock mutation"),
+        WorkspaceMutation::LockTabStackAreaStableKey {
+            tab_stack_id: viewport_stack,
+            locked_stable_surface_key: stable_key_for_tool_surface_kind(ToolSurfaceKind::Viewport),
+        },
     )
     .expect("locking viewport tab stack should succeed");
     let available_kinds = vec![
@@ -2372,8 +2372,9 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
         ToolSurfaceKind::Inspector,
         ToolSurfaceKind::Console,
     ];
+    let available_candidates = create_candidates_for_kinds(&available_kinds);
     let active_frame_model = frame_model_for_workspace(&workspace)
-        .with_available_tool_surface_kinds(available_kinds.clone())
+        .with_available_tool_surface_create_candidates(available_candidates)
         .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
             kind: TabStackPopupMenuKind::CreateSurface,
             tab_stack_id: viewport_stack,
@@ -2400,7 +2401,6 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
             ShellCommand::CreatePanelTabStableKey {
                 tab_stack_id,
                 stable_surface_key,
-                legacy_tool_surface_kind: Some(ToolSurfaceKind::Viewport),
                 ..
             },
         ] if *tab_stack_id == viewport_stack && stable_surface_key.as_str() == "runenwerk.scene.viewport"
@@ -2896,20 +2896,20 @@ fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
 
     let split_workspace = reduce_workspace(
         &workspace,
-        WorkspaceMutation::split_tab_stack_area_legacy(
-            viewport_stack,
-            WorkspaceSplitAxis::Horizontal,
+        WorkspaceMutation::SplitTabStackArea {
+            tab_stack_id: viewport_stack,
+            axis: WorkspaceSplitAxis::Horizontal,
             split_host_id,
             first_child_host_id,
             second_child_host_id,
             new_tab_stack_id,
             new_panel_id,
-            PanelKind::Inspector,
-            new_surface_id,
-            ToolSurfaceKind::Inspector,
-            0.5,
-        )
-        .expect("legacy wrapper should create split mutation"),
+            new_panel_kind: PanelKind::Inspector,
+            new_tool_surface_id: new_surface_id,
+            new_stable_surface_key: stable_key_for_tool_surface_kind(ToolSurfaceKind::Inspector)
+                .expect("inspector should have a stable key"),
+            fraction: 0.5,
+        },
     )
     .expect("split area should produce a valid workspace graph");
     let frame_model = frame_model_for_workspace(&split_workspace);
@@ -3048,24 +3048,38 @@ fn frame_model_for_workspace(workspace: &WorkspaceState) -> EditorShellFrameMode
     EditorShellFrameModel::new(ToolbarViewModel::default(), surfaces)
 }
 
+fn create_candidates_for_kinds(kinds: &[ToolSurfaceKind]) -> Vec<ToolSurfaceCreateCandidate> {
+    kinds
+        .iter()
+        .copied()
+        .filter_map(|kind| {
+            stable_key_for_tool_surface_kind(kind).map(|stable_surface_key| {
+                ToolSurfaceCreateCandidate::new(
+                    stable_surface_key,
+                    tool_surface_kind_definition_key(kind),
+                    kind.panel_kind(),
+                )
+            })
+        })
+        .collect()
+}
+
 fn surface_frame(
     panel_instance_id: PanelInstanceId,
     tab_stack_id: crate::TabStackId,
     surface: &crate::ToolSurfaceState,
     root_widget_id: WidgetId,
 ) -> ResolvedSurfaceFrame {
-    let legacy_tool_surface_kind = surface
-        .legacy_tool_surface_kind_or_error()
-        .expect("test shell frame fixture should retain legacy compatibility metadata");
+    let tool_surface_kind = tool_surface_kind_for_stable_key(surface.stable_surface_key())
+        .unwrap_or(ToolSurfaceKind::Placeholder);
     ResolvedSurfaceFrame {
         surface_instance_id: surface.id,
         panel_instance_id,
         tab_stack_id,
-        surface_kind: Some(legacy_tool_surface_kind),
         stable_surface_key: surface.stable_surface_key().clone(),
-        surface_definition_id: tool_surface_definition_id(legacy_tool_surface_kind),
+        surface_definition_id: tool_surface_definition_id(tool_surface_kind),
         provider_id: Some(SurfaceProviderId::try_from_raw(77).unwrap()),
-        title: format!("{:?}", legacy_tool_surface_kind),
+        title: format!("{:?}", tool_surface_kind),
         artifact: SurfacePresentationArtifact::provider(label(
             root_widget_id,
             "surface",

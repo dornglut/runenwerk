@@ -110,7 +110,6 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-032 | Typed Suite, Surface, Profile, And Provider Handles | P0 | V4 | B2 | 2.7 | Replace ad hoc suite/profile/provider construction with typed composition handles and provider bundles. | Add handle types and builder contracts in editor_shell, then switch Workbench host presets and app suite declarations to the builder. |
 
 ## Support Only
 
@@ -134,13 +133,6 @@ Blocker weight:
 | WR-024 | Editor Shell Polish | P0 | V4 | B1 | 4.0 | Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome, docking, and status overflow slices instead of defining local policy. | Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming those contracts or as explicitly bounded compatibility evidence. |
 | WR-029 | Model Mesh Material Binding | P1 | V4 | B3 | 1.1 | Ready-next only. Do not claim WR-029 complete until WR-030 produces visible source-backed model/mesh pixels through a material-consuming pass, WR-028 SDF non-regression proof is refreshed, and closeout evidence names the consuming renderer module. | WR-030 must prove visible model/mesh pixels from PreparedModelMeshMaterialSelection and the scene material table before WR-029 can close. |
 | WR-030 | Model Mesh Renderable Scene Contract | P0 | V4 | B2 | 1.0 | Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance and WR-028 SDF non-regression. | Needs visible Mesh Preview model/mesh pixels from the selected scene material table entry; descriptor/status rows and SDF pixels are not sufficient proof. |
-| WR-033 | Remove Legacy Tool Surface Identity | P0 | V4 | B3 | 1.2 | Delete legacy stable-key reverse mapping helpers and route Material Lab only through typed suite/profile/provider data. | WR-033 write scopes now include legacy helper and source-guard ownership; WR-032 typed handles still must land before removing legacy enum call sites. |
-| WR-034 | Registry-Backed Workspace Profiles | P0 | V4 | B3 | 1.7 | Make full editor and Material Lab profiles registry-backed rather than enum-backed. | WR-034 write scopes now include app shell bootstrap, profile dispatch, provider, and source-guard ownership; WR-033 must still remove legacy surface identity before profiles can become registry-only. |
-| WR-035 | Clean Persistence Format | P0 | V4 | B3 | 1.9 | Remove persisted legacy surface-kind fields and compatibility loaders. | WR-035 write scopes now include workspace persistence, workspace diagnostics, app persistence adapter, and contract ownership; WR-034 registry-backed profiles must still exist before persistence can reject old schemas safely. |
-| WR-036 | Material Lab Clean Migration Proof | P0 | V4 | B3 | 1.7 | Mount graph, inspector, preview, texture, asset, diagnostics, and console surfaces through typed handles and provider bundles. | WR-036 write scopes now include Material Lab runtime, app construction, host composition, provider, and contract ownership; WR-035 clean persistence must still be in place before Material Lab can prove no legacy metadata is required. |
-| WR-037 | Host Capability Policy | P1 | V4 | B3 | 1.7 | Add CommandCapabilityKey, ProductCapabilityKey, ResourceCapabilityKey, and HostCapabilityPolicy. | WR-036 must prove clean Material Lab mounting before host policy becomes the next mutation gate. |
-| WR-038 | Product And Service Capability Declarations | P1 | V4 | B2 | 1.1 | Design the product and service capability plane before code moves beyond keys and policy. | WR-037 host policy must exist before product and service declarations can be enforced. |
-| WR-039 | Multi-Host Presets | P1 | V4 | B3 | 1.6 | Define full editor, standalone Material Lab, headless validation, and constrained host presets from the same builder. | WR-037 host policy must land before constrained and headless presets can be meaningful. |
 
 ## Archived And Deferred Registers
 

@@ -18,6 +18,7 @@ related_adrs:
   - ../../../adr/accepted/0012-capability-workbench-clean-break.md
 related_reports:
   - ../wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
+  - ../../closeouts/wr-033-remove-legacy-tool-surface-identity/closeout.md
 ---
 
 # WR-033 Remove Legacy Tool Surface Identity Contract
@@ -29,8 +30,8 @@ WR-033 is the second implementation-readiness slice inside
 Workbench path after WR-032 supplies typed suite, surface, profile, provider
 bundle, and composition handles.
 
-This contract is the promotion package for WR-033. It does not implement
-product code, promote roadmap state, or complete PM-WB-CAP-001.
+This contract is the current-candidate implementation package for WR-033. It
+does not implement product code by itself or complete PM-WB-CAP-001.
 
 ## Goal
 
@@ -50,11 +51,13 @@ old persisted layouts or reports unsupported-schema diagnostics.
   `ToolSurfaceKind` removal from Workbench identity, profile construction,
   provider requests, persisted layout authority, and Material Lab routing.
 - `docs-site/src/content/docs/workspace/roadmap-items.yaml` owns `WR-033`.
-  The row is `ready_next`, blocker `B3`, depends on `WR-032`, and names
-  removal of `ToolSurfaceKind`, stable-key reverse mapping helpers, and legacy
-  profile constructors as the next evidence.
+  The row is `current_candidate`, blocker `B2`, depends on completed `WR-032`,
+  and names removal of `ToolSurfaceKind`, stable-key reverse mapping helpers,
+  and legacy profile constructors as the next evidence.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-032-typed-suite-surface-profile-and-provider-handles/plan.md`
-  records the prerequisite typed-handle contract and its current blockers.
+  and
+  `docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md`
+  record the completed prerequisite typed-handle implementation.
 - `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
   is accepted and explicitly forbids `ToolSurfaceKind` as Workbench identity,
   persistence, provider request, profile construction, or Material Lab routing
@@ -70,27 +73,31 @@ old persisted layouts or reports unsupported-schema diagnostics.
 Readiness checks completed for this contract:
 
 - `task ai:goal -- --track PT-WB-CAP --scope non-deferred` classified
-  PM-WB-CAP-001 next legal action as `prepare_wr_promotion_contract`.
+  WR-033 as `write_promotion_contract` after WR-032 completion and the WR-033
+  blocker metadata repair.
 - `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-033`
   classified WR-033 next action as `write_promotion_contract`.
-- `task planning:validate` passed after this contract was added, covering
-  roadmap validation/check, production validation/check, and docs validation.
-- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` passed after this
-  contract was added and preserved PM-WB-CAP-001 as `active` with
-  `prepare_wr_promotion_contract`; WR-033 remains `ready_next` behind WR-032.
+- `task roadmap:render`, `task roadmap:validate`, and `task roadmap:check`
+  passed after repairing the WR-033 blocker metadata from `B3` to `B2`.
+- `task roadmap:promote -- --id WR-033 --state current_candidate --evidence
+  "WR-032 typed handles completed with closeout evidence; WR-033 promotion
+  contract validated and is the next PM-WB-CAP-001 dependency-order
+  implementation slice."` passed.
+- `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-033`
+  then classified WR-033 next action as `write_implementation_contract`.
 
 ## Readiness
 
-Promotion verdict: WR-033 can carry a decision-complete promotion and
-implementation-readiness contract, but it cannot honestly be promoted or
-implemented yet.
+Implementation verdict: WR-033 has a decision-complete current-candidate
+implementation contract. Product code may start only after this contract update
+is validated and `task ai:goal -- --track PT-WB-CAP --scope non-deferred`
+still selects PM-WB-CAP-001 / WR-033 as the next implementation slice.
 
 Blocking conditions before code starts:
 
-- WR-032 is still `ready_next`, not completed. WR-033 depends on completed
-  typed handles because deleting the enum authority before the typed
-  composition path is live would leave profile, provider, and shell commands
-  without a durable identity contract.
+- WR-032 is completed with closeout evidence. WR-033 must continue to rely on
+  that typed composition path rather than inventing a replacement compatibility
+  enum.
 - The WR-033 roadmap write scopes were repaired on 2026-05-20 to cover the
   legacy helper and source-guard ownership required by this contract:
   `domain/editor/editor_shell/src/tool_suite/legacy.rs`,
@@ -98,8 +105,8 @@ Blocking conditions before code starts:
   `domain/editor/editor_shell/src/tests.rs`, and this contract path are now
   listed alongside the workspace, provider, command, composition, app shell,
   and runtime-system scopes.
-- Product code must not start until WR-032 is completed and the repaired
-  WR-033 write scopes are rendered and validated.
+- Product code must stay bounded to the WR-033 write scopes and may not mark
+  downstream WR-034, WR-035, or WR-036 evidence complete.
 
 No new ADR is required while the implementation follows ADR 0012 and removes
 the compatibility authority without moving semantics into `editor_shell`. Run
@@ -224,7 +231,9 @@ Required implementation steps:
 ## Non-Goals
 
 - No product code in this contract-writing slice.
-- No implementation before WR-032 completion and WR-033 write-scope repair.
+- No downstream WR-034 registry-backed profile completion, WR-035 persistence
+  cleanup, or WR-036 Material Lab proof beyond the minimum required to remove
+  legacy live identity from WR-033-owned paths.
 - No persistence format cleanup or old-layout unsupported-schema diagnostic;
   WR-035 owns that.
 - No registry-backed profile completion beyond what is required to stop using
@@ -312,10 +321,11 @@ Closeout for this contract-writing action records:
 - `task planning:validate` passed;
 - `task ai:goal -- --track PT-WB-CAP --scope non-deferred` passed after the
   contract-writing action and still reports PM-WB-CAP-001 next legal action as
-  `prepare_wr_promotion_contract`;
-- confirmation that no product code, roadmap state, or production state
-  changed;
-- remaining blocker: WR-032 completion before code implementation.
+  `execute_next_wr_implementation_contract`;
+- confirmation that no product code or production state changed during this
+  contract-writing action;
+- remaining work: execute the WR-033 implementation slice and close it out
+  before WR-034 can become dependency-complete.
 
 The expected completion-quality tier for the contract-writing action is
 `bounded_contract`. WR-033 itself remains incomplete until implementation,
@@ -324,7 +334,8 @@ production render/validate/check complete.
 
 ## Contract-Writing Closeout Evidence
 
-Status as of 2026-05-20: completed for the contract-writing action only.
+Status as of 2026-05-20: completed for the promotion-contract action and
+current-candidate implementation-contract update only.
 
 Changed artifact:
 
@@ -332,32 +343,38 @@ Changed artifact:
 
 Validation:
 
-- `task planning:validate` passed after the contract was added and after this
-  closeout evidence was recorded, covering roadmap validation/check, production
-  validation/check, and docs validation. It was rerun after the WR-033 roadmap
-  write scopes were repaired to include the legacy helper module, tool-suite
-  module boundary, source-guard test module, and this contract path.
-- `task ai:goal -- --track PT-WB-CAP --scope non-deferred` was rerun after
-  validation and still reported PM-WB-CAP-001 next legal action as
-  `prepare_wr_promotion_contract`.
+- `task roadmap:render`, `task roadmap:validate`, and `task roadmap:check`
+  passed after the WR-033 blocker metadata was repaired to `B2`.
+- `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-033`
+  reported `write_promotion_contract`, `WR-032:completed`, and a promotable
+  preflight with the suggested `task roadmap:promote` command.
+- `task roadmap:promote -- --id WR-033 --state current_candidate --evidence
+  "WR-032 typed handles completed with closeout evidence; WR-033 promotion
+  contract validated and is the next PM-WB-CAP-001 dependency-order
+  implementation slice."` passed.
+- `task roadmap:render`, `task roadmap:validate`, `task roadmap:check`,
+  `task production:render`, `task production:validate`, and
+  `task production:check` passed after promotion.
+- `task production:plan -- --milestone PM-WB-CAP-001 --roadmap WR-033`
+  reported `write_implementation_contract` for the current-candidate row.
 
 Closeout result:
 
 - No Rust product code changed.
-- No roadmap state changed.
+- Roadmap metadata changed to repair WR-033 from `B3` to `B2` and then promote
+  it to `current_candidate`.
 - No production-track state changed.
-- WR-033 remains blocked for implementation by WR-032 completion. Its roadmap
-  write scopes now include the legacy helper and source-guard ownership needed
-  by the later implementation pass.
+- WR-033 is ready for its bounded implementation pass. Its roadmap write scopes
+  include the legacy helper and source-guard ownership needed by the pass.
 - Downstream PM-WB-CAP milestones remain dependency-waiting and must not be
   implemented from this contract alone.
 
 ## Perfectionist Closeout Audit
 
-This contract-writing action cannot honestly be `perfectionist_verified`
+This promotion-contract action cannot honestly be `perfectionist_verified`
 because it deliberately does not remove legacy identity. The known quality gap
-is intentional: `ToolSurfaceKind` remains live until WR-032 completes and a
-later WR-033 implementation pass executes this contract.
+is intentional: `ToolSurfaceKind` remains live until a later WR-033
+implementation pass executes this contract after roadmap promotion.
 
 The later implementation closeout must guard against:
 
@@ -371,3 +388,54 @@ The later implementation closeout must guard against:
   identity;
 - descriptor-only source guards that miss app shell or runtime system call
   sites.
+
+## Implementation Closeout Evidence
+
+Status as of 2026-05-20: completed for the bounded WR-033 implementation
+slice.
+
+Changed closeout artifact:
+
+- `docs-site/src/content/docs/reports/closeouts/wr-033-remove-legacy-tool-surface-identity/closeout.md`
+
+Implementation evidence:
+
+- Live Workbench state, provider requests, create candidates, frame artifacts,
+  shell commands, routed actions, app dispatch, and runtime bridge lookups now
+  use `ToolSurfaceStableKey` instead of `ToolSurfaceKind` as live identity.
+- Legacy enum mapping remains only in explicit compatibility boundaries needed
+  for authored or persisted legacy data and downstream rows.
+- Material Lab provider routing resolves through stable suite/profile/provider
+  metadata; provider requests no longer carry material-specific legacy kind
+  fields.
+- Source guards in `domain/editor/editor_shell/src/tests.rs` and
+  `apps/runenwerk_editor/tests/viewport_architecture_guards.rs` now fail if
+  the removed live legacy command, request, or chrome paths are reintroduced.
+
+Validation:
+
+- `cargo fmt` passed.
+- `cargo test -p editor_shell tool_suite` passed with 31 matching tests.
+- `cargo test -p editor_shell workspace::profile` passed with 26 matching
+  tests.
+- `cargo test -p editor_shell tool_surface_kind_usage_is_boundary_only_guard`
+  passed.
+- `cargo test -p runenwerk_editor --test viewport_architecture_guards` passed
+  with 56 tests.
+- `cargo test -p runenwerk_editor workbench_host` passed with 39 matching
+  tests.
+- `cargo test -p runenwerk_editor material_lab_workbench` passed with 8
+  matching tests.
+- `cargo check -p runenwerk_editor` passed.
+- `task roadmap:render`, `task roadmap:validate`, and `task roadmap:check`
+  passed after WR-033 was archived with closeout evidence.
+- `task production:render`, `task production:validate`, and
+  `task production:check` passed after WR-033 was archived with closeout
+  evidence.
+
+Closeout result:
+
+- WR-033 is ready to archive as `completed` with completion quality
+  `bounded_contract`.
+- PM-WB-CAP-001 remains active. WR-034, WR-035, and WR-036 still own the
+  remaining clean-foundation work.

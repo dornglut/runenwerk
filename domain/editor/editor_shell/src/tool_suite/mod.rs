@@ -7,15 +7,16 @@ pub mod identity;
 pub mod legacy;
 pub mod registry;
 
-pub use capability::HostCapabilityPolicy;
+pub use capability::{HostCapabilityPolicy, HostCapabilityRequirements};
 pub use definition::{
-    EditorToolSuite, ProviderFamilyDefinition, ToolSuiteProfileDefinition, ToolSurfaceDefinition,
+    EditorToolSuite, ProductCapabilityNeed, ProviderFamilyDefinition, ToolServiceNeed,
+    ToolSuiteCapabilityDeclaration, ToolSuiteProfileDefinition, ToolSurfaceDefinition,
     ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
 };
 pub use identity::{
     CommandCapabilityKey, ProductCapabilityKey, ProfileRef, ProviderFamilyId,
-    ResourceCapabilityKey, SuiteRef, SurfaceRef, ToolSuiteId, ToolSuiteIdentityError,
-    ToolSurfaceStableKey,
+    ResourceCapabilityKey, SuiteRef, SurfaceRef, ToolServiceKey, ToolSuiteId,
+    ToolSuiteIdentityError, ToolSurfaceStableKey,
 };
 pub use legacy::{
     LegacyToolSurfaceResolution, LegacyToolSurfaceStableKeyCandidate,

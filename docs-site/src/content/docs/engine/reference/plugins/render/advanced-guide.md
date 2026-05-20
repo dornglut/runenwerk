@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-21
 ---
 
 # Render Plugin Advanced Guide
@@ -122,5 +122,5 @@ Submit/runtime does not re-query ECS for missing feature payloads.
 ## Multi-view Execution Contract
 
 - Prepare carries view containers and execution plans carry `CompiledViewMask`.
-- Active runtime path is currently single-view only (`main`), and multi-view packets fail fast by design.
-- Per-flow-per-view execution and view-scoped pass subsets remain deferred until multi-view activation lands.
+- Active runtime execution supports prepared offscreen product views and per-flow prepared invocations through the product-surface path.
+- View-scoped pass subsets are expressed through execution view masks and pass scoping APIs; product-surface prepared views are active, while broader native OS multi-window and multi-swapchain presentation remains future work.

@@ -66,28 +66,12 @@ package "Level 1 - Near-Term Productization" {
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
-  component "WR-032 Typed Workbench handles\nstate=current_candidate\nscore=2.7 gate=after wr-031 clean-break adr\nV4 B2\ncall=typed handles\nprovider bundle" as WBCAPHANDLE <<V4>>
-
-  component "WR-033 Remove legacy identity\nstate=ready_next\nscore=1.2 gate=after wr-032 typed handles\nV4 B3\ncall=no compatibility enum\nstable key authority" as WBCAPNOLEG <<V4>>
-
-  component "WR-034 Registry-backed profiles\nstate=ready_next\nscore=1.7 gate=after wr-033 legacy identity removal\nV4 B3\ncall=profile declarations\ninstalled suites only" as WBCAPPROF <<V4>>
-
-  component "WR-035 Stable-only persistence\nstate=ready_next\nscore=1.9 gate=after wr-034 registry profiles\nV4 B3\ncall=stable-key persistence\nold schema unsupported" as WBCAPPERSIST <<V4>>
-
 }
 
 package "Level 2 - Contract-Gated Productization" {
   component "WR-009 Native multi-window editor\nstate=ready_next\nscore=0.7 gate=runtime gate\nV3 B3\ncall=window-scoped runtime,\ninput, UI frame, swapchain" as WINDOW <<V3>>
 
   component "WR-010 Render fragments R10\nstate=ready_next\nscore=0.7 gate=product priority gate\nV3 B3\ncall=fragment assets, merge,\nhot reload, inspection" as FRAGMENTS <<V3>>
-
-  component "WR-036 Material Lab clean proof\nstate=ready_next\nscore=1.7 gate=after wr-035 clean persistence\nV4 B3\ncall=Material Lab standalone\nno legacy route metadata" as WBCAPMAT <<V4>>
-
-  component "WR-037 Host capability policy\nstate=ready_next\nscore=1.7 gate=after wr-036 clean foundation proof\nV4 B3\ncall=host policy gate\ncommand/product/resource keys" as WBCAPPOLICY <<V4>>
-
-  component "WR-038 Product and service plane\nstate=ready_next\nscore=1.1 gate=after wr-037 host policy\nV4 B2\ncall=product declarations\nservice declarations" as WBCAPPLANE <<V4>>
-
-  component "WR-039 Multi-host presets\nstate=ready_next\nscore=1.6 gate=after wr-037 host policy\nV4 B3\ncall=full editor preset\nMaterial Lab preset\nconstrained/headless presets" as WBCAPHOST <<V4>>
 
 }
 
@@ -109,13 +93,5 @@ RENDER -down-> FRAGMENTS : aliases / invocations / inspection
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 MESHRND -down-> MESHMAT : model mesh pixel proof prerequisite
-WBCAPHANDLE -down-> WBCAPNOLEG : typed handles before legacy deletion
-WBCAPNOLEG -down-> WBCAPPROF : legacy identity removed before registry profiles
-WBCAPPROF -down-> WBCAPPERSIST : registry profiles before persistence cleanup
-WBCAPPERSIST -down-> WBCAPMAT : clean persistence before Material Lab proof
-WBCAPMAT -down-> WBCAPPOLICY : clean foundation before host policy
-WBCAPPOLICY -down-> WBCAPPLANE : policy before product and service plane
-WBCAPPOLICY -down-> WBCAPHOST : host policy before multi-host presets
-WBCAPPLANE -down-> WBCAPSBOX : product and service plane before external sandbox
 
 @enduml

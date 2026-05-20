@@ -17,7 +17,7 @@ use editor_viewport::{ViewportId, ViewportRuntimeSettings};
 use crate::{
     PanelHostId, PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WorkspaceId,
     WorkspaceIdentityAllocator, WorkspaceIdentitySeed,
-    tool_suite::{ToolSurfaceRegistry, ToolSurfaceStableKey, stable_key_for_tool_surface_kind},
+    tool_suite::{ToolSurfaceRegistry, ToolSurfaceStableKey},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -283,7 +283,6 @@ pub struct TabStackState {
     pub ordered_panels: Vec<PanelInstanceId>,
     pub active_panel: Option<PanelInstanceId>,
     pub locked_stable_surface_key: Option<ToolSurfaceStableKey>,
-    pub legacy_locked_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -298,7 +297,6 @@ pub struct PanelInstanceState {
 pub struct ToolSurfaceState {
     pub id: ToolSurfaceInstanceId,
     pub stable_surface_key: ToolSurfaceStableKey,
-    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     pub mount: ToolSurfaceMount,
     pub viewport_instance_id: Option<ViewportId>,
     pub viewport_settings: Option<ViewportRuntimeSettings>,
@@ -308,67 +306,19 @@ impl ToolSurfaceState {
     pub fn new_with_stable_key(
         instance_id: ToolSurfaceInstanceId,
         stable_surface_key: ToolSurfaceStableKey,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
         mount: ToolSurfaceMount,
     ) -> Self {
         Self {
             id: instance_id,
             stable_surface_key,
-            legacy_tool_surface_kind,
             mount,
             viewport_instance_id: None,
             viewport_settings: None,
         }
     }
 
-    pub fn new_legacy(
-        instance_id: ToolSurfaceInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
-        mount: ToolSurfaceMount,
-    ) -> Result<Self, WorkspaceSurfaceIdentityError> {
-        Self::new_legacy_with_resolver(
-            instance_id,
-            tool_surface_kind,
-            mount,
-            stable_key_for_tool_surface_kind,
-        )
-    }
-
-    fn new_legacy_with_resolver(
-        instance_id: ToolSurfaceInstanceId,
-        tool_surface_kind: ToolSurfaceKind,
-        mount: ToolSurfaceMount,
-        stable_key_for_kind: impl FnOnce(ToolSurfaceKind) -> Option<ToolSurfaceStableKey>,
-    ) -> Result<Self, WorkspaceSurfaceIdentityError> {
-        let stable_surface_key = stable_key_for_kind(tool_surface_kind).ok_or(
-            WorkspaceSurfaceIdentityError::UnmappedLegacySurface {
-                kind: tool_surface_kind,
-            },
-        )?;
-        Ok(Self::new_with_stable_key(
-            instance_id,
-            stable_surface_key,
-            Some(tool_surface_kind),
-            mount,
-        ))
-    }
-
     pub const fn stable_surface_key(&self) -> &ToolSurfaceStableKey {
         &self.stable_surface_key
-    }
-
-    pub const fn legacy_tool_surface_kind(&self) -> Option<ToolSurfaceKind> {
-        self.legacy_tool_surface_kind
-    }
-
-    pub fn legacy_tool_surface_kind_or_error(
-        &self,
-    ) -> Result<ToolSurfaceKind, WorkspaceSurfaceIdentityError> {
-        self.legacy_tool_surface_kind.ok_or_else(|| {
-            WorkspaceSurfaceIdentityError::MissingLegacyCompatibilityKind {
-                stable_surface_key: self.stable_surface_key.clone(),
-            }
-        })
     }
 }
 
@@ -376,35 +326,17 @@ impl ToolSurfaceState {
 pub struct WorkspaceDefaultToolSurface {
     pub stable_surface_key: ToolSurfaceStableKey,
     pub panel_kind: PanelKind,
-    pub legacy_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 impl WorkspaceDefaultToolSurface {
     pub fn new_with_panel_kind(
         stable_surface_key: ToolSurfaceStableKey,
         panel_kind: PanelKind,
-        legacy_tool_surface_kind: Option<ToolSurfaceKind>,
     ) -> Self {
         Self {
             stable_surface_key,
             panel_kind,
-            legacy_tool_surface_kind,
         }
-    }
-
-    pub fn new_legacy(
-        tool_surface_kind: ToolSurfaceKind,
-    ) -> Result<Self, WorkspaceSurfaceIdentityError> {
-        let stable_surface_key = stable_key_for_tool_surface_kind(tool_surface_kind).ok_or(
-            WorkspaceSurfaceIdentityError::UnmappedLegacySurface {
-                kind: tool_surface_kind,
-            },
-        )?;
-        Ok(Self::new_with_panel_kind(
-            stable_surface_key,
-            tool_surface_kind.panel_kind(),
-            Some(tool_surface_kind),
-        ))
     }
 
     pub const fn stable_surface_key(&self) -> &ToolSurfaceStableKey {
@@ -413,20 +345,6 @@ impl WorkspaceDefaultToolSurface {
 
     pub const fn panel_kind(&self) -> PanelKind {
         self.panel_kind
-    }
-
-    pub const fn legacy_tool_surface_kind(&self) -> Option<ToolSurfaceKind> {
-        self.legacy_tool_surface_kind
-    }
-
-    pub fn legacy_tool_surface_kind_or_error(
-        &self,
-    ) -> Result<ToolSurfaceKind, WorkspaceSurfaceIdentityError> {
-        self.legacy_tool_surface_kind.ok_or_else(|| {
-            WorkspaceSurfaceIdentityError::MissingLegacyCompatibilityKind {
-                stable_surface_key: self.stable_surface_key.clone(),
-            }
-        })
     }
 }
 
@@ -476,17 +394,18 @@ impl std::fmt::Display for WorkspaceSurfaceIdentityError {
 
 impl std::error::Error for WorkspaceSurfaceIdentityError {}
 
-fn compiled_in_legacy_tool_surface_state(
+fn compiled_in_tool_surface_state(
     instance_id: ToolSurfaceInstanceId,
     tool_surface_kind: ToolSurfaceKind,
     mount: ToolSurfaceMount,
 ) -> ToolSurfaceState {
-    ToolSurfaceState::new_legacy(instance_id, tool_surface_kind, mount)
-        .expect("compiled-in saveable ToolSurfaceKind should have a stable key")
+    let stable_surface_key = crate::stable_key_for_tool_surface_kind(tool_surface_kind)
+        .expect("compiled-in saveable ToolSurfaceKind should have a stable key");
+    ToolSurfaceState::new_with_stable_key(instance_id, stable_surface_key, mount)
 }
 
 pub(crate) fn is_viewport_stable_surface_key(key: &ToolSurfaceStableKey) -> bool {
-    stable_key_for_tool_surface_kind(ToolSurfaceKind::Viewport).as_ref() == Some(key)
+    key.as_str() == "runenwerk.scene.viewport"
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -943,7 +862,6 @@ impl WorkspaceState {
                 ordered_panels: vec![outliner_panel, entity_table_panel],
                 active_panel: Some(outliner_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -953,7 +871,6 @@ impl WorkspaceState {
                 ordered_panels: vec![viewport_panel],
                 active_panel: Some(viewport_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -963,7 +880,6 @@ impl WorkspaceState {
                 ordered_panels: vec![inspector_panel],
                 active_panel: Some(inspector_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -973,7 +889,6 @@ impl WorkspaceState {
                 ordered_panels: vec![console_panel],
                 active_panel: Some(console_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
 
@@ -1022,7 +937,7 @@ impl WorkspaceState {
         let mut tool_surfaces_by_id = BTreeMap::new();
         tool_surfaces_by_id.insert(
             outliner_surface,
-            compiled_in_legacy_tool_surface_state(
+            compiled_in_tool_surface_state(
                 outliner_surface,
                 ToolSurfaceKind::Outliner,
                 ToolSurfaceMount::Mounted {
@@ -1032,7 +947,7 @@ impl WorkspaceState {
         );
         tool_surfaces_by_id.insert(
             entity_table_surface,
-            compiled_in_legacy_tool_surface_state(
+            compiled_in_tool_surface_state(
                 entity_table_surface,
                 ToolSurfaceKind::EntityTable,
                 ToolSurfaceMount::Mounted {
@@ -1042,7 +957,7 @@ impl WorkspaceState {
         );
         tool_surfaces_by_id.insert(
             viewport_surface,
-            compiled_in_legacy_tool_surface_state(
+            compiled_in_tool_surface_state(
                 viewport_surface,
                 ToolSurfaceKind::Viewport,
                 ToolSurfaceMount::Mounted {
@@ -1052,7 +967,7 @@ impl WorkspaceState {
         );
         tool_surfaces_by_id.insert(
             inspector_surface,
-            compiled_in_legacy_tool_surface_state(
+            compiled_in_tool_surface_state(
                 inspector_surface,
                 ToolSurfaceKind::Inspector,
                 ToolSurfaceMount::Mounted {
@@ -1062,7 +977,7 @@ impl WorkspaceState {
         );
         tool_surfaces_by_id.insert(
             console_surface,
-            compiled_in_legacy_tool_surface_state(
+            compiled_in_tool_surface_state(
                 console_surface,
                 ToolSurfaceKind::Console,
                 ToolSurfaceMount::Mounted {
@@ -1254,7 +1169,6 @@ impl WorkspaceState {
                 ordered_panels: vec![outliner_panel, hierarchy_panel],
                 active_panel: Some(outliner_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -1264,7 +1178,6 @@ impl WorkspaceState {
                 ordered_panels: vec![canvas_panel, layout_preview_panel],
                 active_panel: Some(canvas_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -1274,7 +1187,6 @@ impl WorkspaceState {
                 ordered_panels: vec![style_panel, bindings_panel],
                 active_panel: Some(style_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         tab_stacks_by_id.insert(
@@ -1284,7 +1196,6 @@ impl WorkspaceState {
                 ordered_panels: vec![validation_panel, diff_panel],
                 active_panel: Some(validation_panel),
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
 
@@ -1350,7 +1261,7 @@ impl WorkspaceState {
         ] {
             tool_surfaces_by_id.insert(
                 surface_id,
-                compiled_in_legacy_tool_surface_state(
+                compiled_in_tool_surface_state(
                     surface_id,
                     tool_surface_kind,
                     ToolSurfaceMount::Mounted { panel_id },
@@ -1376,15 +1287,14 @@ impl WorkspaceState {
         let default_surfaces = default_surfaces
             .iter()
             .copied()
-            .map(WorkspaceDefaultToolSurface::new_legacy)
-            .collect::<Result<Vec<_>, _>>()
-            .expect("compiled-in legacy tool workspace surfaces should have stable keys");
+            .map(compiled_in_default_tool_surface)
+            .collect::<Vec<_>>();
         Self::bootstrap_tool_workspace_layout_with_stable_surfaces(
             workspace_id,
             allocator,
             &default_surfaces,
         )
-        .expect("compiled-in legacy tool workspace surfaces should keep C3 legacy metadata")
+        .expect("compiled-in tool workspace surfaces should keep stable-key metadata")
     }
 
     pub fn bootstrap_tool_workspace_layout_with_stable_surfaces(
@@ -1573,67 +1483,23 @@ impl WorkspaceState {
         let mut report = WorkspaceToolSurfaceRegistryCompatibilityReport::default();
 
         for surface in self.tool_surfaces_by_id.values() {
-            let legacy_tool_surface_kind = surface.legacy_tool_surface_kind();
-            let legacy_candidate =
-                legacy_tool_surface_kind.and_then(stable_key_for_tool_surface_kind);
             let actual = surface.stable_surface_key();
-            match (legacy_tool_surface_kind, legacy_candidate.as_ref()) {
-                (Some(_), Some(expected)) if actual != expected => {
-                    report.incompatible_surfaces.push(
-                        WorkspaceToolSurfaceRegistryIncompatibleSurface {
-                            tool_surface_id: surface.id,
-                            tool_surface_kind: legacy_tool_surface_kind,
-                            expected_stable_surface_key: Some(expected.clone()),
-                            actual_stable_surface_key: actual.clone(),
-                        },
-                    );
-                }
-                (Some(_), Some(_)) => {
-                    push_legacy_registry_compatibility(
-                        surface,
-                        actual.clone(),
-                        legacy_tool_surface_kind,
-                        registry,
-                        &mut report,
-                    );
-                }
-                (None, Some(_)) => {
-                    push_legacy_registry_compatibility(
-                        surface,
-                        actual.clone(),
-                        legacy_tool_surface_kind,
-                        registry,
-                        &mut report,
-                    );
-                }
-                (_, None) => {
-                    if registry.get(actual).is_some() && legacy_tool_surface_kind.is_none() {
-                        push_legacy_registry_compatibility(
-                            surface,
-                            actual.clone(),
-                            legacy_tool_surface_kind,
-                            registry,
-                            &mut report,
-                        );
-                    } else if registry.get(actual).is_some() {
-                        report.incompatible_surfaces.push(
-                            WorkspaceToolSurfaceRegistryIncompatibleSurface {
-                                tool_surface_id: surface.id,
-                                tool_surface_kind: legacy_tool_surface_kind,
-                                expected_stable_surface_key: None,
-                                actual_stable_surface_key: actual.clone(),
-                            },
-                        );
-                    } else {
-                        report.unknown_stable_keys.push(
-                            WorkspaceToolSurfaceRegistryUnknownStableKey {
-                                tool_surface_id: surface.id,
-                                tool_surface_kind: legacy_tool_surface_kind,
-                                stable_surface_key: actual.clone(),
-                            },
-                        );
-                    }
-                }
+            if registry.get(actual).is_some() {
+                report
+                    .compatible_surfaces
+                    .push(WorkspaceToolSurfaceRegistryCompatibleSurface {
+                        tool_surface_id: surface.id,
+                        tool_surface_kind: None,
+                        stable_surface_key: actual.clone(),
+                    });
+            } else {
+                report
+                    .unknown_stable_keys
+                    .push(WorkspaceToolSurfaceRegistryUnknownStableKey {
+                        tool_surface_id: surface.id,
+                        tool_surface_kind: None,
+                        stable_surface_key: actual.clone(),
+                    });
             }
         }
 
@@ -1828,32 +1694,6 @@ impl WorkspaceState {
     }
 }
 
-fn push_legacy_registry_compatibility(
-    surface: &ToolSurfaceState,
-    stable_surface_key: ToolSurfaceStableKey,
-    legacy_tool_surface_kind: Option<ToolSurfaceKind>,
-    registry: &ToolSurfaceRegistry,
-    report: &mut WorkspaceToolSurfaceRegistryCompatibilityReport,
-) {
-    if registry.get(&stable_surface_key).is_some() {
-        report
-            .compatible_surfaces
-            .push(WorkspaceToolSurfaceRegistryCompatibleSurface {
-                tool_surface_id: surface.id,
-                tool_surface_kind: legacy_tool_surface_kind,
-                stable_surface_key,
-            });
-    } else {
-        report
-            .unregistered_legacy_surfaces
-            .push(WorkspaceToolSurfaceRegistryLegacySurface {
-                tool_surface_id: surface.id,
-                tool_surface_kind: legacy_tool_surface_kind,
-                stable_surface_key,
-            });
-    }
-}
-
 #[derive(Debug, Default)]
 struct ToolWorkspaceSurfaceGroups {
     left: Vec<WorkspaceDefaultToolSurface>,
@@ -1940,8 +1780,11 @@ fn unique_tool_workspace_surfaces(
 }
 
 fn compiled_in_default_tool_surface(kind: ToolSurfaceKind) -> WorkspaceDefaultToolSurface {
-    WorkspaceDefaultToolSurface::new_legacy(kind)
-        .expect("compiled-in saveable ToolSurfaceKind should have a stable key")
+    WorkspaceDefaultToolSurface::new_with_panel_kind(
+        crate::stable_key_for_tool_surface_kind(kind)
+            .expect("compiled-in saveable ToolSurfaceKind should have a stable key"),
+        kind.panel_kind(),
+    )
 }
 
 fn insert_tool_workspace_stack(
@@ -1971,7 +1814,6 @@ fn insert_tool_workspace_stack(
             ToolSurfaceState::new_with_stable_key(
                 surface_id,
                 surface.stable_surface_key.clone(),
-                surface.legacy_tool_surface_kind,
                 ToolSurfaceMount::Mounted { panel_id },
             ),
         );
@@ -1984,7 +1826,6 @@ fn insert_tool_workspace_stack(
             active_panel: ordered_panels.first().copied(),
             ordered_panels,
             locked_stable_surface_key: None,
-            legacy_locked_tool_surface_kind: None,
         },
     );
 
@@ -1997,7 +1838,7 @@ mod tests {
     use crate::{
         EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
         ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole,
-        ToolSurfaceRoute,
+        ToolSurfaceRoute, stable_key_for_tool_surface_kind,
     };
 
     #[test]
@@ -2007,15 +1848,10 @@ mod tests {
         let surface = ToolSurfaceState::new_with_stable_key(
             ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
             stable_key.clone(),
-            Some(ToolSurfaceKind::Viewport),
             ToolSurfaceMount::Unmounted,
         );
 
         assert_eq!(surface.stable_surface_key(), &stable_key);
-        assert_eq!(
-            surface.legacy_tool_surface_kind(),
-            Some(ToolSurfaceKind::Viewport)
-        );
     }
 
     #[test]
@@ -2025,52 +1861,23 @@ mod tests {
         let surface = ToolSurfaceState::new_with_stable_key(
             ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
             stable_key.clone(),
-            None,
             ToolSurfaceMount::Unmounted,
         );
 
         assert_eq!(surface.stable_surface_key(), &stable_key);
-        assert_eq!(surface.legacy_tool_surface_kind(), None);
-        assert!(matches!(
-            surface.legacy_tool_surface_kind_or_error(),
-            Err(WorkspaceSurfaceIdentityError::MissingLegacyCompatibilityKind { .. })
-        ));
     }
 
     #[test]
-    fn legacy_tool_surface_constructor_populates_compatibility_kind() {
-        let surface = ToolSurfaceState::new_legacy(
+    fn compiled_in_tool_surface_constructor_populates_stable_key() {
+        let surface = compiled_in_tool_surface_state(
             ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
             ToolSurfaceKind::MaterialGraphCanvas,
             ToolSurfaceMount::Unmounted,
-        )
-        .expect("material graph should have a stable key");
+        );
 
         assert_eq!(
             surface.stable_surface_key().as_str(),
             "runenwerk.material_lab.graph_canvas"
-        );
-        assert_eq!(
-            surface.legacy_tool_surface_kind(),
-            Some(ToolSurfaceKind::MaterialGraphCanvas)
-        );
-    }
-
-    #[test]
-    fn legacy_tool_surface_constructor_rejects_unmapped_kind() {
-        let error = ToolSurfaceState::new_legacy_with_resolver(
-            ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
-            ToolSurfaceKind::MaterialGraphCanvas,
-            ToolSurfaceMount::Unmounted,
-            |_| None,
-        )
-        .expect_err("unmapped legacy kind must be rejected");
-
-        assert_eq!(
-            error,
-            WorkspaceSurfaceIdentityError::UnmappedLegacySurface {
-                kind: ToolSurfaceKind::MaterialGraphCanvas
-            }
         );
     }
 
@@ -2086,7 +1893,7 @@ mod tests {
             vec![
                 (
                     ToolSurfaceInstanceId::try_from_raw(1).unwrap(),
-                    ToolSurfaceKind::MaterialGraphCanvas,
+                    "runenwerk.material_lab.graph_canvas".to_string(),
                     ToolSurfaceMount::Mounted {
                         panel_id: PanelInstanceId::try_from_raw(1).unwrap()
                     },
@@ -2095,7 +1902,7 @@ mod tests {
                 ),
                 (
                     ToolSurfaceInstanceId::try_from_raw(2).unwrap(),
-                    ToolSurfaceKind::Viewport,
+                    "runenwerk.scene.viewport".to_string(),
                     ToolSurfaceMount::Mounted {
                         panel_id: PanelInstanceId::try_from_raw(2).unwrap()
                     },
@@ -2432,7 +2239,7 @@ mod tests {
             );
             tool_surfaces_by_id.insert(
                 surface_id,
-                compiled_in_legacy_tool_surface_state(
+                compiled_in_tool_surface_state(
                     surface_id,
                     kind,
                     ToolSurfaceMount::Mounted { panel_id },
@@ -2456,7 +2263,6 @@ mod tests {
                 active_panel: ordered_panels.first().copied(),
                 ordered_panels,
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
 
@@ -2538,10 +2344,12 @@ mod tests {
     }
 
     fn surface_by_kind(workspace: &WorkspaceState, kind: ToolSurfaceKind) -> &ToolSurfaceState {
+        let expected_key =
+            stable_key_for_tool_surface_kind(kind).expect("test kind should have a stable key");
         workspace
             .tool_surfaces_by_id
             .values()
-            .find(|surface| surface.legacy_tool_surface_kind() == Some(kind))
+            .find(|surface| surface.stable_surface_key() == &expected_key)
             .expect("surface kind should exist")
     }
 
@@ -2549,7 +2357,7 @@ mod tests {
         workspace: &WorkspaceState,
     ) -> Vec<(
         ToolSurfaceInstanceId,
-        ToolSurfaceKind,
+        String,
         ToolSurfaceMount,
         Option<ViewportId>,
         Option<ViewportRuntimeSettings>,
@@ -2560,9 +2368,7 @@ mod tests {
             .map(|surface| {
                 (
                     surface.id,
-                    surface
-                        .legacy_tool_surface_kind_or_error()
-                        .expect("test workspace should retain legacy compatibility metadata"),
+                    surface.stable_surface_key().as_str().to_string(),
                     surface.mount,
                     surface.viewport_instance_id,
                     surface.viewport_settings,

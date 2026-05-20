@@ -1,12 +1,13 @@
 use editor_shell::{
-    BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockDropCandidate,
-    DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope, DockSplitSide,
-    DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId, PanelKind, ProjectedTabStackSlot,
+    BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, CommandCapabilityKey, ComputedLayoutMap,
+    DockDropCandidate, DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope,
+    DockSplitSide, DockingPreviewDropTarget, EditorShellFrameModel, HostCapabilityPolicy,
+    HostCapabilityRequirements, PanelHostId, PanelKind, ProjectedTabStackSlot,
     ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
     TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
     TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination,
-    ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceStableKey, UiInputOutcome, UiInteractionResults,
-    UiTree, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
+    ToolSurfaceMount, ToolSurfaceStableKey, UiInputOutcome, UiInteractionResults, UiTree,
+    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
     VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
     build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
@@ -46,6 +47,11 @@ const SPLIT_MIN_FRACTION: f32 = 0.08;
 const SPLIT_MAX_FRACTION: f32 = 0.92;
 const CORNER_AREA_SPLIT_THRESHOLD_PX: f32 = 18.0;
 const SIDE_DOCK_DROP_TARGET_EDGE_PX: f32 = 48.0;
+const SURFACE_SESSION_MUTATION_COMMAND_CAPABILITY: &str = "runenwerk.surface.session_mutation";
+const EDITOR_DOMAIN_MUTATION_COMMAND_CAPABILITY: &str = "runenwerk.editor.domain_mutation";
+const SHELL_COMMAND_PROPOSAL_COMMAND_CAPABILITY: &str = "runenwerk.shell.command";
+const HOST_POLICY_DENIED_PROVIDER_PROPOSAL: &str =
+    "host capability policy denied provider proposal";
 
 #[derive(Debug, Clone, PartialEq)]
 struct ResolvedTabDropPreview {
@@ -1007,18 +1013,23 @@ impl RunenwerkEditorShellController {
                 };
                 if let Some(proposal) =
                     registry.map_action(&dispatch_context, &request, provider_id, action)?
-                    && let Some(command) = shell_command_from_surface_proposal(proposal)
                 {
-                    dispatch_shell_command_with_viewport_commands(
-                        app,
-                        Some(shell_state),
-                        command,
-                        viewport_presentations.as_deref_mut(),
-                        viewport_observations,
-                        tool_surface_bindings,
-                        viewport_render_commands.as_deref_mut(),
-                        Some(current_epoch),
+                    enforce_surface_proposal_host_policy(
+                        app.workbench_host().host_capability_policy(),
+                        &proposal,
                     )?;
+                    if let Some(command) = shell_command_from_surface_proposal(proposal) {
+                        dispatch_shell_command_with_viewport_commands(
+                            app,
+                            Some(shell_state),
+                            command,
+                            viewport_presentations.as_deref_mut(),
+                            viewport_observations,
+                            tool_surface_bindings,
+                            viewport_render_commands.as_deref_mut(),
+                            Some(current_epoch),
+                        )?;
+                    }
                 }
                 continue;
             }
@@ -1056,18 +1067,23 @@ impl RunenwerkEditorShellController {
                     &request,
                     provider_id,
                     interaction,
-                )? && let Some(command) = shell_command_from_surface_proposal(proposal)
-                {
-                    dispatch_shell_command_with_viewport_commands(
-                        app,
-                        Some(shell_state),
-                        command,
-                        viewport_presentations.as_deref_mut(),
-                        viewport_observations,
-                        tool_surface_bindings,
-                        viewport_render_commands.as_deref_mut(),
-                        Some(current_epoch),
+                )? {
+                    enforce_surface_proposal_host_policy(
+                        app.workbench_host().host_capability_policy(),
+                        &proposal,
                     )?;
+                    if let Some(command) = shell_command_from_surface_proposal(proposal) {
+                        dispatch_shell_command_with_viewport_commands(
+                            app,
+                            Some(shell_state),
+                            command,
+                            viewport_presentations.as_deref_mut(),
+                            viewport_observations,
+                            tool_surface_bindings,
+                            viewport_render_commands.as_deref_mut(),
+                            Some(current_epoch),
+                        )?;
+                    }
                 }
                 continue;
             }
@@ -1118,6 +1134,36 @@ impl RunenwerkEditorShellController {
             .map(|target| split_cursor_intent(target.axis))
             .unwrap_or(ShellCursorIntent::Default)
     }
+}
+
+fn enforce_surface_proposal_host_policy(
+    policy: &HostCapabilityPolicy,
+    proposal: &SurfaceCommandProposal,
+) -> Result<(), editor_core::EditorMutationError> {
+    let requirements = surface_proposal_capability_requirements(proposal);
+    if requirements.denied_by(policy).is_some() {
+        return Err(editor_core::EditorMutationError::session_rejected(
+            HOST_POLICY_DENIED_PROVIDER_PROPOSAL,
+        ));
+    }
+
+    Ok(())
+}
+
+fn surface_proposal_capability_requirements(
+    proposal: &SurfaceCommandProposal,
+) -> HostCapabilityRequirements {
+    let command = match proposal {
+        SurfaceCommandProposal::SurfaceSession(_) => SURFACE_SESSION_MUTATION_COMMAND_CAPABILITY,
+        SurfaceCommandProposal::EditorDomain(_) => EDITOR_DOMAIN_MUTATION_COMMAND_CAPABILITY,
+        SurfaceCommandProposal::Shell(_) => SHELL_COMMAND_PROPOSAL_COMMAND_CAPABILITY,
+    };
+
+    HostCapabilityRequirements::new().require_command(command_capability_key(command))
+}
+
+fn command_capability_key(value: &'static str) -> CommandCapabilityKey {
+    CommandCapabilityKey::new(value).expect("compiled-in command capability key should be valid")
 }
 
 fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Option<ShellCommand> {
@@ -1473,7 +1519,6 @@ fn collect_projected_tab_stacks_for_controller<'a>(
 struct TabStackChromeSurfaceTarget {
     panel_kind: PanelKind,
     stable_surface_key: ToolSurfaceStableKey,
-    legacy_tool_surface_kind: Option<ToolSurfaceKind>,
 }
 
 fn tab_stack_chrome_surface_target_pending_c6(
@@ -1498,7 +1543,6 @@ fn tab_stack_chrome_surface_target_pending_c6(
     Some(TabStackChromeSurfaceTarget {
         panel_kind: panel.panel_kind,
         stable_surface_key: surface.stable_surface_key().clone(),
-        legacy_tool_surface_kind: surface.legacy_tool_surface_kind(),
     })
 }
 
@@ -1514,7 +1558,6 @@ fn split_tab_stack_area_command_for_active_surface_pending_c6(
         axis,
         panel_kind: target.panel_kind,
         stable_surface_key: target.stable_surface_key,
-        legacy_tool_surface_kind: target.legacy_tool_surface_kind,
         projection_epoch,
     })
 }

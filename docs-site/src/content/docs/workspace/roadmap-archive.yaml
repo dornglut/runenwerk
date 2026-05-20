@@ -832,3 +832,537 @@ items:
   fitness_function_requirement: Architecture governance output, ADR acceptance, roadmap validation, production validation,
     planning validation, and docs validation.
   ownership_mode: Enabling platform governance for stream-aligned Workbench implementation.
+- id: WR-032
+  title: Typed Suite, Surface, Profile, And Provider Handles
+  diagram_title: Typed Workbench handles
+  alias: WBCAPHANDLE
+  lane: Platform foundation
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: Add typed composition handles before removing old enum authority.
+  kano: Basic
+  dependencies:
+  - WR-031
+  write_scopes:
+  - domain/editor/editor_shell/src/tool_suite
+  - domain/editor/editor_shell/src/workspace
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/tool_suites
+  - apps/runenwerk_editor/src/material_lab/tool_suite.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md
+  validations:
+  - cargo test -p editor_shell tool_suite
+  - cargo test -p editor_shell workspace::profile
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md.
+    Typed constructors, profile validation, full-editor profile exposure, and Material Lab typed profile exposure are in
+    place for the bounded Workbench handle slice.
+  current_decision: WR-032 is completed as a bounded typed-handle implementation. It adds typed constructor paths, validates
+    profile definitions in WorkbenchCompositionBuilder, and makes full-editor and Material Lab hosts expose typed profile
+    data through the builder.
+  current_call: Completed. Do not reopen WR-032 for legacy identity removal, registry-only workspace profiles, persistence
+    cleanup, or Material Lab clean migration proof; those remain WR-033 through WR-036.
+  main_blocker: Completed typed-handle foundation. PM-WB-CAP-001 remains active until WR-033 through WR-036 close out.
+  first_move: Continue PM-WB-CAP-001 with WR-033 after rerunning task ai:goal for PT-WB-CAP non-deferred scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-033 still owns deleting legacy ToolSurfaceKind identity from Workbench state, provider requests, frame artifacts,
+    commands, and source guards.
+  - WR-034 still owns registry-backed workspace profile authority.
+  - WR-035 still owns stable-key-only persistence and unsupported-schema diagnostics for old workspace files.
+  - WR-036 still owns the final Material Lab clean migration proof across full-editor and standalone hosts.
+  completion_audit: ''
+  diagram_call:
+  - typed handles
+  - provider bundle
+  ddd_owner: domain/editor/editor_shell tool_suite and workspace
+  adr_requirement: ADR 0012 governs the clean authority boundary.
+  fitness_function_requirement: Stable-key exactness tests, duplicate provider rejection, unknown provider-family rejection,
+    profile validation tests, and Workbench host construction tests.
+  ownership_mode: Complicated-subsystem platform foundation owned by editor shell.
+- id: WR-033
+  title: Remove Legacy Tool Surface Identity
+  diagram_title: Remove legacy identity
+  alias: WBCAPNOLEG
+  lane: Platform foundation
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.2
+  rice: Delete ToolSurfaceKind as Workbench authority instead of preserving compatibility.
+  kano: Basic
+  dependencies:
+  - WR-032
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/surface_provider.rs
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/src/composition
+  - domain/editor/editor_shell/src/tool_suite/legacy.rs
+  - domain/editor/editor_shell/src/tool_suite/mod.rs
+  - domain/editor/editor_shell/src/tests.rs
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/runtime/systems
+  - docs-site/src/content/docs/reports/implementation-plans/wr-033-remove-legacy-tool-surface-identity/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-033-remove-legacy-tool-surface-identity/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p editor_shell tool_suite
+  - cargo test -p editor_shell workspace::profile
+  - cargo test -p editor_shell tool_surface_kind_usage_is_boundary_only_guard
+  - cargo test -p runenwerk_editor --test viewport_architecture_guards
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo test -p runenwerk_editor material_lab_workbench
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-033-remove-legacy-tool-surface-identity/closeout.md.
+    Live Workbench identity, provider requests, shell commands, create candidates, frame artifacts, Material Lab routing,
+    and runtime bridge targeting now use stable surface keys instead of ToolSurfaceKind.
+  current_decision: WR-033 is completed as a bounded legacy-identity removal implementation. Live Workbench identity paths
+    no longer carry ToolSurfaceKind; compatibility remains only at authored and persisted boundaries owned by downstream
+    cleanup rows.
+  current_call: Completed. Do not reopen WR-033 for registry-only workspace profiles, clean persistence, or Material Lab
+    clean migration proof; those remain WR-034 through WR-036.
+  main_blocker: Completed legacy-identity removal. PM-WB-CAP-001 remains active until WR-034 through WR-036 close out.
+  first_move: Continue PM-WB-CAP-001 with WR-034 after rerunning task ai:goal for PT-WB-CAP non-deferred scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-034 still owns registry-backed workspace profile authority and removal of central legacy default-profile construction.
+  - WR-035 still owns stable-key-only persistence, old schema rejection, and unsupported-schema diagnostics.
+  - WR-036 still owns the final Material Lab clean migration proof across full-editor and standalone hosts.
+  - Host capability policy, product/service declarations, multi-host presets, and external component readiness remain outside
+    WR-033.
+  completion_audit: ''
+  diagram_call:
+  - no compatibility enum
+  - stable key authority
+  ddd_owner: domain/editor/editor_shell with apps/runenwerk_editor shell providers
+  adr_requirement: ADR 0012 governs the clean authority boundary and legacy persistence break.
+  fitness_function_requirement: Source guards rejecting ToolSurfaceKind live identity plus focused provider/profile/Material
+    Lab/runtime bridge tests.
+  ownership_mode: Stream-aligned breaking cleanup with editor shell as owner.
+- id: WR-034
+  title: Registry-Backed Workspace Profiles
+  diagram_title: Registry-backed profiles
+  alias: WBCAPPROF
+  lane: Platform foundation
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.7
+  rice: Build workspace profiles only from installed suite/profile definitions.
+  kano: Basic
+  dependencies:
+  - WR-033
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace/profile.rs
+  - domain/editor/editor_shell/src/workspace/state.rs
+  - domain/editor/editor_shell/src/tests.rs
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/state.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/providers/mod.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-034-registry-backed-workspace-profiles/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-034-registry-backed-workspace-profiles/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p editor_shell workspace::profile
+  - cargo test -p editor_shell stable_key_authority_is_end_to_end_guard
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-034-registry-backed-workspace-profiles/closeout.md.
+    Full-editor and standalone Material Lab workspace profiles now build from installed Workbench profile declarations
+    and host-owned registry-resolved stable surface keys.
+  current_decision: WR-034 is completed as a bounded registry-backed workspace profile implementation. Shell bootstrap,
+    workspace switching, and provider document filtering now consume active Workbench host profile data instead of app-shell
+    global profile lookups.
+  current_call: Completed. Do not reopen WR-034 for clean persistence format or Material Lab clean migration proof; those
+    remain WR-035 and WR-036.
+  main_blocker: Completed registry-backed profile foundation. PM-WB-CAP-001 remains active until WR-035 and WR-036 close
+    out.
+  first_move: Continue PM-WB-CAP-001 with WR-035 after rerunning task ai:goal for PT-WB-CAP non-deferred scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-035 still owns stable-key-only persistence cleanup, V1-V4 loader removal, V5 legacy fallback removal, and unsupported-schema
+    diagnostics.
+  - WR-036 still owns the final Material Lab clean migration proof across full-editor and standalone hosts.
+  - Host capability policy, product/service declarations, multi-host presets, and external component readiness remain outside
+    WR-034.
+  completion_audit: ''
+  diagram_call:
+  - profile declarations
+  - installed suites only
+  ddd_owner: domain/editor/editor_shell workspace profile
+  adr_requirement: ADR 0012 applies to profile compatibility removal.
+  fitness_function_requirement: Registry-backed profile tests for full editor and Material Lab workspace mounting.
+  ownership_mode: Complicated-subsystem profile foundation.
+- id: WR-035
+  title: Clean Persistence Format
+  diagram_title: Stable-only persistence
+  alias: WBCAPPERSIST
+  lane: Platform foundation
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.9
+  rice: Replace legacy workspace persistence with stable-key-only schema.
+  kano: Basic
+  dependencies:
+  - WR-034
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace/persisted.rs
+  - domain/editor/editor_shell/src/workspace/state.rs
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-035-clean-persistence-format/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-035-clean-persistence-format/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p editor_shell workspace::profile
+  - cargo test -p editor_shell workspace::persisted
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo test -p runenwerk_editor workspace_layout
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-035-clean-persistence-format/closeout.md.
+    App workspace layout reads reject V1-V4 schemas, V5 reads reject legacy fallback metadata, and new V5 saves write stable
+    surface keys without legacy fallback fields.
+  current_decision: WR-035 is completed as a bounded clean persistence implementation. Old app workspace files are unsupported,
+    not migrated, and V5 persistence is stable-key-only at the app layout boundary.
+  current_call: Completed. Do not reopen WR-035 for Material Lab clean migration proof; that remains WR-036.
+  main_blocker: Completed clean persistence foundation. PM-WB-CAP-001 remains active until WR-036 closes out.
+  first_move: Continue PM-WB-CAP-001 with WR-036 after rerunning task ai:goal for PT-WB-CAP non-deferred scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-036 still owns final Material Lab clean migration evidence across full-editor and standalone hosts.
+  - Host capability policy, product/service declarations, multi-host presets, and external component readiness remain outside
+    WR-035.
+  completion_audit: ''
+  diagram_call:
+  - stable-key persistence
+  - old schema unsupported
+  ddd_owner: domain/editor/editor_shell workspace persistence with app persistence adapter
+  adr_requirement: ADR 0012 is the breaking persistence decision.
+  fitness_function_requirement: Unsupported old schema diagnostic test and stable-key-only round-trip test.
+  ownership_mode: Stream-aligned persistence cleanup.
+- id: WR-036
+  title: Material Lab Clean Migration Proof
+  diagram_title: Material Lab clean proof
+  alias: WBCAPMAT
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.7
+  rice: Prove Material Lab mounts through the clean Workbench model in both host modes.
+  kano: Basic
+  dependencies:
+  - WR-035
+  write_scopes:
+  - apps/runenwerk_editor/src/material_lab
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - docs-site/src/content/docs/reports/implementation-plans/wr-036-material-lab-clean-migration-proof/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-036-material-lab-clean-migration-proof/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p runenwerk_editor material_lab_workbench
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-036-material-lab-clean-migration-proof/closeout.md.
+    Full-editor and standalone Material Lab hosts resolve graph, inspector, preview, texture, asset, diagnostics, and console
+    surfaces from hosted registries and provider-family maps without legacy request metadata.
+  current_decision: WR-036 is completed as a bounded Material Lab clean migration proof. Full-editor and standalone host
+    construction consume the same registry-backed Material profile surface chain and resolve each mounted request through
+    the active provider-family map.
+  current_call: Completed. Do not reopen WR-036 for host policy, product/service declarations, broad multi-host presets,
+    or external component readiness; those remain WR-037 through WR-040.
+  main_blocker: Completed clean Material Lab host proof. PM-WB-CAP-001 can be reviewed for milestone completion after rerunning
+    task ai:goal for PT-WB-CAP non-deferred scope.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-002 only if the production
+    goal selects it.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-037 still owns host command, product, and resource capability policy.
+  - WR-038 still owns product and service capability declarations.
+  - WR-039 still owns broader multi-host preset behavior.
+  - WR-040 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+  completion_audit: ''
+  diagram_call:
+  - Material Lab standalone
+  - no legacy route metadata
+  ddd_owner: apps/runenwerk_editor Material Lab with editor_shell Workbench contracts
+  adr_requirement: ADR 0012 applies to Material Lab route and persistence cleanup.
+  fitness_function_requirement: Material Lab surface resolution tests and full-editor/standalone Workbench host tests.
+  ownership_mode: Stream-aligned product workflow proof.
+- id: WR-037
+  title: Host Capability Policy
+  diagram_title: Host capability policy
+  alias: WBCAPPOLICY
+  lane: Platform policy
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.7
+  rice: Add host allow/deny policy for command, product, and resource capabilities.
+  kano: Basic
+  dependencies:
+  - WR-036
+  write_scopes:
+  - domain/editor/editor_shell/src/tool_suite
+  - apps/runenwerk_editor/src/shell
+  - docs-site/src/content/docs/reports/implementation-plans/wr-037-host-capability-policy/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-037-host-capability-policy/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p editor_shell requirements_
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-037-host-capability-policy/closeout.md.
+    Provider proposals are classified into typed command/product/resource capability requirements and checked against host
+    policy before conversion to shell commands or app/domain mutation.
+  current_decision: WR-037 is completed as a bounded host policy implementation. The provider proposal dispatch boundary
+    now gates surface-session, editor-domain, and shell-command proposals through RunenwerkWorkbenchHost policy before
+    mutation, while product/service declaration expansion remains WR-038.
+  current_call: Completed. Do not reopen WR-037 for product/service declarations, broad multi-host presets, or external
+    component readiness; those remain WR-038 through WR-040.
+  main_blocker: Completed host command policy gate. PM-WB-CAP-002 can be reviewed for milestone completion after rerunning
+    task ai:goal for PT-WB-CAP non-deferred scope.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-002 completion verification
+    only if the production goal selects it.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-038 still owns product and service capability declaration workflows.
+  - WR-039 still owns broader full-editor, standalone Material Lab, headless validation, and constrained host presets.
+  - WR-040 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+  completion_audit: ''
+  diagram_call:
+  - host policy gate
+  - command/product/resource keys
+  ddd_owner: domain/editor/editor_shell capability contracts with app shell dispatch
+  adr_requirement: ADR 0012 and the capability Workbench target design govern policy direction.
+  fitness_function_requirement: Denied command mutation test and policy allow/deny unit tests.
+  ownership_mode: Enabling platform policy.
+- id: WR-038
+  title: Product And Service Capability Declarations
+  diagram_title: Product and service plane
+  alias: WBCAPPLANE
+  lane: Platform policy
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.1
+  rice: Let suites declare product and service needs without moving semantics into editor_shell.
+  kano: Performance
+  dependencies:
+  - WR-037
+  write_scopes:
+  - domain/editor/editor_shell/src/tool_suite
+  - docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-038-product-and-service-capability-declarations/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p editor_shell tool_suite
+  - cargo check -p editor_shell
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md.
+    Tool-suite composition now carries suite-scoped product and service need declarations through typed keys without moving
+    product semantics, permission authority, or service execution into editor_shell.
+  current_decision: >-
+    WR-038 is completed as a bounded product and service declaration implementation. The declaration plane
+    is registry-validated sidecar metadata: suites request product capabilities and tool services, hosts still grant or deny
+    policy, and owning domains still validate semantic product truth.
+  current_call: Completed. Do not reopen WR-038 for multi-host presets or external component readiness; those remain WR-039
+    and WR-040.
+  main_blocker: Completed declaration plane. PM-WB-CAP-003 can be reviewed for milestone completion after rerunning task
+    ai:goal for PT-WB-CAP non-deferred scope.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-003 completion verification
+    only if the production goal selects it.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-039 still owns broader full-editor, standalone Material Lab, headless validation, and constrained host presets.
+  - WR-040 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+  - Product semantics and service execution remain outside editor_shell by design.
+  completion_audit: ''
+  diagram_call:
+  - product declarations
+  - service declarations
+  ddd_owner: editor_shell tool_suite contracts with owning product domains
+  adr_requirement: ADR required only if product semantic ownership or service process authority changes.
+  fitness_function_requirement: Tool-suite declaration tests plus active design boundary validation.
+  ownership_mode: Enabling platform design.
+- id: WR-039
+  title: Multi-Host Presets
+  diagram_title: Multi-host presets
+  alias: WBCAPHOST
+  lane: Platform host
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.6
+  rice: Full editor, Material Lab, headless validation, and constrained hosts share one clean model.
+  kano: Basic
+  dependencies:
+  - WR-037
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - domain/editor/editor_shell/src/tool_suite
+  - docs-site/src/content/docs/reports/implementation-plans/wr-039-multi-host-presets/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-039-multi-host-presets/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo check -p runenwerk_editor
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-039-multi-host-presets/closeout.md.
+    Full editor, standalone Material Lab, headless validation, and constrained Workbench hosts are explicit composition presets
+    built from suite, profile, provider-family, and host-policy data.
+  current_decision: >-
+    WR-039 is completed as a bounded multi-host preset implementation. Host modes now differ by Workbench composition data:
+    installed suites, profile specs, provider-family assignments, provider registries, and HostCapabilityPolicy.
+  current_call: Completed. Do not reopen WR-039 for external component readiness; WR-040 remains blocked and out of the
+    non-deferred scope.
+  main_blocker: Completed multi-host preset slice. PM-WB-CAP-004 can be reviewed for milestone completion after rerunning
+    task ai:goal for PT-WB-CAP non-deferred scope.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-004 completion verification
+    only if the production goal selects it.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-040 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+  - Headless validation is a registry-backed host composition proof, not a general process runner or plugin sandbox.
+  - Constrained behavior is enforced through HostCapabilityPolicy; richer capability UX and diagnostics remain future bounded
+    work.
+  completion_audit: ''
+  diagram_call:
+  - full editor preset
+  - Material Lab preset
+  - constrained/headless presets
+  ddd_owner: apps/runenwerk_editor Workbench host with editor_shell composition contracts
+  adr_requirement: ADR 0012 blocks reintroducing legacy identity in host presets.
+  fitness_function_requirement: Workbench host preset tests for suite/profile/provider/policy composition.
+  ownership_mode: Stream-aligned app host implementation.

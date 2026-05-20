@@ -1,22 +1,36 @@
 //! File: domain/editor/editor_shell/src/tool_suite/registry.rs
 //! Purpose: Validation and lookup for installed editor tool suites.
 
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 use super::{
-    EditorToolSuite, HostCapabilityPolicy, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
-    ToolSuiteProfileDefinition, ToolSurfaceDefinition, ToolSurfaceStableKey,
+    EditorToolSuite, HostCapabilityPolicy, ProductCapabilityKey, ProfileRef,
+    ProviderFamilyDefinition, ProviderFamilyId, SurfaceRef, ToolServiceKey,
+    ToolSuiteCapabilityDeclaration, ToolSuiteId, ToolSuiteProfileDefinition, ToolSurfaceDefinition,
+    ToolSurfaceStableKey,
 };
 use crate::SurfaceProviderId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolSuiteRegistry {
     suites: Vec<EditorToolSuite>,
+    capability_declarations: Vec<ToolSuiteCapabilityDeclaration>,
+    capability_declaration_indices_by_suite: BTreeMap<ToolSuiteId, usize>,
     surfaces: ToolSurfaceRegistry,
 }
 
 impl ToolSuiteRegistry {
     pub fn new(suites: Vec<EditorToolSuite>) -> Result<Self, ToolSuiteRegistryError> {
+        Self::new_with_capability_declarations(suites, Vec::new())
+    }
+
+    pub fn new_with_capability_declarations(
+        suites: Vec<EditorToolSuite>,
+        capability_declarations: Vec<ToolSuiteCapabilityDeclaration>,
+    ) -> Result<Self, ToolSuiteRegistryError> {
         let mut suite_ids = BTreeMap::<ToolSuiteId, usize>::new();
         let mut provider_family_ids = BTreeMap::<ProviderFamilyId, ToolSuiteId>::new();
 
@@ -42,6 +56,9 @@ impl ToolSuiteRegistry {
                 }
             }
         }
+
+        let capability_declaration_indices_by_suite =
+            validate_capability_declarations(&suite_ids, &capability_declarations)?;
 
         let mut surface_keys = BTreeMap::<ToolSurfaceStableKey, ToolSuiteId>::new();
         let mut ordered_surfaces = Vec::new();
@@ -78,6 +95,8 @@ impl ToolSuiteRegistry {
 
         Ok(Self {
             suites,
+            capability_declarations,
+            capability_declaration_indices_by_suite,
             surfaces: ToolSurfaceRegistry::new(ordered_surfaces),
         })
     }
@@ -100,6 +119,71 @@ impl ToolSuiteRegistry {
     pub fn has_provider_family(&self, id: &ProviderFamilyId) -> bool {
         self.provider_family(id).is_some()
     }
+
+    pub fn capability_declarations(&self) -> &[ToolSuiteCapabilityDeclaration] {
+        &self.capability_declarations
+    }
+
+    pub fn capability_declaration(
+        &self,
+        suite_id: &ToolSuiteId,
+    ) -> Option<&ToolSuiteCapabilityDeclaration> {
+        self.capability_declaration_indices_by_suite
+            .get(suite_id)
+            .and_then(|index| self.capability_declarations.get(*index))
+    }
+}
+
+fn validate_capability_declarations(
+    suite_ids: &BTreeMap<ToolSuiteId, usize>,
+    declarations: &[ToolSuiteCapabilityDeclaration],
+) -> Result<BTreeMap<ToolSuiteId, usize>, ToolSuiteRegistryError> {
+    let mut indices_by_suite = BTreeMap::<ToolSuiteId, usize>::new();
+
+    for (index, declaration) in declarations.iter().enumerate() {
+        let suite_id = declaration.suite_ref.id().clone();
+        if !suite_ids.contains_key(&suite_id) {
+            return Err(ToolSuiteRegistryError::UnknownCapabilityDeclarationSuite { suite_id });
+        }
+
+        if indices_by_suite.insert(suite_id.clone(), index).is_some() {
+            return Err(ToolSuiteRegistryError::DuplicateCapabilityDeclarationSuite { suite_id });
+        }
+
+        let mut product_needs = BTreeSet::<ProductCapabilityKey>::new();
+        for need in &declaration.product_needs {
+            if need.label.trim().is_empty() {
+                return Err(ToolSuiteRegistryError::EmptyProductCapabilityNeedLabel {
+                    suite_id: suite_id.clone(),
+                    product_capability_key: need.key.clone(),
+                });
+            }
+            if !product_needs.insert(need.key.clone()) {
+                return Err(ToolSuiteRegistryError::DuplicateProductCapabilityNeed {
+                    suite_id: suite_id.clone(),
+                    product_capability_key: need.key.clone(),
+                });
+            }
+        }
+
+        let mut service_needs = BTreeSet::<ToolServiceKey>::new();
+        for need in &declaration.service_needs {
+            if need.label.trim().is_empty() {
+                return Err(ToolSuiteRegistryError::EmptyToolServiceNeedLabel {
+                    suite_id: suite_id.clone(),
+                    service_key: need.key.clone(),
+                });
+            }
+            if !service_needs.insert(need.key.clone()) {
+                return Err(ToolSuiteRegistryError::DuplicateToolServiceNeed {
+                    suite_id: suite_id.clone(),
+                    service_key: need.key.clone(),
+                });
+            }
+        }
+    }
+
+    Ok(indices_by_suite)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +244,28 @@ pub enum ToolSuiteRegistryError {
         surface_key: ToolSurfaceStableKey,
         provider_family_id: ProviderFamilyId,
     },
+    UnknownCapabilityDeclarationSuite {
+        suite_id: ToolSuiteId,
+    },
+    DuplicateCapabilityDeclarationSuite {
+        suite_id: ToolSuiteId,
+    },
+    DuplicateProductCapabilityNeed {
+        suite_id: ToolSuiteId,
+        product_capability_key: ProductCapabilityKey,
+    },
+    EmptyProductCapabilityNeedLabel {
+        suite_id: ToolSuiteId,
+        product_capability_key: ProductCapabilityKey,
+    },
+    DuplicateToolServiceNeed {
+        suite_id: ToolSuiteId,
+        service_key: ToolServiceKey,
+    },
+    EmptyToolServiceNeedLabel {
+        suite_id: ToolSuiteId,
+        service_key: ToolServiceKey,
+    },
 }
 
 impl fmt::Display for ToolSuiteRegistryError {
@@ -191,6 +297,41 @@ impl fmt::Display for ToolSuiteRegistryError {
             } => write!(
                 f,
                 "surface `{surface_key}` in suite `{suite_id}` references undeclared provider family `{provider_family_id}`"
+            ),
+            Self::UnknownCapabilityDeclarationSuite { suite_id } => write!(
+                f,
+                "capability declaration references unknown suite `{suite_id}`"
+            ),
+            Self::DuplicateCapabilityDeclarationSuite { suite_id } => {
+                write!(f, "duplicate capability declaration for suite `{suite_id}`")
+            }
+            Self::DuplicateProductCapabilityNeed {
+                suite_id,
+                product_capability_key,
+            } => write!(
+                f,
+                "duplicate product capability need `{product_capability_key}` in suite `{suite_id}`"
+            ),
+            Self::EmptyProductCapabilityNeedLabel {
+                suite_id,
+                product_capability_key,
+            } => write!(
+                f,
+                "product capability need `{product_capability_key}` in suite `{suite_id}` has an empty label"
+            ),
+            Self::DuplicateToolServiceNeed {
+                suite_id,
+                service_key,
+            } => write!(
+                f,
+                "duplicate tool service need `{service_key}` in suite `{suite_id}`"
+            ),
+            Self::EmptyToolServiceNeedLabel {
+                suite_id,
+                service_key,
+            } => write!(
+                f,
+                "tool service need `{service_key}` in suite `{suite_id}` has an empty label"
             ),
         }
     }
@@ -407,6 +548,7 @@ impl WorkbenchComposition {
 #[derive(Debug, Clone, Default)]
 pub struct WorkbenchCompositionBuilder {
     suites: Vec<EditorToolSuite>,
+    capability_declarations: Vec<ToolSuiteCapabilityDeclaration>,
     profiles: Vec<ToolSuiteProfileDefinition>,
     provider_assignments: Vec<ProviderFamilyProviderAssignment>,
     host_policy: HostCapabilityPolicy,
@@ -419,6 +561,14 @@ impl WorkbenchCompositionBuilder {
 
     pub fn with_suites(mut self, suites: Vec<EditorToolSuite>) -> Self {
         self.suites = suites;
+        self
+    }
+
+    pub fn with_capability_declarations(
+        mut self,
+        declarations: Vec<ToolSuiteCapabilityDeclaration>,
+    ) -> Self {
+        self.capability_declarations = declarations;
         self
     }
 
@@ -441,8 +591,12 @@ impl WorkbenchCompositionBuilder {
     }
 
     pub fn build(self) -> Result<WorkbenchComposition, WorkbenchCompositionBuildError> {
-        let tool_suite_registry = ToolSuiteRegistry::new(self.suites)
-            .map_err(WorkbenchCompositionBuildError::ToolSuiteRegistry)?;
+        let tool_suite_registry = ToolSuiteRegistry::new_with_capability_declarations(
+            self.suites,
+            self.capability_declarations,
+        )
+        .map_err(WorkbenchCompositionBuildError::ToolSuiteRegistry)?;
+        validate_profiles(&tool_suite_registry, &self.profiles)?;
         let provider_bundle = ProviderBundle::new(&tool_suite_registry, self.provider_assignments)
             .map_err(WorkbenchCompositionBuildError::ProviderBundle)?;
 
@@ -455,10 +609,48 @@ impl WorkbenchCompositionBuilder {
     }
 }
 
+fn validate_profiles(
+    registry: &ToolSuiteRegistry,
+    profiles: &[ToolSuiteProfileDefinition],
+) -> Result<(), WorkbenchCompositionBuildError> {
+    let mut profile_refs = BTreeMap::<ProfileRef, usize>::new();
+
+    for (index, profile) in profiles.iter().enumerate() {
+        if profile_refs
+            .insert(profile.profile_ref.clone(), index)
+            .is_some()
+        {
+            return Err(WorkbenchCompositionBuildError::DuplicateProfileRef {
+                profile_ref: profile.profile_ref.clone(),
+            });
+        }
+
+        for surface_ref in &profile.default_surfaces {
+            if registry.surfaces().get(surface_ref.key()).is_none() {
+                return Err(
+                    WorkbenchCompositionBuildError::UnknownProfileDefaultSurface {
+                        profile_ref: profile.profile_ref.clone(),
+                        surface_ref: surface_ref.clone(),
+                    },
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub enum WorkbenchCompositionBuildError {
     ToolSuiteRegistry(ToolSuiteRegistryError),
     ProviderBundle(ProviderBundleError),
+    DuplicateProfileRef {
+        profile_ref: ProfileRef,
+    },
+    UnknownProfileDefaultSurface {
+        profile_ref: ProfileRef,
+        surface_ref: SurfaceRef,
+    },
 }
 
 impl fmt::Display for WorkbenchCompositionBuildError {
@@ -470,6 +662,16 @@ impl fmt::Display for WorkbenchCompositionBuildError {
             Self::ProviderBundle(error) => {
                 write!(f, "failed to build Workbench provider bundle: {error}")
             }
+            Self::DuplicateProfileRef { profile_ref } => {
+                write!(f, "duplicate Workbench profile ref: {profile_ref}")
+            }
+            Self::UnknownProfileDefaultSurface {
+                profile_ref,
+                surface_ref,
+            } => write!(
+                f,
+                "Workbench profile `{profile_ref}` references unknown default surface `{surface_ref}`"
+            ),
         }
     }
 }
@@ -480,8 +682,8 @@ impl std::error::Error for WorkbenchCompositionBuildError {}
 mod tests {
     use super::*;
     use crate::{
-        ProviderFamilyDefinition, SurfaceProviderId, ToolSurfacePersistence, ToolSurfaceRole,
-        ToolSurfaceRoute,
+        ProductCapabilityNeed, ProviderFamilyDefinition, SuiteRef, SurfaceProviderId,
+        ToolServiceNeed, ToolSurfaceRole, ToolSurfaceRoute,
     };
 
     #[test]
@@ -547,6 +749,99 @@ mod tests {
         assert!(matches!(
             error,
             ToolSuiteRegistryError::InvalidProviderFamilyReference { .. }
+        ));
+    }
+
+    #[test]
+    fn product_and_service_capability_declarations_are_registered_by_suite() {
+        let suite_id = ToolSuiteId::new("runenwerk.material_lab").unwrap();
+        let product_need = ProductCapabilityNeed::new(
+            ProductCapabilityKey::new("runenwerk.material.preview_product").unwrap(),
+            "Material preview product",
+        );
+        let service_need = ToolServiceNeed::new(
+            ToolServiceKey::new("runenwerk.material.preview_builder").unwrap(),
+            "Material preview builder",
+        );
+        let declaration = ToolSuiteCapabilityDeclaration::new(
+            SuiteRef::new(suite_id.clone()),
+            vec![product_need.clone()],
+            vec![service_need.clone()],
+        );
+
+        let registry = ToolSuiteRegistry::new_with_capability_declarations(
+            vec![suite("runenwerk.material_lab", ["graph_canvas"])],
+            vec![declaration],
+        )
+        .expect("valid capability declarations should register");
+
+        let registered = registry
+            .capability_declaration(&suite_id)
+            .expect("suite declaration should be indexed by suite id");
+        assert_eq!(registered.product_needs, vec![product_need]);
+        assert_eq!(registered.service_needs, vec![service_need]);
+        assert_eq!(registry.capability_declarations().len(), 1);
+    }
+
+    #[test]
+    fn capability_declaration_rejects_unknown_suite() {
+        let declaration = ToolSuiteCapabilityDeclaration::new(
+            SuiteRef::from_stable_key("runenwerk.unknown").unwrap(),
+            vec![ProductCapabilityNeed::new(
+                ProductCapabilityKey::new("runenwerk.material.preview_product").unwrap(),
+                "Material preview product",
+            )],
+            Vec::new(),
+        );
+
+        let error = ToolSuiteRegistry::new_with_capability_declarations(
+            vec![suite("runenwerk.material_lab", ["graph_canvas"])],
+            vec![declaration],
+        )
+        .expect_err("unknown suite declarations should be rejected");
+
+        assert!(matches!(
+            error,
+            ToolSuiteRegistryError::UnknownCapabilityDeclarationSuite { .. }
+        ));
+    }
+
+    #[test]
+    fn capability_declaration_rejects_duplicate_product_and_service_needs() {
+        let product_key = ProductCapabilityKey::new("runenwerk.material.preview_product").unwrap();
+        let service_key = ToolServiceKey::new("runenwerk.material.preview_builder").unwrap();
+        let product_error = ToolSuiteRegistry::new_with_capability_declarations(
+            vec![suite("runenwerk.material_lab", ["graph_canvas"])],
+            vec![ToolSuiteCapabilityDeclaration::new(
+                SuiteRef::from_stable_key("runenwerk.material_lab").unwrap(),
+                vec![
+                    ProductCapabilityNeed::new(product_key.clone(), "Material preview product"),
+                    ProductCapabilityNeed::new(product_key.clone(), "Material preview product"),
+                ],
+                Vec::new(),
+            )],
+        )
+        .expect_err("duplicate product needs should be rejected");
+        let service_error = ToolSuiteRegistry::new_with_capability_declarations(
+            vec![suite("runenwerk.material_lab", ["graph_canvas"])],
+            vec![ToolSuiteCapabilityDeclaration::new(
+                SuiteRef::from_stable_key("runenwerk.material_lab").unwrap(),
+                Vec::new(),
+                vec![
+                    ToolServiceNeed::new(service_key.clone(), "Material preview builder"),
+                    ToolServiceNeed::new(service_key.clone(), "Material preview builder"),
+                ],
+            )],
+        )
+        .expect_err("duplicate service needs should be rejected");
+
+        assert!(matches!(
+            product_error,
+            ToolSuiteRegistryError::DuplicateProductCapabilityNeed { .. }
+        ));
+        assert!(matches!(
+            service_error,
+            ToolSuiteRegistryError::DuplicateToolServiceNeed { .. }
         ));
     }
 
@@ -743,6 +1038,7 @@ mod tests {
     #[test]
     fn composition_builder_installs_suites_profiles_provider_bundle_and_policy() {
         let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+        let material_suite_id = ToolSuiteId::new("runenwerk.material_lab").unwrap();
         let profile = ToolSuiteProfileDefinition::new(
             super::super::ProfileRef::new("runenwerk.material_lab.default").unwrap(),
             "Material Lab",
@@ -754,9 +1050,18 @@ mod tests {
         let command =
             super::super::CommandCapabilityKey::new("runenwerk.material_graph.connect_edge")
                 .unwrap();
+        let product_need = ProductCapabilityNeed::new(
+            ProductCapabilityKey::new("runenwerk.material.preview_product").unwrap(),
+            "Material preview product",
+        );
 
         let composition = WorkbenchCompositionBuilder::new()
             .with_suites(vec![suite("runenwerk.material_lab", ["graph_canvas"])])
+            .with_capability_declarations(vec![ToolSuiteCapabilityDeclaration::new(
+                SuiteRef::new(material_suite_id.clone()),
+                vec![product_need.clone()],
+                Vec::new(),
+            )])
             .with_profiles(vec![profile.clone()])
             .with_provider_assignments(vec![ProviderFamilyProviderAssignment::new(
                 material_family,
@@ -769,6 +1074,13 @@ mod tests {
         assert_eq!(composition.profiles(), &[profile]);
         assert!(composition.host_policy().allows_command(&command));
         assert_eq!(composition.provider_bundle().assignments().len(), 1);
+        assert_eq!(
+            composition
+                .tool_suite_registry()
+                .capability_declaration(&material_suite_id)
+                .map(|declaration| declaration.product_needs.as_slice()),
+            Some([product_need].as_slice())
+        );
         assert!(
             composition
                 .tool_suite_registry()
@@ -776,6 +1088,66 @@ mod tests {
                 .get(&ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap())
                 .is_some()
         );
+    }
+
+    #[test]
+    fn composition_builder_rejects_duplicate_profile_refs() {
+        let profile_ref = super::super::ProfileRef::new("runenwerk.material_lab.default").unwrap();
+        let profile = ToolSuiteProfileDefinition::new(
+            profile_ref.clone(),
+            "Material Lab",
+            vec![
+                super::super::SurfaceRef::from_stable_key("runenwerk.material_lab.graph_canvas")
+                    .unwrap(),
+            ],
+        );
+
+        let error = WorkbenchCompositionBuilder::new()
+            .with_suites(vec![suite("runenwerk.material_lab", ["graph_canvas"])])
+            .with_profiles(vec![profile.clone(), profile])
+            .with_provider_assignments(vec![ProviderFamilyProviderAssignment::new(
+                ProviderFamilyId::new("runenwerk.material_lab").unwrap(),
+                provider_id(7),
+            )])
+            .build()
+            .expect_err("duplicate profile refs should be rejected");
+
+        assert!(matches!(
+            error,
+            WorkbenchCompositionBuildError::DuplicateProfileRef {
+                profile_ref: duplicate
+            } if duplicate == profile_ref
+        ));
+    }
+
+    #[test]
+    fn composition_builder_rejects_unknown_profile_default_surface() {
+        let profile_ref = super::super::ProfileRef::new("runenwerk.material_lab.default").unwrap();
+        let surface_ref =
+            super::super::SurfaceRef::from_stable_key("runenwerk.material_lab.preview").unwrap();
+        let profile = ToolSuiteProfileDefinition::new(
+            profile_ref.clone(),
+            "Material Lab",
+            vec![surface_ref.clone()],
+        );
+
+        let error = WorkbenchCompositionBuilder::new()
+            .with_suites(vec![suite("runenwerk.material_lab", ["graph_canvas"])])
+            .with_profiles(vec![profile])
+            .with_provider_assignments(vec![ProviderFamilyProviderAssignment::new(
+                ProviderFamilyId::new("runenwerk.material_lab").unwrap(),
+                provider_id(7),
+            )])
+            .build()
+            .expect_err("unknown profile surface should be rejected");
+
+        assert!(matches!(
+            error,
+            WorkbenchCompositionBuildError::UnknownProfileDefaultSurface {
+                profile_ref: unknown_profile,
+                surface_ref: unknown_surface
+            } if unknown_profile == profile_ref && unknown_surface == surface_ref
+        ));
     }
 
     fn suite<const N: usize>(suite_id: &str, surface_names: [&str; N]) -> EditorToolSuite {
@@ -788,14 +1160,14 @@ mod tests {
         surface_names: [&str; N],
     ) -> EditorToolSuite {
         let provider_family = ProviderFamilyId::new(provider_family_id).unwrap();
-        EditorToolSuite {
-            suite_id: ToolSuiteId::new(suite_id).unwrap(),
-            label: suite_id.to_string(),
-            provider_families: vec![ProviderFamilyDefinition {
-                id: provider_family.clone(),
-                label: provider_family_id.to_string(),
-            }],
-            surfaces: surface_names
+        EditorToolSuite::new(
+            super::super::SuiteRef::from_stable_key(suite_id).unwrap(),
+            suite_id.to_string(),
+            vec![ProviderFamilyDefinition::new(
+                provider_family.clone(),
+                provider_family_id.to_string(),
+            )],
+            surface_names
                 .into_iter()
                 .map(|surface_name| {
                     surface(
@@ -804,7 +1176,7 @@ mod tests {
                     )
                 })
                 .collect(),
-        }
+        )
     }
 
     fn suite_with_surface_key(
@@ -812,27 +1184,26 @@ mod tests {
         surface_key: &str,
         referenced_provider_family_id: &str,
     ) -> EditorToolSuite {
-        EditorToolSuite {
-            suite_id: ToolSuiteId::new(suite_id).unwrap(),
-            label: suite_id.to_string(),
-            provider_families: vec![ProviderFamilyDefinition {
-                id: ProviderFamilyId::new(suite_id).unwrap(),
-                label: suite_id.to_string(),
-            }],
-            surfaces: vec![surface(surface_key, referenced_provider_family_id)],
-        }
+        EditorToolSuite::new(
+            super::super::SuiteRef::from_stable_key(suite_id).unwrap(),
+            suite_id.to_string(),
+            vec![ProviderFamilyDefinition::new(
+                ProviderFamilyId::new(suite_id).unwrap(),
+                suite_id.to_string(),
+            )],
+            vec![surface(surface_key, referenced_provider_family_id)],
+        )
     }
 
     fn surface(key: &str, provider_family_id: &str) -> ToolSurfaceDefinition {
-        ToolSurfaceDefinition {
-            key: ToolSurfaceStableKey::new(key).unwrap(),
-            label: key.to_string(),
-            role: ToolSurfaceRole::Primary,
-            panel_kind: crate::PanelKind::GraphCanvas,
-            provider_family: ProviderFamilyId::new(provider_family_id).unwrap(),
-            route: ToolSurfaceRoute::ProviderOwnedLocal,
-            persistence: ToolSurfacePersistence::StableKey,
-        }
+        ToolSurfaceDefinition::new(
+            super::super::SurfaceRef::from_stable_key(key).unwrap(),
+            key.to_string(),
+            ToolSurfaceRole::Primary,
+            crate::PanelKind::GraphCanvas,
+            ProviderFamilyId::new(provider_family_id).unwrap(),
+            ToolSurfaceRoute::ProviderOwnedLocal,
+        )
     }
 
     fn provider_id(raw: u64) -> SurfaceProviderId {

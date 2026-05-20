@@ -17,16 +17,6 @@ pub(super) fn is_self_authoring_surface(kind: ToolSurfaceKind) -> bool {
     )
 }
 
-pub(super) fn is_asset_surface(kind: ToolSurfaceKind) -> bool {
-    matches!(
-        kind,
-        ToolSurfaceKind::AssetBrowser
-            | ToolSurfaceKind::ImportInspector
-            | ToolSurfaceKind::FieldProductViewer
-            | ToolSurfaceKind::SdfBrushBrowser
-    )
-}
-
 pub(super) struct SelfAuthoringProvider;
 
 impl EditorSurfaceProvider for SelfAuthoringProvider {
@@ -56,9 +46,18 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
         request: &SurfaceProviderRequest,
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let legacy_tool_surface_kind = legacy_surface_kind_or_diagnostic(request)?;
-        let title = self_authoring_title(legacy_tool_surface_kind).to_string();
-        let (root, routes) = match legacy_tool_surface_kind {
+        let surface_kind =
+            tool_surface_kind_for_stable_key(request.stable_key()).ok_or_else(|| {
+                SurfaceProviderDiagnostic::new(
+                    "editor.surface.unknown_self_authoring_key",
+                    format!(
+                        "self-authoring provider does not recognize stable surface key `{}`",
+                        request.stable_key().as_str()
+                    ),
+                )
+            })?;
+        let title = self_authoring_title(surface_kind).to_string();
+        let (root, routes) = match surface_kind {
             ToolSurfaceKind::UiCanvas => context
                 .shell_state
                 .self_authoring()
@@ -80,8 +79,8 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
             _ => build_self_authoring_control_panel(
                 context.theme,
                 request.tool_surface_instance_id,
-                self_authoring_lines(context, legacy_tool_surface_kind),
-                self_authoring_actions(context, legacy_tool_surface_kind),
+                self_authoring_lines(context, surface_kind),
+                self_authoring_actions(context, surface_kind),
             ),
         };
 

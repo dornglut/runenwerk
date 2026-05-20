@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-21
 ---
 
 # Render Target Architecture
@@ -65,10 +65,11 @@ Generic external imports remain compatibility constructors and are rejected in a
 
 ## Multi-view and Feature Policy
 
-- Prepared frame carries a view container (`PreparedViewFrame`) even for single-view operation.
+- Prepared frame carries a view container (`PreparedViewFrame`) for both main-surface and offscreen product operation.
 - Execution plans carry view masks (`CompiledViewMask`) to support view-scoped pass subsets.
 - Prepared frame requests can describe offscreen product views and per-flow invocations.
-- Active renderer execution for dynamic target aliases and dynamic target cache allocation remains in the render product surface foundation bundle; callers must not emulate product surfaces by cloning flows or suffixing static target labels.
+- Active renderer execution resolves dynamic target aliases and allocates dynamic targets through the render product surface foundation. Callers must not emulate product surfaces by cloning flows or suffixing static target labels.
+- Native OS multi-window and multi-swapchain presentation remains separate future work; it extends surface ownership, not the product-surface target model.
 - Feature contribution status/fallback policy is resolved in prepare and executed without submit-time world extraction.
 
 ## Product Surface Target Model

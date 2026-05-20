@@ -11,13 +11,10 @@ use editor_definition::{
 
 use crate::{
     FloatingHostBounds, FloatingHostPlaceholderState, PanelHostId, PanelHostKind, PanelHostNode,
-    PanelInstanceState, SplitHostState, TabStackHostState, TabStackId, TabStackState,
+    PanelInstanceState, PanelKind, SplitHostState, TabStackHostState, TabStackId, TabStackState,
     ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceId, WorkspaceIdentityAllocator,
-    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, panel_kind_for_tool_surface_kind,
-    tool_suite::{
-        ToolSurfaceDefinition, ToolSurfaceRegistry, ToolSurfaceStableKey,
-        stable_key_for_tool_surface_kind, tool_surface_kind_for_stable_key,
-    },
+    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, stable_key_for_tool_surface_kind,
+    tool_suite::{ToolSurfaceDefinition, ToolSurfaceRegistry, ToolSurfaceStableKey},
     tool_surface_kind_from_definition_key,
     workspace::WorkspaceSurfaceIdentityError,
 };
@@ -35,10 +32,6 @@ pub enum WorkspaceDefinitionFormationError {
         tool_surface: String,
     },
     UnknownStableToolSurface {
-        tab_id: String,
-        stable_surface_key: ToolSurfaceStableKey,
-    },
-    RegistryBackedToolSurfaceWithoutLegacyKind {
         tab_id: String,
         stable_surface_key: ToolSurfaceStableKey,
     },
@@ -137,24 +130,10 @@ struct WorkspaceDefinitionBuilder<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ResolvedTabToolSurface {
-    RegistryBacked {
-        tool_surface_kind: ToolSurfaceKind,
+    Stable {
         stable_surface_key: ToolSurfaceStableKey,
+        panel_kind: PanelKind,
     },
-    Legacy {
-        tool_surface_kind: ToolSurfaceKind,
-    },
-}
-
-impl ResolvedTabToolSurface {
-    const fn tool_surface_kind(&self) -> ToolSurfaceKind {
-        match self {
-            Self::RegistryBacked {
-                tool_surface_kind, ..
-            }
-            | Self::Legacy { tool_surface_kind } => *tool_surface_kind,
-        }
-    }
 }
 
 impl<'a> WorkspaceDefinitionBuilder<'a> {
@@ -269,41 +248,25 @@ impl<'a> WorkspaceDefinitionBuilder<'a> {
         let mut ordered_panels = Vec::with_capacity(tabs.len());
         for tab in tabs {
             let resolved_tool_surface = self.resolve_tab_tool_surface(tab)?;
-            let tool_surface_kind = resolved_tool_surface.tool_surface_kind();
+            let ResolvedTabToolSurface::Stable {
+                stable_surface_key,
+                panel_kind,
+            } = resolved_tool_surface;
             let panel_id = self.allocator.allocate_panel_instance_id();
             let tool_surface_id = self.allocator.allocate_tool_surface_instance_id();
             self.panels_by_id.insert(
                 panel_id,
                 PanelInstanceState {
                     id: panel_id,
-                    panel_kind: panel_kind_for_tool_surface_kind(tool_surface_kind),
+                    panel_kind,
                     active_tool_surface: Some(tool_surface_id),
                 },
             );
-            let tool_surface = match resolved_tool_surface {
-                ResolvedTabToolSurface::RegistryBacked {
-                    tool_surface_kind,
-                    stable_surface_key,
-                } => ToolSurfaceState::new_with_stable_key(
-                    tool_surface_id,
-                    stable_surface_key,
-                    Some(tool_surface_kind),
-                    ToolSurfaceMount::Mounted { panel_id },
-                ),
-                ResolvedTabToolSurface::Legacy { tool_surface_kind } => {
-                    ToolSurfaceState::new_legacy(
-                        tool_surface_id,
-                        tool_surface_kind,
-                        ToolSurfaceMount::Mounted { panel_id },
-                    )
-                    .map_err(|source| {
-                        WorkspaceDefinitionFormationError::SurfaceIdentity {
-                            tab_id: tab.id.clone(),
-                            source,
-                        }
-                    })?
-                }
-            };
+            let tool_surface = ToolSurfaceState::new_with_stable_key(
+                tool_surface_id,
+                stable_surface_key,
+                ToolSurfaceMount::Mounted { panel_id },
+            );
             self.tool_surfaces_by_id
                 .insert(tool_surface_id, tool_surface);
             ordered_panels.push(panel_id);
@@ -323,7 +286,6 @@ impl<'a> WorkspaceDefinitionBuilder<'a> {
                 ordered_panels,
                 active_panel,
                 locked_stable_surface_key: None,
-                legacy_locked_tool_surface_kind: None,
             },
         );
         Ok(tab_stack_id)
@@ -335,23 +297,29 @@ impl<'a> WorkspaceDefinitionBuilder<'a> {
     ) -> Result<ResolvedTabToolSurface, WorkspaceDefinitionFormationError> {
         match resolve_authored_tool_surface_reference(&tab.tool_surface, self.registry) {
             AuthoredToolSurfaceResolution::RegistryBacked {
-                stable_surface_key, ..
+                stable_surface_key,
+                definition,
+            } => Ok(ResolvedTabToolSurface::Stable {
+                stable_surface_key,
+                panel_kind: definition.panel_kind,
+            }),
+            AuthoredToolSurfaceResolution::Legacy {
+                tool_surface_kind,
+                stable_surface_key,
             } => {
-                let tool_surface_kind =
-                    tool_surface_kind_for_stable_key(&stable_surface_key).ok_or_else(|| {
-                        WorkspaceDefinitionFormationError::RegistryBackedToolSurfaceWithoutLegacyKind {
-                            tab_id: tab.id.clone(),
-                            stable_surface_key: stable_surface_key.clone(),
-                        }
-                    })?;
-                Ok(ResolvedTabToolSurface::RegistryBacked {
-                    tool_surface_kind,
+                let stable_surface_key = stable_surface_key.ok_or_else(|| {
+                    WorkspaceDefinitionFormationError::SurfaceIdentity {
+                        tab_id: tab.id.clone(),
+                        source: WorkspaceSurfaceIdentityError::UnmappedLegacySurface {
+                            kind: tool_surface_kind,
+                        },
+                    }
+                })?;
+                Ok(ResolvedTabToolSurface::Stable {
                     stable_surface_key,
+                    panel_kind: tool_surface_kind.panel_kind(),
                 })
             }
-            AuthoredToolSurfaceResolution::Legacy {
-                tool_surface_kind, ..
-            } => Ok(ResolvedTabToolSurface::Legacy { tool_surface_kind }),
             AuthoredToolSurfaceResolution::UnknownStableSurfaceKey { stable_surface_key } => Err(
                 WorkspaceDefinitionFormationError::UnknownStableToolSurface {
                     tab_id: tab.id.clone(),
@@ -600,10 +568,6 @@ mod tests {
             .next()
             .expect("formed workspace should mount one surface");
         assert_eq!(
-            surface.legacy_tool_surface_kind(),
-            Some(ToolSurfaceKind::MaterialGraphCanvas)
-        );
-        assert_eq!(
             surface.stable_surface_key().as_str(),
             "runenwerk.material_lab.graph_canvas"
         );
@@ -631,10 +595,6 @@ mod tests {
         assert_eq!(
             surface.stable_surface_key().as_str(),
             "runenwerk.material_lab.graph_canvas"
-        );
-        assert_eq!(
-            surface.legacy_tool_surface_kind(),
-            Some(ToolSurfaceKind::MaterialGraphCanvas)
         );
     }
 

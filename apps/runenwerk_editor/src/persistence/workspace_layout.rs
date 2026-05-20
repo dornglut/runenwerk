@@ -7,9 +7,8 @@ use serde::Deserialize;
 use editor_shell::{
     PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
     PERSISTED_WORKSPACE_STATE_VERSION_V3, PERSISTED_WORKSPACE_STATE_VERSION_V4,
-    PERSISTED_WORKSPACE_STATE_VERSION_V5, PersistedWorkspaceStateV1, PersistedWorkspaceStateV2,
-    PersistedWorkspaceStateV3, PersistedWorkspaceStateV4, PersistedWorkspaceStateV5,
-    ToolSurfaceRegistry, WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
+    PERSISTED_WORKSPACE_STATE_VERSION_V5, PersistedWorkspaceStateV5, ToolSurfaceRegistry,
+    WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
     default_workspace_profile_registry,
 };
 
@@ -130,62 +129,16 @@ fn read_workspace_layout_with_optional_registry(
         layout_template_version,
         last_saved_at_unix_seconds,
     ) = match probe.version {
-        PERSISTED_WORKSPACE_STATE_VERSION_V1 => {
-            let persisted: PersistedWorkspaceStateV1 =
-                decode_ron(&source).context("failed to decode v1 persisted workspace layout")?;
-            (
-                WorkspaceState::from_persisted_v1(persisted),
-                None,
-                None,
-                None,
-                None,
-            )
-        }
-        PERSISTED_WORKSPACE_STATE_VERSION_V2 => {
-            let persisted: PersistedWorkspaceStateV2 =
-                decode_ron(&source).context("failed to decode v2 persisted workspace layout")?;
-            (
-                WorkspaceState::from_persisted_v2(persisted),
-                None,
-                None,
-                None,
-                None,
-            )
-        }
-        PERSISTED_WORKSPACE_STATE_VERSION_V3 => {
-            let persisted: PersistedWorkspaceStateV3 =
-                decode_ron(&source).context("failed to decode v3 persisted workspace layout")?;
-            let workspace_profile_id = persisted
-                .workspace_profile_id
-                .and_then(|raw| WorkspaceProfileId::try_from_raw(raw).ok());
-            let layout_template = persisted.layout_template.clone();
-            let layout_template_version = persisted.layout_template_version;
-            let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
-            (
-                WorkspaceState::from_persisted_v3(persisted),
-                workspace_profile_id,
-                layout_template,
-                layout_template_version,
-                last_saved_at_unix_seconds,
-            )
-        }
-        PERSISTED_WORKSPACE_STATE_VERSION_V4 => {
-            let persisted: PersistedWorkspaceStateV4 =
-                decode_ron(&source).context("failed to decode v4 persisted workspace layout")?;
-            let workspace_profile_id = persisted
-                .workspace_profile_id
-                .and_then(|raw| WorkspaceProfileId::try_from_raw(raw).ok());
-            let layout_template = persisted.layout_template.clone();
-            let layout_template_version = persisted.layout_template_version;
-            let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
-            (
-                WorkspaceState::from_persisted_v4(persisted),
-                workspace_profile_id,
-                layout_template,
-                layout_template_version,
-                last_saved_at_unix_seconds,
-            )
-        }
+        PERSISTED_WORKSPACE_STATE_VERSION_V1
+        | PERSISTED_WORKSPACE_STATE_VERSION_V2
+        | PERSISTED_WORKSPACE_STATE_VERSION_V3
+        | PERSISTED_WORKSPACE_STATE_VERSION_V4 => (
+            Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(probe.version)),
+            None,
+            None,
+            None,
+            None,
+        ),
         PERSISTED_WORKSPACE_STATE_VERSION_V5 => {
             let persisted: PersistedWorkspaceStateV5 =
                 decode_ron(&source).context("failed to decode v5 persisted workspace layout")?;
@@ -357,17 +310,14 @@ mod tests {
             WorkspaceDefaultToolSurface::new_with_panel_kind(
                 ToolSurfaceStableKey::new(MATERIAL_GRAPH_CANVAS_SURFACE_KEY).unwrap(),
                 PanelKind::MaterialGraphCanvas,
-                None,
             ),
             WorkspaceDefaultToolSurface::new_with_panel_kind(
                 ToolSurfaceStableKey::new(MATERIAL_INSPECTOR_SURFACE_KEY).unwrap(),
                 PanelKind::MaterialInspector,
-                None,
             ),
             WorkspaceDefaultToolSurface::new_with_panel_kind(
                 ToolSurfaceStableKey::new(MATERIAL_PREVIEW_SURFACE_KEY).unwrap(),
                 PanelKind::MaterialPreview,
-                None,
             ),
         ]
     }
@@ -414,7 +364,6 @@ mod tests {
             WorkspaceMutation::LockTabStackAreaStableKey {
                 tab_stack_id: inspector_stack,
                 locked_stable_surface_key: Some(inspector_key),
-                legacy_locked_tool_surface_kind: None,
             },
         )
         .expect("stable-key-only inspector lock should apply")
@@ -465,6 +414,12 @@ mod tests {
             .collect()
     }
 
+    fn error_chain_contains(error: &anyhow::Error, needle: &str) -> bool {
+        error
+            .chain()
+            .any(|cause| cause.to_string().contains(needle))
+    }
+
     fn context<'a>(
         app: &'a RunenwerkEditorApp,
         shell_state: &'a RunenwerkEditorShellState,
@@ -511,7 +466,7 @@ mod tests {
         let source = std::fs::read_to_string(&path).expect("workspace layout should exist");
 
         assert!(source.contains("stable_surface_key"));
-        assert!(source.contains("legacy_tool_surface_kind"));
+        assert!(!source.contains("legacy_tool_surface_kind"));
         assert!(
             !source
                 .lines()
@@ -557,7 +512,10 @@ mod tests {
             .find(|surface| surface.stable_surface_key() == &inspector_key)
             .expect("loaded workspace should preserve inspector stable key");
 
-        assert_eq!(inspector_surface.legacy_tool_surface_kind(), None);
+        assert_eq!(
+            inspector_surface.stable_surface_key().as_str(),
+            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
+        );
         let _ = std::fs::remove_file(path);
     }
 
@@ -612,7 +570,6 @@ mod tests {
                 .map(|key| key.as_str()),
             Some(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
         );
-        assert_eq!(loaded_stack.legacy_locked_tool_surface_kind, None);
         let _ = std::fs::remove_file(path);
     }
 
@@ -781,14 +738,12 @@ mod tests {
                 .iter()
                 .find(|request| request.stable_key().as_str() == stable_key)
                 .expect("Material Lab mounted request should be present");
-            let mut stable_only_request = request.clone();
-            stable_only_request.legacy_tool_surface_kind = None;
 
             let frame = host
                 .provider_registry()
                 .resolve_frame_with_provider_family_map(
                     &context(&app, &shell_state, &theme),
-                    &stable_only_request,
+                    request,
                     &SurfaceSessionState::default(),
                     Some(host.provider_family_provider_map()),
                 );
@@ -853,66 +808,77 @@ mod tests {
     }
 
     #[test]
-    fn app_workspace_layout_v4_still_loads() {
+    fn app_workspace_layout_v4_is_unsupported() {
         let workspace = material_lab_workspace();
         let persisted = workspace.to_persisted_v4();
 
         let path = temp_workspace_layout_path();
         write_persisted_layout(&path, &persisted);
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("v4 workspace layout should decode");
+        let error = read_workspace_layout_legacy_no_registry(&path)
+            .expect_err("v4 workspace layout should be unsupported");
 
-        assert_eq!(loaded, workspace);
+        assert!(error_chain_contains(
+            &error,
+            "persisted workspace version 4 is unsupported"
+        ));
         let _ = std::fs::remove_file(path);
     }
 
     #[test]
-    fn v1_to_v4_workspace_layout_load_still_works() {
+    fn v1_to_v4_workspace_layout_loads_are_unsupported() {
         let app = RunenwerkEditorApp::new();
         let workspace = placeholder_workspace();
 
         let path_v1 = temp_workspace_layout_path();
         write_persisted_layout(&path_v1, &workspace.to_persisted_v1());
-        let loaded_v1 = read_workspace_layout_with_metadata_and_registry(
+        let error_v1 = read_workspace_layout_with_metadata_and_registry(
             &path_v1,
             app.workbench_host().tool_surface_registry(),
         )
-        .expect("v1 workspace layout should load with registry-aware reader")
-        .workspace_state;
-        assert_eq!(loaded_v1, workspace);
+        .expect_err("v1 workspace layout should be unsupported");
+        assert!(error_chain_contains(
+            &error_v1,
+            "persisted workspace version 1 is unsupported"
+        ));
         let _ = std::fs::remove_file(path_v1);
 
         let path_v2 = temp_workspace_layout_path();
         write_persisted_layout(&path_v2, &workspace.to_persisted_v2());
-        let loaded_v2 = read_workspace_layout_with_metadata_and_registry(
+        let error_v2 = read_workspace_layout_with_metadata_and_registry(
             &path_v2,
             app.workbench_host().tool_surface_registry(),
         )
-        .expect("v2 workspace layout should load with registry-aware reader")
-        .workspace_state;
-        assert_eq!(loaded_v2, workspace);
+        .expect_err("v2 workspace layout should be unsupported");
+        assert!(error_chain_contains(
+            &error_v2,
+            "persisted workspace version 2 is unsupported"
+        ));
         let _ = std::fs::remove_file(path_v2);
 
         let path_v3 = temp_workspace_layout_path();
         write_persisted_layout(&path_v3, &workspace.to_persisted_v3());
-        let loaded_v3 = read_workspace_layout_with_metadata_and_registry(
+        let error_v3 = read_workspace_layout_with_metadata_and_registry(
             &path_v3,
             app.workbench_host().tool_surface_registry(),
         )
-        .expect("v3 workspace layout should load with registry-aware reader")
-        .workspace_state;
-        assert_eq!(loaded_v3, workspace);
+        .expect_err("v3 workspace layout should be unsupported");
+        assert!(error_chain_contains(
+            &error_v3,
+            "persisted workspace version 3 is unsupported"
+        ));
         let _ = std::fs::remove_file(path_v3);
 
         let path_v4 = temp_workspace_layout_path();
         write_persisted_layout(&path_v4, &workspace.to_persisted_v4());
-        let loaded_v4 = read_workspace_layout_with_metadata_and_registry(
+        let error_v4 = read_workspace_layout_with_metadata_and_registry(
             &path_v4,
             app.workbench_host().tool_surface_registry(),
         )
-        .expect("v4 workspace layout should load with registry-aware reader")
-        .workspace_state;
-        assert_eq!(loaded_v4, workspace);
+        .expect_err("v4 workspace layout should be unsupported");
+        assert!(error_chain_contains(
+            &error_v4,
+            "persisted workspace version 4 is unsupported"
+        ));
         let _ = std::fs::remove_file(path_v4);
     }
 

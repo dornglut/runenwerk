@@ -110,6 +110,7 @@ stable_identity!(ProfileRef, "profile ref");
 stable_identity!(CommandCapabilityKey, "command capability key");
 stable_identity!(ProductCapabilityKey, "product capability key");
 stable_identity!(ResourceCapabilityKey, "resource capability key");
+stable_identity!(ToolServiceKey, "tool service key");
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SuiteRef {
@@ -197,6 +198,7 @@ mod tests {
         assert_invalid::<CommandCapabilityKey>();
         assert_invalid::<ProductCapabilityKey>();
         assert_invalid::<ResourceCapabilityKey>();
+        assert_invalid::<ToolServiceKey>();
     }
 
     #[test]

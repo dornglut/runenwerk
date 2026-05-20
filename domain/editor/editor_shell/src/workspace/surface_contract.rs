@@ -697,12 +697,8 @@ pub fn mounted_surface_instance(tool_surface: &ToolSurfaceState) -> Option<Mount
     let ToolSurfaceMount::Mounted { panel_id } = tool_surface.mount else {
         return None;
     };
-    // C5 compatibility boundary pending C6: mounted surface contracts still
-    // include the legacy kind for enum-backed shell consumers. Stable-key
-    // authority is retained on ToolSurfaceState and provider requests.
-    let legacy_tool_surface_kind = tool_surface
-        .legacy_tool_surface_kind()
-        .or_else(|| tool_surface_kind_for_stable_key(tool_surface.stable_surface_key()));
+    let legacy_tool_surface_kind =
+        tool_surface_kind_for_stable_key(tool_surface.stable_surface_key());
 
     Some(MountedSurfaceInstance::new(
         SurfaceInstanceId::new(tool_surface.id.raw()),

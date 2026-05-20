@@ -26,18 +26,19 @@ use editor_shell::{
     SurfaceProviderPriority, SurfaceProviderRequest, SurfaceProviderSupportMode, SurfaceRouteTable,
     SurfaceSessionMutation, TexturePreviewChannelSelection, TextureSurfaceAction,
     TextureViewerSurfaceKind, ToolSurfaceCreateCandidate, ToolSurfaceKind, ToolSurfaceRegistry,
-    UiNode, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID,
-    VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID,
-    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_RESET_CAMERA_WIDGET_ID,
-    VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID, VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID,
-    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, ViewportDomainMutation, ViewportObservationFrame,
-    ViewportProductChoiceViewModel, ViewportProductObservation, ViewportSessionMutation,
-    ViewportSurfaceAction, ViewportViewModel, WidgetId, build_console_panel,
-    build_entity_table_panel, build_inspector_panel, build_material_graph_surface,
-    build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
-    editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
-    inspector_field_widget_id, surface_session_proposal, surface_widget_id,
-    tool_surface_capability_set, tool_surface_definition_id, tool_surface_kind_for_stable_key,
+    ToolSurfaceStableKey, UiNode, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_DECREMENT_WIDGET_ID, VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
+    VIEWPORT_FIELD_SLICE_RESET_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+    VIEWPORT_RESET_CAMERA_WIDGET_ID, VIEWPORT_ROOT_OPAQUE_TOGGLE_WIDGET_ID,
+    VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+    ViewportDomainMutation, ViewportObservationFrame, ViewportProductChoiceViewModel,
+    ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportViewModel,
+    WidgetId, WorkspaceProfileRegistry, build_console_panel, build_entity_table_panel,
+    build_inspector_panel, build_material_graph_surface, build_outliner_panel,
+    build_self_authoring_control_panel, build_viewport_panel, editor_domain_proposal,
+    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
+    surface_session_proposal, surface_widget_id, tool_surface_capability_set,
+    tool_surface_definition_id, tool_surface_kind_for_stable_key,
     viewport_debug_stage_button_widget_id, viewport_field_color_ramp_button_widget_id,
     viewport_field_component_button_widget_id, viewport_field_debug_mode_button_widget_id,
     viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
@@ -169,7 +170,7 @@ pub trait EditorSurfaceProvider: Send + Sync {
     fn supports(&self, request: &SurfaceProviderRequest) -> bool;
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
         if self.supports(request) {
-            SurfaceProviderSupportMode::LegacyKind
+            SurfaceProviderSupportMode::StableKey
         } else {
             SurfaceProviderSupportMode::Unsupported
         }
@@ -200,12 +201,10 @@ pub trait EditorSurfaceProvider: Send + Sync {
 fn stable_key_or_legacy_kind_support(
     request: &SurfaceProviderRequest,
     stable_key: &str,
-    legacy_kind: ToolSurfaceKind,
+    _legacy_kind: ToolSurfaceKind,
 ) -> SurfaceProviderSupportMode {
     if request.matches_stable_key(stable_key) {
         SurfaceProviderSupportMode::StableKey
-    } else if request.legacy_kind() == Some(legacy_kind) {
-        SurfaceProviderSupportMode::LegacyKind
     } else {
         SurfaceProviderSupportMode::Unsupported
     }
@@ -214,12 +213,10 @@ fn stable_key_or_legacy_kind_support(
 fn stable_keys_or_legacy_kind_support(
     request: &SurfaceProviderRequest,
     stable_keys: &[&str],
-    legacy_kind_predicate: impl Fn(ToolSurfaceKind) -> bool,
+    _legacy_kind_predicate: impl Fn(ToolSurfaceKind) -> bool,
 ) -> SurfaceProviderSupportMode {
     if request.matches_any_stable_key(stable_keys) {
         SurfaceProviderSupportMode::StableKey
-    } else if request.legacy_kind().is_some_and(legacy_kind_predicate) {
-        SurfaceProviderSupportMode::LegacyKind
     } else {
         SurfaceProviderSupportMode::Unsupported
     }
@@ -334,6 +331,7 @@ impl EditorSurfaceProviderRegistry {
     pub(crate) fn observe_resolution_for_request(
         &self,
         request: &SurfaceProviderRequest,
+        workspace_profile_registry: &WorkspaceProfileRegistry,
         provider_family_map: Option<&ProviderFamilyProviderMap>,
     ) -> SurfaceProviderResolutionObservation {
         let candidate_providers =
@@ -361,7 +359,7 @@ impl EditorSurfaceProviderRegistry {
             })
             .collect::<Vec<_>>();
 
-        if !workspace_allows_document(request) {
+        if !workspace_allows_document(request, workspace_profile_registry) {
             return SurfaceProviderResolutionObservation {
                 candidate_provider_ids,
                 support_modes,
@@ -444,7 +442,10 @@ impl EditorSurfaceProviderRegistry {
         session: &SurfaceSessionState,
         provider_family_map: Option<&ProviderFamilyProviderMap>,
     ) -> ResolvedSurfaceFrame {
-        if !workspace_allows_document(request) {
+        if !workspace_allows_document(
+            request,
+            context.app.workbench_host().workspace_profile_registry(),
+        ) {
             return unsupported_frame(
                 request,
                 "Unsupported Document",
@@ -512,7 +513,6 @@ impl EditorSurfaceProviderRegistry {
                 surface_instance_id: request.tool_surface_instance_id,
                 panel_instance_id: request.panel_instance_id,
                 tab_stack_id: request.tab_stack_id,
-                surface_kind: request.legacy_kind(),
                 stable_surface_key: request.stable_surface_key.clone(),
                 surface_definition_id: request.surface_definition_id,
                 provider_id: Some(descriptor.id),
@@ -725,62 +725,38 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
     let route_actions =
         active_route_actions_by_target(active_definitions, history.can_undo(), history.can_redo());
     let available_panel_kinds = active_definitions.available_panel_kinds();
-    let available_tool_surface_kinds = active_definitions.available_tool_surface_kinds();
+    let available_tool_surface_keys = active_definitions.available_tool_surface_keys();
     let available_tool_surface_create_candidates = build_tool_surface_create_candidates(
-        &available_tool_surface_kinds,
+        &available_tool_surface_keys,
         app.workbench_host().tool_surface_registry(),
     );
 
     EditorShellFrameModel::new(build_toolbar_view_model(&toolbar_frame), surfaces)
         .with_route_actions(route_actions)
         .with_available_panel_kinds(available_panel_kinds)
-        .with_available_tool_surface_kinds(available_tool_surface_kinds)
         .with_available_tool_surface_create_candidates(available_tool_surface_create_candidates)
         .with_active_ui_definitions(toolbar_template, toolbar_binding, shell_chrome_template)
         .with_active_tab_stack_popup_menu(shell_state.active_tab_stack_popup_menu())
 }
 
 fn build_tool_surface_create_candidates(
-    available_tool_surface_kinds: &[ToolSurfaceKind],
+    available_tool_surface_keys: &[ToolSurfaceStableKey],
     tool_surface_registry: &ToolSurfaceRegistry,
 ) -> Vec<ToolSurfaceCreateCandidate> {
     let mut candidates = Vec::new();
     let mut seen = BTreeSet::new();
-    let legacy_kinds = if available_tool_surface_kinds.is_empty() {
-        tool_surface_registry
-            .iter()
-            .filter_map(|surface| tool_surface_kind_for_stable_key(&surface.key))
-            .collect::<Vec<_>>()
-    } else {
-        available_tool_surface_kinds.to_vec()
-    };
-
-    for kind in legacy_kinds {
-        let Some(stable_surface_key) = editor_shell::stable_key_for_tool_surface_kind(kind) else {
-            continue;
-        };
-        let Some(surface) = tool_surface_registry.get(&stable_surface_key) else {
-            continue;
-        };
-        if seen.insert(stable_surface_key.clone()) {
-            candidates.push(ToolSurfaceCreateCandidate::new(
-                stable_surface_key,
-                surface.label.clone(),
-                surface.panel_kind,
-                Some(kind),
-            ));
-        }
-    }
 
     for surface in tool_surface_registry.iter() {
-        if tool_surface_kind_for_stable_key(&surface.key).is_none()
-            && seen.insert(surface.key.clone())
+        if !available_tool_surface_keys.is_empty()
+            && !available_tool_surface_keys.contains(&surface.key)
         {
+            continue;
+        }
+        if seen.insert(surface.key.clone()) {
             candidates.push(ToolSurfaceCreateCandidate::new(
                 surface.key.clone(),
                 surface.label.clone(),
                 surface.panel_kind,
-                None,
             ));
         }
     }
@@ -812,13 +788,13 @@ pub fn mounted_surface_requests_with_registry(
                 .find(|stack| stack.ordered_panels.contains(&panel.id))
                 .map(|stack| stack.id)?;
             let stable_surface_key = surface.stable_surface_key().clone();
-            let legacy_tool_surface_kind = surface.legacy_tool_surface_kind();
             let registered_surface =
                 tool_surface_registry.and_then(|registry| registry.get(&stable_surface_key));
-            let surface_definition_id = legacy_tool_surface_kind
+            let stable_key_kind = tool_surface_kind_for_stable_key(&stable_surface_key);
+            let surface_definition_id = stable_key_kind
                 .map(tool_surface_definition_id)
                 .unwrap_or(editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID);
-            let capabilities = legacy_tool_surface_kind
+            let capabilities = stable_key_kind
                 .map(tool_surface_capability_set)
                 .unwrap_or_default();
             Some(SurfaceProviderRequest {
@@ -828,7 +804,6 @@ pub fn mounted_surface_requests_with_registry(
                 tab_stack_id,
                 tool_surface_instance_id: surface.id,
                 stable_surface_key,
-                legacy_tool_surface_kind,
                 provider_family_id: registered_surface
                     .map(|definition| definition.provider_family.clone()),
                 surface_route: registered_surface.map(|definition| definition.route),
@@ -1299,8 +1274,10 @@ fn inspector_value_summary(value: &InspectorValue) -> String {
     }
 }
 
-fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
-    let registry = editor_shell::default_workspace_profile_registry();
+fn workspace_allows_document(
+    request: &SurfaceProviderRequest,
+    registry: &WorkspaceProfileRegistry,
+) -> bool {
     if request.matches_stable_key(EDITOR_CONSOLE_SURFACE_KEY)
         || request.matches_any_stable_key(EDITOR_DESIGN_SURFACE_KEYS)
         || request.matches_any_stable_key(&[
@@ -1311,12 +1288,6 @@ fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
         ])
         || request.matches_any_stable_key(DIAGNOSTICS_SURFACE_KEYS)
         || request.matches_stable_key(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
-        || request.legacy_kind().is_some_and(|kind| {
-            kind == ToolSurfaceKind::Console
-                || is_self_authoring_surface(kind)
-                || is_asset_surface(kind)
-                || is_m6_global_diagnostic_surface(kind)
-        })
     {
         return true;
     }
@@ -1327,20 +1298,6 @@ fn workspace_allows_document(request: &SurfaceProviderRequest) -> bool {
         .profile(request.workspace_profile_id)
         .map(|profile| profile.document_kind_filters.contains(document_kind))
         .unwrap_or(false)
-}
-
-fn legacy_surface_kind_or_diagnostic(
-    request: &SurfaceProviderRequest,
-) -> Result<ToolSurfaceKind, SurfaceProviderDiagnostic> {
-    request.legacy_kind().ok_or_else(|| {
-        SurfaceProviderDiagnostic::new(
-            "editor.surface.missing_legacy_kind",
-            format!(
-                "surface `{}` is stable-key authoritative and has no legacy compatibility kind for this provider path",
-                request.stable_key().as_str()
-            ),
-        )
-    })
 }
 
 fn surface_document_context_line(document_context: &SurfaceDocumentContext) -> String {
@@ -1383,7 +1340,7 @@ use console::ConsoleProvider;
 use field_layer_stack::FieldLayerStackProvider;
 use field_product_viewer::FieldProductViewerProvider;
 use import_inspector::ImportInspectorProvider;
-use m6_workspace::{M6WorkspaceProvider, is_m6_global_diagnostic_surface};
+use m6_workspace::M6WorkspaceProvider;
 use material_graph_canvas::MaterialGraphCanvasProvider;
 use material_inspector::MaterialInspectorProvider;
 use material_preview::MaterialPreviewProvider;
@@ -1405,4 +1362,4 @@ mod self_authoring;
 mod tests;
 
 use common::{deterministic_provider, diagnostic_frame, unsupported_frame};
-use self_authoring::{SelfAuthoringProvider, is_asset_surface, is_self_authoring_surface};
+use self_authoring::SelfAuthoringProvider;

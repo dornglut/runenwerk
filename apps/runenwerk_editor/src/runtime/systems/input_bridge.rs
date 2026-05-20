@@ -1362,8 +1362,11 @@ mod tests {
                     .workspace_state()
                     .tool_surface(*surface_id)
                     .map(|surface| {
-                        surface.legacy_tool_surface_kind()
-                            == Some(editor_shell::ToolSurfaceKind::Viewport)
+                        editor_shell::stable_key_for_tool_surface_kind(
+                            editor_shell::ToolSurfaceKind::Viewport,
+                        )
+                        .as_ref()
+                        .is_some_and(|key| surface.stable_surface_key() == key)
                     })
                     .unwrap_or(false)
             })

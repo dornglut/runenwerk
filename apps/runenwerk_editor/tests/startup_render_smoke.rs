@@ -1,6 +1,6 @@
 use editor_shell::{
     PanelKind, TabStackId, ToolSurfaceKind, WorkspaceMutation, WorkspaceSplitAxis,
-    viewport_embed_slot_for,
+    stable_key_for_tool_surface_kind, viewport_embed_slot_for,
 };
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::{
@@ -274,20 +274,23 @@ fn split_viewport_resize_keeps_each_viewport_product_sized_to_its_embed() {
                 let new_tab_stack_id = allocator.allocate_tab_stack_id();
                 let new_panel_id = allocator.allocate_panel_instance_id();
                 let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
+                let viewport_surface_key =
+                    stable_key_for_tool_surface_kind(ToolSurfaceKind::Viewport)
+                        .expect("viewport should have a stable surface key");
                 Ok((
-                    WorkspaceMutation::split_tab_stack_area_legacy(
-                        viewport_stack_id,
-                        WorkspaceSplitAxis::Horizontal,
+                    WorkspaceMutation::SplitTabStackArea {
+                        tab_stack_id: viewport_stack_id,
+                        axis: WorkspaceSplitAxis::Horizontal,
                         split_host_id,
                         first_child_host_id,
                         second_child_host_id,
                         new_tab_stack_id,
                         new_panel_id,
-                        PanelKind::Viewport,
+                        new_panel_kind: PanelKind::Viewport,
                         new_tool_surface_id,
-                        ToolSurfaceKind::Viewport,
-                        0.50,
-                    )?,
+                        new_stable_surface_key: viewport_surface_key,
+                        fraction: 0.50,
+                    },
                     split_host_id,
                 ))
             })

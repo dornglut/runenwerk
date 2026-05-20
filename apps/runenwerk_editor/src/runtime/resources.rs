@@ -70,7 +70,8 @@ impl EditorHostResource {
     pub fn new() -> Self {
         let mut app = RunenwerkEditorApp::new();
         ensure_default_material_source_document(&mut app);
-        let shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
+        let shell_state = RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+            app.workbench_host().workspace_profile_registry(),
             app.workbench_host().tool_surface_registry(),
         )
         .expect("default shell workspace should be compatible with workbench registry");
@@ -88,8 +89,9 @@ impl EditorHostResource {
             .activate_default_material_graph_document()
             .expect("Material Lab workbench should open a default material graph document");
         let shell_state =
-            RunenwerkEditorShellState::new_for_workspace_profile_with_tool_surface_registry(
+            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
                 MATERIAL_WORKSPACE_PROFILE_ID,
+                app.workbench_host().workspace_profile_registry(),
                 app.workbench_host().tool_surface_registry(),
             )
             .expect("Material Lab shell workspace should be compatible with workbench registry");

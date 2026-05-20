@@ -9,8 +9,8 @@ pub(crate) mod viewport;
 
 use editor_core::EditorMutationError;
 use editor_shell::{
-    EditorDomainMutation, PanelKind, StructuralCommandTarget, SurfaceSessionMutation,
-    ToolSurfaceKind, tool_surface_capability_set, tool_surface_kind_for_stable_key,
+    EditorDomainMutation, StructuralCommandTarget, SurfaceSessionMutation, ToolSurfaceKind,
+    tool_surface_capability_set, tool_surface_kind_for_stable_key,
     tool_surface_session_retention_class,
 };
 use ui_surface::{
@@ -93,14 +93,12 @@ pub(crate) fn resolve_legacy_surface_command_contract(
     target: StructuralCommandTarget,
     fallback_kind: ToolSurfaceKind,
 ) -> Option<LegacySurfaceCommandContract> {
-    // C6C command-dispatch compatibility boundary: legacy command handlers
-    // still consume enum contracts for labels and capability validation, but
-    // the lookup resolves from stable-key authority before legacy metadata.
+    // Command handlers still consume enum contracts for labels and capability
+    // validation, but the lookup is stable-key authoritative.
     let tool_surface_id = target.active_tool_surface?;
     let resolved_kind = if let Some(state) = shell_state {
         let surface = state.workspace_state().tool_surface(tool_surface_id)?;
-        tool_surface_kind_for_stable_key(surface.stable_surface_key())
-            .or_else(|| surface.legacy_tool_surface_kind())?
+        tool_surface_kind_for_stable_key(surface.stable_surface_key())?
     } else {
         fallback_kind
     };
@@ -116,12 +114,6 @@ pub(crate) fn resolve_legacy_surface_command_contract(
 // still format enum labels until shell command contracts move to stable keys.
 pub(crate) fn tool_surface_kind_label(kind: ToolSurfaceKind) -> &'static str {
     editor_shell::tool_surface_kind_definition_key(kind)
-}
-
-// C6C legacy app-command compatibility boundary: enum-backed shell commands
-// still derive structural panel grouping here until C6D/follow-up cleanup.
-pub(crate) fn panel_kind_for_tool_surface_kind(kind: ToolSurfaceKind) -> PanelKind {
-    editor_shell::panel_kind_for_tool_surface_kind(kind)
 }
 
 pub(crate) fn surface_capability_label(capability: SurfaceCapability) -> &'static str {

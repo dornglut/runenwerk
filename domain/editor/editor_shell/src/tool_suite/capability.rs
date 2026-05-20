@@ -16,6 +16,63 @@ pub struct HostCapabilityPolicy {
     denied_resources: BTreeSet<ResourceCapabilityKey>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeniedHostCapabilityRequirement<'a> {
+    Command(&'a CommandCapabilityKey),
+    Product(&'a ProductCapabilityKey),
+    Resource(&'a ResourceCapabilityKey),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HostCapabilityRequirements {
+    commands: BTreeSet<CommandCapabilityKey>,
+    products: BTreeSet<ProductCapabilityKey>,
+    resources: BTreeSet<ResourceCapabilityKey>,
+}
+
+impl HostCapabilityRequirements {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn require_command(mut self, key: CommandCapabilityKey) -> Self {
+        self.commands.insert(key);
+        self
+    }
+
+    pub fn require_product(mut self, key: ProductCapabilityKey) -> Self {
+        self.products.insert(key);
+        self
+    }
+
+    pub fn require_resource(mut self, key: ResourceCapabilityKey) -> Self {
+        self.resources.insert(key);
+        self
+    }
+
+    pub fn denied_by(
+        &self,
+        policy: &HostCapabilityPolicy,
+    ) -> Option<DeniedHostCapabilityRequirement<'_>> {
+        self.commands
+            .iter()
+            .find(|key| !policy.allows_command(key))
+            .map(DeniedHostCapabilityRequirement::Command)
+            .or_else(|| {
+                self.products
+                    .iter()
+                    .find(|key| !policy.allows_product(key))
+                    .map(DeniedHostCapabilityRequirement::Product)
+            })
+            .or_else(|| {
+                self.resources
+                    .iter()
+                    .find(|key| !policy.allows_resource(key))
+                    .map(DeniedHostCapabilityRequirement::Resource)
+            })
+    }
+}
+
 impl HostCapabilityPolicy {
     pub fn deny_all() -> Self {
         Self::default()
@@ -99,5 +156,34 @@ mod tests {
         let policy = HostCapabilityPolicy::deny_all().allow_resource(key.clone());
 
         assert!(policy.allows_resource(&key));
+    }
+
+    #[test]
+    fn requirements_report_denied_command_before_mutation() {
+        let key = CommandCapabilityKey::new("runenwerk.surface.session_mutation").unwrap();
+        let requirements = HostCapabilityRequirements::new().require_command(key.clone());
+        let policy = HostCapabilityPolicy::allow_all().deny_command(key.clone());
+
+        assert_eq!(
+            requirements.denied_by(&policy),
+            Some(DeniedHostCapabilityRequirement::Command(&key))
+        );
+    }
+
+    #[test]
+    fn requirements_accept_all_allowed_capability_planes() {
+        let command = CommandCapabilityKey::new("runenwerk.shell.command").unwrap();
+        let product = ProductCapabilityKey::new("runenwerk.material.preview_product").unwrap();
+        let resource = ResourceCapabilityKey::new("runenwerk.project.assets.read").unwrap();
+        let requirements = HostCapabilityRequirements::new()
+            .require_command(command.clone())
+            .require_product(product.clone())
+            .require_resource(resource.clone());
+        let policy = HostCapabilityPolicy::deny_all()
+            .allow_command(command)
+            .allow_product(product)
+            .allow_resource(resource);
+
+        assert_eq!(requirements.denied_by(&policy), None);
     }
 }

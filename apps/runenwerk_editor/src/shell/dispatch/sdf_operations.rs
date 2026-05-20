@@ -144,7 +144,9 @@ mod tests {
                 let surface = shell_state
                     .workspace_state()
                     .tool_surface(tool_surface_id)?;
-                (surface.legacy_tool_surface_kind() == Some(kind))
+                editor_shell::stable_key_for_tool_surface_kind(kind)
+                    .as_ref()
+                    .is_some_and(|key| surface.stable_surface_key() == key)
                     .then_some((panel.id, tool_surface_id))
             })
             .next()

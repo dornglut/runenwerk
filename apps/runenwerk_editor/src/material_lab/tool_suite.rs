@@ -2,23 +2,22 @@
 //! Purpose: Material Lab tool-suite declaration.
 
 use editor_shell::{
-    EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
-    ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
-    ToolSurfaceStableKey,
+    EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef, SurfaceRef,
+    ToolSuiteId, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey,
 };
 
 pub fn material_lab_tool_suite() -> EditorToolSuite {
     let suite_id = ToolSuiteId::new("runenwerk.material_lab").unwrap();
     let provider_family_id = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
 
-    EditorToolSuite {
-        suite_id,
-        label: "Material Lab".to_string(),
-        provider_families: vec![ProviderFamilyDefinition {
-            id: provider_family_id.clone(),
-            label: "Material Lab".to_string(),
-        }],
-        surfaces: vec![
+    EditorToolSuite::new(
+        SuiteRef::new(suite_id),
+        "Material Lab",
+        vec![ProviderFamilyDefinition::new(
+            provider_family_id.clone(),
+            "Material Lab",
+        )],
+        vec![
             material_lab_surface(
                 "runenwerk.material_lab.graph_canvas",
                 "Material Graph",
@@ -44,7 +43,7 @@ pub fn material_lab_tool_suite() -> EditorToolSuite {
                 ToolSurfaceRoute::ProviderOwnedLocal,
             ),
         ],
-    }
+    )
 }
 
 fn material_lab_surface(
@@ -55,19 +54,20 @@ fn material_lab_surface(
     provider_family: ProviderFamilyId,
     route: ToolSurfaceRoute,
 ) -> ToolSurfaceDefinition {
-    ToolSurfaceDefinition {
-        key: ToolSurfaceStableKey::new(key).unwrap(),
-        label: label.to_string(),
+    ToolSurfaceDefinition::new(
+        SurfaceRef::new(ToolSurfaceStableKey::new(key).unwrap()),
+        label,
         role,
         panel_kind,
         provider_family,
         route,
-        persistence: ToolSurfacePersistence::StableKey,
-    }
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use editor_shell::ToolSurfacePersistence;
+
     use super::*;
 
     #[test]

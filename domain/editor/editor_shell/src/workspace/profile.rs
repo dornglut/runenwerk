@@ -11,7 +11,7 @@ use id_macros::id;
 use crate::{
     PanelHostKind, PanelKind, ToolSurfaceKind, WorkspaceId, WorkspaceIdentityAllocator,
     WorkspaceSplitAxis,
-    tool_suite::{ToolSurfaceRegistry, ToolSurfaceStableKey},
+    tool_suite::{ToolSuiteProfileDefinition, ToolSurfaceRegistry, ToolSurfaceStableKey},
 };
 
 use super::state::{
@@ -240,7 +240,7 @@ impl WorkspaceProfile {
     ) -> Result<Self, WorkspaceSurfaceIdentityError> {
         let default_surfaces = default_tool_surfaces
             .into_iter()
-            .map(WorkspaceDefaultToolSurface::new_legacy)
+            .map(stable_default_surface_for_kind)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self::new(
             id,
@@ -252,10 +252,42 @@ impl WorkspaceProfile {
         ))
     }
 
-    pub fn legacy_default_tool_surfaces(&self) -> impl Iterator<Item = ToolSurfaceKind> + '_ {
-        self.default_surfaces
+    pub fn from_tool_suite_profile_definition(
+        id: WorkspaceProfileId,
+        default_layout_template: WorkspaceLayoutTemplate,
+        definition: &ToolSuiteProfileDefinition,
+        default_modes: Vec<ModeId>,
+        document_kind_filters: Vec<DocumentKind>,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
+        let default_surfaces = definition
+            .default_surfaces
             .iter()
-            .filter_map(WorkspaceDefaultToolSurface::legacy_tool_surface_kind)
+            .map(|surface_ref| {
+                let stable_surface_key = surface_ref.key().clone();
+                let Some(surface_definition) = registry.get(&stable_surface_key) else {
+                    return Err(
+                        WorkspaceProfileRegistryBackedBuildError::UnregisteredDefaultToolSurface {
+                            profile_id: id,
+                            legacy_tool_surface_kind: None,
+                            stable_surface_key,
+                        },
+                    );
+                };
+                Ok(WorkspaceDefaultToolSurface::new_with_panel_kind(
+                    stable_surface_key,
+                    surface_definition.panel_kind,
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::new(
+            id,
+            definition.label.clone(),
+            default_layout_template,
+            default_surfaces,
+            default_modes,
+            document_kind_filters,
+        ))
     }
 
     pub fn build_default_workspace_state(
@@ -291,7 +323,7 @@ impl WorkspaceProfile {
         registry: &ToolSurfaceRegistry,
     ) -> Result<WorkspaceState, WorkspaceProfileRegistryBackedBuildError> {
         self.require_tool_surface_registry_compatibility(registry)?;
-        let mut workspace = self
+        let workspace = self
             .try_build_default_workspace_state(workspace_id, allocator)
             .map_err(
                 |error| WorkspaceProfileRegistryBackedBuildError::WorkspaceState {
@@ -299,7 +331,6 @@ impl WorkspaceProfile {
                     error,
                 },
             )?;
-        workspace.populate_stable_surface_keys_from_legacy();
         let report = workspace.validate_tool_surface_registry_compatibility(registry);
         if report.is_fully_compatible() {
             Ok(workspace)
@@ -329,20 +360,19 @@ impl WorkspaceProfile {
 
         for default_surface in &self.default_surfaces {
             let stable_surface_key = default_surface.stable_surface_key().clone();
-            let legacy_tool_surface_kind = default_surface.legacy_tool_surface_kind();
             match registry.get(&stable_surface_key) {
                 Some(_) => {
                     report
                         .compatible_surfaces
                         .push(WorkspaceProfileToolSurfaceCompatibleSurface {
-                            legacy_tool_surface_kind,
+                            legacy_tool_surface_kind: None,
                             stable_surface_key,
                         });
                 }
                 None => {
                     report.unregistered_legacy_surfaces.push(
                         WorkspaceProfileToolSurfaceLegacySurface {
-                            legacy_tool_surface_kind,
+                            legacy_tool_surface_kind: None,
                             stable_surface_key,
                         },
                     );
@@ -406,17 +436,14 @@ fn scene_derived_default_graph_matches(workspace_state: &WorkspaceState) -> bool
         return false;
     };
 
-    tab_stack_surface_kinds_by_host(workspace_state, left_right.first_child)
-        == Some(vec![ToolSurfaceKind::Viewport])
-        && tab_stack_surface_kinds_by_host(workspace_state, right_sidebar.first_child)
-            == Some(vec![
-                ToolSurfaceKind::Outliner,
-                ToolSurfaceKind::EntityTable,
-            ])
-        && tab_stack_surface_kinds_by_host(workspace_state, right_sidebar.second_child)
-            == Some(vec![ToolSurfaceKind::Inspector])
-        && tab_stack_surface_kinds_by_host(workspace_state, root.second_child)
-            == Some(vec![ToolSurfaceKind::Console])
+    tab_stack_panel_kinds_by_host(workspace_state, left_right.first_child)
+        == Some(vec![PanelKind::Viewport])
+        && tab_stack_panel_kinds_by_host(workspace_state, right_sidebar.first_child)
+            == Some(vec![PanelKind::Outliner, PanelKind::EntityTable])
+        && tab_stack_panel_kinds_by_host(workspace_state, right_sidebar.second_child)
+            == Some(vec![PanelKind::Inspector])
+        && tab_stack_panel_kinds_by_host(workspace_state, root.second_child)
+            == Some(vec![PanelKind::Console])
 }
 
 fn modelling_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
@@ -446,17 +473,14 @@ fn modelling_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
         return false;
     };
 
-    tab_stack_surface_kinds_by_host(workspace_state, left_center_right.first_child)
-        == Some(vec![
-            ToolSurfaceKind::Outliner,
-            ToolSurfaceKind::EntityTable,
-        ])
-        && tab_stack_surface_kinds_by_host(workspace_state, center_right.first_child)
-            == Some(vec![ToolSurfaceKind::Viewport])
-        && tab_stack_surface_kinds_by_host(workspace_state, center_right.second_child)
-            == Some(vec![ToolSurfaceKind::Inspector])
-        && tab_stack_surface_kinds_by_host(workspace_state, root.second_child)
-            == Some(vec![ToolSurfaceKind::Console])
+    tab_stack_panel_kinds_by_host(workspace_state, left_center_right.first_child)
+        == Some(vec![PanelKind::Outliner, PanelKind::EntityTable])
+        && tab_stack_panel_kinds_by_host(workspace_state, center_right.first_child)
+            == Some(vec![PanelKind::Viewport])
+        && tab_stack_panel_kinds_by_host(workspace_state, center_right.second_child)
+            == Some(vec![PanelKind::Inspector])
+        && tab_stack_panel_kinds_by_host(workspace_state, root.second_child)
+            == Some(vec![PanelKind::Console])
 }
 
 fn split_host_with_axis(
@@ -471,10 +495,10 @@ fn split_host_with_axis(
     }
 }
 
-fn tab_stack_surface_kinds_by_host(
+fn tab_stack_panel_kinds_by_host(
     workspace_state: &WorkspaceState,
     host_id: crate::PanelHostId,
-) -> Option<Vec<ToolSurfaceKind>> {
+) -> Option<Vec<PanelKind>> {
     let host = workspace_state.host(host_id)?;
     let PanelHostKind::TabStackHost(tab_host) = host.kind else {
         return None;
@@ -486,10 +510,8 @@ fn tab_stack_surface_kinds_by_host(
             .iter()
             .filter_map(|panel_id| {
                 let panel = workspace_state.panel(*panel_id)?;
-                let surface_id = panel.active_tool_surface?;
-                workspace_state
-                    .tool_surface(surface_id)
-                    .and_then(|surface| surface.legacy_tool_surface_kind())
+                panel.active_tool_surface?;
+                Some(panel.panel_kind)
             })
             .collect(),
     )
@@ -532,15 +554,15 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
     WorkspaceProfileRegistry::new(
         SCENE_WORKSPACE_PROFILE_ID,
         vec![
-            compiled_in_legacy_workspace_profile(
+            compiled_in_workspace_profile(
                 SCENE_WORKSPACE_PROFILE_ID,
                 "Scene",
                 WorkspaceLayoutTemplate::Scene,
                 vec![
-                    ToolSurfaceKind::Viewport,
-                    ToolSurfaceKind::Outliner,
-                    ToolSurfaceKind::Inspector,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.scene.viewport", PanelKind::Viewport),
+                    ("runenwerk.scene.outliner", PanelKind::Outliner),
+                    ("runenwerk.scene.inspector", PanelKind::Inspector),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![
                     EDIT_MODE_ID,
@@ -550,35 +572,59 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                 ],
                 vec![DocumentKind::Scene],
             ),
-            compiled_in_legacy_workspace_profile(
+            compiled_in_workspace_profile(
                 MODELLING_WORKSPACE_PROFILE_ID,
                 "Modelling",
                 WorkspaceLayoutTemplate::Modelling,
                 vec![
-                    ToolSurfaceKind::Viewport,
-                    ToolSurfaceKind::Outliner,
-                    ToolSurfaceKind::Inspector,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.scene.viewport", PanelKind::Viewport),
+                    ("runenwerk.scene.outliner", PanelKind::Outliner),
+                    ("runenwerk.scene.inspector", PanelKind::Inspector),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
                 vec![DocumentKind::Scene, DocumentKind::SdfBrushLayer],
             ),
-            compiled_in_legacy_workspace_profile(
+            compiled_in_workspace_profile(
                 EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
                 "Editor Design",
                 WorkspaceLayoutTemplate::EditorDesign,
                 vec![
-                    ToolSurfaceKind::EditorDesignOutliner,
-                    ToolSurfaceKind::UiHierarchy,
-                    ToolSurfaceKind::UiCanvas,
-                    ToolSurfaceKind::StyleInspector,
-                    ToolSurfaceKind::Bindings,
-                    ToolSurfaceKind::DockLayoutPreview,
-                    ToolSurfaceKind::ThemeEditor,
-                    ToolSurfaceKind::ShortcutEditor,
-                    ToolSurfaceKind::MenuEditor,
-                    ToolSurfaceKind::DefinitionValidation,
-                    ToolSurfaceKind::CommandDiff,
+                    (
+                        "runenwerk.editor_design.definition_outliner",
+                        PanelKind::EditorDesignOutliner,
+                    ),
+                    (
+                        "runenwerk.editor_design.ui_hierarchy",
+                        PanelKind::UiHierarchy,
+                    ),
+                    ("runenwerk.editor_design.ui_canvas", PanelKind::UiCanvas),
+                    (
+                        "runenwerk.editor_design.style_inspector",
+                        PanelKind::StyleInspector,
+                    ),
+                    ("runenwerk.editor_design.bindings", PanelKind::Bindings),
+                    (
+                        "runenwerk.editor_design.dock_layout_preview",
+                        PanelKind::DockLayoutPreview,
+                    ),
+                    (
+                        "runenwerk.editor_design.theme_editor",
+                        PanelKind::ThemeEditor,
+                    ),
+                    (
+                        "runenwerk.editor_design.shortcut_editor",
+                        PanelKind::ShortcutEditor,
+                    ),
+                    ("runenwerk.editor_design.menu_editor", PanelKind::MenuEditor),
+                    (
+                        "runenwerk.editor_design.definition_validation",
+                        PanelKind::DefinitionValidation,
+                    ),
+                    (
+                        "runenwerk.editor_design.command_diff",
+                        PanelKind::CommandDiff,
+                    ),
                 ],
                 vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
                 vec![
@@ -592,17 +638,29 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::ToolSurfaceDefinition,
                 ],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 FIELD_WORLD_WORKSPACE_PROFILE_ID,
                 "Field World",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::FieldLayerStack,
-                    ToolSurfaceKind::SdfGraphCanvas,
-                    ToolSurfaceKind::FieldProductViewer,
-                    ToolSurfaceKind::SdfBrushBrowser,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    (
+                        "runenwerk.field_world.layer_stack",
+                        PanelKind::FieldLayerStack,
+                    ),
+                    (
+                        "runenwerk.field_world.sdf_graph_canvas",
+                        PanelKind::SdfGraphCanvas,
+                    ),
+                    (
+                        "runenwerk.field_world.product_viewer",
+                        PanelKind::FieldProductViewer,
+                    ),
+                    (
+                        "runenwerk.field_world.sdf_brush_browser",
+                        PanelKind::SdfBrushBrowser,
+                    ),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![
                     DocumentKind::Scene,
@@ -612,17 +670,23 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::FieldProductPreview,
                 ],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 MATERIAL_WORKSPACE_PROFILE_ID,
                 "Materials",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::MaterialGraphCanvas,
-                    ToolSurfaceKind::MaterialInspector,
-                    ToolSurfaceKind::MaterialPreview,
-                    ToolSurfaceKind::TextureViewer,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    (
+                        "runenwerk.material_lab.graph_canvas",
+                        PanelKind::MaterialGraphCanvas,
+                    ),
+                    (
+                        "runenwerk.material_lab.inspector",
+                        PanelKind::MaterialInspector,
+                    ),
+                    ("runenwerk.material_lab.preview", PanelKind::MaterialPreview),
+                    ("runenwerk.texture.viewer_2d", PanelKind::TextureViewer),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![
                     DocumentKind::Scene,
@@ -630,39 +694,54 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::Material,
                 ],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 TEXTURE_WORKSPACE_PROFILE_ID,
                 "Textures",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::TextureViewer,
-                    ToolSurfaceKind::VolumeTextureViewer,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    ("runenwerk.texture.viewer_2d", PanelKind::TextureViewer),
+                    (
+                        "runenwerk.texture.viewer_3d",
+                        PanelKind::VolumeTextureViewer,
+                    ),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![DocumentKind::ProceduralTexture, DocumentKind::VolumeTexture],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 PROCGEN_WORKSPACE_PROFILE_ID,
                 "Procedural Generation",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::ProcgenGraphCanvas,
-                    ToolSurfaceKind::ProcgenPreview,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    (
+                        "runenwerk.procgen.graph_canvas",
+                        PanelKind::ProcgenGraphCanvas,
+                    ),
+                    ("runenwerk.procgen.preview", PanelKind::ProcgenPreview),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![DocumentKind::ProceduralGenerationGraph],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 GAMEPLAY_WORKSPACE_PROFILE_ID,
                 "Gameplay Graph",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::GameplayGraphCanvas,
-                    ToolSurfaceKind::GameplayCompilerDiagnostics,
-                    ToolSurfaceKind::RuntimeDebug,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    (
+                        "runenwerk.gameplay.graph_canvas",
+                        PanelKind::GameplayGraphCanvas,
+                    ),
+                    (
+                        "runenwerk.gameplay.compiler_diagnostics",
+                        PanelKind::GameplayCompilerDiagnostics,
+                    ),
+                    (
+                        "runenwerk.diagnostics.runtime_debug",
+                        PanelKind::RuntimeDebug,
+                    ),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![
                     DocumentKind::GameplayGraph,
@@ -671,40 +750,49 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::Quest,
                 ],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 PARTICLE_WORKSPACE_PROFILE_ID,
                 "Particles",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::ParticleGraphCanvas,
-                    ToolSurfaceKind::ParticlePreview,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    (
+                        "runenwerk.particle.graph_canvas",
+                        PanelKind::ParticleGraphCanvas,
+                    ),
+                    ("runenwerk.particle.preview", PanelKind::ParticlePreview),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![DocumentKind::ParticleGraph, DocumentKind::ParticleEmitter],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 PHYSICS_WORKSPACE_PROFILE_ID,
                 "Physics",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::PhysicsAuthoring,
-                    ToolSurfaceKind::PhysicsDebug,
-                    ToolSurfaceKind::RuntimeDebug,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    ("runenwerk.physics.authoring", PanelKind::PhysicsAuthoring),
+                    ("runenwerk.physics.debug", PanelKind::PhysicsDebug),
+                    (
+                        "runenwerk.diagnostics.runtime_debug",
+                        PanelKind::RuntimeDebug,
+                    ),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![DocumentKind::PhysicsScene, DocumentKind::PhysicsConfig],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 ANIMATION_WORKSPACE_PROFILE_ID,
                 "Animation",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::Timeline,
-                    ToolSurfaceKind::CurveEditor,
-                    ToolSurfaceKind::AnimationGraphCanvas,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    ("runenwerk.animation.timeline", PanelKind::Timeline),
+                    ("runenwerk.animation.curve_editor", PanelKind::CurveEditor),
+                    (
+                        "runenwerk.animation.graph_canvas",
+                        PanelKind::AnimationGraphCanvas,
+                    ),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![
                     DocumentKind::AnimationClip,
@@ -712,15 +800,21 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::Timeline,
                 ],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 SIMULATION_WORKSPACE_PROFILE_ID,
                 "Simulation Processes",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::SimulationPreview,
-                    ToolSurfaceKind::SimulationDiagnostics,
-                    ToolSurfaceKind::RuntimeDebug,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    ("runenwerk.simulation.preview", PanelKind::SimulationPreview),
+                    (
+                        "runenwerk.simulation.diagnostics",
+                        PanelKind::SimulationDiagnostics,
+                    ),
+                    (
+                        "runenwerk.diagnostics.runtime_debug",
+                        PanelKind::RuntimeDebug,
+                    ),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![
                     DocumentKind::FieldWorldDefinition,
@@ -728,29 +822,32 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     DocumentKind::RuntimeDebug,
                 ],
             ),
-            m6_workspace_profile_with_default_surfaces(
+            tool_workspace_profile(
                 RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
                 "Runtime Debug",
                 vec![
-                    compiled_in_legacy_default_surface(ToolSurfaceKind::AssetBrowser),
-                    compiled_in_legacy_default_surface(ToolSurfaceKind::RuntimeDebug),
-                    compiled_in_legacy_default_surface(ToolSurfaceKind::Diagnostics),
-                    compiled_in_stable_default_surface(
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    (
+                        "runenwerk.diagnostics.runtime_debug",
+                        PanelKind::RuntimeDebug,
+                    ),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    (
                         TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
                         PanelKind::Diagnostics,
                     ),
-                    compiled_in_legacy_default_surface(ToolSurfaceKind::Console),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![DocumentKind::RuntimeDebug, DocumentKind::Scene],
             ),
-            m6_workspace_profile(
+            tool_workspace_profile(
                 GRAPH_WORKSPACE_PROFILE_ID,
                 "Graph",
                 vec![
-                    ToolSurfaceKind::AssetBrowser,
-                    ToolSurfaceKind::GraphCanvas,
-                    ToolSurfaceKind::Diagnostics,
-                    ToolSurfaceKind::Console,
+                    ("runenwerk.assets.browser", PanelKind::AssetBrowser),
+                    ("runenwerk.graph.canvas", PanelKind::GraphCanvas),
+                    ("runenwerk.diagnostics.diagnostics", PanelKind::Diagnostics),
+                    ("runenwerk.editor.console", PanelKind::Console),
                 ],
                 vec![DocumentKind::Graph],
             ),
@@ -758,29 +855,13 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
     )
 }
 
-fn m6_workspace_profile(
+fn tool_workspace_profile(
     id: WorkspaceProfileId,
     label: impl Into<String>,
-    default_tool_surfaces: Vec<ToolSurfaceKind>,
+    default_surfaces: Vec<(&'static str, PanelKind)>,
     document_kind_filters: Vec<DocumentKind>,
 ) -> WorkspaceProfile {
-    compiled_in_legacy_workspace_profile(
-        id,
-        label,
-        WorkspaceLayoutTemplate::ToolWorkspace,
-        default_tool_surfaces,
-        vec![EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters,
-    )
-}
-
-fn m6_workspace_profile_with_default_surfaces(
-    id: WorkspaceProfileId,
-    label: impl Into<String>,
-    default_surfaces: Vec<WorkspaceDefaultToolSurface>,
-    document_kind_filters: Vec<DocumentKind>,
-) -> WorkspaceProfile {
-    WorkspaceProfile::new(
+    compiled_in_workspace_profile(
         id,
         label,
         WorkspaceLayoutTemplate::ToolWorkspace,
@@ -790,12 +871,18 @@ fn m6_workspace_profile_with_default_surfaces(
     )
 }
 
-fn compiled_in_legacy_default_surface(kind: ToolSurfaceKind) -> WorkspaceDefaultToolSurface {
-    WorkspaceDefaultToolSurface::new_legacy(kind)
-        .expect("compiled-in workspace profile default surfaces should have stable keys")
+fn stable_default_surface_for_kind(
+    kind: ToolSurfaceKind,
+) -> Result<WorkspaceDefaultToolSurface, WorkspaceSurfaceIdentityError> {
+    let stable_surface_key = crate::stable_key_for_tool_surface_kind(kind)
+        .ok_or(WorkspaceSurfaceIdentityError::UnmappedLegacySurface { kind })?;
+    Ok(WorkspaceDefaultToolSurface::new_with_panel_kind(
+        stable_surface_key,
+        kind.panel_kind(),
+    ))
 }
 
-fn compiled_in_stable_default_surface(
+fn compiled_in_default_surface(
     stable_surface_key: &str,
     panel_kind: PanelKind,
 ) -> WorkspaceDefaultToolSurface {
@@ -803,27 +890,30 @@ fn compiled_in_stable_default_surface(
         ToolSurfaceStableKey::new(stable_surface_key)
             .expect("compiled-in workspace profile stable surface key should be valid"),
         panel_kind,
-        None,
     )
 }
 
-fn compiled_in_legacy_workspace_profile(
+fn compiled_in_workspace_profile(
     id: WorkspaceProfileId,
     label: impl Into<String>,
     default_layout_template: WorkspaceLayoutTemplate,
-    default_tool_surfaces: Vec<ToolSurfaceKind>,
+    default_surfaces: Vec<(&'static str, PanelKind)>,
     default_modes: Vec<ModeId>,
     document_kind_filters: Vec<DocumentKind>,
 ) -> WorkspaceProfile {
-    WorkspaceProfile::new_legacy(
+    WorkspaceProfile::new(
         id,
         label,
         default_layout_template,
-        default_tool_surfaces,
+        default_surfaces
+            .into_iter()
+            .map(|(stable_surface_key, panel_kind)| {
+                compiled_in_default_surface(stable_surface_key, panel_kind)
+            })
+            .collect(),
         default_modes,
         document_kind_filters,
     )
-    .expect("compiled-in workspace profile default surfaces should have stable keys")
 }
 
 #[cfg(test)]
@@ -847,8 +937,9 @@ mod tests {
         assert_eq!(profile.label, "Scene");
         assert!(
             profile
-                .legacy_default_tool_surfaces()
-                .any(|kind| kind == ToolSurfaceKind::Viewport)
+                .default_surfaces
+                .iter()
+                .any(|surface| surface.stable_surface_key().as_str() == "runenwerk.scene.viewport")
         );
         assert!(profile.default_modes.contains(&EDIT_MODE_ID));
         assert!(profile.default_modes.contains(&PREVIEW_MODE_ID));
@@ -874,17 +965,16 @@ mod tests {
     }
 
     #[test]
-    fn default_profiles_retain_legacy_metadata_for_compatibility() {
+    fn default_profiles_store_panel_kind_with_stable_defaults() {
         let registry = default_workspace_profile_registry();
 
         for profile in registry.profiles() {
             assert!(
-                profile.default_surfaces.iter().all(|surface| {
-                    surface.legacy_tool_surface_kind().is_some()
-                        || surface.stable_surface_key().as_str()
-                            == TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
-                }),
-                "{} profile should retain legacy metadata except for explicitly stable-key-native surfaces",
+                profile
+                    .default_surfaces
+                    .iter()
+                    .all(|surface| !surface.stable_surface_key().as_str().is_empty()),
+                "{} profile should retain stable surface defaults",
                 profile.label
             );
         }
@@ -904,7 +994,6 @@ mod tests {
             })
             .expect("runtime debug profile should include the registry inspector");
 
-        assert_eq!(inspector.legacy_tool_surface_kind(), None);
         assert_eq!(inspector.panel_kind(), PanelKind::Diagnostics);
     }
 
@@ -926,12 +1015,16 @@ mod tests {
         .expect("legacy profile fixture should map stable keys");
 
         assert_eq!(
-            profile.legacy_default_tool_surfaces().collect::<Vec<_>>(),
+            profile
+                .default_surfaces
+                .iter()
+                .map(|surface| surface.stable_surface_key().as_str())
+                .collect::<Vec<_>>(),
             vec![
-                ToolSurfaceKind::AssetBrowser,
-                ToolSurfaceKind::GraphCanvas,
-                ToolSurfaceKind::Diagnostics,
-                ToolSurfaceKind::Console,
+                "runenwerk.assets.browser",
+                "runenwerk.graph.canvas",
+                "runenwerk.diagnostics.diagnostics",
+                "runenwerk.editor.console",
             ]
         );
     }
@@ -942,23 +1035,21 @@ mod tests {
         let profile = registry
             .profile(MATERIAL_WORKSPACE_PROFILE_ID)
             .expect("material profile should exist");
-        let mut legacy_allocator = WorkspaceIdentityAllocator::new();
-        let legacy_workspace_id = legacy_allocator.allocate_workspace_id();
-        let legacy_workspace = WorkspaceState::bootstrap_tool_workspace_layout(
-            legacy_workspace_id,
-            &mut legacy_allocator,
-            &profile.legacy_default_tool_surfaces().collect::<Vec<_>>(),
-        );
         let mut stable_allocator = WorkspaceIdentityAllocator::new();
         let stable_workspace_id = stable_allocator.allocate_workspace_id();
 
         let stable_workspace =
             profile.build_default_workspace_state(stable_workspace_id, &mut stable_allocator);
 
-        assert_eq!(
-            workspace_surface_order(&stable_workspace),
-            workspace_surface_order(&legacy_workspace)
-        );
+        let mut actual = workspace_surface_order(&stable_workspace);
+        let mut expected = profile
+            .default_surfaces
+            .iter()
+            .map(|surface| surface.stable_surface_key().as_str().to_string())
+            .collect::<Vec<_>>();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -972,13 +1063,15 @@ mod tests {
 
         let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
 
-        for surface in workspace.tool_surfaces() {
-            let expected_key = surface
-                .legacy_tool_surface_kind()
-                .and_then(stable_key_for_tool_surface_kind)
-                .expect("default profile surfaces should retain C3 legacy metadata");
-            assert_eq!(surface.stable_surface_key(), &expected_key);
-        }
+        let mut actual = workspace_surface_order(&workspace);
+        let mut expected = profile
+            .default_surfaces
+            .iter()
+            .map(|surface| surface.stable_surface_key().as_str().to_string())
+            .collect::<Vec<_>>();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -1026,7 +1119,7 @@ mod tests {
             profile
                 .default_surfaces
                 .iter()
-                .all(|surface| surface.legacy_tool_surface_kind().is_some())
+                .all(|surface| !surface.stable_surface_key().as_str().is_empty())
         );
     }
 
@@ -1139,8 +1232,10 @@ mod tests {
         assert_eq!(profile.label, "Editor Design");
         assert!(
             profile
-                .legacy_default_tool_surfaces()
-                .any(|kind| kind == ToolSurfaceKind::UiCanvas)
+                .default_surfaces
+                .iter()
+                .any(|surface| surface.stable_surface_key().as_str()
+                    == "runenwerk.editor_design.ui_canvas")
         );
         assert!(
             profile
@@ -1149,7 +1244,7 @@ mod tests {
         );
         assert!(workspace.validate_integrity().is_ok());
         assert!(workspace.tool_surfaces().any(|surface| {
-            surface.legacy_tool_surface_kind() == Some(ToolSurfaceKind::DefinitionValidation)
+            surface.stable_surface_key().as_str() == "runenwerk.editor_design.definition_validation"
         }));
     }
 
@@ -1303,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_aware_default_profile_builder_preserves_legacy_tool_surface_kinds() {
+    fn registry_aware_default_profile_builder_preserves_stable_surface_keys() {
         let profile_registry = default_workspace_profile_registry();
         let profile = profile_registry
             .profile(MATERIAL_WORKSPACE_PROFILE_ID)
@@ -1323,21 +1418,18 @@ mod tests {
         assert!(
             workspace
                 .tool_surfaces()
-                .any(|surface| surface.legacy_tool_surface_kind()
-                    == Some(ToolSurfaceKind::MaterialGraphCanvas))
+                .any(|surface| surface.stable_surface_key().as_str()
+                    == "runenwerk.material_lab.graph_canvas")
         );
         assert!(
             workspace
                 .tool_surfaces()
-                .any(|surface| surface.legacy_tool_surface_kind()
-                    == Some(ToolSurfaceKind::MaterialInspector))
+                .any(|surface| surface.stable_surface_key().as_str()
+                    == "runenwerk.material_lab.inspector")
         );
-        assert!(
-            workspace
-                .tool_surfaces()
-                .any(|surface| surface.legacy_tool_surface_kind()
-                    == Some(ToolSurfaceKind::MaterialPreview))
-        );
+        assert!(workspace.tool_surfaces().any(
+            |surface| surface.stable_surface_key().as_str() == "runenwerk.material_lab.preview"
+        ));
     }
 
     #[test]
@@ -1389,9 +1481,9 @@ mod tests {
         assert!(matches!(
             error,
             WorkspaceProfileRegistryBackedBuildError::UnregisteredDefaultToolSurface {
-                legacy_tool_surface_kind: Some(ToolSurfaceKind::AssetBrowser),
+                stable_surface_key,
                 ..
-            }
+            } if stable_surface_key.as_str() == "runenwerk.assets.browser"
         ));
     }
 
@@ -1446,14 +1538,14 @@ mod tests {
         assert_eq!(material_profile.default_surfaces, original_order);
     }
 
-    fn workspace_surface_order(workspace: &WorkspaceState) -> Vec<ToolSurfaceKind> {
+    fn workspace_surface_order(workspace: &WorkspaceState) -> Vec<String> {
         workspace
             .tab_stacks()
             .flat_map(|stack| stack.ordered_panels.iter())
             .filter_map(|panel_id| workspace.panel(*panel_id))
             .filter_map(|panel| panel.active_tool_surface)
             .filter_map(|surface_id| workspace.tool_surface(surface_id))
-            .filter_map(|surface| surface.legacy_tool_surface_kind())
+            .map(|surface| surface.stable_surface_key().as_str().to_string())
             .collect()
     }
 

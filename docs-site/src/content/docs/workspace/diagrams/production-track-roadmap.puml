@@ -52,15 +52,34 @@ package "PT-SDF-OW SDF-first open-world playable vertical" {
 }
 
 package "PT-WB-CAP Capability Workbench Platform" {
-  component "PM-WB-CAP-001 Clean Registry-Owned Workbench Foundation\nkind=implementation\nstate=active\nWR=WR-031, WR-032, WR-033, WR-034, WR-035, WR-036" as PM_WB_CAP_001 <<active>>
+  component "PM-WB-CAP-001 Clean Registry-Owned Workbench Foundation\nkind=implementation\nstate=completed\nWR=WR-031, WR-032, WR-033, WR-034, WR-035, WR-036" as PM_WB_CAP_001 <<completed>>
 
-  component "PM-WB-CAP-002 Host Capability Policy\nkind=implementation\nstate=ready_next\nWR=WR-037" as PM_WB_CAP_002 <<ready_next>>
+  component "PM-WB-CAP-002 Host Capability Policy\nkind=implementation\nstate=completed\nWR=WR-037" as PM_WB_CAP_002 <<completed>>
 
-  component "PM-WB-CAP-003 Product And Service Capability Plane\nkind=design\nstate=ready_next\nWR=WR-038" as PM_WB_CAP_003 <<ready_next>>
+  component "PM-WB-CAP-003 Product And Service Capability Plane\nkind=design\nstate=completed\nWR=WR-038" as PM_WB_CAP_003 <<completed>>
 
-  component "PM-WB-CAP-004 Multi-Host Workbench Modes\nkind=implementation\nstate=ready_next\nWR=WR-039" as PM_WB_CAP_004 <<ready_next>>
+  component "PM-WB-CAP-004 Multi-Host Workbench Modes\nkind=implementation\nstate=completed\nWR=WR-039" as PM_WB_CAP_004 <<completed>>
 
   component "PM-WB-CAP-005 External Component Readiness\nkind=design\nstate=blocked\nWR=WR-040" as PM_WB_CAP_005 <<blocked>>
+
+}
+
+package "PT-RENDER-PG Render Product Graph Platform" {
+  component "PM-RENDER-PG-001 Render Product Graph Doctrine And Boundary Ratification\nkind=design\nstate=active\nWR=WR-003, WR-009, WR-010" as PM_RENDER_PG_001 <<active>>
+
+  component "PM-RENDER-PG-002 Render Contract Ergonomics\nkind=implementation\nstate=designing\nWR=WR-003" as PM_RENDER_PG_002 <<designing>>
+
+  component "PM-RENDER-PG-003 Feature-Owned Render Contributions\nkind=implementation\nstate=designing\nWR=WR-003, WR-010" as PM_RENDER_PG_003 <<designing>>
+
+  component "PM-RENDER-PG-004 Render Execution Graph Compiler Maturity\nkind=implementation\nstate=designing\nWR=WR-003, WR-010" as PM_RENDER_PG_004 <<designing>>
+
+  component "PM-RENDER-PG-005 Product Surface Platform Hardening\nkind=implementation\nstate=designing\nWR=WR-003" as PM_RENDER_PG_005 <<designing>>
+
+  component "PM-RENDER-PG-006 Multi-Surface Presentation\nkind=implementation\nstate=designing\nWR=WR-009" as PM_RENDER_PG_006 <<designing>>
+
+  component "PM-RENDER-PG-007 Render Fragments And Hot Reload\nkind=implementation\nstate=designing\nWR=WR-010" as PM_RENDER_PG_007 <<designing>>
+
+  component "PM-RENDER-PG-008 Production Readiness And Inspection\nkind=hardening\nstate=designing\nWR=WR-003, WR-009, WR-010" as PM_RENDER_PG_008 <<designing>>
 
 }
 
@@ -84,5 +103,16 @@ PM_WB_CAP_001 -down-> PM_WB_CAP_004 : production prerequisite
 PM_WB_CAP_002 -down-> PM_WB_CAP_004 : production prerequisite
 PM_WB_CAP_002 -down-> PM_WB_CAP_005 : production prerequisite
 PM_WB_CAP_003 -down-> PM_WB_CAP_005 : production prerequisite
+PM_RENDER_PG_001 -down-> PM_RENDER_PG_002 : production prerequisite
+PM_RENDER_PG_002 -down-> PM_RENDER_PG_003 : production prerequisite
+PM_RENDER_PG_003 -down-> PM_RENDER_PG_004 : production prerequisite
+PM_RENDER_PG_002 -down-> PM_RENDER_PG_005 : production prerequisite
+PM_RENDER_PG_004 -down-> PM_RENDER_PG_005 : production prerequisite
+PM_RENDER_PG_005 -down-> PM_RENDER_PG_006 : production prerequisite
+PM_RENDER_PG_004 -down-> PM_RENDER_PG_007 : production prerequisite
+PM_RENDER_PG_005 -down-> PM_RENDER_PG_007 : production prerequisite
+PM_RENDER_PG_005 -down-> PM_RENDER_PG_008 : production prerequisite
+PM_RENDER_PG_006 -down-> PM_RENDER_PG_008 : production prerequisite
+PM_RENDER_PG_007 -down-> PM_RENDER_PG_008 : production prerequisite
 
 @enduml

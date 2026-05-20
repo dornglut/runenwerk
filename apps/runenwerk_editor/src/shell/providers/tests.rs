@@ -256,7 +256,6 @@ fn request() -> SurfaceProviderRequest {
         tab_stack_id: TabStackId::try_from_raw(3).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(3).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: VIEWPORT_SURFACE_DEFINITION_ID,
@@ -271,7 +270,6 @@ fn request_with_document_context(
     SurfaceProviderRequest {
         document_context,
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
         capabilities: tool_surface_capability_set(tool_surface_kind),
         ..request()
@@ -284,7 +282,6 @@ fn request_with_stable_key(
 ) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
         stable_surface_key: ToolSurfaceStableKey::new(stable_surface_key).unwrap(),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
         capabilities: tool_surface_capability_set(tool_surface_kind),
         ..request()
@@ -299,7 +296,6 @@ fn self_authoring_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProvider
         tab_stack_id: TabStackId::try_from_raw(10).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(10).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
@@ -318,7 +314,6 @@ fn m6_material_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderReq
         tab_stack_id: TabStackId::try_from_raw(20).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(20).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
@@ -340,7 +335,6 @@ fn stable_key_only_material_request(
         tab_stack_id: TabStackId::try_from_raw(20).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(20).unwrap(),
         stable_surface_key: ToolSurfaceStableKey::new(stable_key).unwrap(),
-        legacy_tool_surface_kind: None,
         provider_family_id: Some(ProviderFamilyId::new("runenwerk.material_lab").unwrap()),
         surface_route: Some(route),
         surface_definition_id: editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID,
@@ -363,7 +357,6 @@ fn m6_texture_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
         tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(21).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
@@ -382,7 +375,6 @@ fn m6_procgen_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
         tab_stack_id: TabStackId::try_from_raw(23).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(23).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
@@ -404,7 +396,6 @@ fn m6_sdf_request(
         tab_stack_id: TabStackId::try_from_raw(22).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(22).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
@@ -420,7 +411,6 @@ fn asset_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
         tab_stack_id: TabStackId::try_from_raw(30).unwrap(),
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(30).unwrap(),
         stable_surface_key: stable_key_for_test(tool_surface_kind),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
@@ -437,7 +427,6 @@ fn inspector_request() -> SurfaceProviderRequest {
         tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(31).unwrap(),
         stable_surface_key: ToolSurfaceStableKey::new(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
             .unwrap(),
-        legacy_tool_surface_kind: None,
         provider_family_id: Some(ProviderFamilyId::new("runenwerk.diagnostics").unwrap()),
         surface_route: Some(ToolSurfaceRoute::ProviderOwnedLocal),
         surface_definition_id: editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID,
@@ -645,7 +634,7 @@ fn mounted_surface_request_includes_advisory_stable_key_when_available() {
 
     let viewport_request = requests
         .iter()
-        .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+        .find(|request| request.matches_stable_key(SCENE_VIEWPORT_SURFACE_KEY))
         .expect("default workspace should mount viewport");
 
     assert_eq!(
@@ -673,7 +662,7 @@ fn live_mounted_surface_requests_use_stable_key_authority() {
 }
 
 #[test]
-fn live_mounted_surface_requests_include_legacy_kind_only_as_metadata() {
+fn live_mounted_surface_requests_include_definition_metadata() {
     let shell_state = RunenwerkEditorShellState::new();
     let requests = mounted_surface_requests(&shell_state, SurfaceDocumentContext::NoActiveDocument);
 
@@ -683,8 +672,8 @@ fn live_mounted_surface_requests_include_legacy_kind_only_as_metadata() {
         .expect("default workspace should mount viewport by stable key");
 
     assert_eq!(
-        viewport_request.legacy_kind(),
-        Some(ToolSurfaceKind::Viewport)
+        viewport_request.surface_definition_id,
+        tool_surface_definition_id(ToolSurfaceKind::Viewport)
     );
 }
 
@@ -701,7 +690,7 @@ fn mounted_surface_request_enrichment_adds_provider_family_and_route_when_regist
 
     let viewport_request = requests
         .iter()
-        .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+        .find(|request| request.matches_stable_key(SCENE_VIEWPORT_SURFACE_KEY))
         .expect("default workspace should mount viewport");
 
     assert_eq!(
@@ -1043,7 +1032,6 @@ fn material_lab_providers_do_not_require_legacy_tool_surface_kind() {
     ];
 
     for (provider, request) in cases {
-        assert_eq!(request.legacy_kind(), None);
         assert_eq!(
             provider.support_mode(&request),
             SurfaceProviderSupportMode::StableKey
@@ -1095,7 +1083,6 @@ fn material_lab_provider_resolution_uses_stable_keys() {
         assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
         assert_eq!(frame.provider_id, Some(expected_provider_id));
         assert_eq!(frame.stable_surface_key, request.stable_surface_key);
-        assert_eq!(frame.surface_kind, None);
     }
 }
 
@@ -1321,7 +1308,6 @@ fn inspector_provider_does_not_support_legacy_kind() {
     let mut request = inspector_request();
     request.stable_surface_key =
         ToolSurfaceStableKey::new("runenwerk.diagnostics.diagnostics").unwrap();
-    request.legacy_tool_surface_kind = Some(ToolSurfaceKind::Diagnostics);
 
     assert_eq!(
         provider.support_mode(&request),
@@ -1366,9 +1352,11 @@ fn inspector_resolution_observation_matches_provider_resolution_for_material_lab
     request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.material_lab").unwrap());
     request.surface_route = Some(ToolSurfaceRoute::ProviderOwnedGraphCanvas);
 
-    let observation = host
-        .provider_registry()
-        .observe_resolution_for_request(&request, Some(host.provider_family_provider_map()));
+    let observation = host.provider_registry().observe_resolution_for_request(
+        &request,
+        host.workspace_profile_registry(),
+        Some(host.provider_family_provider_map()),
+    );
     let frame = host
         .provider_registry()
         .resolve_frame_with_provider_family_map(
@@ -1399,9 +1387,11 @@ fn inspector_resolution_observation_matches_provider_resolution_for_diagnostics_
     let theme = ThemeTokens::default();
     let request = inspector_request();
 
-    let observation = host
-        .provider_registry()
-        .observe_resolution_for_request(&request, Some(host.provider_family_provider_map()));
+    let observation = host.provider_registry().observe_resolution_for_request(
+        &request,
+        host.workspace_profile_registry(),
+        Some(host.provider_family_provider_map()),
+    );
     let frame = host
         .provider_registry()
         .resolve_frame_with_provider_family_map(
@@ -1427,13 +1417,14 @@ fn unresolved_mounted_surface_reports_diagnostic_without_mutation() {
     let mut request = request();
     request.stable_surface_key =
         ToolSurfaceStableKey::new("runenwerk.gameplay.graph_canvas").unwrap();
-    request.legacy_tool_surface_kind = None;
     request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.gameplay").unwrap());
     request.surface_route = Some(ToolSurfaceRoute::ProviderOwnedLocal);
 
-    let observation = host
-        .provider_registry()
-        .observe_resolution_for_request(&request, Some(host.provider_family_provider_map()));
+    let observation = host.provider_registry().observe_resolution_for_request(
+        &request,
+        host.workspace_profile_registry(),
+        Some(host.provider_family_provider_map()),
+    );
 
     assert_eq!(
         observation.availability,
@@ -1546,7 +1537,6 @@ fn provider_resolution_works_without_legacy_kind_for_stable_key_supported_surfac
     let theme = ThemeTokens::default();
     let mut request =
         request_with_stable_key(SCENE_VIEWPORT_SURFACE_KEY, ToolSurfaceKind::Viewport);
-    request.legacy_tool_surface_kind = None;
     request.provider_family_id = Some(ProviderFamilyId::new("runenwerk.scene").unwrap());
 
     let frame = host
@@ -1563,17 +1553,11 @@ fn provider_resolution_works_without_legacy_kind_for_stable_key_supported_surfac
 }
 
 #[test]
-fn provider_resolution_falls_back_to_legacy_only_when_legacy_kind_present() {
+fn provider_resolution_does_not_fall_back_when_stable_key_mismatches() {
     let provider = MaterialGraphCanvasProvider;
     let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
     request.stable_surface_key = ToolSurfaceStableKey::new("runenwerk.fixture.other").unwrap();
 
-    assert_eq!(
-        provider.support_mode(&request),
-        SurfaceProviderSupportMode::LegacyKind
-    );
-
-    request.legacy_tool_surface_kind = None;
     assert_eq!(
         provider.support_mode(&request),
         SurfaceProviderSupportMode::Unsupported
@@ -1648,7 +1632,7 @@ fn live_mounted_surface_requests_include_provider_family_when_registry_resolves(
 
     let viewport_request = requests
         .iter()
-        .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+        .find(|request| request.matches_stable_key(SCENE_VIEWPORT_SURFACE_KEY))
         .expect("default workspace should mount viewport");
 
     assert_eq!(
@@ -1685,7 +1669,7 @@ fn unresolved_registry_surface_request_reports_diagnostic_in_live_frame_path() {
     let viewport_frame = frame_model
         .surfaces
         .values()
-        .find(|frame| frame.surface_kind == Some(ToolSurfaceKind::Viewport))
+        .find(|frame| frame.stable_surface_key.as_str() == SCENE_VIEWPORT_SURFACE_KEY)
         .expect("default workspace should include viewport frame");
 
     assert_eq!(
@@ -1697,7 +1681,7 @@ fn unresolved_registry_surface_request_reports_diagnostic_in_live_frame_path() {
 }
 
 #[test]
-fn request_still_contains_legacy_tool_surface_kind_and_capabilities() {
+fn request_contains_stable_identity_definition_and_capabilities() {
     let host = crate::shell::RunenwerkWorkbenchHost::new().expect("host should build");
     let shell_state = RunenwerkEditorShellState::new();
     let requests = mounted_surface_requests_with_registry(
@@ -1707,10 +1691,10 @@ fn request_still_contains_legacy_tool_surface_kind_and_capabilities() {
     );
     let request = requests
         .iter()
-        .find(|request| request.legacy_kind() == Some(ToolSurfaceKind::Viewport))
+        .find(|request| request.matches_stable_key(SCENE_VIEWPORT_SURFACE_KEY))
         .expect("default workspace should mount viewport");
 
-    assert_eq!(request.legacy_kind(), Some(ToolSurfaceKind::Viewport));
+    assert_eq!(request.stable_key().as_str(), SCENE_VIEWPORT_SURFACE_KEY);
     assert_eq!(
         request.surface_definition_id,
         tool_surface_definition_id(ToolSurfaceKind::Viewport)

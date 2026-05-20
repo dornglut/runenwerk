@@ -1197,7 +1197,6 @@ fn wr028_texture_surface_request(
         tool_surface_instance_id: editor_shell::ToolSurfaceInstanceId::try_from_raw(28).unwrap(),
         stable_surface_key: editor_shell::stable_key_for_tool_surface_kind(tool_surface_kind)
             .expect("WR-028 texture surface fixture should have a stable key"),
-        legacy_tool_surface_kind: Some(tool_surface_kind),
         provider_family_id: None,
         surface_route: None,
         surface_definition_id: editor_shell::tool_surface_definition_id(tool_surface_kind),

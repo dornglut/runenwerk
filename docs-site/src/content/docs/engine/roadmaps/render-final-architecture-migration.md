@@ -33,16 +33,16 @@ materials, fragments, history, and production inspection, use
 - No generalized external imports beyond typed supported categories.
 - No universal simulation abstraction inside renderer.
 
-## Current Branch Status (March 22, 2026)
+## Current Status (May 21, 2026)
 
 - Phases 1-7 are active on the runtime path.
-- Phase 8 product-surface packet work is partially present:
+- Phase 8 product-surface foundation behavior is landed:
   - `PreparedRenderFrame` carries main/offscreen views, prepared flow invocations, target alias bindings, dynamic target descriptors, and history signatures;
   - dynamic target descriptor/request validation exists;
-  - renderer-owned dynamic target cache allocation and target-alias execution remain deferred until the render product surface foundation bundle lands.
+  - renderer-owned dynamic target cache allocation and target-alias execution are implemented foundation behavior.
 - Phase 9 cleanup/docs/cutoff hardening remains in progress.
 
-The active implementation plan for the next large render update is `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`. That bundle pulls the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.
+The implemented product-surface foundation bundle is recorded at `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`. It pulled the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.
 
 Native OS multi-window and multi-swapchain presentation is specified separately in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`.
 

@@ -1200,14 +1200,14 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
     assert!(
         shell_state.contains("active_editor_definitions")
             && frame_model.contains("with_active_ui_definitions")
-            && frame_model.contains("with_available_tool_surface_kinds")
+            && frame_model.contains("with_available_tool_surface_create_candidates")
             && shell_composition.contains("active_toolbar_template"),
         "live catalog activation should feed the next shell frame instead of remaining a snapshot only",
     );
     assert!(
         catalogs.contains("command_for_route_target")
-            && catalogs.contains("available_tool_surface_kinds")
-            && compatibility.contains("known_tool_surface_kinds_in_authored_order")
+            && catalogs.contains("available_tool_surface_keys")
+            && compatibility.contains("known_tool_surface_keys_in_authored_order")
             && compatibility.contains("panel_registry_covers_workspace")
             && compatibility.contains("tool_surface_registry_covers_workspace"),
         "active command and tool-surface catalogs should expose app-owned routing/future-creation seams",
@@ -1516,12 +1516,18 @@ fn shell_chrome_stable_key_only_surfaces_do_not_fallback_to_viewport() {
         shell_builder.contains("SplitTabStackAreaStableKey")
             && shell_builder.contains("ResetTabStackAreaStableKey")
             && shell_builder.contains("LockTabStackAreaStableKey")
-            && shell_builder.contains("tab_stack_supports_legacy_switch_menu")
-            && shell_builder.contains("legacy_active_tool_surface_kind")
+            && shell_builder.contains("CreatePanelTabStableKey")
+            && shell_builder.contains("ToolSurfaceStableKey")
             && shell_commands.contains("SplitTabStackAreaStableKey")
             && shell_commands.contains("ResetTabStackAreaStableKey")
             && shell_commands.contains("LockTabStackAreaStableKey"),
-        "shell chrome must have stable-key-native split/reset/lock paths and gate legacy switch actions on legacy metadata",
+        "shell chrome must have stable-key-native create/split/reset/lock paths",
+    );
+    assert!(
+        !shell_builder.contains("tab_stack_supports_legacy_switch_menu")
+            && !shell_builder.contains("legacy_active_tool_surface_kind")
+            && !shell_commands.contains("SwitchPanelToolSurfaceKind"),
+        "shell chrome must not retain legacy switch action routing",
     );
     assert!(
         !shell_builder.contains("unwrap_or(ToolSurfaceKind::Viewport)")

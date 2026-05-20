@@ -267,7 +267,7 @@ tracks:
       - id: PM-WB-CAP-001
         title: Clean Registry-Owned Workbench Foundation
         kind: implementation
-        state: active
+        state: completed
         goal: Remove legacy tool-surface identity and replace it with typed suite, profile, provider, and registry-backed workspace composition.
         outcome: Workbench state, profiles, providers, persistence, and Material Lab routes are stable-key-only with no compatibility enum or V5 legacy fallback metadata.
         dependencies: []
@@ -287,15 +287,41 @@ tracks:
             path: docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
             required_status: active
             reason: The registry-owned Workbench implementation must follow the active tool-suite host design.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-031-workbench-clean-break-governance-and-adr/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-001 requires accepted clean-break governance and ADR evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-001 requires completed typed suite, surface, profile, and provider handle evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-033-remove-legacy-tool-surface-identity/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-001 requires completed legacy tool-surface identity removal evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-034-registry-backed-workspace-profiles/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-001 requires completed registry-backed workspace profile evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-035-clean-persistence-format/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-001 requires completed stable-key-only persistence evidence.
+          - path: docs-site/src/content/docs/reports/closeouts/wr-036-material-lab-clean-migration-proof/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-001 requires completed Material Lab full-editor and standalone host proof evidence.
         acceptance_criteria:
           - ToolSurfaceKind is removed from Workbench identity, profile construction, provider requests, persisted layout authority, and Material Lab routing.
           - Old persisted workspace schemas fail with a clear unsupported-schema diagnostic.
           - Full-editor and standalone Material Lab profiles mount from registry-backed composition data.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-WB-CAP-001 completed the clean registry-owned Workbench foundation as a bounded milestone; linked WR rows are not all perfectionist_verified.
+          - PM-WB-CAP-002 still owns host command, product, and resource capability policy.
+          - PM-WB-CAP-003 still owns product and service capability declarations.
+          - PM-WB-CAP-004 still owns broader full editor, standalone Material Lab, headless validation, and constrained host presets.
+          - PM-WB-CAP-005 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+        completion_audit: ""
       - id: PM-WB-CAP-002
         title: Host Capability Policy
         kind: implementation
-        state: ready_next
+        state: completed
         goal: Add host allow/deny policy for command, product, and resource capabilities after the clean registry foundation exists.
         outcome: Provider proposals pass through host policy before app or domain mutation.
         dependencies:
@@ -307,14 +333,24 @@ tracks:
             path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
             required_status: accepted
             reason: Host policy depends on registry-owned identity and stable declarations.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-037-host-capability-policy/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-002 requires completed host capability policy evidence.
         acceptance_criteria:
           - Constrained hosts can deny command capabilities before app/domain mutation.
           - Product and resource capability keys are declared separately from provider UI routes.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-WB-CAP-002 completed the provider proposal host policy gate as a bounded milestone; linked WR rows are not all perfectionist_verified.
+          - PM-WB-CAP-003 still owns product and service capability declaration workflows.
+          - PM-WB-CAP-004 still owns broader full-editor, standalone Material Lab, headless validation, and constrained host presets.
+          - PM-WB-CAP-005 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+        completion_audit: ""
       - id: PM-WB-CAP-003
         title: Product And Service Capability Plane
         kind: design
-        state: ready_next
+        state: completed
         goal: Add product and service capability declarations without moving product semantics into editor_shell.
         outcome: Suites declare product and service needs while domains keep semantic validation authority.
         dependencies:
@@ -327,14 +363,24 @@ tracks:
             path: docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md
             required_status: active
             reason: Product and service planes must preserve host policy and domain-owned truth.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-003 requires completed product and service capability declaration evidence.
         acceptance_criteria:
           - Product and service needs are declarative Workbench capability data.
           - Product semantics stay in owning domains and formed product contracts.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-WB-CAP-003 completed the product/service declaration plane as a bounded milestone; linked WR rows are not all perfectionist_verified.
+          - PM-WB-CAP-004 still owns broader full-editor, standalone Material Lab, headless validation, and constrained host presets.
+          - PM-WB-CAP-005 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+          - Product semantics and service execution remain outside editor_shell by design.
+        completion_audit: ""
       - id: PM-WB-CAP-004
         title: Multi-Host Workbench Modes
         kind: implementation
-        state: ready_next
+        state: completed
         goal: Define full editor, standalone Material Lab, headless validation, and constrained host presets from the same clean Workbench model.
         outcome: Hosts differ by suite/profile/provider bundle and policy, not by forked app-specific compatibility paths.
         dependencies:
@@ -347,10 +393,20 @@ tracks:
             path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
             required_status: accepted
             reason: Multi-host modes must not restore legacy surface-kind identity.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-039-multi-host-presets/closeout.md
+            required_status: completed
+            reason: PM-WB-CAP-004 requires completed multi-host preset evidence.
         acceptance_criteria:
           - Full editor and Material Lab host presets are built from the same composition builder.
           - Headless and constrained presets deny unsupported capabilities rather than hiding legacy routes.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-WB-CAP-004 completed the multi-host preset slice as a bounded milestone; linked WR rows are not all perfectionist_verified.
+          - PM-WB-CAP-005 remains blocked and out of the non-deferred scope for external component sandbox readiness.
+          - Headless validation is a registry-backed host composition proof, not a general process runner or plugin sandbox.
+          - Constrained behavior is enforced through HostCapabilityPolicy; richer capability UX and diagnostics remain future bounded work.
+        completion_audit: ""
       - id: PM-WB-CAP-005
         title: External Component Readiness
         kind: design
@@ -371,3 +427,192 @@ tracks:
         acceptance_criteria:
           - No external dynamic component implementation lands before sandbox/security acceptance.
           - The design names trust boundaries, permissions, process/ABI options, diagnostics, and rollback behavior.
+  - id: PT-RENDER-PG
+    title: Render Product Graph Platform
+    state: active
+    owner: engine
+    strategic_goal: Make rendering a product-driven, inspectable, graph-compiled platform without moving product truth into the renderer.
+    success_criteria:
+      - Domains and Product Jobs own product truth, lineage, freshness, authority class, fallback legality, rebuild policy, residency intent, and diagnostics.
+      - The Render Execution Graph Compiler consumes prepared render product selections and feature-owned render fragments only.
+      - "The backend runtime owns derived GPU execution state only: WGPU allocation, command encoding, pipelines, bind groups, uploads, captures, timing, and presentation."
+      - Product surfaces, render fragments, diagnostics, multi-surface presentation, and future product families share one contract path without renderer-owned semantic shortcuts.
+    milestones:
+      - id: PM-RENDER-PG-001
+        title: Render Product Graph Doctrine And Boundary Ratification
+        kind: design
+        state: active
+        goal: Ratify the product-first renderer doctrine and separate Product Graph/Product Jobs from render execution graph compilation before implementation work expands.
+        outcome: The active design, roadmap mapping, and render docs define a product-first render platform without changing WR execution legality.
+        dependencies: []
+        roadmap_links:
+          - WR-003
+          - WR-009
+          - WR-010
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: active
+            reason: The doctrine slice requires an active canonical design before it can guide production sequencing.
+        evidence_gates: []
+        acceptance_criteria:
+          - The active canonical design exists and clearly separates Product Graph/Product Jobs from the Render Execution Graph Compiler.
+          - Stale render docs no longer describe implemented product-surface, prepared-view, dynamic-target, target-alias, or product-view behavior as deferred.
+          - Fully Featured Renderer Roadmap maps FR-0 through FR-8 to PM-RENDER-PG milestones or explicitly deferred product-family designs.
+          - Production, roadmap, docs, and planning validators pass without promoting WR execution state.
+      - id: PM-RENDER-PG-002
+        title: Render Contract Ergonomics
+        kind: implementation
+        state: designing
+        goal: Make product-surface and render-flow authoring easier to use without exposing renderer-private shortcuts.
+        outcome: Product-surface and render-flow authoring have focused examples, diagnostics, and contract tests.
+        dependencies:
+          - PM-RENDER-PG-001
+        roadmap_links:
+          - WR-003
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Ergonomics work must follow the accepted product/render execution boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - Common product-surface authoring paths are documented with focused examples.
+          - Diagnostics make target alias, dynamic target, history, and product-surface request failures visible.
+          - App code does not need renderer-private handles, cloned flows, or suffixed static labels to produce dynamic products.
+      - id: PM-RENDER-PG-003
+        title: Feature-Owned Render Contributions
+        kind: implementation
+        state: designing
+        goal: Replace central feature contribution growth with typed feature-owned collectors and render-fragment contracts.
+        outcome: Feature-owned collectors are typed, inspectable, capability-declared, diagnostic-producing, and validated before submit.
+        dependencies:
+          - PM-RENDER-PG-002
+        roadmap_links:
+          - WR-003
+          - WR-010
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Contribution migration must preserve the accepted feature-owned typed contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - New render features can register contribution collectors without adding new central payload variants.
+          - Contributions are not unstructured type-erased blobs and remain inspectable through prepared-frame diagnostics.
+          - Submit receives validated prepared contributions and performs no live ECS extraction.
+      - id: PM-RENDER-PG-004
+        title: Render Execution Graph Compiler Maturity
+        kind: implementation
+        state: designing
+        goal: Mature render execution graph compilation over prepared selections and feature fragments without deciding product truth.
+        outcome: The compiler validates render resources, pass order, target aliases, history scope, resource lifetimes, and backend capability constraints.
+        dependencies:
+          - PM-RENDER-PG-003
+        roadmap_links:
+          - WR-003
+          - WR-010
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Compiler maturity must follow the accepted Product Graph versus Render Execution Graph boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - Compiler diagnostics reject invalid render resources, pass order, target aliases, history scopes, resource lifetimes, and backend capability mismatches.
+          - Compiler inputs are prepared render selections and feature-owned render fragments only.
+          - Product freshness, authority, fallback legality, rebuild policy, and product dependency truth remain outside the compiler.
+      - id: PM-RENDER-PG-005
+        title: Product Surface Platform Hardening
+        kind: implementation
+        state: designing
+        goal: Harden the shared product-surface path for viewport, material preview, field/debug, drawing, and future preview products.
+        outcome: Product-surface producers share the same dynamic target, prepared view, invocation, history, UI sampling, and diagnostic contracts.
+        dependencies:
+          - PM-RENDER-PG-002
+          - PM-RENDER-PG-004
+        roadmap_links:
+          - WR-003
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Product-surface hardening must preserve product-first ownership and renderer-derived execution.
+        evidence_gates: []
+        acceptance_criteria:
+          - Viewport, material preview, field/debug, drawing/product previews, and diagnostics use the shared product-surface path.
+          - Product-surface state is inspectable by producer, target key, prepared view, invocation, history signature, and UI binding.
+          - Missing, stale, fallback, rejected, or non-sampleable product surfaces are diagnosed instead of silently promoted.
+      - id: PM-RENDER-PG-006
+        title: Multi-Surface Presentation
+        kind: implementation
+        state: designing
+        goal: Add surface-scoped render frames and presentation for native multi-window workflows after product-surface hardening.
+        outcome: Render frames are surface-scoped and submit/present cannot cross native surfaces.
+        dependencies:
+          - PM-RENDER-PG-005
+        roadmap_links:
+          - WR-009
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Multi-surface presentation must follow the accepted render product graph boundary.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md
+            required_status: accepted
+            reason: Native multi-window implementation requires accepted window, input, UI frame, and swapchain ownership.
+        evidence_gates: []
+        acceptance_criteria:
+          - Prepared render frames and backend surface state are scoped by native surface/window identity.
+          - Secondary windows do not depend on singleton render surface state.
+          - Submit and present paths cannot target the wrong surface.
+      - id: PM-RENDER-PG-007
+        title: Render Fragments And Hot Reload
+        kind: implementation
+        state: designing
+        goal: Implement data-driven render fragments, validation, merge provenance, hot reload, and last-good fallback through normal compiled execution.
+        outcome: Fragment-driven flows run through normal RenderFlow validation and compiled execution.
+        dependencies:
+          - PM-RENDER-PG-004
+          - PM-RENDER-PG-005
+        roadmap_links:
+          - WR-010
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Render fragment execution must follow the accepted product/render execution boundary.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-fragment-data-driven-maturity-design.md
+            required_status: accepted
+            reason: Fragment assets, validation, schema/versioning, merge, and hot reload require accepted fragment design.
+        evidence_gates: []
+        acceptance_criteria:
+          - Fragment schema/versioning, validation, merge provenance, hot reload, and last-good fallback are specified and tested.
+          - Invalid fragments cannot affect active rendering.
+          - Fragment execution does not bypass RenderFlow validation or compiled execution planning.
+      - id: PM-RENDER-PG-008
+        title: Production Readiness And Inspection
+        kind: hardening
+        state: designing
+        goal: Harden renderer diagnostics, inspection, budgets, examples, capture/replay policy, and closeout evidence for production renderer work.
+        outcome: Complex renderer behavior is inspectable and validated enough for production product teams.
+        dependencies:
+          - PM-RENDER-PG-005
+          - PM-RENDER-PG-006
+          - PM-RENDER-PG-007
+        roadmap_links:
+          - WR-003
+          - WR-009
+          - WR-010
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Production readiness must follow the accepted product-first renderer platform boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - Renderer diagnostics expose prepared selections, feature contributions, target aliases, dynamic targets, history, backend capability failures, timing, and fallback state without leaking mutable backend handles.
+          - Examples and inspection docs let product teams understand complex renderer behavior without reading backend internals first.
+          - Performance budgets, capture/replay policy, and closeout evidence are sufficient for production renderer work.

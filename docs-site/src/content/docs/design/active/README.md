@@ -38,6 +38,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [ECS Parallel System Execution Design](ecs-parallel-system-execution-design.md)
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Design](engine-game-runtime-editor-ecs-scripting-hot-reload-design.md)
 - [Render Fragment Data-Driven Maturity Design](render-fragment-data-driven-maturity-design.md)
+- [Render Product Graph Platform](render-product-graph-platform-design.md)
 
 ### Gameplay
 

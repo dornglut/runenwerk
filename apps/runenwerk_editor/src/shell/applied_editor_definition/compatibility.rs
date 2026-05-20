@@ -3,25 +3,29 @@
 
 use editor_definition::{EditorPanelRegistryDefinition, EditorToolSurfaceRegistryDefinition};
 use editor_shell::{
-    PanelKind, ToolSurfaceKind, WorkspaceState, panel_kind_definition_key,
-    panel_kind_for_tool_surface_kind, tool_surface_kind_definition_key,
+    PanelKind, ToolSurfaceStableKey, WorkspaceState, panel_kind_definition_key,
+    panel_kind_for_tool_surface_kind, stable_key_for_tool_surface_kind,
+    tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
     tool_surface_kind_from_definition_key,
 };
 use ui_definition::UiDefinitionDiagnostic;
 
-pub fn known_tool_surface_kinds_in_authored_order(
+pub fn known_tool_surface_keys_in_authored_order(
     registry: &EditorToolSurfaceRegistryDefinition,
-) -> Vec<ToolSurfaceKind> {
-    let mut kinds = Vec::new();
+) -> Vec<ToolSurfaceStableKey> {
+    let mut keys = Vec::new();
     for definition in &registry.tool_surfaces {
         let Some(kind) = tool_surface_kind_from_definition_key(&definition.id) else {
             continue;
         };
-        if !kinds.contains(&kind) {
-            kinds.push(kind);
+        let Some(key) = stable_key_for_tool_surface_kind(kind) else {
+            continue;
+        };
+        if !keys.contains(&key) {
+            keys.push(key);
         }
     }
-    kinds
+    keys
 }
 
 pub fn known_panel_kinds_in_authored_order(
@@ -120,17 +124,19 @@ pub fn tool_surface_registry_covers_workspace(
     workspace: &WorkspaceState,
 ) -> Result<(), UiDefinitionDiagnostic> {
     for surface in workspace.tool_surfaces() {
-        let Some(legacy_tool_surface_kind) = surface.legacy_tool_surface_kind() else {
+        let Some(tool_surface_kind) =
+            tool_surface_kind_for_stable_key(surface.stable_surface_key())
+        else {
             return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.tool_surface_registry.active_workspace_missing_legacy_kind",
+                "editor.definition.tool_surface_registry.active_workspace_missing_stable_mapping",
                 format!(
-                    "active workspace surface '{}' has stable key '{}' but no legacy compatibility kind",
+                    "active workspace surface '{}' has stable key '{}' without an authored registry mapping",
                     surface.id.raw(),
                     surface.stable_surface_key()
                 ),
             ));
         };
-        let key = tool_surface_kind_definition_key(legacy_tool_surface_kind);
+        let key = tool_surface_kind_definition_key(tool_surface_kind);
         if !registry
             .tool_surfaces
             .iter()
