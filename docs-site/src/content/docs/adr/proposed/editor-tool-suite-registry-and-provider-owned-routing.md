@@ -1,7 +1,7 @@
 ---
 title: Editor Tool Suite Registry And Provider-Owned Routing
-description: Proposed decision for stable tool-surface keys, typed tool-suite registration, and provider-owned local routing.
-status: draft
+description: Historical proposed decision for stable tool-surface keys, typed tool-suite registration, and provider-owned local routing.
+status: superseded
 owner: editor
 layer: domain/app
 canonical: true
@@ -22,7 +22,8 @@ related_adrs:
 
 ## Status
 
-Draft / proposed.
+Superseded by
+[`../accepted/0012-capability-workbench-clean-break.md`](../accepted/0012-capability-workbench-clean-break.md).
 
 ## Context
 

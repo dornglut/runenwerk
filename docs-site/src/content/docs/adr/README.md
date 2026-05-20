@@ -32,8 +32,8 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0009: UI Interaction Formation V2](accepted/0009-ui-interaction-formation-v2.md)
 - [0010: Graph Substrate Canvas Boundary](accepted/0010-graph-substrate-canvas-boundary.md)
 - [0011: Animated SDF Authoring Graphs Lower Before Runtime](accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md)
+- [0012: Capability Workbench Clean Break](accepted/0012-capability-workbench-clean-break.md)
 
 ## Proposed ADRs
 
 - [Animated SDF Lowering and Purpose-Specific Products](proposed/animated-sdf-lowering-and-purpose-specific-products.md)
-- [Editor Tool Suite Registry And Provider-Owned Routing](proposed/editor-tool-suite-registry-and-provider-owned-routing.md)
