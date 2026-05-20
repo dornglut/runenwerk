@@ -1,5 +1,5 @@
 //! File: apps/runenwerk_editor/src/material_lab/tool_suite.rs
-//! Purpose: Non-wired Material Lab tool-suite declaration.
+//! Purpose: Material Lab tool-suite declaration.
 
 use editor_shell::{
     EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,

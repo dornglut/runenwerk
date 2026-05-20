@@ -54,6 +54,79 @@ impl From<EntityId> for SdfPrimitiveSourceId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SceneModelMeshSourceId {
+    pub asset_id: AssetId,
+    pub source_id: AssetSourceId,
+    pub source_revision_id: Option<AssetSourceRevisionId>,
+    pub source_revision: Option<String>,
+}
+
+impl SceneModelMeshSourceId {
+    pub fn new(asset_id: AssetId, source_id: AssetSourceId) -> Self {
+        Self {
+            asset_id,
+            source_id,
+            source_revision_id: None,
+            source_revision: None,
+        }
+    }
+
+    pub fn with_source_revision_id(mut self, revision_id: AssetSourceRevisionId) -> Self {
+        self.source_revision_id = Some(revision_id);
+        self
+    }
+
+    pub fn with_source_revision(mut self, revision: impl Into<String>) -> Self {
+        self.source_revision = Some(revision.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SceneMeshMaterialRegionId(String);
+
+impl SceneMeshMaterialRegionId {
+    pub fn new(region_key: impl Into<String>) -> Result<Self, String> {
+        let region_key = region_key.into();
+        let trimmed = region_key.trim();
+        if trimmed.is_empty() {
+            return Err("scene mesh material region id must not be empty".to_string());
+        }
+        if trimmed != region_key {
+            return Err("scene mesh material region id must already be normalized".to_string());
+        }
+        if is_transient_mesh_material_region_key(trimmed) {
+            return Err(format!(
+                "scene mesh material region id {trimmed:?} uses transient runtime identity"
+            ));
+        }
+        Ok(Self(region_key))
+    }
+
+    pub fn key(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SceneModelMeshMaterialRegionSourceId {
+    pub model_mesh_source_id: SceneModelMeshSourceId,
+    pub material_region_id: SceneMeshMaterialRegionId,
+}
+
+impl SceneModelMeshMaterialRegionSourceId {
+    pub fn new(
+        model_mesh_source_id: SceneModelMeshSourceId,
+        material_region_id: SceneMeshMaterialRegionId,
+    ) -> Self {
+        Self {
+            model_mesh_source_id,
+            material_region_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SceneMaterialSourceRef {
     pub asset_id: AssetId,
@@ -224,6 +297,24 @@ impl SdfPrimitiveMaterialSlotAssignment {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SceneModelMeshMaterialSlotAssignment {
+    pub material_region: SceneModelMeshMaterialRegionSourceId,
+    pub slot_id: SceneMaterialSlotId,
+}
+
+impl SceneModelMeshMaterialSlotAssignment {
+    pub fn new(
+        material_region: SceneModelMeshMaterialRegionSourceId,
+        slot_id: SceneMaterialSlotId,
+    ) -> Self {
+        Self {
+            material_region,
+            slot_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SceneMaterialBindingDiagnosticCode {
     MissingAssignedSlot,
@@ -232,9 +323,10 @@ pub enum SceneMaterialBindingDiagnosticCode {
     PreparationFailedPreservedPriorValid,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SceneMaterialBindingDiagnosticSubject {
     SdfPrimitive(SdfPrimitiveSourceId),
+    ModelMeshMaterialRegion(SceneModelMeshMaterialRegionSourceId),
     MaterialSlot(SceneMaterialSlotId),
 }
 
@@ -271,6 +363,7 @@ pub struct SceneMaterialResolution {
 pub struct SceneMaterialAssignmentState {
     pub palette: SceneMaterialPalette,
     sdf_primitive_slots: BTreeMap<SdfPrimitiveSourceId, SceneMaterialSlotId>,
+    model_mesh_region_slots: BTreeMap<SceneModelMeshMaterialRegionSourceId, SceneMaterialSlotId>,
     source_revision: u64,
 }
 
@@ -279,6 +372,7 @@ impl Default for SceneMaterialAssignmentState {
         Self {
             palette: SceneMaterialPalette::default(),
             sdf_primitive_slots: BTreeMap::new(),
+            model_mesh_region_slots: BTreeMap::new(),
             source_revision: 1,
         }
     }
@@ -292,10 +386,24 @@ impl SceneMaterialAssignmentState {
         let mut state = Self {
             palette,
             sdf_primitive_slots: BTreeMap::new(),
+            model_mesh_region_slots: BTreeMap::new(),
             source_revision: 1,
         };
         for assignment in assignments {
             state.assign_sdf_primitive_material_slot(assignment.primitive, assignment.slot_id)?;
+        }
+        Ok(state)
+    }
+
+    pub fn new_with_model_mesh_assignments(
+        palette: SceneMaterialPalette,
+        sdf_assignments: impl IntoIterator<Item = SdfPrimitiveMaterialSlotAssignment>,
+        model_mesh_assignments: impl IntoIterator<Item = SceneModelMeshMaterialSlotAssignment>,
+    ) -> Result<Self, String> {
+        let mut state = Self::new(palette, sdf_assignments)?;
+        for assignment in model_mesh_assignments {
+            state
+                .assign_model_mesh_material_slot(assignment.material_region, assignment.slot_id)?;
         }
         Ok(state)
     }
@@ -319,6 +427,16 @@ impl SceneMaterialAssignmentState {
         })
     }
 
+    pub fn model_mesh_assignments(
+        &self,
+    ) -> impl Iterator<Item = SceneModelMeshMaterialSlotAssignment> + '_ {
+        self.model_mesh_region_slots
+            .iter()
+            .map(|(material_region, slot_id)| {
+                SceneModelMeshMaterialSlotAssignment::new(material_region.clone(), *slot_id)
+            })
+    }
+
     pub fn assign_sdf_primitive_material_slot(
         &mut self,
         primitive: SdfPrimitiveSourceId,
@@ -338,11 +456,39 @@ impl SceneMaterialAssignmentState {
         Ok(())
     }
 
+    pub fn assign_model_mesh_material_slot(
+        &mut self,
+        material_region: SceneModelMeshMaterialRegionSourceId,
+        slot_id: SceneMaterialSlotId,
+    ) -> Result<(), String> {
+        if !self.palette.contains_slot(slot_id) {
+            return Err(format!(
+                "scene model/mesh material assignment references unknown slot {}",
+                slot_id.raw()
+            ));
+        }
+        if self.model_mesh_region_slots.get(&material_region).copied() == Some(slot_id) {
+            return Ok(());
+        }
+        self.model_mesh_region_slots
+            .insert(material_region, slot_id);
+        self.bump_revision();
+        Ok(())
+    }
+
     pub fn resolve_material_slot_for_sdf_primitive(
         &self,
         primitive: SdfPrimitiveSourceId,
     ) -> SceneMaterialResolution {
         self.resolve_material_binding_for_sdf_scene_packet(primitive)
+            .0
+    }
+
+    pub fn resolve_material_slot_for_model_mesh_region(
+        &self,
+        material_region: &SceneModelMeshMaterialRegionSourceId,
+    ) -> SceneMaterialResolution {
+        self.resolve_material_binding_for_model_mesh_region(material_region)
             .0
     }
 
@@ -371,6 +517,79 @@ impl SceneMaterialAssignmentState {
                     format!(
                         "SDF primitive {} references missing material slot {}; using default slot {}",
                         primitive.entity_id().0,
+                        requested_slot_id.raw(),
+                        default_slot_id.raw()
+                    ),
+                )],
+            )
+        };
+        let material_table_index = self.material_table_index_for_slot(resolved_slot_id);
+        let Some(slot) = self
+            .palette
+            .slots
+            .iter()
+            .find(|slot| slot.slot_id == resolved_slot_id)
+        else {
+            return (
+                SceneMaterialResolution {
+                    requested_slot_id,
+                    resolved_slot_id: default_slot_id,
+                    material_table_index: 0,
+                    used_default_fallback: true,
+                },
+                diagnostics,
+            );
+        };
+        if slot.source_ref.is_none() && slot.material_asset_id.is_none() && !slot.is_default {
+            diagnostics.push(SceneMaterialBindingDiagnostic::new(
+                SceneMaterialBindingDiagnosticCode::MissingMaterialSource,
+                SceneMaterialBindingDiagnosticSubject::MaterialSlot(slot.slot_id),
+                format!(
+                    "scene material slot {} has no stable material source reference",
+                    slot.slot_id.raw()
+                ),
+            ));
+        }
+        (
+            SceneMaterialResolution {
+                requested_slot_id,
+                resolved_slot_id,
+                material_table_index,
+                used_default_fallback,
+            },
+            diagnostics,
+        )
+    }
+
+    pub fn resolve_material_binding_for_model_mesh_region(
+        &self,
+        material_region: &SceneModelMeshMaterialRegionSourceId,
+    ) -> (SceneMaterialResolution, Vec<SceneMaterialBindingDiagnostic>) {
+        let requested_slot_id = self
+            .model_mesh_region_slots
+            .get(material_region)
+            .copied()
+            .unwrap_or_else(|| self.palette.default_slot().slot_id);
+        let default_slot_id = self.palette.default_slot().slot_id;
+        let (resolved_slot_id, used_default_fallback, mut diagnostics) = if self
+            .palette
+            .contains_slot(requested_slot_id)
+        {
+            (requested_slot_id, false, Vec::new())
+        } else {
+            (
+                default_slot_id,
+                true,
+                vec![SceneMaterialBindingDiagnostic::new(
+                    SceneMaterialBindingDiagnosticCode::MissingAssignedSlot,
+                    SceneMaterialBindingDiagnosticSubject::ModelMeshMaterialRegion(
+                        material_region.clone(),
+                    ),
+                    format!(
+                        "model/mesh material region {}:{}:{} references missing material slot {}; using default slot {}",
+                        material_region.model_mesh_source_id.asset_id.raw(),
+                        material_region.model_mesh_source_id.source_id.raw(),
+                        material_region.material_region_id.key(),
                         requested_slot_id.raw(),
                         default_slot_id.raw()
                     ),
@@ -457,6 +676,21 @@ impl SceneMaterialAssignmentState {
                 assignment.slot_id.raw()
             ));
         }
+        for assignment in self.model_mesh_assignments() {
+            let source = &assignment.material_region.model_mesh_source_id;
+            identity.push_str(&format!(
+                "|model_mesh=asset:{}:source:{}:source_revision_id={}:source_revision={}:region={}:slot={}",
+                source.asset_id.raw(),
+                source.source_id.raw(),
+                source
+                    .source_revision_id
+                    .map(|revision| revision.raw().to_string())
+                    .unwrap_or_default(),
+                source.source_revision.as_deref().unwrap_or_default(),
+                assignment.material_region.material_region_id.key(),
+                assignment.slot_id.raw()
+            ));
+        }
         identity
     }
 
@@ -465,10 +699,30 @@ impl SceneMaterialAssignmentState {
     }
 }
 
+fn is_transient_mesh_material_region_key(region_key: &str) -> bool {
+    let normalized = region_key.to_ascii_lowercase();
+    [
+        "entity:",
+        "ecs:",
+        "renderable:",
+        "renderable_index:",
+        "renderer:",
+        "draw:",
+        "residency:",
+        "palette:",
+        "display:",
+        "ui:",
+        "artifact:",
+        "generated:",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asset::asset_id;
+    use asset::{asset_id, asset_source_id, asset_source_revision_id};
 
     #[test]
     fn palette_requires_exactly_one_default_slot() {
@@ -570,6 +824,76 @@ mod tests {
     }
 
     #[test]
+    fn model_mesh_material_assignment_survives_save_reload() {
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Imported body")
+                .with_material_asset(asset_id(7)),
+        ])
+        .expect("valid palette");
+        let material_region = model_mesh_region("body");
+        let mut saved_state =
+            SceneMaterialAssignmentState::new_with_model_mesh_assignments(palette, [], [])
+                .expect("state");
+
+        saved_state
+            .assign_model_mesh_material_slot(material_region.clone(), SceneMaterialSlotId::new(2))
+            .expect("assign material");
+
+        let saved_palette = saved_state.palette.clone();
+        let saved_model_assignments = saved_state.model_mesh_assignments().collect::<Vec<_>>();
+        let reloaded_state = SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+            saved_palette,
+            [],
+            saved_model_assignments,
+        )
+        .expect("reload");
+
+        let resolution =
+            reloaded_state.resolve_material_slot_for_model_mesh_region(&material_region);
+        assert_eq!(resolution.resolved_slot_id, SceneMaterialSlotId::new(2));
+        assert_eq!(resolution.material_table_index, 1);
+    }
+
+    #[test]
+    fn model_mesh_material_table_identity_changes_when_assignment_changes() {
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Body red")
+                .with_material_asset(asset_id(7)),
+            SceneMaterialSlot::new(SceneMaterialSlotId::new(3), "Body blue")
+                .with_material_asset(asset_id(8)),
+        ])
+        .expect("valid palette");
+        let material_region = model_mesh_region("body");
+        let mut state =
+            SceneMaterialAssignmentState::new_with_model_mesh_assignments(palette, [], [])
+                .expect("state");
+
+        state
+            .assign_model_mesh_material_slot(material_region.clone(), SceneMaterialSlotId::new(2))
+            .expect("assign material");
+        let red_identity = state.material_table_identity();
+        state
+            .assign_model_mesh_material_slot(material_region.clone(), SceneMaterialSlotId::new(3))
+            .expect("reassign material");
+        let blue_identity = state.material_table_identity();
+
+        assert_ne!(red_identity, blue_identity);
+        assert!(blue_identity.contains("model_mesh=asset:42:source:84"));
+        assert!(blue_identity.contains("region=body"));
+        assert!(blue_identity.contains("slot=3"));
+    }
+
+    #[test]
+    fn model_mesh_material_region_rejects_transient_identity() {
+        let error = SceneMeshMaterialRegionId::new("renderable_index:7")
+            .expect_err("transient renderer identity should fail");
+
+        assert!(error.contains("transient runtime identity"));
+    }
+
+    #[test]
     fn scene_material_slot_does_not_store_generated_artifact_truth() {
         let slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Rock")
             .with_material_asset(asset_id(7));
@@ -636,5 +960,13 @@ mod tests {
         let resolution = reloaded_state.resolve_material_slot_for_sdf_primitive(primitive);
         assert_eq!(resolution.resolved_slot_id, SceneMaterialSlotId::new(2));
         assert_eq!(resolution.material_table_index, 1);
+    }
+
+    fn model_mesh_region(region_key: &str) -> SceneModelMeshMaterialRegionSourceId {
+        SceneModelMeshMaterialRegionSourceId::new(
+            SceneModelMeshSourceId::new(asset_id(42), asset_source_id(84))
+                .with_source_revision_id(asset_source_revision_id(2)),
+            SceneMeshMaterialRegionId::new(region_key).expect("stable region key"),
+        )
     }
 }

@@ -4,20 +4,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID,
-    TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID,
-    TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
+    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID,
+    MODELLING_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID, TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
+    TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
+    TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MATERIALS_WORKSPACE_WIDGET_ID,
     TOOLBAR_MENU_POPUP_LIST_WIDGET_ID, TOOLBAR_MENU_POPUP_SCROLL_WIDGET_ID,
     TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID, TOOLBAR_ROOT_WIDGET_ID,
     TOOLBAR_ROW_WIDGET_ID, TOOLBAR_ROWS_WIDGET_ID, TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
     TOOLBAR_SCROLL_WIDGET_ID, TOOLBAR_SEPARATOR_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID,
-    ToolbarViewModel, WorkspaceProfileId, toolbar_menu_item_widget_id,
+    ToolbarViewModel, WidgetId, WorkspaceProfileId, toolbar_menu_item_widget_id,
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id,
 };
+use editor_core::ToolId;
 use editor_definition::{EditorDefinitionBindings, EditorToolbarBinding};
 use ui_definition::{
-    AuthoredUiNodePath, AuthoredUiTemplate, FormedChromeSlot, FormedInteractionModel,
+    AuthoredId, AuthoredUiNodePath, AuthoredUiTemplate, FormedChromeSlot, FormedInteractionModel,
     FormedMenuSizing, FormedMenuStackScope, FormedRetainedUiProduct, FormedScrollOwner,
     FormedUiRoute, NormalizedUiTemplate, UiAvailability, UiAvailabilityBinding,
     UiChromeSlotInputPolicyDefinition, UiChromeSlotKindDefinition, UiDefinitionContext,
@@ -37,6 +39,70 @@ use super::surface_definition_context::contrast_popup_theme;
 const TOOLBAR_TEMPLATE_RON: &str = include_str!("../../../../../assets/editor/ui/toolbar.ron");
 const EDITOR_BINDINGS_RON: &str =
     include_str!("../../../../../assets/editor/ui/editor_bindings.ron");
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolbarWorkspaceButtonDefinition {
+    pub profile_id: WorkspaceProfileId,
+    pub tool_id: ToolId,
+    pub widget_id: WidgetId,
+    pub stable_name: &'static str,
+    pub label: &'static str,
+    pub activate_route: &'static str,
+    pub close_route: &'static str,
+    pub menu_item_tool_id: ToolId,
+    pub menu_item_stable_name: &'static str,
+}
+
+const TOOLBAR_WORKSPACE_BUTTON_DEFINITIONS: [ToolbarWorkspaceButtonDefinition; 4] = [
+    ToolbarWorkspaceButtonDefinition {
+        profile_id: SCENE_WORKSPACE_PROFILE_ID,
+        tool_id: ToolId(3_001),
+        widget_id: TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
+        stable_name: "workspace_scene",
+        label: "Scene",
+        activate_route: "editor.workspace.scene.activate",
+        close_route: "editor.workspace.scene.close",
+        menu_item_tool_id: ToolId(2_400),
+        menu_item_stable_name: "workspace_menu_scene",
+    },
+    ToolbarWorkspaceButtonDefinition {
+        profile_id: MODELLING_WORKSPACE_PROFILE_ID,
+        tool_id: ToolId(3_002),
+        widget_id: TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
+        stable_name: "workspace_modelling",
+        label: "Modelling",
+        activate_route: "editor.workspace.modelling.activate",
+        close_route: "editor.workspace.modelling.close",
+        menu_item_tool_id: ToolId(2_401),
+        menu_item_stable_name: "workspace_menu_modelling",
+    },
+    ToolbarWorkspaceButtonDefinition {
+        profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+        tool_id: ToolId(3_004),
+        widget_id: TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
+        stable_name: "workspace_editor_design",
+        label: "Editor Design",
+        activate_route: "editor.workspace.editor_design.activate",
+        close_route: "editor.workspace.editor_design.close",
+        menu_item_tool_id: ToolId(2_402),
+        menu_item_stable_name: "workspace_menu_editor_design",
+    },
+    ToolbarWorkspaceButtonDefinition {
+        profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+        tool_id: ToolId(3_005),
+        widget_id: TOOLBAR_MATERIALS_WORKSPACE_WIDGET_ID,
+        stable_name: "workspace_materials",
+        label: "Materials",
+        activate_route: "editor.workspace.materials.activate",
+        close_route: "editor.workspace.materials.close",
+        menu_item_tool_id: ToolId(2_403),
+        menu_item_stable_name: "workspace_menu_materials",
+    },
+];
+
+pub fn toolbar_workspace_button_definitions() -> &'static [ToolbarWorkspaceButtonDefinition] {
+    &TOOLBAR_WORKSPACE_BUTTON_DEFINITIONS
+}
 
 pub fn build_defined_toolbar(
     view_model: &ToolbarViewModel,
@@ -304,48 +370,52 @@ fn insert_dynamic_workspace_buttons(
     view_model: &ToolbarViewModel,
     theme: &ThemeTokens,
 ) {
-    let Some(editor_design) = view_model
-        .buttons
-        .iter()
-        .find(|button| button.stable_name == "workspace_editor_design")
-    else {
-        return;
-    };
-    let Some(row) = find_node_mut(&mut product.root, TOOLBAR_ROW_WIDGET_ID) else {
-        return;
-    };
-    if row
-        .children
-        .iter()
-        .any(|child| child.id == TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID)
-    {
-        return;
+    for definition in toolbar_workspace_button_definitions() {
+        let Some(view_button) = view_model
+            .buttons
+            .iter()
+            .find(|button| button.stable_name == definition.stable_name)
+        else {
+            continue;
+        };
+        let Some(row) = find_node_mut(&mut product.root, TOOLBAR_ROW_WIDGET_ID) else {
+            return;
+        };
+        if row
+            .children
+            .iter()
+            .any(|child| child.id == definition.widget_id)
+        {
+            continue;
+        }
+        let mut node = button_selected(
+            definition.widget_id,
+            view_button.label.clone(),
+            theme.body_small_text_style(FontId(1)),
+            theme.clone(),
+            view_button.is_active,
+        );
+        if let UiNodeKind::Button(button) = &mut node.kind {
+            button.enabled = view_button.enabled;
+        }
+        let insert_at = row
+            .children
+            .iter()
+            .position(|child| child.id == TOOLBAR_ADD_WORKSPACE_WIDGET_ID)
+            .unwrap_or(row.children.len());
+        row.children.insert(insert_at, node);
+        product.routes_by_widget_id.insert(
+            definition.widget_id,
+            FormedUiRoute::RouteSlot(UiRouteSlotId::new(definition.activate_route)),
+        );
+        product.paths_by_widget_id.insert(
+            definition.widget_id,
+            AuthoredUiNodePath(format!(
+                "root/scroll/rows/top_row/{}",
+                definition.stable_name
+            )),
+        );
     }
-    let mut node = button_selected(
-        TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
-        editor_design.label.clone(),
-        theme.body_small_text_style(FontId(1)),
-        theme.clone(),
-        editor_design.is_active,
-    );
-    if let UiNodeKind::Button(button) = &mut node.kind {
-        button.enabled = editor_design.enabled;
-    }
-    let insert_at = row
-        .children
-        .iter()
-        .position(|child| child.id == TOOLBAR_ADD_WORKSPACE_WIDGET_ID)
-        .unwrap_or(row.children.len());
-    row.children.insert(insert_at, node);
-    let route = UiRouteSlotId::new("editor.workspace.editor_design.activate");
-    product.routes_by_widget_id.insert(
-        TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
-        FormedUiRoute::RouteSlot(route),
-    );
-    product.paths_by_widget_id.insert(
-        TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
-        AuthoredUiNodePath("root/scroll/rows/top_row/workspace_editor_design".to_string()),
-    );
 }
 
 fn find_node_mut(node: &mut UiNode, widget_id: ui_tree::WidgetId) -> Option<&mut UiNode> {
@@ -370,23 +440,9 @@ fn project_workspace_close_buttons(
         .iter()
         .filter(|button| workspace_profile_for_stable_name(button.stable_name).is_some())
         .count();
-    for (profile_id, anchor_widget_id, route) in [
-        (
-            SCENE_WORKSPACE_PROFILE_ID,
-            TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
-            "editor.workspace.scene.close",
-        ),
-        (
-            MODELLING_WORKSPACE_PROFILE_ID,
-            TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
-            "editor.workspace.modelling.close",
-        ),
-        (
-            EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-            TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
-            "editor.workspace.editor_design.close",
-        ),
-    ] {
+    for definition in toolbar_workspace_button_definitions() {
+        let profile_id = definition.profile_id;
+        let anchor_widget_id = definition.widget_id;
         let close_widget_id = toolbar_workspace_close_widget_id(profile_id);
         let Some(row) = find_node_mut(&mut product.root, TOOLBAR_ROW_WIDGET_ID) else {
             return;
@@ -448,11 +504,14 @@ fn project_workspace_close_buttons(
         );
         product.routes_by_widget_id.insert(
             close_widget_id,
-            FormedUiRoute::RouteSlot(UiRouteSlotId::new(route)),
+            FormedUiRoute::RouteSlot(UiRouteSlotId::new(definition.close_route)),
         );
         product.paths_by_widget_id.insert(
             close_widget_id,
-            AuthoredUiNodePath(format!("root/scroll/rows/top_row/{route}")),
+            AuthoredUiNodePath(format!(
+                "root/scroll/rows/top_row/{}:close",
+                definition.stable_name
+            )),
         );
     }
 }
@@ -502,12 +561,10 @@ fn push_workspace_chrome_slots(
 }
 
 fn workspace_profile_for_stable_name(name: &str) -> Option<WorkspaceProfileId> {
-    match name {
-        "workspace_scene" => Some(SCENE_WORKSPACE_PROFILE_ID),
-        "workspace_modelling" => Some(MODELLING_WORKSPACE_PROFILE_ID),
-        "workspace_editor_design" => Some(EDITOR_DESIGN_WORKSPACE_PROFILE_ID),
-        _ => None,
-    }
+    toolbar_workspace_button_definitions()
+        .iter()
+        .find(|definition| definition.stable_name == name)
+        .map(|definition| definition.profile_id)
 }
 
 fn workspace_button_is_active(
@@ -597,18 +654,6 @@ fn register_toolbar_widget_ids(context: &mut UiDefinitionContext) {
             TOOLBAR_SEPARATOR_WIDGET_ID,
         ),
         (
-            "root/scroll/rows/top_row/workspace_scene",
-            TOOLBAR_SCENE_WORKSPACE_WIDGET_ID,
-        ),
-        (
-            "root/scroll/rows/top_row/workspace_modelling",
-            TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
-        ),
-        (
-            "root/scroll/rows/top_row/workspace_editor_design",
-            TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID,
-        ),
-        (
             "root/scroll/rows/top_row/workspace_plus",
             TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
         ),
@@ -617,6 +662,15 @@ fn register_toolbar_widget_ids(context: &mut UiDefinitionContext) {
         context
             .widget_ids_by_path
             .insert(AuthoredUiNodePath(path.to_string()), widget_id);
+    }
+    for definition in toolbar_workspace_button_definitions() {
+        context.widget_ids_by_path.insert(
+            AuthoredUiNodePath(format!(
+                "root/scroll/rows/top_row/{}",
+                definition.stable_name
+            )),
+            definition.widget_id,
+        );
     }
 }
 
@@ -644,18 +698,15 @@ fn populate_toolbar_values(context: &mut UiDefinitionContext, view_model: &Toolb
         "editor.toolbar.menu.workspace.active".into(),
         UiValue::Bool(active("workspace_plus")),
     );
-    context.values.insert(
-        "editor.workspace.scene.active".into(),
-        UiValue::Bool(active("workspace_scene")),
-    );
-    context.values.insert(
-        "editor.workspace.modelling.active".into(),
-        UiValue::Bool(active("workspace_modelling")),
-    );
-    context.values.insert(
-        "editor.workspace.editor_design.active".into(),
-        UiValue::Bool(active("workspace_editor_design")),
-    );
+    for definition in toolbar_workspace_button_definitions() {
+        context.values.insert(
+            AuthoredId::new(format!(
+                "{}.active",
+                definition.activate_route.trim_end_matches(".activate")
+            )),
+            UiValue::Bool(active(definition.stable_name)),
+        );
+    }
     context.values.insert(
         "editor.tool.select.active".into(),
         UiValue::Bool(active("select")),

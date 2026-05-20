@@ -32,10 +32,11 @@ use crate::workspace::{
 };
 use crate::{
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-    FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID,
-    PanelInstanceId, PanelKind, ROOT_WIDGET_ID, SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction,
-    SurfaceProviderId, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolSurfaceStableKey, ToolbarCommandKind, ToolbarMenuKind, VIEWPORT_CANVAS_WIDGET_ID,
+    FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
+    MODELLING_WORKSPACE_PROFILE_ID, PanelInstanceId, PanelKind, ROOT_WIDGET_ID,
+    SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId,
+    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceKind, ToolSurfaceStableKey,
+    ToolbarCommandKind, ToolbarMenuKind, VIEWPORT_CANVAS_WIDGET_ID,
     VIEWPORT_DETAILS_LABEL_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
     VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID,
     VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID,
@@ -1971,6 +1972,14 @@ fn toolbar_action_for_route_slot(route: &str) -> Option<RoutedShellAction> {
             profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
             enabled: true,
         }),
+        "editor.workspace.materials.activate" => Some(RoutedShellAction::SwitchWorkspaceProfile {
+            profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
+        "editor.workspace.materials.close" => Some(RoutedShellAction::CloseWorkspaceProfile {
+            profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        }),
         "editor.workspace.create" => Some(RoutedShellAction::RunToolbarCommand {
             command: ToolbarCommandKind::AddWorkspace,
             enabled: true,
@@ -2009,6 +2018,9 @@ fn toolbar_action_for_route_slot(route: &str) -> Option<RoutedShellAction> {
         )),
         "editor.toolbar.window.load_modelling_workspace" => Some(toolbar_command_action(
             ToolbarCommandKind::LoadWorkspaceProfile(MODELLING_WORKSPACE_PROFILE_ID),
+        )),
+        "editor.toolbar.window.load_materials_workspace" => Some(toolbar_command_action(
+            ToolbarCommandKind::LoadWorkspaceProfile(MATERIAL_WORKSPACE_PROFILE_ID),
         )),
         "editor.toolbar.window.load_custom_workspace" => Some(toolbar_command_action(
             ToolbarCommandKind::LoadCustomWorkspace,

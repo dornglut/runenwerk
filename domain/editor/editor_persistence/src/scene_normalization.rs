@@ -11,14 +11,45 @@ use crate::{
 pub enum SceneNormalizationError {
     UnsupportedVersion(u32),
     DuplicateEntityId(u64),
-    MissingParent { entity_id: u64, parent_id: u64 },
-    CyclicParentReference { entity_id: u64 },
+    MissingParent {
+        entity_id: u64,
+        parent_id: u64,
+    },
+    CyclicParentReference {
+        entity_id: u64,
+    },
     MissingDefaultMaterialSlot,
     DuplicateMaterialSlotId(u64),
     DuplicateMaterialPaletteEntryId(u64),
     DuplicateSdfMaterialAssignment(u64),
-    MaterialAssignmentReferencesMissingEntity { entity_id: u64 },
-    MaterialAssignmentReferencesMissingSlot { entity_id: u64, slot_id: u64 },
+    DuplicateModelMeshMaterialAssignment {
+        asset_id: u64,
+        source_id: u64,
+        material_region_key: String,
+    },
+    MaterialAssignmentReferencesMissingEntity {
+        entity_id: u64,
+    },
+    MaterialAssignmentReferencesMissingSlot {
+        entity_id: u64,
+        slot_id: u64,
+    },
+    ModelMeshMaterialAssignmentReferencesMissingSlot {
+        asset_id: u64,
+        source_id: u64,
+        material_region_key: String,
+        slot_id: u64,
+    },
+    InvalidModelMeshMaterialSourceIdentity {
+        asset_id: u64,
+        source_id: u64,
+        material_region_key: String,
+    },
+    InvalidModelMeshMaterialRegionIdentity {
+        asset_id: u64,
+        source_id: u64,
+        material_region_key: String,
+    },
 }
 
 impl SceneNormalizationError {
@@ -42,11 +73,23 @@ impl SceneNormalizationError {
             Self::DuplicateSdfMaterialAssignment(_) => {
                 "scene normalization found duplicate SDF material assignments"
             }
+            Self::DuplicateModelMeshMaterialAssignment { .. } => {
+                "scene normalization found duplicate model/mesh material assignments"
+            }
             Self::MaterialAssignmentReferencesMissingEntity { .. } => {
                 "scene normalization found material assignment for missing SDF primitive entity"
             }
             Self::MaterialAssignmentReferencesMissingSlot { .. } => {
                 "scene normalization found material assignment for missing material slot"
+            }
+            Self::ModelMeshMaterialAssignmentReferencesMissingSlot { .. } => {
+                "scene normalization found model/mesh material assignment for missing material slot"
+            }
+            Self::InvalidModelMeshMaterialSourceIdentity { .. } => {
+                "scene normalization found invalid model/mesh material source identity"
+            }
+            Self::InvalidModelMeshMaterialRegionIdentity { .. } => {
+                "scene normalization found invalid model/mesh material region identity"
             }
         }
     }
@@ -191,7 +234,80 @@ fn normalize_material_assignments(
         }
     }
 
+    let mut model_mesh_assignments = BTreeSet::new();
+    for assignment in &material_assignments.model_mesh_assignments {
+        let source = &assignment.model_mesh_source;
+        if source.asset_id == 0 || source.source_id == 0 || source.source_revision_id == Some(0) {
+            return Err(
+                SceneNormalizationError::InvalidModelMeshMaterialSourceIdentity {
+                    asset_id: source.asset_id,
+                    source_id: source.source_id,
+                    material_region_key: assignment.material_region_key.clone(),
+                },
+            );
+        }
+        if !is_stable_model_mesh_material_region_key(&assignment.material_region_key) {
+            return Err(
+                SceneNormalizationError::InvalidModelMeshMaterialRegionIdentity {
+                    asset_id: source.asset_id,
+                    source_id: source.source_id,
+                    material_region_key: assignment.material_region_key.clone(),
+                },
+            );
+        }
+        let assignment_key = (
+            source.asset_id,
+            source.source_id,
+            source.source_revision_id,
+            source.source_revision.clone(),
+            assignment.material_region_key.clone(),
+        );
+        if !model_mesh_assignments.insert(assignment_key) {
+            return Err(
+                SceneNormalizationError::DuplicateModelMeshMaterialAssignment {
+                    asset_id: source.asset_id,
+                    source_id: source.source_id,
+                    material_region_key: assignment.material_region_key.clone(),
+                },
+            );
+        }
+        if !slot_ids.contains(&assignment.slot_id) {
+            return Err(
+                SceneNormalizationError::ModelMeshMaterialAssignmentReferencesMissingSlot {
+                    asset_id: source.asset_id,
+                    source_id: source.source_id,
+                    material_region_key: assignment.material_region_key.clone(),
+                    slot_id: assignment.slot_id,
+                },
+            );
+        }
+    }
+
     Ok(material_assignments)
+}
+
+fn is_stable_model_mesh_material_region_key(region_key: &str) -> bool {
+    let trimmed = region_key.trim();
+    if trimmed.is_empty() || trimmed != region_key {
+        return false;
+    }
+    let normalized = region_key.to_ascii_lowercase();
+    ![
+        "entity:",
+        "ecs:",
+        "renderable:",
+        "renderable_index:",
+        "renderer:",
+        "draw:",
+        "residency:",
+        "palette:",
+        "display:",
+        "ui:",
+        "artifact:",
+        "generated:",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
 }
 
 #[cfg(test)]
@@ -385,5 +501,104 @@ mod tests {
             error,
             SceneNormalizationError::MaterialAssignmentReferencesMissingEntity { entity_id: 99 }
         ));
+    }
+
+    #[test]
+    fn model_mesh_material_assignment_rejects_transient_identity() {
+        let scene = SceneFileV2 {
+            version: SCENE_FILE_VERSION_V2,
+            entities: Vec::new(),
+            material_assignments: SceneMaterialAssignmentsRecord::new_with_model_mesh_assignments(
+                [crate::SceneMaterialSlotRecord::default_generated()],
+                [],
+                [crate::ModelMeshMaterialSlotAssignmentRecord::new(
+                    crate::SceneModelMeshSourceRecord::new(7, 9),
+                    "renderable_index:4",
+                    1,
+                )],
+            ),
+        };
+
+        let error = normalize_scene_file(scene).expect_err("normalization should fail");
+        assert!(matches!(
+            error,
+            SceneNormalizationError::InvalidModelMeshMaterialRegionIdentity {
+                asset_id: 7,
+                source_id: 9,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn normalize_scene_file_validates_and_sorts_model_mesh_material_assignments() {
+        let scene = SceneFileV2 {
+            version: SCENE_FILE_VERSION_V2,
+            entities: Vec::new(),
+            material_assignments: SceneMaterialAssignmentsRecord::new_with_model_mesh_assignments(
+                [
+                    crate::SceneMaterialSlotRecord::default_generated(),
+                    crate::SceneMaterialSlotRecord {
+                        slot_id: 2,
+                        palette_entry_id: 2,
+                        display_name: "Body".to_string(),
+                        source_ref: None,
+                        material_asset_id: None,
+                        is_default: false,
+                    },
+                ],
+                [],
+                [
+                    crate::ModelMeshMaterialSlotAssignmentRecord::new(
+                        crate::SceneModelMeshSourceRecord::new(8, 9),
+                        "wheels",
+                        2,
+                    ),
+                    crate::ModelMeshMaterialSlotAssignmentRecord::new(
+                        crate::SceneModelMeshSourceRecord::new(7, 9),
+                        "body",
+                        1,
+                    ),
+                ],
+            ),
+        };
+
+        let normalized = normalize_scene_file(scene).expect("normalization should succeed");
+
+        assert_eq!(
+            normalized.material_assignments().model_mesh_assignments[0].material_region_key,
+            "body"
+        );
+        assert_eq!(
+            normalized.material_assignments().model_mesh_assignments[1].material_region_key,
+            "wheels"
+        );
+    }
+
+    #[test]
+    fn model_mesh_assignment_duplicate_check_includes_textual_source_revision() {
+        let scene = SceneFileV2 {
+            version: SCENE_FILE_VERSION_V2,
+            entities: Vec::new(),
+            material_assignments: SceneMaterialAssignmentsRecord::new_with_model_mesh_assignments(
+                [crate::SceneMaterialSlotRecord::default_generated()],
+                [],
+                [
+                    crate::ModelMeshMaterialSlotAssignmentRecord::new(
+                        crate::SceneModelMeshSourceRecord::new(7, 9).with_source_revision("a"),
+                        "body",
+                        1,
+                    ),
+                    crate::ModelMeshMaterialSlotAssignmentRecord::new(
+                        crate::SceneModelMeshSourceRecord::new(7, 9).with_source_revision("b"),
+                        "body",
+                        1,
+                    ),
+                ],
+            ),
+        };
+
+        normalize_scene_file(scene)
+            .expect("textual source revision participates in stable source identity");
     }
 }

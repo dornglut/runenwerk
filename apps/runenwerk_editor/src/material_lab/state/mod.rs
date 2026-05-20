@@ -4,6 +4,7 @@ use asset::{
     ArtifactCacheKey, ArtifactPayloadKind, ArtifactValidity, AssetArtifactId, AssetCatalog,
     AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetId, AssetKind, AssetSourceId,
 };
+use editor_scene::SceneMaterialAssignmentState;
 use editor_shell::{
     MaterialDiagnosticRowViewModel, MaterialDiagnosticSeverity, MaterialGraphCanvasViewModel,
     MaterialGraphEdgeViewModel, MaterialGraphEditorViewModel, MaterialGraphGroupViewModel,
@@ -12,13 +13,16 @@ use editor_shell::{
     MaterialGraphSourceDetailViewModel, MaterialGraphSourceRowViewModel,
     MaterialGraphToolbarViewModel, MaterialGraphValidationOverlayViewModel,
     MaterialGraphValidationSeverity, MaterialInspectorViewModel,
+    MaterialModelMeshPreviewRegionViewModel, MaterialModelMeshPreviewStatusKind,
+    MaterialModelMeshPreviewViewModel, MaterialModelMeshRegionBindingViewModel,
     MaterialNodePaletteCategoryViewModel, MaterialNodePaletteItemViewModel,
     MaterialNodePaletteViewModel, MaterialNodePickerViewModel,
     MaterialPreviewPublicationStatusKind, MaterialPreviewStatusKind,
     MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
     MaterialResourceBindingDiagnosticViewModel, MaterialResourceBindingStatusKind,
-    MaterialShortcutAction, MaterialTextureResourceOptionViewModel,
-    MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel,
+    MaterialSceneMaterialSlotOptionViewModel, MaterialShortcutAction,
+    MaterialTextureResourceOptionViewModel, MaterialTextureResourcePickerViewModel,
+    MaterialUndoRedoViewModel,
 };
 use editor_viewport::ExpressionProductId;
 use material_graph::{FormedMaterialProduct, MaterialProductId, MaterialResourceBinding};
@@ -28,11 +32,13 @@ use crate::material_lab::{
     MaterialRendererParameterProfile, PreviewSceneProduct, PreviewSceneProductDiagnostic,
     PreviewSceneProductMode, PreviewSceneProductRequestIdentity, ResolvedMaterialResource,
     material_document_id_for_source, material_parameter_payload,
-    material_preview_expression_product_id, material_resource_binding_diagnostic_row,
+    material_preview_expression_product_id, material_preview_scene_surface_view_model,
+    material_resource_binding_diagnostic_row,
 };
 
 mod diagnostics;
 mod graph_projection;
+mod model_mesh_preview_projection;
 mod picker_projection;
 mod preview_status;
 mod runtime;

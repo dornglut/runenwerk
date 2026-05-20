@@ -5,14 +5,14 @@ status: active
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-05-18
+last_reviewed: 2026-05-20
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
   - ../../adr/accepted/0006-editor-surface-provider-plugin-seam.md
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
-  - ../../adr/proposed/editor-tool-suite-registry-and-provider-owned-routing.md
+  - ../../adr/accepted/0012-capability-workbench-clean-break.md
 related_designs:
   - ./editor-ui-workspace-tool-surface-architecture.md
   - ./material-lab-and-material-preview-design.md
@@ -38,6 +38,10 @@ moving domain semantics into the shell.
 A Workbench Host is a runnable app composition that installs one or more suites
 and supplies concrete app-owned IO, provider implementations, runtime adapters,
 and execution bridges.
+
+ADR 0012 makes this design a clean break for Workbench identity. Legacy
+`ToolSurfaceKind` and persisted surface-kind compatibility are not migration
+authorities for the Capability Workbench Platform track.
 
 Provider-Owned Routing means the shell hosts routes structurally, but providers
 map provider-local interactions into typed command proposals. The shell remains
@@ -116,6 +120,7 @@ A tool suite may contribute:
 
 - stable tool-suite id;
 - stable surface keys;
+- typed suite, surface, profile, and provider handles;
 - surface definitions;
 - provider family definitions;
 - workspace/profile contributions;
@@ -134,6 +139,10 @@ A tool suite must not own:
 - runtime execution authority;
 - persistence authority outside stable key descriptors;
 - global mutable registries.
+
+Old workspace layouts that require legacy surface-kind fields are unsupported
+under this design. They should fail with a clear unsupported-schema diagnostic
+instead of being migrated through compatibility metadata.
 
 Canonical PlantUML source for startup and provider resolution:
 [diagrams/editor-tool-suite-registration-flow.puml](diagrams/editor-tool-suite-registration-flow.puml).
@@ -437,6 +446,18 @@ Standalone apps must not depend on `apps/runenwerk_editor` internals. Shared
 app-neutral contracts belong in `domain/editor/editor_shell` or dedicated
 reusable app-support crates. Concrete app composition remains in `apps/*`.
 
+Current implementation note: `apps/runenwerk_editor/src/shell/workbench_host.rs`
+exposes named full-editor and Material Lab workbench compositions. The Material
+Lab composition installs editor core, assets, diagnostics, texture, and
+Material Lab suites, then pairs them with the app-owned material-focused
+provider registry. The `runenwerk_material_lab` binary starts that composition
+as a dedicated workbench and bootstraps the default Material workspace profile
+through
+`apps/runenwerk_editor/src/shell/state.rs::RunenwerkEditorShellState::new_for_workspace_profile_with_tool_surface_registry`.
+This is the compiled-in app composition boundary for a standalone Material Lab
+workbench; shared app-support crate extraction remains future work and must not
+be faked by forking `apps/runenwerk_editor` internals.
+
 Canonical PlantUML source for workbench compositions:
 [diagrams/workbench-host-compositions.puml](diagrams/workbench-host-compositions.puml).
 
@@ -603,6 +624,14 @@ Status: WorkbenchHost composition wrapper introduced.
   preserving current enum-backed provider resolution;
 - keep provider-family filtering, stable-key-only live identity, dynamic
   plugins, and standalone WorkbenchHost variants as future work.
+
+Post-migration extension: `RunenwerkWorkbenchHost` now also exposes an app-owned
+Material Lab composition that installs only the material-support suite set and
+matching provider registry. `apps/runenwerk_editor/src/runtime/app.rs` wires
+that composition into a dedicated `runenwerk_material_lab` binary. This
+satisfies the compiled-in standalone workbench composition boundary; dynamic
+plugins, external workbench packaging, and separate shared app-support crates
+remain deferred.
 
 ### Phase 7: Suite Ownership and Stable-Key Coverage
 

@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use asset::{
     ArtifactPayloadKind, AssetArtifactDescriptor, AssetArtifactId, AssetDiagnosticCode,
-    AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetKind, AssetSourceDescriptor, ImportPlan,
-    ImportSettings, try_preserve_prior_valid_artifact,
+    AssetDiagnosticRecord, AssetDiagnosticSeverity, AssetKind, AssetSourceDescriptor,
+    ForeignMeshMaterialRegionDescriptor, ImportPlan, ImportSettings,
+    try_preserve_prior_valid_artifact,
 };
 use texture::{
     TextureChannelLayout, TextureColorSpace, TextureCompression, TextureDescriptor,
@@ -165,11 +166,32 @@ fn payload_kind_for_import(
         AssetKind::UiDefinition => ArtifactPayloadKind::UiDefinition,
         AssetKind::ForeignMeshReferenceSource | AssetKind::ForeignMeshReferenceArtifact => {
             ArtifactPayloadKind::ForeignReference {
-                format: format!("{kind:?}"),
+                format: foreign_reference_format(kind, settings),
+                material_regions: foreign_mesh_material_regions_for_import(kind),
             }
         }
         _ => ArtifactPayloadKind::DiagnosticCapture,
     }
+}
+
+fn foreign_reference_format(kind: AssetKind, settings: &ImportSettings) -> String {
+    match settings {
+        ImportSettings::ForeignBlend { export_format, .. } => export_format.clone(),
+        ImportSettings::ForeignGltf => "gltf".to_string(),
+        _ => format!("{kind:?}"),
+    }
+}
+
+fn foreign_mesh_material_regions_for_import(
+    kind: AssetKind,
+) -> Vec<ForeignMeshMaterialRegionDescriptor> {
+    if kind != AssetKind::ForeignMeshReferenceArtifact {
+        return Vec::new();
+    }
+    vec![ForeignMeshMaterialRegionDescriptor::source_material_slot(
+        0,
+        Some("Default material"),
+    )]
 }
 
 fn texture_descriptor_for_import(
@@ -379,6 +401,10 @@ mod tests {
             AssetKind::ForeignMeshReferenceArtifact,
             ArtifactPayloadKind::ForeignReference {
                 format: "glb".to_string(),
+                material_regions: vec![ForeignMeshMaterialRegionDescriptor::source_material_slot(
+                    0,
+                    Some("Default material"),
+                )],
             },
             ArtifactCacheKey::new("previous-glb"),
         )
@@ -402,6 +428,56 @@ mod tests {
         assert_eq!(
             outcome.artifact.as_ref().map(|artifact| artifact.validity),
             Some(ArtifactValidity::FailedPreserved)
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn foreign_mesh_import_exposes_stable_material_region_key() {
+        let root = unique_temp_dir("runenwerk_gltf_material_regions");
+        let source_path = root.join("assets/models/source.gltf");
+        std::fs::create_dir_all(source_path.parent().unwrap()).expect("model dir should exist");
+        std::fs::write(&source_path, b"placeholder").expect("source gltf should be writable");
+        let source = AssetSourceDescriptor::new(
+            asset_source_id(2),
+            asset_id(1),
+            AssetKind::ForeignMeshReferenceSource,
+            "assets/models/source.gltf",
+        )
+        .with_hash(SourceHash::new("sha256", "abc"));
+        let plan = ImportPlan::deterministic(
+            import_job_id(8),
+            &source,
+            ImportSettings::ForeignGltf,
+            AssetKind::ForeignMeshReferenceArtifact,
+        );
+
+        let outcome = run_import_job(
+            &source,
+            &plan,
+            &root,
+            &root.join(".cache"),
+            asset_artifact_id(8),
+            None,
+        )
+        .expect("foreign gltf import should form a controlled placeholder artifact");
+
+        assert_eq!(outcome.status, ImportJobStatus::Imported);
+        let artifact = outcome.artifact.expect("artifact should be published");
+        let ArtifactPayloadKind::ForeignReference {
+            format,
+            material_regions,
+        } = artifact.payload_kind
+        else {
+            panic!("foreign mesh import should publish a foreign reference payload");
+        };
+        assert_eq!(format, "gltf");
+        assert_eq!(material_regions.len(), 1);
+        assert_eq!(material_regions[0].key.as_str(), "source_material_slot:0");
+        assert!(
+            !material_regions[0]
+                .key_source
+                .requires_weak_identity_diagnostic()
         );
         let _ = std::fs::remove_dir_all(root);
     }

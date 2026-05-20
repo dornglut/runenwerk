@@ -5,7 +5,7 @@ status: active
 owner: apps/runenwerk_editor
 layer: app-runtime / engine-render
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-05-20
 related_designs:
   - ../implemented/render-product-surface-foundation-bundle-design.md
   - ./workspace-viewport-expression-upgrade-design.md
@@ -105,6 +105,13 @@ V1 excludes:
 - general mesh scene extraction;
 - renderer-owned ECS extraction;
 - per-invocation render storage buffers.
+
+WR-030 may add a Material Lab Mesh Preview product surface for source-backed
+model/mesh material proof without changing this V1 authored scene contract. That
+preview product is app-owned Material Lab workflow state and renderer-prepared
+product input, not general editor-scene mesh extraction. If future work adds
+authored mesh entities to the editor scene packet, this design must be updated
+through architecture governance before implementation.
 
 ## Migration Path
 

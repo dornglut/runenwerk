@@ -13,9 +13,10 @@ use crate::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
     RenderCapturePointIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
     RenderCaptureTerminal, RenderCaptureTerminalCode, RenderDebugConfigResource,
-    RenderDebugControlResource, RenderPassProvenanceRecord, RenderSelectorResolution,
-    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry, RuntimeResourceReuse,
-    resource_kind_name,
+    RenderDebugControlResource, RenderPassMaterialBindingEvidence,
+    RenderPassModelMeshMaterialSelectionEvidence, RenderPassProvenanceRecord,
+    RenderSelectorResolution, ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
+    RuntimeResourceReuse, resource_kind_name,
 };
 use crate::plugins::render::pipelines::{
     FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey, FlowPrimitiveTopologyClass,
@@ -39,12 +40,12 @@ pub(super) use capture::{
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
 pub(super) use provenance::{
-    EncodedPassEvidence, EncodedPipelinePass, collect_pass_resource_truth,
-    compiled_storage_access_to_storage_texture_access, execution_flow_pass_kind,
-    execution_pass_feature_id, execution_pass_id, execution_pass_kind_name,
-    execution_pass_order_index, feature_runtime_version, hash_bind_group_layout_entries,
-    hash_view_signature, material_specialization_fragment_hash, resolve_shader_material,
-    resolve_shader_material_for_packet,
+    EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
+    collect_pass_resource_truth, compiled_storage_access_to_storage_texture_access,
+    execution_flow_pass_kind, execution_pass_feature_id, execution_pass_id,
+    execution_pass_kind_name, execution_pass_order_index, feature_runtime_version,
+    hash_bind_group_layout_entries, hash_view_signature, material_specialization_fragment_hash,
+    pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedBufferRef, ResolvedColorTargetView, ResolvedDepthTargetView,

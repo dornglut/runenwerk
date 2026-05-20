@@ -5,8 +5,9 @@ use std::collections::BTreeMap;
 
 use editor_definition::EditorMenuItemDefinition;
 use editor_shell::{
-    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, RoutedShellAction,
-    SCENE_WORKSPACE_PROFILE_ID, ShellCommand, ToolbarCommandKind, ToolbarMenuKind,
+    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID,
+    MODELLING_WORKSPACE_PROFILE_ID, RoutedShellAction, SCENE_WORKSPACE_PROFILE_ID, ShellCommand,
+    ToolbarCommandKind, ToolbarMenuKind,
 };
 
 use crate::shell::ActiveEditorDefinitionCatalogs;
@@ -34,14 +35,17 @@ pub enum KnownEditorCommand {
     SaveWorkspace,
     LoadSceneWorkspace,
     LoadModellingWorkspace,
+    LoadMaterialWorkspace,
     LoadCustomWorkspace,
     AddWorkspace,
     SwitchSceneWorkspace,
     SwitchModellingWorkspace,
     SwitchEditorDesignWorkspace,
+    SwitchMaterialWorkspace,
     CloseSceneWorkspace,
     CloseModellingWorkspace,
     CloseEditorDesignWorkspace,
+    CloseMaterialWorkspace,
     ToggleDebugLogs,
     ApplySelectedEditorDefinition,
 }
@@ -89,6 +93,8 @@ impl KnownEditorCommand {
             | "editor.toolbar.window.load_modelling_workspace" => {
                 Some(Self::LoadModellingWorkspace)
             }
+            "editor.workspace.load.materials"
+            | "editor.toolbar.window.load_materials_workspace" => Some(Self::LoadMaterialWorkspace),
             "editor.workspace.load.custom" | "editor.toolbar.window.load_custom_workspace" => {
                 Some(Self::LoadCustomWorkspace)
             }
@@ -96,9 +102,11 @@ impl KnownEditorCommand {
             "editor.workspace.scene.activate" => Some(Self::SwitchSceneWorkspace),
             "editor.workspace.modelling.activate" => Some(Self::SwitchModellingWorkspace),
             "editor.workspace.editor_design.activate" => Some(Self::SwitchEditorDesignWorkspace),
+            "editor.workspace.materials.activate" => Some(Self::SwitchMaterialWorkspace),
             "editor.workspace.scene.close" => Some(Self::CloseSceneWorkspace),
             "editor.workspace.modelling.close" => Some(Self::CloseModellingWorkspace),
             "editor.workspace.editor_design.close" => Some(Self::CloseEditorDesignWorkspace),
+            "editor.workspace.materials.close" => Some(Self::CloseMaterialWorkspace),
             "editor.debug.toggle_logs" => Some(Self::ToggleDebugLogs),
             "editor.definition.apply_selected" => Some(Self::ApplySelectedEditorDefinition),
             _ => None,
@@ -128,14 +136,17 @@ impl KnownEditorCommand {
             Self::SaveWorkspace => "editor.workspace.save",
             Self::LoadSceneWorkspace => "editor.workspace.load.scene",
             Self::LoadModellingWorkspace => "editor.workspace.load.modelling",
+            Self::LoadMaterialWorkspace => "editor.workspace.load.materials",
             Self::LoadCustomWorkspace => "editor.workspace.load.custom",
             Self::AddWorkspace => "editor.workspace.create",
             Self::SwitchSceneWorkspace => "editor.workspace.scene.activate",
             Self::SwitchModellingWorkspace => "editor.workspace.modelling.activate",
             Self::SwitchEditorDesignWorkspace => "editor.workspace.editor_design.activate",
+            Self::SwitchMaterialWorkspace => "editor.workspace.materials.activate",
             Self::CloseSceneWorkspace => "editor.workspace.scene.close",
             Self::CloseModellingWorkspace => "editor.workspace.modelling.close",
             Self::CloseEditorDesignWorkspace => "editor.workspace.editor_design.close",
+            Self::CloseMaterialWorkspace => "editor.workspace.materials.close",
             Self::ToggleDebugLogs => "editor.debug.toggle_logs",
             Self::ApplySelectedEditorDefinition => "editor.definition.apply_selected",
         }
@@ -164,14 +175,17 @@ impl KnownEditorCommand {
             Self::SaveWorkspace,
             Self::LoadSceneWorkspace,
             Self::LoadModellingWorkspace,
+            Self::LoadMaterialWorkspace,
             Self::LoadCustomWorkspace,
             Self::AddWorkspace,
             Self::SwitchSceneWorkspace,
             Self::SwitchModellingWorkspace,
             Self::SwitchEditorDesignWorkspace,
+            Self::SwitchMaterialWorkspace,
             Self::CloseSceneWorkspace,
             Self::CloseModellingWorkspace,
             Self::CloseEditorDesignWorkspace,
+            Self::CloseMaterialWorkspace,
             Self::ToggleDebugLogs,
             Self::ApplySelectedEditorDefinition,
         ]
@@ -212,6 +226,10 @@ impl KnownEditorCommand {
                 profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
                 enabled: true,
             },
+            Self::SwitchMaterialWorkspace => RoutedShellAction::SwitchWorkspaceProfile {
+                profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+                enabled: true,
+            },
             Self::CloseSceneWorkspace => RoutedShellAction::CloseWorkspaceProfile {
                 profile_id: SCENE_WORKSPACE_PROFILE_ID,
                 enabled: true,
@@ -224,6 +242,10 @@ impl KnownEditorCommand {
                 profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
                 enabled: true,
             },
+            Self::CloseMaterialWorkspace => RoutedShellAction::CloseWorkspaceProfile {
+                profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+                enabled: true,
+            },
             Self::SaveSceneAs
             | Self::OpenRecent
             | Self::EditPreferences
@@ -233,6 +255,7 @@ impl KnownEditorCommand {
             | Self::SaveWorkspace
             | Self::LoadSceneWorkspace
             | Self::LoadModellingWorkspace
+            | Self::LoadMaterialWorkspace
             | Self::LoadCustomWorkspace
             | Self::AddWorkspace => RoutedShellAction::RunToolbarCommand {
                 command: self.toolbar_command().expect("toolbar command variant"),
@@ -275,6 +298,9 @@ impl KnownEditorCommand {
             Self::SwitchEditorDesignWorkspace => ShellCommand::SwitchWorkspaceProfile {
                 profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
             },
+            Self::SwitchMaterialWorkspace => ShellCommand::SwitchWorkspaceProfile {
+                profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+            },
             Self::CloseSceneWorkspace => ShellCommand::CloseWorkspaceProfile {
                 profile_id: SCENE_WORKSPACE_PROFILE_ID,
             },
@@ -283,6 +309,9 @@ impl KnownEditorCommand {
             },
             Self::CloseEditorDesignWorkspace => ShellCommand::CloseWorkspaceProfile {
                 profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+            },
+            Self::CloseMaterialWorkspace => ShellCommand::CloseWorkspaceProfile {
+                profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             },
             Self::SaveSceneAs
             | Self::OpenRecent
@@ -293,6 +322,7 @@ impl KnownEditorCommand {
             | Self::SaveWorkspace
             | Self::LoadSceneWorkspace
             | Self::LoadModellingWorkspace
+            | Self::LoadMaterialWorkspace
             | Self::LoadCustomWorkspace
             | Self::AddWorkspace => ShellCommand::RunToolbarCommand {
                 command: self.toolbar_command().expect("toolbar command variant"),
@@ -314,6 +344,9 @@ impl KnownEditorCommand {
             )),
             Self::LoadModellingWorkspace => Some(ToolbarCommandKind::LoadWorkspaceProfile(
                 MODELLING_WORKSPACE_PROFILE_ID,
+            )),
+            Self::LoadMaterialWorkspace => Some(ToolbarCommandKind::LoadWorkspaceProfile(
+                MATERIAL_WORKSPACE_PROFILE_ID,
             )),
             Self::LoadCustomWorkspace => Some(ToolbarCommandKind::LoadCustomWorkspace),
             Self::AddWorkspace => Some(ToolbarCommandKind::AddWorkspace),

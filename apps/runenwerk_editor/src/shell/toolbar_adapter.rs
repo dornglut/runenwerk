@@ -6,10 +6,10 @@ use editor_definition::{
     EditorToolbarMenuItemBinding,
 };
 use editor_shell::{
-    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, ObservationConsumerKind,
-    ObservationFrameMetadata, ObservationSourceReality, SCENE_WORKSPACE_PROFILE_ID,
+    ObservationConsumerKind, ObservationFrameMetadata, ObservationSourceReality,
     ToolbarButtonViewModel, ToolbarMenuKind, ToolbarObservationFrame, ToolbarObservedButton,
-    ToolbarViewModel, WorkspaceProfileId,
+    ToolbarViewModel, ToolbarWorkspaceButtonDefinition, WorkspaceProfileId,
+    toolbar_workspace_button_definitions,
 };
 use ui_definition::{UiAvailabilityBinding, UiAvailabilityId, UiRouteSlotId};
 
@@ -25,10 +25,7 @@ pub const TOOLBAR_DEBUG_LOGS_ID: ToolId = ToolId(1005);
 const MENU_FILE_ID: ToolId = ToolId(2_001);
 const MENU_EDIT_ID: ToolId = ToolId(2_002);
 const MENU_WINDOW_ID: ToolId = ToolId(2_003);
-const WORKSPACE_SCENE_ID: ToolId = ToolId(3_001);
-const WORKSPACE_MODELLING_ID: ToolId = ToolId(3_002);
 const WORKSPACE_PLUS_ID: ToolId = ToolId(3_003);
-const WORKSPACE_EDITOR_DESIGN_ID: ToolId = ToolId(3_004);
 
 #[expect(
     clippy::too_many_arguments,
@@ -161,23 +158,13 @@ fn workspace_button_for_profile(
     profile_id: WorkspaceProfileId,
     active_workspace_profile_id: WorkspaceProfileId,
 ) -> Option<ToolbarObservedButton> {
-    let (id, stable_name, label) = if profile_id == SCENE_WORKSPACE_PROFILE_ID {
-        (WORKSPACE_SCENE_ID, "workspace_scene", "Scene")
-    } else if profile_id == MODELLING_WORKSPACE_PROFILE_ID {
-        (WORKSPACE_MODELLING_ID, "workspace_modelling", "Modelling")
-    } else if profile_id == EDITOR_DESIGN_WORKSPACE_PROFILE_ID {
-        (
-            WORKSPACE_EDITOR_DESIGN_ID,
-            "workspace_editor_design",
-            "Editor Design",
-        )
-    } else {
-        return None;
-    };
+    let definition = toolbar_workspace_button_definitions()
+        .iter()
+        .find(|definition| definition.profile_id == profile_id)?;
     Some(ToolbarObservedButton {
-        id,
-        stable_name,
-        label: label.to_string(),
+        id: definition.tool_id,
+        stable_name: definition.stable_name,
+        label: definition.label.to_string(),
         is_active: active_workspace_profile_id == profile_id,
         enabled: true,
     })
@@ -213,12 +200,21 @@ fn toolbar_menu_items(
             menu_item(2_307, "window_load_custom_label", "Load: Custom", false),
             menu_item(2_308, "window_load_custom", "No Custom Workspaces", false),
         ],
-        Some(ToolbarMenuKind::Workspace) => vec![
-            menu_item(2_400, "workspace_menu_scene", "Scene", true),
-            menu_item(2_401, "workspace_menu_modelling", "Modelling", true),
-            menu_item(2_402, "workspace_menu_editor_design", "Editor Design", true),
-        ],
+        Some(ToolbarMenuKind::Workspace) => toolbar_workspace_button_definitions()
+            .iter()
+            .map(workspace_menu_item)
+            .collect(),
         None => Vec::new(),
+    }
+}
+
+fn workspace_menu_item(definition: &ToolbarWorkspaceButtonDefinition) -> ToolbarObservedButton {
+    ToolbarObservedButton {
+        id: definition.menu_item_tool_id,
+        stable_name: definition.menu_item_stable_name,
+        label: definition.label.to_string(),
+        is_active: false,
+        enabled: true,
     }
 }
 
@@ -250,5 +246,46 @@ pub fn build_toolbar_view_model(frame: &ToolbarObservationFrame) -> ToolbarViewM
                 enabled: button.enabled,
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use editor_core::RealityVersion;
+    use editor_shell::{MATERIAL_WORKSPACE_PROFILE_ID, SCENE_WORKSPACE_PROFILE_ID};
+
+    use super::*;
+
+    #[test]
+    fn material_profile_projects_as_workspace_button_and_menu_item() {
+        let frame = build_toolbar_observation_frame(
+            None,
+            false,
+            false,
+            false,
+            Some(ToolbarMenuKind::Workspace),
+            MATERIAL_WORKSPACE_PROFILE_ID,
+            &[SCENE_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID],
+            RealityVersion(1),
+            &BTreeMap::new(),
+        );
+
+        let material_workspace = frame
+            .buttons
+            .iter()
+            .find(|button| button.stable_name == "workspace_materials")
+            .expect("open Materials profile should project a top-bar workspace button");
+        assert_eq!(material_workspace.label, "Materials");
+        assert!(material_workspace.is_active);
+
+        let material_menu_item = frame
+            .buttons
+            .iter()
+            .find(|button| button.stable_name == "workspace_menu_materials")
+            .expect("workspace menu should expose the Materials workspace");
+        assert_eq!(material_menu_item.label, "Materials");
+        assert!(material_menu_item.enabled);
     }
 }

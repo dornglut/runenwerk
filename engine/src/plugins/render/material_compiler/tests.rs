@@ -320,6 +320,38 @@ fn generated_scene_wgsl_uses_typed_u32_material_slot_lane() {
 }
 
 #[test]
+fn generated_scene_wgsl_renders_model_mesh_regions_from_material_selection_lane() {
+    let ir = ir();
+    let shader = compile_material_shader(MaterialShaderCompileRequest {
+        ir: &ir,
+        fixture: MaterialPreviewFixture::Sphere,
+    })
+    .expect("compile");
+
+    assert!(
+        shader
+            .scene_wgsl
+            .contains("model_mesh_region_flags : array<vec4<u32>, 16>"),
+        "model/mesh material-region slots must travel through a typed u32 lane"
+    );
+    assert!(
+        shader
+            .scene_wgsl
+            .contains("fn model_mesh_region_at(viewport_local: vec2<f32>)")
+    );
+    assert!(
+        shader
+            .scene_wgsl
+            .contains("return ModelMeshRegionHit(true, flags.x")
+    );
+    assert!(
+        shader
+            .scene_wgsl
+            .contains("evaluate_scene_material(hit.material_slot_index")
+    );
+}
+
+#[test]
 fn generated_scene_wgsl_selects_material_from_hit_sdf_slot() {
     let ir = material_channel_color_ir();
     let shader = compile_material_shader(MaterialShaderCompileRequest {
@@ -395,6 +427,15 @@ fn scene_material_table_wgsl_dispatches_to_source_backed_slot_evaluators() {
             .wgsl
             .contains("slot_ctx.material_channel = f32(material_slot_index);"),
         "scene material tables must dispatch by slot instead of rewriting material_channel"
+    );
+    assert!(
+        shader
+            .wgsl
+            .contains("fn model_mesh_region_at(viewport_local: vec2<f32>)")
+            && shader
+                .wgsl
+                .contains("evaluate_scene_material(hit.material_slot_index"),
+        "scene material table shaders must retain the model/mesh material-region render path"
     );
 }
 

@@ -3,7 +3,8 @@ use texture::TextureDescriptor;
 
 use crate::{
     AssetArtifactId, AssetArtifactRevisionId, AssetDiagnosticRecord, AssetId, AssetKind,
-    AssetSourceId, AssetSourceRevisionId, asset_artifact_revision_id,
+    AssetSourceId, AssetSourceRevisionId, ForeignMeshMaterialRegionDescriptor,
+    asset_artifact_revision_id,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -66,6 +67,8 @@ pub enum ArtifactPayloadKind {
     },
     ForeignReference {
         format: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        material_regions: Vec<ForeignMeshMaterialRegionDescriptor>,
     },
     SceneManifest,
     ShaderMetadata,
@@ -244,5 +247,28 @@ mod tests {
             artifact_uri.as_deref(),
             Some(".runenwerk/artifacts/albedo.ktx2")
         );
+    }
+
+    #[test]
+    fn foreign_reference_payload_carries_material_region_descriptors() {
+        let payload = ArtifactPayloadKind::ForeignReference {
+            format: "gltf".to_string(),
+            material_regions: vec![ForeignMeshMaterialRegionDescriptor::source_material_slot(
+                0,
+                Some("Body"),
+            )],
+        };
+
+        let ArtifactPayloadKind::ForeignReference {
+            format,
+            material_regions,
+        } = payload
+        else {
+            panic!("expected foreign reference payload");
+        };
+
+        assert_eq!(format, "gltf");
+        assert_eq!(material_regions[0].key.as_str(), "source_material_slot:0");
+        assert_eq!(material_regions[0].display_name, "Body");
     }
 }

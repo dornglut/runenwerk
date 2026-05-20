@@ -67,4 +67,3 @@ pub(super) fn diagnostic_surface_node(
         )],
     )
 }
-

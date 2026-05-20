@@ -48,9 +48,13 @@ struct EditorViewportSceneProductUniform {{
     primitive_slot_params_a : array<vec4<f32>, 64>,
     primitive_slot_params_b : array<vec4<f32>, 64>,
     primitive_slot_flags : array<vec4<u32>, 64>,
+    model_mesh_flags : vec4<u32>,
+    model_mesh_region_rects : array<vec4<f32>, 16>,
+    model_mesh_region_flags : array<vec4<u32>, 16>,
 }};
 
 const MAX_PRIMITIVES : u32 = 64u;
+const MAX_MODEL_MESH_MATERIAL_REGIONS : u32 = 16u;
 
 @group(0) @binding(0)
 var<uniform> u : EditorViewportSceneProductUniform;
@@ -294,12 +298,67 @@ fn viewport_background() -> vec4<f32> {{
     return vec4<f32>(0.09, 0.10, 0.12, 1.0);
 }}
 
+fn model_mesh_region_count() -> u32 {{
+    return min(u.model_mesh_flags.x, MAX_MODEL_MESH_MATERIAL_REGIONS);
+}}
+
+struct ModelMeshRegionHit {{
+    hit : bool,
+    material_slot_index : u32,
+    region_index : u32,
+    local : vec2<f32>,
+}};
+
+fn model_mesh_region_at(viewport_local: vec2<f32>) -> ModelMeshRegionHit {{
+    var index = 0u;
+    let count = model_mesh_region_count();
+    loop {{
+        if index >= count {{
+            break;
+        }}
+        let rect = u.model_mesh_region_rects[index];
+        let flags = u.model_mesh_region_flags[index];
+        let half_size = max(rect.zw, vec2<f32>(0.0001, 0.0001));
+        let local = (viewport_local - rect.xy) / half_size;
+        let outside = max(abs(local) - vec2<f32>(1.0, 1.0), vec2<f32>(0.0, 0.0));
+        if outside.x <= 0.0 && outside.y <= 0.0 {{
+            return ModelMeshRegionHit(true, flags.x, index, local);
+        }}
+        index = index + 1u;
+    }}
+    return ModelMeshRegionHit(false, 0u, 0u, vec2<f32>(0.0, 0.0));
+}}
+
+fn shade_model_mesh_region(hit: ModelMeshRegionHit) -> vec4<f32> {{
+    let local = hit.local;
+    let normal = normalize(vec3<f32>(local.x * 0.2, local.y * 0.2, 1.0));
+    let material = evaluate_scene_material(hit.material_slot_index, MaterialEvalContext(
+        vec3<f32>(local, 0.0),
+        normal,
+        0.0,
+        f32(hit.material_slot_index),
+        1.0,
+        1.0,
+        clamp((local.y + 1.0) * 0.5, 0.0, 1.0),
+    ));
+    let light_dir = normalize(vec3<f32>(0.3, 0.6, 0.75));
+    let diff = max(dot(normal, light_dir), 0.18);
+    let edge = smoothstep(0.88, 1.0, max(abs(local.x), abs(local.y)));
+    let color = material.base_color.rgb * diff + material.emissive;
+    let framed = mix(color, vec3<f32>(0.025, 0.03, 0.04), edge * 0.45);
+    return vec4<f32>(clamp(framed, vec3<f32>(0.0), vec3<f32>(1.0)), material.opacity);
+}}
+
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {{
     let pixel = position.xy;
     let target_size = max(u.surface.xy, vec2<f32>(1.0, 1.0));
     let viewport_local = pixel / target_size;
     let ndc = vec2<f32>(viewport_local.x * 2.0 - 1.0, 1.0 - viewport_local.y * 2.0);
+    let model_mesh_hit = model_mesh_region_at(viewport_local);
+    if model_mesh_hit.hit {{
+        return shade_model_mesh_region(model_mesh_hit);
+    }}
     if primitive_count() == 0u {{
         return viewport_background();
     }}

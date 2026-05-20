@@ -1,7 +1,16 @@
+use super::model_mesh_preview_projection::material_model_mesh_preview_view_model;
 use super::*;
 
 impl MaterialLabRuntime {
     pub fn preview_view_model(&self, catalog: &AssetCatalog) -> MaterialPreviewViewModel {
+        self.preview_view_model_with_scene_material_assignments(catalog, None)
+    }
+
+    pub fn preview_view_model_with_scene_material_assignments(
+        &self,
+        catalog: &AssetCatalog,
+        scene_material_assignments: Option<&SceneMaterialAssignmentState>,
+    ) -> MaterialPreviewViewModel {
         let preview_status_lines = self.active_preview.as_ref().map_or_else(
             || vec!["No active material preview product".to_string()],
             |preview| {
@@ -48,7 +57,15 @@ impl MaterialLabRuntime {
                 .as_ref()
                 .map(|preview| material_parameter_payload(preview).encoded_len())
                 .unwrap_or(0),
+            preview_surface: self
+                .active_preview
+                .as_ref()
+                .map(material_preview_scene_surface_view_model),
             preview_status: self.material_preview_status_view_model(),
+            model_mesh_preview: material_model_mesh_preview_view_model(
+                catalog,
+                scene_material_assignments,
+            ),
             diagnostic_rows,
             resource_binding_diagnostics: self.material_resource_binding_diagnostic_rows(catalog),
             preview_status_lines,

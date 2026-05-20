@@ -16,29 +16,29 @@ use crate::{
     ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel, EntityTableComponentFilter,
     EntityTableHierarchyFilter, EntityTableSurfaceAction, ImportInspectorViewModel,
     InspectorSurfaceAction, MaterialGraphCanvasViewModel, MaterialGraphEditorViewModel,
-    MaterialGraphSourceRowViewModel, MaterialGraphToolbarViewModel, MaterialNodePaletteViewModel,
-    MaterialNodePickerViewModel, MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
-    MaterialSurfaceAction, MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel,
-    OutlinerSurfaceAction, PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction,
-    ShellCommand, SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute,
-    SurfacePresentationArtifact, SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable,
-    TabStackPopupMenuKind, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
-    UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
-    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
-    build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
-    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
-    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
-    surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
-    tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_container_widget_id, tab_stack_new_surface_menu_item_widget_id,
-    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
-    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_list_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_menu_scroll_widget_id,
-    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
-    tool_surface_kind_definition_key, toolbar_workspace_active_indicator_widget_id,
-    toolbar_workspace_chrome_widget_id, toolbar_workspace_close_widget_id,
-    workspace_split_host_widget_id,
+    MaterialGraphSourceRowViewModel, MaterialGraphToolbarViewModel,
+    MaterialModelMeshPreviewViewModel, MaterialNodePaletteViewModel, MaterialNodePickerViewModel,
+    MaterialPreviewStatusViewModel, MaterialPreviewViewModel, MaterialSurfaceAction,
+    MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel, OutlinerSurfaceAction,
+    PanelInstanceId, PanelKind, ResolvedSurfaceFrame, RoutedShellAction, ShellCommand,
+    SurfaceInteraction, SurfaceLocalAction, SurfaceLocalRoute, SurfacePresentationArtifact,
+    SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
+    ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel, UiInteraction, UiInteractionResults,
+    ViewportSurfaceAction, ViewportViewModel, WidgetId, WorkspaceIdentityAllocator,
+    WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState, build_editor_shell_frame,
+    build_editor_shell_frame_with_docking_visual_state, build_entity_table_panel,
+    build_viewport_panel, dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
+    dock_split_preview_panel_widget_id, label, map_interactions_to_shell_commands,
+    panel_kind_definition_key, reduce_workspace, surface_widget_id, tab_active_indicator_widget_id,
+    tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
+    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
+    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
+    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tool_surface_definition_id, tool_surface_kind_definition_key,
+    toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
+    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
 
 #[test]
@@ -662,6 +662,9 @@ fn material_surface_contracts_use_typed_ids_and_epoch_commands() {
             categories: Vec::new(),
         },
         texture_picker: MaterialTextureResourcePickerViewModel::default(),
+        sdf_primitives: Vec::new(),
+        model_mesh_regions: Vec::new(),
+        scene_material_slots: Vec::new(),
         toolbar: MaterialGraphToolbarViewModel::default(),
         validation_overlays: Vec::new(),
         active_diagnostic_index: None,
@@ -680,7 +683,9 @@ fn material_surface_contracts_use_typed_ids_and_epoch_commands() {
         viewport_product_id: Some(editor_viewport::ExpressionProductId(25)),
         specialization_fragment: Some("material.first_slice.render_material".to_string()),
         prepared_parameter_payload_bytes: 16,
+        preview_surface: None,
         preview_status: MaterialPreviewStatusViewModel::default(),
+        model_mesh_preview: MaterialModelMeshPreviewViewModel::default(),
         diagnostic_rows: Vec::new(),
         resource_binding_diagnostics: Vec::new(),
         preview_status_lines: Vec::new(),
@@ -772,14 +777,21 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                     enabled: true,
                 },
                 ToolbarButtonViewModel {
-                    id: editor_core::ToolId(3_003),
+                    id: editor_core::ToolId(3_004),
                     stable_name: "workspace_editor_design",
                     label: "Editor Design".to_string(),
                     is_active: false,
                     enabled: true,
                 },
                 ToolbarButtonViewModel {
-                    id: editor_core::ToolId(3_004),
+                    id: editor_core::ToolId(3_005),
+                    stable_name: "workspace_materials",
+                    label: "Materials".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(3_003),
                     stable_name: "workspace_plus",
                     label: "+".to_string(),
                     is_active: true,
@@ -789,6 +801,13 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                     id: editor_core::ToolId(2_402),
                     stable_name: "workspace_menu_editor_design",
                     label: "Editor Design".to_string(),
+                    is_active: false,
+                    enabled: true,
+                },
+                ToolbarButtonViewModel {
+                    id: editor_core::ToolId(2_403),
+                    stable_name: "workspace_menu_materials",
+                    label: "Materials".to_string(),
                     is_active: false,
                     enabled: true,
                 },
@@ -809,6 +828,10 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
                     crate::MODELLING_WORKSPACE_PROFILE_ID,
                 )),
                 UiInteraction::Activated(crate::TOOLBAR_EDITOR_DESIGN_WORKSPACE_WIDGET_ID),
+                UiInteraction::Activated(crate::TOOLBAR_MATERIALS_WORKSPACE_WIDGET_ID),
+                UiInteraction::Activated(toolbar_workspace_close_widget_id(
+                    crate::MATERIAL_WORKSPACE_PROFILE_ID,
+                )),
                 UiInteraction::Activated(crate::TOOLBAR_ADD_WORKSPACE_WIDGET_ID),
             ],
         },
@@ -833,6 +856,12 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
             },
             ShellCommand::SwitchWorkspaceProfile {
                 profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+            },
+            ShellCommand::SwitchWorkspaceProfile {
+                profile_id: crate::MATERIAL_WORKSPACE_PROFILE_ID,
+            },
+            ShellCommand::CloseWorkspaceProfile {
+                profile_id: crate::MATERIAL_WORKSPACE_PROFILE_ID,
             },
             ShellCommand::ToggleToolbarMenu {
                 menu: crate::ToolbarMenuKind::Workspace,
@@ -876,6 +905,19 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
         crate::TOOLBAR_MODELLING_WORKSPACE_WIDGET_ID,
         toolbar_workspace_active_indicator_widget_id(crate::MODELLING_WORKSPACE_PROFILE_ID),
     );
+    let materials_chrome = toolbar_workspace_chrome_widget_id(crate::MATERIAL_WORKSPACE_PROFILE_ID);
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        materials_chrome,
+        toolbar_workspace_close_widget_id(crate::MATERIAL_WORKSPACE_PROFILE_ID),
+        ui_definition::UiChromeSlotKindDefinition::CloseAffordance,
+    );
+    assert_chrome_slot(
+        &build.projection_artifacts.interaction_model,
+        materials_chrome,
+        crate::TOOLBAR_MATERIALS_WORKSPACE_WIDGET_ID,
+        ui_definition::UiChromeSlotKindDefinition::Label,
+    );
 
     let workspace_menu_frame_model = EditorShellFrameModel::new(
         ToolbarViewModel {
@@ -896,17 +938,23 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
     );
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
-            items: vec![UiInteraction::Activated(
-                crate::toolbar_menu_item_widget_id(2),
-            )],
+            items: vec![
+                UiInteraction::Activated(crate::toolbar_menu_item_widget_id(2)),
+                UiInteraction::Activated(crate::toolbar_menu_item_widget_id(3)),
+            ],
         },
         &workspace_menu_build.projection_artifacts,
     );
     assert_eq!(
         commands,
-        vec![ShellCommand::SwitchWorkspaceProfile {
-            profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-        }]
+        vec![
+            ShellCommand::SwitchWorkspaceProfile {
+                profile_id: crate::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+            },
+            ShellCommand::SwitchWorkspaceProfile {
+                profile_id: crate::MATERIAL_WORKSPACE_PROFILE_ID,
+            },
+        ]
     );
 }
 
@@ -1990,9 +2038,13 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
                 tab_stack_id: create_stack,
                 anchor_widget_id,
             },
-            ShellCommand::SplitTabStackArea {
+            ShellCommand::SplitTabStackAreaStableKey {
                 tab_stack_id: split_stack,
-                ..
+                axis: split_axis,
+                panel_kind: split_panel_kind,
+                stable_surface_key: split_surface_key,
+                legacy_tool_surface_kind: split_legacy_kind,
+                projection_epoch: split_epoch,
             },
             ShellCommand::ClosePanelTab {
                 tab_stack_id: close_stack,
@@ -2002,6 +2054,11 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
         ] if *create_stack == viewport_stack
             && *anchor_widget_id == tab_stack_new_tab_button_widget_id(viewport_stack)
             && *split_stack == viewport_stack
+            && *split_axis == WorkspaceSplitAxis::Horizontal
+            && *split_panel_kind == PanelKind::Viewport
+            && split_surface_key.as_str() == "runenwerk.scene.viewport"
+            && *split_legacy_kind == Some(ToolSurfaceKind::Viewport)
+            && *split_epoch == projection_epoch
             && *close_stack == viewport_stack
             && *close_panel == viewport_panel
             && *close_epoch == projection_epoch
@@ -2075,6 +2132,7 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
         }));
     let active_build =
         build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+    let projection_epoch = active_build.projection_artifacts.projection_epoch;
 
     assert!(ui_tree_contains_widget(
         &active_build.tree.root,
@@ -2106,13 +2164,22 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
                 tab_stack_id,
                 anchor_widget_id,
             },
-            ShellCommand::SplitTabStackArea {
+            ShellCommand::SplitTabStackAreaStableKey {
                 tab_stack_id: split_stack,
-                ..
+                axis: split_axis,
+                panel_kind: split_panel_kind,
+                stable_surface_key: split_surface_key,
+                legacy_tool_surface_kind: split_legacy_kind,
+                projection_epoch: split_epoch,
             },
         ] if *tab_stack_id == viewport_stack
             && *anchor_widget_id == tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
             && *split_stack == viewport_stack
+            && *split_axis == WorkspaceSplitAxis::Horizontal
+            && *split_panel_kind == PanelKind::Viewport
+            && split_surface_key.as_str() == "runenwerk.scene.viewport"
+            && *split_legacy_kind == Some(ToolSurfaceKind::Viewport)
+            && *split_epoch == projection_epoch
     ));
 }
 

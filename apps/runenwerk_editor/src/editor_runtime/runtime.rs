@@ -6,8 +6,8 @@ use editor_core::{
 };
 use editor_inspector::{InspectTarget, InspectorEditError, InspectorEditValue, InspectorPath};
 use editor_scene::{
-    SceneComponentDescriptor, SceneMaterialAssignmentState, SceneMaterialSlotId, SceneRuntime,
-    SdfPrimitiveSourceId,
+    SceneComponentDescriptor, SceneMaterialAssignmentState, SceneMaterialSlotId,
+    SceneModelMeshMaterialRegionSourceId, SceneRuntime, SdfPrimitiveSourceId,
 };
 
 use crate::editor_runtime::{
@@ -112,6 +112,34 @@ impl RunenwerkEditorRuntime {
 
     pub fn document_tabs(&self) -> &DocumentTabRuntimeState {
         &self.document_tabs
+    }
+
+    pub fn activate_default_material_graph_document(&mut self) -> Result<(), EditorMutationError> {
+        self.activate_or_open_document(
+            DocumentDescriptor::new(
+                DEFAULT_MATERIAL_GRAPH_DOCUMENT_ID,
+                DocumentKind::MaterialGraph,
+                "Material Graph",
+            ),
+            true,
+        )
+    }
+
+    pub fn activate_or_open_document(
+        &mut self,
+        descriptor: DocumentDescriptor,
+        provider_compatible: bool,
+    ) -> Result<(), EditorMutationError> {
+        let document_id = descriptor.id;
+        let document_kind = descriptor.kind.clone();
+        self.session.upsert_document(descriptor);
+        self.session.activate_document(document_id)?;
+        self.document_tabs.upsert(DocumentTabRuntimeRecord::new(
+            document_id,
+            document_kind,
+            provider_compatible,
+        ));
+        Ok(())
     }
 
     pub fn session_reality(&self) -> SessionReality<'_> {
@@ -282,6 +310,16 @@ impl RunenwerkEditorRuntime {
         self.scene_realities
             .material_assignments
             .resolve_material_slot_for_sdf_primitive(SdfPrimitiveSourceId::new(entity_id))
+            .material_table_index
+    }
+
+    pub fn material_slot_index_for_model_mesh_region(
+        &self,
+        material_region: &SceneModelMeshMaterialRegionSourceId,
+    ) -> u32 {
+        self.scene_realities
+            .material_assignments
+            .resolve_material_slot_for_model_mesh_region(material_region)
             .material_table_index
     }
 
@@ -907,6 +945,8 @@ fn ensure_default_scene_document(session: &mut EditorSession) -> DocumentId {
         .expect("default scene document should be registered before activation");
     scene_document_id
 }
+
+const DEFAULT_MATERIAL_GRAPH_DOCUMENT_ID: DocumentId = DocumentId(2);
 
 fn map_session_change_to_share(
     kind: &editor_core::SessionChangeKind,

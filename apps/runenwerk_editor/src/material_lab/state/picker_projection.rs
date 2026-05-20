@@ -1,4 +1,5 @@
 use super::*;
+use crate::material_lab::model_mesh_regions::catalog_model_mesh_material_regions;
 
 pub(super) fn material_node_palette_view_model(search_query: &str) -> MaterialNodePaletteViewModel {
     let needle = search_query.trim().to_ascii_lowercase();
@@ -168,3 +169,68 @@ pub(super) fn material_texture_resource_picker_view_model(
     }
 }
 
+pub(super) fn material_model_mesh_region_binding_view_model(
+    catalog: &AssetCatalog,
+    assignments: Option<&SceneMaterialAssignmentState>,
+) -> Vec<MaterialModelMeshRegionBindingViewModel> {
+    catalog_model_mesh_material_regions(catalog)
+        .into_iter()
+        .map(|region| {
+            let valid = region.is_assignable();
+            let diagnostic = region.display_diagnostic().or_else(|| {
+                (region.artifact_validity != ArtifactValidity::Valid)
+                    .then(|| format!("artifact validity is {:?}", region.artifact_validity))
+            });
+            let (assigned_slot_id, assigned_slot_label) = assignments
+                .and_then(|assignments| {
+                    let source_region = region.scene_material_region().ok()?;
+                    let slot_id = assignments
+                        .model_mesh_assignments()
+                        .find(|assignment| assignment.material_region == source_region)?
+                        .slot_id;
+                    let label = assignments
+                        .palette()
+                        .slots
+                        .iter()
+                        .find(|slot| slot.slot_id == slot_id)
+                        .map(|slot| slot.display_name.clone());
+                    Some((Some(slot_id), label))
+                })
+                .unwrap_or((None, None));
+            MaterialModelMeshRegionBindingViewModel {
+                asset_id: region.asset_id,
+                stable_name: region.asset_stable_name,
+                asset_display_name: region.asset_display_name,
+                artifact_id: region.artifact_id,
+                source_id: region.source_id,
+                source_revision_id: region.source_revision_id,
+                source_revision: region.source_revision,
+                material_region_key: region.material_region_key,
+                material_region_label: region.display_name,
+                assigned_slot_id,
+                assigned_slot_label,
+                valid,
+                diagnostic,
+            }
+        })
+        .collect()
+}
+
+pub(super) fn material_scene_material_slot_option_view_model(
+    assignments: Option<&SceneMaterialAssignmentState>,
+) -> Vec<MaterialSceneMaterialSlotOptionViewModel> {
+    assignments
+        .map(|assignments| {
+            assignments
+                .palette()
+                .slots
+                .iter()
+                .map(|slot| MaterialSceneMaterialSlotOptionViewModel {
+                    slot_id: slot.slot_id,
+                    display_name: slot.display_name.clone(),
+                    is_default: slot.is_default,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}

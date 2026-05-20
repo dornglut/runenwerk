@@ -1,5 +1,5 @@
-use super::*;
 use super::diagnostics::material_diagnostic;
+use super::*;
 
 pub fn material_source_for_asset(
     catalog: &AssetCatalog,
@@ -99,9 +99,26 @@ pub fn default_material_graph_document_for_source_with_target(
     output_target: MaterialOutputTarget,
 ) -> MaterialGraphDocument {
     use graph::{
-        CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId, PortDefinition,
-        PortDirection, PortId, PortTypeId,
+        CyclePolicy, EdgeDefinition, EdgeId, GraphDefinition, GraphId, GraphMetadataEntry,
+        GraphValue, NodeDefinition, NodeId, PortDefinition, PortDirection, PortId,
     };
+    let color_port_type = material_graph::MaterialValueType::Color.port_type_id();
+    let base_color_node = NodeId::new(1);
+    let base_color_port = PortId::new(1);
+    let output_node = NodeId::new(2);
+    let output_base_color_port = PortId::new(2);
+    let mut editor_state = material_graph::MaterialGraphEditorState::default();
+    editor_state.selected_fixture = material_graph::MaterialGraphPreviewFixture::SdfPrimitive;
+    editor_state.selected_preview = if output_target == MaterialOutputTarget::RenderMaterial {
+        material_graph::MaterialGraphPreviewSelection::SceneProduct
+    } else {
+        material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct
+    };
+    editor_state.node_layouts = vec![
+        material_graph::MaterialGraphNodeLayout::new(base_color_node, 40, 96),
+        material_graph::MaterialGraphNodeLayout::new(output_node, 360, 96),
+    ];
+
     MaterialGraphDocument::new(
         material_document_id_for_source(asset_id, source.source_id),
         label,
@@ -109,19 +126,39 @@ pub fn default_material_graph_document_for_source_with_target(
             GraphId::new(1),
             "material.preview",
             CyclePolicy::RejectDirectedCycles,
-            [NodeDefinition::new(
-                NodeId::new(1),
-                "pbr.output",
-                [PortDefinition::new(
-                    PortId::new(1),
-                    "base_color",
-                    PortDirection::Input,
-                    PortTypeId::new(1),
-                )],
+            [
+                NodeDefinition::new(
+                    base_color_node,
+                    "pbr.base_color",
+                    [PortDefinition::new(
+                        base_color_port,
+                        "color",
+                        PortDirection::Output,
+                        color_port_type,
+                    )],
+                )
+                .with_values([GraphMetadataEntry::new(
+                    "color",
+                    GraphValue::Text("0.08 0.62 0.95 1.0".to_string()),
+                )]),
+                NodeDefinition::new(
+                    output_node,
+                    "pbr.output",
+                    [PortDefinition::new(
+                        output_base_color_port,
+                        "base_color",
+                        PortDirection::Input,
+                        color_port_type,
+                    )],
+                ),
+            ],
+            [EdgeDefinition::new(
+                EdgeId::new(1),
+                base_color_port,
+                output_base_color_port,
             )],
-            [],
         ),
         output_target,
     )
+    .with_editor_state(editor_state)
 }
-

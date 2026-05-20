@@ -5,7 +5,7 @@ status: active
 owner: domain/material_graph
 layer: domain / app-runtime / engine-render
 canonical: true
-last_reviewed: 2026-05-18
+last_reviewed: 2026-05-20
 related_designs:
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
@@ -182,6 +182,14 @@ Perfectionist V1, owned by `WR-028`, additionally requires:
 assignment, and any future `renderable_index` renderer ABI extension. WR-028
 evidence must not erase those gaps.
 
+`WR-030` is the follow-up renderable-surface prerequisite for WR-029 Phase 4.
+Its first accepted direction is a source-backed Mesh Preview product surface for
+Material Lab rather than immediate general editor-scene mesh extraction. The
+preview surface must consume the same scene-owned model/mesh material
+assignments and generated material table as the SDF scene path, while preserving
+Material Lab source documents and scene material assignment state as separate
+truth.
+
 ## Non Goals
 
 - No canvas-only material truth.
@@ -198,7 +206,8 @@ Material Lab must appear explicitly in the editor roadmap and workspace roadmap 
 row that must close the rich visual graph editor, live texture views, and
 SDF primitive scene material binding gaps before that bounded path can claim
 `perfectionist_verified`. Model/mesh material binding remains open under
-`WR-029`.
+`WR-029`, with `WR-030` providing the Mesh Preview product-surface contract
+needed before WR-029 can claim model/mesh pixel proof.
 
 ## Tests
 

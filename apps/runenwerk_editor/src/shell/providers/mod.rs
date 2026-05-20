@@ -13,7 +13,8 @@ use editor_shell::{
     InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
     InspectorObservedTarget, InspectorSessionMutation, InspectorSurfaceAction,
     InspectorTargetViewModel, InspectorViewModel, MaterialDiagnosticRowViewModel,
-    MaterialPreviewStatusViewModel, MaterialResourceBindingDiagnosticViewModel,
+    MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
+    MaterialResourceBindingDiagnosticViewModel, MaterialSdfPrimitiveBindingViewModel,
     MaterialSurfaceAction, OUTLINER_LIST_WIDGET_ID, ObservationConsumerKind,
     ObservationFrameMetadata, ObservationSourceReality, OutlinerDomainMutation,
     OutlinerObservationFrame, OutlinerObservedRow, OutlinerRowViewModel, OutlinerSurfaceAction,
@@ -298,6 +299,22 @@ impl EditorSurfaceProviderRegistry {
             Box::new(ToolSuiteRegistryInspectorProvider),
         ])
         .expect("default surface providers must have unique ids")
+    }
+
+    pub fn runenwerk_material_lab_workbench() -> Self {
+        Self::new(vec![
+            Box::new(ConsoleProvider),
+            Box::new(AssetBrowserProvider),
+            Box::new(ImportInspectorProvider),
+            Box::new(M6WorkspaceProvider),
+            Box::new(ToolSuiteRegistryInspectorProvider),
+            Box::new(TextureViewerProvider),
+            Box::new(VolumeTextureViewerProvider),
+            Box::new(MaterialGraphCanvasProvider),
+            Box::new(MaterialInspectorProvider),
+            Box::new(MaterialPreviewProvider),
+        ])
+        .expect("Material Lab workbench surface providers must have unique ids")
     }
 
     pub fn provider_descriptors(&self) -> impl Iterator<Item = SurfaceProviderDescriptor> + '_ {
@@ -1381,7 +1398,6 @@ use texture_viewer::TextureViewerProvider;
 use tool_suite_registry_inspector::ToolSuiteRegistryInspectorProvider;
 use volume_texture_viewer::VolumeTextureViewerProvider;
 
-
 mod common;
 mod self_authoring;
 
@@ -1389,4 +1405,4 @@ mod self_authoring;
 mod tests;
 
 use common::{deterministic_provider, diagnostic_frame, unsupported_frame};
-use self_authoring::{is_asset_surface, is_self_authoring_surface, SelfAuthoringProvider};
+use self_authoring::{SelfAuthoringProvider, is_asset_surface, is_self_authoring_surface};

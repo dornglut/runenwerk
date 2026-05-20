@@ -13,6 +13,9 @@ struct EditorViewportSceneProductUniform {
     primitive_slot_params_a : array<vec4<f32>, 64>,
     primitive_slot_params_b : array<vec4<f32>, 64>,
     primitive_slot_flags : array<vec4<u32>, 64>,
+    model_mesh_flags : vec4<u32>,
+    model_mesh_region_rects : array<vec4<f32>, 16>,
+    model_mesh_region_flags : array<vec4<u32>, 16>,
 };
 
 @group(0) @binding(0)

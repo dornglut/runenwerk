@@ -3,14 +3,17 @@ use std::collections::BTreeSet;
 use asset::{AssetId, AssetSourceId, AssetSourceRevisionId};
 use editor_core::{EditorMutationError, EntityId};
 use editor_persistence::{
-    FormedScenePackageV2, SceneEntityRecordV2, SceneFileV2, SceneMaterialAssignmentsRecord,
-    SceneMaterialSlotRecord, SceneMaterialSourceRefRecord, ScenePrimitiveKind,
-    ScenePrimitiveRecord, SceneTransformRecord, SdfPrimitiveMaterialSlotAssignmentRecord,
+    FormedScenePackageV2, ModelMeshMaterialSlotAssignmentRecord, SceneEntityRecordV2, SceneFileV2,
+    SceneMaterialAssignmentsRecord, SceneMaterialSlotRecord, SceneMaterialSourceRefRecord,
+    SceneModelMeshSourceRecord, ScenePrimitiveKind, ScenePrimitiveRecord, SceneTransformRecord,
+    SdfPrimitiveMaterialSlotAssignmentRecord,
 };
 use editor_scene::{
     SceneEntitySnapshot, SceneMaterialAssignmentState, SceneMaterialPalette,
     SceneMaterialPaletteEntryId, SceneMaterialSlot, SceneMaterialSlotId, SceneMaterialSourceRef,
-    SceneRuntime, SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
+    SceneMeshMaterialRegionId, SceneModelMeshMaterialRegionSourceId,
+    SceneModelMeshMaterialSlotAssignment, SceneModelMeshSourceId, SceneRuntime,
+    SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
 };
 use scene::{LocalTransform, QuatValue, Vec3Value};
 
@@ -79,9 +82,32 @@ fn scene_material_assignments_record(
                 )
             })
             .collect(),
+        model_mesh_assignments: state
+            .model_mesh_assignments()
+            .map(model_mesh_material_assignment_record)
+            .collect(),
     };
     record.sort_stable();
     record
+}
+
+fn model_mesh_material_assignment_record(
+    assignment: SceneModelMeshMaterialSlotAssignment,
+) -> ModelMeshMaterialSlotAssignmentRecord {
+    let source = &assignment.material_region.model_mesh_source_id;
+    let mut source_record =
+        SceneModelMeshSourceRecord::new(source.asset_id.raw(), source.source_id.raw());
+    if let Some(revision_id) = source.source_revision_id {
+        source_record = source_record.with_source_revision_id(revision_id.raw());
+    }
+    if let Some(revision) = &source.source_revision {
+        source_record = source_record.with_source_revision(revision.clone());
+    }
+    ModelMeshMaterialSlotAssignmentRecord::new(
+        source_record,
+        assignment.material_region.material_region_id.key(),
+        assignment.slot_id.raw(),
+    )
 }
 
 fn scene_material_slot_record(slot: &SceneMaterialSlot) -> SceneMaterialSlotRecord {
@@ -139,9 +165,49 @@ fn scene_material_assignments_from_record(
             )
         })
         .collect::<Vec<_>>();
-    SceneMaterialAssignmentState::new(palette, assignments)
-        .map(|state| state.with_source_revision(record.source_revision))
-        .map_err(|_| EditorMutationError::runtime_rejected("invalid scene material assignment"))
+    let model_mesh_assignments = record
+        .model_mesh_assignments
+        .iter()
+        .map(model_mesh_material_assignment_from_record)
+        .collect::<Result<Vec<_>, _>>()?;
+    SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+        palette,
+        assignments,
+        model_mesh_assignments,
+    )
+    .map(|state| state.with_source_revision(record.source_revision))
+    .map_err(|_| EditorMutationError::runtime_rejected("invalid scene material assignment"))
+}
+
+fn model_mesh_material_assignment_from_record(
+    record: &ModelMeshMaterialSlotAssignmentRecord,
+) -> Result<SceneModelMeshMaterialSlotAssignment, EditorMutationError> {
+    let material_region = SceneModelMeshMaterialRegionSourceId::new(
+        scene_model_mesh_source_from_record(&record.model_mesh_source)?,
+        SceneMeshMaterialRegionId::new(record.material_region_key.clone()).map_err(|_| {
+            EditorMutationError::runtime_rejected("invalid model/mesh material region identity")
+        })?,
+    );
+    Ok(SceneModelMeshMaterialSlotAssignment::new(
+        material_region,
+        SceneMaterialSlotId::new(record.slot_id),
+    ))
+}
+
+fn scene_model_mesh_source_from_record(
+    record: &SceneModelMeshSourceRecord,
+) -> Result<SceneModelMeshSourceId, EditorMutationError> {
+    let mut source = SceneModelMeshSourceId::new(
+        required_asset_id(record.asset_id)?,
+        required_source_id(record.source_id)?,
+    );
+    if let Some(revision_id) = record.source_revision_id {
+        source = source.with_source_revision_id(required_source_revision_id(revision_id)?);
+    }
+    if let Some(revision) = &record.source_revision {
+        source = source.with_source_revision(revision.clone());
+    }
+    Ok(source)
 }
 
 fn scene_material_slot_from_record(
@@ -375,9 +441,11 @@ mod tests {
     use super::*;
     use crate::editor_app::RunenwerkEditorApp;
     use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
+    use asset::{asset_id, asset_source_id, asset_source_revision_id};
     use editor_scene::{
-        SceneMaterialPalette, SceneMaterialSlot, SceneMaterialSlotId,
-        SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
+        SceneMaterialPalette, SceneMaterialSlot, SceneMaterialSlotId, SceneMeshMaterialRegionId,
+        SceneModelMeshMaterialRegionSourceId, SceneModelMeshMaterialSlotAssignment,
+        SceneModelMeshSourceId, SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
     };
 
     #[test]
@@ -500,6 +568,54 @@ mod tests {
 
         let resolution = restored.material_slot_index_for_entity(entity);
         assert_eq!(resolution, 1);
+    }
+
+    #[test]
+    fn model_mesh_material_assignments_persist_through_scene_file_roundtrip() {
+        let mut source_app = RunenwerkEditorApp::new();
+        let assigned_slot = SceneMaterialSlotId::new(2);
+        let material_region = SceneModelMeshMaterialRegionSourceId::new(
+            SceneModelMeshSourceId::new(asset_id(7), asset_source_id(9))
+                .with_source_revision_id(asset_source_revision_id(11)),
+            SceneMeshMaterialRegionId::new("body").expect("stable region key"),
+        );
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(assigned_slot, "Body").with_material_asset(asset_id(7)),
+        ])
+        .expect("valid palette");
+        let assignments = SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+            palette,
+            [],
+            [SceneModelMeshMaterialSlotAssignment::new(
+                material_region.clone(),
+                assigned_slot,
+            )],
+        )
+        .expect("valid model/mesh assignments");
+        source_app
+            .runtime_mut()
+            .replace_scene_material_assignments(assignments);
+
+        let scene_file = scene_file_from_runtime(source_app.runtime());
+        assert_eq!(
+            scene_file.material_assignments.model_mesh_assignments.len(),
+            1
+        );
+        assert_eq!(
+            scene_file.material_assignments.model_mesh_assignments[0].material_region_key,
+            "body"
+        );
+
+        let mut restored = RunenwerkEditorRuntime::new();
+        apply_scene_file_to_runtime(&mut restored, &scene_file)
+            .expect("scene apply should succeed");
+
+        let resolution = restored
+            .scene_material_assignments()
+            .resolve_material_slot_for_model_mesh_region(&material_region);
+        assert_eq!(resolution.resolved_slot_id, assigned_slot);
+        assert_eq!(resolution.material_table_index, 1);
     }
 
     #[test]

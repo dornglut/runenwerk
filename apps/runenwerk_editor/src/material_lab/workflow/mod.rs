@@ -29,6 +29,7 @@ use crate::material_lab::{
 
 mod artifact_io;
 mod diagnostics;
+mod model_mesh_assignment;
 mod preview_build;
 mod source_editing;
 mod source_resolution;

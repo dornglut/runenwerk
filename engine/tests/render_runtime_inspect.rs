@@ -1,9 +1,9 @@
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
-    RenderCapturePointIdentity, RenderDebugTimingsState, RenderPassProvenanceRecord,
-    RenderPassProvenanceState, deterministic_capture_filename, inspect_prepared_render_frame,
-    inspect_render_gpu_residency, inspect_resources, inspect_texture_resources, resource_kind_name,
-    summarize_pass_timings,
+    RenderCapturePointIdentity, RenderDebugTimingsState, RenderPassMaterialBindingEvidence,
+    RenderPassProvenanceRecord, RenderPassProvenanceState, deterministic_capture_filename,
+    inspect_prepared_render_frame, inspect_render_gpu_residency, inspect_resources,
+    inspect_texture_resources, resource_kind_name, summarize_pass_timings,
 };
 use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
 use engine::plugins::render::{
@@ -374,6 +374,7 @@ fn pass_provenance_state_preserves_required_human_fields() {
             depth_format: None,
             sample_count: 1,
             primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
+            material_binding: RenderPassMaterialBindingEvidence::default(),
             render_targets: vec!["surface.color".to_string()],
             sampled_textures: vec!["surface.color".to_string()],
             storage_textures: Vec::new(),
@@ -397,6 +398,7 @@ fn pass_provenance_state_preserves_required_human_fields() {
     assert_eq!(record.shader_id, "editor_viewport_sdf");
     assert_eq!(record.shader_revision, 7);
     assert!(!record.fallback_used);
+    assert!(!record.material_binding.consumes_material_resources);
 }
 
 #[test]

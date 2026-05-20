@@ -1,5 +1,13 @@
 use super::*;
 
+const MATERIAL_PREVIEW_ROOT_WIDGET_ID: WidgetId = WidgetId(53_000);
+const MATERIAL_PREVIEW_SCROLL_WIDGET_ID: WidgetId = WidgetId(53_001);
+const MATERIAL_PREVIEW_BODY_WIDGET_ID: WidgetId = WidgetId(53_002);
+const MATERIAL_PREVIEW_SURFACE_WIDGET_ID: WidgetId = WidgetId(53_003);
+const MATERIAL_PREVIEW_CONTROLS_WIDGET_ID: WidgetId = WidgetId(53_004);
+const MATERIAL_PREVIEW_LINE_WIDGET_ID_BASE: u64 = 53_100;
+const MATERIAL_PREVIEW_ACTION_WIDGET_ID_BASE: u64 = 53_500;
+
 pub(super) struct MaterialPreviewProvider;
 
 impl EditorSurfaceProvider for MaterialPreviewProvider {
@@ -32,7 +40,10 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
         let view_model = context
             .app
             .material_lab_runtime()
-            .preview_view_model(context.app.asset_catalog_runtime().catalog());
+            .preview_view_model_with_scene_material_assignments(
+                context.app.asset_catalog_runtime().catalog(),
+                Some(context.app.runtime().scene_material_assignments()),
+            );
         let mut lines = vec![
             "material preview: catalog-backed product and prepared renderer handoff".to_string(),
             surface_document_context_line(&request.document_context),
@@ -54,6 +65,7 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
             "prepared parameter payload bytes: {}",
             view_model.prepared_parameter_payload_bytes
         ));
+        lines.push("scene material binding: SDF primitives use scene material slots".to_string());
         lines.extend(material_preview_status_lines(&view_model.preview_status));
         lines.extend(super::material_graph_canvas::material_diagnostic_row_lines(
             &view_model.diagnostic_rows,
@@ -81,12 +93,8 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
             ));
         }
 
-        let (root, routes) = build_self_authoring_control_panel(
-            context.theme,
-            request.tool_surface_instance_id,
-            lines,
-            actions,
-        );
+        let (root, routes) =
+            build_material_preview_panel(context.theme, request, &view_model, lines, actions);
 
         Ok(ProviderSurfaceFrame {
             title: "Material Preview".to_string(),
@@ -112,6 +120,88 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
             .map(SurfaceCommandProposal::Shell),
         )
     }
+}
+
+fn build_material_preview_panel(
+    theme: &ThemeTokens,
+    request: &SurfaceProviderRequest,
+    view_model: &MaterialPreviewViewModel,
+    mut lines: Vec<String>,
+    actions: Vec<(String, SurfaceLocalAction)>,
+) -> (UiNode, SurfaceRouteTable) {
+    let scope = editor_shell::SurfaceWidgetScope::new(request.tool_surface_instance_id);
+    let text_style = theme.body_small_text_style(FontId(1));
+    let mut routes = SurfaceRouteTable::empty();
+    let mut body_children = Vec::new();
+
+    if let Some(surface) = &view_model.preview_surface {
+        body_children.push(editor_shell::product_surface(
+            scope.widget_id(MATERIAL_PREVIEW_SURFACE_WIDGET_ID),
+            surface.source.clone(),
+            ui_math::UiSize::new(surface.width.max(1) as f32, surface.height.max(1) as f32),
+        ));
+        lines.push("material preview scene: rendered GPU product-surface preview".to_string());
+        lines.push(format!(
+            "material preview scene target: {}",
+            surface.target_label
+        ));
+        lines.push(format!(
+            "material preview scene bind group identity: {}",
+            surface.bind_group_identity
+        ));
+    } else {
+        lines.push(
+            "material preview scene: unavailable until a material preview product is active"
+                .to_string(),
+        );
+    }
+
+    for (index, line) in lines.into_iter().enumerate() {
+        body_children.push(editor_shell::label(
+            scope.widget_id(WidgetId(
+                MATERIAL_PREVIEW_LINE_WIDGET_ID_BASE + index as u64,
+            )),
+            line,
+            text_style.clone(),
+        ));
+    }
+
+    if !actions.is_empty() {
+        let mut action_nodes = Vec::with_capacity(actions.len());
+        for (index, (label, action)) in actions.into_iter().enumerate() {
+            let widget_id = scope.widget_id(WidgetId(
+                MATERIAL_PREVIEW_ACTION_WIDGET_ID_BASE + index as u64,
+            ));
+            action_nodes.push(editor_shell::compact_surface_action_button(
+                widget_id, label, false, true, theme,
+            ));
+            routes.insert(widget_id, SurfaceLocalRoute::new(action));
+        }
+        body_children.push(editor_shell::hstack(
+            scope.widget_id(MATERIAL_PREVIEW_CONTROLS_WIDGET_ID),
+            theme.spacing.xs,
+            action_nodes,
+        ));
+    }
+
+    let body = editor_shell::vstack(
+        scope.widget_id(MATERIAL_PREVIEW_BODY_WIDGET_ID),
+        theme.spacing.xs,
+        body_children,
+    );
+    let scroll = editor_shell::vscroll(
+        scope.widget_id(MATERIAL_PREVIEW_SCROLL_WIDGET_ID),
+        theme.clone(),
+        vec![body],
+    );
+    (
+        editor_shell::panel(
+            scope.widget_id(MATERIAL_PREVIEW_ROOT_WIDGET_ID),
+            theme.clone(),
+            vec![scroll],
+        ),
+        routes,
+    )
 }
 
 fn material_preview_status_lines(status: &MaterialPreviewStatusViewModel) -> Vec<String> {

@@ -379,11 +379,179 @@ pub struct PreparedDrawBatch {
     pub instance_count: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PreparedModelMeshMaterialSourceIdentity {
+    pub asset_id: u64,
+    pub source_id: u64,
+    pub source_revision_id: Option<u64>,
+    pub source_revision: Option<String>,
+}
+
+impl PreparedModelMeshMaterialSourceIdentity {
+    pub fn new(asset_id: u64, source_id: u64) -> Result<Self, PreparedModelMeshMaterialError> {
+        if asset_id == 0 {
+            return Err(PreparedModelMeshMaterialError::new(
+                "model/mesh material source asset id must be non-zero",
+            ));
+        }
+        if source_id == 0 {
+            return Err(PreparedModelMeshMaterialError::new(
+                "model/mesh material source id must be non-zero",
+            ));
+        }
+        Ok(Self {
+            asset_id,
+            source_id,
+            source_revision_id: None,
+            source_revision: None,
+        })
+    }
+
+    pub fn with_source_revision_id(mut self, source_revision_id: u64) -> Self {
+        self.source_revision_id = (source_revision_id != 0).then_some(source_revision_id);
+        self
+    }
+
+    pub fn with_source_revision(mut self, source_revision: impl Into<String>) -> Self {
+        let source_revision = source_revision.into();
+        if !source_revision.is_empty() {
+            self.source_revision = Some(source_revision);
+        }
+        self
+    }
+
+    pub fn identity_key(&self) -> String {
+        format!(
+            "asset={}:source={}:source_revision_id={}:source_revision={}",
+            self.asset_id,
+            self.source_id,
+            self.source_revision_id
+                .map(|revision| revision.to_string())
+                .unwrap_or_default(),
+            self.source_revision.as_deref().unwrap_or_default()
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PreparedModelMeshMaterialRegionIdentity {
+    pub source: PreparedModelMeshMaterialSourceIdentity,
+    pub region_key: String,
+}
+
+impl PreparedModelMeshMaterialRegionIdentity {
+    pub fn new(
+        source: PreparedModelMeshMaterialSourceIdentity,
+        region_key: impl Into<String>,
+    ) -> Result<Self, PreparedModelMeshMaterialError> {
+        let region_key = region_key.into();
+        validate_model_mesh_material_region_key(&region_key)?;
+        Ok(Self { source, region_key })
+    }
+
+    pub fn identity_key(&self) -> String {
+        format!("{}:region={}", self.source.identity_key(), self.region_key)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedModelMeshMaterialSelection {
+    pub surface: PreparedModelMeshMaterialRegionIdentity,
+    pub requested_material_slot_id: u64,
+    pub resolved_material_slot_id: u64,
+    pub material_table_index: u32,
+    pub used_default_fallback: bool,
+}
+
+impl PreparedModelMeshMaterialSelection {
+    pub fn new(
+        surface: PreparedModelMeshMaterialRegionIdentity,
+        requested_material_slot_id: u64,
+        resolved_material_slot_id: u64,
+        material_table_index: u32,
+        used_default_fallback: bool,
+    ) -> Result<Self, PreparedModelMeshMaterialError> {
+        if requested_material_slot_id == 0 {
+            return Err(PreparedModelMeshMaterialError::new(
+                "requested model/mesh material slot id must be non-zero",
+            ));
+        }
+        if resolved_material_slot_id == 0 {
+            return Err(PreparedModelMeshMaterialError::new(
+                "resolved model/mesh material slot id must be non-zero",
+            ));
+        }
+        Ok(Self {
+            surface,
+            requested_material_slot_id,
+            resolved_material_slot_id,
+            material_table_index,
+            used_default_fallback,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedModelMeshMaterialError {
+    message: String,
+}
+
+impl PreparedModelMeshMaterialError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for PreparedModelMeshMaterialError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl Error for PreparedModelMeshMaterialError {}
+
+fn validate_model_mesh_material_region_key(
+    value: &str,
+) -> Result<(), PreparedModelMeshMaterialError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(PreparedModelMeshMaterialError::new(
+            "model/mesh material region key must not be empty",
+        ));
+    }
+    if trimmed != value {
+        return Err(PreparedModelMeshMaterialError::new(
+            "model/mesh material region key must already be normalized",
+        ));
+    }
+    if is_transient_model_mesh_material_region_key(trimmed) {
+        return Err(PreparedModelMeshMaterialError::new(format!(
+            "model/mesh material region key must not use transient renderer identity '{trimmed}'"
+        )));
+    }
+    Ok(())
+}
+
+fn is_transient_model_mesh_material_region_key(value: &str) -> bool {
+    let normalized = value.to_ascii_lowercase();
+    [
+        "renderable_index:",
+        "draw_order:",
+        "mesh_table_index:",
+        "residency_slot:",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct PreparedMaterialFeatureContribution {
     pub instances: Vec<PreparedMaterialInstanceInput>,
     pub binding_table: PreparedMaterialBindingTable,
     pub scene_bundle: Option<PreparedSceneMaterialBundle>,
+    pub model_mesh_material_selections: Vec<PreparedModelMeshMaterialSelection>,
 }
 
 pub const PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT: usize = 128;
@@ -418,6 +586,34 @@ impl PreparedMaterialFeatureContribution {
                         binding.resource_slot_index
                     )));
                 }
+            }
+        }
+        let mut seen_model_mesh_regions = std::collections::BTreeSet::new();
+        for selection in &self.model_mesh_material_selections {
+            if selection.material_table_index as usize
+                >= PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT
+            {
+                return Err(PreparedMaterialBindingTableError::new(format!(
+                    "model/mesh material table slot {} exceeds portable limit {}",
+                    selection.material_table_index,
+                    PREPARED_MATERIAL_BINDING_TABLE_PORTABLE_SLOT_LIMIT
+                )));
+            }
+            if selection.requested_material_slot_id == 0 {
+                return Err(PreparedMaterialBindingTableError::new(
+                    "requested model/mesh material slot id must be non-zero",
+                ));
+            }
+            if selection.resolved_material_slot_id == 0 {
+                return Err(PreparedMaterialBindingTableError::new(
+                    "resolved model/mesh material slot id must be non-zero",
+                ));
+            }
+            if !seen_model_mesh_regions.insert(selection.surface.identity_key()) {
+                return Err(PreparedMaterialBindingTableError::new(format!(
+                    "duplicate model/mesh material region '{}'",
+                    selection.surface.identity_key()
+                )));
             }
         }
         Ok(())
@@ -1171,6 +1367,7 @@ mod tests {
             }],
             binding_table: PreparedMaterialBindingTable::default(),
             scene_bundle: None,
+            model_mesh_material_selections: Vec::new(),
         };
 
         let error = contribution
@@ -1181,6 +1378,97 @@ mod tests {
             error
                 .to_string()
                 .contains("duplicate material texture resource slot")
+        );
+    }
+
+    #[test]
+    fn model_mesh_surface_material_selection_uses_typed_identity() {
+        let source = PreparedModelMeshMaterialSourceIdentity::new(42, 84)
+            .expect("source-backed model/mesh identity should be valid")
+            .with_source_revision_id(2)
+            .with_source_revision("sha256:abc");
+        let surface =
+            PreparedModelMeshMaterialRegionIdentity::new(source, "source_material_slot:0")
+                .expect("source-backed model/mesh identity should be valid");
+        let selection = PreparedModelMeshMaterialSelection::new(surface.clone(), 2, 2, 1, false)
+            .expect("source-backed model/mesh material selection should form");
+        let contribution = PreparedMaterialFeatureContribution {
+            instances: Vec::new(),
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+            model_mesh_material_selections: vec![selection.clone()],
+        };
+
+        contribution
+            .validate_portable_limits()
+            .expect("typed model/mesh material selection should validate");
+        assert_eq!(
+            contribution.model_mesh_material_selections[0].surface,
+            surface
+        );
+        assert_eq!(
+            contribution.model_mesh_material_selections[0]
+                .surface
+                .source
+                .asset_id,
+            42
+        );
+        assert_eq!(
+            contribution.model_mesh_material_selections[0]
+                .surface
+                .source
+                .source_id,
+            84
+        );
+        assert_eq!(
+            contribution.model_mesh_material_selections[0].material_table_index,
+            1
+        );
+        assert_eq!(
+            contribution.model_mesh_material_selections[0].requested_material_slot_id,
+            2
+        );
+    }
+
+    #[test]
+    fn model_mesh_surface_material_selection_rejects_transient_renderer_identity() {
+        let source =
+            PreparedModelMeshMaterialSourceIdentity::new(42, 84).expect("source should form");
+        let region_error =
+            PreparedModelMeshMaterialRegionIdentity::new(source, "renderable_index:7").expect_err(
+                "raw renderer identity must not become prepared model/mesh region truth",
+            );
+
+        assert!(region_error.to_string().contains("transient"));
+    }
+
+    #[test]
+    fn model_mesh_surface_material_selection_rejects_duplicate_regions() {
+        let source = PreparedModelMeshMaterialSourceIdentity::new(42, 84)
+            .expect("source-backed model/mesh identity should be valid");
+        let surface =
+            PreparedModelMeshMaterialRegionIdentity::new(source, "source_material_slot:0")
+                .expect("source-backed model/mesh identity should be valid");
+        let contribution = PreparedMaterialFeatureContribution {
+            instances: Vec::new(),
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+            model_mesh_material_selections: vec![
+                PreparedModelMeshMaterialSelection::new(surface.clone(), 2, 2, 1, false)
+                    .expect("first selection should validate"),
+                PreparedModelMeshMaterialSelection::new(surface, 3, 3, 2, false)
+                    .expect("second selection should validate"),
+            ],
+        };
+
+        let error = contribution
+            .validate_portable_limits()
+            .expect_err("same source-backed region cannot be selected twice");
+
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate model/mesh material region")
         );
     }
 }

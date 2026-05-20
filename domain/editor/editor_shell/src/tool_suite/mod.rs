@@ -1,16 +1,22 @@
 //! File: domain/editor/editor_shell/src/tool_suite/mod.rs
 //! Purpose: Stable tool-suite registry contracts for editor-hosted surfaces.
 
+pub mod capability;
 pub mod definition;
 pub mod identity;
 pub mod legacy;
 pub mod registry;
 
+pub use capability::HostCapabilityPolicy;
 pub use definition::{
-    EditorToolSuite, ProviderFamilyDefinition, ToolSurfaceDefinition, ToolSurfacePersistence,
-    ToolSurfaceRole, ToolSurfaceRoute,
+    EditorToolSuite, ProviderFamilyDefinition, ToolSuiteProfileDefinition, ToolSurfaceDefinition,
+    ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
 };
-pub use identity::{ProviderFamilyId, ToolSuiteId, ToolSuiteIdentityError, ToolSurfaceStableKey};
+pub use identity::{
+    CommandCapabilityKey, ProductCapabilityKey, ProfileRef, ProviderFamilyId,
+    ResourceCapabilityKey, SuiteRef, SurfaceRef, ToolSuiteId, ToolSuiteIdentityError,
+    ToolSurfaceStableKey,
+};
 pub use legacy::{
     LegacyToolSurfaceResolution, LegacyToolSurfaceStableKeyCandidate,
     SAVEABLE_TOOL_SURFACE_STABLE_KEY_CANDIDATES, resolve_legacy_tool_surface_kind,
@@ -20,6 +26,8 @@ pub use legacy::{
     tool_surface_kind_for_stable_key,
 };
 pub use registry::{
-    ProviderFamilyProviderAssignment, ProviderFamilyProviderMap, ProviderFamilyProviderMapError,
-    ToolSuiteRegistry, ToolSuiteRegistryError, ToolSurfaceRegistry, ToolSurfaceResolution,
+    ProviderBundle, ProviderBundleError, ProviderFamilyProviderAssignment,
+    ProviderFamilyProviderMap, ProviderFamilyProviderMapError, ToolSuiteRegistry,
+    ToolSuiteRegistryError, ToolSurfaceRegistry, ToolSurfaceResolution, WorkbenchComposition,
+    WorkbenchCompositionBuildError, WorkbenchCompositionBuilder,
 };

@@ -106,6 +106,72 @@ macro_rules! stable_identity {
 stable_identity!(ToolSuiteId, "tool suite id");
 stable_identity!(ToolSurfaceStableKey, "tool surface stable key");
 stable_identity!(ProviderFamilyId, "provider family id");
+stable_identity!(ProfileRef, "profile ref");
+stable_identity!(CommandCapabilityKey, "command capability key");
+stable_identity!(ProductCapabilityKey, "product capability key");
+stable_identity!(ResourceCapabilityKey, "resource capability key");
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SuiteRef {
+    id: ToolSuiteId,
+}
+
+impl SuiteRef {
+    pub fn new(id: ToolSuiteId) -> Self {
+        Self { id }
+    }
+
+    pub fn from_stable_key(value: impl Into<String>) -> Result<Self, ToolSuiteIdentityError> {
+        ToolSuiteId::new(value).map(Self::new)
+    }
+
+    pub const fn id(&self) -> &ToolSuiteId {
+        &self.id
+    }
+}
+
+impl From<ToolSuiteId> for SuiteRef {
+    fn from(id: ToolSuiteId) -> Self {
+        Self::new(id)
+    }
+}
+
+impl fmt::Display for SuiteRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.id.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SurfaceRef {
+    key: ToolSurfaceStableKey,
+}
+
+impl SurfaceRef {
+    pub fn new(key: ToolSurfaceStableKey) -> Self {
+        Self { key }
+    }
+
+    pub fn from_stable_key(value: impl Into<String>) -> Result<Self, ToolSuiteIdentityError> {
+        ToolSurfaceStableKey::new(value).map(Self::new)
+    }
+
+    pub const fn key(&self) -> &ToolSurfaceStableKey {
+        &self.key
+    }
+}
+
+impl From<ToolSurfaceStableKey> for SurfaceRef {
+    fn from(key: ToolSurfaceStableKey) -> Self {
+        Self::new(key)
+    }
+}
+
+impl fmt::Display for SurfaceRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.key.fmt(f)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -127,6 +193,13 @@ mod tests {
     }
 
     #[test]
+    fn capability_keys_reject_invalid_values() {
+        assert_invalid::<CommandCapabilityKey>();
+        assert_invalid::<ProductCapabilityKey>();
+        assert_invalid::<ResourceCapabilityKey>();
+    }
+
+    #[test]
     fn stable_ids_accept_lowercase_dotted_values() {
         let suite_id = ToolSuiteId::new("runenwerk.material_lab").unwrap();
         let surface_key = ToolSurfaceStableKey::from_str("runenwerk.material_lab.graph_canvas")
@@ -140,6 +213,21 @@ mod tests {
             "runenwerk.material_lab.graph_canvas"
         );
         assert_eq!(provider_family.as_str(), "runenwerk.material_lab");
+    }
+
+    #[test]
+    fn typed_handles_preserve_exact_stable_identity() {
+        let suite_ref = SuiteRef::from_stable_key("runenwerk.material_lab").unwrap();
+        let surface_ref =
+            SurfaceRef::from_stable_key("runenwerk.material_lab.graph_canvas").unwrap();
+        let profile_ref = ProfileRef::new("runenwerk.material_lab.default").unwrap();
+
+        assert_eq!(suite_ref.to_string(), "runenwerk.material_lab");
+        assert_eq!(
+            surface_ref.to_string(),
+            "runenwerk.material_lab.graph_canvas"
+        );
+        assert_eq!(profile_ref.as_str(), "runenwerk.material_lab.default");
     }
 
     fn assert_invalid<T>()

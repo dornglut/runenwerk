@@ -1,5 +1,5 @@
-use super::*;
 use super::diagnostics::material_diagnostic;
+use super::*;
 
 pub fn catalog_with_material_artifact(
     catalog: &AssetCatalog,

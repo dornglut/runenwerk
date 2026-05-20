@@ -8,7 +8,8 @@ use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInvocationId,
     PreparedFlowInvocationRequest, PreparedMaterialFeatureResource,
-    PreparedRenderFrameRequestResource, PreparedTargetBinding, PreparedViewFrame, RenderFlowId,
+    PreparedRenderFrameRequestResource, PreparedTargetBinding, PreparedViewFrame,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId,
     RenderFlowRegistryResource, ShaderRegistryResource, compile_scene_material_table_shader,
 };
 use engine::runtime::{Res, ResMut};
@@ -17,14 +18,19 @@ use engine::runtime::{Res, ResMut};
 use crate::material_lab::prepared_material_resource_for_preview_with_resolved_scene_materials_and_bundle;
 use crate::material_lab::workflow::write_scene_material_table_shader_bundle;
 use crate::material_lab::{
-    EditorMaterialPreviewProduct, EditorSceneMaterialTableShaderBundle, PreviewSceneProduct,
-    PreviewSceneProductBuildOutcome, PreviewSceneProductBuildStatus, PreviewSceneProductDiagnostic,
-    SceneMaterialSlotProduct, build_preview_scene_product_for_scene_material_table,
+    EditorMaterialPreviewProduct, EditorSceneMaterialTableShaderBundle,
+    MATERIAL_PREVIEW_SCENE_SURFACE_HEIGHT, MATERIAL_PREVIEW_SCENE_SURFACE_WIDTH,
+    PreviewSceneProduct, PreviewSceneProductBuildOutcome, PreviewSceneProductBuildStatus,
+    PreviewSceneProductDiagnostic, SceneMaterialSlotProduct,
+    build_preview_scene_product_for_scene_material_table,
+    material_preview_scene_surface_descriptor, material_preview_scene_surface_target_key,
     prepared_material_resource_for_preview, prepared_material_resource_for_preview_scene_product,
     scene_material_table_shader_build_request_for_preview,
 };
 use crate::runtime::app::{EDITOR_MATERIAL_PREVIEW_FLOW_ID, EDITOR_MATERIAL_PREVIEW_SHADER_ID};
-use crate::runtime::resources::EditorHostResource;
+use crate::runtime::resources::{
+    EditorHostResource, EditorViewportModelMeshMaterialSelectionPacket,
+};
 use crate::runtime::viewport::{
     EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID, VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW,
     ViewportProductTargetRegistryResource, ViewportProductTargetStatus,
@@ -104,6 +110,16 @@ pub fn prepare_material_preview_render_resource_system(
         scene_table_bundle.as_ref(),
         &mut material_feature,
         &mut shader_registry,
+    ) {
+        host.app
+            .material_lab_runtime_mut()
+            .record_diagnostic(diagnostic);
+    }
+    let model_mesh_selection_packet =
+        model_mesh_material_selection_packet_from_assignments(&scene_material_assignments);
+    if let Some(diagnostic) = apply_model_mesh_material_selection_packet(
+        &mut material_feature,
+        &model_mesh_selection_packet,
     ) {
         host.app
             .material_lab_runtime_mut()
@@ -495,35 +511,96 @@ fn collect_scene_material_slot_products<'a>(
         .collect()
 }
 
+fn model_mesh_material_selection_packet_from_assignments(
+    scene_material_assignments: &SceneMaterialAssignmentState,
+) -> EditorViewportModelMeshMaterialSelectionPacket {
+    let material_regions = scene_material_assignments
+        .model_mesh_assignments()
+        .map(|assignment| assignment.material_region)
+        .collect::<Vec<_>>();
+    EditorViewportModelMeshMaterialSelectionPacket::from_model_mesh_regions(
+        scene_material_assignments,
+        material_regions,
+    )
+}
+
+pub(crate) fn apply_model_mesh_material_selection_packet(
+    material_feature: &mut PreparedMaterialFeatureResource,
+    packet: &EditorViewportModelMeshMaterialSelectionPacket,
+) -> Option<asset::AssetDiagnosticRecord> {
+    if packet.has_blocking_diagnostics() {
+        material_feature.status = FeatureContributionStatus::Stale;
+        material_feature.fallback_policy = FeatureFallbackPolicy::ReuseLastGood;
+        return packet
+            .diagnostics()
+            .first()
+            .map(model_mesh_material_selection_asset_diagnostic);
+    }
+    if material_feature.status != FeatureContributionStatus::Ready {
+        return None;
+    }
+    material_feature.payload.model_mesh_material_selections = packet.prepared_material_selections();
+    if let Err(error) = material_feature.payload.validate_portable_limits() {
+        material_feature.status = FeatureContributionStatus::Stale;
+        material_feature.fallback_policy = FeatureFallbackPolicy::ReuseLastGood;
+        return Some(asset::AssetDiagnosticRecord::error(
+            asset::AssetDiagnosticCode::RatificationRejected,
+            format!("model/mesh material selection handoff rejected portable limits: {error}"),
+        ));
+    }
+    None
+}
+
+fn model_mesh_material_selection_asset_diagnostic(
+    diagnostic: &editor_scene::SceneMaterialBindingDiagnostic,
+) -> asset::AssetDiagnosticRecord {
+    asset::AssetDiagnosticRecord::error(
+        asset::AssetDiagnosticCode::RatificationRejected,
+        diagnostic.message.clone(),
+    )
+}
+
 pub fn produce_material_preview_dynamic_uploads_system(
     material_feature: Res<PreparedMaterialFeatureResource>,
     flow_registry: Res<RenderFlowRegistryResource>,
     product_targets: Res<ViewportProductTargetRegistryResource>,
     host: Res<EditorHostResource>,
+    mut dynamic_target_requests: ResMut<RenderDynamicTextureTargetRequestRegistryResource>,
     mut prepared_frame_requests: ResMut<PreparedRenderFrameRequestResource>,
 ) {
     let Some(flow_id) = material_preview_flow_id(&flow_registry) else {
+        let _ = dynamic_target_requests
+            .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
         let _ = prepared_frame_requests
             .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
         return;
     };
     let Some(preview) = host.app.material_lab_runtime().active_preview() else {
+        let _ = dynamic_target_requests
+            .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
         let _ = prepared_frame_requests
             .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
         return;
     };
     if material_feature.status != FeatureContributionStatus::Ready {
+        let _ = dynamic_target_requests
+            .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
         let _ = prepared_frame_requests
             .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
         return;
     }
 
-    let requests = material_preview_flow_requests(preview, flow_id, &product_targets);
-    if requests.is_empty() {
-        let _ = prepared_frame_requests
-            .remove_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID);
-        return;
-    }
+    dynamic_target_requests
+        .replace_contribution(
+            EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID,
+            [material_preview_scene_surface_descriptor(preview)],
+        )
+        .expect("material preview product-surface target contribution must be unique");
+
+    let mut requests = material_preview_flow_requests(preview, flow_id, &product_targets);
+    requests.push(material_preview_scene_surface_flow_request(
+        preview, flow_id,
+    ));
     let views = requests
         .iter()
         .map(|(_, view, _)| view.clone())
@@ -539,6 +616,47 @@ pub fn produce_material_preview_dynamic_uploads_system(
             invocations,
         )
         .expect("material preview render producer contribution must be unique");
+}
+
+pub(crate) fn material_preview_scene_surface_flow_request(
+    preview: &EditorMaterialPreviewProduct,
+    flow_id: RenderFlowId,
+) -> (
+    RenderDynamicTextureTargetKey,
+    PreparedViewFrame,
+    PreparedFlowInvocationRequest,
+) {
+    let target = material_preview_scene_surface_target_key(preview);
+    let view_id = format!(
+        "editor.material.preview.surface.{}.view",
+        preview.product_id().raw()
+    );
+    let view = PreparedViewFrame::offscreen_product(
+        view_id.clone(),
+        (
+            MATERIAL_PREVIEW_SCENE_SURFACE_WIDTH,
+            MATERIAL_PREVIEW_SCENE_SURFACE_HEIGHT,
+        ),
+    );
+    let request = PreparedFlowInvocationRequest {
+        invocation_id: PreparedFlowInvocationId::new(format!(
+            "editor.material.preview.surface.{}.{}",
+            preview.product_id().raw(),
+            preview.shader_identity
+        )),
+        flow_id,
+        view_id,
+        target_alias_bindings: BTreeMap::from([(
+            VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW.to_string(),
+            PreparedTargetBinding::DynamicTexture(target.clone()),
+        )]),
+        uniform_overrides: BTreeMap::new(),
+        history_signature: Some(format!(
+            "material-preview-surface:{}",
+            preview.shader_identity
+        )),
+    };
+    (target, view, request)
 }
 
 pub(crate) fn material_preview_flow_requests(
@@ -594,7 +712,10 @@ fn material_preview_flow_id(flow_registry: &RenderFlowRegistryResource) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asset::{ArtifactCacheKey, AssetKind, asset_artifact_id, asset_id, asset_source_id};
+    use asset::{
+        ArtifactCacheKey, AssetKind, asset_artifact_id, asset_id, asset_source_id,
+        asset_source_revision_id,
+    };
     use editor_core::RealityVersion;
     use graph::{
         CyclePolicy, GraphDefinition, GraphId, GraphMetadataEntry, GraphValue, NodeDefinition,
@@ -672,6 +793,52 @@ mod tests {
                 .target_alias_bindings
                 .get(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW),
             Some(&PreparedTargetBinding::DynamicTexture(target))
+        );
+    }
+
+    #[test]
+    fn material_preview_scene_surface_request_targets_provider_product_surface() {
+        let preview = preview();
+        let flow_id = RenderFlowId::try_from_raw(99).unwrap();
+
+        let (target, view, request) =
+            material_preview_scene_surface_flow_request(&preview, flow_id);
+
+        assert_eq!(target, material_preview_scene_surface_target_key(&preview));
+        assert_eq!(
+            target.label(),
+            "runenwerk.editor.material_lab.preview_scene:material-product-3-scene"
+        );
+        assert_eq!(
+            view.kind,
+            engine::plugins::render::PreparedViewKind::OffscreenProduct
+        );
+        assert_eq!(
+            view.view_id,
+            "editor.material.preview.surface.3.view".to_string()
+        );
+        assert_eq!(
+            view.target_size_px,
+            (
+                MATERIAL_PREVIEW_SCENE_SURFACE_WIDTH,
+                MATERIAL_PREVIEW_SCENE_SURFACE_HEIGHT
+            )
+        );
+        assert_eq!(request.flow_id, flow_id);
+        assert_eq!(request.view_id, view.view_id);
+        assert_eq!(
+            request.invocation_id.0,
+            "editor.material.preview.surface.3.shader-identity"
+        );
+        assert_eq!(
+            request
+                .target_alias_bindings
+                .get(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW),
+            Some(&PreparedTargetBinding::DynamicTexture(target))
+        );
+        assert_eq!(
+            request.history_signature.as_deref(),
+            Some("material-preview-surface:shader-identity")
         );
     }
 
@@ -846,6 +1013,66 @@ mod tests {
             bundle.resource_layout_identity
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn model_mesh_material_selection_packet_reaches_material_feature_payload() {
+        let assigned_slot = editor_scene::SceneMaterialSlotId::new(2);
+        let palette = editor_scene::SceneMaterialPalette::new([
+            editor_scene::SceneMaterialSlot::default_generated(),
+            editor_scene::SceneMaterialSlot::new(assigned_slot, "Imported Body")
+                .with_material_asset(asset_id(8)),
+        ])
+        .expect("valid palette");
+        let material_region = editor_scene::SceneModelMeshMaterialRegionSourceId::new(
+            editor_scene::SceneModelMeshSourceId::new(asset_id(42), asset_source_id(84))
+                .with_source_revision_id(asset_source_revision_id(2))
+                .with_source_revision("sha256:model-source"),
+            editor_scene::SceneMeshMaterialRegionId::new("source_material_slot:0")
+                .expect("stable source material key should form"),
+        );
+        let assignments = SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+            palette,
+            [],
+            [editor_scene::SceneModelMeshMaterialSlotAssignment::new(
+                material_region.clone(),
+                assigned_slot,
+            )],
+        )
+        .expect("valid assignments");
+        let packet = model_mesh_material_selection_packet_from_assignments(&assignments);
+        let mut material_feature = PreparedMaterialFeatureResource {
+            status: FeatureContributionStatus::Ready,
+            fallback_policy: FeatureFallbackPolicy::ReuseLastGood,
+            payload: Default::default(),
+        };
+
+        let diagnostic = apply_model_mesh_material_selection_packet(&mut material_feature, &packet);
+
+        assert!(diagnostic.is_none());
+        let selections = &material_feature.payload.model_mesh_material_selections;
+        assert_eq!(selections.len(), 1);
+        assert_eq!(selections[0].surface.source.asset_id, asset_id(42).raw());
+        assert_eq!(
+            selections[0].surface.source.source_id,
+            asset_source_id(84).raw()
+        );
+        assert_eq!(
+            selections[0].surface.source.source_revision_id,
+            Some(asset_source_revision_id(2).raw())
+        );
+        assert_eq!(
+            selections[0].surface.source.source_revision.as_deref(),
+            Some("sha256:model-source")
+        );
+        assert_eq!(selections[0].surface.region_key, "source_material_slot:0");
+        assert_eq!(
+            selections[0].requested_material_slot_id,
+            assigned_slot.raw()
+        );
+        assert_eq!(selections[0].resolved_material_slot_id, assigned_slot.raw());
+        assert_eq!(selections[0].material_table_index, 1);
+        assert!(!selections[0].used_default_fallback);
     }
 
     fn texture_preview(

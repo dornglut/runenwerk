@@ -1,14 +1,28 @@
-use super::*;
 use super::picker_projection::{
-    material_node_palette_view_model, material_node_picker_view_model,
+    material_model_mesh_region_binding_view_model, material_node_palette_view_model,
+    material_node_picker_view_model, material_scene_material_slot_option_view_model,
     material_texture_resource_picker_view_model,
 };
+use super::*;
 
 impl MaterialLabRuntime {
     pub fn graph_canvas_view_model(
         &self,
         catalog: &AssetCatalog,
         catalog_status_lines: Vec<String>,
+    ) -> MaterialGraphCanvasViewModel {
+        self.graph_canvas_view_model_with_scene_material_assignments(
+            catalog,
+            catalog_status_lines,
+            None,
+        )
+    }
+
+    pub fn graph_canvas_view_model_with_scene_material_assignments(
+        &self,
+        catalog: &AssetCatalog,
+        catalog_status_lines: Vec<String>,
+        scene_material_assignments: Option<&SceneMaterialAssignmentState>,
     ) -> MaterialGraphCanvasViewModel {
         let rows = catalog
             .assets()
@@ -57,6 +71,14 @@ impl MaterialLabRuntime {
             texture_picker: material_texture_resource_picker_view_model(
                 catalog,
                 &self.texture_resource_search_query,
+            ),
+            sdf_primitives: Vec::new(),
+            model_mesh_regions: material_model_mesh_region_binding_view_model(
+                catalog,
+                scene_material_assignments,
+            ),
+            scene_material_slots: material_scene_material_slot_option_view_model(
+                scene_material_assignments,
             ),
             toolbar: material_graph_toolbar_view_model(
                 self.active_source_document().map(|(_, document)| document),
@@ -123,8 +145,6 @@ impl MaterialLabRuntime {
             diagnostic_lines: self.diagnostic_lines(),
         }
     }
-
-
 }
 
 fn selected_material_detail(
@@ -748,4 +768,3 @@ fn material_graph_shortcut_view_model() -> Vec<MaterialGraphShortcutViewModel> {
         },
     ]
 }
-

@@ -1,9 +1,8 @@
 use editor_shell::{
     BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, ComputedLayoutMap, DockDropCandidate,
     DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope, DockSplitSide,
-    DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId, ProjectedTabStackSlot,
-    PanelKind, ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame,
-    SurfaceCommandProposal,
+    DockingPreviewDropTarget, EditorShellFrameModel, PanelHostId, PanelKind, ProjectedTabStackSlot,
+    ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
     TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
     TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination,
     ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceStableKey, UiInputOutcome, UiInteractionResults,
@@ -42,6 +41,7 @@ use editor_shell::TabStackPopupMenuKind;
 
 const CONSOLE_FOLLOW_BOTTOM_EPSILON: f32 = 1.0;
 const SPLIT_HIT_SLOP_PX: f32 = 12.0;
+const SPLIT_BORDER_ROUTE_OVERRIDE_PX: f32 = 3.0;
 const SPLIT_MIN_FRACTION: f32 = 0.08;
 const SPLIT_MAX_FRACTION: f32 = 0.92;
 const CORNER_AREA_SPLIT_THRESHOLD_PX: f32 = 18.0;
@@ -1310,13 +1310,11 @@ impl RunenwerkEditorShellController {
         let candidate =
             resolve_split_resize_target(pointer.position, layouts, projection_artifacts)?;
         let split_distance = split_resize_distance(pointer.position, layouts, candidate);
-        if tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some() {
-            if split_distance > 3.0 {
-                return None;
-            }
-        } else if routed_action_widget_at_pointer(projection_artifacts, layouts, pointer.position)
-            .is_some()
-        {
+        let routed_widget_under_pointer =
+            tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some()
+                || routed_action_widget_at_pointer(projection_artifacts, layouts, pointer.position)
+                    .is_some();
+        if routed_widget_under_pointer && split_distance > SPLIT_BORDER_ROUTE_OVERRIDE_PX {
             return None;
         }
         shell_state.begin_workspace_split_resize(

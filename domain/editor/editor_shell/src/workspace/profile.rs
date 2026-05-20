@@ -141,6 +141,9 @@ pub struct WorkspaceProfileToolSurfaceUnmappedLegacySurface {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorkspaceProfileRegistryBackedBuildError {
+    UnknownWorkspaceProfile {
+        profile_id: WorkspaceProfileId,
+    },
     UnregisteredDefaultToolSurface {
         profile_id: WorkspaceProfileId,
         legacy_tool_surface_kind: Option<ToolSurfaceKind>,
@@ -163,6 +166,11 @@ pub enum WorkspaceProfileRegistryBackedBuildError {
 impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnknownWorkspaceProfile { profile_id } => write!(
+                f,
+                "workspace profile {} is not registered",
+                profile_id.raw()
+            ),
             Self::UnregisteredDefaultToolSurface {
                 profile_id,
                 legacy_tool_surface_kind,
@@ -616,7 +624,11 @@ pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {
                     ToolSurfaceKind::Diagnostics,
                     ToolSurfaceKind::Console,
                 ],
-                vec![DocumentKind::MaterialGraph, DocumentKind::Material],
+                vec![
+                    DocumentKind::Scene,
+                    DocumentKind::MaterialGraph,
+                    DocumentKind::Material,
+                ],
             ),
             m6_workspace_profile(
                 TEXTURE_WORKSPACE_PROFILE_ID,

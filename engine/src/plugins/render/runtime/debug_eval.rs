@@ -545,6 +545,7 @@ mod tests {
                 }],
                 binding_table: PreparedMaterialBindingTable::default(),
                 scene_bundle: None,
+                model_mesh_material_selections: Vec::new(),
             },
         });
         world.insert_resource(PreparedDeformationFeatureResource {
@@ -617,6 +618,7 @@ mod tests {
                 }],
                 binding_table: PreparedMaterialBindingTable::default(),
                 scene_bundle: None,
+                model_mesh_material_selections: Vec::new(),
             },
         });
 

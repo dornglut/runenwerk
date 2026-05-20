@@ -457,7 +457,10 @@ fn diagnostic_rows(
                     ToolSuiteRegistryInspectorDiagnosticSeverity::Warning,
                     ToolSuiteRegistryInspectorDiagnosticScope::Suite,
                     "inspector.suite.empty",
-                    format!("suite `{}` has no surfaces or provider families", suite.suite_id),
+                    format!(
+                        "suite `{}` has no surfaces or provider families",
+                        suite.suite_id
+                    ),
                 )
                 .with_suite_id(suite.suite_id.as_str().to_string()),
             );
@@ -475,8 +478,8 @@ fn diagnostic_rows(
                         ToolSuiteRegistryInspectorDiagnosticScope::ProviderFamily,
                         "inspector.provider_family.missing_assignment",
                         format!(
-                        "provider family `{}` has no concrete provider assignment",
-                        provider_family.id.as_str()
+                            "provider family `{}` has no concrete provider assignment",
+                            provider_family.id.as_str()
                         ),
                     )
                     .with_suite_id(suite.suite_id.as_str().to_string())
@@ -494,9 +497,9 @@ fn diagnostic_rows(
                     ToolSuiteRegistryInspectorDiagnosticScope::ProviderAssignment,
                     "inspector.provider_assignment.unknown_provider",
                     format!(
-                    "provider family `{}` references unknown provider `{}`",
-                    assignment.provider_family_id.as_str(),
-                    assignment.provider_id
+                        "provider family `{}` references unknown provider `{}`",
+                        assignment.provider_family_id.as_str(),
+                        assignment.provider_id
                     ),
                 )
                 .with_provider_family_id(assignment.provider_family_id.as_str().to_string())
@@ -505,8 +508,8 @@ fn diagnostic_rows(
         }
     }
 
-    let compatibility =
-        workspace_state.validate_tool_surface_registry_compatibility(tool_suite_registry.surfaces());
+    let compatibility = workspace_state
+        .validate_tool_surface_registry_compatibility(tool_suite_registry.surfaces());
     for unknown in compatibility.unknown_stable_keys {
         diagnostics.push(
             diagnostic_row(
@@ -647,7 +650,9 @@ fn provider_resolution_severity(
     availability: SurfaceProviderAvailability,
 ) -> ToolSuiteRegistryInspectorDiagnosticSeverity {
     match availability {
-        SurfaceProviderAvailability::Available => ToolSuiteRegistryInspectorDiagnosticSeverity::Info,
+        SurfaceProviderAvailability::Available => {
+            ToolSuiteRegistryInspectorDiagnosticSeverity::Info
+        }
         SurfaceProviderAvailability::Unsupported => {
             ToolSuiteRegistryInspectorDiagnosticSeverity::Warning
         }
@@ -697,10 +702,7 @@ fn diagnostic_row(
 }
 
 impl ToolSuiteRegistryInspectorDiagnosticRow {
-    fn with_severity(
-        mut self,
-        severity: ToolSuiteRegistryInspectorDiagnosticSeverity,
-    ) -> Self {
+    fn with_severity(mut self, severity: ToolSuiteRegistryInspectorDiagnosticSeverity) -> Self {
         self.severity = severity;
         self
     }
@@ -725,10 +727,7 @@ impl ToolSuiteRegistryInspectorDiagnosticRow {
         self
     }
 
-    fn with_optional_provider_family_id(
-        mut self,
-        provider_family_id: Option<String>,
-    ) -> Self {
+    fn with_optional_provider_family_id(mut self, provider_family_id: Option<String>) -> Self {
         self.related_provider_family_id = provider_family_id;
         self
     }
@@ -738,10 +737,7 @@ impl ToolSuiteRegistryInspectorDiagnosticRow {
         self
     }
 
-    fn with_mounted_surface_id(
-        mut self,
-        mounted_surface_id: ToolSurfaceInstanceId,
-    ) -> Self {
+    fn with_mounted_surface_id(mut self, mounted_surface_id: ToolSurfaceInstanceId) -> Self {
         self.related_mounted_surface_id = Some(mounted_surface_id);
         self
     }
@@ -799,17 +795,19 @@ fn mounted_surface_rows(
                 .collect(),
             resolved_provider_id: observation.selected_provider_id,
             resolution_status: observation.availability,
-                diagnostics: observation
+            diagnostics: observation
                 .diagnostic
                 .map(|diagnostic| {
-                    vec![diagnostic_row(
-                        ToolSuiteRegistryInspectorDiagnosticSeverity::Info,
-                        ToolSuiteRegistryInspectorDiagnosticScope::ProviderResolution,
-                        diagnostic.code,
-                        diagnostic.message,
-                    )
-                    .with_surface_key(request.stable_surface_key.as_str().to_string())
-                    .with_mounted_surface_id(request.tool_surface_instance_id)]
+                    vec![
+                        diagnostic_row(
+                            ToolSuiteRegistryInspectorDiagnosticSeverity::Info,
+                            ToolSuiteRegistryInspectorDiagnosticScope::ProviderResolution,
+                            diagnostic.code,
+                            diagnostic.message,
+                        )
+                        .with_surface_key(request.stable_surface_key.as_str().to_string())
+                        .with_mounted_surface_id(request.tool_surface_instance_id),
+                    ]
                 })
                 .unwrap_or_default(),
         })
@@ -933,22 +931,22 @@ fn live_workspace_preview_error_rows(
                     surface.legacy_tool_surface_kind().is_some(),
                 ),
                 validation_status: ToolSuiteRegistryInspectorPersistenceValidationStatus::Error,
-                diagnostics: vec![diagnostic_row(
-                    ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
-                    ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview,
-                    "inspector.v5_preview.conversion_error",
-                    error_message.clone(),
-                )
-                .with_surface_key(surface.stable_surface_key().as_str().to_string())
-                .with_mounted_surface_id(surface.id)],
+                diagnostics: vec![
+                    diagnostic_row(
+                        ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
+                        ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview,
+                        "inspector.v5_preview.conversion_error",
+                        error_message.clone(),
+                    )
+                    .with_surface_key(surface.stable_surface_key().as_str().to_string())
+                    .with_mounted_surface_id(surface.id),
+                ],
             }
         })
         .collect()
 }
 
-fn panel_id_from_persisted_mount(
-    mount: &PersistedToolSurfaceMountV1,
-) -> Option<PanelInstanceId> {
+fn panel_id_from_persisted_mount(mount: &PersistedToolSurfaceMountV1) -> Option<PanelInstanceId> {
     match mount {
         PersistedToolSurfaceMountV1::Mounted { panel_id } => {
             PanelInstanceId::try_from_raw(*panel_id).ok()
@@ -1180,13 +1178,13 @@ mod tests {
 
     fn view_model() -> ToolSuiteRegistryInspectorViewModel {
         let mut app = RunenwerkEditorApp::new();
-        app.runtime_mut().session_mut().upsert_document(
-            editor_core::DocumentDescriptor::new(
+        app.runtime_mut()
+            .session_mut()
+            .upsert_document(editor_core::DocumentDescriptor::new(
                 editor_core::DocumentId(1),
                 editor_core::DocumentKind::Scene,
                 "Scene",
-            ),
-        );
+            ));
         let shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
             app.workbench_host().tool_surface_registry(),
         )
@@ -1276,8 +1274,8 @@ mod tests {
         availability: SurfaceProviderAvailability,
         code: &'static str,
     ) -> ToolSuiteRegistryInspectorMountedSurfaceRow {
-        let surface_id = ToolSurfaceInstanceId::try_from_raw(1)
-            .expect("test surface id should be non-zero");
+        let surface_id =
+            ToolSurfaceInstanceId::try_from_raw(1).expect("test surface id should be non-zero");
         ToolSuiteRegistryInspectorMountedSurfaceRow {
             workspace_profile_id: editor_shell::SCENE_WORKSPACE_PROFILE_ID,
             panel_instance_id: PanelInstanceId::try_from_raw(1)
@@ -1294,13 +1292,15 @@ mod tests {
             support_modes: Vec::new(),
             resolved_provider_id: None,
             resolution_status: availability,
-            diagnostics: vec![diagnostic_row(
-                ToolSuiteRegistryInspectorDiagnosticSeverity::Info,
-                ToolSuiteRegistryInspectorDiagnosticScope::ProviderResolution,
-                code,
-                "test diagnostic".to_string(),
-            )
-            .with_mounted_surface_id(surface_id)],
+            diagnostics: vec![
+                diagnostic_row(
+                    ToolSuiteRegistryInspectorDiagnosticSeverity::Info,
+                    ToolSuiteRegistryInspectorDiagnosticScope::ProviderResolution,
+                    code,
+                    "test diagnostic".to_string(),
+                )
+                .with_mounted_surface_id(surface_id),
+            ],
         }
     }
 
@@ -1314,7 +1314,11 @@ mod tests {
         let workspace_before = shell_state.workspace_state().clone();
         let suite_count_before = app.workbench_host().tool_suite_registry().suites().len();
         let surface_count_before = app.workbench_host().tool_surface_registry().iter().count();
-        let provider_count_before = app.workbench_host().provider_registry().provider_ids().count();
+        let provider_count_before = app
+            .workbench_host()
+            .provider_registry()
+            .provider_ids()
+            .count();
         let assignment_count_before = app
             .workbench_host()
             .provider_family_provider_map()
@@ -1345,7 +1349,10 @@ mod tests {
             surface_count_before
         );
         assert_eq!(
-            app.workbench_host().provider_registry().provider_ids().count(),
+            app.workbench_host()
+                .provider_registry()
+                .provider_ids()
+                .count(),
             provider_count_before
         );
         assert_eq!(
@@ -1399,12 +1406,16 @@ mod tests {
             .find(|row| row.family_id == "runenwerk.diagnostics")
             .expect("diagnostics provider family should be visible");
 
-        assert!(diagnostics_family
-            .assigned_provider_ids
-            .contains(&M6_WORKSPACE_PROVIDER_ID));
-        assert!(diagnostics_family
-            .assigned_provider_ids
-            .contains(&TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID));
+        assert!(
+            diagnostics_family
+                .assigned_provider_ids
+                .contains(&M6_WORKSPACE_PROVIDER_ID)
+        );
+        assert!(
+            diagnostics_family
+                .assigned_provider_ids
+                .contains(&TOOL_SUITE_REGISTRY_INSPECTOR_PROVIDER_ID)
+        );
         assert!(!diagnostics_family.missing_assignment);
     }
 
@@ -1456,10 +1467,12 @@ mod tests {
     fn mounted_surface_rows_use_stable_keys_as_authority() {
         let view_model = view_model();
 
-        assert!(view_model
-            .mounted_surface_rows
-            .iter()
-            .all(|row| row.stable_surface_key.starts_with("runenwerk.")));
+        assert!(
+            view_model
+                .mounted_surface_rows
+                .iter()
+                .all(|row| row.stable_surface_key.starts_with("runenwerk."))
+        );
     }
 
     #[test]
@@ -1467,12 +1480,11 @@ mod tests {
         let view_model = view_model();
 
         assert!(view_model.mounted_surface_rows.iter().all(|row| {
-            row.legacy_tool_surface_kind
-                .is_some_and(|legacy_kind| {
-                    editor_shell::stable_key_for_tool_surface_kind(legacy_kind)
-                        .as_ref()
-                        .is_some_and(|stable_key| stable_key.as_str() == row.stable_surface_key)
-                })
+            row.legacy_tool_surface_kind.is_some_and(|legacy_kind| {
+                editor_shell::stable_key_for_tool_surface_kind(legacy_kind)
+                    .as_ref()
+                    .is_some_and(|stable_key| stable_key.as_str() == row.stable_surface_key)
+            })
         }));
     }
 
@@ -1480,20 +1492,24 @@ mod tests {
     fn mounted_surface_rows_include_provider_family_and_route() {
         let view_model = view_model();
 
-        assert!(view_model
-            .mounted_surface_rows
-            .iter()
-            .all(|row| row.provider_family_id.is_some() && row.surface_route.is_some()));
+        assert!(
+            view_model
+                .mounted_surface_rows
+                .iter()
+                .all(|row| row.provider_family_id.is_some() && row.surface_route.is_some())
+        );
     }
 
     #[test]
     fn mounted_surface_rows_include_candidate_providers() {
         let view_model = view_model();
 
-        assert!(view_model
-            .mounted_surface_rows
-            .iter()
-            .all(|row| !row.candidate_provider_ids.is_empty()));
+        assert!(
+            view_model
+                .mounted_surface_rows
+                .iter()
+                .all(|row| !row.candidate_provider_ids.is_empty())
+        );
     }
 
     #[test]
@@ -1502,9 +1518,10 @@ mod tests {
 
         assert!(view_model.mounted_surface_rows.iter().all(|row| {
             row.support_modes.len() == row.candidate_provider_ids.len()
-                && row.support_modes.iter().all(|support| {
-                    row.candidate_provider_ids.contains(&support.provider_id)
-                })
+                && row
+                    .support_modes
+                    .iter()
+                    .all(|support| row.candidate_provider_ids.contains(&support.provider_id))
         }));
     }
 
@@ -1566,12 +1583,8 @@ mod tests {
         let inspector_source = include_str!("tool_suite_registry_inspector.rs");
 
         assert!(inspector_source.contains("to_persisted_v5"));
-        assert!(
-            !inspector_source.contains(&["write_", "workspace_layout"].concat())
-        );
-        assert!(
-            !inspector_source.contains(&["save_", "workspace_layout"].concat())
-        );
+        assert!(!inspector_source.contains(&["write_", "workspace_layout"].concat()));
+        assert!(!inspector_source.contains(&["save_", "workspace_layout"].concat()));
     }
 
     #[test]
@@ -1632,9 +1645,11 @@ mod tests {
             ToolSuiteRegistryInspectorPersistencePreviewStatus::Error
         );
         assert!(summary.invalid_surface_count > 0);
-        assert!(rows.iter().any(|row| row.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == "inspector.v5_preview.conversion_error"
-        })));
+        assert!(rows.iter().any(|row| {
+            row.diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "inspector.v5_preview.conversion_error")
+        }));
     }
 
     #[test]

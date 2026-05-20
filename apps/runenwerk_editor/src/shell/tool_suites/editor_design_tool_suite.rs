@@ -3,7 +3,7 @@
 
 use editor_shell::{EditorToolSuite, ToolSurfaceKind, ToolSurfaceRole, ToolSurfaceRoute};
 
-use super::{tool_suite, ToolSuiteSurface};
+use super::{ToolSuiteSurface, tool_suite};
 
 pub fn editor_design_tool_suite() -> EditorToolSuite {
     tool_suite(

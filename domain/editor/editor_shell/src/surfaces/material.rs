@@ -8,6 +8,9 @@ pub struct MaterialGraphCanvasViewModel {
     pub graph: MaterialGraphEditorViewModel,
     pub palette: MaterialNodePaletteViewModel,
     pub texture_picker: MaterialTextureResourcePickerViewModel,
+    pub sdf_primitives: Vec<MaterialSdfPrimitiveBindingViewModel>,
+    pub model_mesh_regions: Vec<MaterialModelMeshRegionBindingViewModel>,
+    pub scene_material_slots: Vec<MaterialSceneMaterialSlotOptionViewModel>,
     pub toolbar: MaterialGraphToolbarViewModel,
     pub validation_overlays: Vec<MaterialGraphValidationOverlayViewModel>,
     pub active_diagnostic_index: Option<usize>,
@@ -141,6 +144,44 @@ pub struct MaterialTextureResourceOptionViewModel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialSdfPrimitiveBindingViewModel {
+    pub entity_id: editor_core::EntityId,
+    pub display_name: String,
+    pub primitive_kind_label: String,
+    pub assigned_slot_id: Option<editor_scene::SceneMaterialSlotId>,
+    pub assigned_slot_label: Option<String>,
+    pub requested_slot_id: editor_scene::SceneMaterialSlotId,
+    pub resolved_slot_id: editor_scene::SceneMaterialSlotId,
+    pub material_table_index: u32,
+    pub used_default_fallback: bool,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialModelMeshRegionBindingViewModel {
+    pub asset_id: asset::AssetId,
+    pub stable_name: String,
+    pub asset_display_name: String,
+    pub artifact_id: asset::AssetArtifactId,
+    pub source_id: Option<asset::AssetSourceId>,
+    pub source_revision_id: Option<asset::AssetSourceRevisionId>,
+    pub source_revision: Option<String>,
+    pub material_region_key: String,
+    pub material_region_label: String,
+    pub assigned_slot_id: Option<editor_scene::SceneMaterialSlotId>,
+    pub assigned_slot_label: Option<String>,
+    pub valid: bool,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialSceneMaterialSlotOptionViewModel {
+    pub slot_id: editor_scene::SceneMaterialSlotId,
+    pub display_name: String,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialGraphEdgeViewModel {
     pub edge_id: graph::EdgeId,
     pub from_port_id: graph::PortId,
@@ -270,11 +311,78 @@ pub struct MaterialPreviewViewModel {
     pub viewport_product_id: Option<editor_viewport::ExpressionProductId>,
     pub specialization_fragment: Option<String>,
     pub prepared_parameter_payload_bytes: usize,
+    pub preview_surface: Option<MaterialPreviewProductSurfaceViewModel>,
     pub preview_status: MaterialPreviewStatusViewModel,
+    pub model_mesh_preview: MaterialModelMeshPreviewViewModel,
     pub diagnostic_rows: Vec<MaterialDiagnosticRowViewModel>,
     pub resource_binding_diagnostics: Vec<MaterialResourceBindingDiagnosticViewModel>,
     pub preview_status_lines: Vec<String>,
     pub diagnostic_lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialPreviewProductSurfaceViewModel {
+    pub source: ui_render_data::ProductSurfaceTextureBindingSource,
+    pub width: u32,
+    pub height: u32,
+    pub target_label: String,
+    pub bind_group_identity: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialModelMeshPreviewViewModel {
+    pub status: MaterialModelMeshPreviewStatusKind,
+    pub headline: String,
+    pub source_backed_region_count: usize,
+    pub assignable_region_count: usize,
+    pub prepared_region_count: usize,
+    pub assigned_region_count: usize,
+    pub diagnostic_count: usize,
+    pub regions: Vec<MaterialModelMeshPreviewRegionViewModel>,
+}
+
+impl Default for MaterialModelMeshPreviewViewModel {
+    fn default() -> Self {
+        Self {
+            status: MaterialModelMeshPreviewStatusKind::NoModelMeshRegions,
+            headline: "No source-backed model/mesh material regions are available".to_string(),
+            source_backed_region_count: 0,
+            assignable_region_count: 0,
+            prepared_region_count: 0,
+            assigned_region_count: 0,
+            diagnostic_count: 0,
+            regions: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaterialModelMeshPreviewStatusKind {
+    NoModelMeshRegions,
+    WaitingForSceneMaterialAssignments,
+    Ready,
+    Blocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterialModelMeshPreviewRegionViewModel {
+    pub asset_id: asset::AssetId,
+    pub stable_name: String,
+    pub asset_display_name: String,
+    pub artifact_id: asset::AssetArtifactId,
+    pub source_id: Option<asset::AssetSourceId>,
+    pub source_revision_id: Option<asset::AssetSourceRevisionId>,
+    pub source_revision: Option<String>,
+    pub material_region_key: String,
+    pub material_region_label: String,
+    pub assigned_slot_id: Option<editor_scene::SceneMaterialSlotId>,
+    pub assigned_slot_label: Option<String>,
+    pub requested_slot_id: Option<editor_scene::SceneMaterialSlotId>,
+    pub resolved_slot_id: Option<editor_scene::SceneMaterialSlotId>,
+    pub material_table_index: Option<u32>,
+    pub used_default_fallback: bool,
+    pub valid: bool,
+    pub diagnostic: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -471,6 +579,15 @@ pub enum MaterialSurfaceAction {
         node_id: graph::NodeId,
         key: String,
         stable_id: String,
+    },
+    AssignSdfPrimitiveMaterialSlot {
+        entity_id: editor_core::EntityId,
+        slot_id: editor_scene::SceneMaterialSlotId,
+    },
+    AssignModelMeshMaterialSlot {
+        model_asset_id: asset::AssetId,
+        material_region_key: String,
+        slot_id: editor_scene::SceneMaterialSlotId,
     },
     NavigateDiagnostic {
         diagnostic_index: usize,

@@ -29,10 +29,15 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
         request: &SurfaceProviderRequest,
         _session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
-        let view_model = context.app.material_lab_runtime().graph_canvas_view_model(
-            context.app.asset_catalog_runtime().catalog(),
-            context.app.asset_catalog_status_lines(),
-        );
+        let mut view_model = context
+            .app
+            .material_lab_runtime()
+            .graph_canvas_view_model_with_scene_material_assignments(
+                context.app.asset_catalog_runtime().catalog(),
+                context.app.asset_catalog_status_lines(),
+                Some(context.app.runtime().scene_material_assignments()),
+            );
+        view_model.sdf_primitives = material_sdf_primitive_bindings(context.app.runtime());
         let mut lines = vec![
             "material graph canvas: source-backed MaterialGraphDocument workflow".to_string(),
             surface_document_context_line(&request.document_context),
@@ -57,6 +62,32 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
                 row.artifact_count,
                 preserved
             ));
+        }
+        if view_model.sdf_primitives.is_empty() {
+            lines.push("SDF primitive material bindings: none".to_string());
+        } else {
+            lines.push(format!(
+                "SDF primitive material bindings: {}",
+                view_model.sdf_primitives.len()
+            ));
+            for primitive in &view_model.sdf_primitives {
+                let assigned = primitive
+                    .assigned_slot_label
+                    .as_deref()
+                    .unwrap_or("unassigned");
+                let diagnostic = primitive.diagnostic.as_deref().unwrap_or("ok");
+                lines.push(format!(
+                    "SDF primitive entity={} {} [{}] assigned={} resolved_slot={} table={} fallback={} status={}",
+                    primitive.entity_id.0,
+                    primitive.display_name,
+                    primitive.primitive_kind_label,
+                    assigned,
+                    primitive.resolved_slot_id.raw(),
+                    primitive.material_table_index,
+                    primitive.used_default_fallback,
+                    diagnostic
+                ));
+            }
         }
         if let Some(selected) = &view_model.selected {
             lines.push(format!(
@@ -151,6 +182,63 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
         Ok(material_action_for_graph_canvas_action(action)
             .and_then(|action| material_surface_action_command(action, context.projection_epoch))
             .map(SurfaceCommandProposal::Shell))
+    }
+}
+
+fn material_sdf_primitive_bindings(
+    runtime: &crate::editor_runtime::RunenwerkEditorRuntime,
+) -> Vec<MaterialSdfPrimitiveBindingViewModel> {
+    let assignments = runtime.scene_material_assignments();
+    runtime
+        .list_scene_entities()
+        .into_iter()
+        .filter_map(|entity| {
+            let ecs_entity = runtime.ids().resolve_entity(entity.id)?;
+            let primitive = runtime
+                .world()
+                .get::<crate::editor_runtime::EditorPrimitive>(ecs_entity)
+                .copied()?;
+            let source_id = editor_scene::SdfPrimitiveSourceId::new(entity.id);
+            let explicit_assignment = assignments
+                .assignments()
+                .find(|assignment| assignment.primitive == source_id);
+            let assigned_slot_id = explicit_assignment.map(|assignment| assignment.slot_id);
+            let assigned_slot_label = assigned_slot_id.and_then(|slot_id| {
+                assignments
+                    .palette()
+                    .slots
+                    .iter()
+                    .find(|slot| slot.slot_id == slot_id)
+                    .map(|slot| slot.display_name.clone())
+            });
+            let (resolution, diagnostics) =
+                assignments.resolve_material_binding_for_sdf_scene_packet(source_id);
+            Some(MaterialSdfPrimitiveBindingViewModel {
+                entity_id: entity.id,
+                display_name: entity.display_name,
+                primitive_kind_label: sdf_primitive_kind_label(primitive.kind()).to_string(),
+                assigned_slot_id,
+                assigned_slot_label,
+                requested_slot_id: resolution.requested_slot_id,
+                resolved_slot_id: resolution.resolved_slot_id,
+                material_table_index: resolution.material_table_index,
+                used_default_fallback: resolution.used_default_fallback,
+                diagnostic: diagnostics
+                    .first()
+                    .map(|diagnostic| diagnostic.message.clone()),
+            })
+        })
+        .collect()
+}
+
+fn sdf_primitive_kind_label(kind: crate::editor_runtime::EditorPrimitiveKind) -> &'static str {
+    match kind {
+        crate::editor_runtime::EditorPrimitiveKind::Box => "box",
+        crate::editor_runtime::EditorPrimitiveKind::Sphere => "sphere",
+        crate::editor_runtime::EditorPrimitiveKind::Capsule => "capsule",
+        crate::editor_runtime::EditorPrimitiveKind::Cylinder => "cylinder",
+        crate::editor_runtime::EditorPrimitiveKind::Torus => "torus",
+        crate::editor_runtime::EditorPrimitiveKind::Plane => "plane",
     }
 }
 
@@ -345,6 +433,10 @@ mod tests {
             },
             MaterialSurfaceAction::SelectPreviewFixture {
                 fixture: material_graph::MaterialGraphPreviewFixture::Sphere,
+            },
+            MaterialSurfaceAction::AssignSdfPrimitiveMaterialSlot {
+                entity_id: editor_core::EntityId(9),
+                slot_id: editor_scene::SceneMaterialSlotId::new(2),
             },
         ];
 

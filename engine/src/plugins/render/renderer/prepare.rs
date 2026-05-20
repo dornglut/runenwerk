@@ -1012,6 +1012,22 @@ fn hash_prepared_feature_contribution(
                 scene_bundle.material_table_identity.hash(&mut hasher);
                 scene_bundle.resource_layout_identity.hash(&mut hasher);
             }
+            value.model_mesh_material_selections.len().hash(&mut hasher);
+            for selection in &value.model_mesh_material_selections {
+                selection.surface.source.asset_id.hash(&mut hasher);
+                selection.surface.source.source_id.hash(&mut hasher);
+                selection
+                    .surface
+                    .source
+                    .source_revision_id
+                    .hash(&mut hasher);
+                selection.surface.source.source_revision.hash(&mut hasher);
+                selection.surface.region_key.hash(&mut hasher);
+                selection.requested_material_slot_id.hash(&mut hasher);
+                selection.resolved_material_slot_id.hash(&mut hasher);
+                selection.material_table_index.hash(&mut hasher);
+                selection.used_default_fallback.hash(&mut hasher);
+            }
             value.instances.len().hash(&mut hasher);
             for instance in &value.instances {
                 instance.material_instance_id.hash(&mut hasher);
@@ -1087,6 +1103,7 @@ mod tests {
                     }],
                     binding_table: PreparedMaterialBindingTable::default(),
                     scene_bundle: None,
+                    model_mesh_material_selections: Vec::new(),
                 }),
             }
         }

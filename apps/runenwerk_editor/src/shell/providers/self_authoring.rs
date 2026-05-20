@@ -503,4 +503,3 @@ fn workspace_host_summary(host: &editor_definition::EditorWorkspaceHostDefinitio
         ),
     }
 }
-

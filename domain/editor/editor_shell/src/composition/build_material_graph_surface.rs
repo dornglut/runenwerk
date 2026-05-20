@@ -223,6 +223,70 @@ fn build_source_panel(
             )),
         );
     }
+    children.push(label(
+        scope.widget_id(WidgetId(42_400)),
+        "SDF primitive material slots",
+        text_style.clone(),
+    ));
+    if view_model.sdf_primitives.is_empty() {
+        children.push(label(
+            scope.widget_id(WidgetId(42_401)),
+            "No SDF primitives in scene",
+            text_style.clone(),
+        ));
+    }
+    for (primitive_index, primitive) in view_model.sdf_primitives.iter().enumerate() {
+        let base_id = 42_500 + primitive_index as u64 * 100;
+        let assigned = primitive
+            .assigned_slot_label
+            .as_deref()
+            .unwrap_or("unassigned");
+        children.push(label(
+            scope.widget_id(WidgetId(base_id)),
+            format!(
+                "{} [{}] -> {} (table {})",
+                primitive.display_name,
+                primitive.primitive_kind_label,
+                assigned,
+                primitive.material_table_index
+            ),
+            text_style.clone(),
+        ));
+        if let Some(diagnostic) = &primitive.diagnostic {
+            children.push(label(
+                scope.widget_id(WidgetId(base_id + 1)),
+                diagnostic.clone(),
+                text_style.clone(),
+            ));
+        }
+        for (slot_index, slot) in view_model.scene_material_slots.iter().enumerate() {
+            let widget_id = scope.widget_id(WidgetId(base_id + 10 + slot_index as u64));
+            let selected = primitive.resolved_slot_id == slot.slot_id
+                && primitive
+                    .assigned_slot_id
+                    .unwrap_or(primitive.resolved_slot_id)
+                    == slot.slot_id;
+            children.push(button(
+                widget_id,
+                if selected {
+                    format!("* {}", slot.display_name)
+                } else {
+                    format!("Use {}", slot.display_name)
+                },
+                text_style.clone(),
+                theme.clone(),
+            ));
+            routes.insert(
+                widget_id,
+                SurfaceLocalRoute::new(SurfaceLocalAction::Material(
+                    MaterialSurfaceAction::AssignSdfPrimitiveMaterialSlot {
+                        entity_id: primitive.entity_id,
+                        slot_id: slot.slot_id,
+                    },
+                )),
+            );
+        }
+    }
     panel(
         scope.widget_id(WidgetId(42_320)),
         theme.clone(),
@@ -688,7 +752,8 @@ mod tests {
         MaterialGraphSourceDetailViewModel, MaterialGraphToolbarViewModel,
         MaterialGraphValidationOverlayViewModel, MaterialGraphValidationSeverity,
         MaterialNodePaletteCategoryViewModel, MaterialNodePaletteItemViewModel,
-        MaterialNodePaletteViewModel, MaterialNodePickerViewModel, MaterialUndoRedoViewModel,
+        MaterialNodePaletteViewModel, MaterialNodePickerViewModel,
+        MaterialSceneMaterialSlotOptionViewModel, MaterialUndoRedoViewModel,
     };
 
     #[test]
@@ -857,6 +922,54 @@ mod tests {
         );
     }
 
+    #[test]
+    fn material_graph_surface_routes_sdf_primitive_slot_assignment() {
+        let surface_id = ToolSurfaceInstanceId::try_from_raw(6).unwrap();
+        let mut view_model = test_view_model();
+        view_model.sdf_primitives = vec![crate::MaterialSdfPrimitiveBindingViewModel {
+            entity_id: editor_core::EntityId(51),
+            display_name: "Graybox".to_string(),
+            primitive_kind_label: "box".to_string(),
+            assigned_slot_id: Some(editor_scene::SceneMaterialSlotId::new(1)),
+            assigned_slot_label: Some("Default Material".to_string()),
+            requested_slot_id: editor_scene::SceneMaterialSlotId::new(1),
+            resolved_slot_id: editor_scene::SceneMaterialSlotId::new(1),
+            material_table_index: 0,
+            used_default_fallback: false,
+            diagnostic: None,
+        }];
+        view_model.scene_material_slots = vec![
+            MaterialSceneMaterialSlotOptionViewModel {
+                slot_id: editor_scene::SceneMaterialSlotId::new(1),
+                display_name: "Default Material".to_string(),
+                is_default: true,
+            },
+            MaterialSceneMaterialSlotOptionViewModel {
+                slot_id: editor_scene::SceneMaterialSlotId::new(2),
+                display_name: "Hero Body".to_string(),
+                is_default: false,
+            },
+        ];
+
+        let (_, routes) = build_material_graph_surface(
+            &ThemeTokens::default(),
+            surface_id,
+            &view_model,
+            Vec::new(),
+            Vec::new(),
+        );
+
+        assert_route_action(
+            surface_id,
+            &routes,
+            WidgetId(42_511),
+            SurfaceLocalAction::Material(MaterialSurfaceAction::AssignSdfPrimitiveMaterialSlot {
+                entity_id: editor_core::EntityId(51),
+                slot_id: editor_scene::SceneMaterialSlotId::new(2),
+            }),
+        );
+    }
+
     fn test_view_model() -> MaterialGraphCanvasViewModel {
         let canvas = ui_graph_editor::GraphCanvasViewModel {
             canvas_id: ui_graph_editor::GraphCanvasId(7),
@@ -930,6 +1043,9 @@ mod tests {
                 categories: Vec::new(),
             },
             texture_picker: Default::default(),
+            sdf_primitives: Vec::new(),
+            model_mesh_regions: Vec::new(),
+            scene_material_slots: Vec::new(),
             toolbar: MaterialGraphToolbarViewModel::default(),
             validation_overlays: Vec::new(),
             active_diagnostic_index: None,

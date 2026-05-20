@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use asset::{
-    ArtifactCacheKey, AssetKind, AssetSourceDescriptor, asset_artifact_id, asset_id,
-    asset_source_id,
+    ArtifactCacheKey, ArtifactPayloadKind, AssetArtifactDescriptor, AssetKind, AssetRecord,
+    AssetSourceDescriptor, asset_artifact_id, asset_id, asset_source_id,
 };
 use engine::plugins::render::ShaderRegistryResource;
 use engine::plugins::render::material_compiler::{
@@ -17,7 +17,7 @@ use material_graph::{MaterialNodeCatalog, MaterialOutputTarget, lower_material_g
 use crate::editor_app::RunenwerkEditorApp;
 use crate::material_lab::{
     EditorMaterialPreviewProduct, MaterialRendererParameterProfile,
-    default_material_graph_document_for_source_with_target,
+    default_material_graph_document_for_source_with_target, write_material_graph_document,
 };
 use crate::runtime::app::EDITOR_MATERIAL_PREVIEW_SHADER_ID;
 
@@ -35,28 +35,24 @@ pub fn ensure_default_scene_material_preview(
     ensure_default_scene_material_preview_at(app, shader_registry, project_root.as_path())
 }
 
+pub fn ensure_default_material_source_document(app: &mut RunenwerkEditorApp) {
+    let (source, document) = generated_default_material_source_document();
+    publish_default_material_source(app, source, document);
+}
+
 pub(crate) fn ensure_default_scene_material_preview_at(
     app: &mut RunenwerkEditorApp,
     shader_registry: &mut ShaderRegistryResource,
     project_root: &Path,
 ) -> Result<()> {
+    let (source, document) = generated_default_material_source_document();
+    publish_default_material_source(app, source.clone(), document.clone());
+    write_material_graph_document(&project_root.join(&source.relative_path), &document)?;
+
     if app.material_lab_runtime().active_preview().is_some() {
         return Ok(());
     }
 
-    let asset_id = asset_id(DEFAULT_MATERIAL_ASSET_ID);
-    let source = AssetSourceDescriptor::new(
-        asset_source_id(DEFAULT_MATERIAL_SOURCE_ID),
-        asset_id,
-        AssetKind::MaterialGraph,
-        ".runenwerk/generated/default-material/source.material.ron",
-    );
-    let document = default_material_graph_document_for_source_with_target(
-        asset_id,
-        &source,
-        "Generated Default Material",
-        MaterialOutputTarget::RenderMaterial,
-    );
     let catalog = MaterialNodeCatalog::first_slice();
     let lowering = lower_material_graph(&document, &catalog);
     if lowering.report.has_blocking_issues() {
@@ -74,7 +70,7 @@ pub(crate) fn ensure_default_scene_material_preview_at(
         .ok_or_else(|| anyhow!("default material product has no executable IR"))?;
     let compiled = compile_material_shader(MaterialShaderCompileRequest {
         ir: executable_ir,
-        fixture: MaterialPreviewFixture::Sphere,
+        fixture: MaterialPreviewFixture::SdfPrimitive,
     })
     .map_err(|error| anyhow!("default material shader compilation failed: {error}"))?;
 
@@ -105,8 +101,18 @@ pub(crate) fn ensure_default_scene_material_preview_at(
         canonical_shader_registry_path(project_root, preview_shader_relative_path.as_str());
     let scene_shader_path =
         canonical_shader_registry_path(project_root, scene_shader_relative_path.as_str());
+    publish_default_material_artifacts(
+        app,
+        &source,
+        &product,
+        artifact_cache_key.clone(),
+        preview_shader_cache_key.clone(),
+        preview_shader_relative_path.clone(),
+        scene_shader_cache_key.clone(),
+        scene_shader_relative_path.clone(),
+    );
     let preview = EditorMaterialPreviewProduct::new(
-        asset_id,
+        source.asset_id,
         source.source_id,
         asset_artifact_id(DEFAULT_MATERIAL_ARTIFACT_ID),
         artifact_cache_key,
@@ -128,6 +134,104 @@ pub(crate) fn ensure_default_scene_material_preview_at(
     let _ = shader_registry.poll_updates();
     app.material_lab_runtime_mut().set_active_preview(preview);
     Ok(())
+}
+
+fn generated_default_material_source_document()
+-> (AssetSourceDescriptor, material_graph::MaterialGraphDocument) {
+    let asset_id = asset_id(DEFAULT_MATERIAL_ASSET_ID);
+    let source = AssetSourceDescriptor::new(
+        asset_source_id(DEFAULT_MATERIAL_SOURCE_ID),
+        asset_id,
+        AssetKind::MaterialGraph,
+        ".runenwerk/generated/default-material/source.material.ron",
+    );
+    let document = default_material_graph_document_for_source_with_target(
+        asset_id,
+        &source,
+        "Generated Default Material",
+        MaterialOutputTarget::RenderMaterial,
+    );
+    (source, document)
+}
+
+fn publish_default_material_source(
+    app: &mut RunenwerkEditorApp,
+    source: AssetSourceDescriptor,
+    document: material_graph::MaterialGraphDocument,
+) {
+    let asset_id = source.asset_id;
+    {
+        let catalog = app.asset_catalog_runtime_mut().catalog_mut();
+        catalog.insert_asset_record(
+            AssetRecord::new(
+                asset_id,
+                "generated.default_material",
+                "Generated Default Material",
+                AssetKind::MaterialGraph,
+            )
+            .with_primary_source(source.source_id),
+        );
+        catalog.insert_source(source);
+    }
+    if app
+        .material_lab_runtime()
+        .active_source_document()
+        .is_none()
+    {
+        app.material_lab_runtime_mut()
+            .set_active_source_document(asset_id, document);
+    }
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "default bootstrap publishes the formed material plus its two generated shader artifacts together"
+)]
+fn publish_default_material_artifacts(
+    app: &mut RunenwerkEditorApp,
+    source: &AssetSourceDescriptor,
+    product: &material_graph::FormedMaterialProduct,
+    artifact_cache_key: ArtifactCacheKey,
+    preview_shader_cache_key: ArtifactCacheKey,
+    preview_shader_relative_path: String,
+    scene_shader_cache_key: ArtifactCacheKey,
+    scene_shader_relative_path: String,
+) {
+    let catalog = app.asset_catalog_runtime_mut().catalog_mut();
+    catalog.insert_artifact(
+        AssetArtifactDescriptor::new(
+            asset_artifact_id(DEFAULT_MATERIAL_ARTIFACT_ID),
+            source.asset_id,
+            AssetKind::Material,
+            ArtifactPayloadKind::FormedMaterialProduct {
+                product_id: product.product_id.raw().to_string(),
+            },
+            artifact_cache_key,
+        )
+        .with_source(source.source_id, source.revision_id),
+    );
+    catalog.insert_artifact(
+        AssetArtifactDescriptor::new(
+            asset_artifact_id(DEFAULT_MATERIAL_PREVIEW_SHADER_ARTIFACT_ID),
+            source.asset_id,
+            AssetKind::Shader,
+            ArtifactPayloadKind::ShaderMetadata,
+            preview_shader_cache_key,
+        )
+        .with_source(source.source_id, source.revision_id)
+        .with_artifact_path(preview_shader_relative_path),
+    );
+    catalog.insert_artifact(
+        AssetArtifactDescriptor::new(
+            asset_artifact_id(DEFAULT_MATERIAL_SCENE_SHADER_ARTIFACT_ID),
+            source.asset_id,
+            AssetKind::Shader,
+            ArtifactPayloadKind::ShaderMetadata,
+            scene_shader_cache_key,
+        )
+        .with_source(source.source_id, source.revision_id)
+        .with_artifact_path(scene_shader_relative_path),
+    );
 }
 
 fn default_material_generated_path(prefix: &str, cache_key: &ArtifactCacheKey) -> String {
@@ -178,6 +282,32 @@ mod tests {
             .material_lab_runtime()
             .active_preview()
             .expect("default material preview should be active");
+        let (active_asset_id, active_document) = app
+            .material_lab_runtime()
+            .active_source_document()
+            .expect("generated default source document should be active");
+        assert_eq!(active_asset_id, asset_id(DEFAULT_MATERIAL_ASSET_ID));
+        assert_eq!(active_document.graph.nodes.len(), 2);
+        assert_eq!(active_document.graph.edges.len(), 1);
+        assert!(
+            active_document
+                .graph
+                .nodes
+                .iter()
+                .any(|node| node.name == "pbr.base_color")
+        );
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(asset_id(DEFAULT_MATERIAL_ASSET_ID))
+                .is_some()
+        );
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .source(asset_source_id(DEFAULT_MATERIAL_SOURCE_ID))
+                .is_some()
+        );
         assert!(shader_registry.is_loaded(EDITOR_MATERIAL_PREVIEW_SHADER_ID));
         assert!(shader_registry.is_loaded(preview.scene_shader_path.as_str()));
         assert!(preview.shader_path.ends_with(".wgsl"));

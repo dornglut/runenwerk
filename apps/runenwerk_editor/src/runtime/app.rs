@@ -7,7 +7,7 @@ use engine::prelude::*;
 use winit::keyboard::KeyCode;
 
 use crate::runtime::plugin::EditorAppPlugin;
-use crate::runtime::resources::EditorViewportRenderState;
+use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
 use crate::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
     VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, VIEWPORT_TARGET_ALIAS_OVERLAY,
@@ -23,7 +23,8 @@ pub const ACTION_EDITOR_TOOL_SCALE: &str = "editor.tool.scale";
 pub const ACTION_EDITOR_VIEWPORT_FOCUS: &str = "editor.viewport.focus_selected";
 pub const ACTION_EDITOR_VIEWPORT_TOOL_RADIAL: &str = "editor.viewport.tool_radial";
 
-const WINDOW_TITLE: &str = "Runenwerk Editor";
+const EDITOR_WINDOW_TITLE: &str = "Runenwerk Editor";
+const MATERIAL_LAB_WINDOW_TITLE: &str = "Runenwerk Material Lab";
 const EDITOR_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
 const EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
@@ -38,13 +39,40 @@ pub const EDITOR_MATERIAL_PREVIEW_SHADER_ID: &str = "editor_material_preview_gen
 const EDITOR_VIEWPORT_BACKGROUND_CLEAR: [f32; 4] = [0.09, 0.10, 0.12, 1.0];
 const EDITOR_VIEWPORT_TRANSPARENT_CLEAR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunenwerkRuntimeWorkbench {
+    FullEditor,
+    MaterialLab,
+}
+
+impl RunenwerkRuntimeWorkbench {
+    pub const fn window_title(self) -> &'static str {
+        match self {
+            Self::FullEditor => EDITOR_WINDOW_TITLE,
+            Self::MaterialLab => MATERIAL_LAB_WINDOW_TITLE,
+        }
+    }
+
+    fn editor_host_resource(self) -> EditorHostResource {
+        match self {
+            Self::FullEditor => EditorHostResource::new(),
+            Self::MaterialLab => EditorHostResource::material_lab_workbench(),
+        }
+    }
+}
+
 fn configure_app(app: &mut App) {
-    app.set_title(WINDOW_TITLE);
+    configure_app_for_workbench(app, RunenwerkRuntimeWorkbench::FullEditor);
+}
+
+fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkbench) {
+    app.set_title(workbench.window_title());
     app.add_plugins(default_plugins());
     app.add_plugin(SchedulerDiagnosticsPlugin);
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     register_editor_render_flow(app);
+    app.insert_resource(workbench.editor_host_resource());
     app.add_plugin(EditorAppPlugin);
     configure_editor_diagnostics(app);
 
@@ -150,13 +178,59 @@ fn register_editor_render_flow(app: &mut App) {
 }
 
 pub fn build_headless_app() -> App {
+    build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::FullEditor)
+}
+
+pub fn build_headless_app_for_workbench(workbench: RunenwerkRuntimeWorkbench) -> App {
     let mut app = App::headless();
-    configure_app(&mut app);
+    configure_app_for_workbench(&mut app, workbench);
     app
+}
+
+pub fn build_material_lab_workbench_headless_app() -> App {
+    build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::MaterialLab)
 }
 
 pub fn run() -> Result<()> {
     let mut app = App::new();
     configure_app(&mut app);
     app.run()
+}
+
+pub fn run_material_lab_workbench() -> Result<()> {
+    let mut app = App::new();
+    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::MaterialLab);
+    app.run()
+}
+
+#[cfg(test)]
+mod tests {
+    use editor_shell::MATERIAL_WORKSPACE_PROFILE_ID;
+
+    use crate::runtime::resources::EditorHostResource;
+    use crate::shell::RunenwerkWorkbenchComposition;
+
+    use super::*;
+
+    #[test]
+    fn material_lab_headless_app_installs_material_lab_workbench_host() {
+        let app = build_material_lab_workbench_headless_app();
+        let host = app
+            .world()
+            .resource::<EditorHostResource>()
+            .expect("runtime app should install editor host resource");
+
+        assert_eq!(
+            host.app.workbench_host().composition(),
+            RunenwerkWorkbenchComposition::MaterialLab
+        );
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            MATERIAL_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            host.shell_state.open_workspace_profile_ids(),
+            &[MATERIAL_WORKSPACE_PROFILE_ID]
+        );
+    }
 }

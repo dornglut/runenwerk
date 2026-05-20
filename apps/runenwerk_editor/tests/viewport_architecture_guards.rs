@@ -1366,12 +1366,13 @@ fn app_surface_providers_delegate_reusable_control_composition_to_editor_shell()
         "app providers should pass DTOs and route proposals to editor_shell builders instead of constructing reusable controls directly: {offenders:?}",
     );
 
-    let provider = read_workspace_source("apps/runenwerk_editor/src/shell/providers/mod.rs");
+    let provider_source_text =
+        read_workspace_source_tree_contents("apps/runenwerk_editor/src/shell/providers");
     let shell_builder = read_workspace_source(
         "domain/editor/editor_shell/src/composition/build_self_authoring_control_panel.rs",
     );
     assert!(
-        provider.contains("build_self_authoring_control_panel(")
+        provider_source_text.contains("build_self_authoring_control_panel(")
             && shell_builder.contains("compact_surface_action_button")
             && shell_builder.contains("SurfaceRouteTable"),
         "self-authoring control panel composition should live in editor_shell while provider code supplies actions and routes",
@@ -1407,19 +1408,66 @@ fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
         "material feature passes must bind prepared group-1 resources and fail closed instead of falling back to old scene shaders",
     );
 
-    let material_state = read_workspace_source("apps/runenwerk_editor/src/material_lab/state.rs");
+    let material_runtime_state =
+        read_workspace_source("apps/runenwerk_editor/src/material_lab/state/runtime.rs");
     let editor_runtime =
         read_workspace_source("apps/runenwerk_editor/src/editor_runtime/runtime.rs");
     let frame_submit =
         read_workspace_source("apps/runenwerk_editor/src/runtime/systems/frame_submit.rs");
     assert!(
-        !material_state.contains("SceneMaterialAssignmentState")
-            && !material_state.contains("primitive_material_slots:")
+        !material_runtime_state.contains("SceneMaterialAssignmentState")
+            && !material_runtime_state.contains("primitive_material_slots:")
             && editor_runtime.contains("SceneMaterialAssignmentState")
             && editor_runtime.contains("scene_material_assignments")
             && frame_submit.contains("runtime.material_slot_index_for_entity(entity)")
             && frame_submit.contains("with_material_slot_index"),
         "editor_scene SceneMaterialAssignmentState must drive viewport scene packet material slot indices, not a MaterialLabRuntime-owned primitive slot map",
+    );
+}
+
+#[test]
+fn wr029_phase4_requires_real_model_mesh_renderable_contract_before_pixel_claim() {
+    let wr029_contract = read_workspace_source(
+        "docs-site/src/content/docs/reports/implementation-plans/wr-029-model-mesh-material-binding/plan.md",
+    );
+    let rendered_world_design = read_workspace_source(
+        "docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md",
+    );
+    let wr030_contract = read_workspace_source(
+        "docs-site/src/content/docs/reports/implementation-plans/wr-030-model-mesh-renderable-scene-contract/plan.md",
+    );
+    let roadmap = read_workspace_source("docs-site/src/content/docs/workspace/roadmap-items.yaml");
+
+    assert!(
+        wr029_contract.contains("WR-030")
+            && wr029_contract.contains("must not use the current SDF pass")
+            && wr029_contract.contains("descriptor-only")
+            && wr029_contract.contains("proof as a substitute"),
+        "WR-029 Phase 4 must stay blocked on a real model/mesh renderable contract instead of claiming SDF or descriptor-only evidence",
+    );
+    assert!(
+        rendered_world_design.contains("- general mesh scene extraction;"),
+        "the active rendered-world design still excludes general mesh scene extraction and must be updated before WR-029 claims model/mesh pixels",
+    );
+    assert!(
+        wr030_contract.contains("first implementation surface is a Mesh Preview product surface")
+            && wr030_contract.contains("Do not add general mesh scene extraction")
+            && wr030_contract.contains("add Mesh Preview beside the existing SDF scene path"),
+        "WR-030 must stay product-surface-first until a broader mesh scene extraction ADR/design is accepted",
+    );
+    assert!(
+        roadmap.contains("- id: WR-030")
+            && roadmap.contains("Model Mesh Renderable Scene Contract")
+            && roadmap.contains("planning_state: current_candidate")
+            && roadmap.contains("Current Mesh Preview pixel proof")
+            && roadmap.contains("PreparedModelMeshMaterialSelection"),
+        "active roadmap must keep WR-030 as the current Mesh Preview prerequisite for WR-029 Phase 4",
+    );
+    assert!(
+        roadmap.contains("- id: WR-029")
+            && roadmap.contains("planning_state: ready_next")
+            && roadmap.contains("WR-030 visible Mesh Preview model/mesh pixel proof"),
+        "active roadmap must keep WR-029 ready-next until WR-030 supplies visible model/mesh pixel proof",
     );
 }
 
@@ -1446,7 +1494,8 @@ fn wr021_material_descriptors_and_ui_do_not_fall_back_to_old_shortcuts() {
         "Material Graph Canvas must project typed graph surface data instead of the generic line/control-panel helper",
     );
 
-    let material_state = read_workspace_source("apps/runenwerk_editor/src/material_lab/state.rs");
+    let material_state =
+        read_workspace_source_tree_contents("apps/runenwerk_editor/src/material_lab/state");
     let material_catalog = read_workspace_source("domain/material_graph/src/catalog.rs");
     assert!(
         material_catalog.contains("from_port_type_id")
@@ -1691,6 +1740,14 @@ fn read_workspace_source_tree(path: &str) -> Vec<(String, String)> {
                 .map(|source| (display_path, source))
         })
         .collect()
+}
+
+fn read_workspace_source_tree_contents(path: &str) -> String {
+    read_workspace_source_tree(path)
+        .into_iter()
+        .map(|(_, source)| source)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn forbidden_source_markers(sources: &[(String, String)], forbidden_terms: &[&str]) -> Vec<String> {

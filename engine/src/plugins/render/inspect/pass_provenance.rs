@@ -37,9 +37,37 @@ pub struct RenderPassProvenanceRecord {
     pub depth_format: Option<TextureFormat>,
     pub sample_count: u32,
     pub primitive_topology_class: FlowPrimitiveTopologyClass,
+    pub material_binding: RenderPassMaterialBindingEvidence,
     pub render_targets: Vec<String>,
     pub sampled_textures: Vec<String>,
     pub storage_textures: Vec<String>,
     pub depth_targets: Vec<String>,
     pub capture_points_available: Vec<RenderCapturePointIdentity>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RenderPassMaterialBindingEvidence {
+    pub consumes_material_resources: bool,
+    pub prepared_material_available: bool,
+    pub material_table_identity: Option<String>,
+    pub scene_shader_identity: Option<String>,
+    pub scene_shader_path: Option<String>,
+    pub material_instance_count: usize,
+    pub material_binding_slot_count: usize,
+    pub prepared_model_mesh_material_selection_count: usize,
+    pub model_mesh_material_selections_available_to_pass:
+        Vec<RenderPassModelMeshMaterialSelectionEvidence>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderPassModelMeshMaterialSelectionEvidence {
+    pub source_asset_id: u64,
+    pub source_id: u64,
+    pub source_revision_id: Option<u64>,
+    pub source_revision: Option<String>,
+    pub region_key: String,
+    pub requested_material_slot_id: u64,
+    pub resolved_material_slot_id: u64,
+    pub material_table_index: u32,
+    pub used_default_fallback: bool,
 }

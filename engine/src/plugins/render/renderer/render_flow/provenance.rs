@@ -198,6 +198,60 @@ pub fn collect_pass_resource_truth(
     }
 }
 
+pub fn collect_pass_material_binding_evidence(
+    packet: &RendererPreparedPacket,
+    pass: &CompiledPassExecutionPlan,
+) -> RenderPassMaterialBindingEvidence {
+    let feature_id = execution_pass_feature_id(pass);
+    let shader_reference = execution_pass_shader_reference(pass);
+    let consumes_material_resources =
+        pass_consumes_material_resources(feature_id, shader_reference);
+    let Some(material) = packet.prepared_material.as_ref() else {
+        return RenderPassMaterialBindingEvidence {
+            consumes_material_resources,
+            ..RenderPassMaterialBindingEvidence::default()
+        };
+    };
+    let model_mesh_material_selections_available_to_pass = if consumes_material_resources {
+        material
+            .model_mesh_material_selections
+            .iter()
+            .map(inspect_model_mesh_material_selection)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let scene_bundle = material.scene_bundle.as_ref();
+
+    RenderPassMaterialBindingEvidence {
+        consumes_material_resources,
+        prepared_material_available: true,
+        material_table_identity: scene_bundle.map(|bundle| bundle.material_table_identity.clone()),
+        scene_shader_identity: scene_bundle.map(|bundle| bundle.shader_identity.clone()),
+        scene_shader_path: scene_bundle.map(|bundle| bundle.shader_path.clone()),
+        material_instance_count: material.instances.len(),
+        material_binding_slot_count: material.binding_table.slots.len(),
+        prepared_model_mesh_material_selection_count: material.model_mesh_material_selections.len(),
+        model_mesh_material_selections_available_to_pass,
+    }
+}
+
+fn inspect_model_mesh_material_selection(
+    selection: &crate::plugins::render::PreparedModelMeshMaterialSelection,
+) -> RenderPassModelMeshMaterialSelectionEvidence {
+    RenderPassModelMeshMaterialSelectionEvidence {
+        source_asset_id: selection.surface.source.asset_id,
+        source_id: selection.surface.source.source_id,
+        source_revision_id: selection.surface.source.source_revision_id,
+        source_revision: selection.surface.source.source_revision.clone(),
+        region_key: selection.surface.region_key.clone(),
+        requested_material_slot_id: selection.requested_material_slot_id,
+        resolved_material_slot_id: selection.resolved_material_slot_id,
+        material_table_index: selection.material_table_index,
+        used_default_fallback: selection.used_default_fallback,
+    }
+}
+
 pub fn push_resolved_resource_id(
     pass_id: RenderPassId,
     target: &CompiledResourceRef,
@@ -255,6 +309,19 @@ pub fn execution_pass_feature_id(pass: &CompiledPassExecutionPlan) -> Option<Ren
         CompiledPassExecutionPlan::Copy(value) => value.feature_id,
         CompiledPassExecutionPlan::Present(value) => value.feature_id,
         CompiledPassExecutionPlan::BuiltinUiComposite(value) => Some(value.feature_id),
+    }
+}
+
+pub fn execution_pass_shader_reference(
+    pass: &CompiledPassExecutionPlan,
+) -> Option<&RenderShaderReference> {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => value.shader.as_ref(),
+        CompiledPassExecutionPlan::Fullscreen(value)
+        | CompiledPassExecutionPlan::Graphics(value) => value.shader.as_ref(),
+        CompiledPassExecutionPlan::Copy(_)
+        | CompiledPassExecutionPlan::Present(_)
+        | CompiledPassExecutionPlan::BuiltinUiComposite(_) => None,
     }
 }
 
@@ -434,13 +501,32 @@ pub fn compiled_storage_access_to_storage_texture_access(
     }
 }
 
+pub fn pass_consumes_material_resources(
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader: Option<&RenderShaderReference>,
+) -> bool {
+    feature_id == Some(crate::plugins::render::features::MATERIAL_RENDER_FEATURE_ID)
+        || matches!(
+            shader,
+            Some(RenderShaderReference::MaterialSceneBundle { .. })
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::plugins::render::features::{
         MATERIAL_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
     };
-    use crate::plugins::render::{CompiledPresentExecutionPlan, CompiledViewMask};
+    use crate::plugins::render::{
+        CompiledDrawBufferPlan, CompiledPassBindings, CompiledPresentExecutionPlan,
+        CompiledRasterExecutionPlan, CompiledTargetPlan, CompiledViewMask,
+        PreparedMaterialBindingSlot, PreparedMaterialBindingTable,
+        PreparedMaterialFeatureContribution, PreparedMaterialInstanceInput,
+        PreparedMaterialParameterPayloadV1, PreparedModelMeshMaterialRegionIdentity,
+        PreparedModelMeshMaterialSelection, PreparedModelMeshMaterialSourceIdentity,
+        PreparedSceneMaterialBundle, RenderShaderReference,
+    };
 
     fn packet_with_feature_gate(
         feature_id: RenderFeatureId,
@@ -567,6 +653,110 @@ mod tests {
     }
 
     #[test]
+    fn material_pass_provenance_exposes_model_mesh_selection_table() {
+        let selection = source_backed_model_mesh_selection();
+        let mut packet = packet_with_feature_gate(
+            MATERIAL_RENDER_FEATURE_ID,
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::FailFrame,
+            },
+        );
+        packet.prepared_material = Some(PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.7".to_string(),
+                specialization_key_fragment: "shader.fragment.7".to_string(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings: Vec::new(),
+            }],
+            binding_table: PreparedMaterialBindingTable::fixed_capacity([
+                PreparedMaterialBindingSlot::new(
+                    3,
+                    "material.product.7",
+                    "artifact.material.7",
+                    "artifact.shader.7",
+                    "material-cache.7",
+                    "shader-cache.7",
+                ),
+            ])
+            .expect("material binding table should form"),
+            scene_bundle: Some(PreparedSceneMaterialBundle::new(
+                "artifact.shader.7",
+                "shader-cache.7",
+                "generated/wr029-scene.wgsl",
+                "scene-shader-identity.7",
+                "material-table-identity.7",
+            )),
+            model_mesh_material_selections: vec![selection],
+        });
+
+        let pass = material_scene_fullscreen_pass();
+        let evidence = collect_pass_material_binding_evidence(&packet, &pass);
+
+        assert!(evidence.consumes_material_resources);
+        assert!(evidence.prepared_material_available);
+        assert_eq!(
+            evidence.material_table_identity.as_deref(),
+            Some("material-table-identity.7")
+        );
+        assert_eq!(
+            evidence.scene_shader_identity.as_deref(),
+            Some("scene-shader-identity.7")
+        );
+        assert_eq!(evidence.material_instance_count, 1);
+        assert_eq!(evidence.material_binding_slot_count, 1);
+        assert_eq!(evidence.prepared_model_mesh_material_selection_count, 1);
+
+        let selected = evidence
+            .model_mesh_material_selections_available_to_pass
+            .first()
+            .expect("material pass should expose the source-backed model/mesh selection");
+        assert_eq!(selected.source_asset_id, 42);
+        assert_eq!(selected.source_id, 84);
+        assert_eq!(selected.source_revision_id, Some(2));
+        assert_eq!(selected.source_revision.as_deref(), Some("sha256:abc"));
+        assert_eq!(selected.region_key, "source_material_slot:0");
+        assert_eq!(selected.requested_material_slot_id, 7);
+        assert_eq!(selected.resolved_material_slot_id, 7);
+        assert_eq!(selected.material_table_index, 3);
+        assert!(!selected.used_default_fallback);
+    }
+
+    #[test]
+    fn non_material_pass_provenance_keeps_model_mesh_selection_out_of_pass_scope() {
+        let mut packet = packet_with_feature_gate(
+            WORLD_DRAW_RENDER_FEATURE_ID,
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            },
+        );
+        packet.prepared_material = Some(PreparedMaterialFeatureContribution {
+            model_mesh_material_selections: vec![source_backed_model_mesh_selection()],
+            ..PreparedMaterialFeatureContribution::default()
+        });
+        let pass = CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
+            pass_id: RenderPassId::try_from_raw(9).unwrap(),
+            order_index: 0,
+            feature_id: Some(WORLD_DRAW_RENDER_FEATURE_ID),
+            view_mask: CompiledViewMask::AllViews,
+            source: None,
+        });
+
+        let evidence = collect_pass_material_binding_evidence(&packet, &pass);
+
+        assert!(!evidence.consumes_material_resources);
+        assert!(evidence.prepared_material_available);
+        assert_eq!(evidence.prepared_model_mesh_material_selection_count, 1);
+        assert!(
+            evidence
+                .model_mesh_material_selections_available_to_pass
+                .is_empty(),
+            "selection details should be scoped only to passes that consume material resources"
+        );
+    }
+
+    #[test]
     fn material_scene_bundle_missing_from_packet_is_a_forbidden_fallback() {
         let packet = packet_with_feature_gate(
             MATERIAL_RENDER_FEATURE_ID,
@@ -615,5 +805,34 @@ mod tests {
             "minimap",
             crate::plugins::render::PreparedViewKind::OffscreenProduct
         ));
+    }
+
+    fn source_backed_model_mesh_selection() -> PreparedModelMeshMaterialSelection {
+        let source = PreparedModelMeshMaterialSourceIdentity::new(42, 84)
+            .expect("source-backed model/mesh identity should be valid")
+            .with_source_revision_id(2)
+            .with_source_revision("sha256:abc");
+        let surface =
+            PreparedModelMeshMaterialRegionIdentity::new(source, "source_material_slot:0")
+                .expect("source-backed region should form");
+        PreparedModelMeshMaterialSelection::new(surface, 7, 7, 3, false)
+            .expect("source-backed selection should form")
+    }
+
+    fn material_scene_fullscreen_pass() -> CompiledPassExecutionPlan {
+        CompiledPassExecutionPlan::Fullscreen(CompiledRasterExecutionPlan {
+            pass_id: RenderPassId::try_from_raw(7).unwrap(),
+            order_index: 0,
+            feature_id: Some(MATERIAL_RENDER_FEATURE_ID),
+            shader: Some(RenderShaderReference::MaterialSceneBundle {
+                fallback_asset: "fallback-scene.wgsl".to_string(),
+            }),
+            view_mask: CompiledViewMask::AllViews,
+            bindings: CompiledPassBindings::default(),
+            targets: CompiledTargetPlan::default(),
+            draw_buffers: CompiledDrawBufferPlan::default(),
+            clear_color: None,
+            draw: None,
+        })
     }
 }

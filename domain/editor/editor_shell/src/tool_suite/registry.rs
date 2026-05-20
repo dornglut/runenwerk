@@ -4,8 +4,8 @@
 use std::{collections::BTreeMap, fmt};
 
 use super::{
-    EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
-    ToolSurfaceDefinition, ToolSurfaceStableKey,
+    EditorToolSuite, HostCapabilityPolicy, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
+    ToolSuiteProfileDefinition, ToolSurfaceDefinition, ToolSurfaceStableKey,
 };
 use crate::SurfaceProviderId;
 
@@ -319,6 +319,163 @@ impl fmt::Display for ProviderFamilyProviderMapError {
 
 impl std::error::Error for ProviderFamilyProviderMapError {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderBundle {
+    assignments: Vec<ProviderFamilyProviderAssignment>,
+}
+
+impl ProviderBundle {
+    pub fn new(
+        registry: &ToolSuiteRegistry,
+        assignments: Vec<ProviderFamilyProviderAssignment>,
+    ) -> Result<Self, ProviderBundleError> {
+        ProviderFamilyProviderMap::new(registry, assignments.clone())
+            .map_err(ProviderBundleError::ProviderMap)?;
+        Ok(Self { assignments })
+    }
+
+    pub fn assignments(&self) -> &[ProviderFamilyProviderAssignment] {
+        &self.assignments
+    }
+
+    pub fn provider_map(
+        &self,
+        registry: &ToolSuiteRegistry,
+    ) -> Result<ProviderFamilyProviderMap, ProviderBundleError> {
+        ProviderFamilyProviderMap::new(registry, self.assignments.clone())
+            .map_err(ProviderBundleError::ProviderMap)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProviderBundleError {
+    ProviderMap(ProviderFamilyProviderMapError),
+}
+
+impl fmt::Display for ProviderBundleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ProviderMap(error) => write!(f, "invalid provider bundle: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ProviderBundleError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkbenchComposition {
+    tool_suite_registry: ToolSuiteRegistry,
+    profiles: Vec<ToolSuiteProfileDefinition>,
+    provider_bundle: ProviderBundle,
+    host_policy: HostCapabilityPolicy,
+}
+
+impl WorkbenchComposition {
+    pub fn tool_suite_registry(&self) -> &ToolSuiteRegistry {
+        &self.tool_suite_registry
+    }
+
+    pub fn profiles(&self) -> &[ToolSuiteProfileDefinition] {
+        &self.profiles
+    }
+
+    pub fn provider_bundle(&self) -> &ProviderBundle {
+        &self.provider_bundle
+    }
+
+    pub fn host_policy(&self) -> &HostCapabilityPolicy {
+        &self.host_policy
+    }
+
+    pub fn into_parts(
+        self,
+    ) -> (
+        ToolSuiteRegistry,
+        Vec<ToolSuiteProfileDefinition>,
+        ProviderBundle,
+        HostCapabilityPolicy,
+    ) {
+        (
+            self.tool_suite_registry,
+            self.profiles,
+            self.provider_bundle,
+            self.host_policy,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct WorkbenchCompositionBuilder {
+    suites: Vec<EditorToolSuite>,
+    profiles: Vec<ToolSuiteProfileDefinition>,
+    provider_assignments: Vec<ProviderFamilyProviderAssignment>,
+    host_policy: HostCapabilityPolicy,
+}
+
+impl WorkbenchCompositionBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_suites(mut self, suites: Vec<EditorToolSuite>) -> Self {
+        self.suites = suites;
+        self
+    }
+
+    pub fn with_profiles(mut self, profiles: Vec<ToolSuiteProfileDefinition>) -> Self {
+        self.profiles = profiles;
+        self
+    }
+
+    pub fn with_provider_assignments(
+        mut self,
+        assignments: Vec<ProviderFamilyProviderAssignment>,
+    ) -> Self {
+        self.provider_assignments = assignments;
+        self
+    }
+
+    pub fn with_host_policy(mut self, policy: HostCapabilityPolicy) -> Self {
+        self.host_policy = policy;
+        self
+    }
+
+    pub fn build(self) -> Result<WorkbenchComposition, WorkbenchCompositionBuildError> {
+        let tool_suite_registry = ToolSuiteRegistry::new(self.suites)
+            .map_err(WorkbenchCompositionBuildError::ToolSuiteRegistry)?;
+        let provider_bundle = ProviderBundle::new(&tool_suite_registry, self.provider_assignments)
+            .map_err(WorkbenchCompositionBuildError::ProviderBundle)?;
+
+        Ok(WorkbenchComposition {
+            tool_suite_registry,
+            profiles: self.profiles,
+            provider_bundle,
+            host_policy: self.host_policy,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum WorkbenchCompositionBuildError {
+    ToolSuiteRegistry(ToolSuiteRegistryError),
+    ProviderBundle(ProviderBundleError),
+}
+
+impl fmt::Display for WorkbenchCompositionBuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ToolSuiteRegistry(error) => {
+                write!(f, "failed to build Workbench tool-suite registry: {error}")
+            }
+            Self::ProviderBundle(error) => {
+                write!(f, "failed to build Workbench provider bundle: {error}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for WorkbenchCompositionBuildError {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,6 +686,95 @@ mod tests {
                 first_provider_family_id: first_family,
                 duplicate_provider_family_id: second_family,
             }
+        );
+    }
+
+    #[test]
+    fn provider_bundle_rejects_duplicate_providers() {
+        let registry = ToolSuiteRegistry::new(vec![
+            suite("runenwerk.material_lab", ["graph_canvas"]),
+            suite("runenwerk.scene", ["viewport"]),
+        ])
+        .expect("valid registry");
+        let first_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+        let second_family = ProviderFamilyId::new("runenwerk.scene").unwrap();
+
+        let error = ProviderBundle::new(
+            &registry,
+            vec![
+                ProviderFamilyProviderAssignment::new(first_family, provider_id(1)),
+                ProviderFamilyProviderAssignment::new(second_family, provider_id(1)),
+            ],
+        )
+        .expect_err("duplicate providers should be rejected");
+
+        assert!(matches!(
+            error,
+            ProviderBundleError::ProviderMap(
+                ProviderFamilyProviderMapError::DuplicateProviderAssignment { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn provider_bundle_rejects_unknown_families() {
+        let registry =
+            ToolSuiteRegistry::new(vec![suite("runenwerk.material_lab", ["graph_canvas"])])
+                .expect("valid registry");
+        let unknown_family = ProviderFamilyId::new("runenwerk.unknown").unwrap();
+
+        let error = ProviderBundle::new(
+            &registry,
+            vec![ProviderFamilyProviderAssignment::new(
+                unknown_family,
+                provider_id(1),
+            )],
+        )
+        .expect_err("unknown families should be rejected");
+
+        assert!(matches!(
+            error,
+            ProviderBundleError::ProviderMap(
+                ProviderFamilyProviderMapError::UnknownProviderFamily { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn composition_builder_installs_suites_profiles_provider_bundle_and_policy() {
+        let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+        let profile = ToolSuiteProfileDefinition::new(
+            super::super::ProfileRef::new("runenwerk.material_lab.default").unwrap(),
+            "Material Lab",
+            vec![
+                super::super::SurfaceRef::from_stable_key("runenwerk.material_lab.graph_canvas")
+                    .unwrap(),
+            ],
+        );
+        let command =
+            super::super::CommandCapabilityKey::new("runenwerk.material_graph.connect_edge")
+                .unwrap();
+
+        let composition = WorkbenchCompositionBuilder::new()
+            .with_suites(vec![suite("runenwerk.material_lab", ["graph_canvas"])])
+            .with_profiles(vec![profile.clone()])
+            .with_provider_assignments(vec![ProviderFamilyProviderAssignment::new(
+                material_family,
+                provider_id(7),
+            )])
+            .with_host_policy(HostCapabilityPolicy::deny_all().allow_command(command.clone()))
+            .build()
+            .expect("composition should build");
+
+        assert_eq!(composition.profiles(), &[profile]);
+        assert!(composition.host_policy().allows_command(&command));
+        assert_eq!(composition.provider_bundle().assignments().len(), 1);
+        assert!(
+            composition
+                .tool_suite_registry()
+                .surfaces()
+                .get(&ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap())
+                .is_some()
         );
     }
 

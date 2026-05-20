@@ -17,9 +17,9 @@ use ui_render_data::{
 
 use crate::editor_runtime::EditorPrimitive;
 use crate::runtime::resources::{
-    EditorHostResource, EditorViewportDebugStage, EditorViewportPrimitiveInstance,
-    EditorViewportRenderState, EditorViewportSceneRenderPacket, effective_shell_scale,
-    scaled_shell_theme,
+    EditorHostResource, EditorViewportDebugStage, EditorViewportModelMeshMaterialSelectionPacket,
+    EditorViewportPrimitiveInstance, EditorViewportRenderState, EditorViewportSceneRenderPacket,
+    effective_shell_scale, scaled_shell_theme,
 };
 use crate::runtime::viewport::{
     MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRegistryResource,
@@ -513,6 +513,17 @@ fn populate_viewport_render_state(
     } else {
         render_state.set_scene_packet(packet);
     }
+    let model_mesh_material_regions = runtime
+        .scene_material_assignments()
+        .model_mesh_assignments()
+        .map(|assignment| assignment.material_region)
+        .collect::<Vec<_>>();
+    render_state.set_model_mesh_material_selection_packet(
+        EditorViewportModelMeshMaterialSelectionPacket::from_model_mesh_regions(
+            runtime.scene_material_assignments(),
+            model_mesh_material_regions,
+        ),
+    );
 
     bounds_changed
 }
@@ -570,12 +581,14 @@ mod tests {
     use super::*;
     use crate::editor_runtime::{execute_scene_intent, register_mvp_component_types};
     use crate::runtime::viewport::{ToolSurfaceRuntimeBindingRecord, ViewportRenderStateCommand};
+    use asset::{asset_id, asset_source_id, asset_source_revision_id};
     use editor_core::{ChangeOrigin, CommandId, EntityId, SelectionTarget};
     use editor_scene::{
         SceneCommandIntent, SceneMaterialAssignmentState, SceneMaterialPalette, SceneMaterialSlot,
-        SceneMaterialSlotId, SceneQuat, SceneTransform, SceneVec3, SdfBooleanIntent,
-        SdfPrimitiveKind, SdfPrimitiveMaterialSlotAssignment, SdfPrimitiveSourceId,
-        SdfPrimitiveSpec,
+        SceneMaterialSlotId, SceneMeshMaterialRegionId, SceneModelMeshMaterialRegionSourceId,
+        SceneModelMeshMaterialSlotAssignment, SceneModelMeshSourceId, SceneQuat, SceneTransform,
+        SceneVec3, SdfBooleanIntent, SdfPrimitiveKind, SdfPrimitiveMaterialSlotAssignment,
+        SdfPrimitiveSourceId, SdfPrimitiveSpec,
     };
     use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId, WidgetId};
     use editor_viewport::ViewportId;
@@ -884,6 +897,90 @@ mod tests {
         assert_ne!(
             first_slot, second_slot,
             "two SDF primitives must reach the renderer with distinct material table slots"
+        );
+    }
+
+    #[test]
+    fn model_mesh_renderable_uses_source_backed_material_slot() {
+        let mut runtime = crate::editor_runtime::RunenwerkEditorRuntime::new();
+        register_mvp_component_types(&mut runtime);
+        let assigned_slot = SceneMaterialSlotId::new(2);
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(assigned_slot, "Imported Body").with_material_asset(asset_id(7)),
+        ])
+        .expect("valid palette");
+        let material_region = SceneModelMeshMaterialRegionSourceId::new(
+            SceneModelMeshSourceId::new(asset_id(42), asset_source_id(84))
+                .with_source_revision_id(asset_source_revision_id(2))
+                .with_source_revision("sha256:source"),
+            SceneMeshMaterialRegionId::new("source_material_slot:0")
+                .expect("source material slot key should be stable"),
+        );
+        let assignments = SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+            palette,
+            [],
+            [SceneModelMeshMaterialSlotAssignment::new(
+                material_region.clone(),
+                assigned_slot,
+            )],
+        )
+        .expect("valid material assignment state");
+        runtime.replace_scene_material_assignments(assignments.clone());
+
+        let packet = EditorViewportModelMeshMaterialSelectionPacket::from_model_mesh_regions(
+            runtime.scene_material_assignments(),
+            [material_region.clone()],
+        );
+        let selection = packet
+            .selections()
+            .first()
+            .expect("source-backed model/mesh material surface should prepare");
+        let prepared_selection = selection.prepared_selection().clone();
+
+        assert_eq!(selection.material_table_index, 1);
+        assert_eq!(
+            prepared_selection.surface.source.asset_id,
+            asset_id(42).raw()
+        );
+        assert_eq!(
+            prepared_selection.surface.source.source_id,
+            asset_source_id(84).raw()
+        );
+        assert_eq!(
+            prepared_selection.surface.source.source_revision_id,
+            Some(asset_source_revision_id(2).raw())
+        );
+        assert_eq!(
+            prepared_selection.surface.source.source_revision.as_deref(),
+            Some("sha256:source")
+        );
+        assert_eq!(
+            prepared_selection.surface.region_key,
+            "source_material_slot:0"
+        );
+        assert!(
+            !prepared_selection
+                .surface
+                .identity_key()
+                .contains("renderable_index")
+        );
+
+        let mut app = crate::editor_app::RunenwerkEditorApp::new();
+        app.runtime_mut()
+            .replace_scene_material_assignments(assignments);
+        let mut render_state = EditorViewportRenderState::default();
+        populate_viewport_render_state(
+            &app,
+            &mut render_state,
+            UiRect::new(0.0, 0.0, 320.0, 240.0),
+        );
+
+        assert_eq!(
+            render_state
+                .model_mesh_material_selection_packet
+                .prepared_material_selections(),
+            vec![prepared_selection]
         );
     }
 }

@@ -7,6 +7,8 @@
       entries: [
         (id: "scene", label: "Scene", route: AuthoredId("editor.workspace.scene.activate")),
         (id: "modelling", label: "Modelling", route: AuthoredId("editor.workspace.modelling.activate")),
+        (id: "editor_design", label: "Editor Design", route: AuthoredId("editor.workspace.editor_design.activate")),
+        (id: "materials", label: "Materials", route: AuthoredId("editor.workspace.materials.activate")),
       ],
     )),
     routes: [
@@ -41,6 +43,7 @@
       (menu_id: "workspace", item_id: "workspace_menu_scene", label: "Scene", route: AuthoredId("editor.workspace.scene.activate"), availability: None),
       (menu_id: "workspace", item_id: "workspace_menu_modelling", label: "Modelling", route: AuthoredId("editor.workspace.modelling.activate"), availability: None),
       (menu_id: "workspace", item_id: "workspace_menu_editor_design", label: "Editor Design", route: AuthoredId("editor.workspace.editor_design.activate"), availability: None),
+      (menu_id: "workspace", item_id: "workspace_menu_materials", label: "Materials", route: AuthoredId("editor.workspace.materials.activate"), availability: None),
     ],
   ),
   shell_chrome_template: AuthoredId("runenwerk.editor.shell_chrome"),

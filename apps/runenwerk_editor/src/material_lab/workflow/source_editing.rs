@@ -1,9 +1,9 @@
-use super::*;
 use super::diagnostics::{
     material_diagnostic, material_graph_diagnostic, material_graph_subject_from_diagnostic,
 };
 use super::preview_build::rebuild_material_preview_for_asset;
 use super::source_resolution::resolve_material_source_for_asset;
+use super::*;
 
 impl RunenwerkEditorApp {
     pub fn select_material_asset(&mut self, asset_id: AssetId) {
@@ -44,6 +44,23 @@ impl RunenwerkEditorApp {
                 self.clear_material_diagnostics();
                 Ok(())
             }
+            MaterialSurfaceAction::AssignModelMeshMaterialSlot {
+                model_asset_id,
+                material_region_key,
+                slot_id,
+            } => self.assign_model_mesh_material_region_slot(
+                model_asset_id,
+                &material_region_key,
+                slot_id,
+            ),
+            MaterialSurfaceAction::AssignSdfPrimitiveMaterialSlot { entity_id, slot_id } => self
+                .runtime_mut()
+                .assign_sdf_primitive_material_slot(entity_id, slot_id)
+                .map_err(|_| {
+                    editor_core::EditorMutationError::runtime_rejected(
+                        "SDF primitive material slot assignment failed",
+                    )
+                }),
             action => self.apply_source_backed_material_edit(action),
         }
     }
@@ -394,7 +411,7 @@ impl RunenwerkEditorApp {
         )
     }
 
-    fn record_material_workflow_diagnostics(
+    pub(super) fn record_material_workflow_diagnostics(
         &mut self,
         diagnostics: impl IntoIterator<Item = AssetDiagnosticRecord>,
     ) {

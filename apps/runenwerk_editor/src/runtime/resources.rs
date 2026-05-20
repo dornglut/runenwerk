@@ -1,14 +1,23 @@
 use std::collections::BTreeMap;
 
 use editor_core::EntityId;
+use editor_scene::{
+    SceneMaterialAssignmentState, SceneMaterialBindingDiagnostic,
+    SceneMaterialBindingDiagnosticCode, SceneMaterialBindingDiagnosticSubject,
+    SceneMaterialResolution, SceneMaterialSlotId, SceneModelMeshMaterialRegionSourceId,
+    SceneModelMeshSourceId,
+};
 use editor_shell::{
-    ToolSurfaceInstanceId, WorkspaceIdentityAllocator,
+    MATERIAL_WORKSPACE_PROFILE_ID, ToolSurfaceInstanceId, WorkspaceIdentityAllocator,
     form_workspace_state_from_definition_with_registry,
 };
 use editor_viewport::{
     ViewportCameraSettings, ViewportFieldVisualizerSettings, ViewportId, ViewportRuntimeSettings,
 };
-use engine::plugins::render::{GpuParams, GpuUniform};
+use engine::plugins::render::{
+    GpuParams, GpuUniform, PreparedModelMeshMaterialRegionIdentity,
+    PreparedModelMeshMaterialSelection, PreparedModelMeshMaterialSourceIdentity,
+};
 use glam::{Vec3, vec3};
 use scene::{LocalTransform, Vec3Value};
 use ui_math::UiVector;
@@ -16,6 +25,7 @@ use ui_theme::ThemeTokens;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_runtime::{EditorPrimitive, EditorPrimitiveKind};
+use crate::material_lab::ensure_default_material_source_document;
 use crate::runtime::preview_process::PreviewProcessManager;
 use crate::shell::{
     EditorDefinitionActivation, RunenwerkEditorShellState, activate_editor_definition_document,
@@ -34,6 +44,7 @@ const CAMERA_PAN_SENSITIVITY: f32 = 0.0015;
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.08;
 const CAMERA_MAX_PITCH_RADIANS: f32 = 1.553_343;
 pub const EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES: usize = 64;
+pub const EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS: usize = 16;
 
 pub use editor_viewport::ViewportDebugStage as EditorViewportDebugStage;
 
@@ -51,7 +62,14 @@ pub struct RuntimePreviewProcessResource {
 
 impl Default for EditorHostResource {
     fn default() -> Self {
-        let app = RunenwerkEditorApp::new();
+        Self::new()
+    }
+}
+
+impl EditorHostResource {
+    pub fn new() -> Self {
+        let mut app = RunenwerkEditorApp::new();
+        ensure_default_material_source_document(&mut app);
         let shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
             app.workbench_host().tool_surface_registry(),
         )
@@ -62,9 +80,26 @@ impl Default for EditorHostResource {
             theme: ThemeTokens::default(),
         }
     }
-}
 
-impl EditorHostResource {
+    pub fn material_lab_workbench() -> Self {
+        let mut app = RunenwerkEditorApp::new_material_lab_workbench();
+        ensure_default_material_source_document(&mut app);
+        app.runtime_mut()
+            .activate_default_material_graph_document()
+            .expect("Material Lab workbench should open a default material graph document");
+        let shell_state =
+            RunenwerkEditorShellState::new_for_workspace_profile_with_tool_surface_registry(
+                MATERIAL_WORKSPACE_PROFILE_ID,
+                app.workbench_host().tool_surface_registry(),
+            )
+            .expect("Material Lab shell workspace should be compatible with workbench registry");
+        Self {
+            app,
+            shell_state,
+            theme: ThemeTokens::default(),
+        }
+    }
+
     pub fn apply_theme(&mut self, theme: ThemeTokens) {
         self.theme = theme;
     }
@@ -328,6 +363,9 @@ pub struct EditorViewportSceneProductUniform {
     pub primitive_slot_params_a: [[f32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
     pub primitive_slot_params_b: [[f32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
     pub primitive_slot_flags: [[u32; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES],
+    pub model_mesh_flags: [u32; 4],
+    pub model_mesh_region_rects: [[f32; 4]; EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS],
+    pub model_mesh_region_flags: [[u32; 4]; EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -480,6 +518,150 @@ impl EditorViewportSceneRenderPacket {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorViewportModelMeshMaterialSelection {
+    pub material_region: SceneModelMeshMaterialRegionSourceId,
+    pub requested_slot_id: SceneMaterialSlotId,
+    pub resolved_slot_id: SceneMaterialSlotId,
+    pub material_table_index: u32,
+    pub used_default_fallback: bool,
+    prepared_selection: PreparedModelMeshMaterialSelection,
+}
+
+impl EditorViewportModelMeshMaterialSelection {
+    pub fn new(
+        material_region: SceneModelMeshMaterialRegionSourceId,
+        resolution: SceneMaterialResolution,
+    ) -> Result<Self, String> {
+        let prepared_selection =
+            prepared_model_mesh_material_selection(&material_region, resolution)?;
+        Ok(Self {
+            material_region,
+            requested_slot_id: resolution.requested_slot_id,
+            resolved_slot_id: resolution.resolved_slot_id,
+            material_table_index: resolution.material_table_index,
+            used_default_fallback: resolution.used_default_fallback,
+            prepared_selection,
+        })
+    }
+
+    pub fn prepared_selection(&self) -> &PreparedModelMeshMaterialSelection {
+        &self.prepared_selection
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EditorViewportModelMeshMaterialSelectionPacket {
+    selections: Vec<EditorViewportModelMeshMaterialSelection>,
+    diagnostics: Vec<SceneMaterialBindingDiagnostic>,
+}
+
+impl EditorViewportModelMeshMaterialSelectionPacket {
+    pub fn from_model_mesh_regions(
+        assignments: &SceneMaterialAssignmentState,
+        material_regions: impl IntoIterator<Item = SceneModelMeshMaterialRegionSourceId>,
+    ) -> Self {
+        let mut selections = Vec::new();
+        let mut diagnostics = Vec::new();
+        for material_region in material_regions {
+            let (resolution, mut region_diagnostics) =
+                assignments.resolve_material_binding_for_model_mesh_region(&material_region);
+            diagnostics.append(&mut region_diagnostics);
+            match EditorViewportModelMeshMaterialSelection::new(material_region.clone(), resolution)
+            {
+                Ok(selection) => selections.push(selection),
+                Err(message) => diagnostics.push(model_mesh_material_selection_diagnostic(
+                    material_region,
+                    message,
+                )),
+            }
+        }
+        selections.sort_by(|left, right| {
+            left.material_region
+                .cmp(&right.material_region)
+                .then_with(|| left.material_table_index.cmp(&right.material_table_index))
+        });
+        Self {
+            selections,
+            diagnostics,
+        }
+    }
+
+    pub fn from_blocking_diagnostics(
+        diagnostics: impl IntoIterator<Item = SceneMaterialBindingDiagnostic>,
+    ) -> Self {
+        Self {
+            selections: Vec::new(),
+            diagnostics: diagnostics.into_iter().collect(),
+        }
+    }
+
+    pub fn selections(&self) -> &[EditorViewportModelMeshMaterialSelection] {
+        &self.selections
+    }
+
+    pub fn diagnostics(&self) -> &[SceneMaterialBindingDiagnostic] {
+        &self.diagnostics
+    }
+
+    pub fn has_blocking_diagnostics(&self) -> bool {
+        !self.diagnostics.is_empty()
+    }
+
+    pub fn prepared_material_selections(&self) -> Vec<PreparedModelMeshMaterialSelection> {
+        self.selections
+            .iter()
+            .map(|selection| selection.prepared_selection().clone())
+            .collect()
+    }
+}
+
+pub fn model_mesh_material_selection_diagnostic(
+    material_region: SceneModelMeshMaterialRegionSourceId,
+    message: impl Into<String>,
+) -> SceneMaterialBindingDiagnostic {
+    SceneMaterialBindingDiagnostic::new(
+        SceneMaterialBindingDiagnosticCode::InvalidMaterialProduct,
+        SceneMaterialBindingDiagnosticSubject::ModelMeshMaterialRegion(material_region),
+        message,
+    )
+}
+
+fn prepared_model_mesh_material_selection(
+    material_region: &SceneModelMeshMaterialRegionSourceId,
+    resolution: SceneMaterialResolution,
+) -> Result<PreparedModelMeshMaterialSelection, String> {
+    let source = prepared_model_mesh_source_identity(&material_region.model_mesh_source_id)?;
+    let region = PreparedModelMeshMaterialRegionIdentity::new(
+        source,
+        material_region.material_region_id.key().to_string(),
+    )
+    .map_err(|error| error.to_string())?;
+    PreparedModelMeshMaterialSelection::new(
+        region,
+        resolution.requested_slot_id.raw(),
+        resolution.resolved_slot_id.raw(),
+        resolution.material_table_index,
+        resolution.used_default_fallback,
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn prepared_model_mesh_source_identity(
+    source: &SceneModelMeshSourceId,
+) -> Result<PreparedModelMeshMaterialSourceIdentity, String> {
+    let mut prepared =
+        PreparedModelMeshMaterialSourceIdentity::new(source.asset_id.raw(), source.source_id.raw())
+            .map_err(|error| error.to_string())?;
+    if let Some(revision_id) = source.source_revision_id {
+        prepared = prepared.with_source_revision_id(revision_id.raw());
+    }
+    if let Some(revision) = &source.source_revision {
+        prepared = prepared.with_source_revision(revision.clone());
+    }
+    Ok(prepared)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct EditorViewportBranchTraceSnapshot {
     pub viewport_bounds_px: (f32, f32, f32, f32),
@@ -498,6 +680,8 @@ pub struct EditorViewportBranchTraceSnapshot {
     pub primitive_params_a: [f32; 4],
     pub primitive_params_b: [f32; 4],
     pub primitive_flags: [u32; 4],
+    pub model_mesh_flags: [u32; 4],
+    pub first_model_mesh_region_flags: [u32; 4],
 }
 
 impl EditorViewportBranchTraceSnapshot {
@@ -518,11 +702,13 @@ impl EditorViewportBranchTraceSnapshot {
             && approx_vec4(self.primitive_params_a, other.primitive_params_a)
             && approx_vec4(self.primitive_params_b, other.primitive_params_b)
             && self.primitive_flags == other.primitive_flags
+            && self.model_mesh_flags == other.model_mesh_flags
+            && self.first_model_mesh_region_flags == other.first_model_mesh_region_flags
     }
 
     pub fn summary_line(self) -> String {
         format!(
-            "stage={}({}) valid={} shader_loaded={} has_primitive={} kind={:?} bounds=({:.1},{:.1},{:.1},{:.1}) viewport=({:.1},{:.1},{:.1},{:.1}) surface=({:.0},{:.0}) obj=({:.2},{:.2},{:.2}) params_a=({:.2},{:.2},{:.2},{:.2}) params_b=({:.2},{:.2},{:.2},{:.2}) flags={:?} cam_pos=({:.2},{:.2},{:.2}) fov={:.3} cam_fwd=({:.3},{:.3},{:.3}) cam_right=({:.3},{:.3},{:.3}) cam_up=({:.3},{:.3},{:.3})",
+            "stage={}({}) valid={} shader_loaded={} has_primitive={} kind={:?} bounds=({:.1},{:.1},{:.1},{:.1}) viewport=({:.1},{:.1},{:.1},{:.1}) surface=({:.0},{:.0}) obj=({:.2},{:.2},{:.2}) params_a=({:.2},{:.2},{:.2},{:.2}) params_b=({:.2},{:.2},{:.2},{:.2}) flags={:?} model_mesh_flags={:?} model_mesh_first={:?} cam_pos=({:.2},{:.2},{:.2}) fov={:.3} cam_fwd=({:.3},{:.3},{:.3}) cam_right=({:.3},{:.3},{:.3}) cam_up=({:.3},{:.3},{:.3})",
             self.debug_stage.label(),
             self.debug_stage.as_u32(),
             self.viewport_valid,
@@ -551,6 +737,8 @@ impl EditorViewportBranchTraceSnapshot {
             self.primitive_params_b[2],
             self.primitive_params_b[3],
             self.primitive_flags,
+            self.model_mesh_flags,
+            self.first_model_mesh_region_flags,
             self.camera_position[0],
             self.camera_position[1],
             self.camera_position[2],
@@ -584,6 +772,7 @@ pub struct EditorViewportRenderState {
     pub capsule_radius: f32,
     pub capsule_half_height: f32,
     pub scene_packet: EditorViewportSceneRenderPacket,
+    pub model_mesh_material_selection_packet: EditorViewportModelMeshMaterialSelectionPacket,
     pub camera_settings: ViewportCameraSettings,
     pub camera: EditorViewportCamera,
     pub camera_fov_y_radians: f32,
@@ -611,6 +800,8 @@ impl Default for EditorViewportRenderState {
             capsule_radius: 0.35,
             capsule_half_height: 0.75,
             scene_packet: EditorViewportSceneRenderPacket::default(),
+            model_mesh_material_selection_packet:
+                EditorViewportModelMeshMaterialSelectionPacket::default(),
             camera_settings: ViewportCameraSettings::default(),
             camera: editor_viewport_camera(),
             camera_fov_y_radians: editor_viewport_camera_fov_y_radians(),
@@ -773,6 +964,13 @@ impl EditorViewportRenderState {
         self.sync_first_primitive_mirror();
     }
 
+    pub fn set_model_mesh_material_selection_packet(
+        &mut self,
+        packet: EditorViewportModelMeshMaterialSelectionPacket,
+    ) {
+        self.model_mesh_material_selection_packet = packet;
+    }
+
     pub fn clear_primitive(&mut self) {
         self.has_primitive = false;
         self.scene_packet = EditorViewportSceneRenderPacket::default();
@@ -848,6 +1046,8 @@ impl EditorViewportRenderState {
             primitive_params_a: uniform.primitive_params_a,
             primitive_params_b: uniform.primitive_params_b,
             primitive_flags: uniform.primitive_flags,
+            model_mesh_flags: uniform.model_mesh_flags,
+            first_model_mesh_region_flags: uniform.model_mesh_region_flags[0],
         }
     }
 
@@ -876,6 +1076,9 @@ impl EditorViewportRenderState {
         let mut primitive_slot_params_a = [[0.0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
         let mut primitive_slot_params_b = [[0.0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
         let mut primitive_slot_flags = [[0; 4]; EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES];
+        let mut model_mesh_region_rects =
+            [[0.0; 4]; EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS];
+        let mut model_mesh_region_flags = [[0; 4]; EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS];
         for (index, primitive) in self
             .scene_packet
             .primitives()
@@ -892,6 +1095,21 @@ impl EditorViewportRenderState {
             .scene_packet
             .len()
             .min(EDITOR_VIEWPORT_MAX_PRIMITIVE_INSTANCES) as u32;
+        let model_mesh_region_count = self
+            .model_mesh_material_selection_packet
+            .selections()
+            .len()
+            .min(EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS);
+        let model_mesh_region_omitted_count = self
+            .model_mesh_material_selection_packet
+            .selections()
+            .len()
+            .saturating_sub(EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS);
+        write_model_mesh_material_region_slots(
+            self.model_mesh_material_selection_packet.selections(),
+            &mut model_mesh_region_rects,
+            &mut model_mesh_region_flags,
+        );
 
         EditorViewportSceneProductUniform {
             surface: [width, height, 1.0 / width, 1.0 / height],
@@ -933,12 +1151,46 @@ impl EditorViewportRenderState {
             primitive_slot_params_a,
             primitive_slot_params_b,
             primitive_slot_flags,
+            model_mesh_flags: [
+                model_mesh_region_count as u32,
+                model_mesh_region_omitted_count as u32,
+                0,
+                0,
+            ],
+            model_mesh_region_rects,
+            model_mesh_region_flags,
         }
     }
 
     pub fn compose_scene_product_uniform_bytes(&self, surface: (u32, u32)) -> Vec<u8> {
         let raw = self.compose_scene_product_uniform(surface).to_gpu();
         engine::plugins::render::bytemuck::bytes_of(&raw).to_vec()
+    }
+}
+
+fn write_model_mesh_material_region_slots(
+    selections: &[EditorViewportModelMeshMaterialSelection],
+    rects: &mut [[f32; 4]; EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS],
+    flags: &mut [[u32; 4]; EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS],
+) {
+    let count = selections
+        .len()
+        .min(EDITOR_VIEWPORT_MAX_MODEL_MESH_MATERIAL_REGIONS);
+    if count == 0 {
+        return;
+    }
+
+    let count_f = count as f32;
+    let half_width = (0.42 / count_f).clamp(0.055, 0.18);
+    for (index, selection) in selections.iter().take(count).enumerate() {
+        let center_x = (index as f32 + 0.5) / count_f;
+        rects[index] = [center_x, 0.56, half_width, 0.22];
+        flags[index] = [
+            selection.material_table_index,
+            (index + 1) as u32,
+            u32::from(selection.used_default_fallback),
+            0,
+        ];
     }
 }
 
@@ -1031,6 +1283,11 @@ fn sanitized_camera_settings(settings: ViewportCameraSettings) -> ViewportCamera
 #[cfg(test)]
 mod tests {
     use super::*;
+    use asset::{asset_id, asset_source_id, asset_source_revision_id};
+    use editor_scene::{
+        SceneMaterialPalette, SceneMaterialSlot, SceneMeshMaterialRegionId,
+        SceneModelMeshMaterialSlotAssignment,
+    };
     use ui_theme::UiColor;
 
     #[test]
@@ -1044,6 +1301,31 @@ mod tests {
         host.apply_theme(theme.clone());
 
         assert_eq!(host.theme, theme);
+    }
+
+    #[test]
+    fn material_lab_workbench_host_resource_bootstraps_material_profile() {
+        let host = EditorHostResource::material_lab_workbench();
+
+        assert_eq!(
+            host.app.workbench_host().composition(),
+            crate::shell::RunenwerkWorkbenchComposition::MaterialLab
+        );
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            MATERIAL_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            host.shell_state.open_workspace_profile_ids(),
+            &[MATERIAL_WORKSPACE_PROFILE_ID]
+        );
+        assert!(matches!(
+            host.app.runtime().session().active_document_descriptor(),
+            Some(editor_core::DocumentDescriptor {
+                kind: editor_core::DocumentKind::MaterialGraph,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -1211,6 +1493,106 @@ mod tests {
     }
 
     #[test]
+    fn model_mesh_material_selection_packet_serializes_scene_product_uniform_regions() {
+        let assigned_slot = SceneMaterialSlotId::new(2);
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(assigned_slot, "Imported Body").with_material_asset(asset_id(7)),
+        ])
+        .expect("valid palette");
+        let material_region = SceneModelMeshMaterialRegionSourceId::new(
+            SceneModelMeshSourceId::new(asset_id(42), asset_source_id(84))
+                .with_source_revision_id(asset_source_revision_id(2))
+                .with_source_revision("sha256:source"),
+            SceneMeshMaterialRegionId::new("source_material_slot:0")
+                .expect("source material slot key should be stable"),
+        );
+        let assignments = SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+            palette,
+            [],
+            [SceneModelMeshMaterialSlotAssignment::new(
+                material_region.clone(),
+                assigned_slot,
+            )],
+        )
+        .expect("valid material assignment state");
+        let packet = EditorViewportModelMeshMaterialSelectionPacket::from_model_mesh_regions(
+            &assignments,
+            [material_region],
+        );
+
+        let mut state = EditorViewportRenderState::default();
+        state.set_model_mesh_material_selection_packet(packet);
+        let uniform = state.compose_scene_product_uniform((1280, 720));
+
+        assert_eq!(uniform.model_mesh_flags, [1, 0, 0, 0]);
+        assert_eq!(uniform.model_mesh_region_flags[0], [1, 1, 0, 0]);
+        assert_eq!(uniform.model_mesh_region_rects[0], [0.5, 0.56, 0.18, 0.22]);
+        assert_eq!(uniform.model_mesh_region_flags[1], [0, 0, 0, 0]);
+        assert_eq!(uniform.model_mesh_region_rects[1], [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(
+            state
+                .branch_trace_snapshot((1280, 720))
+                .first_model_mesh_region_flags,
+            [1, 1, 0, 0]
+        );
+    }
+
+    #[test]
+    fn model_mesh_preview_packet_uses_source_backed_material_regions() {
+        let assigned_slot = SceneMaterialSlotId::new(2);
+        let palette = SceneMaterialPalette::new([
+            SceneMaterialSlot::default_generated(),
+            SceneMaterialSlot::new(assigned_slot, "Imported Body").with_material_asset(asset_id(7)),
+        ])
+        .expect("valid palette");
+        let material_region = SceneModelMeshMaterialRegionSourceId::new(
+            SceneModelMeshSourceId::new(asset_id(42), asset_source_id(84))
+                .with_source_revision_id(asset_source_revision_id(2))
+                .with_source_revision("sha256:source"),
+            SceneMeshMaterialRegionId::new("source_material_slot:0")
+                .expect("source material slot key should be stable"),
+        );
+        let assignments = SceneMaterialAssignmentState::new_with_model_mesh_assignments(
+            palette,
+            [],
+            [SceneModelMeshMaterialSlotAssignment::new(
+                material_region.clone(),
+                assigned_slot,
+            )],
+        )
+        .expect("valid material assignment state");
+
+        let packet = EditorViewportModelMeshMaterialSelectionPacket::from_model_mesh_regions(
+            &assignments,
+            [material_region],
+        );
+
+        assert!(packet.diagnostics().is_empty());
+        assert_eq!(packet.selections().len(), 1);
+        let selection = packet.selections().first().expect("selection should exist");
+        assert_eq!(selection.material_table_index, 1);
+        assert_eq!(selection.requested_slot_id, assigned_slot);
+        assert_eq!(selection.resolved_slot_id, assigned_slot);
+        let prepared = selection.prepared_selection();
+        assert_eq!(prepared.surface.source.asset_id, asset_id(42).raw());
+        assert_eq!(prepared.surface.source.source_id, asset_source_id(84).raw());
+        assert_eq!(
+            prepared.surface.source.source_revision_id,
+            Some(asset_source_revision_id(2).raw())
+        );
+        assert_eq!(
+            prepared.surface.source.source_revision.as_deref(),
+            Some("sha256:source")
+        );
+        assert_eq!(prepared.surface.region_key, "source_material_slot:0");
+        assert!(
+            !prepared.surface.identity_key().contains("renderable_index"),
+            "model/mesh preview packets must not use transient renderable identity"
+        );
+    }
+
+    #[test]
     fn viewport_shaders_decode_scene_primitives_and_keep_grid_in_overlay() {
         let scene_shader =
             include_str!("../../../../assets/shaders/editor_viewport_scene_product.wgsl");
@@ -1226,6 +1608,17 @@ mod tests {
             assert_shader_supports_primitive(shader, EditorPrimitiveKind::Plane);
             assert!(shader.contains("return sdf_box("));
         }
+        for shader in [scene_shader, picking_shader, overlay_shader] {
+            assert!(
+                shader.contains("model_mesh_region_flags : array<vec4<u32>, 16>"),
+                "viewport product shaders must keep the model/mesh material-region uniform ABI aligned"
+            );
+        }
+        assert!(
+            scene_shader.contains("fn model_mesh_region_at(viewport_local: vec2<f32>)")
+                && scene_shader.contains("fn shade_model_mesh_region"),
+            "scene product shader must consume model/mesh material-region uniform slots"
+        );
         assert!(
             !scene_shader.contains("sdf_ground_box")
                 && !scene_shader.contains("grid_shade")

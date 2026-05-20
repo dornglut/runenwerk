@@ -189,6 +189,10 @@ impl Renderer {
                                     pass,
                                     runtime_resources,
                                 );
+                                let material_binding = collect_pass_material_binding_evidence(
+                                    &invocation_packet,
+                                    pass,
+                                );
                                 self.last_pass_provenance.push(RenderPassProvenanceRecord {
                                     frame_index,
                                     flow_id: flow.flow_id.to_string(),
@@ -245,6 +249,7 @@ impl Renderer {
                                         .as_ref()
                                         .map(|key| key.primitive_topology_class)
                                         .unwrap_or(FlowPrimitiveTopologyClass::None),
+                                    material_binding,
                                     render_targets: pass_resource_truth.render_targets,
                                     sampled_textures: pass_resource_truth.sampled_textures,
                                     storage_textures: pass_resource_truth.storage_textures,

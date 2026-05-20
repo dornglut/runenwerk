@@ -183,14 +183,19 @@ pub fn material_resource_binding_diagnostic_row(
                 format!("texture asset '{stable_id}' has no texture-product artifact payload"),
             );
         }
-        if artifacts.iter().any(|artifact| texture_payload_is_texture(artifact)) {
+        if artifacts
+            .iter()
+            .any(|artifact| texture_payload_is_texture(artifact))
+        {
             return material_resource_binding_row(
                 MaterialResourceBindingStatusKind::Incompatible,
                 "material.resource.incompatible_artifact",
                 binding_label,
                 resource_label,
                 expected_label,
-                artifacts.first().map(|artifact| artifact_label(artifact.artifact_id)),
+                artifacts
+                    .first()
+                    .map(|artifact| artifact_label(artifact.artifact_id)),
                 format!(
                     "texture asset '{stable_id}' has texture artifacts that do not match the expected kind"
                 ),

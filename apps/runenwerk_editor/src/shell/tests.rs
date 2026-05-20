@@ -9,11 +9,11 @@ use editor_shell::{
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
     EditorDomainMutation, EntityTableComponentFilter, EntityTableHierarchyFilter,
     EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_LIST_WIDGET_ID,
-    OutlinerDomainMutation, PanelKind, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-    SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget, SurfaceLocalAction,
-    SurfaceProviderAvailability, SurfaceProviderId, SurfaceSessionMutation, ToolSurfaceKind,
-    ToolbarCommandKind, ToolbarMenuKind, UiInteraction, UiInteractionResults,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID,
+    OUTLINER_LIST_WIDGET_ID, OutlinerDomainMutation, PanelKind, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+    RoutedShellAction, SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget,
+    SurfaceLocalAction, SurfaceProviderAvailability, SurfaceProviderId, SurfaceSessionMutation,
+    ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, UiInteraction, UiInteractionResults,
     VIEWPORT_DETAILS_TOGGLE_WIDGET_ID, VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID,
     VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation, ViewportSessionMutation,
     ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis, build_editor_shell_frame,
@@ -737,6 +737,35 @@ fn authored_command_binding_route_target_resolves_to_shell_command() {
 }
 
 #[test]
+fn material_workspace_routes_resolve_to_shell_commands() {
+    let host = EditorHostResource::default();
+    let route_actions =
+        active_route_actions_by_target(host.shell_state.active_editor_definitions(), false, false);
+
+    assert_eq!(
+        route_actions.get("editor.workspace.materials.activate"),
+        Some(&RoutedShellAction::SwitchWorkspaceProfile {
+            profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        })
+    );
+    assert_eq!(
+        route_actions.get("editor.workspace.materials.close"),
+        Some(&RoutedShellAction::CloseWorkspaceProfile {
+            profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+            enabled: true,
+        })
+    );
+    assert_eq!(
+        route_actions.get("editor.workspace.load.materials"),
+        Some(&RoutedShellAction::RunToolbarCommand {
+            command: ToolbarCommandKind::LoadWorkspaceProfile(MATERIAL_WORKSPACE_PROFILE_ID),
+            enabled: true,
+        })
+    );
+}
+
+#[test]
 fn invalid_shortcut_activation_keeps_previous_active_shortcuts() {
     let mut host = EditorHostResource::default();
     host.app.queue_editor_definition_activation(
@@ -1406,6 +1435,107 @@ fn default_startup_resolves_scene_surface_providers() {
             "{kind:?} should not render unsupported document on default startup",
         );
     }
+}
+
+#[test]
+fn material_lab_workbench_startup_resolves_material_surface_providers() {
+    let host = EditorHostResource::material_lab_workbench();
+    assert!(matches!(
+        active_document_context(&host.app),
+        editor_shell::SurfaceDocumentContext::Resolved {
+            document_kind: editor_core::DocumentKind::MaterialGraph,
+            ..
+        }
+    ));
+
+    let frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.surface_provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+
+    for kind in [
+        PanelKind::MaterialGraphCanvas,
+        PanelKind::MaterialInspector,
+        PanelKind::MaterialPreview,
+    ] {
+        let surface = surface_id_by_kind(host.shell_state.workspace_state(), kind);
+        let frame = frame_model
+            .surface(surface)
+            .expect("mounted Material Lab surface should resolve a frame");
+        assert_eq!(
+            frame.availability,
+            SurfaceProviderAvailability::Available,
+            "{kind:?} should be available on standalone Material Lab startup",
+        );
+    }
+}
+
+#[test]
+fn full_editor_material_workspace_resolves_material_surfaces_with_scene_document() {
+    let mut host = EditorHostResource::default();
+    assert!(matches!(
+        active_document_context(&host.app),
+        editor_shell::SurfaceDocumentContext::Resolved {
+            document_kind: editor_core::DocumentKind::Scene,
+            ..
+        }
+    ));
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SwitchWorkspaceProfile {
+            profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("material workspace switch should load from the full editor");
+
+    let frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.surface_provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+
+    for kind in [
+        PanelKind::MaterialGraphCanvas,
+        PanelKind::MaterialInspector,
+        PanelKind::MaterialPreview,
+    ] {
+        let surface = surface_id_by_kind(host.shell_state.workspace_state(), kind);
+        let frame = frame_model
+            .surface(surface)
+            .expect("mounted Material Lab surface should resolve a frame");
+        assert_eq!(
+            frame.availability,
+            SurfaceProviderAvailability::Available,
+            "{kind:?} should be available when Material Lab opens from a scene document",
+        );
+    }
+
+    let graph_surface = surface_id_by_kind(
+        host.shell_state.workspace_state(),
+        PanelKind::MaterialGraphCanvas,
+    );
+    let graph_frame = frame_model
+        .surface(graph_surface)
+        .expect("material graph surface should resolve");
+    assert!(
+        frame_contains_graph_canvas(graph_frame),
+        "Material Lab graph frame should contain a real graph canvas node"
+    );
 }
 
 #[test]
@@ -2916,13 +3046,13 @@ fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessi
         None,
         Some(2),
     )
-    .expect("unsupported editor type switch should still use mounted surface seam");
+    .expect("placeholder editor type switch should still use mounted surface seam");
 
-    let unsupported_surface = shell_state
+    let placeholder_surface = shell_state
         .workspace_state()
         .panel(viewport_panel)
         .and_then(|panel| panel.active_tool_surface)
-        .expect("placeholder switch should mount a surface");
+        .expect("placeholder switch should mount a diagnostics fallback surface");
     let frame_model = build_editor_shell_frame_model(
         &app,
         &shell_state,
@@ -2932,15 +3062,23 @@ fn editor_type_switch_uses_new_surface_identity_for_provider_artifacts_and_sessi
         None,
         None,
     );
-    let unsupported_frame = frame_model
-        .surface(unsupported_surface)
-        .expect("unsupported mounted surface should still resolve a diagnostic frame");
-    assert_eq!(unsupported_frame.panel_instance_id, viewport_panel);
+    let placeholder_frame = frame_model
+        .surface(placeholder_surface)
+        .expect("placeholder mounted surface should resolve a diagnostic frame");
+    assert_eq!(placeholder_frame.panel_instance_id, viewport_panel);
     assert_eq!(
-        unsupported_frame.availability,
-        SurfaceProviderAvailability::Unsupported
+        placeholder_frame.surface_kind,
+        Some(editor_shell::ToolSurfaceKind::Placeholder)
     );
-    assert!(unsupported_frame.routes.is_empty());
+    assert_eq!(
+        placeholder_frame.stable_surface_key.as_str(),
+        "runenwerk.diagnostics.placeholder"
+    );
+    assert_eq!(
+        placeholder_frame.availability,
+        SurfaceProviderAvailability::Available
+    );
+    assert!(placeholder_frame.routes.is_empty());
 }
 
 #[test]
@@ -6212,6 +6350,15 @@ fn surface_id_by_kind(
         .panel(panel_id)
         .and_then(|panel| panel.active_tool_surface)
         .expect("panel should have active tool surface")
+}
+
+fn frame_contains_graph_canvas(frame: &editor_shell::ResolvedSurfaceFrame) -> bool {
+    fn walk(node: &editor_shell::UiNode) -> bool {
+        matches!(node.kind, editor_shell::UiNodeKind::GraphCanvas(_))
+            || node.children.iter().any(walk)
+    }
+
+    walk(&frame.artifact.root)
 }
 
 fn host_for_tab_stack(

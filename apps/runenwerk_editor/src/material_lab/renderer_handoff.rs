@@ -127,6 +127,7 @@ pub fn prepared_material_contribution_for_preview_with_scene_materials(
             preview.scene_shader_identity.clone(),
             scene_material_table_identity(preview, scene_material_assignments),
         )),
+        model_mesh_material_selections: Vec::new(),
     }
 }
 
@@ -322,6 +323,7 @@ fn prepared_material_contribution_from_single_preview_scene_product(
         ])
         .expect("single material preview uses one portable material binding slot"),
         scene_bundle: Some(scene_material_bundle_for_preview_scene_product(product)),
+        model_mesh_material_selections: Vec::new(),
     }
 }
 
@@ -365,6 +367,7 @@ fn prepared_material_contribution_from_resolved_preview_scene_product(
         binding_table: PreparedMaterialBindingTable::fixed_capacity(binding_slots)
             .expect("editor_scene palette enforces portable material binding slot limits"),
         scene_bundle: Some(scene_material_bundle_for_preview_scene_product(product)),
+        model_mesh_material_selections: Vec::new(),
     }
 }
 

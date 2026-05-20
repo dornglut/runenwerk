@@ -136,10 +136,62 @@ impl SdfPrimitiveMaterialSlotAssignmentRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SceneModelMeshSourceRecord {
+    pub asset_id: u64,
+    pub source_id: u64,
+    pub source_revision_id: Option<u64>,
+    pub source_revision: Option<String>,
+}
+
+impl SceneModelMeshSourceRecord {
+    pub fn new(asset_id: u64, source_id: u64) -> Self {
+        Self {
+            asset_id,
+            source_id,
+            source_revision_id: None,
+            source_revision: None,
+        }
+    }
+
+    pub fn with_source_revision_id(mut self, source_revision_id: u64) -> Self {
+        self.source_revision_id = Some(source_revision_id);
+        self
+    }
+
+    pub fn with_source_revision(mut self, source_revision: impl Into<String>) -> Self {
+        self.source_revision = Some(source_revision.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelMeshMaterialSlotAssignmentRecord {
+    pub model_mesh_source: SceneModelMeshSourceRecord,
+    pub material_region_key: String,
+    pub slot_id: u64,
+}
+
+impl ModelMeshMaterialSlotAssignmentRecord {
+    pub fn new(
+        model_mesh_source: SceneModelMeshSourceRecord,
+        material_region_key: impl Into<String>,
+        slot_id: u64,
+    ) -> Self {
+        Self {
+            model_mesh_source,
+            material_region_key: material_region_key.into(),
+            slot_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SceneMaterialAssignmentsRecord {
     pub source_revision: u64,
     pub palette_slots: Vec<SceneMaterialSlotRecord>,
     pub sdf_primitive_assignments: Vec<SdfPrimitiveMaterialSlotAssignmentRecord>,
+    #[serde(default)]
+    pub model_mesh_assignments: Vec<ModelMeshMaterialSlotAssignmentRecord>,
 }
 
 impl Default for SceneMaterialAssignmentsRecord {
@@ -148,6 +200,7 @@ impl Default for SceneMaterialAssignmentsRecord {
             source_revision: 1,
             palette_slots: vec![SceneMaterialSlotRecord::default_generated()],
             sdf_primitive_assignments: Vec::new(),
+            model_mesh_assignments: Vec::new(),
         }
     }
 }
@@ -161,6 +214,22 @@ impl SceneMaterialAssignmentsRecord {
             source_revision: 1,
             palette_slots: palette_slots.into_iter().collect(),
             sdf_primitive_assignments: sdf_primitive_assignments.into_iter().collect(),
+            model_mesh_assignments: Vec::new(),
+        };
+        value.sort_stable();
+        value
+    }
+
+    pub fn new_with_model_mesh_assignments(
+        palette_slots: impl IntoIterator<Item = SceneMaterialSlotRecord>,
+        sdf_primitive_assignments: impl IntoIterator<Item = SdfPrimitiveMaterialSlotAssignmentRecord>,
+        model_mesh_assignments: impl IntoIterator<Item = ModelMeshMaterialSlotAssignmentRecord>,
+    ) -> Self {
+        let mut value = Self {
+            source_revision: 1,
+            palette_slots: palette_slots.into_iter().collect(),
+            sdf_primitive_assignments: sdf_primitive_assignments.into_iter().collect(),
+            model_mesh_assignments: model_mesh_assignments.into_iter().collect(),
         };
         value.sort_stable();
         value
@@ -171,7 +240,22 @@ impl SceneMaterialAssignmentsRecord {
             .sort_by_key(|slot| (slot.slot_id, slot.palette_entry_id));
         self.sdf_primitive_assignments
             .sort_by_key(|assignment| assignment.sdf_primitive_entity_id);
+        self.model_mesh_assignments.sort_by(|left, right| {
+            model_mesh_assignment_sort_key(left).cmp(&model_mesh_assignment_sort_key(right))
+        });
     }
+}
+
+fn model_mesh_assignment_sort_key(
+    assignment: &ModelMeshMaterialSlotAssignmentRecord,
+) -> (u64, u64, Option<u64>, Option<&str>, &str) {
+    (
+        assignment.model_mesh_source.asset_id,
+        assignment.model_mesh_source.source_id,
+        assignment.model_mesh_source.source_revision_id,
+        assignment.model_mesh_source.source_revision.as_deref(),
+        assignment.material_region_key.as_str(),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -219,20 +303,27 @@ mod tests {
             .into_iter()
             .collect(),
         )
-        .with_material_assignments(SceneMaterialAssignmentsRecord::new(
-            [
-                SceneMaterialSlotRecord::default_generated(),
-                SceneMaterialSlotRecord {
-                    slot_id: 2,
-                    palette_entry_id: 2,
-                    display_name: "Rock".to_string(),
-                    source_ref: Some(SceneMaterialSourceRefRecord::new(7, 9)),
-                    material_asset_id: Some(7),
-                    is_default: false,
-                },
-            ],
-            [SdfPrimitiveMaterialSlotAssignmentRecord::new(1, 2)],
-        ));
+        .with_material_assignments(
+            SceneMaterialAssignmentsRecord::new_with_model_mesh_assignments(
+                [
+                    SceneMaterialSlotRecord::default_generated(),
+                    SceneMaterialSlotRecord {
+                        slot_id: 2,
+                        palette_entry_id: 2,
+                        display_name: "Rock".to_string(),
+                        source_ref: Some(SceneMaterialSourceRefRecord::new(7, 9)),
+                        material_asset_id: Some(7),
+                        is_default: false,
+                    },
+                ],
+                [SdfPrimitiveMaterialSlotAssignmentRecord::new(1, 2)],
+                [ModelMeshMaterialSlotAssignmentRecord::new(
+                    SceneModelMeshSourceRecord::new(77, 88),
+                    "body",
+                    2,
+                )],
+            ),
+        );
 
         let encoded = ron::to_string(&scene).expect("scene should serialize");
 
@@ -248,5 +339,73 @@ mod tests {
                 "authored SceneFileV2 material assignments must not persist {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn scene_file_model_mesh_material_assignment_survives_roundtrip() {
+        let scene = SceneFileV2::new(Vec::new()).with_material_assignments(
+            SceneMaterialAssignmentsRecord::new_with_model_mesh_assignments(
+                [
+                    SceneMaterialSlotRecord::default_generated(),
+                    SceneMaterialSlotRecord {
+                        slot_id: 2,
+                        palette_entry_id: 2,
+                        display_name: "Body".to_string(),
+                        source_ref: Some(SceneMaterialSourceRefRecord::new(7, 9)),
+                        material_asset_id: Some(7),
+                        is_default: false,
+                    },
+                ],
+                [],
+                [ModelMeshMaterialSlotAssignmentRecord::new(
+                    SceneModelMeshSourceRecord::new(77, 88).with_source_revision_id(2),
+                    "body",
+                    2,
+                )],
+            ),
+        );
+
+        let encoded = ron::to_string(&scene).expect("scene should serialize");
+        let decoded: SceneFileV2 = ron::from_str(&encoded).expect("scene should deserialize");
+
+        assert_eq!(
+            decoded.material_assignments.model_mesh_assignments,
+            scene.material_assignments.model_mesh_assignments
+        );
+    }
+
+    #[test]
+    fn scene_file_model_mesh_assignment_sort_includes_textual_source_revision() {
+        let assignments = SceneMaterialAssignmentsRecord::new_with_model_mesh_assignments(
+            [SceneMaterialSlotRecord::default_generated()],
+            [],
+            [
+                ModelMeshMaterialSlotAssignmentRecord::new(
+                    SceneModelMeshSourceRecord::new(77, 88).with_source_revision("b"),
+                    "body",
+                    1,
+                ),
+                ModelMeshMaterialSlotAssignmentRecord::new(
+                    SceneModelMeshSourceRecord::new(77, 88).with_source_revision("a"),
+                    "body",
+                    1,
+                ),
+            ],
+        );
+
+        assert_eq!(
+            assignments.model_mesh_assignments[0]
+                .model_mesh_source
+                .source_revision
+                .as_deref(),
+            Some("a")
+        );
+        assert_eq!(
+            assignments.model_mesh_assignments[1]
+                .model_mesh_source
+                .source_revision
+                .as_deref(),
+            Some("b")
+        );
     }
 }

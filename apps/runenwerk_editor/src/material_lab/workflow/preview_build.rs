@@ -163,7 +163,7 @@ pub fn rebuild_material_preview_for_asset(
         .expect("executable IR checked before ledger allocation");
     let compiled_shader = match compile_material_shader(MaterialShaderCompileRequest {
         ir: executable_ir,
-        fixture: MaterialPreviewFixture::Sphere,
+        fixture: engine_preview_fixture(document.editor_state.selected_fixture),
     }) {
         Ok(shader) => shader,
         Err(error) => {
@@ -369,6 +369,22 @@ pub(crate) fn write_scene_material_table_shader_bundle(
         material_table_identity.to_string(),
         resource_layout_identity.to_string(),
     ))
+}
+
+fn engine_preview_fixture(
+    fixture: material_graph::MaterialGraphPreviewFixture,
+) -> MaterialPreviewFixture {
+    match fixture {
+        material_graph::MaterialGraphPreviewFixture::Sphere => MaterialPreviewFixture::Sphere,
+        material_graph::MaterialGraphPreviewFixture::Box => MaterialPreviewFixture::Box,
+        material_graph::MaterialGraphPreviewFixture::Plane => MaterialPreviewFixture::Plane,
+        material_graph::MaterialGraphPreviewFixture::SdfPrimitive => {
+            MaterialPreviewFixture::SdfPrimitive
+        }
+        material_graph::MaterialGraphPreviewFixture::FieldMaterial => {
+            MaterialPreviewFixture::FieldMaterial
+        }
+    }
 }
 
 fn preserved_or_blocked(

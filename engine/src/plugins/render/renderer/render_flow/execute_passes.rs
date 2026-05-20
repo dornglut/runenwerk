@@ -1051,17 +1051,6 @@ fn material_resources_for_pass<'a>(
     }
 }
 
-fn pass_consumes_material_resources(
-    feature_id: Option<crate::plugins::render::RenderFeatureId>,
-    shader: Option<&RenderShaderReference>,
-) -> bool {
-    feature_id == Some(crate::plugins::render::features::MATERIAL_RENDER_FEATURE_ID)
-        || matches!(
-            shader,
-            Some(RenderShaderReference::MaterialSceneBundle { .. })
-        )
-}
-
 fn build_vertex_attribute_sets(draw_buffers: &CompiledDrawBufferPlan) -> Vec<Vec<VertexAttribute>> {
     draw_buffers
         .vertex_buffers

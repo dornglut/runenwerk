@@ -76,6 +76,16 @@ impl RunenwerkEditorApp {
         RunenwerkWorkbenchHost::new().map(Self::with_workbench_host)
     }
 
+    pub fn new_material_lab_workbench() -> Self {
+        let workbench_host = RunenwerkWorkbenchHost::material_lab()
+            .expect("Material Lab workbench host composition must build");
+        Self::with_workbench_host(workbench_host)
+    }
+
+    pub fn try_new_material_lab_workbench() -> Result<Self, RunenwerkWorkbenchHostError> {
+        RunenwerkWorkbenchHost::material_lab().map(Self::with_workbench_host)
+    }
+
     fn with_workbench_host(workbench_host: RunenwerkWorkbenchHost) -> Self {
         Self {
             runtime: RunenwerkEditorRuntime::new(),

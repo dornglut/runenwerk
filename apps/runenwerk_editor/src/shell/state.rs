@@ -128,10 +128,48 @@ impl RunenwerkEditorShellState {
         ))
     }
 
+    pub fn new_for_workspace_profile_with_tool_surface_registry(
+        profile_id: WorkspaceProfileId,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
+        let mut identity_allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = identity_allocator.allocate_workspace_id();
+        let profile_registry = default_workspace_profile_registry();
+        let profile = profile_registry.profile(profile_id).ok_or(
+            WorkspaceProfileRegistryBackedBuildError::UnknownWorkspaceProfile { profile_id },
+        )?;
+        let workspace_state = profile.build_default_workspace_state_with_registry(
+            workspace_id,
+            &mut identity_allocator,
+            registry,
+        )?;
+        debug_assert!(workspace_state.validate_integrity().is_ok());
+        Ok(Self::from_bootstrapped_workspace_with_open_profiles(
+            identity_allocator,
+            profile_id,
+            workspace_state,
+            vec![profile_id],
+        ))
+    }
+
     fn from_bootstrapped_workspace(
         identity_allocator: WorkspaceIdentityAllocator,
         active_workspace_profile_id: WorkspaceProfileId,
         workspace_state: WorkspaceState,
+    ) -> Self {
+        Self::from_bootstrapped_workspace_with_open_profiles(
+            identity_allocator,
+            active_workspace_profile_id,
+            workspace_state,
+            vec![SCENE_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID],
+        )
+    }
+
+    fn from_bootstrapped_workspace_with_open_profiles(
+        identity_allocator: WorkspaceIdentityAllocator,
+        active_workspace_profile_id: WorkspaceProfileId,
+        workspace_state: WorkspaceState,
+        open_workspace_profile_ids: Vec<WorkspaceProfileId>,
     ) -> Self {
         let mut active_editor_definitions = ActiveEditorDefinitionCatalogs::default();
         let checked_in_definitions = load_checked_in_editor_ui_definitions()
@@ -151,10 +189,7 @@ impl RunenwerkEditorShellState {
             projection_epoch: 0,
             identity_allocator,
             active_workspace_profile_id,
-            open_workspace_profile_ids: vec![
-                SCENE_WORKSPACE_PROFILE_ID,
-                MODELLING_WORKSPACE_PROFILE_ID,
-            ],
+            open_workspace_profile_ids,
             active_toolbar_menu: None,
             active_tab_stack_popup_menu: None,
             workspace_state,

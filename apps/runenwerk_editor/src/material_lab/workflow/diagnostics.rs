@@ -48,4 +48,3 @@ pub(super) fn material_diagnostic(
 ) -> AssetDiagnosticRecord {
     AssetDiagnosticRecord::new(code, AssetDiagnosticSeverity::Error, message)
 }
-
