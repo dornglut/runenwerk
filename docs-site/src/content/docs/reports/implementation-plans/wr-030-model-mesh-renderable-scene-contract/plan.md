@@ -192,9 +192,13 @@ from a source-backed model/mesh material selection and names the pass evidence.
 
 ## Initial Validation Targets
 
+2026-05-20 filter audit: keep these commands on test names that match at
+least one test. Cargo test filters that pass with zero tests are not acceptable
+WR-030 evidence.
+
 - `cargo test -p runenwerk_editor material_preview_model_mesh_projection_uses_source_backed_regions`
-- `cargo test -p runenwerk_editor material_preview_provider_renders_source_backed_model_mesh_preview_surface`
-- `cargo test -p runenwerk_editor material_lab_workbench_preview_uses_model_mesh_preview_projection`
+- `cargo test -p runenwerk_editor material_preview_provider_renders_preview_scene_product_section`
+- `cargo test -p runenwerk_editor material_lab_workbench_preview_keeps_first_visible_path_sdf_first`
 - `cargo test -p runenwerk_editor model_mesh_preview_packet_uses_source_backed_material_regions`
 - `cargo test -p runenwerk_editor model_mesh`
 - `cargo test -p runenwerk_editor material_lab_workbench`

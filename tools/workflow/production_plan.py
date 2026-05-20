@@ -33,6 +33,7 @@ from roadmap_state import (
     batch_ineligibility_reason,
     decision_gate_errors,
     load_roadmap,
+    promotion_preflight,
     repo_path,
 )
 
@@ -43,6 +44,9 @@ DEFAULT_IMPLEMENTATION_PLAN_ROOT = REPO_ROOT / "docs-site/src/content/docs/repor
 PlanAction = Literal[
     "write_implementation_contract",
     "write_promotion_contract",
+    "switch_current_candidate",
+    "repair_wr_promotion_metadata",
+    "stop_on_promotion_blocker",
     "design_first",
     "already_completed",
     "invalid",
@@ -102,6 +106,13 @@ def classify_plan_action(context: ProductionPlanContext) -> PlanAction:
     if item.planning_state == "current_candidate":
         return "write_implementation_contract" if batch_ineligibility_reason(item) is None else "design_first"
     if item.planning_state == "ready_next":
+        preflight = promotion_preflight(context.roadmap, item.id, "current_candidate")
+        if preflight.status == "needs_switch":
+            return "switch_current_candidate"
+        if preflight.status == "metadata_blocked":
+            return "repair_wr_promotion_metadata"
+        if preflight.status == "hard_blocked":
+            return "stop_on_promotion_blocker"
         return "write_promotion_contract"
     if item.planning_state == "blocked_deferred":
         return "design_first"
@@ -157,8 +168,15 @@ def render_readiness_report(context: ProductionPlanContext, action: PlanAction, 
         lines.extend(f"- Design gate unmet: {error}" for error in gate_errors)
     if batch_reason:
         lines.append(f"- Current candidate is not batch eligible: {batch_reason}")
+    preflight = promotion_preflight(context.roadmap, item.id, "current_candidate") if item.planning_state == "ready_next" else None
     if action == "write_promotion_contract":
         lines.append("- This is ready_next planning work, not direct implementation. The contract should verify promotion evidence first.")
+    elif action == "switch_current_candidate":
+        lines.append("- Promotion preflight found an overlapping current candidate. Switch current candidate before planning code.")
+    elif action == "repair_wr_promotion_metadata":
+        lines.append("- Promotion preflight found roadmap metadata that must be repaired before promotion.")
+    elif action == "stop_on_promotion_blocker":
+        lines.append("- Promotion preflight found a hard blocker. Stop and report before doing adjacent WR work.")
     elif action == "write_implementation_contract":
         lines.append("- This WR row is current-candidate eligible. The contract may plan implementation and closeout.")
     elif action == "design_first":
@@ -167,6 +185,16 @@ def render_readiness_report(context: ProductionPlanContext, action: PlanAction, 
         lines.append("- The WR row is completed. Check closeout evidence before doing more work.")
     elif action == "invalid":
         lines.append("- The current state does not map to a production implementation contract.")
+    if preflight is not None:
+        lines.extend(["", "## Promotion Preflight", ""])
+        lines.append(f"- Status: {preflight.status}")
+        if preflight.blocking_current_candidates:
+            lines.append(f"- Blocking current candidate: {', '.join(preflight.blocking_current_candidates)}")
+        if preflight.reasons:
+            lines.append("- Reasons:")
+            lines.extend(f"  - {reason}" for reason in preflight.reasons)
+        if preflight.suggested_command:
+            lines.append(f"- Suggested command: `{preflight.suggested_command}`")
     lines.extend(["", "## Prompt Template", "", f"- {repo_path(PROMPT_TEMPLATE)}", ""])
     return "\n".join(lines)
 
@@ -181,6 +209,18 @@ def render_contract_prompt(context: ProductionPlanContext, action: PlanAction, c
             "Create a decision-complete promotion and implementation-readiness contract, then stop. "
             "Verify whether the WR row can honestly be promoted before planning code changes."
         )
+    elif action == "switch_current_candidate":
+        task_line = (
+            "Switch the current candidate through task roadmap:switch-current, validate, rerun task ai:goal, then stop. "
+            "Do not inspect or repair adjacent WR evidence."
+        )
+    elif action == "repair_wr_promotion_metadata":
+        task_line = (
+            "Repair the exact roadmap metadata named by promotion preflight, validate, rerun task ai:goal, then stop. "
+            "Do not inspect or repair adjacent WR evidence."
+        )
+    elif action == "stop_on_promotion_blocker":
+        task_line = "Stop and report the hard promotion blocker. Do not inspect or repair adjacent WR evidence."
     elif action == "design_first":
         task_line = "Create the design-first planning contract needed to clear gates before implementation, then stop."
     elif action == "already_completed":

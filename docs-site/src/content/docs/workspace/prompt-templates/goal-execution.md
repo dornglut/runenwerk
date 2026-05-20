@@ -48,6 +48,14 @@ Work through the finite milestone list in dependency order.
 For each milestone, perform exactly one legal next action, validate it, close it
 out, then rerun task ai:goal before continuing.
 
+Use the five-minute gate loop before code changes: run `task ai:goal`, run
+`task production:plan` for the selected WR, follow promotion preflight or
+`task roadmap:switch-current`, validate, then rerun `task ai:goal`.
+
+After a failed promotion or gate command, do not investigate adjacent WR
+evidence. Classify the failure and either repair exact roadmap metadata, switch
+current candidate, or stop and report.
+
 Do not bypass design gates, ADR gates, WR roadmap state, write scopes,
 validation, closeout evidence, or completion-quality rules.
 
@@ -63,6 +71,8 @@ Stop and report instead of continuing when:
 - a milestone dependency is incomplete;
 - a design, ADR, WR, validation, or closeout gate is missing;
 - a linked WR row is not ready for its required action;
+- promotion preflight reports metadata or hard blockers that cannot be repaired
+  inside the current bounded action;
 - implementation would exceed the current milestone;
 - validation or closeout evidence is missing;
 - source files changed enough that the generated plan must be refreshed.

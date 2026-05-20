@@ -535,7 +535,7 @@ items:
   lane: Product workflow
   dependency_level: L3
   gate: Current Mesh Preview pixel proof
-  planning_state: current_candidate
+  planning_state: ready_next
   priority: P0
   value: 4
   blocker: 2
@@ -572,18 +572,18 @@ items:
   - cargo test -p runenwerk_editor model_mesh_material_selection_packet_serializes_scene_product_uniform_regions
   - cargo test -p runenwerk_editor model_mesh_material_selection_packet_reaches_material_feature_payload
   - cargo test -p engine model_mesh_surface_material_selection
-  - cargo test -p engine model_mesh_renderable_surface_rejects_transient_identity
-  - cargo test -p engine model_mesh_preview_pass_provenance_exposes_selected_material_region
+  - cargo test -p engine model_mesh_surface_material_selection_rejects_transient_renderer_identity
+  - cargo test -p engine material_pass_provenance_exposes_model_mesh_selection_table
   - cargo test -p engine generated_scene_wgsl_renders_model_mesh_regions_from_material_selection_lane
   - cargo test -p runenwerk_editor sdf_two_primitives_render_different_material_slots
   - cargo check -p runenwerk_editor
   - task docs:validate
   - task roadmap:validate
   - task planning:validate
-  next_evidence: 'Current candidate: prove the source-backed Mesh Preview material-consuming pass with changed visible model/mesh
-    pixels, selected material-region provenance, and refreshed WR-028 SDF non-regression evidence.'
-  current_decision: WR-030 is the current implementation row because the code-backed WR-029 Phase 1-3 material assignment
-    path still lacks the visible model/mesh pixel proof required before WR-029 can close.
+  next_evidence: Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032; WR-030 remains valid ready-next
+    work for WR-029 and is not a typed Workbench handle prerequisite.
+  current_decision: Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032; WR-030 remains valid ready-next
+    work for WR-029 and is not a typed Workbench handle prerequisite.
   current_call: 'Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must
     resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance
     and WR-028 SDF non-regression.'
@@ -621,52 +621,6 @@ items:
   fitness_function_requirement: Source-backed Mesh Preview projection, material table selection, pass-consumption evidence,
     full-editor and standalone-workbench surface coverage, SDF non-regression, and GPU/manual pixel proof.
   ownership_mode: Stream-aligned Material Lab product workflow with enabling app-runtime and engine-render support.
-- id: WR-031
-  title: Workbench Clean-Break Governance And ADR
-  diagram_title: Workbench clean-break ADR
-  alias: WBCAPADR
-  lane: Platform foundation
-  dependency_level: L1
-  gate: Current governance gate
-  planning_state: current_candidate
-  priority: P0
-  value: 4
-  blocker: 3
-  tc: 4
-  rr_oe: 5
-  du: 4
-  effort: 3
-  confidence: 0.8
-  expected_score: 4.5
-  rice: Accept the breaking Workbench decision before deleting compatibility paths.
-  kano: Basic
-  dependencies: []
-  write_scopes:
-  - docs-site/src/content/docs/adr
-  - docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
-  - docs-site/src/content/docs/workspace/roadmap-items.yaml
-  - docs-site/src/content/docs/workspace/production-tracks.yaml
-  validations:
-  - task docs:validate
-  - task roadmap:validate
-  - task production:validate
-  - task planning:validate
-  next_evidence: Accepted ADR 0012 and roadmap/production records that explicitly approve dropping legacy Workbench persisted layout support.
-  current_decision: Run architecture governance and accept the breaking Workbench clean-break ADR before code removes legacy profile or persistence paths.
-  current_call: Implement the governance source records for PT-WB-CAP and make legacy compatibility removal an intentional platform decision.
-  first_move: Run architecture governance, accept ADR 0012, add PT-WB-CAP, and sequence WR-032 through WR-040.
-  main_blocker: Code removal without accepted decision evidence would violate the repository architecture workflow.
-  why_not_ready: ''
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
-  diagram_call:
-  - clean-break ADR
-  - no legacy persistence support
-  ddd_owner: domain/editor/editor_shell with apps/runenwerk_editor Workbench host
-  adr_requirement: Accepted ADR 0012 is required and is the authority for dropping compatibility.
-  fitness_function_requirement: Architecture governance output, ADR acceptance, roadmap validation, production validation, planning validation, and docs validation.
-  ownership_mode: Enabling platform governance for stream-aligned Workbench implementation.
 - id: WR-032
   title: Typed Suite, Surface, Profile, And Provider Handles
   diagram_title: Typed Workbench handles
@@ -674,10 +628,10 @@ items:
   lane: Platform foundation
   dependency_level: L1
   gate: After WR-031 clean-break ADR
-  planning_state: ready_next
+  planning_state: current_candidate
   priority: P0
   value: 4
-  blocker: 3
+  blocker: 2
   tc: 4
   rr_oe: 5
   du: 4
@@ -692,22 +646,33 @@ items:
   - domain/editor/editor_shell/src/tool_suite
   - domain/editor/editor_shell/src/workspace
   - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/tool_suites
+  - apps/runenwerk_editor/src/material_lab/tool_suite.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
   validations:
   - cargo test -p editor_shell tool_suite
-  - cargo test -p editor_shell workspace_profile
+  - cargo test -p editor_shell workspace::profile
   - cargo test -p runenwerk_editor workbench_host
   - cargo check -p runenwerk_editor
-  next_evidence: SuiteRef, SurfaceRef, ProfileRef, ProviderBundle, WorkbenchCompositionBuilder, and ToolSuiteProfileDefinition with exact stable-key tests.
-  current_decision: Tool suites export typed handles; raw strings stay localized to declarations.
+  next_evidence: WR-031 governance is complete; WR-030 has been deferred back to ready_next as unrelated product-workflow
+    model-mesh proof; WR-032 is the PT-WB-CAP typed Workbench handle implementation slice at the B2 gate with write scopes
+    covered.
+  current_decision: WR-031 governance is complete; WR-030 has been deferred back to ready_next as unrelated product-workflow
+    model-mesh proof; WR-032 is the PT-WB-CAP typed Workbench handle implementation slice at the B2 gate with write scopes
+    covered.
   current_call: Replace ad hoc suite/profile/provider construction with typed composition handles and provider bundles.
-  main_blocker: WR-031 clean-break ADR and planning records must validate before code promotes typed handles into host presets.
-  first_move: Add handle types and builder contracts in editor_shell, then switch Workbench host presets to the builder.
+  main_blocker: Needs implementation evidence that app suite declarations and Workbench host presets consume the typed composition
+    path without restoring legacy ToolSurfaceKind authority.
+  first_move: Add handle types and builder contracts in editor_shell, then switch Workbench host presets and app suite declarations
+    to the builder.
+  why_not_ready: ''
   diagram_call:
   - typed handles
   - provider bundle
   ddd_owner: domain/editor/editor_shell tool_suite and workspace
   adr_requirement: ADR 0012 governs the clean authority boundary.
-  fitness_function_requirement: Stable-key exactness tests, duplicate provider rejection, unknown provider-family rejection, and Workbench host construction tests.
+  fitness_function_requirement: Stable-key exactness tests, duplicate provider rejection, unknown provider-family rejection,
+    and Workbench host construction tests.
   ownership_mode: Complicated-subsystem platform foundation owned by editor shell.
 - id: WR-033
   title: Remove Legacy Tool Surface Identity
@@ -735,25 +700,34 @@ items:
   - domain/editor/editor_shell/src/surface_provider.rs
   - domain/editor/editor_shell/src/commands
   - domain/editor/editor_shell/src/composition
+  - domain/editor/editor_shell/src/tool_suite/legacy.rs
+  - domain/editor/editor_shell/src/tool_suite/mod.rs
+  - domain/editor/editor_shell/src/tests.rs
   - apps/runenwerk_editor/src/shell
   - apps/runenwerk_editor/src/runtime/systems
+  - docs-site/src/content/docs/reports/implementation-plans/wr-033-remove-legacy-tool-surface-identity/plan.md
   validations:
   - cargo test -p editor_shell tool_suite
-  - cargo test -p editor_shell workspace_profile
+  - cargo test -p editor_shell workspace::profile
   - cargo test -p runenwerk_editor workbench_host
   - cargo test -p runenwerk_editor material_lab_workbench
   - cargo check -p runenwerk_editor
-  next_evidence: No Workbench code references ToolSurfaceKind, stable-key reverse mapping helpers, or legacy material/texture/diagnostics profile constructors.
+  next_evidence: No Workbench code references ToolSurfaceKind, stable-key reverse mapping helpers, or legacy material/texture/diagnostics
+    profile constructors.
   current_decision: Remove ToolSurfaceKind as Workbench identity and do not introduce a replacement compatibility enum.
-  current_call: Delete legacy stable-key reverse mapping helpers and route Material Lab only through typed suite/profile/provider data.
-  main_blocker: WR-032 typed handles must land before removing legacy enum call sites.
-  first_move: Remove legacy fields from ToolSurfaceState, SurfaceProviderRequest, frame artifacts, create candidates, and shell commands.
+  current_call: Delete legacy stable-key reverse mapping helpers and route Material Lab only through typed suite/profile/provider
+    data.
+  main_blocker: WR-033 write scopes now include legacy helper and source-guard ownership; WR-032 typed handles still must
+    land before removing legacy enum call sites.
+  first_move: After WR-032 completes, remove legacy fields from ToolSurfaceState, SurfaceProviderRequest, frame artifacts,
+    create candidates, and shell commands.
   diagram_call:
   - no compatibility enum
   - stable key authority
   ddd_owner: domain/editor/editor_shell with apps/runenwerk_editor shell providers
   adr_requirement: ADR 0012 is mandatory because this intentionally breaks persisted layouts.
-  fitness_function_requirement: Source guard rejecting ToolSurfaceKind in Workbench code plus focused provider/profile/Material Lab tests.
+  fitness_function_requirement: Source guard rejecting ToolSurfaceKind in Workbench code plus focused provider/profile/Material
+    Lab tests.
   ownership_mode: Stream-aligned breaking cleanup with editor shell as owner.
 - id: WR-034
   title: Registry-Backed Workspace Profiles
@@ -779,16 +753,24 @@ items:
   write_scopes:
   - domain/editor/editor_shell/src/workspace/profile.rs
   - domain/editor/editor_shell/src/workspace/state.rs
+  - domain/editor/editor_shell/src/tests.rs
   - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/state.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/providers/mod.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-034-registry-backed-workspace-profiles/plan.md
   validations:
-  - cargo test -p editor_shell workspace_profile
+  - cargo test -p editor_shell workspace::profile
   - cargo test -p runenwerk_editor workbench_host
   - cargo check -p runenwerk_editor
   next_evidence: Central legacy default profile authority deleted and replaced by Workbench composition data.
   current_decision: Installed suites and profile definitions own default workspace composition.
   current_call: Make full editor and Material Lab profiles registry-backed rather than enum-backed.
-  main_blocker: WR-033 must remove legacy surface identity before profiles can become registry-only.
-  first_move: Move default surface lists into ToolSuiteProfileDefinition declarations and build profiles through WorkbenchCompositionBuilder.
+  main_blocker: WR-034 write scopes now include app shell bootstrap, profile dispatch, provider, and source-guard ownership;
+    WR-033 must still remove legacy surface identity before profiles can become registry-only.
+  first_move: After WR-033 completes, move default surface lists into ToolSuiteProfileDefinition declarations and build profiles
+    through WorkbenchCompositionBuilder.
   diagram_call:
   - profile declarations
   - installed suites only
@@ -819,16 +801,20 @@ items:
   - WR-034
   write_scopes:
   - domain/editor/editor_shell/src/workspace/persisted.rs
+  - domain/editor/editor_shell/src/workspace/state.rs
   - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-035-clean-persistence-format/plan.md
   validations:
-  - cargo test -p editor_shell workspace_profile
+  - cargo test -p editor_shell workspace::profile
   - cargo test -p runenwerk_editor workbench_host
   - cargo check -p runenwerk_editor
   next_evidence: Old persisted layouts fail with unsupported-schema diagnostics and new stable-key-only layouts round trip.
   current_decision: Old workspace files are unsupported, not migrated.
   current_call: Remove persisted legacy surface-kind fields and compatibility loaders.
-  main_blocker: WR-034 registry-backed profiles must exist before persistence can reject old schemas safely.
-  first_move: Delete V1-V4 migration loaders and V5 legacy fallback fields, then add unsupported-schema tests.
+  main_blocker: WR-035 write scopes now include workspace persistence, workspace diagnostics, app persistence adapter, and
+    contract ownership; WR-034 registry-backed profiles must still exist before persistence can reject old schemas safely.
+  first_move: After WR-034 completes, delete V1-V4 migration loaders and V5 legacy fallback fields, then add unsupported-schema
+    tests.
   diagram_call:
   - stable-key persistence
   - old schema unsupported
@@ -859,17 +845,22 @@ items:
   - WR-035
   write_scopes:
   - apps/runenwerk_editor/src/material_lab
+  - apps/runenwerk_editor/src/editor_app/state.rs
   - apps/runenwerk_editor/src/shell/workbench_host.rs
   - apps/runenwerk_editor/src/shell/providers
+  - docs-site/src/content/docs/reports/implementation-plans/wr-036-material-lab-clean-migration-proof/plan.md
   validations:
   - cargo test -p runenwerk_editor material_lab_workbench
   - cargo test -p runenwerk_editor workbench_host
   - cargo check -p runenwerk_editor
   next_evidence: Material Lab full-editor and standalone Workbench tests resolve without legacy kind metadata.
   current_decision: Material Lab is the proof surface for the clean registry foundation.
-  current_call: Mount graph, inspector, preview, texture, asset, diagnostics, and console surfaces through typed handles and provider bundles.
-  main_blocker: WR-035 clean persistence must be in place before Material Lab can prove no legacy metadata is required.
-  first_move: Add host-preset tests that inspect Material Lab mounted requests and provider resolution without legacy surface metadata.
+  current_call: Mount graph, inspector, preview, texture, asset, diagnostics, and console surfaces through typed handles and
+    provider bundles.
+  main_blocker: WR-036 write scopes now include Material Lab runtime, app construction, host composition, provider, and contract
+    ownership; WR-035 clean persistence must still be in place before Material Lab can prove no legacy metadata is required.
+  first_move: After WR-035 completes, add host-preset tests that inspect Material Lab mounted requests and provider resolution
+    without legacy surface metadata.
   diagram_call:
   - Material Lab standalone
   - no legacy route metadata
@@ -984,7 +975,8 @@ items:
   - cargo check -p runenwerk_editor
   next_evidence: Host presets differ only by suite/profile/provider bundle and capability policy.
   current_decision: Host presets are Workbench composition data, not app forks or legacy route branches.
-  current_call: Define full editor, standalone Material Lab, headless validation, and constrained host presets from the same builder.
+  current_call: Define full editor, standalone Material Lab, headless validation, and constrained host presets from the same
+    builder.
   main_blocker: WR-037 host policy must land before constrained and headless presets can be meaningful.
   first_move: Add preset constructors and tests proving the installed suites, profiles, providers, and policies are explicit.
   diagram_call:
@@ -1024,10 +1016,12 @@ items:
   - task docs:validate
   - task planning:validate
   next_evidence: Accepted sandbox/security design before any external dynamic component implementation.
-  current_decision: External components stay blocked until sandbox, package trust, permissions, unload/reload, and diagnostics are accepted.
+  current_decision: External components stay blocked until sandbox, package trust, permissions, unload/reload, and diagnostics
+    are accepted.
   current_call: Keep this as design-only future work.
   main_blocker: No accepted sandbox/security design exists.
-  first_move: Draft external component threat model, trust boundary, process/ABI options, permissions, diagnostics, and rollback design.
+  first_move: Draft external component threat model, trust boundary, process/ABI options, permissions, diagnostics, and rollback
+    design.
   diagram_call:
   - external components blocked
   - sandbox decision required

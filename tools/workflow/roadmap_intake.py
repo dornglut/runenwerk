@@ -33,6 +33,7 @@ from roadmap_state import (
     load_roadmap,
     load_yaml,
     normalize_repo_path,
+    promotion_preflight,
     repo_path,
     split_source_paths,
     validate_existing_write_scope_paths,
@@ -117,6 +118,30 @@ def promote(
             console.print(f"- {line}")
         raise typer.Exit(1) from error
     console.print(f"[green]promoted roadmap item:[/green] {id} -> {state}")
+
+
+@app.command("switch-current")
+def switch_current(
+    from_id: str = typer.Option(..., "--from", help="Current candidate item ID to demote to ready_next."),
+    to_id: str = typer.Option(..., "--to", help="Ready item ID to promote to current_candidate."),
+    evidence: str = typer.Option(..., help="Evidence justifying the current-candidate switch."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    skip_checks: bool = typer.Option(False, help="Skip roadmap and PUML checks after writing."),
+) -> None:
+    try:
+        switch_current_candidate(
+            from_id=from_id,
+            to_id=to_id,
+            evidence=evidence,
+            source=source,
+            skip_checks=skip_checks,
+        )
+    except WorkflowError as error:
+        console.print("[red]roadmap current-candidate switch failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+    console.print(f"[green]switched current candidate:[/green] {from_id} -> {to_id}")
 
 
 def build_intake_proposal(
@@ -351,7 +376,7 @@ def promote_roadmap_item(
         raise WorkflowError("roadmap item id must match WR-000")
     if not evidence.strip():
         raise WorkflowError("promotion evidence is required")
-    data, archive_data, deferred_data = load_split_data_for_write(source)
+    data, _archive_data, _deferred_data = load_split_data_for_write(source)
     roadmap_before = RoadmapState.model_validate(combine_roadmap_data(data, source))
     updated_data = roadmap_data_with_promotion(
         data,
@@ -373,6 +398,85 @@ def promote_roadmap_item(
     write_roadmap_data(source, updated_data)
     render_and_check(roadmap, skip_checks=skip_checks)
     return roadmap
+
+
+def switch_current_candidate(
+    *,
+    from_id: str,
+    to_id: str,
+    evidence: str,
+    source: Path = ROADMAP_SOURCE,
+    skip_checks: bool = False,
+) -> RoadmapState:
+    if not ID_PATTERN.fullmatch(from_id) or not ID_PATTERN.fullmatch(to_id):
+        raise WorkflowError("roadmap item ids must match WR-000")
+    if from_id == to_id:
+        raise WorkflowError("from and to roadmap item ids must differ")
+    if not evidence.strip():
+        raise WorkflowError("switch evidence is required")
+    data, _archive_data, _deferred_data = load_split_data_for_write(source)
+    roadmap_before = RoadmapState.model_validate(combine_roadmap_data(data, source))
+    from_item = roadmap_before.by_id.get(from_id)
+    if from_item is None:
+        raise WorkflowError(f"{from_id}: not present in active roadmap source")
+    if from_item.planning_state != "current_candidate":
+        raise WorkflowError(f"{from_id}: planning_state {from_item.planning_state!r} is not current_candidate")
+    if to_id not in roadmap_before.by_id:
+        raise WorkflowError(f"{to_id}: not present in active roadmap source")
+
+    updated_data = roadmap_data_with_current_switch(
+        data,
+        from_id=from_id,
+        to_id=to_id,
+        evidence=evidence.strip(),
+    )
+    try:
+        roadmap = RoadmapState.model_validate(combine_roadmap_data(updated_data, source))
+    except ValueError as error:
+        raise WorkflowError(str(error)) from error
+    preflight = promotion_preflight(roadmap, to_id, "current_candidate", evidence=evidence.strip())
+    if preflight.status != "promotable":
+        raise WorkflowError("\n".join(preflight.reasons))
+    write_roadmap_data(source, updated_data)
+    render_and_check(roadmap, skip_checks=skip_checks)
+    return roadmap
+
+
+def roadmap_data_with_current_switch(
+    data: dict,
+    *,
+    from_id: str,
+    to_id: str,
+    evidence: str,
+) -> dict:
+    items = list(data.get("items", []))
+    active_by_id = {item.get("id"): item for item in items}
+    if from_id not in active_by_id:
+        raise WorkflowError(f"{from_id}: not present in active roadmap source")
+    if to_id not in active_by_id:
+        raise WorkflowError(f"{to_id}: not present in active roadmap source")
+    updated_items: list[dict] = []
+    for item in items:
+        if item.get("id") == from_id:
+            demoted = dict(item)
+            demoted["planning_state"] = "ready_next"
+            demoted["current_decision"] = evidence
+            demoted["next_evidence"] = evidence
+            if not str(demoted.get("main_blocker", "")).strip():
+                demoted["main_blocker"] = evidence
+            updated_items.append(demoted)
+        elif item.get("id") == to_id:
+            promoted = dict(item)
+            promoted["planning_state"] = "current_candidate"
+            promoted["current_decision"] = evidence
+            promoted["next_evidence"] = evidence
+            updated_items.append(promoted)
+        else:
+            updated_items.append(item)
+    updated = dict(data)
+    updated["items"] = updated_items
+    updated["roadmap"] = {**updated.get("roadmap", {}), "last_reviewed": dt.date.today().isoformat()}
+    return updated
 
 
 def roadmap_data_with_promotion(

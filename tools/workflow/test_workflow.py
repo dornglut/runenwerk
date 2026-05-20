@@ -62,6 +62,8 @@ from roadmap_state import (
     document_frontmatter_status,
     load_batch_manifest,
     load_roadmap,
+    load_yaml,
+    promotion_preflight,
     repo_path,
     render_batch_manifest,
     select_batch_candidates,
@@ -84,6 +86,7 @@ from roadmap_intake import (
     proposal_to_yaml_data,
     roadmap_data_with_promotion,
     roadmap_data_with_proposal,
+    switch_current_candidate,
     validate_intake_item_scopes,
     write_intake_proposal,
 )
@@ -105,6 +108,19 @@ def valid_state() -> dict:
         ],
         "edges": [{"source": "WR-001", "target": "WR-002", "label": "depends"}],
     }
+
+
+def valid_state_with_switch_target() -> dict:
+    state = valid_state()
+    state["items"].append(
+        item(
+            "WR-003",
+            planning_state="ready_next",
+            dependencies=[],
+            write_scopes=["tools/workflow/production_plan.py"],
+        )
+    )
+    return state
 
 
 def item(
@@ -539,6 +555,22 @@ def test_ready_next_row_classifies_as_promotion_contract() -> None:
     assert classify_plan_action(context) == "write_promotion_contract"
 
 
+def test_ready_next_row_classifies_switch_when_current_candidate_blocks_scope() -> None:
+    roadmap = RoadmapState.model_validate(valid_state_with_switch_target())
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["roadmap_links"] = ["WR-003"]
+    planning = ProductionPlanningState.model_validate(production_data)
+    context = ProductionPlanContext(
+        planning=planning,
+        roadmap=roadmap,
+        track=planning.tracks[0],
+        milestone=planning.tracks[0].milestones[0],
+        roadmap_item=roadmap.by_id["WR-003"],
+    )
+
+    assert classify_plan_action(context) == "switch_current_candidate"
+
+
 def test_current_candidate_row_classifies_as_implementation_contract() -> None:
     context = production_plan_context(roadmap_state="current_candidate")
 
@@ -571,6 +603,35 @@ def test_production_plan_default_command_does_not_write_scaffold(tmp_path: Path)
 
     assert result.exit_code == 0
     assert not target.exists()
+
+
+def test_production_plan_renders_switch_current_preflight(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["roadmap_links"] = ["WR-003"]
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, valid_state_with_switch_target())
+
+    result = CliRunner().invoke(
+        production_plan_app,
+        [
+            "plan",
+            "--milestone",
+            "PM-TEST-001",
+            "--roadmap",
+            "WR-003",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Next action: switch_current_candidate" in result.stdout
+    assert "## Promotion Preflight" in result.stdout
+    assert "task roadmap:switch-current -- --from WR-001 --to WR-003" in result.stdout
 
 
 def test_write_scaffold_writes_and_refuses_overwrite(tmp_path: Path) -> None:
@@ -678,6 +739,21 @@ def test_production_goal_active_milestone_uses_wr_action_classification() -> Non
 
     assert steps[0].roadmap_actions[0].action == "write_implementation_contract"
     assert steps[0].next_action == "execute_next_wr_implementation_contract"
+
+
+def test_production_goal_surfaces_switch_current_candidate_action() -> None:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["roadmap_links"] = ["WR-003"]
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(valid_state_with_switch_target())
+    track = find_track(planning, "PT-TEST")
+
+    steps = build_goal_steps(planning, roadmap, track)
+    rendered = render_track_goal(planning, roadmap, track)
+
+    assert steps[0].roadmap_actions[0].action == "switch_current_candidate"
+    assert steps[0].next_action == "switch_current_candidate"
+    assert "After a failed roadmap:promote or gate command" in rendered
 
 
 def test_production_goal_non_deferred_scope_preserves_blocked_milestones() -> None:
@@ -960,13 +1036,13 @@ def test_batch_kickoff_defaults_to_current_candidates() -> None:
     ]
 
 
-def test_current_repository_next_batch_selects_wr030_not_wr029() -> None:
+def test_current_repository_next_batch_selects_wr032() -> None:
     roadmap = load_roadmap()
     selected = select_batch_candidates(roadmap)
     dependency_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml").read_text(encoding="utf-8")
     candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
 
-    assert [item.id for item in selected] == ["WR-030"]
+    assert [item.id for item in selected] == ["WR-032"]
     assert roadmap.by_id["WR-029"].planning_state == "ready_next"
     assert "state=completed" not in dependency_puml
     assert "state=completed" not in candidates_puml
@@ -1888,6 +1964,91 @@ def test_promote_rejects_current_candidate_with_unmet_decision_gate() -> None:
             state="current_candidate",
             evidence="Ready after review.",
         )
+
+
+def test_promotion_preflight_reports_needs_switch_for_overlapping_current_candidate() -> None:
+    roadmap = RoadmapState.model_validate(valid_state_with_switch_target())
+
+    result = promotion_preflight(roadmap, "WR-003", "current_candidate", evidence="Ready after review.")
+
+    assert result.status == "needs_switch"
+    assert result.blocking_current_candidates == ("WR-001",)
+    assert "write-scope conflict" in result.reasons[0]
+    assert result.suggested_command == (
+        'task roadmap:switch-current -- --from WR-001 --to WR-003 --evidence "Ready after review."'
+    )
+
+
+def test_promotion_preflight_reports_metadata_blockers() -> None:
+    b3_state = valid_state()
+    b3_state["items"][0]["planning_state"] = "completed"
+    b3_state["items"][1]["planning_state"] = "ready_next"
+    b3_state["items"][1]["blocker"] = 3
+    b3_state["items"][1]["gate"] = "Ready next"
+    b3 = promotion_preflight(RoadmapState.model_validate(b3_state), "WR-002", "current_candidate")
+
+    dependency_state = valid_state()
+    dependency_state["items"][0]["planning_state"] = "ready_next"
+    dependency_state["items"][1]["planning_state"] = "ready_next"
+    dependency_state["items"][1]["blocker"] = 2
+    dependency_state["items"][1]["gate"] = "Ready next"
+    dependency = promotion_preflight(RoadmapState.model_validate(dependency_state), "WR-002", "current_candidate")
+
+    gate_state = valid_state()
+    gate_state["items"][0]["planning_state"] = "completed"
+    gate_state["items"][1]["planning_state"] = "ready_next"
+    gate_state["items"][1]["blocker"] = 2
+    gate_state["items"][1]["gate"] = "Ready next"
+    gate_state["items"][1]["decision_gates"] = [
+        decision_gate("docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md")
+    ]
+    gate = promotion_preflight(RoadmapState.model_validate(gate_state), "WR-002", "current_candidate")
+
+    assert b3.status == "metadata_blocked"
+    assert "B3 is above the B2 implementation gate" in b3.reasons[0]
+    assert dependency.status == "metadata_blocked"
+    assert "dependencies are not completed/support context" in dependency.reasons[0]
+    assert gate.status == "metadata_blocked"
+    assert "does not match required" in gate.reasons[0]
+
+
+def test_switch_current_candidate_updates_two_items_atomically(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "roadmap.yaml"
+    write_yaml(source, valid_state_with_switch_target())
+    monkeypatch.setattr("roadmap_intake.render_and_check", lambda _roadmap, *, skip_checks=False: None)
+
+    switch_current_candidate(
+        from_id="WR-001",
+        to_id="WR-003",
+        evidence="Switch to Workbench handles.",
+        source=source,
+    )
+    roadmap = RoadmapState.model_validate(load_yaml(source))
+
+    assert roadmap.by_id["WR-001"].planning_state == "ready_next"
+    assert roadmap.by_id["WR-003"].planning_state == "current_candidate"
+    assert roadmap.by_id["WR-003"].current_decision == "Switch to Workbench handles."
+
+
+def test_switch_current_candidate_writes_nothing_when_validation_fails(tmp_path: Path) -> None:
+    source = tmp_path / "roadmap.yaml"
+    state = valid_state_with_switch_target()
+    state["items"][2]["blocker"] = 3
+    write_yaml(source, state)
+    before = source.read_text(encoding="utf-8")
+
+    with pytest.raises(WorkflowError, match="above the B2 implementation gate"):
+        switch_current_candidate(
+            from_id="WR-001",
+            to_id="WR-003",
+            evidence="Switch to Workbench handles.",
+            source=source,
+        )
+
+    assert source.read_text(encoding="utf-8") == before
 
 
 def test_promote_updates_existing_item_with_evidence() -> None:

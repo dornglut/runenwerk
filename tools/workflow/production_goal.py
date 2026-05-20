@@ -174,8 +174,14 @@ def classify_milestone_next_action(
         action_names = {action.action for action in roadmap_actions}
         if "write_implementation_contract" in action_names:
             return "execute_next_wr_implementation_contract"
+        if "switch_current_candidate" in action_names:
+            return "switch_current_candidate"
+        if "repair_wr_promotion_metadata" in action_names:
+            return "repair_wr_promotion_metadata"
         if "write_promotion_contract" in action_names:
             return "prepare_wr_promotion_contract"
+        if "stop_on_promotion_blocker" in action_names:
+            return "stop_on_promotion_blocker"
         if "design_first" in action_names:
             return "clear_wr_design_or_gate_blocker"
         if "already_completed" in action_names:
@@ -383,6 +389,7 @@ def render_goal_prompt(track: ProductionTrack, steps: list[MilestoneGoalStep], *
             "- Completed milestones: verify evidence gates and completion-quality claims before relying on them.",
             "- Designing, blocked, or deferred milestones: do design, ADR, or unblock work only; do not implement product code.",
             "- Active or ready_next milestones: use linked WR rows and task production:plan before code changes.",
+            "- After a failed roadmap:promote or gate command, only repair exact metadata, run task roadmap:switch-current, or stop/report; do not investigate adjacent WR evidence.",
             "- Implement only one bounded WR slice or design-gate repair at a time.",
             "- After implementation, run focused validation, closeout or drift-check routines, roadmap render/validate/check, and production render/validate/check as applicable.",
             completion_rule,

@@ -66,9 +66,7 @@ package "Level 1 - Near-Term Productization" {
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
-  component "WR-031 Workbench clean-break ADR\nstate=current_candidate\nscore=4.5 gate=current governance gate\nV4 B3\ncall=clean-break ADR\nno legacy persistence support" as WBCAPADR <<V4>>
-
-  component "WR-032 Typed Workbench handles\nstate=ready_next\nscore=2.7 gate=after wr-031 clean-break adr\nV4 B3\ncall=typed handles\nprovider bundle" as WBCAPHANDLE <<V4>>
+  component "WR-032 Typed Workbench handles\nstate=current_candidate\nscore=2.7 gate=after wr-031 clean-break adr\nV4 B2\ncall=typed handles\nprovider bundle" as WBCAPHANDLE <<V4>>
 
   component "WR-033 Remove legacy identity\nstate=ready_next\nscore=1.2 gate=after wr-032 typed handles\nV4 B3\ncall=no compatibility enum\nstable key authority" as WBCAPNOLEG <<V4>>
 
@@ -100,7 +98,7 @@ package "Level 3 - Active Domain Tracks" {
 
   component "WR-029 Model mesh materials\nstate=ready_next\nscore=1.1 gate=after wr-030 model/mesh pixel proof\nV4 B3\ncall=ready after WR-030\nmodel mesh material closeout\nSDF non-regression required" as MESHMAT <<V4>>
 
-  component "WR-030 Model mesh renderable scene\nstate=current_candidate\nscore=1.0 gate=current mesh preview pixel proof\nV4 B2\ncall=current model mesh pixel proof\nMesh Preview material pass\nWR-029 closeout prerequisite" as MESHRND <<V4>>
+  component "WR-030 Model mesh renderable scene\nstate=ready_next\nscore=1.0 gate=current mesh preview pixel proof\nV4 B2\ncall=current model mesh pixel proof\nMesh Preview material pass\nWR-029 closeout prerequisite" as MESHRND <<V4>>
 
   component "WR-040 External sandbox design\nstate=support_only\nscore=0.7 gate=policy deferred until sandbox/security design acceptance\nV3 B5\ncall=external components blocked\nsandbox decision required" as WBCAPSBOX <<support_only>>
 
@@ -111,7 +109,6 @@ RENDER -down-> FRAGMENTS : aliases / invocations / inspection
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 MESHRND -down-> MESHMAT : model mesh pixel proof prerequisite
-WBCAPADR -down-> WBCAPHANDLE : clean-break ADR before typed handles
 WBCAPHANDLE -down-> WBCAPNOLEG : typed handles before legacy deletion
 WBCAPNOLEG -down-> WBCAPPROF : legacy identity removed before registry profiles
 WBCAPPROF -down-> WBCAPPERSIST : registry profiles before persistence cleanup

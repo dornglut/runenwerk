@@ -82,6 +82,11 @@ tasks:
     cmds:
       - uv run python tools/workflow/roadmap_intake.py promote {{.CLI_ARGS}}
 
+  roadmap:switch-current:
+    desc: Demote one current candidate and promote another atomically with evidence.
+    cmds:
+      - uv run python tools/workflow/roadmap_intake.py switch-current {{.CLI_ARGS}}
+
   batch:propose:
     desc: Propose a parallel roadmap batch.
     cmds:

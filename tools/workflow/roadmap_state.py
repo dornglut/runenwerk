@@ -8,6 +8,7 @@ Module: roadmap_state
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import re
 import subprocess
@@ -47,6 +48,7 @@ COMPLETED_BATCH_INTEGRATION_STATUSES = {"merged", "integrated"}
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanningState = Literal["current_candidate", "support_only", "ready_next", "completed", "blocked_deferred"]
+PromotionPreflightStatus = Literal["promotable", "needs_switch", "metadata_blocked", "hard_blocked"]
 Priority = Literal["P0", "P1", "P2", "P3"]
 ApprovalState = Literal["proposed", "approved", "rejected"]
 BatchItemStatus = Literal["proposed", "approved", "running", "slice_completed", "integrated", "roadmap_closed", "rejected"]
@@ -62,6 +64,16 @@ class WorkflowError(ValueError):
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+@dataclass(frozen=True)
+class PromotionPreflightResult:
+    item_id: str
+    target_state: PlanningState
+    status: PromotionPreflightStatus
+    reasons: tuple[str, ...] = ()
+    suggested_command: str = ""
+    blocking_current_candidates: tuple[str, ...] = ()
 
 
 class RoadmapMeta(StrictModel):
@@ -536,6 +548,139 @@ def batch_ineligibility_reason(item: RoadmapItem, *, include_discovery: bool = F
     if gate_errors:
         return f"decision gate unmet: {gate_errors[0]}"
     return None
+
+
+def promotion_preflight(
+    roadmap: RoadmapState,
+    item_id: str,
+    target_state: PlanningState,
+    *,
+    evidence: str = "<accepted evidence>",
+) -> PromotionPreflightResult:
+    item = roadmap.by_id.get(item_id)
+    if item is None:
+        return PromotionPreflightResult(
+            item_id=item_id,
+            target_state=target_state,
+            status="hard_blocked",
+            reasons=(f"{item_id}: not present in combined roadmap sources",),
+        )
+
+    metadata_errors = promotion_metadata_errors(roadmap, item, target_state)
+    if metadata_errors:
+        return PromotionPreflightResult(
+            item_id=item_id,
+            target_state=target_state,
+            status="metadata_blocked",
+            reasons=tuple(metadata_errors),
+        )
+
+    post_items = items_with_planning_state(roadmap.items, item_id, target_state)
+    implementation_items = [candidate for candidate in post_items if candidate.can_enter_implementation_batch]
+    missing_scopes = validate_existing_write_scope_paths(implementation_items)
+    if missing_scopes:
+        status: PromotionPreflightStatus = (
+            "metadata_blocked" if all(missing.startswith(f"{item_id}:") for missing in missing_scopes) else "hard_blocked"
+        )
+        return PromotionPreflightResult(
+            item_id=item_id,
+            target_state=target_state,
+            status=status,
+            reasons=tuple(f"write-scope path missing: {missing}" for missing in missing_scopes),
+        )
+
+    conflicts = validate_write_scopes(implementation_items)
+    if conflicts:
+        blockers = blocking_current_candidates_for_conflicts(roadmap, item_id, conflicts)
+        if blockers and len(blockers) == 1 and all(conflict_involves_item(conflict, item_id) for conflict in conflicts):
+            blocker = blockers[0]
+            return PromotionPreflightResult(
+                item_id=item_id,
+                target_state=target_state,
+                status="needs_switch",
+                reasons=tuple(f"write-scope conflict: {conflict}" for conflict in conflicts),
+                suggested_command=switch_current_command(blocker, item_id, evidence),
+                blocking_current_candidates=tuple(blockers),
+            )
+        return PromotionPreflightResult(
+            item_id=item_id,
+            target_state=target_state,
+            status="hard_blocked",
+            reasons=tuple(f"write-scope conflict: {conflict}" for conflict in conflicts),
+        )
+
+    return PromotionPreflightResult(
+        item_id=item_id,
+        target_state=target_state,
+        status="promotable",
+        suggested_command=promotion_command(item_id, target_state, evidence),
+    )
+
+
+def promotion_metadata_errors(roadmap: RoadmapState, item: RoadmapItem, target_state: PlanningState) -> list[str]:
+    if target_state != "current_candidate":
+        return []
+    errors: list[str] = []
+    if item.blocker > 2:
+        errors.append(f"{item.id}: {item.blocker_label} is above the B2 implementation gate")
+    invalid_dependencies = [
+        dependency
+        for dependency in item.dependencies
+        if (roadmap.by_id.get(dependency).planning_state if roadmap.by_id.get(dependency) is not None else None)
+        not in {"completed", "support_only"}
+    ]
+    if invalid_dependencies:
+        errors.append(f"{item.id}: dependencies are not completed/support context: {', '.join(invalid_dependencies)}")
+    errors.extend(decision_gate_errors(item, applies_to="implementation"))
+    return errors
+
+
+def items_with_planning_state(items: list[RoadmapItem], item_id: str, target_state: PlanningState) -> list[RoadmapItem]:
+    return [
+        item.model_copy(update={"planning_state": target_state}) if item.id == item_id else item
+        for item in items
+    ]
+
+
+def conflict_item_ids(conflict: str) -> tuple[str, str] | None:
+    match = re.match(r"^(WR-\d{3}):.+ overlaps (WR-\d{3}):", conflict)
+    if not match:
+        return None
+    return match.group(1), match.group(2)
+
+
+def conflict_involves_item(conflict: str, item_id: str) -> bool:
+    ids = conflict_item_ids(conflict)
+    return ids is not None and item_id in ids
+
+
+def blocking_current_candidates_for_conflicts(
+    roadmap: RoadmapState,
+    item_id: str,
+    conflicts: list[str],
+) -> list[str]:
+    blockers: set[str] = set()
+    for conflict in conflicts:
+        ids = conflict_item_ids(conflict)
+        if ids is None or item_id not in ids:
+            continue
+        other_id = ids[1] if ids[0] == item_id else ids[0]
+        other = roadmap.by_id.get(other_id)
+        if other is not None and other.planning_state == "current_candidate":
+            blockers.add(other_id)
+    return sorted(blockers)
+
+
+def promotion_command(item_id: str, target_state: PlanningState, evidence: str) -> str:
+    return f'task roadmap:promote -- --id {item_id} --state {target_state} --evidence "{command_arg(evidence)}"'
+
+
+def switch_current_command(from_id: str, to_id: str, evidence: str) -> str:
+    return f'task roadmap:switch-current -- --from {from_id} --to {to_id} --evidence "{command_arg(evidence)}"'
+
+
+def command_arg(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def decision_gate_errors(item: RoadmapItem, *, applies_to: DecisionGateAppliesTo) -> list[str]:

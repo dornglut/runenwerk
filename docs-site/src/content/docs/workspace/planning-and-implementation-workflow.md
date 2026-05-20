@@ -137,6 +137,21 @@ Use `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` as the
 normal bridge from production intent to a durable implementation contract. The
 command is read-only unless `--write-scaffold` is explicitly passed.
 
+Before a `ready_next` WR becomes implementation work, run the promotion preflight
+shown by `task production:plan`. If the intended row is blocked only by an
+overlapping current candidate, switch candidates explicitly:
+
+```text
+task roadmap:switch-current -- --from WR-OLD --to WR-NEW --evidence "<accepted evidence>"
+```
+
+Use the five-minute gate loop for production-track coordination:
+`task ai:goal` -> `task production:plan` -> promotion preflight or
+`task roadmap:switch-current` -> validation -> rerun `task ai:goal`. After a
+failed promotion or gate command, do not investigate adjacent WR evidence.
+Classify the failure and either repair exact roadmap metadata, switch current
+candidate, or stop and report.
+
 Codex CLI `/goal` is execution persistence, not roadmap authority. Use it only
 after there is a written execution contract from a plan, batch, accepted design,
 or approved roadmap row. A `/goal` run must not directly promote or complete

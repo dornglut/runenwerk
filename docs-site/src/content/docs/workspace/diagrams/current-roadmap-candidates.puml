@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "WR-030 Model mesh renderable scene\nstate=current_candidate\nscore=1.0 V4 B2\ncall=current model mesh pixel proof\nMesh Preview material pass\nWR-029 closeout prerequisite" as MESHRND <<candidate>>
+  component "WR-032 Typed Workbench handles\nstate=current_candidate\nscore=2.7 V4 B2\ncall=typed handles\nprovider bundle" as WBCAPHANDLE <<candidate>>
 
 }
 

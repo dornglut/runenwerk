@@ -768,3 +768,67 @@ items:
   completion_quality: perfectionist_verified
   known_quality_gaps: []
   completion_audit: docs-site/src/content/docs/reports/closeouts/wr-028-perfectionist-material-lab-texture-views-and-scene-material-binding/closeout.md
+- id: WR-031
+  title: Workbench Clean-Break Governance And ADR
+  diagram_title: Workbench clean-break ADR
+  alias: WBCAPADR
+  lane: Platform foundation
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 3
+  confidence: 0.8
+  expected_score: 4.5
+  rice: Accept the breaking Workbench decision before deleting compatibility paths.
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/adr
+  - docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/reports/implementation-plans/wr-031-workbench-clean-break-governance-and-adr/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-031-workbench-clean-break-governance-and-adr/closeout.md
+  validations:
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-031-workbench-clean-break-governance-and-adr/closeout.md.
+    ADR 0012 is accepted, the active Workbench host design references the clean-break decision, PT-WB-CAP exists, and
+    WR-032 through WR-040 are sequenced behind the governance gate.
+  current_decision: The Capability Workbench clean break is accepted as governance. ToolSurfaceKind must not remain
+    Workbench identity, persistence, provider request, profile construction, or Material Lab routing authority.
+  current_call: Completed as governance-only closeout. Do not reopen WR-031 for product code; execute WR-032 through
+    WR-036 in dependency order for typed handles, identity removal, registry profiles, clean persistence, and Material
+    Lab proof.
+  first_move: Use ADR 0012 and the active Workbench design as the authority for downstream implementation contracts; repair
+    downstream write scopes before product code when a contract identifies missing owners.
+  main_blocker: Completed governance. PM-WB-CAP-001 remains active until WR-032 through WR-036 implementation closeouts
+    land.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - No Rust product code changed in WR-031; legacy Workbench compatibility paths remain for downstream WR-032 through
+    WR-036 implementation slices.
+  - PM-WB-CAP-001 remains incomplete until typed handles, legacy identity removal, registry-backed profiles, clean
+    persistence, and Material Lab proof are implemented and closed out.
+  completion_audit: ''
+  diagram_call:
+  - clean-break ADR
+  - no legacy persistence support
+  ddd_owner: domain/editor/editor_shell with apps/runenwerk_editor Workbench host
+  adr_requirement: Accepted ADR 0012 is required and is the authority for dropping compatibility.
+  fitness_function_requirement: Architecture governance output, ADR acceptance, roadmap validation, production validation,
+    planning validation, and docs validation.
+  ownership_mode: Enabling platform governance for stream-aligned Workbench implementation.
