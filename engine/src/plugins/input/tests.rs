@@ -1,6 +1,6 @@
 // Owner: Engine Input Plugin - Tests
 use crate::plugins::{
-    action, InputBindingChange, InputBindingChangeResult, InputState, KeyChord, TouchInputPhase,
+    InputBindingChange, InputBindingChangeResult, InputState, KeyChord, TouchInputPhase, action,
 };
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;

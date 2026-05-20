@@ -1,5 +1,5 @@
 use crate::plugins::{
-    action, InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord,
+    InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord, action,
 };
 use std::collections::{HashMap, HashSet};
 use winit::event::{
