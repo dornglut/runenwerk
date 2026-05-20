@@ -1,7 +1,6 @@
 //! Runtime systems for the drawing app shell.
 
 use engine::WindowState;
-use engine::plugins::InputState;
 use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
     PreparedRenderFrameRequestResource, PreparedRenderProductSelectionResource,
@@ -12,6 +11,7 @@ use engine::plugins::render::{
     RenderTextureTargetUsage, RenderTextureUploadAlphaMode, UiFrameProducerId, UiFrameRoute,
     UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
 };
+use engine::plugins::{InputState, MouseButtonTransitionSample, MouseMotionSample};
 use engine::runtime::RuntimeJobExecutorResource;
 use engine::runtime::{Res, ResMut};
 use native_tablet_input::{
@@ -38,6 +38,7 @@ use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerReso
 
 pub const DRAWING_UI_FRAME_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(4_001);
 pub const DRAWING_RENDER_FRAME_PRODUCER_ID: RenderFrameProducerId = render_frame_producer_id(4_001);
+pub const NATIVE_CONTACT_FALLBACK_SUPPRESSION_IDLE_FRAME_LIMIT: u32 = 12;
 
 #[derive(ecs::SystemParam)]
 pub struct DrawingFrameSubmissionResources {
@@ -84,14 +85,20 @@ pub fn route_draw_input_system(
         .update_tablet_panel(tablet_panel_projection(&native_frame, &native_control));
     let native_events = native_frame.drain_events();
     if !native_events.is_empty() {
+        let mut native_claims_pointer_stream = false;
         for event in coalesce_pointer_move_events(native_events) {
+            native_claims_pointer_stream |= native_event_claims_pointer_stream(&event);
             host.app.dispatch_input(&event);
         }
-        return;
+        if native_claims_pointer_stream || native_frame.active_native_contact {
+            return;
+        }
     }
 
     if native_frame.active_native_contact
         && native_control.suppress_winit_fallback_while_native_active
+        && native_frame.frames_since_native_event
+            <= NATIVE_CONTACT_FALLBACK_SUPPRESSION_IDLE_FRAME_LIMIT
     {
         return;
     }
@@ -101,52 +108,14 @@ pub fn route_draw_input_system(
         return;
     }
 
-    if input.left_mouse_pressed() {
-        host.app
-            .dispatch_input(&UiInputEvent::Pointer(pointer_event(
-                PointerEventKind::Down,
-                position,
-                UiVector::ZERO,
-                Some(PointerButton::Primary),
-                modifiers,
-                1,
-                PointerPacket::mouse(),
-            )));
-    }
-
-    if input.left_mouse_down()
-        && (!motion_samples.is_empty()
-            || delta.x.abs() > f32::EPSILON
-            || delta.y.abs() > f32::EPSILON)
-    {
-        let (sample_position, sample_delta, packet) =
-            pointer_motion_packet(position, delta, motion_samples);
-        host.app
-            .dispatch_input(&UiInputEvent::Pointer(pointer_event(
-                PointerEventKind::Move,
-                sample_position,
-                sample_delta,
-                Some(PointerButton::Primary),
-                modifiers,
-                0,
-                packet,
-            )));
-    }
-
-    if input.left_mouse_released() {
-        let (sample_position, sample_delta, packet) =
-            pointer_motion_packet(position, delta, motion_samples);
-        host.app
-            .dispatch_input(&UiInputEvent::Pointer(pointer_event(
-                PointerEventKind::Up,
-                sample_position,
-                sample_delta,
-                Some(PointerButton::Primary),
-                modifiers,
-                0,
-                packet,
-            )));
-    }
+    route_winit_mouse_fallback(
+        &mut host.app,
+        &input,
+        position,
+        delta,
+        motion_samples,
+        modifiers,
+    );
 
     if input.scroll_delta.abs() > f32::EPSILON {
         host.app
@@ -159,6 +128,116 @@ pub fn route_draw_input_system(
                 0,
                 PointerPacket::mouse(),
             )));
+    }
+}
+
+fn route_winit_mouse_fallback(
+    app: &mut crate::app::RunenwerkDrawApp,
+    input: &InputState,
+    frame_position: UiPoint,
+    frame_delta: UiVector,
+    motion_samples: &[MouseMotionSample],
+    modifiers: Modifiers,
+) {
+    let left_press = input.left_mouse_pressed_transition();
+    let left_release = input.left_mouse_released_transition();
+
+    if input.left_mouse_pressed() {
+        let down_position = left_press
+            .map(mouse_transition_position)
+            .unwrap_or(frame_position);
+        app.dispatch_input(&UiInputEvent::Pointer(pointer_event(
+            PointerEventKind::Down,
+            down_position,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            modifiers,
+            1,
+            PointerPacket::mouse(),
+        )));
+    }
+
+    let contact_start_index = if input.left_mouse_pressed() {
+        left_press
+            .map(|transition| transition.motion_sample_index)
+            .unwrap_or(motion_samples.len())
+    } else {
+        0
+    }
+    .min(motion_samples.len());
+    let contact_end_index = if input.left_mouse_released() {
+        left_release
+            .map(|transition| transition.motion_sample_index)
+            .unwrap_or(contact_start_index)
+    } else {
+        motion_samples.len()
+    }
+    .min(motion_samples.len());
+    let contact_motion_samples = if contact_start_index <= contact_end_index {
+        &motion_samples[contact_start_index..contact_end_index]
+    } else {
+        &[]
+    };
+
+    if input.left_mouse_released() {
+        let release_position = left_release
+            .map(mouse_transition_position)
+            .unwrap_or(frame_position);
+        let (sample_position, sample_delta, packet) =
+            pointer_release_packet(release_position, contact_motion_samples);
+        app.dispatch_input(&UiInputEvent::Pointer(pointer_event(
+            PointerEventKind::Up,
+            sample_position,
+            sample_delta,
+            Some(PointerButton::Primary),
+            modifiers,
+            0,
+            packet,
+        )));
+        return;
+    }
+
+    if input.left_mouse_down() {
+        if !contact_motion_samples.is_empty() {
+            let (sample_position, sample_delta, packet) =
+                pointer_motion_packet(frame_position, frame_delta, contact_motion_samples);
+            app.dispatch_input(&UiInputEvent::Pointer(pointer_event(
+                PointerEventKind::Move,
+                sample_position,
+                sample_delta,
+                Some(PointerButton::Primary),
+                modifiers,
+                0,
+                packet,
+            )));
+        } else if !input.left_mouse_pressed()
+            && (frame_delta.x.abs() > f32::EPSILON || frame_delta.y.abs() > f32::EPSILON)
+        {
+            app.dispatch_input(&UiInputEvent::Pointer(pointer_event(
+                PointerEventKind::Move,
+                frame_position,
+                frame_delta,
+                Some(PointerButton::Primary),
+                modifiers,
+                0,
+                PointerPacket::mouse(),
+            )));
+        }
+    }
+}
+
+fn mouse_transition_position(transition: MouseButtonTransitionSample) -> UiPoint {
+    UiPoint::new(transition.position.0, transition.position.1)
+}
+
+fn native_event_claims_pointer_stream(event: &UiInputEvent) -> bool {
+    let UiInputEvent::Pointer(pointer) = event else {
+        return false;
+    };
+    match pointer.kind {
+        PointerEventKind::Down | PointerEventKind::Up => true,
+        PointerEventKind::Move => pointer.packet.contact == PointerContactState::Contact,
+        PointerEventKind::Enter | PointerEventKind::Leave | PointerEventKind::Scroll => false,
     }
 }
 
@@ -601,22 +680,53 @@ fn touch_pointer_packet(
 fn pointer_motion_packet(
     fallback_position: UiPoint,
     fallback_delta: UiVector,
-    samples: &[engine::plugins::MouseMotionSample],
+    samples: &[MouseMotionSample],
 ) -> (UiPoint, UiVector, PointerPacket) {
     let Some((last, coalesced)) = samples.split_last() else {
         return (fallback_position, fallback_delta, PointerPacket::mouse());
     };
 
-    let packet = PointerPacket::mouse().with_coalesced_samples(coalesced.iter().map(|sample| {
-        PointerSample::new(
-            PointerSampleRole::Coalesced,
-            UiPoint::new(sample.position.0, sample.position.1),
-            UiVector::new(sample.delta.0, sample.delta.1),
-        )
-    }));
+    let packet = pointer_packet_with_coalesced_mouse_samples(coalesced);
     (
         UiPoint::new(last.position.0, last.position.1),
         UiVector::new(last.delta.0, last.delta.1),
         packet,
     )
+}
+
+fn pointer_release_packet(
+    release_position: UiPoint,
+    samples: &[MouseMotionSample],
+) -> (UiPoint, UiVector, PointerPacket) {
+    let Some((last, coalesced)) = samples.split_last() else {
+        return (release_position, UiVector::ZERO, PointerPacket::mouse());
+    };
+
+    let last_position = UiPoint::new(last.position.0, last.position.1);
+    if last_position == release_position {
+        return (
+            last_position,
+            UiVector::new(last.delta.0, last.delta.1),
+            pointer_packet_with_coalesced_mouse_samples(coalesced),
+        );
+    }
+
+    (
+        release_position,
+        UiVector::new(
+            release_position.x - last_position.x,
+            release_position.y - last_position.y,
+        ),
+        pointer_packet_with_coalesced_mouse_samples(samples),
+    )
+}
+
+fn pointer_packet_with_coalesced_mouse_samples(samples: &[MouseMotionSample]) -> PointerPacket {
+    PointerPacket::mouse().with_coalesced_samples(samples.iter().map(|sample| {
+        PointerSample::new(
+            PointerSampleRole::Coalesced,
+            UiPoint::new(sample.position.0, sample.position.1),
+            UiVector::new(sample.delta.0, sample.delta.1),
+        )
+    }))
 }

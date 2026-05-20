@@ -207,6 +207,45 @@ fn preview_tile_formation_uses_committed_raster_payload_behavior() {
 }
 
 #[test]
+fn stroke_visualization_contract_preserves_ordered_identity_reconstruction() {
+    let samples = vec![
+        sample(1, 128.0, 128.0, 0.7),
+        sample(2, 180.0, 142.0, 0.9),
+        sample(3, 260.0, 190.0, 0.8),
+    ];
+    let timeline = StrokeSampleTimeline::from_samples(samples.clone());
+    let path =
+        StrokeReconstructedPath::from_timeline(&timeline, StrokeReconstructionPolicy::identity());
+
+    assert_eq!(timeline.samples(), samples.as_slice());
+    assert_eq!(path.samples(), samples.as_slice());
+    assert_eq!(path.policy(), StrokeReconstructionPolicy::identity());
+
+    let committed = form_drawing_ink_tiles(
+        &document_with_stroke(samples.clone()),
+        DrawingTileFormationPolicy::preview(),
+    );
+    let preview_document = valid_document();
+    let preview_stroke = DrawingInkPreviewStroke::new(
+        StrokeId::new(1),
+        PaintTarget::StackEntry(LayerStackEntryId::new(1)),
+        BrushId::new(1),
+        ColorRgba::new(0.1, 0.2, 0.3, 1.0),
+        preview_document.revision,
+    )
+    .with_samples(samples);
+    let preview = form_drawing_ink_preview_tiles(
+        &preview_document,
+        &preview_stroke,
+        DrawingTileFormationPolicy::preview(),
+    );
+
+    assert!(committed.is_accepted(), "{:?}", committed.diagnostics);
+    assert!(preview.is_accepted(), "{:?}", preview.diagnostics);
+    assert_eq!(committed.products[0].payload, preview.products[0].payload);
+}
+
+#[test]
 fn preview_tile_formation_is_deterministic() {
     let document = valid_document();
     let preview_stroke = DrawingInkPreviewStroke::new(

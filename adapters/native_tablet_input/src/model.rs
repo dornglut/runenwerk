@@ -82,6 +82,7 @@ impl NativeTabletBackendPreference {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NativeTabletToolKind {
+    Mouse,
     Pen,
     Brush,
     Marker,
@@ -94,6 +95,7 @@ pub enum NativeTabletToolKind {
 impl From<NativeTabletToolKind> for PointerToolKind {
     fn from(value: NativeTabletToolKind) -> Self {
         match value {
+            NativeTabletToolKind::Mouse => Self::Mouse,
             NativeTabletToolKind::Pen => Self::Pen,
             NativeTabletToolKind::Brush => Self::Brush,
             NativeTabletToolKind::Marker => Self::Marker,
@@ -161,6 +163,21 @@ impl NativeTabletCapabilities {
             eraser: false,
             barrel_buttons: false,
             coalesced_samples: true,
+            predicted_samples: false,
+            calibration: true,
+        }
+    }
+
+    pub const fn windows_pointer_mouse() -> Self {
+        Self {
+            pressure: false,
+            tilt: false,
+            twist: false,
+            tangential_pressure: false,
+            hover: true,
+            eraser: false,
+            barrel_buttons: false,
+            coalesced_samples: false,
             predicted_samples: false,
             calibration: true,
         }
@@ -367,6 +384,26 @@ impl NativeTabletPacket {
             position,
             delta,
         )
+    }
+
+    pub fn windows_pointer_mouse(
+        device_id: u64,
+        kind: PointerEventKind,
+        position: PointerPosition,
+        delta: PointerDelta,
+    ) -> Self {
+        Self::new(
+            NativeTabletPlatform::Windows,
+            NativeTabletVendor::Generic,
+            NativeTabletBackendKind::WindowsPointer,
+            PointerSourceKind::Mouse,
+            NativeTabletCapabilities::windows_pointer_mouse(),
+            device_id,
+            kind,
+            position,
+            delta,
+        )
+        .with_tool_kind(NativeTabletToolKind::Mouse)
     }
 
     pub fn windows_wintab(
@@ -731,6 +768,7 @@ pub struct NativeTabletFrameResource {
     pub telemetry: NativeTabletSampleTelemetry,
     pub diagnostics: Vec<NativeTabletDiagnostic>,
     pub active_native_contact: bool,
+    pub frames_since_native_event: u32,
 }
 
 impl NativeTabletFrameResource {
@@ -746,6 +784,7 @@ pub struct NativeTabletRuntimeResource {
     pub backend_health: Vec<NativeTabletBackendHealth>,
     pub diagnostics: Vec<NativeTabletDiagnostic>,
     pub active_native_contact: bool,
+    frames_since_native_event: u32,
     last_position: Option<PointerPosition>,
 }
 
@@ -794,12 +833,18 @@ impl NativeTabletRuntimeResource {
             diagnostics.extend(mapping.diagnostics);
             events.push(mapping.event);
         }
+        if events.is_empty() {
+            self.frames_since_native_event = self.frames_since_native_event.saturating_add(1);
+        } else {
+            self.frames_since_native_event = 0;
+        }
         frame.events = events;
         frame.devices = self.devices.clone();
         frame.backend_health = self.backend_health.clone();
         frame.telemetry = telemetry;
         frame.diagnostics = diagnostics;
         frame.active_native_contact = self.active_native_contact;
+        frame.frames_since_native_event = self.frames_since_native_event;
     }
 
     fn upsert_device(&mut self, packet: &NativeTabletPacket, active: bool) {
@@ -847,4 +892,59 @@ pub(crate) fn calibrated_pressure(
         return Some(pressure);
     };
     Some((pressure * calibration.pressure_scale + calibration.pressure_bias).clamp(0.0, 1.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn publish_frame_tracks_idle_frames_after_active_native_contact() {
+        let mut runtime = NativeTabletRuntimeResource::default();
+        let mut frame = NativeTabletFrameResource::default();
+        let mut control = NativeTabletDeviceControlResource::default();
+        runtime.push_packet(NativeTabletPacket::windows_pointer(
+            7,
+            PointerEventKind::Down,
+            PointerPosition::new(10.0, 20.0),
+            PointerDelta::ZERO,
+        ));
+
+        runtime.publish_frame(&mut frame, &mut control);
+        assert!(frame.active_native_contact);
+        assert_eq!(frame.frames_since_native_event, 0);
+        assert_eq!(frame.events.len(), 1);
+
+        runtime.publish_frame(&mut frame, &mut control);
+        assert!(frame.active_native_contact);
+        assert_eq!(frame.frames_since_native_event, 1);
+        assert!(frame.events.is_empty());
+    }
+
+    #[test]
+    fn publish_frame_resets_idle_frames_when_native_events_resume() {
+        let mut runtime = NativeTabletRuntimeResource::default();
+        let mut frame = NativeTabletFrameResource::default();
+        let mut control = NativeTabletDeviceControlResource::default();
+        runtime.push_packet(NativeTabletPacket::windows_pointer(
+            7,
+            PointerEventKind::Down,
+            PointerPosition::new(10.0, 20.0),
+            PointerDelta::ZERO,
+        ));
+        runtime.publish_frame(&mut frame, &mut control);
+        runtime.publish_frame(&mut frame, &mut control);
+        assert_eq!(frame.frames_since_native_event, 1);
+
+        runtime.push_packet(NativeTabletPacket::windows_pointer(
+            7,
+            PointerEventKind::Move,
+            PointerPosition::new(12.0, 22.0),
+            PointerDelta::new(2.0, 2.0),
+        ));
+        runtime.publish_frame(&mut frame, &mut control);
+
+        assert_eq!(frame.frames_since_native_event, 0);
+        assert_eq!(frame.events.len(), 1);
+    }
 }

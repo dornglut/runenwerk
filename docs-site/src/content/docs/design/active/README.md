@@ -58,6 +58,12 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 ### Drawing / Apps
 
 - [Runenwerk Draw Pen-First Radial Tablet UX Design](runenwerk-draw-pen-first-radial-tablet-ux-design.md)
+- [Runenwerk Draw Paper Response Phase 6A](runenwerk-draw-paper-response-phase-6a.md)
+- [Runenwerk Draw Stroke Fidelity Phase 0/1](runenwerk-draw-stroke-fidelity-phase-0-1.md)
+- [Runenwerk Draw Stroke Fidelity Phase 1 Preview Final Parity](runenwerk-draw-stroke-fidelity-phase-1-preview-final-parity.md)
+- [Runenwerk Draw Tool Session Architecture Slice](runenwerk-draw-tool-session-architecture-slice.md)
+- [Runenwerk Draw Tool Session Slice 2 Session Control](runenwerk-draw-tool-session-slice-2-session-control.md)
+- [Runenwerk Draw Tool Session Slice 3 Intent Input Path](runenwerk-draw-tool-session-slice-3-intent-input-path.md)
 
 ### Workspace / Cross-Domain
 

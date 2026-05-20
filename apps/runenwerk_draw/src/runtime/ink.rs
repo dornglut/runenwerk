@@ -167,6 +167,7 @@ fn submit_next_preview_ink_job(
         stroke_id: job.preview_stroke.stroke_id,
         document_revision: job.document.revision,
         preview_generation: job.preview_generation,
+        preview_sample_count: job.preview_sample_count,
         dirty_start_sample_index: job.dirty_start_sample_index,
         formation_key: job.formation_key.clone(),
     };
@@ -213,10 +214,10 @@ fn drain_completed_preview_ink_jobs(
                     continue;
                 };
                 app.clear_pending_preview_tile_job(&output.formation_key);
-                if !app.preview_tile_job_is_current(
+                if !app.preview_tile_job_can_apply(
                     output.stroke_id,
                     output.document_revision,
-                    output.preview_generation,
+                    output.preview_sample_count,
                 ) {
                     app.ink_runtime_mut().record_journal(
                         DrawingInkJournalStage::Formation,
@@ -243,6 +244,7 @@ fn drain_completed_preview_ink_jobs(
                 }
 
                 let product_count = output.formation.products.len();
+                let cleared_count = output.formation.cleared_tiles.len();
                 let diagnostic_count = output.formation.diagnostics.len();
                 app.ink_runtime_mut().replace_preview_products_for_tiles(
                     output.dirty_tile_ids,
@@ -250,6 +252,9 @@ fn drain_completed_preview_ink_jobs(
                     output.formation.cleared_tiles,
                     output.formation.diagnostics,
                 );
+                if product_count > 0 || cleared_count > 0 {
+                    app.record_applied_preview_tile_job(output.preview_sample_count);
+                }
                 app.ink_runtime_mut().record_journal(
                     DrawingInkJournalStage::Formation,
                     true,
@@ -723,10 +728,16 @@ pub fn publish_drawing_ink_query_snapshots(
         .collect::<Vec<_>>();
 
     if report.published_count > 0 && report.rejected_count == 0 {
-        let accepted = app
-            .ink_runtime_mut()
-            .record_accepted_snapshots(snapshot_key, accepted);
-        if accepted {
+        let preserve_active_preview = app.preview_stroke().is_some_and(|preview| preview.active);
+        let accepted = app.ink_runtime_mut().record_accepted_snapshots(
+            snapshot_key,
+            accepted,
+            !preserve_active_preview,
+        );
+        if accepted && preserve_active_preview {
+            app.clear_committed_stroke_overlays_if_clean();
+            app.rebuild_visible_frame();
+        } else if accepted {
             app.clear_preview_after_committed_acceptance();
         }
     }
@@ -761,4 +772,118 @@ fn descriptor_generation_key(descriptors: &[ProductDescriptorCore]) -> Option<St
         .collect::<Vec<_>>();
     parts.sort();
     Some(parts.join("|"))
+}
+
+#[cfg(test)]
+mod tests {
+    use drawing::CanvasCoordinate;
+    use engine::runtime::{RuntimeJobExecutorConfig, RuntimeJobExecutorResource};
+    use ui_input::{Modifiers, PointerButton, PointerEvent, PointerEventKind, UiInputEvent};
+    use ui_math::{UiPoint, UiVector};
+    use ui_render_data::UiPrimitive;
+
+    use super::*;
+    use crate::app::RunenwerkDrawApp;
+
+    #[test]
+    fn compatible_lagging_preview_job_advances_product_coverage() {
+        let mut app = RunenwerkDrawApp::new();
+        let mut executor =
+            RuntimeJobExecutorResource::with_config(RuntimeJobExecutorConfig::serial());
+        let start = screen_point_for_canvas(&app, 64.0, 64.0);
+        app.dispatch_input(&pointer_event(PointerEventKind::Down, start, 1));
+        for step in 1..=2 {
+            let position = screen_point_for_canvas(&app, 64.0 + step as f64 * 220.0, 64.0);
+            app.dispatch_input(&pointer_event(PointerEventKind::Move, position, 0));
+        }
+
+        let mut report = DrawingPreviewInkJobProcessReport::default();
+        submit_next_preview_ink_job(&mut app, &mut executor, &mut report);
+        assert_eq!(report.submitted_count, 1);
+        let submitted_sample_count = app
+            .pending_preview_tile_job()
+            .expect("preview job should be pending")
+            .preview_sample_count;
+
+        for step in 3..=6 {
+            let position = screen_point_for_canvas(&app, 64.0 + step as f64 * 220.0, 64.0);
+            app.dispatch_input(&pointer_event(PointerEventKind::Move, position, 0));
+        }
+        assert!(
+            app.preview_generation()
+                > app
+                    .pending_preview_tile_job()
+                    .expect("preview job should still be pending")
+                    .preview_generation
+        );
+
+        drain_completed_preview_ink_jobs(&mut app, &mut executor, &mut report);
+
+        assert_eq!(
+            report.stale_count, 0,
+            "older compatible preview output should not be discarded just because input advanced"
+        );
+        assert_eq!(report.applied_count, 1);
+        assert_eq!(app.preview_product_sample_count(), submitted_sample_count);
+        assert!(!app.ink_runtime().preview_products().is_empty());
+        assert!(
+            app.preview_dirty_start_sample_index().is_some(),
+            "tail input gathered while the job was pending must remain scheduled for catch-up"
+        );
+        assert!(
+            stroke_primitive_count(app.last_frame()) > 0,
+            "unformed tail samples should remain visible over the applied preview products"
+        );
+        let preview_sample_count = app
+            .preview_stroke()
+            .expect("preview stroke should remain active")
+            .samples
+            .len();
+        let tail_point_count = stroke_primitive_point_count(app.last_frame());
+        assert!(
+            tail_point_count > 0 && tail_point_count < preview_sample_count,
+            "immediate projection should cover only the unformed tail, not the whole long stroke"
+        );
+    }
+
+    fn pointer_event(kind: PointerEventKind, position: UiPoint, click_count: u8) -> UiInputEvent {
+        UiInputEvent::Pointer(PointerEvent::new(
+            kind,
+            position,
+            UiVector::ZERO,
+            Some(PointerButton::Primary),
+            Modifiers::default(),
+            click_count,
+        ))
+    }
+
+    fn screen_point_for_canvas(app: &RunenwerkDrawApp, x: f64, y: f64) -> UiPoint {
+        app.workspace()
+            .canvas_view
+            .canvas_to_screen(CanvasCoordinate::new(x, y))
+            .expect("test canvas point should be visible")
+    }
+
+    fn stroke_primitive_count(frame: &ui_render_data::UiFrame) -> usize {
+        frame
+            .surfaces
+            .iter()
+            .flat_map(|surface| surface.layers.iter())
+            .flat_map(|layer| layer.primitives.iter())
+            .filter(|primitive| matches!(primitive, UiPrimitive::Stroke(_)))
+            .count()
+    }
+
+    fn stroke_primitive_point_count(frame: &ui_render_data::UiFrame) -> usize {
+        frame
+            .surfaces
+            .iter()
+            .flat_map(|surface| surface.layers.iter())
+            .flat_map(|layer| layer.primitives.iter())
+            .filter_map(|primitive| match primitive {
+                UiPrimitive::Stroke(stroke) => Some(stroke.points.len()),
+                _ => None,
+            })
+            .sum()
+    }
 }

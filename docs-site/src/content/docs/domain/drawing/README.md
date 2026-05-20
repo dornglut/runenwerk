@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: domain
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-19
 related_docs:
   - ../../design/active/drawing-domain-crate-design.md
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
@@ -34,12 +34,12 @@ lineage, invalidation, source cache key construction, and product-substrate
 descriptor helpers. It does not own app-visible tile lifecycle or runtime cache
 state.
 
-App/runtime layers own current/preview visibility, dynamic texture upload
-tracking, cache policy, fallback/promotion decisions, and renderer submission.
-Drawing quality class participates in product scale, descriptor generation,
-cache identity, and render selection. App-visible final-quality lifecycle,
-runtime cache acceptance, persistent caches, and package sidecars remain
-app/package or engine-runtime work according to the product cache roadmap.
+App/runtime layers own current/preview/final visibility, dynamic texture upload
+tracking, runtime cache acceptance, cache policy, GPU validation,
+fallback/promotion decisions, and renderer submission. Drawing quality class
+participates in product scale, descriptor generation, cache identity, and
+render selection. Persistent caches and package sidecars remain app/package or
+engine-runtime work according to the product cache roadmap.
 
 ## Current Scope
 
@@ -117,6 +117,6 @@ serialized and migrated.
 ## Next Phase
 
 The next drawing phases should build on the existing command and product path:
-paper response, native package persistence, persistent tile cache policy, GPU
-product formation, eraser compositing, and richer layer/effect formation. Native
-tablet and Wacom details still belong outside this crate.
+paper response, native package persistence, persistent tile cache policy,
+broader GPU acceleration work, eraser compositing, and richer layer/effect
+formation. Native tablet and Wacom details still belong outside this crate.

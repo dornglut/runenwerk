@@ -16,3 +16,6 @@ tracing = "0.1.44"
 ui_input.workspace = true
 ui_math.workspace = true
 ui_render_data.workspace = true
+
+[dev-dependencies]
+winit = "0.30.9"

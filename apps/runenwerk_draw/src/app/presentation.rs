@@ -1,6 +1,6 @@
 //! Canvas-first UI frame projection for the drawing app shell and ink product surfaces.
 
-use drawing::{CanvasTileId, DrawingInkTileProduct, ProductQualityClass};
+use drawing::{CanvasTileId, DrawingInkTileProduct, ProductQualityClass, StrokeSample};
 use ui_math::{UiPoint, UiRect, UiSize};
 use ui_render_data::{
     ProductSurfaceAlphaMode, ProductSurfacePrimitive, ProductSurfaceTextureBindingSource,
@@ -8,7 +8,7 @@ use ui_render_data::{
     UiSortKey, UiSurface, UiSurfaceId,
 };
 
-use crate::app::{DrawingPreviewStroke, DrawingWorkspaceProjection};
+use crate::app::DrawingWorkspaceProjection;
 
 pub const DRAWING_UI_SURFACE_ID: UiSurfaceId = UiSurfaceId(4_001);
 pub const DRAWING_CANVAS_LAYER_ID: UiLayerId = UiLayerId(4_010);
@@ -17,6 +17,7 @@ const DRAW_KEY_SOLID: UiDrawKey = UiDrawKey::new(1, None);
 
 pub const DRAWING_INK_TEXTURE_NAMESPACE: &str = "runenwerk.draw.ink";
 const IMMEDIATE_STROKE_PRIMITIVE_ORDER: u32 = 25_000;
+const MAX_IMMEDIATE_STROKE_POINT_COUNT: usize = 1_024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DrawingInkSurfaceKind {
@@ -52,7 +53,7 @@ pub struct DrawingInkSurfaceProjection<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct DrawingImmediateStrokeProjection<'a> {
-    pub stroke: &'a DrawingPreviewStroke,
+    pub samples: &'a [StrokeSample],
     pub width_px: f32,
 }
 
@@ -86,18 +87,23 @@ pub fn build_workspace_frame_with_ink_and_stroke(
     )
 }
 
-pub(crate) fn build_workspace_frame_with_ink_surface_refs_and_stroke(
+pub(crate) fn build_workspace_frame_with_ink_surface_refs_and_strokes(
     workspace: &DrawingWorkspaceProjection,
     ink_tiles: &[DrawingInkSurfaceProjection<'_>],
     preview_tiles: &[DrawingInkSurfaceProjection<'_>],
-    immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
+    immediate_strokes: &[DrawingImmediateStrokeProjection<'_>],
 ) -> UiFrame {
     let mut layer = UiLayer::new(DRAWING_CANVAS_LAYER_ID);
     push_workspace_base(&mut layer, workspace);
     push_projected_ink_surfaces(&mut layer, workspace, ink_tiles, 10);
     push_projected_ink_surfaces(&mut layer, workspace, preview_tiles, 20_000);
-    if let Some(stroke) = immediate_stroke {
-        push_immediate_stroke(&mut layer, workspace, stroke);
+    for (index, stroke) in immediate_strokes.iter().copied().enumerate() {
+        push_immediate_stroke(
+            &mut layer,
+            workspace,
+            stroke,
+            IMMEDIATE_STROKE_PRIMITIVE_ORDER.saturating_add(index as u32),
+        );
     }
 
     UiFrame::with_surfaces(vec![UiSurface::with_layers(
@@ -130,7 +136,12 @@ pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
         20_000,
     );
     if let Some(stroke) = immediate_stroke {
-        push_immediate_stroke(&mut layer, workspace, stroke);
+        push_immediate_stroke(
+            &mut layer,
+            workspace,
+            stroke,
+            IMMEDIATE_STROKE_PRIMITIVE_ORDER,
+        );
     }
 
     UiFrame::with_surfaces(vec![UiSurface::with_layers(
@@ -179,9 +190,9 @@ fn push_immediate_stroke(
     layer: &mut UiLayer,
     workspace: &DrawingWorkspaceProjection,
     projection: DrawingImmediateStrokeProjection<'_>,
+    primitive_order: u32,
 ) {
     let points = projection
-        .stroke
         .samples
         .iter()
         .filter_map(|sample| workspace.canvas_view.canvas_to_screen(sample.position))
@@ -189,6 +200,7 @@ fn push_immediate_stroke(
     if points.is_empty() {
         return;
     }
+    let points = bounded_immediate_stroke_points(points, MAX_IMMEDIATE_STROKE_POINT_COUNT);
 
     layer.push(UiPrimitive::Stroke(
         StrokePrimitive::new(
@@ -196,10 +208,35 @@ fn push_immediate_stroke(
             projection.width_px.max(1.0),
             UiPaint::rgba(0.04, 0.035, 0.03, 1.0),
             DRAW_KEY_SOLID,
-            UiSortKey::new(0, 0, IMMEDIATE_STROKE_PRIMITIVE_ORDER),
+            UiSortKey::new(0, 0, primitive_order),
         )
         .with_clip(workspace.canvas_view.screen_bounds),
     ));
+}
+
+fn bounded_immediate_stroke_points(points: Vec<UiPoint>, max_point_count: usize) -> Vec<UiPoint> {
+    if points.len() <= max_point_count || max_point_count < 2 {
+        return points;
+    }
+    let last_index = points.len() - 1;
+    let target_last = max_point_count - 1;
+    let mut bounded = Vec::with_capacity(max_point_count);
+    for output_index in 0..max_point_count {
+        let source_index = output_index * last_index / target_last;
+        let source_index = source_index.min(last_index);
+        if bounded.last().copied() != Some(points[source_index]) {
+            bounded.push(points[source_index]);
+        }
+    }
+    if bounded.last().copied() != points.last().copied()
+        && let Some(last) = points.last().copied()
+    {
+        if bounded.len() == max_point_count {
+            bounded.pop();
+        }
+        bounded.push(last);
+    }
+    bounded
 }
 
 fn push_tablet_panel(

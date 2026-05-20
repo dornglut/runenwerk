@@ -1,5 +1,5 @@
 use crate::plugins::{
-    InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord, action,
+    action, InputBindingChange, InputBindingChangeResult, InputBindings, KeyChord,
 };
 use std::collections::{HashMap, HashSet};
 use winit::event::{
@@ -12,6 +12,24 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 pub struct MouseMotionSample {
     pub position: (f32, f32),
     pub delta: (f32, f32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MouseButtonTransitionSample {
+    pub button: MouseButton,
+    pub state: ElementState,
+    pub position: (f32, f32),
+    pub motion_sample_index: usize,
+}
+
+impl MouseButtonTransitionSample {
+    pub fn is_left_pressed(self) -> bool {
+        self.button == MouseButton::Left && self.state == ElementState::Pressed
+    }
+
+    pub fn is_left_released(self) -> bool {
+        self.button == MouseButton::Left && self.state == ElementState::Released
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +98,7 @@ pub struct InputState {
     pub mouse_delta: (f32, f32),
     pub mouse_position: (f32, f32),
     mouse_motion_samples: Vec<MouseMotionSample>,
+    mouse_button_transitions: Vec<MouseButtonTransitionSample>,
     touch_samples: Vec<TouchInputSample>,
     touch_positions: HashMap<u64, (f32, f32)>,
     primary_touch_id: Option<u64>,
@@ -132,6 +151,7 @@ impl Default for InputState {
             mouse_delta: (0.0, 0.0),
             mouse_position: (0.0, 0.0),
             mouse_motion_samples: Vec::new(),
+            mouse_button_transitions: Vec::new(),
             touch_samples: Vec::new(),
             touch_positions: HashMap::new(),
             primary_touch_id: None,
@@ -315,6 +335,13 @@ impl InputState {
     }
 
     pub fn handle_mouse_input(&mut self, state: ElementState, button: MouseButton) {
+        self.mouse_button_transitions
+            .push(MouseButtonTransitionSample {
+                button,
+                state,
+                position: self.mouse_position,
+                motion_sample_index: self.mouse_motion_samples.len(),
+            });
         match state {
             ElementState::Pressed => {
                 self.mouse_buttons_down.insert(button);
@@ -390,6 +417,7 @@ impl InputState {
         self.overlay_consumed = false;
         self.mouse_delta = (0.0, 0.0);
         self.mouse_motion_samples.clear();
+        self.mouse_button_transitions.clear();
         self.touch_samples.clear();
         self.scroll_delta = 0.0;
         self.left_mouse_pressed = false;
@@ -407,6 +435,25 @@ impl InputState {
 
     pub fn mouse_motion_samples(&self) -> &[MouseMotionSample] {
         &self.mouse_motion_samples
+    }
+
+    pub fn mouse_button_transitions(&self) -> &[MouseButtonTransitionSample] {
+        &self.mouse_button_transitions
+    }
+
+    pub fn left_mouse_pressed_transition(&self) -> Option<MouseButtonTransitionSample> {
+        self.mouse_button_transitions
+            .iter()
+            .find(|transition| transition.is_left_pressed())
+            .copied()
+    }
+
+    pub fn left_mouse_released_transition(&self) -> Option<MouseButtonTransitionSample> {
+        self.mouse_button_transitions
+            .iter()
+            .rev()
+            .find(|transition| transition.is_left_released())
+            .copied()
     }
 
     pub fn touch_samples(&self) -> &[TouchInputSample] {

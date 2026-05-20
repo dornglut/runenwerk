@@ -3,6 +3,11 @@
 
 mod record;
 mod sample;
+mod visualization;
 
 pub use record::{ColorRgba, PaintTarget, StrokeRecord};
 pub use sample::{StrokeSample, StrokeToolKind, StylusTilt};
+pub use visualization::{
+    BrushDab, BrushDabStream, StrokeReconstructedPath, StrokeReconstructionPolicy,
+    StrokeSampleTimeline,
+};

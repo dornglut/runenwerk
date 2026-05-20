@@ -244,18 +244,16 @@ fn route_kind(
     canvas_position: Option<CanvasCoordinate>,
     capture_active: bool,
 ) -> DrawingToolRouteKind {
-    if pointer.packet.contact == PointerContactState::Hover {
-        return DrawingToolRouteKind::Hover;
-    }
     match pointer.kind {
         PointerEventKind::Down if bounded_canvas_position.is_some() => {
             DrawingToolRouteKind::BeginPreviewStroke
         }
-        PointerEventKind::Move if capture_active && canvas_position.is_some() => {
-            DrawingToolRouteKind::UpdatePreviewStroke
-        }
         PointerEventKind::Up if capture_active && canvas_position.is_some() => {
             DrawingToolRouteKind::EndPreviewStroke
+        }
+        _ if pointer.packet.contact == PointerContactState::Hover => DrawingToolRouteKind::Hover,
+        PointerEventKind::Move if capture_active && canvas_position.is_some() => {
+            DrawingToolRouteKind::UpdatePreviewStroke
         }
         PointerEventKind::Scroll => DrawingToolRouteKind::Scroll,
         PointerEventKind::Down

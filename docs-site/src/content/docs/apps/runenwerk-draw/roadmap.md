@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: app
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-05-19
 related_designs:
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
   - ../../design/active/drawing-domain-crate-design.md
@@ -49,9 +49,13 @@ max RGBA channel delta 2 and changed pixels <= 1%, promotes only matching tile
 generations to GPU-backed product surfaces, rejects stale GPU generations, and
 keeps CPU current or last-good tiles authoritative when GPU validation fails.
 
+Canonical product-flow diagram:
+[draw-authority-and-product-flow.puml](./diagrams/draw-authority-and-product-flow.puml).
+
 ## Foundation Policy
 
 - CPU tile formation remains the canonical correctness oracle.
+- `DrawingDocument` remains the source authority for drawing truth.
 - GPU formation is a production acceleration path, not drawing truth.
 - GPU output becomes the default visible path only for a tile generation that
   passes shadow comparison against the CPU reference.
@@ -66,6 +70,14 @@ keeps CPU current or last-good tiles authoritative when GPU validation fails.
   targets, capture/readback, texture diff, and inspection only.
 - `apps/runenwerk_draw` owns app cache policy, visibility promotion, CPU/GPU
   validation state, fallback policy, and Draw-specific render-flow requests.
+- App cache, GPU validation, visible product promotion, and CPU fallback policy
+  are app-owned runtime state. They derive from document truth and product
+  barriers; they do not redefine document authority.
+- Renderer/GPU output is derived execution state. It can feed app-owned
+  promotion/fallback decisions, but it must not mutate `DrawingDocument` or
+  become authoritative over deterministic CPU tile truth.
+- Workbench integration is deferred and must not block standalone
+  `runenwerk_draw` work.
 
 ## Contract Alignment Status
 
@@ -80,6 +92,14 @@ The current contracts are aligned with the future preview/final split:
 - Publication and query-snapshot rejection diagnostics must remain visible and
   retryable, so cache/GPU phases cannot silently lock a failed generation as
   complete.
+- DRF1 through DRF5 are implemented for the current rendering foundation:
+  deterministic preview/final CPU tile contracts, in-memory app cache proof,
+  product-surface dynamic texture bridge, Draw-owned GPU validation proof, and
+  per-generation GPU promotion/fallback are all present.
+- Remaining gaps are outside this foundation slice: persistent cache storage,
+  package sidecars, paper response, watercolor, export, package IO, lasso,
+  transform, fill, selection tooling, mask eraser compositing, radial menus,
+  and production native tablet hardware acceptance.
 
 ## Phase DRF1 - Preview And Final Tile Profiles
 
@@ -122,7 +142,7 @@ Persistent storage remains later work.
 
 Target modules:
 
-- `apps/runenwerk_draw/src/app/ink.rs::DrawingInkRuntimeState`
+- `apps/runenwerk_draw/src/app/ink/mod.rs::DrawingInkRuntimeState`
 - `apps/runenwerk_draw/src/runtime/resources.rs::DrawingInkUploadTrackerResource`
 
 Implementation requirements:
@@ -231,7 +251,7 @@ generation rejection, and CPU current/last-good fallback.
 
 Target modules:
 
-- `apps/runenwerk_draw/src/app/ink.rs::DrawingInkRuntimeState`
+- `apps/runenwerk_draw/src/app/ink/mod.rs::DrawingInkRuntimeState`
 - `apps/runenwerk_draw/src/runtime/resources.rs`
 - `apps/runenwerk_draw/src/runtime/systems.rs::submit_draw_frame_system`
 

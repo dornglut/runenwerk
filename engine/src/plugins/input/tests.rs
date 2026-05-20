@@ -1,7 +1,8 @@
 // Owner: Engine Input Plugin - Tests
 use crate::plugins::{
-    InputBindingChange, InputBindingChangeResult, InputState, KeyChord, TouchInputPhase, action,
+    action, InputBindingChange, InputBindingChangeResult, InputState, KeyChord, TouchInputPhase,
 };
+use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
 #[test]
@@ -156,6 +157,44 @@ fn cursor_motion_samples_preserve_all_positions_until_frame_end() {
 
     assert!(state.mouse_motion_samples().is_empty());
     assert_eq!(state.mouse_position, (21.0, 19.0));
+}
+
+#[test]
+fn mouse_button_transitions_record_position_and_motion_sample_index() {
+    let mut state = InputState::new();
+
+    state.handle_cursor_moved(10.0, 12.0);
+    state.handle_mouse_input(ElementState::Pressed, MouseButton::Left);
+    state.handle_cursor_moved(14.0, 15.0);
+    state.handle_mouse_input(ElementState::Released, MouseButton::Left);
+    state.handle_cursor_moved(21.0, 19.0);
+
+    let press = state
+        .left_mouse_pressed_transition()
+        .expect("left press transition should be recorded");
+    assert!(press.is_left_pressed());
+    assert_eq!(press.position, (10.0, 12.0));
+    assert_eq!(
+        press.motion_sample_index, 1,
+        "press should remember how many motion samples happened before contact"
+    );
+
+    let release = state
+        .left_mouse_released_transition()
+        .expect("left release transition should be recorded");
+    assert!(release.is_left_released());
+    assert_eq!(release.position, (14.0, 15.0));
+    assert_eq!(
+        release.motion_sample_index, 2,
+        "release should remember how many motion samples happened before release"
+    );
+    assert_eq!(state.mouse_button_transitions().len(), 2);
+
+    state.clear_frame();
+
+    assert!(state.mouse_button_transitions().is_empty());
+    assert!(state.left_mouse_pressed_transition().is_none());
+    assert!(state.left_mouse_released_transition().is_none());
 }
 
 #[test]

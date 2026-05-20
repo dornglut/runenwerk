@@ -17,6 +17,7 @@ use crate::model::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowsPointerInputKind {
+    Mouse,
     Pen,
     Touch,
 }
@@ -32,11 +33,31 @@ pub struct WindowsPointerHistorySample {
     pub twist_degrees: Option<f32>,
     pub eraser: bool,
     pub barrel_buttons: PointerBarrelButtons,
+    pub event_button: Option<PointerButton>,
+    pub primary_button_down: bool,
     pub in_contact: bool,
     pub in_range: bool,
 }
 
 impl WindowsPointerHistorySample {
+    pub fn mouse(pointer_id: u32, position: PointerPosition) -> Self {
+        Self {
+            pointer_id,
+            input_kind: WindowsPointerInputKind::Mouse,
+            position,
+            timestamp_micros: None,
+            pressure: None,
+            tilt: None,
+            twist_degrees: None,
+            eraser: false,
+            barrel_buttons: PointerBarrelButtons::none(),
+            event_button: Some(PointerButton::Primary),
+            primary_button_down: true,
+            in_contact: true,
+            in_range: true,
+        }
+    }
+
     pub fn pen(pointer_id: u32, position: PointerPosition) -> Self {
         Self {
             pointer_id,
@@ -48,6 +69,8 @@ impl WindowsPointerHistorySample {
             twist_degrees: None,
             eraser: false,
             barrel_buttons: PointerBarrelButtons::none(),
+            event_button: Some(PointerButton::Primary),
+            primary_button_down: true,
             in_contact: true,
             in_range: true,
         }
@@ -64,6 +87,8 @@ impl WindowsPointerHistorySample {
             twist_degrees: None,
             eraser: false,
             barrel_buttons: PointerBarrelButtons::none(),
+            event_button: Some(PointerButton::Primary),
+            primary_button_down: true,
             in_contact: true,
             in_range: true,
         }
@@ -231,7 +256,22 @@ pub fn map_windows_pointer_history(
 
     let current_delta = delta_from(last_position, current.position);
     let capabilities = capabilities_from_windows_sample(*current, !coalesced_samples.is_empty());
+    if current.input_kind == WindowsPointerInputKind::Mouse
+        && matches!(history.kind, PointerEventKind::Down | PointerEventKind::Up)
+        && current.event_button != Some(PointerButton::Primary)
+    {
+        return None;
+    }
     let (mut packet, tool_kind) = match current.input_kind {
+        WindowsPointerInputKind::Mouse => (
+            NativeTabletPacket::windows_pointer_mouse(
+                u64::from(history.pointer_id),
+                history.kind,
+                current.position,
+                current_delta,
+            ),
+            NativeTabletToolKind::Mouse,
+        ),
         WindowsPointerInputKind::Pen => (
             NativeTabletPacket::windows_pointer(
                 u64::from(history.pointer_id),
@@ -264,7 +304,7 @@ pub fn map_windows_pointer_history(
         .with_latency_class(PointerLatencyClass::LowLatencyPreview)
         .with_coalesced_samples(coalesced_samples)
         .with_contact(contact_from_windows_sample(*current))
-        .with_event_button(event_button_for_kind(history.kind));
+        .with_event_button(event_button_for_sample(history.kind, *current));
 
     if let Some(pressure) = current.pressure {
         packet = packet.with_pressure(pressure);
@@ -314,6 +354,10 @@ fn capabilities_from_windows_sample(
     has_coalesced_samples: bool,
 ) -> NativeTabletCapabilities {
     match sample.input_kind {
+        WindowsPointerInputKind::Mouse => NativeTabletCapabilities {
+            coalesced_samples: has_coalesced_samples,
+            ..NativeTabletCapabilities::windows_pointer_mouse()
+        },
         WindowsPointerInputKind::Pen => NativeTabletCapabilities {
             pressure: sample.pressure.is_some(),
             tilt: sample.tilt.is_some(),
@@ -351,12 +395,25 @@ fn contact_from_windows_sample(sample: WindowsPointerHistorySample) -> PointerCo
     }
 }
 
-fn event_button_for_kind(kind: PointerEventKind) -> Option<PointerButton> {
-    match kind {
-        PointerEventKind::Down | PointerEventKind::Up | PointerEventKind::Move => {
-            Some(PointerButton::Primary)
-        }
-        PointerEventKind::Enter | PointerEventKind::Leave | PointerEventKind::Scroll => None,
+fn event_button_for_sample(
+    kind: PointerEventKind,
+    sample: WindowsPointerHistorySample,
+) -> Option<PointerButton> {
+    match sample.input_kind {
+        WindowsPointerInputKind::Mouse => match kind {
+            PointerEventKind::Down | PointerEventKind::Up => sample.event_button,
+            PointerEventKind::Move if sample.primary_button_down => Some(PointerButton::Primary),
+            PointerEventKind::Move
+            | PointerEventKind::Enter
+            | PointerEventKind::Leave
+            | PointerEventKind::Scroll => None,
+        },
+        WindowsPointerInputKind::Pen | WindowsPointerInputKind::Touch => match kind {
+            PointerEventKind::Down | PointerEventKind::Up | PointerEventKind::Move => {
+                Some(PointerButton::Primary)
+            }
+            PointerEventKind::Enter | PointerEventKind::Leave | PointerEventKind::Scroll => None,
+        },
     }
 }
 
@@ -396,14 +453,21 @@ mod platform {
     use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
     use windows_sys::Win32::UI::Accessibility::RegisterPointerInputTargetEx;
     use windows_sys::Win32::UI::Input::Pointer::{
-        GetPointerFramePenInfoHistory, GetPointerFrameTouchInfoHistory, GetPointerPenInfo,
-        GetPointerTouchInfo, POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_PEN_INFO,
+        GetPointerFrameInfoHistory, GetPointerFramePenInfoHistory, GetPointerFrameTouchInfoHistory,
+        GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType,
+        POINTER_CHANGE_FIFTHBUTTON_DOWN, POINTER_CHANGE_FIFTHBUTTON_UP,
+        POINTER_CHANGE_FIRSTBUTTON_DOWN, POINTER_CHANGE_FIRSTBUTTON_UP,
+        POINTER_CHANGE_FOURTHBUTTON_DOWN, POINTER_CHANGE_FOURTHBUTTON_UP, POINTER_CHANGE_NONE,
+        POINTER_CHANGE_SECONDBUTTON_DOWN, POINTER_CHANGE_SECONDBUTTON_UP,
+        POINTER_CHANGE_THIRDBUTTON_DOWN, POINTER_CHANGE_THIRDBUTTON_UP, POINTER_FLAG_FIRSTBUTTON,
+        POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_INFO, POINTER_PEN_INFO,
         POINTER_TOUCH_INFO,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         MSG, PEN_FLAG_BARREL, PEN_FLAG_ERASER, PEN_FLAG_INVERTED, PEN_MASK_PRESSURE,
-        PEN_MASK_ROTATION, PEN_MASK_TILT_X, PEN_MASK_TILT_Y, PT_PEN, PT_TOUCH, TOUCH_MASK_PRESSURE,
-        WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
+        PEN_MASK_ROTATION, PEN_MASK_TILT_X, PEN_MASK_TILT_Y, PT_MOUSE, PT_PEN, PT_POINTER,
+        PT_TOUCH, TOUCH_MASK_PRESSURE, WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE,
+        WM_POINTERUP, WM_POINTERUPDATE,
     };
     use winit::platform::windows::EventLoopBuilderExtWindows;
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -431,12 +495,15 @@ mod platform {
         };
 
         // SAFETY: HWND belongs to the live winit window on this UI thread. The calls register
-        // observation for pen and touch pointer messages; they do not take ownership of the HWND.
+        // observation for pointer messages; they do not take ownership of the HWND.
         let pen_ok = unsafe { RegisterPointerInputTargetEx(hwnd, PT_PEN, 1) != 0 };
         // SAFETY: Same HWND lifetime as above. Registering touch keeps the backend able to
         // distinguish pen from non-pen pointer streams and report diagnostics consistently.
         let touch_ok = unsafe { RegisterPointerInputTargetEx(hwnd, PT_TOUCH, 1) != 0 };
-        if pen_ok || touch_ok {
+        // SAFETY: Same HWND lifetime as above. Mouse registration provides pointer history before
+        // the generic winit mouse fallback runs.
+        let mouse_ok = unsafe { RegisterPointerInputTargetEx(hwnd, PT_MOUSE, 1) != 0 };
+        if pen_ok || touch_ok || mouse_ok {
             NativeTabletBackendHealth::available(
                 NativeTabletBackendKind::WindowsPointer,
                 "attached to Win32 pointer message stream",
@@ -444,7 +511,7 @@ mod platform {
         } else {
             NativeTabletBackendHealth::unavailable(
                 NativeTabletBackendKind::WindowsPointer,
-                "RegisterPointerInputTargetEx failed for pen and touch",
+                "RegisterPointerInputTargetEx failed for pen, touch, and mouse",
             )
         }
     }
@@ -459,8 +526,87 @@ mod platform {
         let msg = unsafe { &*msg };
         let kind = pointer_event_kind(msg.message)?;
         let pointer_id = pointer_id_from_wparam(msg.wParam);
-        read_pen_history(pointer_id, msg.hwnd, kind)
-            .or_else(|| read_touch_history(pointer_id, msg.hwnd, kind))
+        match pointer_type(pointer_id) {
+            Some(PT_MOUSE) => read_mouse_history(pointer_id, msg.hwnd, kind),
+            Some(PT_PEN) => read_pen_history(pointer_id, msg.hwnd, kind),
+            Some(PT_TOUCH) => read_touch_history(pointer_id, msg.hwnd, kind),
+            _ => read_pen_history(pointer_id, msg.hwnd, kind)
+                .or_else(|| read_touch_history(pointer_id, msg.hwnd, kind))
+                .or_else(|| read_mouse_history(pointer_id, msg.hwnd, kind)),
+        }
+    }
+
+    fn pointer_type(pointer_id: u32) -> Option<i32> {
+        let mut pointer_type = PT_POINTER;
+        // SAFETY: pointer_type is a valid out pointer for the current pointer message id.
+        let ok = unsafe { GetPointerType(pointer_id, &mut pointer_type) != 0 };
+        ok.then_some(pointer_type)
+    }
+
+    fn read_mouse_history(
+        pointer_id: u32,
+        hwnd: HWND,
+        kind: PointerEventKind,
+    ) -> Option<WindowsPointerHistoryPacket> {
+        let mut entries = 0_u32;
+        let mut pointer_count = 0_u32;
+        // SAFETY: The first call intentionally passes a null output buffer to query dimensions.
+        unsafe {
+            GetPointerFrameInfoHistory(
+                pointer_id,
+                &mut entries,
+                &mut pointer_count,
+                ptr::null_mut(),
+            );
+        }
+        if entries == 0 || pointer_count == 0 {
+            return read_single_mouse(pointer_id, hwnd, kind);
+        }
+
+        let mut infos =
+            vec![POINTER_INFO::default(); entries.saturating_mul(pointer_count) as usize];
+        let mut entries_in_out = entries;
+        let mut pointer_count_in_out = pointer_count;
+        // SAFETY: Buffer has entries * pointer_count elements as required by the Win32 API.
+        let ok = unsafe {
+            GetPointerFrameInfoHistory(
+                pointer_id,
+                &mut entries_in_out,
+                &mut pointer_count_in_out,
+                infos.as_mut_ptr(),
+            ) != 0
+        };
+        if !ok {
+            return read_single_mouse(pointer_id, hwnd, kind);
+        }
+
+        let samples = infos
+            .into_iter()
+            .filter(|info| info.pointerId == pointer_id && info.pointerType == PT_MOUSE)
+            .map(|info| pointer_info_to_mouse_sample(info, hwnd))
+            .collect::<Vec<_>>();
+        if samples.is_empty() {
+            None
+        } else {
+            Some(WindowsPointerHistoryPacket::new(kind, pointer_id, samples))
+        }
+    }
+
+    fn read_single_mouse(
+        pointer_id: u32,
+        hwnd: HWND,
+        kind: PointerEventKind,
+    ) -> Option<WindowsPointerHistoryPacket> {
+        let mut info = POINTER_INFO::default();
+        // SAFETY: info is a valid out pointer for the current pointer message on this thread.
+        let ok = unsafe { GetPointerInfo(pointer_id, &mut info) != 0 };
+        ok.then(|| {
+            WindowsPointerHistoryPacket::new(
+                kind,
+                pointer_id,
+                [pointer_info_to_mouse_sample(info, hwnd)],
+            )
+        })
     }
 
     fn read_pen_history(
@@ -635,6 +781,40 @@ mod platform {
         sample
     }
 
+    fn pointer_info_to_mouse_sample(info: POINTER_INFO, hwnd: HWND) -> WindowsPointerHistorySample {
+        let position = client_position(info.ptPixelLocation, info.hwndTarget, hwnd);
+        let mut sample = WindowsPointerHistorySample::mouse(info.pointerId, position);
+        sample.timestamp_micros = Some(u64::from(info.dwTime) * 1_000);
+        sample.event_button = pointer_button_from_change(info.ButtonChangeType);
+        sample.primary_button_down = info.pointerFlags & POINTER_FLAG_FIRSTBUTTON != 0;
+        sample.in_contact =
+            info.pointerFlags & (POINTER_FLAG_INCONTACT | POINTER_FLAG_FIRSTBUTTON) != 0;
+        sample.in_range = true;
+        sample
+    }
+
+    fn pointer_button_from_change(change: i32) -> Option<PointerButton> {
+        match change {
+            POINTER_CHANGE_FIRSTBUTTON_DOWN | POINTER_CHANGE_FIRSTBUTTON_UP => {
+                Some(PointerButton::Primary)
+            }
+            POINTER_CHANGE_SECONDBUTTON_DOWN | POINTER_CHANGE_SECONDBUTTON_UP => {
+                Some(PointerButton::Secondary)
+            }
+            POINTER_CHANGE_THIRDBUTTON_DOWN | POINTER_CHANGE_THIRDBUTTON_UP => {
+                Some(PointerButton::Middle)
+            }
+            POINTER_CHANGE_FOURTHBUTTON_DOWN | POINTER_CHANGE_FOURTHBUTTON_UP => {
+                Some(PointerButton::Other(4))
+            }
+            POINTER_CHANGE_FIFTHBUTTON_DOWN | POINTER_CHANGE_FIFTHBUTTON_UP => {
+                Some(PointerButton::Other(5))
+            }
+            POINTER_CHANGE_NONE => None,
+            _ => None,
+        }
+    }
+
     fn client_position(
         mut point: POINT,
         target_hwnd: HWND,
@@ -777,5 +957,59 @@ mod tests {
         assert_eq!(packet.source_kind, PointerSourceKind::Touch);
         assert_eq!(packet.tool_kind, NativeTabletToolKind::Finger);
         assert_eq!(packet.event_button, Some(PointerButton::Primary));
+    }
+
+    #[test]
+    fn windows_pointer_mouse_history_maps_as_mouse_source_with_ordered_samples() {
+        let history = WindowsPointerHistoryPacket::new(
+            PointerEventKind::Move,
+            11,
+            [
+                WindowsPointerHistorySample::mouse(11, PointerPosition::new(36.0, 18.0))
+                    .with_timestamp_micros(300),
+                WindowsPointerHistorySample::mouse(11, PointerPosition::new(24.0, 12.0))
+                    .with_timestamp_micros(200),
+                WindowsPointerHistorySample::mouse(11, PointerPosition::new(12.0, 6.0))
+                    .with_timestamp_micros(100),
+            ],
+        );
+
+        let packet = map_windows_pointer_history(
+            history,
+            Some(PointerPosition::new(0.0, 0.0)),
+            PointerCalibration::identity(),
+        )
+        .expect("mouse history should map");
+
+        assert_eq!(packet.source_kind, PointerSourceKind::Mouse);
+        assert_eq!(packet.tool_kind, NativeTabletToolKind::Mouse);
+        assert_eq!(packet.event_button, Some(PointerButton::Primary));
+        assert_eq!(packet.position, PointerPosition::new(36.0, 18.0));
+        assert_eq!(packet.delta, PointerDelta::new(12.0, 6.0));
+        assert_eq!(packet.coalesced_samples.len(), 2);
+        assert_eq!(
+            packet.coalesced_samples[0].position,
+            PointerPosition::new(12.0, 6.0)
+        );
+        assert_eq!(
+            packet.coalesced_samples[1].position,
+            PointerPosition::new(24.0, 12.0)
+        );
+        assert!(packet.capabilities.coalesced_samples);
+        assert!(packet.capabilities.hover);
+        assert!(!packet.capabilities.pressure);
+    }
+
+    #[test]
+    fn windows_pointer_mouse_secondary_contact_does_not_start_native_primary_stream() {
+        let mut sample = WindowsPointerHistorySample::mouse(12, PointerPosition::new(8.0, 9.0));
+        sample.event_button = Some(PointerButton::Secondary);
+
+        let history = WindowsPointerHistoryPacket::new(PointerEventKind::Down, 12, [sample]);
+
+        assert!(
+            map_windows_pointer_history(history, None, PointerCalibration::identity()).is_none(),
+            "secondary mouse down must not become a native primary drawing stream"
+        );
     }
 }

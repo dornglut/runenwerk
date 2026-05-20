@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: app
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-05-19
 related_docs:
   - ../../apps/runenwerk-draw/README.md
   - ./drawing-authoring-and-comic-layout-platform-design.md
@@ -57,7 +57,8 @@ No hidden pen-contact delay may be added to distinguish drawing from menus.
 The first app shell and input path already exist:
 
 - `apps/runenwerk_draw/src/app/input.rs` extracts pointer/stylus facts into
-  drawing tool input DTOs.
+  drawing tool input DTOs. Its current `DrawingToolRouteKind` values are a
+  narrow preview-stroke route model, not the final generic tool-session model.
 - `apps/runenwerk_draw/src/app/state.rs` owns preview stroke routing, commit
   routing, and last visible drawing frame rebuilds.
 - `apps/runenwerk_draw/src/runtime/systems.rs` bridges current mouse and touch
@@ -78,6 +79,97 @@ the app can exercise fallback pointer flow. That is not the desired default
 product UX. Pen contact must continue to draw immediately with no hold delay,
 while touch drawing enablement belongs to a future user profile/input policy and
 should be disabled by default.
+
+The rendering foundation baseline is DRF1 through DRF5: deterministic
+preview/final CPU ink tile contracts, app-owned in-memory cache proof,
+product-surface dynamic texture bridging, Draw-owned GPU validation through
+public render-flow APIs, and per-generation GPU promotion/fallback are present.
+CPU tile formation remains the correctness oracle. App cache, GPU validation,
+visible product promotion, and CPU current or last-good fallback are app-owned
+runtime state. Persistent cache storage, package IO, paper response,
+watercolor, lasso, transform, fill, mask eraser compositing, radial menu
+behavior, Workbench migration, and new GPU drawing behavior remain outside this
+slice.
+
+## Drawing Authority Boundaries
+
+`DrawingDocument` in `domain/drawing` is the source authority for drawing
+truth. Committed artwork mutations must enter through
+`DrawingTransaction` and `DrawingCommand`; app preview state, cache state,
+publication state, GPU validation state, and renderer output are all derived
+runtime or execution state.
+
+`apps/runenwerk_draw` owns the pen-first product workflow: tool input/session
+routing, app cache payloads, dirty tile invalidation, product lifecycle,
+visible product promotion, GPU validation records, and CPU current or last-good
+fallback policy.
+
+`engine/render` owns generic derived execution: render-flow invocation, dynamic
+texture upload/allocation, capture/readback, texture diff, and UI composition.
+Renderer/GPU output can feed app-owned promotion and fallback decisions, but it
+must not become drawing truth.
+
+`native_tablet_input` is normalization only. It turns native tablet facts into
+`ui_input` pointer events and diagnostics. It must not own drawing semantics,
+stroke commit policy, app tool state, or render products.
+
+`ui_render_data` is projection vocabulary only. It carries neutral primitives
+and product-surface bindings selected by the app; it does not own drawing
+truth, product lifecycle policy, or renderer backend handles.
+
+Workbench integration is deferred. It must not block standalone
+`runenwerk_draw` drawing app work.
+
+Canonical PlantUML source:
+[draw-authority-and-product-flow.puml](../../apps/runenwerk-draw/diagrams/draw-authority-and-product-flow.puml).
+
+## Tool-Session Boundary
+
+The intended input and command pipeline is:
+
+```text
+PointerEvent / tablet packet
+  -> DrawingToolInputEvent
+  -> DrawingToolSession
+  -> DrawingToolIntent
+  -> DrawingCommand transaction or app-only navigation/selection action
+  -> dirty tile invalidation / product lifecycle
+```
+
+`PointerEvent` and normalized tablet packets are platform-neutral input facts.
+`DrawingToolInputEvent` is app-owned extraction of screen, canvas, source,
+device, pressure, tilt, twist, eraser, barrel-button, coalesced, and predicted
+sample facts. `DrawingToolSession` is the app-owned interaction
+state machine for an active tool gesture. `DrawingToolIntent` should be the
+tool-level semantic output: either a drawing-domain command transaction or an
+app-only action such as navigation, selection preview, menu navigation, or
+diagnostic UI state.
+
+Only committed drawing mutations may produce `DrawingTransaction` and
+`DrawingCommand` values. Document mutations then drive dirty tile invalidation
+and the product lifecycle. App-only navigation or selection actions may rebuild
+projection state without mutating `DrawingDocument`.
+
+`DrawingToolRouteKind::BeginPreviewStroke`,
+`DrawingToolRouteKind::UpdatePreviewStroke`, and
+`DrawingToolRouteKind::EndPreviewStroke` are acceptable for the current simple
+stroke path because that path has one contact lifecycle, one preview stroke,
+one commit shape, and direct dirty tile invalidation. They must not become the
+generic model for lasso, transform, fill, selection, eraser, masking, or radial
+menu behavior.
+
+Those future tools need different session contracts:
+
+- lasso and selection need hit-testing, selection previews, cancel/confirm
+  semantics, and often app-only state before any document mutation;
+- transform needs handles, constraints, preview transforms, confirm/cancel, and
+  document commands that are not stroke sample appends;
+- fill needs region analysis, threshold/source policy, and product updates
+  that are not preview stroke routes;
+- eraser and masking need mask-aware document commands and product contracts,
+  not visual deletion through stroke preview state;
+- radial menus are explicit UI command surfaces and must be driven by offhand
+  input/session state, not hidden pen-contact delays or preview stroke routing.
 
 ## Radial Menu Model
 

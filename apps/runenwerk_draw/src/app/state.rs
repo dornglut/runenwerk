@@ -3,7 +3,7 @@
 use drawing::{
     BrushId, ColorRgba, DrawingCommand, DrawingDocument, DrawingDocumentRevision,
     DrawingInkPreviewStroke, DrawingRatificationReport, DrawingTileFormationPolicy,
-    DrawingTransaction, LayerStackEntryId, PaintTarget, StrokeId,
+    DrawingTransaction, LayerStackEntryId, PaintTarget, StrokeId, StrokeSample,
     drawing_ink_tile_invalidation_for_preview_stroke, ratify_drawing_document,
 };
 use ui_input::{PointerEventKind, UiInputEvent};
@@ -13,12 +13,14 @@ use ui_render_data::UiFrame;
 use crate::app::{
     DrawingImmediateStrokeProjection, DrawingInkRuntimeState, DrawingInkSurfaceKind,
     DrawingInkSurfaceProjection, DrawingPreviewStroke, DrawingTabletPanelProjection,
-    DrawingToolInputEvent, DrawingToolRouteKind, DrawingWorkspaceProjection, build_workspace_frame,
-    build_workspace_frame_with_ink_surface_refs_and_stroke, minimal_drawing_document,
+    DrawingToolControlInputEvent, DrawingToolInputEvent, DrawingToolIntent, DrawingToolSession,
+    DrawingWorkspaceProjection, build_workspace_frame,
+    build_workspace_frame_with_ink_surface_refs_and_strokes, minimal_drawing_document,
 };
 
 pub const DEFAULT_DRAWING_BRUSH_ID: BrushId = BrushId::new(1);
 pub const DEFAULT_DRAWING_LAYER_ENTRY_ID: LayerStackEntryId = LayerStackEntryId::new(1);
+const MAX_PENDING_COMMITTED_STROKE_OVERLAYS: usize = 64;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DrawingPreviewTileJobSnapshot {
@@ -35,6 +37,7 @@ pub struct DrawingPreviewTileJobTracker {
     pub stroke_id: StrokeId,
     pub document_revision: DrawingDocumentRevision,
     pub preview_generation: u64,
+    pub preview_sample_count: usize,
     pub dirty_start_sample_index: usize,
     pub formation_key: String,
 }
@@ -45,11 +48,14 @@ pub struct RunenwerkDrawApp {
     workspace: DrawingWorkspaceProjection,
     active_brush_id: BrushId,
     active_layer_entry_id: LayerStackEntryId,
+    tool_session: DrawingToolSession,
     routed_inputs: Vec<DrawingToolInputEvent>,
     preview_stroke: Option<DrawingPreviewStroke>,
+    committed_stroke_overlays: Vec<DrawingPreviewStroke>,
     preview_stroke_visible: bool,
     preview_generation: u64,
     preview_dirty_start_sample_index: Option<usize>,
+    preview_product_sample_count: usize,
     pending_preview_job: Option<DrawingPreviewTileJobTracker>,
     ink_runtime: DrawingInkRuntimeState,
     next_preview_stroke_id: u64,
@@ -79,11 +85,14 @@ impl RunenwerkDrawApp {
             workspace,
             active_brush_id: DEFAULT_DRAWING_BRUSH_ID,
             active_layer_entry_id: DEFAULT_DRAWING_LAYER_ENTRY_ID,
+            tool_session: DrawingToolSession::default(),
             routed_inputs: Vec::new(),
             preview_stroke: None,
+            committed_stroke_overlays: Vec::new(),
             preview_stroke_visible: false,
             preview_generation: 0,
             preview_dirty_start_sample_index: None,
+            preview_product_sample_count: 0,
             pending_preview_job: None,
             ink_runtime: DrawingInkRuntimeState::default(),
             next_preview_stroke_id: 1,
@@ -108,11 +117,14 @@ impl RunenwerkDrawApp {
         )
         .with_tablet_panel(tablet_panel);
         self.document = Some(document);
+        self.tool_session = DrawingToolSession::default();
         self.routed_inputs.clear();
         self.preview_stroke = None;
+        self.committed_stroke_overlays.clear();
         self.preview_stroke_visible = false;
         self.preview_generation = 0;
         self.preview_dirty_start_sample_index = None;
+        self.preview_product_sample_count = 0;
         self.pending_preview_job = None;
         self.ink_runtime = DrawingInkRuntimeState::default();
         self.next_preview_stroke_id = 1;
@@ -153,6 +165,10 @@ impl RunenwerkDrawApp {
         self.preview_dirty_start_sample_index
     }
 
+    pub fn preview_product_sample_count(&self) -> usize {
+        self.preview_product_sample_count
+    }
+
     pub fn pending_preview_tile_job(&self) -> Option<&DrawingPreviewTileJobTracker> {
         self.pending_preview_job.as_ref()
     }
@@ -179,6 +195,9 @@ impl RunenwerkDrawApp {
         }
         let dirty_start_sample_index = self.preview_dirty_start_sample_index?;
         let preview = self.preview_stroke.as_ref()?;
+        if !preview.active {
+            return None;
+        }
         if preview.samples.is_empty() {
             return None;
         }
@@ -228,29 +247,47 @@ impl RunenwerkDrawApp {
         }
     }
 
-    pub(crate) fn preview_tile_job_is_current(
+    pub(crate) fn preview_tile_job_can_apply(
         &self,
         stroke_id: StrokeId,
         document_revision: DrawingDocumentRevision,
-        preview_generation: u64,
+        preview_sample_count: usize,
     ) -> bool {
         self.preview_stroke_visible
-            && self
-                .preview_stroke
-                .as_ref()
-                .is_some_and(|preview| preview.stroke_id == stroke_id)
+            && self.preview_stroke.as_ref().is_some_and(|preview| {
+                preview.active
+                    && preview.stroke_id == stroke_id
+                    && preview_sample_count > 0
+                    && preview_sample_count <= preview.samples.len()
+                    && preview_sample_count >= self.preview_product_sample_count
+            })
             && self
                 .document
                 .as_ref()
                 .is_some_and(|document| document.revision == document_revision)
-            && self.preview_generation == preview_generation
+    }
+
+    pub(crate) fn record_applied_preview_tile_job(&mut self, preview_sample_count: usize) {
+        self.preview_product_sample_count =
+            self.preview_product_sample_count.max(preview_sample_count);
     }
 
     pub(crate) fn clear_preview_after_committed_acceptance(&mut self) {
-        self.preview_stroke_visible = false;
         self.preview_dirty_start_sample_index = None;
+        self.preview_product_sample_count = 0;
         self.pending_preview_job = None;
         self.ink_runtime.clear_preview_products();
+        if self.ink_runtime.dirty_tiles().is_empty() {
+            self.preview_stroke_visible = false;
+            self.committed_stroke_overlays.clear();
+        }
+        self.rebuild_last_frame();
+    }
+
+    pub(crate) fn clear_committed_stroke_overlays_if_clean(&mut self) {
+        if self.ink_runtime.dirty_tiles().is_empty() {
+            self.committed_stroke_overlays.clear();
+        }
         self.rebuild_last_frame();
     }
 
@@ -283,45 +320,57 @@ impl RunenwerkDrawApp {
     }
 
     pub fn dispatch_input(&mut self, event: &UiInputEvent) -> bool {
-        let UiInputEvent::Pointer(pointer) = event else {
-            return false;
-        };
-        let capture_active = self
-            .preview_stroke
-            .as_ref()
-            .is_some_and(|preview| preview.active);
-        let routed = DrawingToolInputEvent::from_pointer_with_capture(
-            pointer,
-            self.workspace.canvas_view,
-            capture_active,
-        );
-        let handled = routed.route_kind != DrawingToolRouteKind::Ignored;
-        self.apply_routed_input(routed.clone());
-        self.rebuild_last_frame();
-        self.routed_inputs.push(routed);
-        handled
+        match event {
+            UiInputEvent::Pointer(pointer) => {
+                let capture_active = self
+                    .preview_stroke
+                    .as_ref()
+                    .is_some_and(|preview| preview.active);
+                let routed = DrawingToolInputEvent::from_pointer_with_capture(
+                    pointer,
+                    self.workspace.canvas_view,
+                    capture_active,
+                );
+                let outcome = self.tool_session.handle_input(routed.clone());
+                let handled = outcome.handled;
+                self.apply_tool_intent(outcome.intent);
+                self.rebuild_last_frame();
+                self.routed_inputs.push(routed);
+                handled
+            }
+            UiInputEvent::Keyboard(keyboard) => {
+                let input = DrawingToolControlInputEvent::from_keyboard(keyboard);
+                let outcome = self.tool_session.handle_control_input(input);
+                let handled = outcome.handled;
+                self.apply_tool_intent(outcome.intent);
+                handled
+            }
+            UiInputEvent::Text(_) => false,
+        }
     }
 
-    fn apply_routed_input(&mut self, routed: DrawingToolInputEvent) {
-        match routed.route_kind {
-            DrawingToolRouteKind::BeginPreviewStroke => {
+    fn apply_tool_intent(&mut self, intent: DrawingToolIntent) {
+        match intent {
+            DrawingToolIntent::BeginPreviewStroke { input } => {
+                self.preserve_released_preview_overlay();
                 let mut preview =
                     DrawingPreviewStroke::new(StrokeId::new(self.next_preview_stroke_id));
                 self.next_preview_stroke_id = self.next_preview_stroke_id.saturating_add(1);
                 self.preview_stroke_visible = true;
+                self.preview_product_sample_count = 0;
                 self.ink_runtime.clear_preview_products();
                 let dirty_start_sample_index = preview.samples.len();
-                let appended = self.append_preview_samples(&mut preview, &routed);
+                let appended = self.append_preview_samples(&mut preview, &input);
                 if appended > 0 {
                     self.mark_preview_dirty(dirty_start_sample_index);
                 }
                 self.preview_stroke = Some(preview);
             }
-            DrawingToolRouteKind::UpdatePreviewStroke => {
+            DrawingToolIntent::UpdatePreviewStroke { input } => {
                 if let Some(mut preview) = self.preview_stroke.take() {
                     if preview.active {
                         let dirty_start_sample_index = preview.samples.len().saturating_sub(1);
-                        let appended = self.append_preview_samples(&mut preview, &routed);
+                        let appended = self.append_preview_samples(&mut preview, &input);
                         if appended > 0 {
                             self.mark_preview_dirty(dirty_start_sample_index);
                         }
@@ -329,26 +378,29 @@ impl RunenwerkDrawApp {
                     self.preview_stroke = Some(preview);
                 }
             }
-            DrawingToolRouteKind::EndPreviewStroke => {
+            DrawingToolIntent::FinishPreviewStroke { input } => {
                 if let Some(mut preview) = self.preview_stroke.take() {
-                    let pointer_up = routed.pointer_kind == PointerEventKind::Up;
+                    let pointer_up = input.pointer_kind == PointerEventKind::Up;
                     if preview.active && pointer_up {
                         let dirty_start_sample_index = preview.samples.len().saturating_sub(1);
-                        let appended = self.append_preview_samples(&mut preview, &routed);
+                        let appended = self.append_preview_samples(&mut preview, &input);
                         if appended > 0 {
                             self.mark_preview_dirty(dirty_start_sample_index);
                         }
                     }
                     preview.finish();
-                    if pointer_up {
-                        self.commit_preview_stroke(&preview);
+                    if pointer_up && self.commit_preview_stroke(&preview) {
+                        self.freeze_preview_after_commit();
                     }
                     self.preview_stroke = Some(preview);
                 }
             }
-            DrawingToolRouteKind::Hover
-            | DrawingToolRouteKind::Scroll
-            | DrawingToolRouteKind::Ignored => {}
+            DrawingToolIntent::Hover { .. }
+            | DrawingToolIntent::Scroll { .. }
+            | DrawingToolIntent::Ignore { .. }
+            | DrawingToolIntent::ControlInputObserved { .. }
+            | DrawingToolIntent::RequestCancel { .. }
+            | DrawingToolIntent::RequestRadialMenu { .. } => {}
         }
     }
 
@@ -374,12 +426,41 @@ impl RunenwerkDrawApp {
         );
     }
 
-    fn commit_preview_stroke(&mut self, preview: &DrawingPreviewStroke) {
-        if preview.samples.is_empty() {
+    fn freeze_preview_after_commit(&mut self) {
+        self.preview_dirty_start_sample_index = None;
+        self.pending_preview_job = None;
+    }
+
+    fn preserve_released_preview_overlay(&mut self) {
+        let Some(preview) = self.preview_stroke.as_ref() else {
+            return;
+        };
+        if preview.active || !self.preview_stroke_visible || preview.samples.is_empty() {
             return;
         }
-        let Some(document) = self.document.as_ref() else {
+        if self
+            .committed_stroke_overlays
+            .iter()
+            .any(|overlay| overlay.stroke_id == preview.stroke_id)
+        {
             return;
+        }
+        self.committed_stroke_overlays.push(preview.clone());
+        let overflow = self
+            .committed_stroke_overlays
+            .len()
+            .saturating_sub(MAX_PENDING_COMMITTED_STROKE_OVERLAYS);
+        if overflow > 0 {
+            self.committed_stroke_overlays.drain(..overflow);
+        }
+    }
+
+    fn commit_preview_stroke(&mut self, preview: &DrawingPreviewStroke) -> bool {
+        if preview.samples.is_empty() {
+            return false;
+        }
+        let Some(document) = self.document.as_ref() else {
+            return false;
         };
         let policy = DrawingTileFormationPolicy::default();
         let preview_stroke = self.preview_ink_stroke(preview, document.revision);
@@ -391,7 +472,7 @@ impl RunenwerkDrawApp {
             Vec::new()
         };
         let Some(document) = self.document.as_mut() else {
-            return;
+            return false;
         };
         let mut commands = Vec::with_capacity(preview.samples.len() + 2);
         commands.push(DrawingCommand::BeginStroke {
@@ -413,6 +494,9 @@ impl RunenwerkDrawApp {
         if transaction.apply_to(document).is_ok() {
             self.ink_runtime.invalidate_after_document_change();
             self.ink_runtime.mark_dirty_tiles(dirty_tiles);
+            true
+        } else {
+            false
         }
     }
 
@@ -449,13 +533,43 @@ impl RunenwerkDrawApp {
             return None;
         }
         let stroke = self.preview_stroke.as_ref()?;
+        let samples = self.immediate_stroke_samples(stroke)?;
+        Some(DrawingImmediateStrokeProjection {
+            samples,
+            width_px: self.preview_stroke_width_px(),
+        })
+    }
+
+    fn immediate_stroke_samples<'a>(
+        &self,
+        stroke: &'a DrawingPreviewStroke,
+    ) -> Option<&'a [StrokeSample]> {
         if stroke.samples.is_empty() {
             return None;
         }
-        Some(DrawingImmediateStrokeProjection {
-            stroke,
-            width_px: self.preview_stroke_width_px(),
-        })
+        let formed_sample_count = self.preview_product_sample_count.min(stroke.samples.len());
+        if formed_sample_count >= stroke.samples.len() {
+            return None;
+        }
+        let continuity_start = formed_sample_count.saturating_sub(1);
+        Some(&stroke.samples[continuity_start..])
+    }
+
+    fn immediate_stroke_projections(&self) -> Vec<DrawingImmediateStrokeProjection<'_>> {
+        let width_px = self.preview_stroke_width_px();
+        let mut strokes = self
+            .committed_stroke_overlays
+            .iter()
+            .filter(|stroke| !stroke.samples.is_empty())
+            .map(|stroke| DrawingImmediateStrokeProjection {
+                samples: stroke.samples.as_slice(),
+                width_px,
+            })
+            .collect::<Vec<_>>();
+        if let Some(stroke) = self.immediate_stroke_projection() {
+            strokes.push(stroke);
+        }
+        strokes
     }
 
     fn preview_stroke_width_px(&self) -> f32 {
@@ -496,12 +610,12 @@ impl RunenwerkDrawApp {
                         .visible_surface_kind_for(DrawingInkSurfaceKind::Preview, product),
                 })
                 .collect::<Vec<_>>();
-            let immediate_stroke = self.immediate_stroke_projection();
-            build_workspace_frame_with_ink_surface_refs_and_stroke(
+            let immediate_strokes = self.immediate_stroke_projections();
+            build_workspace_frame_with_ink_surface_refs_and_strokes(
                 &self.workspace,
                 &visible_products,
                 &preview_products,
-                immediate_stroke,
+                &immediate_strokes,
             )
         };
         self.last_frame = frame;

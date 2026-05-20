@@ -6,11 +6,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use ratification::RatificationSeverity;
 
 use crate::{
-    BrushDescriptor, BrushId, BrushLineageRef, CanvasCoordinate, CanvasRect, CanvasTileId,
-    ColorRgba, CompositeOutputId, DrawingDocument, DrawingDocumentRevision, DrawingProductLineage,
-    DrawingRatificationReport, DrawingTileProduct, DrawingTileProductId, DrawingTileProductSource,
-    FormationVersion, PaintTarget, PaperLineageRef, ProductQualityClass, StrokeId,
-    StrokeLineageRange, StrokeRecord, StrokeSample, StrokeToolKind,
+    BrushDab, BrushDabStream, BrushDescriptor, BrushId, BrushLineageRef, CanvasCoordinate,
+    CanvasRect, CanvasTileId, ColorRgba, CompositeOutputId, DrawingDocument,
+    DrawingDocumentRevision, DrawingProductLineage, DrawingRatificationReport, DrawingTileProduct,
+    DrawingTileProductId, DrawingTileProductSource, FormationVersion, PaintTarget, PaperLineageRef,
+    ProductQualityClass, StrokeId, StrokeLineageRange, StrokeReconstructedPath,
+    StrokeReconstructionPolicy, StrokeRecord, StrokeSample, StrokeSampleTimeline, StrokeToolKind,
 };
 
 use super::determinism::StableDrawingHasher;
@@ -793,30 +794,14 @@ fn rasterize_stroke(
     let context = StrokeRasterContext {
         tile_bounds,
         stroke,
-        brush,
         policy,
     };
-    match stroke.samples.as_slice() {
-        [] => {}
-        [sample] => {
-            let radius = f64::from(sample_size(brush, sample) * 0.5).max(0.5);
-            rasterize_dab(
-                payload,
-                context,
-                DabRaster {
-                    center: sample.position,
-                    radius,
-                    opacity: sample_opacity(brush, sample),
-                    flow: sample_flow(brush, sample),
-                    edge_softness: brush.ink.edge_softness,
-                },
-            );
-        }
-        samples => {
-            for (index, pair) in samples.windows(2).enumerate() {
-                rasterize_segment_dabs(payload, context, &pair[0], &pair[1], index == 0);
-            }
-        }
+    let timeline = StrokeSampleTimeline::from_samples(stroke.samples.iter().copied());
+    let reconstructed_path =
+        StrokeReconstructedPath::from_timeline(&timeline, StrokeReconstructionPolicy::identity());
+    let dab_stream = brush_dab_stream_for_path(&reconstructed_path, brush);
+    for dab in dab_stream.dabs() {
+        rasterize_dab(payload, context, *dab);
     }
 }
 
@@ -824,76 +809,57 @@ fn rasterize_stroke(
 struct StrokeRasterContext<'a> {
     tile_bounds: CanvasRect,
     stroke: &'a StrokeRecord,
-    brush: &'a BrushDescriptor,
     policy: DrawingTileFormationPolicy,
 }
 
-#[derive(Clone, Copy)]
-struct DabRaster {
-    center: CanvasCoordinate,
-    radius: f64,
-    opacity: f32,
-    flow: f32,
-    edge_softness: f32,
+fn brush_dab_stream_for_path(
+    path: &StrokeReconstructedPath,
+    brush: &BrushDescriptor,
+) -> BrushDabStream {
+    let mut dabs = Vec::new();
+    match path.samples() {
+        [] => {}
+        [sample] => dabs.push(brush_dab_for_sample(brush, sample)),
+        samples => {
+            for (index, pair) in samples.windows(2).enumerate() {
+                append_segment_dabs(&mut dabs, brush, &pair[0], &pair[1], index == 0);
+            }
+        }
+    }
+    BrushDabStream::new(dabs)
 }
 
-fn rasterize_segment_dabs(
-    payload: &mut DrawingInkTilePayload,
-    context: StrokeRasterContext<'_>,
+fn brush_dab_for_sample(brush: &BrushDescriptor, sample: &StrokeSample) -> BrushDab {
+    BrushDab {
+        center: sample.position,
+        radius: f64::from(sample_size(brush, sample) * 0.5).max(0.5),
+        opacity: sample_opacity(brush, sample),
+        flow: sample_flow(brush, sample),
+        edge_softness: brush.ink.edge_softness,
+    }
+}
+
+fn append_segment_dabs(
+    dabs: &mut Vec<BrushDab>,
+    brush: &BrushDescriptor,
     start: &StrokeSample,
     end: &StrokeSample,
     include_start: bool,
 ) {
-    let brush = context.brush;
-    let start_radius = f64::from(sample_size(brush, start) * 0.5).max(0.5);
-    let end_radius = f64::from(sample_size(brush, end) * 0.5).max(0.5);
-    let max_radius = start_radius.max(end_radius);
-    let segment_bounds = CanvasRect::new(
-        CanvasCoordinate::new(
-            start.position.x.min(end.position.x) - max_radius,
-            start.position.y.min(end.position.y) - max_radius,
-        ),
-        CanvasCoordinate::new(
-            start.position.x.max(end.position.x) + max_radius,
-            start.position.y.max(end.position.y) + max_radius,
-        ),
-    );
-    if !rects_intersect(segment_bounds, context.tile_bounds) {
-        return;
-    }
-
     let dx = end.position.x - start.position.x;
     let dy = end.position.y - start.position.y;
     let length = (dx * dx + dy * dy).sqrt();
     if length <= f64::EPSILON {
         if include_start {
-            rasterize_dab(
-                payload,
-                context,
-                DabRaster {
-                    center: start.position,
-                    radius: start_radius,
-                    opacity: sample_opacity(brush, start),
-                    flow: sample_flow(brush, start),
-                    edge_softness: brush.ink.edge_softness,
-                },
-            );
+            dabs.push(brush_dab_for_sample(brush, start));
         }
         return;
     }
 
-    let clip_bounds = expanded_rect(context.tile_bounds, max_radius);
-    let Some((clip_t0, clip_t1)) =
-        segment_rect_parameter_range(start.position, end.position, clip_bounds)
-    else {
-        return;
-    };
     let spacing = dab_spacing(brush, start, end);
     let min_index = if include_start { 0 } else { 1 };
-    let first_index = ((clip_t0 * length - 0.000_001) / spacing)
-        .ceil()
-        .max(min_index as f64) as u32;
-    let last_index = ((clip_t1 * length + 0.000_001) / spacing).floor() as u32;
+    let first_index = min_index;
+    let last_index = (length / spacing).floor() as u32;
     let mut drew_end = false;
     for index in first_index..=last_index {
         let distance = (f64::from(index) * spacing).min(length);
@@ -901,21 +867,19 @@ fn rasterize_segment_dabs(
         if (1.0 - t).abs() <= 0.000_001 {
             drew_end = true;
         }
-        rasterize_dab_at_t(payload, context, start, end, t);
+        dabs.push(brush_dab_at_t(brush, start, end, t));
     }
-    if clip_t1 >= 1.0 - 0.000_001 && !drew_end {
-        rasterize_dab_at_t(payload, context, start, end, 1.0);
+    if !drew_end {
+        dabs.push(brush_dab_at_t(brush, start, end, 1.0));
     }
 }
 
-fn rasterize_dab_at_t(
-    payload: &mut DrawingInkTilePayload,
-    context: StrokeRasterContext<'_>,
+fn brush_dab_at_t(
+    brush: &BrushDescriptor,
     start: &StrokeSample,
     end: &StrokeSample,
     t: f64,
-) {
-    let brush = context.brush;
+) -> BrushDab {
     let center = CanvasCoordinate::new(
         lerp_f64(start.position.x, end.position.x, t),
         lerp_f64(start.position.y, end.position.y, t),
@@ -927,23 +891,19 @@ fn rasterize_dab_at_t(
     );
     let opacity = lerp_f32(sample_opacity(brush, start), sample_opacity(brush, end), t);
     let flow = lerp_f32(sample_flow(brush, start), sample_flow(brush, end), t);
-    rasterize_dab(
-        payload,
-        context,
-        DabRaster {
-            center,
-            radius,
-            opacity,
-            flow,
-            edge_softness: brush.ink.edge_softness,
-        },
-    );
+    BrushDab {
+        center,
+        radius,
+        opacity,
+        flow,
+        edge_softness: brush.ink.edge_softness,
+    }
 }
 
 fn rasterize_dab(
     payload: &mut DrawingInkTilePayload,
     context: StrokeRasterContext<'_>,
-    dab: DabRaster,
+    dab: BrushDab,
 ) {
     let radius = dab.radius.max(0.5);
     let min_x = dab.center.x - radius;
@@ -1052,52 +1012,6 @@ fn dab_spacing(brush: &BrushDescriptor, start: &StrokeSample, end: &StrokeSample
     let start_size = f64::from(sample_size(brush, start)).max(1.0);
     let end_size = f64::from(sample_size(brush, end)).max(1.0);
     (start_size.min(end_size) * 0.25).clamp(0.75, 8.0)
-}
-
-fn expanded_rect(rect: CanvasRect, amount: f64) -> CanvasRect {
-    CanvasRect::new(
-        CanvasCoordinate::new(rect.min.x - amount, rect.min.y - amount),
-        CanvasCoordinate::new(rect.max.x + amount, rect.max.y + amount),
-    )
-}
-
-fn segment_rect_parameter_range(
-    start: CanvasCoordinate,
-    end: CanvasCoordinate,
-    rect: CanvasRect,
-) -> Option<(f64, f64)> {
-    let dx = end.x - start.x;
-    let dy = end.y - start.y;
-    let mut t0 = 0.0;
-    let mut t1 = 1.0;
-    clip_segment_axis(-dx, start.x - rect.min.x, &mut t0, &mut t1)?;
-    clip_segment_axis(dx, rect.max.x - start.x, &mut t0, &mut t1)?;
-    clip_segment_axis(-dy, start.y - rect.min.y, &mut t0, &mut t1)?;
-    clip_segment_axis(dy, rect.max.y - start.y, &mut t0, &mut t1)?;
-    Some((t0, t1))
-}
-
-fn clip_segment_axis(p: f64, q: f64, t0: &mut f64, t1: &mut f64) -> Option<()> {
-    if p.abs() <= f64::EPSILON {
-        return (q >= 0.0).then_some(());
-    }
-    let r = q / p;
-    if p < 0.0 {
-        if r > *t1 {
-            return None;
-        }
-        if r > *t0 {
-            *t0 = r;
-        }
-    } else {
-        if r < *t0 {
-            return None;
-        }
-        if r < *t1 {
-            *t1 = r;
-        }
-    }
-    Some(())
 }
 
 fn lerp_f64(start: f64, end: f64, t: f64) -> f64 {

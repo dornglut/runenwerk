@@ -41,7 +41,11 @@ pub use ratification::{
     DrawingIssueCode, DrawingIssueSubject, DrawingRatificationReport, ratify_drawing_document,
 };
 pub use simulation::FormationVersion;
-pub use stroke::{ColorRgba, PaintTarget, StrokeRecord, StrokeSample, StrokeToolKind, StylusTilt};
+pub use stroke::{
+    BrushDab, BrushDabStream, ColorRgba, PaintTarget, StrokeReconstructedPath,
+    StrokeReconstructionPolicy, StrokeRecord, StrokeSample, StrokeSampleTimeline, StrokeToolKind,
+    StylusTilt,
+};
 pub use tile::{
     CanvasCoordinate, CanvasRect, CanvasTileId, DEFAULT_FINAL_INK_TILE_PIXEL_HEIGHT,
     DEFAULT_FINAL_INK_TILE_PIXEL_WIDTH, DEFAULT_INK_TILE_PIXEL_HEIGHT,
