@@ -51,6 +51,21 @@ package "PT-SDF-OW SDF-first open-world playable vertical" {
 
 }
 
+package "PT-ECS-FABRIC ECS Execution Fabric Platform" {
+  component "PM-ECS-FABRIC-001 Audit and Product Baseline\nkind=design\nstate=completed\nWR=WR-002, WR-023" as PM_ECS_FABRIC_001 <<completed>>
+
+  component "PM-ECS-FABRIC-002 Runtime Convergence and Diagnostics\nkind=implementation\nstate=active\nWR=WR-002" as PM_ECS_FABRIC_002 <<active>>
+
+  component "PM-ECS-FABRIC-003 Runtime Product Job Substrate Hardening\nkind=implementation\nstate=designing\nWR=WR-001, WR-002" as PM_ECS_FABRIC_003 <<designing>>
+
+  component "PM-ECS-FABRIC-004 Scheduler Plan Ergonomics\nkind=implementation\nstate=designing\nWR=WR-002, WR-023" as PM_ECS_FABRIC_004 <<designing>>
+
+  component "PM-ECS-FABRIC-005 ECS Parallel Execution Readiness\nkind=design\nstate=designing\nWR=WR-023" as PM_ECS_FABRIC_005 <<designing>>
+
+  component "PM-ECS-FABRIC-006 ECS Parallel Execution Implementation\nkind=implementation\nstate=blocked\nWR=WR-023" as PM_ECS_FABRIC_006 <<blocked>>
+
+}
+
 package "PT-WB-CAP Capability Workbench Platform" {
   component "PM-WB-CAP-001 Clean Registry-Owned Workbench Foundation\nkind=implementation\nstate=completed\nWR=WR-031, WR-032, WR-033, WR-034, WR-035, WR-036" as PM_WB_CAP_001 <<completed>>
 
@@ -83,6 +98,29 @@ package "PT-RENDER-PG Render Product Graph Platform" {
 
 }
 
+package "PT-UI-DESIGN UI Designer And Interface Lab Platform" {
+  component "PM-UI-DESIGN-001 UI Designer Doctrine And Target Boundary Ratification\nkind=design\nstate=active\nWR=N/A" as PM_UI_DESIGN_001 <<active>>
+
+  component "PM-UI-DESIGN-002 Canonical UI IR And Composition Pipeline\nkind=design\nstate=designing\nWR=N/A" as PM_UI_DESIGN_002 <<designing>>
+
+  component "PM-UI-DESIGN-003 Target Projection Profiles\nkind=design\nstate=designing\nWR=N/A" as PM_UI_DESIGN_003 <<designing>>
+
+  component "PM-UI-DESIGN-004 Visual Layout And Interface Composition\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_DESIGN_004 <<designing>>
+
+  component "PM-UI-DESIGN-005 Theme Tokens Modes Skins And State Variants\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_DESIGN_005 <<designing>>
+
+  component "PM-UI-DESIGN-006 Component Surface And Widget Recipe Library\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_DESIGN_006 <<designing>>
+
+  component "PM-UI-DESIGN-007 View-Model Capability And Intent Binding\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_DESIGN_007 <<designing>>
+
+  component "PM-UI-DESIGN-008 Live Preview Fixtures Scenarios And Target Matrix\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_DESIGN_008 <<designing>>
+
+  component "PM-UI-DESIGN-009 Persistence Migration Diff And Activation\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_DESIGN_009 <<designing>>
+
+  component "PM-UI-DESIGN-010 Production Readiness And Evidence\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_DESIGN_010 <<designing>>
+
+}
+
 PM_SDF_OW_001 -down-> PM_SDF_OW_002 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_003 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_004 : production prerequisite
@@ -96,6 +134,12 @@ PM_SDF_OW_006 -down-> PM_SDF_OW_008 : production prerequisite
 PM_SDF_OW_005 -down-> PM_SDF_OW_009 : production prerequisite
 PM_SDF_OW_007 -down-> PM_SDF_OW_009 : production prerequisite
 PM_SDF_OW_008 -down-> PM_SDF_OW_009 : production prerequisite
+PM_ECS_FABRIC_001 -down-> PM_ECS_FABRIC_002 : production prerequisite
+PM_ECS_FABRIC_002 -down-> PM_ECS_FABRIC_003 : production prerequisite
+PM_ECS_FABRIC_002 -down-> PM_ECS_FABRIC_004 : production prerequisite
+PM_ECS_FABRIC_003 -down-> PM_ECS_FABRIC_005 : production prerequisite
+PM_ECS_FABRIC_004 -down-> PM_ECS_FABRIC_005 : production prerequisite
+PM_ECS_FABRIC_005 -down-> PM_ECS_FABRIC_006 : production prerequisite
 PM_WB_CAP_001 -down-> PM_WB_CAP_002 : production prerequisite
 PM_WB_CAP_001 -down-> PM_WB_CAP_003 : production prerequisite
 PM_WB_CAP_002 -down-> PM_WB_CAP_003 : production prerequisite
@@ -114,5 +158,24 @@ PM_RENDER_PG_005 -down-> PM_RENDER_PG_007 : production prerequisite
 PM_RENDER_PG_005 -down-> PM_RENDER_PG_008 : production prerequisite
 PM_RENDER_PG_006 -down-> PM_RENDER_PG_008 : production prerequisite
 PM_RENDER_PG_007 -down-> PM_RENDER_PG_008 : production prerequisite
+PM_UI_DESIGN_001 -down-> PM_UI_DESIGN_002 : production prerequisite
+PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_003 : production prerequisite
+PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_004 : production prerequisite
+PM_UI_DESIGN_003 -down-> PM_UI_DESIGN_004 : production prerequisite
+PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_005 : production prerequisite
+PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_006 : production prerequisite
+PM_UI_DESIGN_005 -down-> PM_UI_DESIGN_006 : production prerequisite
+PM_UI_DESIGN_003 -down-> PM_UI_DESIGN_007 : production prerequisite
+PM_UI_DESIGN_004 -down-> PM_UI_DESIGN_007 : production prerequisite
+PM_UI_DESIGN_003 -down-> PM_UI_DESIGN_008 : production prerequisite
+PM_UI_DESIGN_004 -down-> PM_UI_DESIGN_008 : production prerequisite
+PM_UI_DESIGN_007 -down-> PM_UI_DESIGN_008 : production prerequisite
+PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_009 : production prerequisite
+PM_UI_DESIGN_008 -down-> PM_UI_DESIGN_009 : production prerequisite
+PM_UI_DESIGN_005 -down-> PM_UI_DESIGN_010 : production prerequisite
+PM_UI_DESIGN_006 -down-> PM_UI_DESIGN_010 : production prerequisite
+PM_UI_DESIGN_007 -down-> PM_UI_DESIGN_010 : production prerequisite
+PM_UI_DESIGN_008 -down-> PM_UI_DESIGN_010 : production prerequisite
+PM_UI_DESIGN_009 -down-> PM_UI_DESIGN_010 : production prerequisite
 
 @enduml

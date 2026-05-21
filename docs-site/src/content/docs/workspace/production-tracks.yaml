@@ -1,7 +1,7 @@
 version: 1
 production:
   title: Runenwerk Production Tracks
-  last_reviewed: "2026-05-17"
+  last_reviewed: "2026-05-21"
   owner: workspace
 render:
   production_index: docs-site/src/content/docs/workspace/production-track-index.md
@@ -253,6 +253,175 @@ tracks:
         acceptance_criteria:
           - A player can move through an SDF field, observe day/night, affect vegetation, approach prefabs, see water/wetness, encounter enemies, and inspect diagnostics.
           - LOD, freshness, fallback, residency, and product-lineage diagnostics are stable enough for continued production.
+  - id: PT-ECS-FABRIC
+    title: ECS Execution Fabric Platform
+    state: active
+    owner: ecs
+    strategic_goal: Make ECS, scheduler planning, and runtime product jobs deterministic, inspectable, ergonomic, and ready for future parallel execution without moving worker-thread ownership into domain crates.
+    success_criteria:
+      - ECS APIs make live state, systems, deferred commands, queries, messaging, snapshots, and runtime plans easy to inspect and use correctly.
+      - Scheduler planning exposes deterministic phases, waves, barriers, conflicts, and diagnostics through non-panicking APIs suitable for tools and production debugging.
+      - Runtime jobs remain the active multithreaded path, with serial fallback, stale suppression, panic capture, backpressure diagnostics, and barrier-based product/query publication.
+      - Public ECS parallel execution is introduced only after accepted design, deterministic command merge, blocked-parallel diagnostics, and serial/parallel equivalence tests.
+    milestones:
+      - id: PM-ECS-FABRIC-001
+        title: Audit and Product Baseline
+        kind: design
+        state: completed
+        goal: Audit ECS, scheduler, multithreading, and runtime jobs against repository architecture and define the production sequence.
+        outcome: The ECS execution-fabric audit identifies ownership, current implementation state, friction, gaps, future features, redesign candidates, and production-track sequencing.
+        dependencies: []
+        roadmap_links:
+          - WR-002
+          - WR-023
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/execution-fabric-and-product-jobs-design.md
+            required_status: accepted
+            reason: The ECS production track must preserve the accepted ECS/scheduler/runtime ownership split.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ecs-parallel-system-execution-design.md
+            required_status: active
+            reason: Parallel ECS work is intentionally design-first and must not be treated as accepted implementation policy yet.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md
+            required_status: completed
+            reason: PM-ECS-FABRIC-001 requires a completed code-grounded audit.
+        acceptance_criteria:
+          - ECS, scheduler, runtime jobs, product barriers, and multithreading ownership are mapped to exact modules and functions.
+          - Friction, gaps, future features, ergonomics, architecture risks, redesign candidates, and refactors are recorded as production evidence.
+          - The production track sequences WR-002 diagnostics/convergence work before WR-023 parallel execution implementation.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - The audit defines the production path but does not itself close runtime convergence, stale audit-doc drift, job-substrate hardening, or ECS parallel readiness gaps.
+          - ECS parallel execution remains blocked on an accepted design/ADR and serial-equivalence evidence.
+        completion_audit: docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md
+      - id: PM-ECS-FABRIC-002
+        title: Runtime Convergence and Diagnostics
+        kind: implementation
+        state: active
+        goal: Close the remaining ECS/runtime convergence and diagnostic gaps that directly support product jobs, snapshots, and production debugging.
+        outcome: Runtime lifecycle finalization, plan inspection, conflict diagnostics, and docs evidence are current, non-panicking, and usable from tooling.
+        dependencies:
+          - PM-ECS-FABRIC-001
+        roadmap_links:
+          - WR-002
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/execution-fabric-and-product-jobs-design.md
+            required_status: accepted
+            reason: Runtime convergence must keep product jobs and barriers in engine runtime ownership.
+          - kind: doc
+            path: docs-site/src/content/docs/net/ecs-runtime-prioritized-roadmap.md
+            required_status: active
+            reason: WR-002 convergence scope is documented in the ECS runtime prioritized roadmap.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md
+            required_status: completed
+            reason: Implementation should work from the current code-grounded audit.
+        evidence_gates: []
+        acceptance_criteria:
+          - "`domain/scheduler/src/plan.rs::ExecutionScheduler` exposes result-returning plan inspection APIs and ECS callers no longer rely on panic/hidden-error inspection for production tooling."
+          - "`engine/src/runtime/frame_lifecycle.rs::run_runtime_frame` remains the canonical frame finalization path, with nested or overlay runtime finalization ownership explicitly documented or refactored."
+          - Stale ECS runtime audit docs are refreshed or archived so roadmap and production planning reference current evidence.
+          - ECS architecture docs accurately describe current system arity and named parameter diagnostics.
+      - id: PM-ECS-FABRIC-003
+        title: Runtime Product Job Substrate Hardening
+        kind: implementation
+        state: designing
+        goal: Harden the runtime job executor and migrate suitable product-family workloads onto the accepted product-job substrate.
+        outcome: Runtime product jobs are the obvious worker-backed path for product computation, with clear fallbacks and diagnostics.
+        dependencies:
+          - PM-ECS-FABRIC-002
+        roadmap_links:
+          - WR-001
+          - WR-002
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/execution-fabric-and-product-jobs-design.md
+            required_status: accepted
+            reason: Product job hardening must keep worker execution and product publication in engine runtime ownership.
+          - kind: doc
+            path: docs-site/src/content/docs/engine/roadmaps/runtime-product-job-executor-roadmap.md
+            required_status: active
+            reason: Runtime job executor sequencing and deferred scope are documented in the engine roadmap.
+        evidence_gates: []
+        acceptance_criteria:
+          - Runtime job executor construction reports worker-spawn failure or falls back to serial execution instead of panicking.
+          - Product-job authoring helpers make common ECS-to-runtime-job workflows discoverable without moving worker-thread ownership into `domain/ecs`.
+          - World build, import, and field product jobs migrate only when their product descriptors, generations, stale suppression, and barrier publication contracts are explicit.
+      - id: PM-ECS-FABRIC-004
+        title: Scheduler Plan Ergonomics
+        kind: implementation
+        state: designing
+        goal: Improve scheduler plan APIs, access identity, frame-level inspection, and barrier policy without weakening deterministic serial behavior.
+        outcome: Scheduler plans are easier to inspect, safer to compose, and ready for richer product/job scheduling diagnostics.
+        dependencies:
+          - PM-ECS-FABRIC-002
+        roadmap_links:
+          - WR-002
+          - WR-023
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/execution-fabric-and-product-jobs-design.md
+            required_status: accepted
+            reason: Scheduler ergonomics must preserve deterministic barriers and product publication ownership.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md
+            required_status: completed
+            reason: Scheduler ergonomics should close the code-grounded audit findings.
+        evidence_gates: []
+        acceptance_criteria:
+          - Scheduler plan inspection distinguishes rebuild errors from missing schedule labels.
+          - Frame-level runtime inspection composes schedule phases, fixed-step loops, and publication barriers.
+          - Barrier insertion can become policy-driven while the current safe per-wave default remains available.
+          - Access keys can represent same-type distinct lanes when future queues, streams, or snapshots require it.
+      - id: PM-ECS-FABRIC-005
+        title: ECS Parallel Execution Readiness
+        kind: design
+        state: designing
+        goal: Promote ECS parallel execution from active design to accepted implementation contract only after the safety model is complete.
+        outcome: Parallel ECS has accepted ownership, API, safety, command-merge, diagnostics, fallback, and validation contracts before code changes make it public.
+        dependencies:
+          - PM-ECS-FABRIC-003
+          - PM-ECS-FABRIC-004
+        roadmap_links:
+          - WR-023
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ecs-parallel-system-execution-design.md
+            required_status: accepted
+            reason: Public parallel ECS execution requires an accepted design, not an active proposal.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md
+            required_status: completed
+            reason: Parallel readiness must address the current audit findings.
+        evidence_gates: []
+        acceptance_criteria:
+          - The accepted design defines `Send + Sync` system parameter boundaries, resource access policy, per-wave command queues, deterministic merge ordering, and serial fallback.
+          - Blocked-parallel diagnostics explain why a wave cannot run in parallel.
+          - Serial/parallel equivalence tests are specified before implementation begins.
+      - id: PM-ECS-FABRIC-006
+        title: ECS Parallel Execution Implementation
+        kind: implementation
+        state: blocked
+        goal: Implement parallel ECS waves only after the accepted readiness contract exists.
+        outcome: ECS waves can run in parallel where safe, while serial execution remains permanent and behavior-equivalent.
+        dependencies:
+          - PM-ECS-FABRIC-005
+        roadmap_links:
+          - WR-023
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ecs-parallel-system-execution-design.md
+            required_status: accepted
+            reason: Implementation is blocked until ECS parallel execution is accepted.
+        evidence_gates: []
+        acceptance_criteria:
+          - Parallel waves use thread-safe system parameters and per-wave command queues.
+          - Deferred command merge order is deterministic and covered by tests.
+          - Serial and parallel runs are equivalent across conflict-heavy, deferred-command-heavy, product-barrier, and failure cases.
+          - Runtime diagnostics identify parallelized, serialized, and blocked systems.
   - id: PT-WB-CAP
     title: Capability Workbench Platform
     state: active
@@ -616,3 +785,218 @@ tracks:
           - Renderer diagnostics expose prepared selections, feature contributions, target aliases, dynamic targets, history, backend capability failures, timing, and fallback state without leaking mutable backend handles.
           - Examples and inspection docs let product teams understand complex renderer behavior without reading backend internals first.
           - Performance budgets, capture/replay policy, and closeout evidence are sufficient for production renderer work.
+  - id: PT-UI-DESIGN
+    title: UI Designer And Interface Lab Platform
+    state: active
+    owner: editor
+    strategic_goal: Make UI/interface authoring a generic, definition-driven, target-profile-aware Designer/Lab platform for editor/workbench UI and game-runtime UI without moving domain semantics into the Designer.
+    success_criteria:
+      - Designer documents remain source truth only for UI/interface definitions.
+      - Editor/workbench and game-runtime targets project from shared Canonical UI IR through explicit target profiles.
+      - Runtime projections are reproducible from authored definitions, target profile, policy, fixtures, and validated composition.
+      - Visual editing round-trips through Canonical UI IR with stable ids and reviewable textual diffs.
+      - Preview, diagnostics, migration, accessibility, compatibility, performance, and golden evidence are first-class.
+    milestones:
+      - id: PM-UI-DESIGN-001
+        title: UI Designer Doctrine And Target Boundary Ratification
+        kind: design
+        state: active
+        goal: Ratify the generic UI/interface Designer doctrine, target-profile boundary, and Workbench-versus-game-runtime split before implementation work begins.
+        outcome: The active design defines source truth, domain boundaries, target profiles, and planning-only constraints without changing runtime behavior.
+        dependencies: []
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: active
+            reason: The doctrine slice requires an active canonical design before it can guide production sequencing.
+        evidence_gates: []
+        acceptance_criteria:
+          - The active canonical design exists and uses the generic UI Designer And Interface Lab Platform framing.
+          - Workbench is treated as one target profile and game-runtime UI is treated as a separate target profile.
+          - Designer documents are source truth only for UI/interface definitions and not for editor, gameplay, render, material, scene, asset, simulation, save-game, network, or project truth.
+          - Production, roadmap, docs, and planning validators pass without changing WR roadmap execution state.
+      - id: PM-UI-DESIGN-002
+        title: Canonical UI IR And Composition Pipeline
+        kind: design
+        state: designing
+        goal: Define authored UI documents, Canonical UI IR, deterministic composition, validation, migration, and projection planning.
+        outcome: Visual and textual authoring converge through one typed, inspectable, versioned UI definition pipeline.
+        dependencies:
+          - PM-UI-DESIGN-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Canonical IR and composition implementation requires the generic source-truth boundary to be accepted.
+        evidence_gates: []
+        acceptance_criteria:
+          - Authored documents parse through schema/version checks into Canonical UI IR before composition or activation.
+          - Composition has deterministic strength ordering for base libraries, recipes, target defaults, project/game/editor overrides, skins, themes, platform overrides, accessibility modes, localization modes, user preferences, preview overrides, and host/runtime policy overlays.
+          - Conflict resolution is inspectable and reports winning source, losing source, affected target profile, owning domain, and activation impact.
+          - Visual edits round-trip through Canonical UI IR with stable ids and reviewable textual diffs.
+      - id: PM-UI-DESIGN-003
+        title: Target Projection Profiles
+        kind: design
+        state: designing
+        goal: Define target projection profiles for editor/workbench UI and game-runtime UI without coupling game UI to editor shell ownership.
+        outcome: Editor Workbench Projection and Game Runtime UI Projection consume shared Canonical UI IR through explicit target-profile rules.
+        dependencies:
+          - PM-UI-DESIGN-002
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Target projection work requires accepted ownership for editor and game-runtime UI profiles.
+        evidence_gates: []
+        acceptance_criteria:
+          - Editor/workbench projection rules cover profiles, suites, panels, docking/splits/tabs, menus, shortcuts, tool surfaces, provider families, host policy, capability gates, editor command routing, diagnostics, and tool-lab surfaces.
+          - Game-runtime projection rules cover HUD layers, bars, inventory/equipment, hotbars, quests, dialogue, minimaps, damage numbers, nameplates, boss frames, world-space UI, split-screen UI, safe areas, platform prompt glyphs, accessibility modes, and game-runtime performance/readability budgets.
+          - Runtime projections are reproducible from authored definitions, target profile, policy, fixtures, and validated composition.
+          - Preview/runtime/app/provider layers consume projection output and cannot become source truth.
+      - id: PM-UI-DESIGN-004
+        title: Visual Layout And Interface Composition
+        kind: implementation
+        state: designing
+        goal: Implement visual layout authoring over Canonical UI IR and deterministic target-profile composition.
+        outcome: Designers can author layouts visually while preserving typed definitions, stable ids, and reviewable textual diffs.
+        dependencies:
+          - PM-UI-DESIGN-002
+          - PM-UI-DESIGN-003
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Visual layout implementation must follow accepted Canonical UI IR and target-profile composition rules.
+        evidence_gates: []
+        acceptance_criteria:
+          - Visual layout edits preserve stable ids and deterministic formatting.
+          - Layout/composition diagnostics identify source location, affected target/profile/host/suite, owning domain, severity, activation impact, and suggested fix.
+          - Preview-only edits cannot activate unless they produce a valid Canonical UI IR diff.
+      - id: PM-UI-DESIGN-005
+        title: Theme Tokens Modes Skins And State Variants
+        kind: implementation
+        state: designing
+        goal: Implement deterministic styling through primitive, semantic, component, state, mode, theme, skin, platform, and accessibility token layers.
+        outcome: Style resolution is reproducible, inspectable, target-profile-aware, and guarded by typed token/theme diagnostics.
+        dependencies:
+          - PM-UI-DESIGN-002
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Styling implementation must follow accepted Canonical UI IR and composition semantics.
+        evidence_gates: []
+        acceptance_criteria:
+          - Token alias graphs, token modes, themes, skins, platform overrides, and accessibility overrides resolve deterministically.
+          - Token cycles, missing aliases, incompatible modes, and accessibility override conflicts fail closed with typed diagnostics.
+          - State variants can be previewed and evidenced across editor/workbench and game-runtime target profiles.
+      - id: PM-UI-DESIGN-006
+        title: Component Surface And Widget Recipe Library
+        kind: implementation
+        state: designing
+        goal: Build a reusable component, surface, and widget recipe library over shared UI primitives and target-profile declarations.
+        outcome: Editor/workbench and game-runtime UI reuse common recipes without sharing domain semantics or direct mutation authority.
+        dependencies:
+          - PM-UI-DESIGN-002
+          - PM-UI-DESIGN-005
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Component and widget implementation must follow accepted UI definition and target-profile ownership.
+        evidence_gates: []
+        acceptance_criteria:
+          - Component recipes declare inputs, tokens, state variants, accessibility metadata, layout behavior, and target-profile compatibility.
+          - Widget and surface declarations do not own editor, gameplay, render, material, scene, asset, simulation, save-game, network, or project truth.
+          - Unsupported target-profile features fail closed with provider/surface or capability diagnostics.
+      - id: PM-UI-DESIGN-007
+        title: View-Model Capability And Intent Binding
+        kind: implementation
+        state: designing
+        goal: Implement read-only domain-owned view-model bindings and validated command/intent declarations without direct domain mutation.
+        outcome: UI definitions can display domain-owned state and emit validated intents while domains retain semantic authority.
+        dependencies:
+          - PM-UI-DESIGN-003
+          - PM-UI-DESIGN-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Binding implementation must follow accepted source-truth, capability, and target-profile rules.
+        evidence_gates: []
+        acceptance_criteria:
+          - UI definitions bind only to read-only domain-owned view models.
+          - Editor command, menu, shortcut, and game UI intents are validated before activation.
+          - Denied capabilities and command/shortcut/focus conflicts fail closed with typed diagnostics.
+          - UI definitions cannot mutate domain truth directly.
+      - id: PM-UI-DESIGN-008
+        title: Live Preview Fixtures Scenarios And Target Matrix
+        kind: implementation
+        state: designing
+        goal: Add target-profile-aware fixtures, scenarios, host/runtime policy matrices, and replayable preview evidence.
+        outcome: Designer previews prove empty, loading, error, denied, offline, heavy, accessibility, performance, and interaction behavior across targets.
+        dependencies:
+          - PM-UI-DESIGN-003
+          - PM-UI-DESIGN-004
+          - PM-UI-DESIGN-007
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Preview implementation must follow accepted target projection, binding, and diagnostics boundaries.
+        evidence_gates: []
+        acceptance_criteria:
+          - Fixtures cover empty, loading, error, denied, offline, and heavy states.
+          - Replayable scenarios define expected diagnostics, UI state transitions, and validated intent emissions.
+          - Host/runtime policy matrices prove fail-closed behavior for denied capabilities and unsupported target-profile features.
+      - id: PM-UI-DESIGN-009
+        title: Persistence Migration Diff And Activation
+        kind: implementation
+        state: designing
+        goal: Implement deterministic persistence, migration, diff, and activation gates for authored UI/interface definitions.
+        outcome: UI definition changes are reviewable, migratable, dry-runnable, and fail closed before runtime activation.
+        dependencies:
+          - PM-UI-DESIGN-002
+          - PM-UI-DESIGN-008
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Persistence and activation implementation must follow accepted Canonical UI IR, migration, and evidence rules.
+        evidence_gates: []
+        acceptance_criteria:
+          - Schema/version failures, incompatible migrations, and unknown unsupported fields fail closed before activation.
+          - Migration dry-runs produce source-mapped reports and do not mutate active definitions.
+          - Persisted definitions preserve compatible unknown fields where possible and always produce reviewable textual diffs.
+      - id: PM-UI-DESIGN-010
+        title: Production Readiness And Evidence
+        kind: hardening
+        state: designing
+        goal: Harden diagnostics, inspection, examples, visual regression, interaction, accessibility, migration, compatibility, performance, and golden evidence.
+        outcome: UI/interface authoring is inspectable and validated enough for production editor/workbench and game-runtime UI work.
+        dependencies:
+          - PM-UI-DESIGN-005
+          - PM-UI-DESIGN-006
+          - PM-UI-DESIGN-007
+          - PM-UI-DESIGN-008
+          - PM-UI-DESIGN-009
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: accepted
+            reason: Production readiness must follow the accepted generic UI/interface Designer platform boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - Golden projection snapshots, visual captures, accessibility reports, migration reports, and performance budget reports are generated for relevant target profiles.
+          - Diagnostics and inspection DTOs let authors understand composition, style, binding, capability, provider, accessibility, performance, migration, and compatibility failures without runtime internals.
+          - Production closeout evidence proves the Designer remains definition-driven and does not own domain semantics.

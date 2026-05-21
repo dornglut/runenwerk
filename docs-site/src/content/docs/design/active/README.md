@@ -32,6 +32,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Editor UI Runtime V2 And Interaction Formation Design](editor-ui-runtime-v2-and-interaction-formation-design.md)
 - [Editor UI Popup Adornment Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
+- [UI Designer And Interface Lab Platform](ui-designer-interface-lab-platform-design.md)
 
 ### Engine Runtime
 
