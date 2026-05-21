@@ -1,16 +1,18 @@
 ---
 title: Editor Native Multi-Window Presentation Design
-description: Design for Window > New Window, independent OS windows, multi-swapchain rendering, second-monitor workflows, and shared editor-session editing.
-status: active
+description: Accepted design for Window > New Window, independent OS windows, multi-swapchain rendering, second-monitor workflows, and shared editor-session editing.
+status: accepted
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-21
 related_designs:
+  - ./render-product-graph-platform-design.md
+  - ./product-surface-platform-hardening-design.md
   - ../implemented/editor-workspace-document-mode-panel-architecture.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
+  - ../active/editor-ui-workspace-tool-surface-architecture.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
-  - ./workspace-viewport-expression-upgrade-design.md
+  - ../active/workspace-viewport-expression-upgrade-design.md
 related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
@@ -24,9 +26,53 @@ related:
 
 ## Status
 
-Active design for a future editor windowing milestone.
+This is the accepted design contract for `PM-RENDER-PG-006`.
+
+It accepts the native multi-window and multi-surface presentation direction
+before implementation work starts. It does not mark `PM-RENDER-PG-006`
+complete, does not assign `completion_quality`, and does not authorize product
+code changes by itself. Implementation still requires `WR-009` to be legal for
+the planned slice, `task production:plan -- --milestone PM-RENDER-PG-006 --roadmap WR-009`,
+focused validation, closeout evidence, and a rerun of
+`task ai:goal -- --track PT-RENDER-PG`.
+
+If an implementation slice needs files outside the legal `WR-009` write scopes,
+the roadmap row must be repaired through the normal roadmap workflow before
+code changes start.
 
 This design makes native OS windows a first-class editor capability: the user can choose `Window > New Window`, move the new window to another monitor, and keep editing the same project/session through a separate workspace root with its own swapchain, input focus, DPI scale, and render surface lifecycle.
+
+## Locked Decisions
+
+- Native OS windows are real platform windows, not floating hosts inside the
+  main editor UI composition.
+- `EditorWindowId` is editor-owned, `NativeWindowId` is engine-runtime-owned,
+  and `RenderSurfaceId` is render-runtime-owned.
+- The app owns the binding between logical editor windows, native runtime
+  windows, and render surfaces.
+- Editor-domain state must not store native handles, swapchains, backend
+  surface objects, or render-runtime private handles.
+- Generic engine/runtime APIs must not depend on editor concepts such as
+  `EditorWindowId`, workspace roots, panels, tabs, documents, or tool surfaces.
+- Render frames, prepare packets, submit packets, presentation, surface loss,
+  resize, redraw, and diagnostics are scoped by native window or render surface
+  identity.
+- Submit and present APIs must make cross-surface presentation mistakes
+  structurally difficult; singleton active-surface state is not an acceptable
+  final implementation shape.
+- Viewport and preview product targets remain viewport/product-owned. Native
+  windows decide presentation surface, not product truth.
+- The renderer must not infer product selection, source truth, freshness,
+  fallback legality, authority, rebuild policy, residency policy, material
+  semantics, or document semantics.
+- Each editor window has independent focus, input capture, workspace root,
+  active panel/tab, UI frame, DPI scale, cursor state, redraw state, and surface
+  lifecycle while sharing the authoritative project/session where appropriate.
+- Secondary-window close policy must not close the project unless it is the
+  last project window and the app-level quit policy allows it.
+- ADR review is required before changing global runtime/window ownership,
+  platform event ownership, or render-surface ownership policy beyond the
+  accepted boundary.
 
 ## Goal
 
@@ -57,7 +103,12 @@ The new window is not a fake floating panel inside the main window. It is an ind
 
 ## Current Constraints
 
-Current runtime window state is singleton-shaped:
+The accepted render product graph foundation, contract ergonomics,
+feature-owned contribution path, execution compiler maturity, and
+product-surface hardening provide the product-surface groundwork. PM-006 starts
+after that foundation and must not reopen those completed ownership decisions.
+
+Remaining runtime and presentation state is still singleton-shaped:
 
 - `engine/src/runtime/window.rs::WindowState` represents one window.
 - `engine/src/runtime/platform.rs::PlatformEvent` is not window-scoped.
@@ -65,6 +116,39 @@ Current runtime window state is singleton-shaped:
 - editor workspace state supports tab stacks, split resizing, and floating hosts, but floating hosts are still inside the main UI composition, not native OS windows.
 
 Those are sufficient for a single-window editor and internal floating layouts, but not for `Window > New Window`.
+
+## PM-006 Scope
+
+PM-006 is the production-track milestone that turns accepted design into
+multi-surface presentation capability. Its implementation must stay bounded to
+native window and render-surface presentation mechanics.
+
+In scope:
+
+- logical editor window identity and window-local workspace focus/routing;
+- runtime-native window registry and window-scoped platform events;
+- render surface registry keyed by native window or render surface identity;
+- surface-scoped frame prepare, submit, present, resize, surface-loss recovery,
+  and diagnostics;
+- app-owned binding from `EditorWindowId` to `NativeWindowId` and
+  `RenderSurfaceId`;
+- `Window > New Window` and close/focus policy needed to prove two native
+  editor windows can render and edit the same session;
+- focused viewport/product proof that presentation surface identity is correct.
+
+Out of scope:
+
+- render fragments, fragment hot reload, or data-driven fragment compiler
+  maturity from `PM-RENDER-PG-007`;
+- production-readiness inspection, capture/replay policy, and broad diagnostic
+  hardening from `PM-RENDER-PG-008`;
+- product truth, product selection, freshness, fallback legality, authority,
+  rebuild policy, residency policy, or material lowering;
+- broad product-surface hardening beyond the already completed PM-005 contract;
+- renderer-owned editor/window policy shortcuts;
+- renderer-private handles passed to editor viewport or preview producers;
+- unrelated editor command, persistence, or workspace redesigns that are not
+  required for native multi-window presentation.
 
 ## Ownership Boundaries
 
@@ -225,6 +309,12 @@ NativeWindowId
 
 Window-local UI and app/product surfaces can share underlying product targets when explicitly selected, but normal viewport products remain per viewport instance.
 
+The surface-scoped render packet carries presentation identity. Product-surface
+manifests and prepared render requests carry product/view identity. The bridge
+between them is explicit: a window-local UI frame chooses which prepared
+products to present into that window's render surface without changing the
+ownership or freshness rules for those products.
+
 ## Input And Focus
 
 Platform events must include a native window id:
@@ -271,6 +361,11 @@ Focus is per window. A capture in one window must not consume pointer events in 
 Surface loss, resize, and scale-factor changes are scoped to one native window. Other windows continue rendering. Product target dimensions update only for viewports or surfaces affected by the window-local layout change.
 
 ## Implementation Phases
+
+Each phase must be implemented through one legal bounded roadmap slice at a
+time. The phases are dependency order, not permission to do broad code changes
+without `task production:plan`, roadmap legality, validation, closeout evidence,
+and `task ai:goal` reruns.
 
 ### MW1 - Logical Editor Window Domain
 
@@ -364,14 +459,27 @@ Exit criteria:
 ## Validation
 
 ```text
+task production:plan -- --milestone PM-RENDER-PG-006 --roadmap WR-009
 cargo test -p editor_shell multi_window
 cargo test -p engine window
 cargo test -p engine --test render_multi_surface
 cargo test -p runenwerk_editor window
 cargo test -p runenwerk_editor --test viewport_architecture_guards
 RUNENWERK_ENABLE_GPU_SMOKE=1 RUNENWERK_ENABLE_MACOS_MAIN_THREAD_GPU_SMOKE=1 cargo test -p runenwerk_editor --test viewport_gpu_truth_smoke -- --ignored
-python3 tools/docs/validate_docs.py
+task docs:validate
+task roadmap:render
+task roadmap:validate
+task roadmap:check
+task production:render
+task production:validate
+task production:check
+task planning:validate
+task ai:goal -- --track PT-RENDER-PG
 ```
+
+GPU smoke is required for final runtime proof when the host environment can run
+it. If unavailable, closeout evidence must state that limitation and include
+the strongest deterministic surface-scoping tests that ran.
 
 ## Final Acceptance Criteria
 
@@ -390,3 +498,8 @@ The render product surface foundation bundle is a prerequisite for robust viewpo
 Product surfaces answer: "what texture/product is this viewport or preview presenting?"
 
 Native multi-window answers: "which OS window and swapchain presents this editor workspace UI?"
+
+The two contracts are intentionally separate. PM-006 may route an already
+prepared product surface into a window-local UI frame and render surface, but it
+must not make native windows the owner of product truth or turn render surfaces
+into product selection authorities.

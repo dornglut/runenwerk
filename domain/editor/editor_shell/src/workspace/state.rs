@@ -1509,6 +1509,7 @@ impl WorkspaceState {
     pub fn next_identity_seed(&self) -> WorkspaceIdentitySeed {
         WorkspaceIdentitySeed {
             next_workspace_id: self.workspace_id.raw().saturating_add(1).max(1),
+            next_editor_window_id: 1,
             next_panel_host_id: self
                 .hosts_by_id
                 .keys()

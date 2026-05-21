@@ -1,17 +1,22 @@
 ---
 title: Render Product Graph Platform
-description: Active design for product-first render graph planning, production-track sequencing, and the boundary between Product Graph/Product Jobs and render execution graph compilation.
-status: active
+description: Accepted design for product-first render graph planning, production-track sequencing, and the boundary between Product Graph/Product Jobs and render execution graph compilation.
+status: accepted
 owner: engine
 layer: engine-runtime / product-platform
 canonical: true
 last_reviewed: 2026-05-21
 related_designs:
-  - ../accepted/sdf-product-renderer-and-gpu-residency-design.md
-  - ../accepted/field-product-contracts-diagnostics-and-residency-design.md
-  - ../accepted/execution-fabric-and-product-jobs-design.md
+  - ./sdf-product-renderer-and-gpu-residency-design.md
+  - ./field-product-contracts-diagnostics-and-residency-design.md
+  - ./execution-fabric-and-product-jobs-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
+  - ./render-contract-ergonomics-design.md
+  - ./feature-owned-render-contributions-design.md
+  - ./render-execution-graph-compiler-maturity-design.md
+  - ./product-surface-platform-hardening-design.md
   - ./render-fragment-data-driven-maturity-design.md
+  - ./render-production-readiness-and-inspection-design.md
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
   - ../../workspace/production-tracks.yaml
@@ -21,12 +26,13 @@ related_roadmaps:
 
 ## Status
 
-This is an active design, not an accepted implementation contract.
+This is the accepted boundary design for `PT-RENDER-PG`.
 
-It defines the long-term renderer production-track boundary for
-`PT-RENDER-PG`. It does not authorize code changes by itself. Implementation
-still flows through the WR roadmap, accepted designs, architecture governance
-when required, validation, and closeout evidence.
+It ratifies the long-term renderer production-track doctrine and the ownership
+boundary between Product Graph/Product Jobs and render execution graph
+compilation. It does not authorize standalone code changes. Implementation
+still flows through the WR roadmap, the relevant milestone design gates,
+architecture governance when required, validation, and closeout evidence.
 
 ## Purpose
 
@@ -193,9 +199,9 @@ accepted designs, WR rows, or product-family gates before implementation:
   target retention, and upload budgets.
 - CPU, GPU, editor, and product rebuild performance budgets.
 
-## Promotion Criteria
+## Acceptance Evidence
 
-This design can move from `active` to `accepted` only after:
+This design was accepted for PM-RENDER-PG-001 after:
 
 - stale render docs have been reconciled with implemented product-surface,
   prepared-view, target-alias, and dynamic-target behavior;
@@ -204,8 +210,9 @@ This design can move from `active` to `accepted` only after:
 - production, roadmap, docs, and planning validators pass;
 - Product Graph/Product Jobs and Render Execution Graph Compiler ownership is
   unambiguous;
-- architecture governance decides whether an ADR or future
-  `domain/render_contracts` crate is required.
+- architecture governance decides that the current accepted ADR/design set is
+  sufficient for PM-RENDER-PG-001 and that a future `domain/render_contracts`
+  crate should wait for a concrete cross-domain engine-agnostic consumer.
 
 ## Validation
 
@@ -219,6 +226,7 @@ task production:check
 task roadmap:validate
 task roadmap:check
 task planning:validate
+task ai:goal -- --track PT-RENDER-PG
 ```
 
 No renderer code, tests, public Rust APIs, or runtime behavior should change in

@@ -1,0 +1,104 @@
+version: 1
+idea: 'PM-RENDER-PG-004 bounded implementation WR for render execution graph compiler maturity. Create a new legal WR row,
+  not WR-010. Scope: mature compiler validation/preflight over RenderFlow, PreparedRenderFrame, prepared flow invocations,
+  target aliases, dynamic targets, history scopes, resource lifetime windows, backend capability profile diagnostics, and
+  inspection. Must not implement render fragments, fragment assets, hot reload, last-good fragment promotion, broad product-surface
+  producer hardening, native multi-window, material lowering, product truth, product freshness, authority, fallback legality,
+  rebuild policy, or residency policy. Dependencies: WR-042 completed and accepted PM-004 design docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md.
+  Write scopes limited to engine/src/plugins/render, engine/tests, relevant render reference/roadmap docs, production/roadmap
+  workflow files, and the PM-004 implementation plan/closeout artifacts after they exist. Validations: cargo test -p engine
+  render_flow; cargo test -p engine render_dynamic_targets; cargo test -p engine render_runtime_inspect; workflow docs/roadmap/production/planning/goal
+  gates.'
+source_path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+owner: engine
+created_at: '2026-05-21'
+governance_notes:
+- Architecture governance review ran for PM-RENDER-PG-004 before accepting the design.
+- DDD owner is engine/src/plugins/render.
+- No ADR is required while compiler maturity remains engine-local and does not become a cross-domain ABI, persisted graph format, external mod contract, or source-of-truth ownership change.
+open_questions: []
+item:
+  id: WR-043
+  title: PM-RENDER-PG-004 Render Execution Graph Compiler Maturity
+  diagram_title: PM-004 compiler maturity
+  alias: WR043
+  lane: Core support
+  dependency_level: L1
+  gate: Accepted PM-004 design and PM-003 completion evidence
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.6
+  rice: Bounded PM-004 compiler maturity slice after PM-003 feature-owned contribution completion
+  kano: Basic
+  dependencies:
+  - WR-042
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-004-bounded-implementation-
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_flow
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: Accepted PM-RENDER-PG-004 render execution graph compiler maturity design at docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md and completed PM-003 closeout evidence.
+  current_decision: Create a bounded PM-004 implementation row for typed static flow validation and prepared-frame execution preflight over resources, pass order, target aliases, history scopes, resource lifetimes, backend capability profiles, diagnostics, and inspection.
+  current_call: Ready for production planning only. Do not implement render fragments, fragment assets, hot reload, last-good fragment promotion, broad product-surface producer hardening, native multi-window, material lowering, or renderer-owned product policy in WR-043.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG, then run task production:plan -- --milestone PM-RENDER-PG-004 --roadmap WR-043 only if the goal selects PM-004 promotion planning.
+  main_blocker: Needs production plan, promotion or current-candidate selection, bounded implementation contract, focused validation, closeout evidence, and production-track completion update.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - static compiler diagnostics
+  - prepared-frame preflight
+  - no fragment implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-004 implementation must follow the accepted render execution graph compiler maturity design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-004 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-004 depends on completed PM-003 feature-owned render contribution closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required while the compiler contract remains engine-local and does not become a cross-domain ABI, persisted graph format, external mod contract, or source-of-truth ownership change.
+  fitness_function_requirement: Static flow validation tests, prepared-frame preflight tests, alias/dynamic target compatibility tests, history/lifetime tests, backend capability mismatch tests, inspection tests, and submit-boundary tests.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product and editor producers.
+edges: []

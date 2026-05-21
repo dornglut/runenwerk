@@ -7,7 +7,7 @@ layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-16
 related_designs:
-  - ../../design/active/editor-native-multi-window-presentation-design.md
+  - ../../design/accepted/editor-native-multi-window-presentation-design.md
   - ../../design/implemented/render-product-surface-foundation-bundle-design.md
 related_roadmaps:
   - ./fully-featured-renderer-roadmap.md
@@ -44,7 +44,7 @@ materials, fragments, history, and production inspection, use
 
 The implemented product-surface foundation bundle is recorded at `docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md`. It pulled the product-surface portion of Phase 8 forward with dynamic targets, target aliases, prepared render views, history invalidation, and inspection support.
 
-Native OS multi-window and multi-swapchain presentation is specified separately in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`.
+Native OS multi-window and multi-swapchain presentation is specified separately in `docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md`.
 
 ## Final Target Shape
 

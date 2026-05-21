@@ -1251,10 +1251,20 @@ fn dispatch_toolbar_command(
             load_workspace_profile_layout(app, shell_state, profile_id)?;
             shell_state.close_toolbar_menu();
         }
+        ToolbarCommandKind::NewWindow => {
+            let shell_state = shell_state.ok_or(EditorMutationError::runtime_rejected(
+                "missing shell state for new window command",
+            ))?;
+            let editor_window_id = shell_state.open_editor_window_for_active_workspace();
+            shell_state.close_toolbar_menu();
+            app.append_console_line(format!(
+                "[ui] requested editor window {}",
+                editor_window_id.raw()
+            ));
+        }
         ToolbarCommandKind::SaveSceneAs
         | ToolbarCommandKind::OpenRecent
         | ToolbarCommandKind::EditPreferences
-        | ToolbarCommandKind::NewWindow
         | ToolbarCommandKind::LoadCustomWorkspace
         | ToolbarCommandKind::AddWorkspace => {
             app.append_console_line("[ui] command unavailable".to_string());

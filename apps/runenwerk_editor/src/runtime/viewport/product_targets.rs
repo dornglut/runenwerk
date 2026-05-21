@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use editor_core::RealityVersion;
+use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{
     ArtifactObservationFrame, ExpressionDimensions, ExpressionFormat, ExpressionProductDescriptor,
     ExpressionProductId, ExpressionProductKind, ProducerHealth, ProductAvailabilityState,
@@ -12,10 +13,11 @@ use editor_viewport::{
 use engine::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
     RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource,
-    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
-    ViewportSurfaceBindingRegistryResource,
+    RenderProductSurfaceManifest, RenderProductSurfaceStatusKind, RenderTextureSampleMode,
+    RenderTextureTargetFormat, RenderTextureTargetUsage, ViewportSurfaceBindingRegistryResource,
 };
 use engine::runtime::{Res, ResMut};
+use ui_render_data::ViewportSurfaceBindingSource;
 
 use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
@@ -232,10 +234,13 @@ pub fn sync_viewport_product_targets_system(
     }
 
     viewport_product_targets.replace_records(records);
+    let manifest =
+        viewport_product_surface_manifest(&viewport_product_targets, &viewport_presentations);
+    let (dynamic_target_descriptors, _, _, _) = manifest.into_render_parts();
     dynamic_target_requests
         .replace_contribution(
             EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
-            viewport_product_targets.requested_dynamic_descriptors(),
+            dynamic_target_descriptors,
         )
         .expect("editor viewport dynamic target contribution must be valid and uniquely owned");
     sync_surface_sets_from_product_targets(
@@ -324,6 +329,50 @@ pub fn sync_viewport_presentation_products_system(
     viewport_surface_sets.retain_viewports(|viewport_id| {
         viewport_id == MAIN_VIEWPORT_ID || viewport_id_set.contains(&viewport_id)
     });
+}
+
+pub(crate) fn viewport_product_surface_manifest(
+    viewport_product_targets: &ViewportProductTargetRegistryResource,
+    viewport_presentations: &ViewportPresentationStateResource,
+) -> RenderProductSurfaceManifest {
+    let mut manifest = RenderProductSurfaceManifest::new(
+        EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
+        "editor.viewport.products",
+    )
+    .with_dynamic_targets(viewport_product_targets.requested_dynamic_descriptors());
+
+    for record in viewport_product_targets.records() {
+        if record.status != ViewportProductTargetStatus::Requested {
+            manifest = manifest.with_status(
+                viewport_product_surface_key(record),
+                RenderProductSurfaceStatusKind::Unavailable,
+                format!(
+                    "viewport product {} target is unavailable for slot {}",
+                    record.key.product_id.0,
+                    presentation_slot_label(record.key.presentation_slot)
+                ),
+            );
+            continue;
+        }
+
+        if !target_record_is_selected_or_support(record, viewport_presentations)
+            || !record.ui_sampleable
+        {
+            continue;
+        }
+
+        manifest = manifest.with_viewport_surface_binding(
+            record.key.viewport_id.0,
+            viewport_embed_slot_for(record.key.presentation_slot),
+            viewport_product_surface_key(record),
+            ViewportSurfaceBindingSource::dynamic_texture(
+                record.namespace.clone(),
+                record.target_id.clone(),
+            ),
+        );
+    }
+
+    manifest
 }
 
 fn canonical_viewport_ids_for_sync(
@@ -530,6 +579,10 @@ pub fn dynamic_target_id_for(key: ViewportProductTargetKey) -> String {
     )
 }
 
+fn viewport_product_surface_key(record: &ViewportProductTargetRecord) -> String {
+    record.dynamic_key().to_string()
+}
+
 fn presentation_slot_label(slot: ViewportSurfacePresentationSlot) -> &'static str {
     match slot {
         ViewportSurfacePresentationSlot::Primary => "primary",
@@ -646,6 +699,10 @@ mod tests {
     use editor_viewport::{
         ExpressionDimensions, ExpressionFreshness, ExpressionPresentationHints,
         ExpressionSourceRealityClass,
+    };
+    use engine::plugins::render::{
+        RenderProductSurfaceDiagnosticKind, RenderProductSurfaceRequestKind,
+        RenderProductSurfaceStatusKind,
     };
     use ui_math::UiRect;
 
@@ -946,6 +1003,76 @@ mod tests {
             frame.field_visualizer_settings,
             presentation_state.field_visualizer_settings
         );
+    }
+
+    #[test]
+    fn viewport_product_surface_manifest_traces_selected_field_surface_binding() {
+        let viewport_id = ViewportId(1);
+        let descriptor = descriptor(
+            SCALAR_FIELD_PRODUCT_ID,
+            ExpressionProductKind::ScalarField2D,
+            ExpressionFormat::Rgba8Unorm,
+        );
+        let mut targets = ViewportProductTargetRegistryResource::default();
+        targets.replace_records(vec![
+            product_target_record_for_descriptor(viewport_id, &descriptor).expect("target"),
+        ]);
+        let mut presentation = initial_presentation_state(viewport_id);
+        presentation.select_primary_product(SCALAR_FIELD_PRODUCT_ID);
+        let mut presentations = ViewportPresentationStateResource::default();
+        presentations.upsert_state(presentation);
+
+        let manifest = viewport_product_surface_manifest(&targets, &presentations);
+
+        assert_eq!(manifest.product_family(), "editor.viewport.products");
+        assert_eq!(manifest.dynamic_targets().len(), 1);
+        assert_eq!(manifest.viewport_bindings().len(), 1);
+        assert_eq!(manifest.viewport_bindings()[0].viewport_id, viewport_id.0);
+        assert_eq!(
+            manifest.viewport_bindings()[0].surface_key,
+            manifest.dynamic_targets()[0].key.to_string()
+        );
+        assert!(
+            manifest.diagnostics().is_empty(),
+            "selected field product should bind through a declared sampleable target"
+        );
+    }
+
+    #[test]
+    fn viewport_product_surface_manifest_traces_unavailable_field_status() {
+        let viewport_id = ViewportId(1);
+        let descriptor = ExpressionProductDescriptor::new(
+            SCALAR_FIELD_PRODUCT_ID,
+            ExpressionProductKind::ScalarField2D,
+            ExpressionDimensions::new(0, 64),
+            ExpressionFormat::Rgba8Unorm,
+            "test.field.producer",
+            ExpressionSourceRealityClass::ObservedScene,
+            RealityVersion(1),
+            ExpressionFreshness::Current,
+            ExpressionPresentationHints::default(),
+            None,
+        );
+        let mut targets = ViewportProductTargetRegistryResource::default();
+        targets.replace_records(vec![
+            product_target_record_for_descriptor(viewport_id, &descriptor).expect("target"),
+        ]);
+        let presentations = ViewportPresentationStateResource::default();
+
+        let manifest = viewport_product_surface_manifest(&targets, &presentations);
+        let diagnostics = manifest.diagnostics();
+
+        assert!(manifest.dynamic_targets().is_empty());
+        assert_eq!(manifest.statuses().len(), 1);
+        assert_eq!(
+            manifest.statuses()[0].status,
+            RenderProductSurfaceStatusKind::Unavailable
+        );
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.diagnostic_kind == RenderProductSurfaceDiagnosticKind::ProducerStatus
+                && diagnostic.request_kind == RenderProductSurfaceRequestKind::Status
+                && diagnostic.status == Some(RenderProductSurfaceStatusKind::Unavailable)
+        }));
     }
 
     #[test]

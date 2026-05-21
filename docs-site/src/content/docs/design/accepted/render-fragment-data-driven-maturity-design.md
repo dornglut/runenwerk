@@ -1,16 +1,17 @@
 ---
 title: Render Fragment Data-Driven Maturity Design
-description: Design for authored render fragments, fragment validation, hot reload, merge semantics, ID maturity, inspection, and example proofs.
-status: active
+description: Accepted design for authored render fragments, fragment validation, hot reload, merge semantics, ID maturity, inspection, and example proofs.
+status: accepted
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-21
 related_designs:
   - ../implemented/render-product-surface-foundation-bundle-design.md
-  - ./editor-asset-pipeline-and-content-workflow-design.md
-  - ./editor-procedural-content-and-simulation-workflow-plan.md
-  - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+  - ./render-execution-graph-compiler-maturity-design.md
+  - ../active/editor-asset-pipeline-and-content-workflow-design.md
+  - ../active/editor-procedural-content-and-simulation-workflow-plan.md
+  - ../active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related_roadmaps:
   - ../../engine/plugins/render/docs/roadmap.md
 related:
@@ -22,9 +23,21 @@ related:
 
 ## Status
 
-Active design for the full R10 render roadmap scope.
+Accepted design for the full R10 render roadmap scope.
 
 This design promotes render fragments from a roadmap placeholder into a concrete architecture for authored, validated, mergeable, inspectable, and hot-reloadable render-flow pieces.
+
+## Acceptance Lock
+
+The accepted PM-RENDER-PG-007 direction is:
+
+- fragment assets are authored descriptions, not backend runtime objects;
+- fragments must validate before they affect active render execution;
+- valid fragments merge into normal `RenderFlow` definitions and still pass normal compile/validation/planning;
+- hot reload preserves last-good active revisions on invalid changes;
+- diagnostics and inspection expose fragment ids, package/source paths, revisions, merge provenance, and conflicts;
+- product truth, product selection, freshness, authority, fallback legality, rebuild policy, material truth, and residency policy remain outside renderer-owned fragment code;
+- `WR-010` remains the implementation row for this milestone and must not be repurposed for production-readiness hardening.
 
 ## Goal
 

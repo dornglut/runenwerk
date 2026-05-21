@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 
 use editor_viewport::{ExpressionDimensions, ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::{
-    PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
-    PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureTargetKey, RenderFlowId,
-    RenderFlowRegistryResource, RenderResourceId,
+    PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, PreparedViewFrame,
+    RenderDynamicTextureTargetKey, RenderFlowId, RenderFlowRegistryResource,
+    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    RenderResourceId,
 };
 use engine::runtime::{Res, ResMut};
 use ui_math::UiRect;
@@ -28,8 +29,17 @@ pub struct ViewportRenderJob {
     pub scene_color_target: RenderDynamicTextureTargetKey,
     pub picking_ids_target: RenderDynamicTextureTargetKey,
     pub overlay_target: RenderDynamicTextureTargetKey,
-    pub prepared_view: PreparedViewFrame,
-    pub prepared_flow_invocation: PreparedFlowInvocationRequest,
+    pub product_surface_request: RenderProductSurfaceRequest,
+}
+
+impl ViewportRenderJob {
+    pub fn prepared_view(&self) -> &PreparedViewFrame {
+        self.product_surface_request.view()
+    }
+
+    pub fn prepared_flow_invocation(&self) -> &PreparedFlowInvocationRequest {
+        self.product_surface_request.flow_invocation()
+    }
 }
 
 #[derive(Debug, Default, ecs::Component, ecs::Resource)]
@@ -86,8 +96,19 @@ pub fn sync_viewport_render_jobs_system(
             )
         })
         .collect::<Vec<_>>();
-    let views = jobs.iter().map(|job| job.prepared_view.clone());
-    let invocations = jobs.iter().map(|job| job.prepared_flow_invocation.clone());
+    let batch = RenderProductSurfaceRequestBatch::from_requests(
+        jobs.iter().map(|job| job.product_surface_request.clone()),
+    );
+    let manifest = RenderProductSurfaceManifest::from_request_batch(
+        EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
+        "editor.viewport",
+        batch,
+    );
+    debug_assert!(
+        !manifest.has_error_diagnostics(),
+        "viewport product-surface manifest should be structurally valid"
+    );
+    let (_, _, views, invocations) = manifest.into_render_parts();
     prepared_frame_requests
         .replace_contribution(
             EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID,
@@ -134,25 +155,26 @@ fn build_viewport_render_job(
         view_id.clone(),
         (dimensions.width, dimensions.height),
     );
-    let prepared_flow_invocation = PreparedFlowInvocationRequest {
-        invocation_id: PreparedFlowInvocationId::new(format!(
-            "editor.viewport.{}.{}",
-            viewport_id.0, EDITOR_MAIN_FLOW_ID
-        )),
+    let prepared_flow_invocation = PreparedFlowInvocationRequest::new(
+        format!("editor.viewport.{}.{}", viewport_id.0, EDITOR_MAIN_FLOW_ID),
         flow_id,
         view_id,
-        target_alias_bindings: target_alias_bindings(
-            scene_color_target.clone(),
-            picking_ids_target.clone(),
-            overlay_target.clone(),
-        ),
-        uniform_overrides: BTreeMap::new(),
-        history_signature: None,
-    }
+    )
+    .bind_dynamic_texture_alias(
+        VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
+        scene_color_target.clone(),
+    )
+    .bind_dynamic_texture_alias(
+        VIEWPORT_TARGET_ALIAS_PICKING_IDS,
+        picking_ids_target.clone(),
+    )
+    .bind_dynamic_texture_alias(VIEWPORT_TARGET_ALIAS_OVERLAY, overlay_target.clone())
     .with_uniform_override(
         scene_uniform_id,
         viewport_render.compose_scene_product_uniform_bytes((dimensions.width, dimensions.height)),
     );
+    let product_surface_request =
+        RenderProductSurfaceRequest::new(prepared_view, prepared_flow_invocation);
 
     Some(ViewportRenderJob {
         viewport_id,
@@ -161,34 +183,12 @@ fn build_viewport_render_job(
         scene_color_target,
         picking_ids_target,
         overlay_target,
-        prepared_view,
-        prepared_flow_invocation,
+        product_surface_request,
     })
 }
 
 pub fn prepared_view_id(viewport_id: ViewportId) -> String {
     format!("editor.viewport.{}.view", viewport_id.0)
-}
-
-fn target_alias_bindings(
-    scene_color_target: RenderDynamicTextureTargetKey,
-    picking_ids_target: RenderDynamicTextureTargetKey,
-    overlay_target: RenderDynamicTextureTargetKey,
-) -> BTreeMap<String, PreparedTargetBinding> {
-    BTreeMap::from([
-        (
-            VIEWPORT_TARGET_ALIAS_SCENE_COLOR.to_string(),
-            PreparedTargetBinding::DynamicTexture(scene_color_target),
-        ),
-        (
-            VIEWPORT_TARGET_ALIAS_PICKING_IDS.to_string(),
-            PreparedTargetBinding::DynamicTexture(picking_ids_target),
-        ),
-        (
-            VIEWPORT_TARGET_ALIAS_OVERLAY.to_string(),
-            PreparedTargetBinding::DynamicTexture(overlay_target),
-        ),
-    ])
 }
 
 fn editor_main_flow_ids(
@@ -218,6 +218,7 @@ mod tests {
         ExpressionFormat, ExpressionFreshness, ExpressionPresentationHints,
         ExpressionProductDescriptor, ExpressionProductKind, ExpressionSourceRealityClass,
     };
+    use engine::plugins::render::PreparedTargetBinding;
 
     fn descriptor(
         id: editor_viewport::ExpressionProductId,
@@ -289,6 +290,15 @@ mod tests {
 
         assert_eq!(job.viewport_id, viewport_id);
         assert_eq!(job.dimensions, ExpressionDimensions::new(320, 200));
+        assert_eq!(
+            job.prepared_view().view_id,
+            prepared_view_id(viewport_id),
+            "viewport jobs must carry the shared product-surface helper view"
+        );
+        assert!(
+            job.product_surface_request.dynamic_targets().is_empty(),
+            "viewport dynamic targets are published by the viewport target producer, not the request helper"
+        );
         let scene_target = target_registry
             .record_for_product(
                 viewport_id,
@@ -299,13 +309,13 @@ mod tests {
             .dynamic_key();
         assert_eq!(job.scene_color_target, scene_target);
         assert_eq!(
-            job.prepared_flow_invocation
+            job.prepared_flow_invocation()
                 .target_alias_bindings
                 .get(VIEWPORT_TARGET_ALIAS_SCENE_COLOR),
             Some(&PreparedTargetBinding::DynamicTexture(scene_target)),
         );
         assert_eq!(
-            job.prepared_flow_invocation
+            job.prepared_flow_invocation()
                 .uniform_overrides
                 .get(&scene_uniform_id),
             Some(&viewport_render.compose_scene_product_uniform_bytes((320, 200))),
@@ -378,7 +388,7 @@ mod tests {
         assert_eq!(job.scene_color_target, scene_target);
         assert_ne!(job.scene_color_target, material_target);
         assert_eq!(
-            job.prepared_flow_invocation
+            job.prepared_flow_invocation()
                 .target_alias_bindings
                 .get(VIEWPORT_TARGET_ALIAS_SCENE_COLOR),
             Some(&PreparedTargetBinding::DynamicTexture(scene_target)),

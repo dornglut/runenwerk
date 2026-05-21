@@ -68,13 +68,6 @@ package "Level 1 - Near-Term Productization" {
 
 }
 
-package "Level 2 - Contract-Gated Productization" {
-  component "WR-009 Native multi-window editor\nstate=ready_next\nscore=0.7 gate=runtime gate\nV3 B3\ncall=window-scoped runtime,\ninput, UI frame, swapchain" as WINDOW <<V3>>
-
-  component "WR-010 Render fragments R10\nstate=ready_next\nscore=0.7 gate=product priority gate\nV3 B3\ncall=fragment assets, merge,\nhot reload, inspection" as FRAGMENTS <<V3>>
-
-}
-
 package "Level 3 - Active Domain Tracks" {
   component "WR-022 SDF Prefab V2\nstate=ready_next\nscore=0.8 gate=v2 gated\nV4 B3\ncall=active design now\nruntime instancing V2" as PREFABV2 <<V4>>
 
@@ -88,8 +81,6 @@ package "Level 3 - Active Domain Tracks" {
 
 }
 
-RENDER -down-> WINDOW : render surface foundation
-RENDER -down-> FRAGMENTS : aliases / invocations / inspection
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 MESHRND -down-> MESHMAT : model mesh pixel proof prerequisite

@@ -5,8 +5,9 @@ use super::{
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId, RenderPassId,
-    RenderResourceId,
+    RenderResourceId, backend::RenderSurfaceId,
 };
+use crate::runtime::NativeWindowId;
 use product::RenderProductSelection;
 use std::collections::{BTreeMap, BTreeSet};
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -137,7 +138,35 @@ impl PreparedRenderFrame {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PreparedSurfaceInfo {
+    pub render_surface_id: RenderSurfaceId,
+    pub native_window_id: Option<NativeWindowId>,
     pub target_size_px: (u32, u32),
+}
+
+impl PreparedSurfaceInfo {
+    pub fn primary(target_size_px: (u32, u32)) -> Self {
+        Self {
+            render_surface_id: RenderSurfaceId::primary(),
+            native_window_id: Some(NativeWindowId::primary()),
+            target_size_px,
+        }
+    }
+
+    pub fn for_surface(
+        render_surface_id: RenderSurfaceId,
+        native_window_id: NativeWindowId,
+        target_size_px: (u32, u32),
+    ) -> Self {
+        Self {
+            render_surface_id,
+            native_window_id: Some(native_window_id),
+            target_size_px,
+        }
+    }
+
+    pub fn target_size_px(&self) -> (u32, u32) {
+        self.target_size_px
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -153,6 +182,24 @@ pub struct PreparedFlowInvocationId(pub String);
 impl PreparedFlowInvocationId {
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
+    }
+}
+
+impl From<String> for PreparedFlowInvocationId {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<&str> for PreparedFlowInvocationId {
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl std::fmt::Display for PreparedFlowInvocationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.as_str())
     }
 }
 
@@ -187,7 +234,7 @@ pub enum PreparedTargetBinding {
     FlowOwned(RenderResourceId),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedFlowInvocationRequest {
     pub invocation_id: PreparedFlowInvocationId,
     pub flow_id: RenderFlowId,
@@ -198,15 +245,172 @@ pub struct PreparedFlowInvocationRequest {
 }
 
 impl PreparedFlowInvocationRequest {
+    pub fn new(
+        invocation_id: impl Into<PreparedFlowInvocationId>,
+        flow_id: RenderFlowId,
+        view_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            invocation_id: invocation_id.into(),
+            flow_id,
+            view_id: view_id.into(),
+            target_alias_bindings: BTreeMap::new(),
+            uniform_overrides: BTreeMap::new(),
+            history_signature: None,
+        }
+    }
+
+    pub fn bind_target_alias(
+        mut self,
+        alias: impl Into<String>,
+        binding: PreparedTargetBinding,
+    ) -> Self {
+        self.target_alias_bindings.insert(alias.into(), binding);
+        self
+    }
+
+    pub fn bind_dynamic_texture_alias(
+        self,
+        alias: impl Into<String>,
+        key: RenderDynamicTextureTargetKey,
+    ) -> Self {
+        self.bind_target_alias(alias, PreparedTargetBinding::DynamicTexture(key))
+    }
+
+    pub fn bind_surface_color_alias(self, alias: impl Into<String>) -> Self {
+        self.bind_target_alias(alias, PreparedTargetBinding::SurfaceColor)
+    }
+
+    pub fn bind_surface_depth_alias(self, alias: impl Into<String>) -> Self {
+        self.bind_target_alias(alias, PreparedTargetBinding::SurfaceDepth)
+    }
+
+    pub fn bind_flow_owned_alias(
+        self,
+        alias: impl Into<String>,
+        resource_id: RenderResourceId,
+    ) -> Self {
+        self.bind_target_alias(alias, PreparedTargetBinding::FlowOwned(resource_id))
+    }
+
+    pub fn with_history_signature(mut self, signature: impl Into<String>) -> Self {
+        self.history_signature = Some(signature.into());
+        self
+    }
+
     pub fn with_uniform_override(mut self, uniform_id: RenderResourceId, bytes: Vec<u8>) -> Self {
         self.uniform_overrides.insert(uniform_id, bytes);
         self
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreparedRenderFrameRequestKind {
+    View,
+    Invocation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedRenderFrameRequestDiagnostic {
+    pub producer_id: RenderFrameProducerId,
+    pub existing_producer_id: Option<RenderFrameProducerId>,
+    pub view_id: Option<String>,
+    pub invocation_id: Option<PreparedFlowInvocationId>,
+    pub request_kind: PreparedRenderFrameRequestKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PreparedRenderFrameRequestError {
+    #[error(
+        "prepared render frame producer {producer_id:?} publishes duplicate view '{view_id}' within one contribution"
+    )]
+    DuplicateViewWithinProducer {
+        producer_id: RenderFrameProducerId,
+        view_id: String,
+    },
+    #[error(
+        "prepared render frame producer {producer_id:?} publishes view '{view_id}' already owned by producer {existing_producer_id:?}"
+    )]
+    DuplicateViewAcrossProducers {
+        producer_id: RenderFrameProducerId,
+        existing_producer_id: RenderFrameProducerId,
+        view_id: String,
+    },
+    #[error(
+        "prepared render frame producer {producer_id:?} publishes duplicate invocation '{invocation_id}' within one contribution"
+    )]
+    DuplicateInvocationWithinProducer {
+        producer_id: RenderFrameProducerId,
+        invocation_id: PreparedFlowInvocationId,
+    },
+    #[error(
+        "prepared render frame producer {producer_id:?} publishes invocation '{invocation_id}' already owned by producer {existing_producer_id:?}"
+    )]
+    DuplicateInvocationAcrossProducers {
+        producer_id: RenderFrameProducerId,
+        existing_producer_id: RenderFrameProducerId,
+        invocation_id: PreparedFlowInvocationId,
+    },
+}
+
+impl PreparedRenderFrameRequestError {
+    pub fn diagnostic(&self) -> PreparedRenderFrameRequestDiagnostic {
+        match self {
+            Self::DuplicateViewWithinProducer {
+                producer_id,
+                view_id,
+            } => PreparedRenderFrameRequestDiagnostic {
+                producer_id: *producer_id,
+                existing_producer_id: None,
+                view_id: Some(view_id.clone()),
+                invocation_id: None,
+                request_kind: PreparedRenderFrameRequestKind::View,
+                message: self.to_string(),
+            },
+            Self::DuplicateViewAcrossProducers {
+                producer_id,
+                existing_producer_id,
+                view_id,
+            } => PreparedRenderFrameRequestDiagnostic {
+                producer_id: *producer_id,
+                existing_producer_id: Some(*existing_producer_id),
+                view_id: Some(view_id.clone()),
+                invocation_id: None,
+                request_kind: PreparedRenderFrameRequestKind::View,
+                message: self.to_string(),
+            },
+            Self::DuplicateInvocationWithinProducer {
+                producer_id,
+                invocation_id,
+            } => PreparedRenderFrameRequestDiagnostic {
+                producer_id: *producer_id,
+                existing_producer_id: None,
+                view_id: None,
+                invocation_id: Some(invocation_id.clone()),
+                request_kind: PreparedRenderFrameRequestKind::Invocation,
+                message: self.to_string(),
+            },
+            Self::DuplicateInvocationAcrossProducers {
+                producer_id,
+                existing_producer_id,
+                invocation_id,
+            } => PreparedRenderFrameRequestDiagnostic {
+                producer_id: *producer_id,
+                existing_producer_id: Some(*existing_producer_id),
+                view_id: None,
+                invocation_id: Some(invocation_id.clone()),
+                request_kind: PreparedRenderFrameRequestKind::Invocation,
+                message: self.to_string(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct PreparedRenderFrameRequestResource {
     contributions: BTreeMap<RenderFrameProducerId, PreparedRenderFrameRequestContribution>,
+    diagnostics: Vec<PreparedRenderFrameRequestDiagnostic>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -218,13 +422,17 @@ pub struct PreparedRenderFrameRequestContribution {
 impl PreparedRenderFrameRequestResource {
     pub fn clear(&mut self) {
         self.contributions.clear();
+        self.diagnostics.clear();
     }
 
     pub fn remove_contribution(
         &mut self,
         producer_id: impl Into<RenderFrameProducerId>,
     ) -> Option<PreparedRenderFrameRequestContribution> {
-        self.contributions.remove(&producer_id.into())
+        let producer_id = producer_id.into();
+        let removed = self.contributions.remove(&producer_id);
+        self.clear_diagnostics_for_producer(&producer_id);
+        removed
     }
 
     pub fn replace_contribution(
@@ -232,12 +440,30 @@ impl PreparedRenderFrameRequestResource {
         producer_id: impl Into<RenderFrameProducerId>,
         views: impl IntoIterator<Item = PreparedViewFrame>,
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
-    ) -> anyhow::Result<Option<PreparedRenderFrameRequestContribution>> {
+    ) -> Result<Option<PreparedRenderFrameRequestContribution>, PreparedRenderFrameRequestError>
+    {
         let producer_id = producer_id.into();
-        let contribution =
-            PreparedRenderFrameRequestContribution::from_requests(views, flow_invocations)?;
-        self.validate_replacement(&producer_id, &contribution)?;
+        self.clear_diagnostics_for_producer(&producer_id);
+        let contribution = match PreparedRenderFrameRequestContribution::from_requests(
+            &producer_id,
+            views,
+            flow_invocations,
+        ) {
+            Ok(contribution) => contribution,
+            Err(error) => {
+                self.record_error(&error);
+                return Err(error);
+            }
+        };
+        if let Err(error) = self.validate_replacement(&producer_id, &contribution) {
+            self.record_error(&error);
+            return Err(error);
+        }
         Ok(self.contributions.insert(producer_id, contribution))
+    }
+
+    pub fn diagnostics(&self) -> &[PreparedRenderFrameRequestDiagnostic] {
+        &self.diagnostics
     }
 
     pub fn requested_views(&self) -> Vec<&PreparedViewFrame> {
@@ -262,54 +488,77 @@ impl PreparedRenderFrameRequestResource {
         &self,
         producer_id: &RenderFrameProducerId,
         replacement: &PreparedRenderFrameRequestContribution,
-    ) -> anyhow::Result<()> {
-        let mut view_ids = BTreeSet::<&str>::new();
-        let mut invocation_ids = BTreeSet::<&PreparedFlowInvocationId>::new();
+    ) -> Result<(), PreparedRenderFrameRequestError> {
+        let mut view_ids = BTreeMap::<&str, &RenderFrameProducerId>::new();
+        let mut invocation_ids =
+            BTreeMap::<&PreparedFlowInvocationId, &RenderFrameProducerId>::new();
 
         for (existing_producer_id, contribution) in &self.contributions {
             if existing_producer_id == producer_id {
                 continue;
             }
             for view_id in contribution.views.keys() {
-                view_ids.insert(view_id.as_str());
+                view_ids.insert(view_id.as_str(), existing_producer_id);
             }
             for request in &contribution.flow_invocations {
-                invocation_ids.insert(&request.invocation_id);
+                invocation_ids.insert(&request.invocation_id, existing_producer_id);
             }
         }
 
         for view_id in replacement.views.keys() {
-            if !view_ids.insert(view_id.as_str()) {
-                anyhow::bail!(
-                    "prepared render frame producer '{:?}' publishes duplicate view '{}'",
-                    producer_id,
-                    view_id
+            if let Some(existing_producer_id) = view_ids.get(view_id.as_str()) {
+                return Err(
+                    PreparedRenderFrameRequestError::DuplicateViewAcrossProducers {
+                        producer_id: *producer_id,
+                        existing_producer_id: **existing_producer_id,
+                        view_id: view_id.clone(),
+                    },
                 );
             }
         }
         for request in &replacement.flow_invocations {
-            if !invocation_ids.insert(&request.invocation_id) {
-                anyhow::bail!(
-                    "prepared render frame producer '{:?}' publishes duplicate invocation '{}'",
-                    producer_id,
-                    request.invocation_id.0
+            if let Some(existing_producer_id) = invocation_ids.get(&request.invocation_id) {
+                return Err(
+                    PreparedRenderFrameRequestError::DuplicateInvocationAcrossProducers {
+                        producer_id: *producer_id,
+                        existing_producer_id: **existing_producer_id,
+                        invocation_id: request.invocation_id.clone(),
+                    },
                 );
             }
         }
 
         Ok(())
     }
+
+    fn record_error(&mut self, error: &PreparedRenderFrameRequestError) {
+        self.diagnostics.push(error.diagnostic());
+    }
+
+    fn clear_diagnostics_for_producer(&mut self, producer_id: &RenderFrameProducerId) {
+        self.diagnostics.retain(|diagnostic| {
+            diagnostic.producer_id != *producer_id
+                && diagnostic.existing_producer_id != Some(*producer_id)
+        });
+    }
 }
 
 impl PreparedRenderFrameRequestContribution {
     fn from_requests(
+        producer_id: &RenderFrameProducerId,
         views: impl IntoIterator<Item = PreparedViewFrame>,
         flow_invocations: impl IntoIterator<Item = PreparedFlowInvocationRequest>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, PreparedRenderFrameRequestError> {
         let mut view_map = BTreeMap::<String, PreparedViewFrame>::new();
         for view in views {
-            if view_map.insert(view.view_id.clone(), view).is_some() {
-                anyhow::bail!("prepared render frame contribution contains duplicate view id");
+            let view_id = view.view_id.clone();
+            if view_map.insert(view_id.clone(), view).is_some() {
+                return Err(
+                    PreparedRenderFrameRequestError::DuplicateViewWithinProducer {
+                        producer_id: *producer_id,
+                        view_id,
+                    },
+                );
             }
         }
 
@@ -317,9 +566,11 @@ impl PreparedRenderFrameRequestContribution {
         let flow_invocations = flow_invocations.into_iter().collect::<Vec<_>>();
         for request in &flow_invocations {
             if !invocation_ids.insert(request.invocation_id.clone()) {
-                anyhow::bail!(
-                    "prepared render frame contribution contains duplicate invocation '{}'",
-                    request.invocation_id.0
+                return Err(
+                    PreparedRenderFrameRequestError::DuplicateInvocationWithinProducer {
+                        producer_id: *producer_id,
+                        invocation_id: request.invocation_id.clone(),
+                    },
                 );
             }
         }
@@ -353,9 +604,7 @@ mod tests {
                 shader_registry_revision: 11,
                 prepare_epoch: 3,
             },
-            surface: PreparedSurfaceInfo {
-                target_size_px: (1280, 720),
-            },
+            surface: PreparedSurfaceInfo::primary((1280, 720)),
             views: vec![PreparedViewFrame::main((1280, 720))],
             flows: BTreeMap::new(),
             flow_invocations: Vec::new(),

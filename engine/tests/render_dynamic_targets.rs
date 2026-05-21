@@ -1,13 +1,21 @@
-use std::collections::BTreeMap;
-
 use engine::plugins::render::{
-    PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
-    PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderDynamicTextureRetention,
-    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetDescriptorError,
-    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId,
-    RenderFrameProducerId, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureTargetUsage,
+    PreparedFlowInputs, PreparedFlowInvocation, PreparedFlowInvocationId,
+    PreparedFlowInvocationRequest, PreparedFrameContext, PreparedFrameContributions,
+    PreparedRenderFrame, PreparedRenderFrameRequestError, PreparedRenderFrameRequestKind,
+    PreparedRenderFrameRequestResource, PreparedShaderSnapshot, PreparedSurfaceInfo,
+    PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderBackendCapabilityProfile,
+    RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+    RenderDynamicTextureTargetDescriptorError, RenderDynamicTextureTargetKey,
+    RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadDescriptor,
+    RenderExecutionGraphDiagnosticKind, RenderFlow, RenderFlowId, RenderFrameProducerId,
+    RenderProductSurfaceDiagnosticKind, RenderProductSurfaceDiagnosticSeverity,
+    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    RenderProductSurfaceRequestKind, RenderProductSurfaceStatusKind, RenderResourceId,
+    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
+    RenderTextureUploadAlphaMode, compile_flow_plan, validate_prepared_render_frame,
 };
+use std::collections::BTreeMap;
+use ui_render_data::{ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry};
 
 fn dynamic_descriptor(
     target_id: &str,
@@ -28,12 +36,258 @@ fn dynamic_descriptor(
     )
 }
 
+fn upload_descriptor(
+    key: RenderDynamicTextureTargetKey,
+    width: u32,
+    height: u32,
+) -> RenderDynamicTextureUploadDescriptor {
+    RenderDynamicTextureUploadDescriptor::rgba8(
+        key,
+        0,
+        0,
+        width,
+        height,
+        RenderTextureUploadAlphaMode::Straight,
+        1,
+        vec![255; width as usize * height as usize * 4],
+    )
+}
+
 fn producer(raw: u64) -> RenderFrameProducerId {
     RenderFrameProducerId::try_from_raw(raw).unwrap()
 }
 
+fn prepared_frame_for_invocations(
+    views: Vec<PreparedViewFrame>,
+    invocations: Vec<PreparedFlowInvocation>,
+    dynamic_texture_targets: Vec<RenderDynamicTextureTargetDescriptor>,
+) -> PreparedRenderFrame {
+    PreparedRenderFrame {
+        context: PreparedFrameContext {
+            frame_index: 1,
+            flow_registry_revision: 1,
+            shader_registry_revision: 1,
+            prepare_epoch: 1,
+        },
+        surface: PreparedSurfaceInfo::primary((800, 600)),
+        views,
+        flows: BTreeMap::new(),
+        flow_invocations: invocations,
+        dynamic_texture_targets,
+        dynamic_texture_uploads: Vec::new(),
+        product_selections: Vec::new(),
+        viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+        contributions: PreparedFrameContributions::default(),
+        shader: PreparedShaderSnapshot {
+            registry_revision: 1,
+        },
+    }
+}
+
+fn invocation(
+    invocation_id: &str,
+    flow_id: RenderFlowId,
+    view_id: &str,
+    bindings: BTreeMap<String, PreparedTargetBinding>,
+) -> PreparedFlowInvocation {
+    PreparedFlowInvocation {
+        invocation_id: PreparedFlowInvocationId::new(invocation_id),
+        flow_id,
+        view_id: view_id.to_string(),
+        inputs: PreparedFlowInputs::default(),
+        target_alias_bindings: bindings,
+        history_signature: None,
+    }
+}
+
 #[test]
-fn dynamic_target_descriptor_validation_rejects_invalid_shapes() {
+fn render_dynamic_targets_descriptor_constructors_build_valid_common_shapes() {
+    let retention = RenderDynamicTextureRetention::RetainWhileRequested;
+    let color = RenderDynamicTextureTargetDescriptor::color_sampled(
+        RenderDynamicTextureTargetKey::new("test.dynamic", "color"),
+        64,
+        64,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        retention,
+    );
+    let attachment_only = RenderDynamicTextureTargetDescriptor::color_attachment_only(
+        RenderDynamicTextureTargetKey::new("test.dynamic", "attachment"),
+        64,
+        64,
+        RenderTextureTargetFormat::R32Uint,
+        retention,
+    );
+    let storage = RenderDynamicTextureTargetDescriptor::storage_sampled(
+        RenderDynamicTextureTargetKey::new("test.dynamic", "storage"),
+        64,
+        64,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        retention,
+    );
+    let depth = RenderDynamicTextureTargetDescriptor::depth_sampled(
+        RenderDynamicTextureTargetKey::new("test.dynamic", "depth"),
+        64,
+        64,
+        retention,
+    );
+
+    for descriptor in [&color, &attachment_only, &storage, &depth] {
+        descriptor
+            .validate()
+            .expect("constructor-built descriptor should validate");
+        assert_eq!(descriptor.retention, retention);
+    }
+    assert!(color.usage.color_attachment);
+    assert!(color.usage.sampled);
+    assert!(attachment_only.usage.color_attachment);
+    assert!(!attachment_only.usage.sampled);
+    assert!(storage.usage.storage);
+    assert_eq!(depth.format, RenderTextureTargetFormat::Depth32Float);
+    assert!(depth.usage.depth_attachment);
+}
+
+#[test]
+fn render_dynamic_targets_product_surface_manifest_builds_upload_backed_batches() {
+    let key = RenderDynamicTextureTargetKey::new("test.product", "preview");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+        key.clone(),
+        32,
+        16,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let upload = upload_descriptor(key.clone(), 32, 16);
+    let manifest = RenderProductSurfaceManifest::new(producer(77), "test.product.preview")
+        .with_dynamic_target(descriptor.clone())
+        .with_dynamic_upload(upload.clone())
+        .with_upload_backed_product_surface_binding(
+            "preview.surface",
+            ProductSurfaceTextureBindingSource::dynamic_texture(
+                key.namespace.clone(),
+                key.target_id.clone(),
+            ),
+        );
+
+    assert!(
+        manifest.diagnostics().is_empty(),
+        "valid upload-backed product surface should have no manifest diagnostics"
+    );
+    assert_eq!(manifest.product_bindings()[0].upload_required, true);
+
+    let (targets, uploads, views, invocations) = manifest.into_render_parts();
+    assert_eq!(targets, vec![descriptor]);
+    assert_eq!(uploads, vec![upload]);
+    assert!(views.is_empty());
+    assert!(invocations.is_empty());
+}
+
+#[test]
+fn render_dynamic_targets_product_surface_manifest_reports_typed_surface_diagnostics() {
+    let key = RenderDynamicTextureTargetKey::new("test.product", "shared");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+        key.clone(),
+        32,
+        16,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let manifest = RenderProductSurfaceManifest::new(producer(78), "test.product.preview")
+        .with_dynamic_target(descriptor.clone())
+        .with_dynamic_target(descriptor)
+        .with_upload_backed_product_surface_binding(
+            "preview.surface",
+            ProductSurfaceTextureBindingSource::dynamic_texture(
+                key.namespace.clone(),
+                key.target_id.clone(),
+            ),
+        )
+        .with_dynamic_upload(upload_descriptor(
+            RenderDynamicTextureTargetKey::new("test.product", "missing-target"),
+            32,
+            16,
+        ))
+        .with_status(
+            "preview.surface",
+            RenderProductSurfaceStatusKind::Unavailable,
+            "producer reported unavailable preview surface",
+        );
+
+    let diagnostics = manifest.diagnostics();
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.diagnostic_kind == RenderProductSurfaceDiagnosticKind::DuplicateSurfaceKey
+            && diagnostic.request_kind == RenderProductSurfaceRequestKind::DynamicTarget
+            && diagnostic.dynamic_target_key.as_ref() == Some(&key)
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.diagnostic_kind == RenderProductSurfaceDiagnosticKind::MissingUpload
+            && diagnostic.request_kind == RenderProductSurfaceRequestKind::DynamicUpload
+            && diagnostic.surface_key.as_deref() == Some("preview.surface")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.diagnostic_kind == RenderProductSurfaceDiagnosticKind::MissingDynamicTarget
+            && diagnostic.request_kind == RenderProductSurfaceRequestKind::DynamicUpload
+            && diagnostic
+                .dynamic_target_key
+                .as_ref()
+                .is_some_and(|key| key.target_id == "missing-target")
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.diagnostic_kind == RenderProductSurfaceDiagnosticKind::ProducerStatus
+            && diagnostic.status == Some(RenderProductSurfaceStatusKind::Unavailable)
+            && diagnostic.severity == RenderProductSurfaceDiagnosticSeverity::Error
+    }));
+}
+
+#[test]
+fn render_dynamic_targets_product_surface_manifest_reports_ui_sampleability_and_history_conflicts()
+{
+    let key = RenderDynamicTextureTargetKey::new("test.product", "history");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_attachment_only(
+        key.clone(),
+        32,
+        16,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let flow_id = RenderFlowId::try_from_raw(7).unwrap();
+    let first = PreparedFlowInvocationRequest::new("history.a", flow_id, "view.a")
+        .bind_dynamic_texture_alias("surface", key.clone())
+        .with_history_signature("camera:a");
+    let second = PreparedFlowInvocationRequest::new("history.b", flow_id, "view.b")
+        .bind_dynamic_texture_alias("surface", key.clone())
+        .with_history_signature("camera:b");
+    let manifest = RenderProductSurfaceManifest::new(producer(79), "test.product.history")
+        .with_dynamic_target(descriptor)
+        .with_product_surface_binding(
+            "history.surface",
+            ProductSurfaceTextureBindingSource::dynamic_texture(
+                key.namespace.clone(),
+                key.target_id.clone(),
+            ),
+        )
+        .with_flow_invocation(first)
+        .with_flow_invocation(second);
+
+    let diagnostics = manifest.diagnostics();
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.diagnostic_kind == RenderProductSurfaceDiagnosticKind::NonSampleableUiBinding
+            && diagnostic.request_kind == RenderProductSurfaceRequestKind::ProductSurfaceBinding
+            && diagnostic.dynamic_target_key.as_ref() == Some(&key)
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.diagnostic_kind
+            == RenderProductSurfaceDiagnosticKind::ConflictingHistorySignature
+            && diagnostic.request_kind == RenderProductSurfaceRequestKind::HistorySignature
+            && diagnostic.invocation_id.as_ref().map(|id| id.0.as_str()) == Some("history.b")
+    }));
+}
+
+#[test]
+fn render_dynamic_targets_descriptor_validation_rejects_invalid_shapes() {
     let zero = dynamic_descriptor(
         "zero",
         0,
@@ -91,7 +345,161 @@ fn dynamic_target_descriptor_validation_rejects_invalid_shapes() {
 }
 
 #[test]
-fn dynamic_target_request_registry_snapshots_valid_requests_by_key() {
+fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
+    let flow = RenderFlow::new("preflight.alias.missing")
+        .with_color_target_alias("scene_color")
+        .fullscreen_pass("compose")
+        .offscreen_products_only()
+        .write_target_alias("scene_color")
+        .finish()
+        .validate()
+        .expect("flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("flow should compile");
+    let frame = prepared_frame_for_invocations(
+        vec![PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (320, 180),
+        )],
+        vec![invocation(
+            "viewport.1.scene",
+            compiled.flow_id,
+            "viewport.1",
+            BTreeMap::new(),
+        )],
+        Vec::new(),
+    );
+
+    let report = validate_prepared_render_frame(
+        &frame,
+        &[compiled],
+        &RenderBackendCapabilityProfile::runtime_default(),
+    );
+
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::TargetAliasMissingBinding
+            && diagnostic.alias_label.as_deref() == Some("scene_color")
+            && diagnostic.view_id.as_deref() == Some("viewport.1")
+    }));
+}
+
+#[test]
+fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_sampled() {
+    let flow = RenderFlow::new("preflight.dynamic.sampled")
+        .with_surface_color()
+        .with_color_target_alias("scene_color")
+        .fullscreen_pass("draw_scene")
+        .offscreen_products_only()
+        .write_target_alias("scene_color")
+        .finish()
+        .fullscreen_pass("sample_scene")
+        .offscreen_products_only()
+        .sample_texture("scene_color")
+        .write_surface_color()
+        .depends_on("draw_scene")
+        .finish()
+        .validate()
+        .expect("flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("flow should compile");
+    let key = RenderDynamicTextureTargetKey::new("preflight", "scene");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_attachment_only(
+        key.clone(),
+        320,
+        180,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "scene_color".to_string(),
+        PreparedTargetBinding::DynamicTexture(key.clone()),
+    );
+    let frame = prepared_frame_for_invocations(
+        vec![PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (320, 180),
+        )],
+        vec![invocation(
+            "viewport.1.scene",
+            compiled.flow_id,
+            "viewport.1",
+            bindings,
+        )],
+        vec![descriptor],
+    );
+
+    let report = validate_prepared_render_frame(
+        &frame,
+        &[compiled],
+        &RenderBackendCapabilityProfile::runtime_default(),
+    );
+
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::DynamicTargetUsageMismatch
+            && diagnostic.dynamic_target_key.as_ref() == Some(&key)
+            && diagnostic.alias_label.as_deref() == Some("scene_color")
+    }));
+}
+
+#[test]
+fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() {
+    let flow = RenderFlow::new("preflight.history")
+        .with_color_target_alias("scene_color")
+        .fullscreen_pass("draw_scene")
+        .offscreen_products_only()
+        .write_target_alias("scene_color")
+        .finish()
+        .validate()
+        .expect("flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("flow should compile");
+    let key = RenderDynamicTextureTargetKey::new("preflight", "shared-history");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+        key.clone(),
+        320,
+        180,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let binding = PreparedTargetBinding::DynamicTexture(key.clone());
+    let mut first = invocation(
+        "viewport.1.a",
+        compiled.flow_id,
+        "viewport.1",
+        [("scene_color".to_string(), binding.clone())]
+            .into_iter()
+            .collect(),
+    );
+    first.history_signature = Some("camera:a".to_string());
+    let mut second = invocation(
+        "viewport.1.b",
+        compiled.flow_id,
+        "viewport.1",
+        [("scene_color".to_string(), binding)].into_iter().collect(),
+    );
+    second.history_signature = Some("camera:b".to_string());
+    let frame = prepared_frame_for_invocations(
+        vec![PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (320, 180),
+        )],
+        vec![first, second],
+        vec![descriptor],
+    );
+
+    let report = validate_prepared_render_frame(
+        &frame,
+        &[compiled],
+        &RenderBackendCapabilityProfile::runtime_default(),
+    );
+
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::HistorySignatureConflict
+            && diagnostic.dynamic_target_key.as_ref() == Some(&key)
+    }));
+}
+
+#[test]
+fn render_dynamic_targets_request_registry_snapshots_valid_requests_by_key() {
     let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
     registry
         .replace_contribution(
@@ -143,7 +551,7 @@ fn dynamic_target_request_registry_snapshots_valid_requests_by_key() {
 }
 
 #[test]
-fn dynamic_target_request_registry_rejects_cross_producer_key_collisions() {
+fn render_dynamic_targets_request_registry_rejects_cross_producer_key_collisions() {
     let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
     registry
         .replace_contribution(
@@ -181,38 +589,50 @@ fn dynamic_target_request_registry_rejects_cross_producer_key_collisions() {
 }
 
 #[test]
-fn prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
+fn render_dynamic_targets_prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
     let flow_id = RenderFlowId::try_from_raw(7).unwrap();
+    let uniform_id = RenderResourceId::try_from_raw(11).unwrap();
+    let flow_owned_id = RenderResourceId::try_from_raw(12).unwrap();
     let dynamic_key = RenderDynamicTextureTargetKey::new("test.dynamic", "viewport.7.scene");
-    let mut alias_bindings = BTreeMap::new();
-    alias_bindings.insert(
-        "scene_color".to_string(),
-        PreparedTargetBinding::DynamicTexture(dynamic_key.clone()),
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+        dynamic_key.clone(),
+        320,
+        180,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        RenderDynamicTextureRetention::RetainForFrames(2),
     );
+    let product_surface_request = RenderProductSurfaceRequest::new(
+        PreparedViewFrame::offscreen_product("viewport.7", (320, 180))
+            .with_history_signature("viewport.7:view"),
+        PreparedFlowInvocationRequest::new("viewport.7.editor", flow_id, "viewport.7")
+            .bind_dynamic_texture_alias("scene_color", dynamic_key.clone())
+            .bind_surface_color_alias("surface_color")
+            .bind_flow_owned_alias("owned_color", flow_owned_id)
+            .with_uniform_override(uniform_id, vec![1, 2, 3, 4])
+            .with_history_signature("viewport.7:v1"),
+    )
+    .with_dynamic_target(descriptor.clone());
+    let batch = RenderProductSurfaceRequestBatch::from_request(product_surface_request);
 
     let mut requests = PreparedRenderFrameRequestResource::default();
     requests
         .replace_contribution(
             producer(1),
-            [PreparedViewFrame::offscreen_product(
-                "viewport.7",
-                (320, 180),
-            )],
-            [PreparedFlowInvocationRequest {
-                invocation_id: PreparedFlowInvocationId::new("viewport.7.editor"),
-                flow_id,
-                view_id: "viewport.7".to_string(),
-                target_alias_bindings: alias_bindings,
-                uniform_overrides: BTreeMap::new(),
-                history_signature: Some("viewport.7:v1".to_string()),
-            }],
+            batch.views().iter().cloned(),
+            batch.flow_invocations().iter().cloned(),
         )
         .unwrap();
 
+    assert_eq!(batch.dynamic_targets(), &[descriptor]);
     let views = requests.requested_views();
     assert_eq!(views.len(), 1);
     assert_eq!(views[0].kind, PreparedViewKind::OffscreenProduct);
     assert_eq!(views[0].target_size_px, (320, 180));
+    assert_eq!(
+        views[0].history_signature.as_deref(),
+        Some("viewport.7:view")
+    );
 
     let invocations = requests.requested_flow_invocations();
     assert_eq!(invocations.len(), 1);
@@ -226,24 +646,85 @@ fn prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
         invocations[0].history_signature.as_deref(),
         Some("viewport.7:v1")
     );
-    assert!(
-        invocations[0].uniform_overrides.is_empty(),
-        "prepared invocation requests should expose an explicit override map even when unused"
+    assert_eq!(
+        invocations[0].target_alias_bindings.get("surface_color"),
+        Some(&PreparedTargetBinding::SurfaceColor)
+    );
+    assert_eq!(
+        invocations[0].target_alias_bindings.get("owned_color"),
+        Some(&PreparedTargetBinding::FlowOwned(flow_owned_id))
+    );
+    assert_eq!(
+        invocations[0].uniform_overrides.get(&uniform_id),
+        Some(&vec![1, 2, 3, 4])
     );
 }
 
 #[test]
-fn prepared_frame_requests_reject_duplicate_invocation_ids_across_producers() {
+fn render_dynamic_targets_prepared_frame_requests_report_typed_duplicate_diagnostics() {
     let flow_id = RenderFlowId::try_from_raw(7).unwrap();
-    let request = |view_id: &str| PreparedFlowInvocationRequest {
-        invocation_id: PreparedFlowInvocationId::new("shared.invocation"),
-        flow_id,
-        view_id: view_id.to_string(),
-        target_alias_bindings: BTreeMap::new(),
-        uniform_overrides: BTreeMap::new(),
-        history_signature: None,
+    let request = |invocation_id: &str, view_id: &str| {
+        PreparedFlowInvocationRequest::new(invocation_id, flow_id, view_id)
     };
     let mut requests = PreparedRenderFrameRequestResource::default();
+
+    let err = requests
+        .replace_contribution(
+            producer(1),
+            [
+                PreparedViewFrame::offscreen_product("same.view", (320, 180)),
+                PreparedViewFrame::offscreen_product("same.view", (320, 180)),
+            ],
+            [],
+        )
+        .expect_err("duplicate views inside one producer should be typed");
+    assert!(matches!(
+        err,
+        PreparedRenderFrameRequestError::DuplicateViewWithinProducer { .. }
+    ));
+    assert_eq!(requests.diagnostics().len(), 1);
+    assert_eq!(
+        requests.diagnostics()[0].request_kind,
+        PreparedRenderFrameRequestKind::View
+    );
+    assert_eq!(requests.diagnostics()[0].producer_id, producer(1));
+    assert_eq!(requests.diagnostics()[0].existing_producer_id, None);
+    assert_eq!(
+        requests.diagnostics()[0].view_id.as_deref(),
+        Some("same.view")
+    );
+
+    requests.clear();
+    let err = requests
+        .replace_contribution(
+            producer(1),
+            [PreparedViewFrame::offscreen_product(
+                "viewport.1",
+                (320, 180),
+            )],
+            [
+                request("shared.invocation", "viewport.1"),
+                request("shared.invocation", "viewport.1"),
+            ],
+        )
+        .expect_err("duplicate invocations inside one producer should be typed");
+    assert!(matches!(
+        err,
+        PreparedRenderFrameRequestError::DuplicateInvocationWithinProducer { .. }
+    ));
+    assert_eq!(
+        requests.diagnostics()[0].request_kind,
+        PreparedRenderFrameRequestKind::Invocation
+    );
+    assert_eq!(
+        requests.diagnostics()[0]
+            .invocation_id
+            .as_ref()
+            .map(|id| id.0.as_str()),
+        Some("shared.invocation")
+    );
+
+    requests.clear();
     requests
         .replace_contribution(
             producer(1),
@@ -251,7 +732,7 @@ fn prepared_frame_requests_reject_duplicate_invocation_ids_across_producers() {
                 "viewport.1",
                 (320, 180),
             )],
-            [request("viewport.1")],
+            [request("producer.1.invocation", "viewport.1")],
         )
         .unwrap();
 
@@ -259,15 +740,62 @@ fn prepared_frame_requests_reject_duplicate_invocation_ids_across_producers() {
         .replace_contribution(
             producer(2),
             [PreparedViewFrame::offscreen_product(
+                "viewport.1",
+                (320, 180),
+            )],
+            [request("producer.2.invocation", "viewport.1")],
+        )
+        .expect_err("view ids must be globally unique inside a frame");
+    assert!(matches!(
+        err,
+        PreparedRenderFrameRequestError::DuplicateViewAcrossProducers { .. }
+    ));
+    assert_eq!(
+        requests.diagnostics()[0].existing_producer_id,
+        Some(producer(1))
+    );
+    assert_eq!(requests.requested_views().len(), 1);
+
+    requests.clear();
+    requests
+        .replace_contribution(
+            producer(1),
+            [PreparedViewFrame::offscreen_product(
+                "viewport.1",
+                (320, 180),
+            )],
+            [request("shared.invocation", "viewport.1")],
+        )
+        .unwrap();
+    let err = requests
+        .replace_contribution(
+            producer(2),
+            [PreparedViewFrame::offscreen_product(
                 "viewport.2",
                 (320, 180),
             )],
-            [request("viewport.2")],
+            [request("shared.invocation", "viewport.2")],
         )
         .expect_err("invocation ids must be globally unique inside a frame");
 
-    assert!(
-        err.to_string().contains("duplicate invocation"),
-        "unexpected error: {err}"
+    assert!(matches!(
+        err,
+        PreparedRenderFrameRequestError::DuplicateInvocationAcrossProducers { .. }
+    ));
+    assert_eq!(requests.diagnostics()[0].producer_id, producer(2));
+    assert_eq!(
+        requests.diagnostics()[0].existing_producer_id,
+        Some(producer(1))
+    );
+    assert_eq!(
+        requests.diagnostics()[0].request_kind,
+        PreparedRenderFrameRequestKind::Invocation
+    );
+    assert_eq!(
+        requests.diagnostics()[0]
+            .invocation_id
+            .as_ref()
+            .map(|id| id.0.as_str()),
+        Some("shared.invocation")
     );
 }

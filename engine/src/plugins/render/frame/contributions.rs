@@ -1,3 +1,4 @@
+use super::{PreparedFeatureContributionDiagnostic, PreparedRegisteredFeaturePayload};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
     CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
@@ -13,6 +14,7 @@ use std::fmt;
 #[derive(Debug, Clone, Default)]
 pub struct PreparedFrameContributions {
     pub by_feature: BTreeMap<RenderFeatureId, PreparedFeatureContribution>,
+    pub diagnostics: Vec<PreparedFeatureContributionDiagnostic>,
 }
 
 impl PreparedFrameContributions {
@@ -22,6 +24,14 @@ impl PreparedFrameContributions {
 
     pub fn insert(&mut self, id: RenderFeatureId, contribution: PreparedFeatureContribution) {
         self.by_feature.insert(id, contribution);
+    }
+
+    pub fn push_diagnostic(&mut self, diagnostic: PreparedFeatureContributionDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    pub fn diagnostics(&self) -> &[PreparedFeatureContributionDiagnostic] {
+        &self.diagnostics
     }
 
     pub fn insert_missing(&mut self, id: RenderFeatureId, fallback_policy: FeatureFallbackPolicy) {
@@ -198,6 +208,23 @@ impl PreparedFrameContributions {
         );
     }
 
+    pub fn insert_registered(
+        &mut self,
+        id: RenderFeatureId,
+        payload: PreparedRegisteredFeaturePayload,
+        status: FeatureContributionStatus,
+        fallback_policy: FeatureFallbackPolicy,
+    ) {
+        self.insert(
+            id,
+            PreparedFeatureContribution {
+                status,
+                fallback_policy,
+                payload: PreparedFeaturePayload::Registered(payload),
+            },
+        );
+    }
+
     pub fn ui(&self) -> Option<&PreparedUiFrameContribution> {
         let contribution = self.by_feature.get(&UI_RENDER_FEATURE_ID)?;
         match contribution.payload {
@@ -292,6 +319,7 @@ pub enum PreparedFeaturePayload {
     WindFields(PreparedWindFieldFeatureContribution),
     Material(PreparedMaterialFeatureContribution),
     Deformation(PreparedDeformationFeatureContribution),
+    Registered(PreparedRegisteredFeaturePayload),
 }
 
 #[derive(Debug, Clone, Default)]

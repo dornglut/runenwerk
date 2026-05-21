@@ -1,16 +1,14 @@
 //! File: apps/runenwerk_editor/src/runtime/systems/material_preview.rs
 //! Purpose: Material Lab prepared renderer handoff and preview render producer.
 
-use std::collections::BTreeMap;
-
 use editor_scene::SceneMaterialAssignmentState;
 use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::plugins::render::{
-    FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInvocationId,
-    PreparedFlowInvocationRequest, PreparedMaterialFeatureResource,
-    PreparedRenderFrameRequestResource, PreparedTargetBinding, PreparedViewFrame,
-    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId,
-    RenderFlowRegistryResource, ShaderRegistryResource, compile_scene_material_table_shader,
+    FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInvocationRequest,
+    PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource, PreparedViewFrame,
+    RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId, RenderFlowRegistryResource,
+    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    ShaderRegistryResource, compile_scene_material_table_shader,
 };
 use engine::runtime::{Res, ResMut};
 
@@ -590,25 +588,25 @@ pub fn produce_material_preview_dynamic_uploads_system(
         return;
     }
 
-    dynamic_target_requests
-        .replace_contribution(
-            EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID,
-            [material_preview_scene_surface_descriptor(preview)],
-        )
-        .expect("material preview product-surface target contribution must be unique");
-
     let mut requests = material_preview_flow_requests(preview, flow_id, &product_targets);
     requests.push(material_preview_scene_surface_flow_request(
         preview, flow_id,
     ));
-    let views = requests
-        .iter()
-        .map(|(_, view, _)| view.clone())
-        .collect::<Vec<_>>();
-    let invocations = requests
-        .into_iter()
-        .map(|(_, _, request)| request)
-        .collect::<Vec<_>>();
+    let batch = RenderProductSurfaceRequestBatch::from_requests(requests);
+    let manifest = RenderProductSurfaceManifest::from_request_batch(
+        EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID,
+        "editor.material_preview",
+        batch,
+    );
+    debug_assert!(
+        !manifest.has_error_diagnostics(),
+        "material preview product-surface manifest should be structurally valid"
+    );
+    let (dynamic_targets, _, views, invocations) = manifest.into_render_parts();
+
+    dynamic_target_requests
+        .replace_contribution(EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID, dynamic_targets)
+        .expect("material preview product-surface target contribution must be unique");
     prepared_frame_requests
         .replace_contribution(
             EDITOR_MATERIAL_PREVIEW_PRODUCT_PRODUCER_ID,
@@ -621,11 +619,7 @@ pub fn produce_material_preview_dynamic_uploads_system(
 pub(crate) fn material_preview_scene_surface_flow_request(
     preview: &EditorMaterialPreviewProduct,
     flow_id: RenderFlowId,
-) -> (
-    RenderDynamicTextureTargetKey,
-    PreparedViewFrame,
-    PreparedFlowInvocationRequest,
-) {
+) -> RenderProductSurfaceRequest {
     let target = material_preview_scene_surface_target_key(preview);
     let view_id = format!(
         "editor.material.preview.surface.{}.view",
@@ -638,36 +632,29 @@ pub(crate) fn material_preview_scene_surface_flow_request(
             MATERIAL_PREVIEW_SCENE_SURFACE_HEIGHT,
         ),
     );
-    let request = PreparedFlowInvocationRequest {
-        invocation_id: PreparedFlowInvocationId::new(format!(
+    let request = PreparedFlowInvocationRequest::new(
+        format!(
             "editor.material.preview.surface.{}.{}",
             preview.product_id().raw(),
             preview.shader_identity
-        )),
+        ),
         flow_id,
         view_id,
-        target_alias_bindings: BTreeMap::from([(
-            VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW.to_string(),
-            PreparedTargetBinding::DynamicTexture(target.clone()),
-        )]),
-        uniform_overrides: BTreeMap::new(),
-        history_signature: Some(format!(
-            "material-preview-surface:{}",
-            preview.shader_identity
-        )),
-    };
-    (target, view, request)
+    )
+    .bind_dynamic_texture_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, target)
+    .with_history_signature(format!(
+        "material-preview-surface:{}",
+        preview.shader_identity
+    ));
+    RenderProductSurfaceRequest::new(view, request)
+        .with_dynamic_target(material_preview_scene_surface_descriptor(preview))
 }
 
 pub(crate) fn material_preview_flow_requests(
     preview: &EditorMaterialPreviewProduct,
     flow_id: RenderFlowId,
     product_targets: &ViewportProductTargetRegistryResource,
-) -> Vec<(
-    engine::plugins::render::RenderDynamicTextureTargetKey,
-    PreparedViewFrame,
-    PreparedFlowInvocationRequest,
-)> {
+) -> Vec<RenderProductSurfaceRequest> {
     product_targets
         .records()
         .filter(|record| {
@@ -682,21 +669,17 @@ pub(crate) fn material_preview_flow_requests(
                 view_id.clone(),
                 (record.width, record.height),
             );
-            let request = PreparedFlowInvocationRequest {
-                invocation_id: PreparedFlowInvocationId::new(format!(
+            let request = PreparedFlowInvocationRequest::new(
+                format!(
                     "editor.material.preview.{}.{}",
                     record.key.viewport_id.0, preview.shader_identity
-                )),
+                ),
                 flow_id,
                 view_id,
-                target_alias_bindings: BTreeMap::from([(
-                    VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW.to_string(),
-                    PreparedTargetBinding::DynamicTexture(target.clone()),
-                )]),
-                uniform_overrides: BTreeMap::new(),
-                history_signature: Some(preview.shader_identity.clone()),
-            };
-            (target, view, request)
+            )
+            .bind_dynamic_texture_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, target)
+            .with_history_signature(preview.shader_identity.clone());
+            RenderProductSurfaceRequest::new(view, request)
         })
         .collect()
 }
@@ -717,6 +700,7 @@ mod tests {
         asset_source_revision_id,
     };
     use editor_core::RealityVersion;
+    use engine::plugins::render::PreparedTargetBinding;
     use graph::{
         CyclePolicy, GraphDefinition, GraphId, GraphMetadataEntry, GraphValue, NodeDefinition,
         NodeId, PortDefinition, PortDirection, PortId, PortTypeId,
@@ -786,10 +770,18 @@ mod tests {
         );
 
         assert_eq!(requests.len(), 1);
-        let target = requests[0].0.clone();
+        assert!(
+            requests[0].dynamic_targets().is_empty(),
+            "viewport-backed material preview requests reuse viewport-owned dynamic targets"
+        );
+        let target = targets
+            .records()
+            .find(|record| record.key.product_id == preview.viewport_product_id)
+            .expect("preview target should exist")
+            .dynamic_key();
         assert_eq!(
             requests[0]
-                .2
+                .flow_invocation()
                 .target_alias_bindings
                 .get(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW),
             Some(&PreparedTargetBinding::DynamicTexture(target))
@@ -801,10 +793,14 @@ mod tests {
         let preview = preview();
         let flow_id = RenderFlowId::try_from_raw(99).unwrap();
 
-        let (target, view, request) =
+        let product_surface_request =
             material_preview_scene_surface_flow_request(&preview, flow_id);
+        let target = material_preview_scene_surface_target_key(&preview);
+        let view = product_surface_request.view();
+        let request = product_surface_request.flow_invocation();
 
-        assert_eq!(target, material_preview_scene_surface_target_key(&preview));
+        assert_eq!(product_surface_request.dynamic_targets().len(), 1);
+        assert_eq!(product_surface_request.dynamic_targets()[0].key, target);
         assert_eq!(
             target.label(),
             "runenwerk.editor.material_lab.preview_scene:material-product-3-scene"

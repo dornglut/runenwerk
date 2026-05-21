@@ -7,9 +7,10 @@ use engine::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
     RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource,
     RenderDynamicTextureUploadDescriptor, RenderDynamicTextureUploadRegistryResource,
-    RenderFrameProducerId, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureTargetUsage, RenderTextureUploadAlphaMode, UiFrameProducerId, UiFrameRoute,
-    UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
+    RenderFrameProducerId, RenderProductSurfaceManifest, RenderTextureSampleMode,
+    RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
+    UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
+    UiFrameSubmissionRegistryResource,
 };
 use engine::plugins::{InputState, MouseButtonTransitionSample, MouseMotionSample};
 use engine::runtime::RuntimeJobExecutorResource;
@@ -27,10 +28,11 @@ use ui_input::{
     PointerSourceKind, PointerToolKind, UiInputEvent,
 };
 use ui_math::{UiPoint, UiSize, UiVector};
+use ui_render_data::ProductSurfaceTextureBindingSource;
 
 use crate::app::{
     DRAWING_INK_TEXTURE_NAMESPACE, DrawingInkSurfaceKind, DrawingTabletPanelProjection,
-    drawing_ink_texture_target_id,
+    RunenwerkDrawApp, drawing_ink_texture_target_id,
 };
 use crate::runtime::gpu_ink::{DrawingInkGpuFlowResource, prepare_drawing_ink_gpu_frame};
 use crate::runtime::ink::process_drawing_preview_ink_jobs;
@@ -420,6 +422,25 @@ pub fn submit_draw_frame_system(
             ))
             .chain(gpu_target_descriptors)
             .collect::<Vec<_>>();
+    let uploads = ink_uploads(&committed_upload_products, DrawingInkSurfaceKind::Committed)
+        .into_iter()
+        .chain(ink_uploads(
+            &preview_upload_products,
+            DrawingInkSurfaceKind::Preview,
+        ))
+        .collect::<Vec<_>>();
+    let manifest = drawing_ink_product_surface_manifest(
+        &host.app,
+        target_descriptors,
+        uploads,
+        &committed_products,
+        &preview_products,
+    );
+    debug_assert!(
+        !manifest.has_error_diagnostics(),
+        "drawing ink product-surface manifest should be structurally valid"
+    );
+    let (target_descriptors, uploads, _, _) = manifest.into_render_parts();
     let target_requests_accepted =
         dynamic_targets.replace_contribution(DRAWING_RENDER_FRAME_PRODUCER_ID, target_descriptors)
             .map(|_| true)
@@ -428,13 +449,6 @@ pub fn submit_draw_frame_system(
                 false
             });
 
-    let uploads = ink_uploads(&committed_upload_products, DrawingInkSurfaceKind::Committed)
-        .into_iter()
-        .chain(ink_uploads(
-            &preview_upload_products,
-            DrawingInkSurfaceKind::Preview,
-        ))
-        .collect::<Vec<_>>();
     let uploads_accepted =
         texture_uploads.replace_contribution(DRAWING_RENDER_FRAME_PRODUCER_ID, uploads)
             .map(|_| true)
@@ -462,6 +476,62 @@ pub fn submit_draw_frame_system(
             .with_order(UiFrameSubmissionOrder::new(10, 0))
             .with_frame(frame),
     );
+}
+
+fn drawing_ink_product_surface_manifest(
+    app: &RunenwerkDrawApp,
+    target_descriptors: Vec<RenderDynamicTextureTargetDescriptor>,
+    uploads: Vec<RenderDynamicTextureUploadDescriptor>,
+    committed_products: &[drawing::DrawingInkTileProduct],
+    preview_products: &[drawing::DrawingInkTileProduct],
+) -> RenderProductSurfaceManifest {
+    let manifest =
+        RenderProductSurfaceManifest::new(DRAWING_RENDER_FRAME_PRODUCER_ID, "runenwerk_draw.ink")
+            .with_dynamic_targets(target_descriptors)
+            .with_dynamic_uploads(uploads);
+    committed_products.iter().fold(
+        preview_products.iter().fold(manifest, |manifest, product| {
+            with_ink_product_surface_binding(app, manifest, DrawingInkSurfaceKind::Preview, product)
+        }),
+        |manifest, product| {
+            with_ink_product_surface_binding(
+                app,
+                manifest,
+                DrawingInkSurfaceKind::Committed,
+                product,
+            )
+        },
+    )
+}
+
+fn with_ink_product_surface_binding(
+    app: &RunenwerkDrawApp,
+    manifest: RenderProductSurfaceManifest,
+    surface_kind: DrawingInkSurfaceKind,
+    product: &drawing::DrawingInkTileProduct,
+) -> RenderProductSurfaceManifest {
+    let binding = ink_surface_binding(app, surface_kind, product);
+    match binding.backing {
+        DrawingInkSurfaceBacking::Upload => {
+            manifest.with_upload_backed_product_surface_binding(binding.surface_key, binding.source)
+        }
+        DrawingInkSurfaceBacking::DynamicTarget => {
+            manifest.with_product_surface_binding(binding.surface_key, binding.source)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DrawingInkSurfaceBinding {
+    surface_key: String,
+    source: ProductSurfaceTextureBindingSource,
+    backing: DrawingInkSurfaceBacking,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DrawingInkSurfaceBacking {
+    Upload,
+    DynamicTarget,
 }
 
 fn ink_target_descriptors(
@@ -545,6 +615,40 @@ fn ink_target_key(
             product.metadata.tile_id,
         ),
     )
+}
+
+fn ink_visible_surface_kind(
+    app: &RunenwerkDrawApp,
+    surface_kind: DrawingInkSurfaceKind,
+    product: &drawing::DrawingInkTileProduct,
+) -> DrawingInkSurfaceKind {
+    app.ink_runtime()
+        .visible_surface_kind_for(surface_kind, product)
+}
+
+fn ink_surface_binding(
+    app: &RunenwerkDrawApp,
+    surface_kind: DrawingInkSurfaceKind,
+    product: &drawing::DrawingInkTileProduct,
+) -> DrawingInkSurfaceBinding {
+    let visible_surface_kind = ink_visible_surface_kind(app, surface_kind, product);
+    let key = ink_target_key(visible_surface_kind, product);
+    DrawingInkSurfaceBinding {
+        surface_key: key.to_string(),
+        source: ProductSurfaceTextureBindingSource::dynamic_texture(key.namespace, key.target_id),
+        backing: ink_surface_backing(visible_surface_kind),
+    }
+}
+
+fn ink_surface_backing(surface_kind: DrawingInkSurfaceKind) -> DrawingInkSurfaceBacking {
+    match surface_kind {
+        DrawingInkSurfaceKind::Committed | DrawingInkSurfaceKind::Preview => {
+            DrawingInkSurfaceBacking::Upload
+        }
+        DrawingInkSurfaceKind::GpuCommitted | DrawingInkSurfaceKind::GpuPreview => {
+            DrawingInkSurfaceBacking::DynamicTarget
+        }
+    }
 }
 
 fn ink_texture_target_usage() -> RenderTextureTargetUsage {
@@ -729,4 +833,209 @@ fn pointer_packet_with_coalesced_mouse_samples(samples: &[MouseMotionSample]) ->
             UiVector::new(sample.delta.0, sample.delta.1),
         )
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use drawing::{
+        CanvasCoordinate, CanvasRect, CanvasTileId, CompositeOutputId, DrawingDocumentRevision,
+        DrawingInkTilePayload, DrawingInkTileProduct, DrawingProductLineage, DrawingTileProduct,
+        DrawingTileProductId, DrawingTileProductSource, FormationVersion, ProductQualityClass,
+        TilePyramidLevel,
+    };
+
+    fn drawing_product(
+        product_id: u64,
+        quality_class: ProductQualityClass,
+        tile_x: i64,
+    ) -> DrawingInkTileProduct {
+        let tile_id = CanvasTileId::new(TilePyramidLevel::new(0), tile_x, 0);
+        let revision = DrawingDocumentRevision::new(1);
+        let source = DrawingTileProductSource::new(
+            quality_class,
+            revision,
+            CompositeOutputId::new(1),
+            DrawingProductLineage::new(revision),
+            FormationVersion::new(1),
+            CanvasRect::new(
+                CanvasCoordinate::new(0.0, 0.0),
+                CanvasCoordinate::new(2.0, 2.0),
+            ),
+        );
+
+        DrawingInkTileProduct {
+            metadata: DrawingTileProduct::new(
+                DrawingTileProductId::new(product_id),
+                tile_id,
+                source,
+            ),
+            payload: DrawingInkTilePayload::new(
+                2,
+                2,
+                vec![
+                    255, 255, 255, 255, 0, 0, 0, 0, 255, 0, 0, 255, 0, 255, 0, 255,
+                ],
+            ),
+            cache_key: format!("test-product-{product_id}"),
+            descriptor_generation: product_id,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn passing_gpu_metrics() -> crate::app::DrawingInkGpuValidationMetrics {
+        crate::app::DrawingInkGpuValidationMetrics {
+            max_channel_delta: 0,
+            changed_pixel_count: 0,
+            total_pixel_count: 4,
+            changed_pixel_ratio: 0.0,
+        }
+    }
+
+    #[test]
+    fn drawing_product_surface_manifest_traces_upload_backed_committed_tiles() {
+        let app = RunenwerkDrawApp::new();
+        let product = drawing_product(7, ProductQualityClass::Final, 3);
+        let targets = ink_target_descriptors(
+            std::slice::from_ref(&product),
+            DrawingInkSurfaceKind::Committed,
+        );
+        let uploads = ink_uploads(&[&product], DrawingInkSurfaceKind::Committed);
+
+        let manifest = drawing_ink_product_surface_manifest(
+            &app,
+            targets,
+            uploads,
+            std::slice::from_ref(&product),
+            &[],
+        );
+
+        assert_eq!(manifest.dynamic_targets().len(), 1);
+        assert_eq!(manifest.dynamic_uploads().len(), 1);
+        assert_eq!(manifest.product_bindings().len(), 1);
+        assert_eq!(
+            manifest.product_bindings()[0].surface_key,
+            manifest.dynamic_targets()[0].key.to_string()
+        );
+        assert!(manifest.product_bindings()[0].upload_required);
+        assert!(
+            manifest.diagnostics().is_empty(),
+            "drawing upload-backed product-surface manifest should be valid"
+        );
+    }
+
+    #[test]
+    fn drawing_product_surface_manifest_traces_preview_tiles() {
+        let app = RunenwerkDrawApp::new();
+        let product = drawing_product(8, ProductQualityClass::Preview, 4);
+        let targets = ink_target_descriptors(
+            std::slice::from_ref(&product),
+            DrawingInkSurfaceKind::Preview,
+        );
+        let uploads = ink_uploads(&[&product], DrawingInkSurfaceKind::Preview);
+
+        let manifest =
+            drawing_ink_product_surface_manifest(&app, targets, uploads, &[], &[product]);
+
+        assert_eq!(manifest.product_family(), "runenwerk_draw.ink");
+        assert_eq!(manifest.product_bindings().len(), 1);
+        assert_eq!(
+            manifest.product_bindings()[0].source,
+            ProductSurfaceTextureBindingSource::dynamic_texture(
+                DRAWING_INK_TEXTURE_NAMESPACE,
+                "preview.preview.L0.4.0",
+            )
+        );
+        assert!(manifest.product_bindings()[0].upload_required);
+        assert!(
+            manifest.diagnostics().is_empty(),
+            "drawing preview product-surface manifest should be valid"
+        );
+    }
+
+    #[test]
+    fn drawing_product_surface_manifest_binds_gpu_committed_tiles_without_upload_requirement() {
+        let mut app = RunenwerkDrawApp::new();
+        let product = drawing_product(9, ProductQualityClass::Final, 5);
+        app.ink_runtime_mut().record_gpu_validation_pass(
+            DrawingInkSurfaceKind::Committed,
+            &product,
+            passing_gpu_metrics(),
+        );
+        let targets = ink_target_descriptors(
+            std::slice::from_ref(&product),
+            DrawingInkSurfaceKind::Committed,
+        )
+        .into_iter()
+        .chain(ink_target_descriptors(
+            std::slice::from_ref(&product),
+            DrawingInkSurfaceKind::GpuCommitted,
+        ))
+        .collect::<Vec<_>>();
+        let gpu_key = ink_target_key(DrawingInkSurfaceKind::GpuCommitted, &product);
+
+        let manifest = drawing_ink_product_surface_manifest(
+            &app,
+            targets,
+            Vec::new(),
+            std::slice::from_ref(&product),
+            &[],
+        );
+
+        assert_eq!(manifest.dynamic_targets().len(), 2);
+        assert!(manifest.dynamic_uploads().is_empty());
+        assert_eq!(manifest.product_bindings().len(), 1);
+        assert_eq!(
+            manifest.product_bindings()[0].surface_key,
+            gpu_key.to_string()
+        );
+        assert_eq!(
+            manifest.product_bindings()[0].source,
+            ProductSurfaceTextureBindingSource::dynamic_texture(
+                gpu_key.namespace.clone(),
+                gpu_key.target_id.clone(),
+            )
+        );
+        assert!(!manifest.product_bindings()[0].upload_required);
+        assert!(
+            manifest.diagnostics().is_empty(),
+            "GPU-promoted committed drawing surface should not require a CPU upload"
+        );
+    }
+
+    #[test]
+    fn drawing_product_surface_manifest_binds_gpu_preview_tiles_without_upload_requirement() {
+        let mut app = RunenwerkDrawApp::new();
+        let product = drawing_product(10, ProductQualityClass::Preview, 6);
+        app.ink_runtime_mut().record_gpu_validation_pass(
+            DrawingInkSurfaceKind::Preview,
+            &product,
+            passing_gpu_metrics(),
+        );
+        let targets = ink_target_descriptors(
+            std::slice::from_ref(&product),
+            DrawingInkSurfaceKind::Preview,
+        )
+        .into_iter()
+        .chain(ink_target_descriptors(
+            std::slice::from_ref(&product),
+            DrawingInkSurfaceKind::GpuPreview,
+        ))
+        .collect::<Vec<_>>();
+        let gpu_key = ink_target_key(DrawingInkSurfaceKind::GpuPreview, &product);
+
+        let manifest =
+            drawing_ink_product_surface_manifest(&app, targets, Vec::new(), &[], &[product]);
+
+        assert_eq!(manifest.product_bindings().len(), 1);
+        assert_eq!(
+            manifest.product_bindings()[0].surface_key,
+            gpu_key.to_string()
+        );
+        assert!(!manifest.product_bindings()[0].upload_required);
+        assert!(
+            manifest.diagnostics().is_empty(),
+            "GPU-promoted preview drawing surface should not require a CPU upload"
+        );
+    }
 }

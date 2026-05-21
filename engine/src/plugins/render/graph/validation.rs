@@ -1007,6 +1007,7 @@ fn validate_pass_resource_usage(
                 | RenderResourceDescriptor::ColorTarget(_)
                 | RenderResourceDescriptor::DepthTarget(_)
                 | RenderResourceDescriptor::HistoryTexture(_)
+                | RenderResourceDescriptor::TargetAlias(_)
                 | RenderResourceDescriptor::ImportedTexture(_)
         ) {
             issues.push(RenderFlowValidationIssue::SampledNonTextureResource {

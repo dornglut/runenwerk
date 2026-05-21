@@ -19,7 +19,7 @@ pub mod runtime;
 
 pub use api::*;
 pub use bytemuck;
-pub use composition::RenderFlowRegistryResource;
+pub use composition::*;
 pub use engine_render_macros::{GpuStorage, GpuUniform};
 pub use features::*;
 pub use frame::*;

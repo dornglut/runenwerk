@@ -80,21 +80,21 @@ package "PT-WB-CAP Capability Workbench Platform" {
 }
 
 package "PT-RENDER-PG Render Product Graph Platform" {
-  component "PM-RENDER-PG-001 Render Product Graph Doctrine And Boundary Ratification\nkind=design\nstate=active\nWR=WR-003, WR-009, WR-010" as PM_RENDER_PG_001 <<active>>
+  component "PM-RENDER-PG-001 Render Product Graph Doctrine And Boundary Ratification\nkind=design\nstate=completed\nWR=WR-003" as PM_RENDER_PG_001 <<completed>>
 
-  component "PM-RENDER-PG-002 Render Contract Ergonomics\nkind=implementation\nstate=designing\nWR=WR-003" as PM_RENDER_PG_002 <<designing>>
+  component "PM-RENDER-PG-002 Render Contract Ergonomics\nkind=implementation\nstate=completed\nWR=WR-041" as PM_RENDER_PG_002 <<completed>>
 
-  component "PM-RENDER-PG-003 Feature-Owned Render Contributions\nkind=implementation\nstate=designing\nWR=WR-003, WR-010" as PM_RENDER_PG_003 <<designing>>
+  component "PM-RENDER-PG-003 Feature-Owned Render Contributions\nkind=implementation\nstate=completed\nWR=WR-003, WR-042" as PM_RENDER_PG_003 <<completed>>
 
-  component "PM-RENDER-PG-004 Render Execution Graph Compiler Maturity\nkind=implementation\nstate=designing\nWR=WR-003, WR-010" as PM_RENDER_PG_004 <<designing>>
+  component "PM-RENDER-PG-004 Render Execution Graph Compiler Maturity\nkind=implementation\nstate=completed\nWR=WR-003, WR-043" as PM_RENDER_PG_004 <<completed>>
 
-  component "PM-RENDER-PG-005 Product Surface Platform Hardening\nkind=implementation\nstate=designing\nWR=WR-003" as PM_RENDER_PG_005 <<designing>>
+  component "PM-RENDER-PG-005 Product Surface Platform Hardening\nkind=implementation\nstate=completed\nWR=WR-003, WR-044" as PM_RENDER_PG_005 <<completed>>
 
-  component "PM-RENDER-PG-006 Multi-Surface Presentation\nkind=implementation\nstate=designing\nWR=WR-009" as PM_RENDER_PG_006 <<designing>>
+  component "PM-RENDER-PG-006 Multi-Surface Presentation\nkind=implementation\nstate=completed\nWR=WR-009" as PM_RENDER_PG_006 <<completed>>
 
-  component "PM-RENDER-PG-007 Render Fragments And Hot Reload\nkind=implementation\nstate=designing\nWR=WR-010" as PM_RENDER_PG_007 <<designing>>
+  component "PM-RENDER-PG-007 Render Fragments And Hot Reload\nkind=implementation\nstate=completed\nWR=WR-010" as PM_RENDER_PG_007 <<completed>>
 
-  component "PM-RENDER-PG-008 Production Readiness And Inspection\nkind=hardening\nstate=designing\nWR=WR-003, WR-009, WR-010" as PM_RENDER_PG_008 <<designing>>
+  component "PM-RENDER-PG-008 Production Readiness And Inspection\nkind=hardening\nstate=completed\nWR=WR-045, WR-003, WR-009, WR-010" as PM_RENDER_PG_008 <<completed>>
 
 }
 

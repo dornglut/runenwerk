@@ -20,6 +20,10 @@ Move a design to `implemented/` only after code has been checked against it and 
 
 - [Foundation Diagnostics Design](foundation-diagnostics-design.md)
 
+### Editor Domain
+
+- [Editor Native Multi-Window Presentation Design](editor-native-multi-window-presentation-design.md)
+
 ### Workspace / Cross-Domain
 
 - [AI-Friendly Engine Architecture](workspace-ai-friendly-engine-architecture.md)
@@ -31,4 +35,11 @@ Move a design to `implemented/` only after code has been checked against it and 
 
 ### Engine Runtime
 
+- [Feature-Owned Render Contributions Design](feature-owned-render-contributions-design.md)
+- [Product Surface Platform Hardening Design](product-surface-platform-hardening-design.md)
+- [Render Execution Graph Compiler Maturity Design](render-execution-graph-compiler-maturity-design.md)
+- [Render Fragment Data-Driven Maturity Design](render-fragment-data-driven-maturity-design.md)
+- [Render Production Readiness And Inspection Design](render-production-readiness-and-inspection-design.md)
+- [Render Contract Ergonomics Design](render-contract-ergonomics-design.md)
+- [Render Product Graph Platform](render-product-graph-platform-design.md)
 - [SDF Product Renderer and GPU Residency Design](sdf-product-renderer-and-gpu-residency-design.md)

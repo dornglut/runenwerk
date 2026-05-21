@@ -1,5 +1,5 @@
 use crate::plugins::{InputState, TouchInputPhase};
-use crate::runtime::window::WindowState;
+use crate::runtime::window::{NativeWindowId, WindowState, WindowStateRegistryResource};
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
@@ -44,6 +44,21 @@ pub enum PlatformEvent {
         pressure: Option<f32>,
     },
     RedrawRequested,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlatformWindowEvent {
+    pub native_window_id: NativeWindowId,
+    pub event: PlatformEvent,
+}
+
+impl PlatformWindowEvent {
+    pub fn new(native_window_id: NativeWindowId, event: PlatformEvent) -> Self {
+        Self {
+            native_window_id,
+            event,
+        }
+    }
 }
 
 pub fn apply_platform_event(
@@ -101,11 +116,78 @@ pub fn apply_platform_event(
     }
 }
 
+pub fn apply_platform_window_event(
+    registry: &mut WindowStateRegistryResource,
+    legacy_primary_window: &mut WindowState,
+    input: &mut InputState,
+    event: &PlatformWindowEvent,
+) {
+    if registry.primary_window_id().is_none() {
+        registry.ensure_primary_from_legacy(legacy_primary_window);
+    }
+
+    let is_primary = registry.primary_window_id() == Some(event.native_window_id);
+    if let Some(record) = registry.record_mut(event.native_window_id) {
+        match &event.event {
+            PlatformEvent::Resumed => {
+                record.redraw_requested = true;
+            }
+            PlatformEvent::CloseRequested => {
+                record.request_close();
+            }
+            PlatformEvent::Resized { width, height } => {
+                record.size_px = (*width, *height);
+                record.request_redraw();
+            }
+            PlatformEvent::ScaleFactorChanged {
+                scale_factor,
+                width,
+                height,
+            } => {
+                record.scale_factor = *scale_factor;
+                record.size_px = (*width, *height);
+                record.request_redraw();
+            }
+            PlatformEvent::RedrawRequested => {
+                record.redraw_requested = false;
+            }
+            PlatformEvent::KeyboardInput { .. }
+            | PlatformEvent::MouseWheel { .. }
+            | PlatformEvent::CursorMoved { .. }
+            | PlatformEvent::MouseInput { .. }
+            | PlatformEvent::MouseMotion { .. }
+            | PlatformEvent::Touch { .. } => {}
+        }
+        if is_primary {
+            record.copy_to_legacy(legacy_primary_window);
+        }
+    }
+
+    match &event.event {
+        PlatformEvent::KeyboardInput { .. }
+        | PlatformEvent::MouseWheel { .. }
+        | PlatformEvent::CursorMoved { .. }
+        | PlatformEvent::MouseInput { .. }
+        | PlatformEvent::MouseMotion { .. }
+        | PlatformEvent::Touch { .. } => {
+            let mut shadow_window = WindowState::headless("");
+            apply_platform_event(&mut shadow_window, input, &event.event);
+        }
+        PlatformEvent::Resumed
+        | PlatformEvent::CloseRequested
+        | PlatformEvent::Resized { .. }
+        | PlatformEvent::ScaleFactorChanged { .. }
+        | PlatformEvent::RedrawRequested => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PlatformEvent, apply_platform_event};
+    use super::{
+        PlatformEvent, PlatformWindowEvent, apply_platform_event, apply_platform_window_event,
+    };
     use crate::plugins::InputState;
-    use crate::runtime::window::WindowState;
+    use crate::runtime::window::{NativeWindowId, WindowState, WindowStateRegistryResource};
     use winit::event::{ElementState, MouseButton};
     use winit::keyboard::KeyCode;
 
@@ -184,5 +266,68 @@ mod tests {
         assert_eq!(input.mouse_delta, (5.0, -2.0));
         assert_eq!(input.touch_samples().len(), 1);
         assert_eq!(input.touch_samples()[0].pressure, Some(0.6));
+    }
+
+    #[test]
+    fn window_scoped_resize_updates_selected_native_window_only() {
+        let mut legacy = WindowState::windowed("Runtime");
+        let mut registry = WindowStateRegistryResource::from_legacy(&legacy);
+        let secondary = registry
+            .request_window("Secondary", (640, 480))
+            .native_window_id;
+        let mut input = InputState::new();
+
+        apply_platform_window_event(
+            &mut registry,
+            &mut legacy,
+            &mut input,
+            &PlatformWindowEvent::new(
+                secondary,
+                PlatformEvent::Resized {
+                    width: 1920,
+                    height: 1080,
+                },
+            ),
+        );
+
+        assert_eq!(legacy.size_px, (1280, 720));
+        assert_eq!(
+            registry.record(secondary).map(|record| record.size_px),
+            Some((1920, 1080))
+        );
+        assert_eq!(
+            registry
+                .record(NativeWindowId::primary())
+                .map(|record| record.size_px),
+            Some((1280, 720))
+        );
+    }
+
+    #[test]
+    fn primary_window_scoped_resize_preserves_legacy_compatibility() {
+        let mut legacy = WindowState::windowed("Runtime");
+        let mut registry = WindowStateRegistryResource::from_legacy(&legacy);
+        let mut input = InputState::new();
+
+        apply_platform_window_event(
+            &mut registry,
+            &mut legacy,
+            &mut input,
+            &PlatformWindowEvent::new(
+                NativeWindowId::primary(),
+                PlatformEvent::Resized {
+                    width: 1024,
+                    height: 768,
+                },
+            ),
+        );
+
+        assert_eq!(legacy.size_px, (1024, 768));
+        assert_eq!(
+            registry
+                .record(NativeWindowId::primary())
+                .map(|record| record.size_px),
+            Some((1024, 768))
+        );
     }
 }

@@ -1,5 +1,8 @@
 use crate::plugins::render::inspect::RenderCapturePointIdentity;
 use crate::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
+use crate::plugins::render::{
+    RenderFragmentMergeReport, RenderFragmentProvenanceElementKind, RenderFragmentProvenanceRecord,
+};
 use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -70,4 +73,40 @@ pub struct RenderPassModelMeshMaterialSelectionEvidence {
     pub resolved_material_slot_id: u64,
     pub material_table_index: u32,
     pub used_default_fallback: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderFragmentPassProvenanceRecord {
+    pub package_id: String,
+    pub fragment_id: String,
+    pub namespace: String,
+    pub source_path: String,
+    pub source_revision: u64,
+    pub source_label: String,
+    pub generated_label: String,
+}
+
+pub fn inspect_fragment_pass_provenance(
+    report: &RenderFragmentMergeReport,
+) -> Vec<RenderFragmentPassProvenanceRecord> {
+    report
+        .provenance
+        .iter()
+        .filter(|record| record.element_kind == RenderFragmentProvenanceElementKind::Pass)
+        .map(fragment_pass_provenance_record)
+        .collect()
+}
+
+fn fragment_pass_provenance_record(
+    record: &RenderFragmentProvenanceRecord,
+) -> RenderFragmentPassProvenanceRecord {
+    RenderFragmentPassProvenanceRecord {
+        package_id: record.package_id.to_string(),
+        fragment_id: record.fragment_id.to_string(),
+        namespace: record.namespace.to_string(),
+        source_path: record.source_path.clone(),
+        source_revision: record.source_revision.0,
+        source_label: record.source_label.clone(),
+        generated_label: record.generated_label.clone(),
+    }
 }

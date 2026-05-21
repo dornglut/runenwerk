@@ -8,6 +8,7 @@ use crate::plugins::inspect::{
     validate_selector_terminal_invariant,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
+use crate::plugins::render::backend::{RenderSurfaceDiagnostic, RenderSurfaceRegistryResource};
 use crate::plugins::render::runtime::debug_eval::{evaluate_pixel_probes, evaluate_texture_diffs};
 use crate::plugins::render::*;
 use crate::plugins::time::domain::Time;
@@ -62,6 +63,8 @@ pub(crate) fn frame_render_submit_system(
         world.insert_resource(prepared_resource);
         prepared_frame
     };
+
+    validate_prepared_frame_surface_scope(&mut world, &prepared_frame)?;
 
     let Some(mut shader_registry) = world.remove_resource::<ShaderRegistryResource>() else {
         return Ok(());
@@ -381,4 +384,43 @@ pub(crate) fn frame_render_submit_system(
     world.insert_resource(shader_registry);
     world.insert_resource(gfx);
     result
+}
+
+fn validate_prepared_frame_surface_scope(
+    world: &mut WorldMut,
+    prepared_frame: &PreparedRenderFrame,
+) -> anyhow::Result<()> {
+    let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() else {
+        return Ok(());
+    };
+    let Some(record) = registry.record(prepared_frame.surface.render_surface_id) else {
+        let message = format!(
+            "prepared frame {} targets unknown render surface {}",
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw()
+        );
+        registry.record_diagnostic(RenderSurfaceDiagnostic {
+            render_surface_id: Some(prepared_frame.surface.render_surface_id),
+            native_window_id: prepared_frame.surface.native_window_id,
+            message: message.clone(),
+        });
+        anyhow::bail!(message);
+    };
+    let registered_native_window_id = record.native_window_id;
+    if prepared_frame.surface.native_window_id != Some(registered_native_window_id) {
+        let message = format!(
+            "prepared frame {} targets render surface {} for native window {:?}, but the registry owns native window {:?}",
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+            prepared_frame.surface.native_window_id,
+            registered_native_window_id
+        );
+        registry.record_diagnostic(RenderSurfaceDiagnostic {
+            render_surface_id: Some(prepared_frame.surface.render_surface_id),
+            native_window_id: prepared_frame.surface.native_window_id,
+            message: message.clone(),
+        });
+        anyhow::bail!(message);
+    }
+    Ok(())
 }

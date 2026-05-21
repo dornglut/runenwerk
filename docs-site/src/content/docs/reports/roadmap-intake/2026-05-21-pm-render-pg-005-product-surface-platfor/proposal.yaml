@@ -1,0 +1,120 @@
+version: 1
+idea: PM-RENDER-PG-005 Product Surface Platform Hardening bounded implementation
+source_path: ''
+owner: engine/src/plugins/render
+created_at: '2026-05-21'
+governance_notes:
+- Accepted PM-RENDER-PG-005 product-surface platform hardening design preserves the Product Graph and renderer execution boundary.
+- No ADR is required while the shared manifest and diagnostics remain engine/app runtime contracts and do not become a persisted cross-domain ABI.
+- Implementation must run through production:plan, roadmap promotion, focused validation, closeout evidence, and task ai:goal before PM-006.
+open_questions:
+- None for roadmap intake. Implementation contract must still choose the exact first bounded code slice before promotion.
+item:
+  id: WR-044
+  title: PM-RENDER-PG-005 Product Surface Platform Hardening
+  diagram_title: PM-005 product-surface hardening
+  alias: WR044
+  lane: Core support
+  dependency_level: L1
+  gate: Accepted PM-005 design and PM-004 completion evidence
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.6
+  rice: Bounded PM-005 shared product-surface hardening slice after PM-004 compiler maturity completion
+  kano: Basic
+  dependencies:
+  - WR-041
+  - WR-043
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - domain/ui/ui_render_data
+  - apps/runenwerk_editor/src/runtime/viewport
+  - apps/runenwerk_editor/src/runtime/systems/material_preview.rs
+  - apps/runenwerk_editor/src/runtime/systems/texture_preview.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - apps/runenwerk_editor/tests
+  - apps/runenwerk_draw/src
+  - apps/runenwerk_draw/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/product-surface-platform-hardening-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-005-product-surface-platfor
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow
+  - cargo test -p runenwerk_editor viewport
+  - cargo test -p runenwerk_editor material_preview
+  - cargo test -p runenwerk_editor texture_preview
+  - cargo test -p runenwerk_draw product_surface
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: Accepted PM-RENDER-PG-005 product-surface platform hardening design at docs-site/src/content/docs/design/accepted/product-surface-platform-hardening-design.md and completed PM-004 compiler maturity closeout.
+  current_decision: Accepted PM-RENDER-PG-005 shared product-surface producer manifest, diagnostics, UI binding, dynamic target, upload, prepared view, invocation, history, and inspection direction.
+  current_call: Ready-next for bounded PM-005 implementation planning. Do not implement native multi-window, render fragments, material truth/lowering, drawing semantics, SDF acceleration, production-readiness budgets, or renderer-owned product policy in WR-044.
+  first_move: Run task ai:goal -- --track PT-RENDER-PG, then task production:plan -- --milestone PM-RENDER-PG-005 --roadmap WR-044 before any code changes.
+  main_blocker: Needs production implementation contract, current-candidate promotion, bounded implementation, focused validation, closeout evidence, and production-track completion update.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - shared surface manifest
+  - upload and flow backed
+  - no product policy
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/product-surface-platform-hardening-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-005 implementation must follow the accepted product-surface platform hardening design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-005 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-005 depends on completed PM-002 render contract ergonomics evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-005 depends on completed PM-004 render execution graph compiler maturity evidence.
+  ddd_owner: engine render plugin with editor and drawing producer ownership
+  adr_requirement: No ADR required while this remains an engine/app runtime contract and does not become a cross-domain ABI, persisted plugin contract, external mod interface, or source-of-truth ownership change.
+  fitness_function_requirement: Manifest helper tests, duplicate/conflict diagnostics, UI binding traceability tests, non-sampleable UI rejection tests, upload-backed product-surface tests, field/debug status tests, drawing product-surface tests, prepared-frame inspection tests, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product, editor, and drawing producers.
+edges:
+- source: WR-041
+  target: WR-044
+  label: render ergonomics prerequisite
+- source: WR-043
+  target: WR-044
+  label: compiler preflight prerequisite

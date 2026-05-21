@@ -1,0 +1,87 @@
+version: 1
+idea: 'PM-RENDER-PG-002 render contract ergonomics implementation: add return-only engine render product-surface request helpers, typed prepared-frame request diagnostics, and migrate only editor viewport plus material preview request construction without moving product truth, freshness, authority, fallback legality, rebuild policy, or residency policy into the renderer.'
+source_path: docs-site/src/content/docs/design/accepted/render-contract-ergonomics-design.md
+owner: engine render plugin
+created_at: '2026-05-21'
+governance_notes:
+  - Architecture governance kickoff was run for the bounded PM-RENDER-PG-002 scope.
+  - The DDD owner is the engine render plugin for request contracts, with apps/runenwerk_editor as the explicit producer owner.
+  - No ADR is required because PM-002 preserves the accepted Render Product Graph ownership boundary and adds migration-safe helpers.
+open_questions: []
+item:
+  id: WR-041
+  title: PM-RENDER-PG-002 Render Contract Ergonomics
+  diagram_title: PM-002 render contract ergonomics
+  alias: WR041
+  lane: Core support
+  dependency_level: L0
+  gate: Accepted PM-002 design and production-track dependency complete
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.4
+  rice: Bounded PM-002 ergonomics slice after PM-001 doctrine acceptance
+  kano: Basic
+  dependencies: []
+  write_scopes:
+    - engine/src/plugins/render
+    - engine/tests
+    - apps/runenwerk_editor/src/runtime/viewport
+    - apps/runenwerk_editor/src/runtime/systems/material_preview.rs
+    - docs-site/src/content/docs/engine/reference/plugins/render
+    - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+    - docs-site/src/content/docs/design/accepted/render-contract-ergonomics-design.md
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/production-track-index.md
+    - docs-site/src/content/docs/workspace/production-milestone-register.md
+    - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+    - docs-site/src/content/docs/reports/closeouts
+  validations:
+    - cargo test -p engine render_dynamic_targets
+    - cargo test -p engine render_runtime_inspect
+    - cargo test -p runenwerk_editor viewport::render_jobs
+    - cargo test -p runenwerk_editor material_preview
+    - task docs:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task planning:validate
+    - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: Promote only after PM-002 is linked to this WR row and production planning confirms the bounded implementation contract.
+  current_decision: PM-002 has an accepted design gate; this WR is the bounded implementation row for return-only render product-surface request helpers, typed request diagnostics, and exactly two producer migrations.
+  current_call: Implement only the PM-002 ergonomics slice; keep WR-003 as contextual support evidence and do not move product truth or product policy into the renderer.
+  first_move: Run task production:plan -- --milestone PM-RENDER-PG-002 --roadmap WR-041, then implement only the bounded helper, diagnostic, viewport, and material-preview changes if the gate allows code.
+  main_blocker: Ready for promotion after PM-002 links to WR-041 and production planning confirms the implementation contract.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+    - return-only helpers
+    - typed request diagnostics
+    - viewport and material preview only
+  decision_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/render-contract-ergonomics-design.md
+      required_status: accepted
+      applies_to: implementation
+      reason: PM-002 implementation must follow the accepted bounded render contract ergonomics design.
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+      required_status: accepted
+      applies_to: implementation
+      reason: PM-002 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  ddd_owner: engine render plugin with apps/runenwerk_editor producer ownership
+  adr_requirement: No ADR required while helpers remain return-only and product truth, freshness, fallback legality, authority, rebuild policy, and residency policy stay outside renderer helpers.
+  fitness_function_requirement: Helper-built descriptor/view/invocation tests, typed duplicate diagnostics, prepared-frame inspection, viewport render job tests, material preview tests, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned editor producers.
+edges: []

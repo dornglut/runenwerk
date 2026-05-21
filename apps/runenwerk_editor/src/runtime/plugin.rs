@@ -1,4 +1,5 @@
 use ecs::World;
+use engine::plugins::render::backend::RenderSurfaceRegistryResource;
 use engine::plugins::render::{
     PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
     RenderDynamicTextureUploadRegistryResource, RenderGpuResidencyBudgetResource,
@@ -6,7 +7,7 @@ use engine::plugins::render::{
 };
 use engine::prelude::*;
 use engine::runtime::ProductPublicationRuntimeResource;
-use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt};
+use engine::runtime::{CoreSet, IntoSystemSetKey, SystemConfigExt, WindowStateRegistryResource};
 use engine::{BarrierKind, ExecutionBarrier, SystemSetKey};
 
 use crate::asset_pipeline::publish_pending_field_product_publications;
@@ -39,6 +40,7 @@ use crate::runtime::viewport::{
     sync_viewport_presentation_products_system, sync_viewport_product_targets_system,
     sync_viewport_render_jobs_system,
 };
+use crate::shell::EditorWindowPresentationBinding;
 
 pub struct EditorAppPlugin;
 
@@ -46,6 +48,7 @@ pub struct EditorAppPlugin;
 pub enum EditorRuntimeSet {
     Picking,
     InputBridge,
+    WindowPresentationRequests,
     ViewportLifecycle,
     FrameSubmit,
     ViewportRenderStateCommands,
@@ -66,6 +69,9 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::Picking => SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::Picking"),
             Self::InputBridge => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::InputBridge")
+            }
+            Self::WindowPresentationRequests => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::WindowPresentationRequests")
             }
             Self::ViewportLifecycle => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::ViewportLifecycle")
@@ -182,9 +188,18 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            sync_editor_window_presentation_requests_system
+                .in_set(EditorRuntimeSet::WindowPresentationRequests)
+                .after(EditorRuntimeSet::InputBridge)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
             sync_viewport_instances_system
                 .in_set(EditorRuntimeSet::ViewportLifecycle)
                 .after(EditorRuntimeSet::ViewportRenderStateCommands)
+                .after(EditorRuntimeSet::WindowPresentationRequests)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
         );
@@ -265,6 +280,41 @@ impl Plugin for EditorAppPlugin {
     }
 }
 
+pub(crate) fn sync_editor_window_presentation_requests_system(
+    mut host: ResMut<EditorHostResource>,
+    mut window_registry: ResMut<WindowStateRegistryResource>,
+    mut surface_registry: ResMut<RenderSurfaceRegistryResource>,
+) {
+    let _ = sync_editor_window_presentation_requests(
+        &mut host,
+        &mut window_registry,
+        &mut surface_registry,
+    );
+}
+
+fn sync_editor_window_presentation_requests(
+    host: &mut EditorHostResource,
+    window_registry: &mut WindowStateRegistryResource,
+    surface_registry: &mut RenderSurfaceRegistryResource,
+) -> usize {
+    let pending = host.shell_state.drain_pending_editor_window_presentations();
+    let synced = pending.len();
+    for editor_window_id in pending {
+        let request = window_registry
+            .request_window(format!("Runenwerk {}", editor_window_id.raw()), (1280, 720));
+        let render_surface_id = surface_registry
+            .ensure_surface_for_native_window(request.native_window_id, request.size_px);
+        let binding = EditorWindowPresentationBinding {
+            native_window_id: request.native_window_id,
+            render_surface_id,
+        };
+        let _ = host
+            .shell_state
+            .bind_editor_window_presentation(editor_window_id, binding);
+    }
+    synced
+}
+
 fn publish_editor_field_products_at_barrier(
     barrier: &ExecutionBarrier,
     world: &mut World,
@@ -283,6 +333,40 @@ fn publish_editor_field_products_at_barrier(
     world.insert_resource(publications);
     world.insert_resource(host);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engine::runtime::{NativeWindowId, WindowState};
+
+    #[test]
+    fn window_presentation_requests_bind_editor_windows_to_native_surfaces() {
+        let mut host = EditorHostResource::default();
+        let editor_window_id = host.shell_state.open_editor_window_for_active_workspace();
+        let mut window_registry =
+            WindowStateRegistryResource::from_legacy(&WindowState::windowed("Runenwerk"));
+        let mut surface_registry = RenderSurfaceRegistryResource::default();
+
+        let synced = sync_editor_window_presentation_requests(
+            &mut host,
+            &mut window_registry,
+            &mut surface_registry,
+        );
+
+        assert_eq!(synced, 1);
+        let binding = host
+            .shell_state
+            .editor_window_binding(editor_window_id)
+            .expect("secondary editor window should be bound to presentation ids");
+        assert_ne!(binding.native_window_id, NativeWindowId::primary());
+        assert!(window_registry.record(binding.native_window_id).is_some());
+        assert_eq!(
+            surface_registry.surface_for_native_window(binding.native_window_id),
+            Some(binding.render_surface_id)
+        );
+        assert_eq!(window_registry.pending_creation_requests().len(), 1);
+    }
 }
 
 fn publish_editor_material_preview_products_at_barrier(

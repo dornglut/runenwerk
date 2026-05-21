@@ -1,15 +1,25 @@
+pub mod capabilities;
+pub mod diagnostics;
 pub mod execution_plan;
 pub mod flow_graph;
+pub mod merge;
 pub mod pass_graph;
 pub mod planning;
+pub mod prepared_validation;
 pub mod resource_graph;
+pub mod resource_lifetimes;
 pub mod validation;
 pub mod validation_builtin_ui;
 
+pub use capabilities::*;
+pub use diagnostics::*;
 pub use execution_plan::*;
 pub use flow_graph::*;
+pub use merge::*;
 pub use pass_graph::*;
 pub use planning::*;
+pub use prepared_validation::*;
 pub use resource_graph::*;
+pub use resource_lifetimes::*;
 pub use validation::*;
 pub use validation_builtin_ui::*;

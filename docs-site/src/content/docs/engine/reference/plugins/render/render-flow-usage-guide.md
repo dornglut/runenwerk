@@ -193,10 +193,11 @@ Use target aliases when authored flow topology should stay static while prepared
 
 ```rust
 use engine::plugins::render::{
-    PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedTargetBinding,
-    PreparedViewFrame, RenderDynamicTextureTargetKey, RenderFlow,
+    PreparedFlowInvocationRequest, PreparedViewFrame, RenderDynamicTextureRetention,
+    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow,
+    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderTextureSampleMode,
+    RenderTextureTargetFormat,
 };
-use std::collections::BTreeMap;
 
 let flow = RenderFlow::new("viewport.product.flow")
     .with_color_target_alias("viewport.scene_color")
@@ -205,24 +206,75 @@ let flow = RenderFlow::new("viewport.product.flow")
     .write_color_target("viewport.scene_color")
     .finish();
 
-let view = PreparedViewFrame::offscreen_product("viewport.1", (1280, 720));
-let mut target_alias_bindings = BTreeMap::new();
-target_alias_bindings.insert(
-    "viewport.scene_color".to_string(),
-    PreparedTargetBinding::DynamicTexture(RenderDynamicTextureTargetKey::new(
-        "editor.viewport.1",
-        "scene_color",
-    )),
+let target_key = RenderDynamicTextureTargetKey::new("editor.viewport.1", "scene_color");
+let target_descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+    target_key.clone(),
+    1280,
+    720,
+    RenderTextureTargetFormat::Rgba8Unorm,
+    RenderTextureSampleMode::FilterableFloat,
+    RenderDynamicTextureRetention::RetainWhileRequested,
 );
 
-let invocation = PreparedFlowInvocationRequest {
-    invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
-    flow_id: flow.id(),
-    view_id: view.view_id.clone(),
-    target_alias_bindings,
-    uniform_overrides: BTreeMap::new(),
-    history_signature: Some("camera:v1:1280x720".to_string()),
+let request = RenderProductSurfaceRequest::new(
+    PreparedViewFrame::offscreen_product("viewport.1", (1280, 720))
+        .with_history_signature("camera:v1:1280x720"),
+    PreparedFlowInvocationRequest::new("viewport.1.scene", flow.id(), "viewport.1")
+        .bind_dynamic_texture_alias("viewport.scene_color", target_key)
+        .with_history_signature("camera:v1:1280x720"),
+)
+.with_dynamic_target(target_descriptor);
+
+let batch = RenderProductSurfaceRequestBatch::from_request(request);
+
+dynamic_target_requests.replace_contribution(
+    producer_id,
+    batch.dynamic_targets().iter().cloned(),
+)?;
+prepared_frame_requests.replace_contribution(
+    producer_id,
+    batch.views().iter().cloned(),
+    batch.flow_invocations().iter().cloned(),
+)?;
+```
+
+Upload-backed product surfaces use the same manifest vocabulary, but they opt
+in to upload validation explicitly. The renderer can then diagnose missing
+uploads without inferring product meaning:
+
+```rust
+use engine::plugins::render::{
+    RenderDynamicTextureUploadDescriptor, RenderProductSurfaceManifest,
+    RenderTextureUploadAlphaMode,
 };
+use ui_render_data::ProductSurfaceTextureBindingSource;
+
+let upload = RenderDynamicTextureUploadDescriptor::rgba8(
+    target_key.clone(),
+    0,
+    0,
+    1280,
+    720,
+    RenderTextureUploadAlphaMode::Straight,
+    product_generation,
+    rgba8,
+);
+
+let manifest = RenderProductSurfaceManifest::new(producer_id, "editor.texture_preview")
+    .with_dynamic_target(target_descriptor)
+    .with_dynamic_upload(upload)
+    .with_upload_backed_product_surface_binding(
+        "texture-preview.primary",
+        ProductSurfaceTextureBindingSource::dynamic_texture(
+            target_key.namespace.clone(),
+            target_key.target_id.clone(),
+        ),
+    );
+
+let (targets, uploads, views, invocations) = manifest.into_render_parts();
+dynamic_target_requests.replace_contribution(producer_id, targets)?;
+texture_uploads.replace_contribution(producer_id, uploads)?;
+prepared_frame_requests.replace_contribution(producer_id, views, invocations)?;
 ```
 
 Prepared render frame requests are written before `RenderPrepare`. `RenderPrepare` snapshots requested views, prepared flow invocations, target alias bindings, dynamic target descriptors, projected uniform bytes, dispatch workgroups, and history signatures into `PreparedRenderFrame`. `RenderSubmit` must consume that packet rather than rediscovering product targets from live ECS state.
@@ -230,7 +282,9 @@ Prepared render frame requests are written before `RenderPrepare`. `RenderPrepar
 Current implementation boundary:
 
 - `RenderDynamicTextureTargetRequestRegistryResource` validates producer-scoped dynamic target descriptor contributions and snapshots them into `PreparedRenderFrame`.
-- `PreparedRenderFrameRequestResource` carries producer-scoped offscreen product views and per-flow invocation requests.
+- `RenderProductSurfaceRequestBatch` and `RenderProductSurfaceManifest` are return-only. Producers still call `replace_contribution(...)` on `RenderDynamicTextureTargetRequestRegistryResource`, `RenderDynamicTextureUploadRegistryResource`, and `PreparedRenderFrameRequestResource` explicitly.
+- `RenderProductSurfaceManifest::diagnostics()` reports producer-scoped duplicate target/upload keys, missing dynamic targets, missing upload descriptors for upload-backed bindings, non-sampleable UI bindings, conflicting history signatures, and producer-owned stale/fallback/rejected/unavailable status.
+- `PreparedRenderFrameRequestResource` carries producer-scoped offscreen product views and per-flow invocation requests and exposes typed duplicate diagnostics through `diagnostics()`.
 - Target alias execution and renderer-owned dynamic texture cache work are implemented foundation behavior; do not model dynamic products by cloning flows or suffixing static flow resource labels.
 
 History retention should be expressed through explicit history resources or dynamic target retention policy:
@@ -267,8 +321,23 @@ let flow = RenderFlow::new("ui.flow")
 `RenderFlow` keeps contracts inspectable:
 
 - `flow.validation_report()` returns pass order and validation result details.
+- `compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())` returns typed compiler diagnostics for static validation failures, resource lifetime windows, and backend-neutral capability mismatches.
 - `flow.graph()` exposes declared pass/resource topology for tests and tooling.
 - `flow.project_uniforms(frame_data, surface_size)` verifies state projection at frame time.
+
+Prepared-frame preflight runs before backend command encoding. It validates the compiled flow against the prepared frame packet:
+
+- target alias bindings are present for invocations that execute alias-using passes;
+- dynamic target descriptors are valid and compatible with color, depth, sampled, storage, copy, or present roles;
+- non-sampleable dynamic targets are rejected before a sampled pass or UI binding tries to use them;
+- compute dispatch and uniform bytes are prepared for passes that require them;
+- history signatures remain unambiguous for dynamic targets and invocation history scopes;
+- feature-gated passes have prepared contribution status and fallback policy;
+- backend capabilities are checked through `RenderBackendCapabilityProfile` without exposing WGPU handles.
+
+Use `validate_prepared_render_frame(...)` for tooling/tests that want a report and `preflight_prepared_render_frame(...)` for submit-style fail-fast behavior. `Renderer::last_preflight_report()` and `inspect_render_execution_graph_preflight(...)` expose the last successful report for diagnostics.
+
+The compiler/preflight path owns render execution correctness only. Product jobs and producers still own product truth, selection, freshness, authority, fallback legality, rebuild policy, and residency intent.
 
 Import-model contract:
 
@@ -294,6 +363,8 @@ Advanced feature-tagged pass note:
 - `compute_pass(...)`, `fullscreen_pass(...)`, and `graphics_pass(...)` expose optional `.for_feature("feature.id")` tagging.
 - Feature-tagged passes execute through the same compiled path but are gated by prepared feature status/fallback policy.
 - Only tag passes when the corresponding feature contribution is prepared for the frame; otherwise policy may skip those passes.
+- New render features should register typed contribution collectors instead of adding feature-specific central `PreparedFeaturePayload` variants.
+- Collectors run in `RenderPrepare`, declare the prepared resources they read, and publish typed diagnostics plus inspectable registered payloads. `RenderSubmit` still consumes only the prepared frame.
 
 Current multi-view scope:
 

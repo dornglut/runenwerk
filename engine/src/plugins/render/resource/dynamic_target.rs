@@ -176,6 +176,79 @@ impl RenderDynamicTextureTargetDescriptor {
         }
     }
 
+    pub fn color_sampled(
+        key: RenderDynamicTextureTargetKey,
+        width: u32,
+        height: u32,
+        format: RenderTextureTargetFormat,
+        sample_mode: RenderTextureSampleMode,
+        retention: RenderDynamicTextureRetention,
+    ) -> Self {
+        Self::new(
+            key,
+            width,
+            height,
+            format,
+            RenderTextureTargetUsage::color_sampled(),
+            sample_mode,
+            retention,
+        )
+    }
+
+    pub fn color_attachment_only(
+        key: RenderDynamicTextureTargetKey,
+        width: u32,
+        height: u32,
+        format: RenderTextureTargetFormat,
+        retention: RenderDynamicTextureRetention,
+    ) -> Self {
+        Self::new(
+            key,
+            width,
+            height,
+            format,
+            RenderTextureTargetUsage::color_attachment_only(),
+            RenderTextureSampleMode::NotSampled,
+            retention,
+        )
+    }
+
+    pub fn storage_sampled(
+        key: RenderDynamicTextureTargetKey,
+        width: u32,
+        height: u32,
+        format: RenderTextureTargetFormat,
+        sample_mode: RenderTextureSampleMode,
+        retention: RenderDynamicTextureRetention,
+    ) -> Self {
+        Self::new(
+            key,
+            width,
+            height,
+            format,
+            RenderTextureTargetUsage::storage_sampled(),
+            sample_mode,
+            retention,
+        )
+    }
+
+    pub fn depth_sampled(
+        key: RenderDynamicTextureTargetKey,
+        width: u32,
+        height: u32,
+        retention: RenderDynamicTextureRetention,
+    ) -> Self {
+        Self::new(
+            key,
+            width,
+            height,
+            RenderTextureTargetFormat::Depth32Float,
+            RenderTextureTargetUsage::depth_sampled(),
+            RenderTextureSampleMode::Depth,
+            retention,
+        )
+    }
+
     pub fn signature(&self) -> RenderDynamicTextureTargetSignature {
         RenderDynamicTextureTargetSignature {
             width: self.width,

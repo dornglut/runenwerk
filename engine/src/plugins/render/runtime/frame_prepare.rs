@@ -1,3 +1,4 @@
+use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
 use crate::runtime::{ResMut, WorldMut};
@@ -133,9 +134,7 @@ pub(crate) fn frame_render_prepare_system(
             shader_registry_revision: shader_registry.revision(),
             prepare_epoch,
         },
-        surface: PreparedSurfaceInfo {
-            target_size_px: target_size,
-        },
+        surface: prepared_surface_info(&mut world, target_size),
         views,
         flows,
         flow_invocations,
@@ -164,6 +163,22 @@ pub(crate) fn frame_render_prepare_system(
     }
 
     Ok(())
+}
+
+fn prepared_surface_info(world: &mut WorldMut, target_size: (u32, u32)) -> PreparedSurfaceInfo {
+    let native_window_id = world
+        .resource::<crate::runtime::WindowStateRegistryResource>()
+        .ok()
+        .and_then(|registry| registry.primary_window_id())
+        .unwrap_or_else(crate::runtime::NativeWindowId::primary);
+
+    let render_surface_id = world
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .ok()
+        .map(|registry| registry.ensure_surface_for_native_window(native_window_id, target_size))
+        .unwrap_or_else(RenderSurfaceId::primary);
+
+    PreparedSurfaceInfo::for_surface(render_surface_id, native_window_id, target_size)
 }
 
 fn build_prepared_views(
@@ -311,44 +326,50 @@ pub(crate) fn build_frame_feature_contributions(
     execution_feature_ids: &[RenderFeatureId],
 ) -> PreparedFrameContributions {
     let mut contributions = PreparedFrameContributions::default();
-
-    let scene_policy = feature_policy(
-        world,
-        SCENE_ROUTE_RENDER_FEATURE_ID,
-        FeatureFallbackPolicy::EmptyContribution,
-    );
-    contributions.insert_scene_route(
+    let scene_route = PreparedSceneRouteContribution {
         world_scene_label,
         overlay_scene_label,
-        FeatureContributionStatus::Ready,
-        scene_policy,
-    );
+    };
 
-    if let Ok(resource) = world.resource::<PreparedUiFrameResource>() {
+    collect_registered_feature_contributions(world, &scene_route, &mut contributions);
+
+    if contributions.feature(&UI_RENDER_FEATURE_ID).is_none()
+        && let Ok(resource) = world.resource::<PreparedUiFrameResource>()
+    {
         let ui_policy = feature_policy(world, UI_RENDER_FEATURE_ID, resource.fallback_policy);
         contributions.insert_ui(resource.payload.clone(), resource.status, ui_policy);
     }
 
-    if let Ok(resource) = world.resource::<PreparedWorldFeatureResource>() {
-        let world_policy = feature_policy(
-            world,
-            WORLD_DRAW_RENDER_FEATURE_ID,
-            resource.fallback_policy,
-        );
-        contributions.insert_world(resource.payload.clone(), resource.status, world_policy);
-    }
+    let world_draw_from_registry = contributions
+        .feature(&WORLD_DRAW_RENDER_FEATURE_ID)
+        .is_some();
+    if !world_draw_from_registry {
+        if let Ok(resource) = world.resource::<PreparedWorldFeatureResource>() {
+            let world_policy = feature_policy(
+                world,
+                WORLD_DRAW_RENDER_FEATURE_ID,
+                resource.fallback_policy,
+            );
+            contributions.insert_world(resource.payload.clone(), resource.status, world_policy);
+        }
 
-    if let Ok(resource) = world.resource::<PreparedDrawFeatureResource>() {
-        let world_feature_id = WORLD_DRAW_RENDER_FEATURE_ID;
-        let should_publish_draw = !matches!(resource.status, FeatureContributionStatus::Missing)
-            || contributions.feature(&world_feature_id).is_none();
-        if should_publish_draw {
-            let draw_policy = feature_policy(world, world_feature_id, resource.fallback_policy);
-            contributions.insert_draw(resource.payload.clone(), resource.status, draw_policy);
+        if let Ok(resource) = world.resource::<PreparedDrawFeatureResource>() {
+            let world_feature_id = WORLD_DRAW_RENDER_FEATURE_ID;
+            let should_publish_draw =
+                !matches!(resource.status, FeatureContributionStatus::Missing)
+                    || contributions.feature(&world_feature_id).is_none();
+            if should_publish_draw {
+                let draw_policy = feature_policy(world, world_feature_id, resource.fallback_policy);
+                contributions.insert_draw(resource.payload.clone(), resource.status, draw_policy);
+            }
         }
     }
 
-    if let Ok(resource) = world.resource::<PreparedCaveFeatureResource>() {
+    if contributions
+        .feature(&CAVE_INTERIOR_RENDER_FEATURE_ID)
+        .is_none()
+        && let Ok(resource) = world.resource::<PreparedCaveFeatureResource>()
+    {
         let cave_policy = feature_policy(
             world,
             CAVE_INTERIOR_RENDER_FEATURE_ID,
@@ -357,13 +378,19 @@ pub(crate) fn build_frame_feature_contributions(
         contributions.insert_caves(resource.payload.clone(), resource.status, cave_policy);
     }
 
-    if let Ok(resource) = world.resource::<PreparedDetailFeatureResource>() {
+    if contributions.feature(&DETAIL_RENDER_FEATURE_ID).is_none()
+        && let Ok(resource) = world.resource::<PreparedDetailFeatureResource>()
+    {
         let detail_policy =
             feature_policy(world, DETAIL_RENDER_FEATURE_ID, resource.fallback_policy);
         contributions.insert_detail(resource.payload.clone(), resource.status, detail_policy);
     }
 
-    if let Ok(resource) = world.resource::<PreparedProceduralWorldFeatureResource>() {
+    if contributions
+        .feature(&PROCEDURAL_WORLD_RENDER_FEATURE_ID)
+        .is_none()
+        && let Ok(resource) = world.resource::<PreparedProceduralWorldFeatureResource>()
+    {
         let procedural_policy = feature_policy(
             world,
             PROCEDURAL_WORLD_RENDER_FEATURE_ID,
@@ -376,13 +403,19 @@ pub(crate) fn build_frame_feature_contributions(
         );
     }
 
-    if let Ok(resource) = world.resource::<PreparedMaterialFeatureResource>() {
+    if contributions.feature(&MATERIAL_RENDER_FEATURE_ID).is_none()
+        && let Ok(resource) = world.resource::<PreparedMaterialFeatureResource>()
+    {
         let material_policy =
             feature_policy(world, MATERIAL_RENDER_FEATURE_ID, resource.fallback_policy);
         contributions.insert_material(resource.payload.clone(), resource.status, material_policy);
     }
 
-    if let Ok(resource) = world.resource::<PreparedDeformationFeatureResource>() {
+    if contributions
+        .feature(&DEFORMATION_RENDER_FEATURE_ID)
+        .is_none()
+        && let Ok(resource) = world.resource::<PreparedDeformationFeatureResource>()
+    {
         let deformation_policy = feature_policy(
             world,
             DEFORMATION_RENDER_FEATURE_ID,
@@ -395,7 +428,11 @@ pub(crate) fn build_frame_feature_contributions(
         );
     }
 
-    if let Ok(resource) = world.resource::<PreparedWindFieldFeatureResource>() {
+    if contributions
+        .feature(&WIND_FIELDS_RENDER_FEATURE_ID)
+        .is_none()
+        && let Ok(resource) = world.resource::<PreparedWindFieldFeatureResource>()
+    {
         let wind_policy = feature_policy(
             world,
             WIND_FIELDS_RENDER_FEATURE_ID,
@@ -427,6 +464,83 @@ pub(crate) fn build_frame_feature_contributions(
     }
 
     contributions
+}
+
+fn collect_registered_feature_contributions(
+    world: &ecs::World,
+    scene_route: &PreparedSceneRouteContribution,
+    contributions: &mut PreparedFrameContributions,
+) {
+    let collector_registry = world
+        .resource::<RenderFeatureContributionCollectorRegistryResource>()
+        .ok()
+        .cloned()
+        .unwrap_or_default();
+    for diagnostic in collector_registry.diagnostics() {
+        contributions.push_diagnostic(diagnostic.clone());
+    }
+    let feature_registry = world.resource::<RenderFeatureRegistryResource>().ok();
+
+    for collector in collector_registry.collectors() {
+        let descriptor = &collector.descriptor;
+        if let Some(feature_registry) = feature_registry {
+            if feature_registry
+                .descriptor(&descriptor.feature_id)
+                .is_none()
+            {
+                contributions.push_diagnostic(
+                    PreparedFeatureContributionDiagnostic::error(
+                        descriptor.feature_id,
+                        format!(
+                            "collector '{}' references unknown render feature {:?}",
+                            descriptor.collector_id, descriptor.feature_id
+                        ),
+                    )
+                    .with_collector_id(descriptor.collector_id.clone())
+                    .with_payload_kind(descriptor.payload_kind.clone()),
+                );
+                continue;
+            }
+        }
+        if let Err(diagnostic) = validate_collector_resources(world, descriptor) {
+            contributions.push_diagnostic(diagnostic);
+            continue;
+        }
+        if contributions.feature(&descriptor.feature_id).is_some() {
+            contributions.push_diagnostic(
+                PreparedFeatureContributionDiagnostic::error(
+                    descriptor.feature_id,
+                    format!(
+                        "collector '{}' conflicts with existing contribution for feature {:?}",
+                        descriptor.collector_id, descriptor.feature_id
+                    ),
+                )
+                .with_collector_id(descriptor.collector_id.clone())
+                .with_payload_kind(descriptor.payload_kind.clone()),
+            );
+            continue;
+        }
+
+        let fallback_policy =
+            feature_policy(world, descriptor.feature_id, descriptor.fallback_policy);
+        let context = RenderFeatureContributionContext::new(
+            world,
+            descriptor,
+            fallback_policy,
+            Some(scene_route),
+        );
+        match (collector.collect)(&context) {
+            Ok(contribution) => {
+                if let Err(diagnostic) = validate_collected_contribution(descriptor, &contribution)
+                {
+                    contributions.push_diagnostic(diagnostic);
+                    continue;
+                }
+                contributions.insert(descriptor.feature_id, contribution);
+            }
+            Err(diagnostic) => contributions.push_diagnostic(diagnostic),
+        }
+    }
 }
 
 fn feature_policy(
@@ -636,6 +750,59 @@ fn project_dispatch_for_pass(
 mod tests {
     use super::*;
 
+    #[derive(Debug, Clone, ecs::Component, ecs::Resource)]
+    struct TestContributionResource {
+        value: String,
+    }
+
+    fn test_feature_id() -> RenderFeatureId {
+        RenderFeatureId::try_from_raw(10_042).expect("test feature id should be non-zero")
+    }
+
+    fn registered_test_collector() -> RenderFeatureContributionCollector {
+        RenderFeatureContributionCollector::new(
+            RenderFeatureContributionCollectorDescriptor::new(
+                test_feature_id(),
+                "test.collector",
+                "test.payload",
+            )
+            .require_resource::<TestContributionResource>(),
+            collect_test_registered_contribution,
+        )
+    }
+
+    fn collect_test_registered_contribution(
+        context: &RenderFeatureContributionContext<'_>,
+    ) -> Result<PreparedFeatureContribution, PreparedFeatureContributionDiagnostic> {
+        let Some(resource) = context.resource::<TestContributionResource>() else {
+            return Err(PreparedFeatureContributionDiagnostic::error(
+                context.descriptor().feature_id,
+                "test collector requires TestContributionResource",
+            )
+            .with_collector_id(context.descriptor().collector_id.clone())
+            .with_payload_kind(context.descriptor().payload_kind.clone()));
+        };
+        Ok(PreparedFeatureContribution {
+            status: FeatureContributionStatus::Ready,
+            fallback_policy: context.fallback_policy(),
+            payload: PreparedFeaturePayload::Registered(PreparedRegisteredFeaturePayload::new(
+                StaticRegisteredFeaturePayload::new("test.payload", "test contribution")
+                    .with_field("value", resource.value.clone()),
+            )),
+        })
+    }
+
+    fn world_with_test_feature() -> ecs::World {
+        let mut world = ecs::World::default();
+        let mut feature_registry = RenderFeatureRegistryResource::default();
+        feature_registry.upsert_descriptor(RenderFeatureDescriptor::new(
+            test_feature_id(),
+            "test.registered",
+        ));
+        world.insert_resource(feature_registry);
+        world
+    }
+
     #[test]
     fn requested_offscreen_invocations_prepare_before_main_invocation() {
         let flow = RenderFlow::new("prepare.order")
@@ -683,5 +850,85 @@ mod tests {
         assert_eq!(invocations.len(), 2);
         assert_eq!(invocations[0].view_id, "viewport.1");
         assert_eq!(invocations[1].view_id, "main");
+    }
+
+    #[test]
+    fn render_feature_contributions_default_scene_route_uses_registered_collector() {
+        let world = ecs::World::default();
+
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world.scene".to_string(),
+            "overlay.scene".to_string(),
+            &[],
+        );
+
+        assert_eq!(
+            contributions.scene_route_labels(),
+            Some(("world.scene", "overlay.scene"))
+        );
+        assert!(contributions.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn render_feature_contributions_registered_payload_does_not_need_central_variant() {
+        let mut world = world_with_test_feature();
+        world.insert_resource(TestContributionResource {
+            value: "from-resource".to_string(),
+        });
+        let mut collector_registry = RenderFeatureContributionCollectorRegistryResource::default();
+        collector_registry
+            .try_register_collector(registered_test_collector())
+            .expect("test collector should register");
+        world.insert_resource(collector_registry);
+
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world.scene".to_string(),
+            "overlay.scene".to_string(),
+            &[test_feature_id()],
+        );
+
+        let contribution = contributions
+            .feature(&test_feature_id())
+            .expect("registered feature should contribute");
+        let PreparedFeaturePayload::Registered(payload) = &contribution.payload else {
+            panic!("test feature should use registered payload bridge");
+        };
+        let inspection = payload.inspect();
+        assert_eq!(inspection.payload_kind, "test.payload");
+        assert_eq!(inspection.summary, "test contribution");
+        assert_eq!(
+            inspection.fields,
+            vec![("value".to_string(), "from-resource".to_string())]
+        );
+        assert!(contributions.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn render_feature_contributions_missing_declared_resource_is_typed_diagnostic() {
+        let mut world = world_with_test_feature();
+        let mut collector_registry = RenderFeatureContributionCollectorRegistryResource::default();
+        collector_registry
+            .try_register_collector(registered_test_collector())
+            .expect("test collector should register");
+        world.insert_resource(collector_registry);
+
+        let contributions = build_frame_feature_contributions(
+            &world,
+            "world.scene".to_string(),
+            "overlay.scene".to_string(),
+            &[test_feature_id()],
+        );
+
+        let contribution = contributions
+            .feature(&test_feature_id())
+            .expect("execution feature should still receive a missing contribution");
+        assert_eq!(contribution.status, FeatureContributionStatus::Missing);
+        assert!(contributions.diagnostics().iter().any(|diagnostic| {
+            diagnostic
+                .message
+                .contains("requires missing prepared resource")
+        }));
     }
 }

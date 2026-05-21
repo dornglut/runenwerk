@@ -4,7 +4,7 @@ use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
 };
 use crate::plugins::render::frame::PreparedRenderFrame;
-use crate::plugins::render::graph::CompiledRenderFlowPlan;
+use crate::plugins::render::graph::{CompiledRenderFlowPlan, RenderExecutionGraphPreparedReport};
 use crate::plugins::render::inspect::{
     PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
     RenderDebugConfigResource, RenderDebugControlResource, RenderPassProvenanceRecord,
@@ -741,6 +741,7 @@ pub struct Renderer {
     last_pass_timings: Vec<PassTimingSample>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
     last_pass_provenance: Vec<RenderPassProvenanceRecord>,
+    last_preflight_report: RenderExecutionGraphPreparedReport,
     last_capture_plan: ResolvedRenderCapturePlan,
     last_capture_selector_results: Vec<RenderCaptureSelectorResult>,
     last_captured_textures: Vec<RenderCapturedTexture>,

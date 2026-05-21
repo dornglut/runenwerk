@@ -318,15 +318,13 @@ fn unavailable_target_diagnostic(product_id: ExpressionProductId) -> FieldProduc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     use editor_core::RealityVersion;
     use editor_viewport::{
         ExpressionDimensions, ViewportPresentationState, ViewportSurfacePresentationSlot,
     };
     use engine::plugins::render::{
-        PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedTargetBinding,
-        PreparedViewFrame, RenderFlowId, RenderResourceId,
+        PreparedFlowInvocationRequest, PreparedViewFrame, RenderFlowId, RenderProductSurfaceRequest,
     };
     use engine::{BarrierKind, ExecutionBarrier};
     use product::{
@@ -430,15 +428,14 @@ mod tests {
             scene_color_target,
             picking_ids_target,
             overlay_target,
-            prepared_view: PreparedViewFrame::offscreen_product(view_id.clone(), (320, 200)),
-            prepared_flow_invocation: PreparedFlowInvocationRequest {
-                invocation_id: PreparedFlowInvocationId::new("viewport.test"),
-                flow_id: RenderFlowId::try_from_raw(1).unwrap(),
-                view_id,
-                target_alias_bindings: BTreeMap::<String, PreparedTargetBinding>::new(),
-                uniform_overrides: BTreeMap::<RenderResourceId, Vec<u8>>::new(),
-                history_signature: None,
-            },
+            product_surface_request: RenderProductSurfaceRequest::new(
+                PreparedViewFrame::offscreen_product(view_id.clone(), (320, 200)),
+                PreparedFlowInvocationRequest::new(
+                    "viewport.test",
+                    RenderFlowId::try_from_raw(1).unwrap(),
+                    view_id,
+                ),
+            ),
         }
     }
 

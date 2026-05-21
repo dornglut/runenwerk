@@ -1,0 +1,129 @@
+version: 1
+idea: PM-RENDER-PG-008 production readiness and inspection hardening for renderer diagnostics, readiness inspection, capture/replay policy, performance budget reporting, examples, and closeout evidence without renderer-owned product policy.
+source_path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+owner: engine
+created_at: '2026-05-21'
+governance_notes:
+  - Architecture governance kickoff was run before design acceptance.
+  - "Keep Clean Architecture dependency direction: engine render consumes prepared product contracts and exposes read-only execution inspection."
+  - No ADR is required unless capture/replay becomes a persisted cross-domain ABI or product source-truth ownership changes.
+open_questions: []
+item:
+  id: WR-045
+  title: PM-RENDER-PG-008 Production Readiness And Inspection
+  diagram_title: PM-008 readiness
+  alias: WR045
+  lane: Productization
+  dependency_level: L2
+  gate: Accepted design; ready for promotion contract
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: Bounded PM-008 production-readiness hardening after product surfaces, multi-surface presentation, and render fragments
+  kano: Basic
+  dependencies:
+    - WR-044
+    - WR-009
+    - WR-010
+  write_scopes:
+    - engine/src/plugins/render
+    - engine/tests
+    - engine/examples
+    - docs-site/src/content/docs/engine/reference/plugins/render
+    - docs-site/src/content/docs/engine/plugins/render
+    - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+    - docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    - docs-site/src/content/docs/reports/implementation-plans/wr-045-pm-render-pg-008-production-readiness-and-inspection/plan.md
+    - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-008-production-readiness-an
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+    - docs-site/src/content/docs/workspace/design-implementation-triage.md
+    - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+    - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/production-track-index.md
+    - docs-site/src/content/docs/workspace/production-milestone-register.md
+    - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+    - cargo test -p engine render_runtime_inspect
+    - cargo test -p engine render_dynamic_targets
+    - cargo test -p engine --test render_flow_v2
+    - cargo test -p engine --test render_flow_fragments
+    - cargo test -p engine --test render_multi_surface
+    - cargo test -p engine --example render_fragment_compositor
+    - cargo test -p engine --example render_readiness_inspection
+    - task docs:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task planning:validate
+    - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: Write a PM-008 promotion and implementation-readiness contract, then promote only if WR-045 can be current-candidate without bypassing gates.
+  current_decision: WR-045 is the bounded implementation row for PM-RENDER-PG-008 production readiness and inspection hardening.
+  current_call: Prepare a promotion and implementation-readiness contract before product code. Do not repurpose the support-only render contract row or completed multi-surface and fragment rows for PM-008 implementation.
+  first_move: Run task production:plan -- --milestone PM-RENDER-PG-008 --roadmap WR-045 and follow the generated promotion contract.
+  main_blocker: Needs promotion contract and current-candidate promotion before implementation.
+  why_not_ready: Ready for promotion planning, not direct implementation.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+    - readiness inspection
+    - capture and budgets
+    - no product policy
+  decision_gates:
+    - kind: design
+      path: docs-site/src/content/docs/reports/implementation-plans/wr-045-pm-render-pg-008-production-readiness-and-inspection/plan.md
+      required_status: active
+      applies_to: implementation
+      reason: PM-008 implementation must follow the bounded production promotion and implementation-readiness contract.
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+      required_status: accepted
+      applies_to: implementation
+      reason: PM-008 implementation must follow the accepted production readiness and inspection design.
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+      required_status: accepted
+      applies_to: implementation
+      reason: PM-008 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+    - kind: doc
+      path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md
+      required_status: completed
+      applies_to: implementation
+      reason: PM-008 depends on completed product-surface platform hardening evidence.
+    - kind: doc
+      path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+      required_status: completed
+      applies_to: implementation
+      reason: PM-008 depends on completed multi-surface presentation evidence.
+    - kind: doc
+      path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+      required_status: completed
+      applies_to: implementation
+      reason: PM-008 depends on completed render fragments and hot reload evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required while this remains an engine-runtime hardening slice over existing accepted render contracts.
+  fitness_function_requirement: Readiness inspection tests, capture/replay manifest tests, renderer budget report tests, product-surface and prepared-frame inspection tests, fragment inspection tests, multi-surface diagnostic tests, example checks, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product, editor, drawing, and future world/product teams.
+edges:
+  - source: WR-044
+    target: WR-045
+    label: product-surface readiness baseline
+  - source: WR-009
+    target: WR-045
+    label: multi-surface evidence baseline
+  - source: WR-010
+    target: WR-045
+    label: fragment evidence baseline

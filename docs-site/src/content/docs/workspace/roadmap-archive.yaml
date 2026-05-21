@@ -805,24 +805,22 @@ items:
   - task production:check
   - task planning:validate
   next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-031-workbench-clean-break-governance-and-adr/closeout.md.
-    ADR 0012 is accepted, the active Workbench host design references the clean-break decision, PT-WB-CAP exists, and
-    WR-032 through WR-040 are sequenced behind the governance gate.
-  current_decision: The Capability Workbench clean break is accepted as governance. ToolSurfaceKind must not remain
-    Workbench identity, persistence, provider request, profile construction, or Material Lab routing authority.
-  current_call: Completed as governance-only closeout. Do not reopen WR-031 for product code; execute WR-032 through
-    WR-036 in dependency order for typed handles, identity removal, registry profiles, clean persistence, and Material
-    Lab proof.
+    ADR 0012 is accepted, the active Workbench host design references the clean-break decision, PT-WB-CAP exists, and WR-032
+    through WR-040 are sequenced behind the governance gate.
+  current_decision: The Capability Workbench clean break is accepted as governance. ToolSurfaceKind must not remain Workbench
+    identity, persistence, provider request, profile construction, or Material Lab routing authority.
+  current_call: Completed as governance-only closeout. Do not reopen WR-031 for product code; execute WR-032 through WR-036
+    in dependency order for typed handles, identity removal, registry profiles, clean persistence, and Material Lab proof.
   first_move: Use ADR 0012 and the active Workbench design as the authority for downstream implementation contracts; repair
     downstream write scopes before product code when a contract identifies missing owners.
-  main_blocker: Completed governance. PM-WB-CAP-001 remains active until WR-032 through WR-036 implementation closeouts
-    land.
+  main_blocker: Completed governance. PM-WB-CAP-001 remains active until WR-032 through WR-036 implementation closeouts land.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
-  - No Rust product code changed in WR-031; legacy Workbench compatibility paths remain for downstream WR-032 through
-    WR-036 implementation slices.
-  - PM-WB-CAP-001 remains incomplete until typed handles, legacy identity removal, registry-backed profiles, clean
-    persistence, and Material Lab proof are implemented and closed out.
+  - No Rust product code changed in WR-031; legacy Workbench compatibility paths remain for downstream WR-032 through WR-036
+    implementation slices.
+  - PM-WB-CAP-001 remains incomplete until typed handles, legacy identity removal, registry-backed profiles, clean persistence,
+    and Material Lab proof are implemented and closed out.
   completion_audit: ''
   diagram_call:
   - clean-break ADR
@@ -873,8 +871,8 @@ items:
   - task production:validate
   - task production:check
   next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md.
-    Typed constructors, profile validation, full-editor profile exposure, and Material Lab typed profile exposure are in
-    place for the bounded Workbench handle slice.
+    Typed constructors, profile validation, full-editor profile exposure, and Material Lab typed profile exposure are in place
+    for the bounded Workbench handle slice.
   current_decision: WR-032 is completed as a bounded typed-handle implementation. It adds typed constructor paths, validates
     profile definitions in WorkbenchCompositionBuilder, and makes full-editor and Material Lab hosts expose typed profile
     data through the builder.
@@ -885,8 +883,8 @@ items:
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
-  - WR-033 still owns deleting legacy ToolSurfaceKind identity from Workbench state, provider requests, frame artifacts,
-    commands, and source guards.
+  - WR-033 still owns deleting legacy ToolSurfaceKind identity from Workbench state, provider requests, frame artifacts, commands,
+    and source guards.
   - WR-034 still owns registry-backed workspace profile authority.
   - WR-035 still owns stable-key-only persistence and unsupported-schema diagnostics for old workspace files.
   - WR-036 still owns the final Material Lab clean migration proof across full-editor and standalone hosts.
@@ -951,10 +949,10 @@ items:
     Live Workbench identity, provider requests, shell commands, create candidates, frame artifacts, Material Lab routing,
     and runtime bridge targeting now use stable surface keys instead of ToolSurfaceKind.
   current_decision: WR-033 is completed as a bounded legacy-identity removal implementation. Live Workbench identity paths
-    no longer carry ToolSurfaceKind; compatibility remains only at authored and persisted boundaries owned by downstream
-    cleanup rows.
-  current_call: Completed. Do not reopen WR-033 for registry-only workspace profiles, clean persistence, or Material Lab
-    clean migration proof; those remain WR-034 through WR-036.
+    no longer carry ToolSurfaceKind; compatibility remains only at authored and persisted boundaries owned by downstream cleanup
+    rows.
+  current_call: Completed. Do not reopen WR-033 for registry-only workspace profiles, clean persistence, or Material Lab clean
+    migration proof; those remain WR-034 through WR-036.
   main_blocker: Completed legacy-identity removal. PM-WB-CAP-001 remains active until WR-034 through WR-036 close out.
   first_move: Continue PM-WB-CAP-001 with WR-034 after rerunning task ai:goal for PT-WB-CAP non-deferred scope.
   why_not_ready: ''
@@ -1019,15 +1017,14 @@ items:
   - task production:validate
   - task production:check
   next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-034-registry-backed-workspace-profiles/closeout.md.
-    Full-editor and standalone Material Lab workspace profiles now build from installed Workbench profile declarations
-    and host-owned registry-resolved stable surface keys.
-  current_decision: WR-034 is completed as a bounded registry-backed workspace profile implementation. Shell bootstrap,
-    workspace switching, and provider document filtering now consume active Workbench host profile data instead of app-shell
-    global profile lookups.
+    Full-editor and standalone Material Lab workspace profiles now build from installed Workbench profile declarations and
+    host-owned registry-resolved stable surface keys.
+  current_decision: WR-034 is completed as a bounded registry-backed workspace profile implementation. Shell bootstrap, workspace
+    switching, and provider document filtering now consume active Workbench host profile data instead of app-shell global
+    profile lookups.
   current_call: Completed. Do not reopen WR-034 for clean persistence format or Material Lab clean migration proof; those
     remain WR-035 and WR-036.
-  main_blocker: Completed registry-backed profile foundation. PM-WB-CAP-001 remains active until WR-035 and WR-036 close
-    out.
+  main_blocker: Completed registry-backed profile foundation. PM-WB-CAP-001 remains active until WR-035 and WR-036 close out.
   first_move: Continue PM-WB-CAP-001 with WR-035 after rerunning task ai:goal for PT-WB-CAP non-deferred scope.
   why_not_ready: ''
   completion_quality: bounded_contract
@@ -1149,15 +1146,15 @@ items:
   next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-036-material-lab-clean-migration-proof/closeout.md.
     Full-editor and standalone Material Lab hosts resolve graph, inspector, preview, texture, asset, diagnostics, and console
     surfaces from hosted registries and provider-family maps without legacy request metadata.
-  current_decision: WR-036 is completed as a bounded Material Lab clean migration proof. Full-editor and standalone host
-    construction consume the same registry-backed Material profile surface chain and resolve each mounted request through
-    the active provider-family map.
-  current_call: Completed. Do not reopen WR-036 for host policy, product/service declarations, broad multi-host presets,
-    or external component readiness; those remain WR-037 through WR-040.
+  current_decision: WR-036 is completed as a bounded Material Lab clean migration proof. Full-editor and standalone host construction
+    consume the same registry-backed Material profile surface chain and resolve each mounted request through the active provider-family
+    map.
+  current_call: Completed. Do not reopen WR-036 for host policy, product/service declarations, broad multi-host presets, or
+    external component readiness; those remain WR-037 through WR-040.
   main_blocker: Completed clean Material Lab host proof. PM-WB-CAP-001 can be reviewed for milestone completion after rerunning
     task ai:goal for PT-WB-CAP non-deferred scope.
-  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-002 only if the production
-    goal selects it.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-002 only if the production goal
+    selects it.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
@@ -1213,15 +1210,15 @@ items:
   next_evidence: 2026-05-20 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-037-host-capability-policy/closeout.md.
     Provider proposals are classified into typed command/product/resource capability requirements and checked against host
     policy before conversion to shell commands or app/domain mutation.
-  current_decision: WR-037 is completed as a bounded host policy implementation. The provider proposal dispatch boundary
-    now gates surface-session, editor-domain, and shell-command proposals through RunenwerkWorkbenchHost policy before
-    mutation, while product/service declaration expansion remains WR-038.
-  current_call: Completed. Do not reopen WR-037 for product/service declarations, broad multi-host presets, or external
-    component readiness; those remain WR-038 through WR-040.
+  current_decision: WR-037 is completed as a bounded host policy implementation. The provider proposal dispatch boundary now
+    gates surface-session, editor-domain, and shell-command proposals through RunenwerkWorkbenchHost policy before mutation,
+    while product/service declaration expansion remains WR-038.
+  current_call: Completed. Do not reopen WR-037 for product/service declarations, broad multi-host presets, or external component
+    readiness; those remain WR-038 through WR-040.
   main_blocker: Completed host command policy gate. PM-WB-CAP-002 can be reviewed for milestone completion after rerunning
     task ai:goal for PT-WB-CAP non-deferred scope.
-  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-002 completion verification
-    only if the production goal selects it.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-002 completion verification only
+    if the production goal selects it.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
@@ -1276,16 +1273,15 @@ items:
   next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md.
     Tool-suite composition now carries suite-scoped product and service need declarations through typed keys without moving
     product semantics, permission authority, or service execution into editor_shell.
-  current_decision: >-
-    WR-038 is completed as a bounded product and service declaration implementation. The declaration plane
+  current_decision: 'WR-038 is completed as a bounded product and service declaration implementation. The declaration plane
     is registry-validated sidecar metadata: suites request product capabilities and tool services, hosts still grant or deny
-    policy, and owning domains still validate semantic product truth.
+    policy, and owning domains still validate semantic product truth.'
   current_call: Completed. Do not reopen WR-038 for multi-host presets or external component readiness; those remain WR-039
     and WR-040.
-  main_blocker: Completed declaration plane. PM-WB-CAP-003 can be reviewed for milestone completion after rerunning task
-    ai:goal for PT-WB-CAP non-deferred scope.
-  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-003 completion verification
-    only if the production goal selects it.
+  main_blocker: Completed declaration plane. PM-WB-CAP-003 can be reviewed for milestone completion after rerunning task ai:goal
+    for PT-WB-CAP non-deferred scope.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-003 completion verification only
+    if the production goal selects it.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
@@ -1341,15 +1337,14 @@ items:
   next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-039-multi-host-presets/closeout.md.
     Full editor, standalone Material Lab, headless validation, and constrained Workbench hosts are explicit composition presets
     built from suite, profile, provider-family, and host-policy data.
-  current_decision: >-
-    WR-039 is completed as a bounded multi-host preset implementation. Host modes now differ by Workbench composition data:
-    installed suites, profile specs, provider-family assignments, provider registries, and HostCapabilityPolicy.
-  current_call: Completed. Do not reopen WR-039 for external component readiness; WR-040 remains blocked and out of the
-    non-deferred scope.
+  current_decision: 'WR-039 is completed as a bounded multi-host preset implementation. Host modes now differ by Workbench
+    composition data: installed suites, profile specs, provider-family assignments, provider registries, and HostCapabilityPolicy.'
+  current_call: Completed. Do not reopen WR-039 for external component readiness; WR-040 remains blocked and out of the non-deferred
+    scope.
   main_blocker: Completed multi-host preset slice. PM-WB-CAP-004 can be reviewed for milestone completion after rerunning
     task ai:goal for PT-WB-CAP non-deferred scope.
-  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-004 completion verification
-    only if the production goal selects it.
+  first_move: Rerun task ai:goal for PT-WB-CAP non-deferred scope and continue to PM-WB-CAP-004 completion verification only
+    if the production goal selects it.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
@@ -1366,3 +1361,803 @@ items:
   adr_requirement: ADR 0012 blocks reintroducing legacy identity in host presets.
   fitness_function_requirement: Workbench host preset tests for suite/profile/provider/policy composition.
   ownership_mode: Stream-aligned app host implementation.
+- id: WR-041
+  title: PM-RENDER-PG-002 Render Contract Ergonomics
+  diagram_title: PM-002 render contract ergonomics
+  alias: WR041
+  lane: Core support
+  dependency_level: L0
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.4
+  rice: Bounded PM-002 ergonomics slice after PM-001 doctrine acceptance
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - apps/runenwerk_editor/src/runtime/viewport
+  - apps/runenwerk_editor/src/runtime/systems/material_preview.rs
+  - apps/runenwerk_editor/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/render-contract-ergonomics-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-041-pm-render-pg-002-render-contract-ergonomics/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-002-render-contract-ergonom
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p runenwerk_editor viewport::render_jobs
+  - cargo test -p runenwerk_editor material_preview
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: '2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md.
+    Render product-surface request authoring now has return-only helper batches, typed producer diagnostics, and exactly two
+    migrated producers: editor viewport and material preview.'
+  current_decision: WR-041 is completed as the bounded PM-RENDER-PG-002 render contract ergonomics implementation. The renderer
+    owns reusable request-construction ergonomics and duplicate diagnostics; producer systems still explicitly publish ECS
+    resources and product truth, freshness, authority, fallback legality, rebuild, and residency policy remain outside renderer
+    helpers.
+  current_call: Completed. Do not reopen WR-041 for feature-owned contribution registries, render graph compiler maturity,
+    render fragments, native multi-window, material truth/lowering, or production-readiness inspection.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-002 ergonomics slice. PM-RENDER-PG-003 remains the next dependency for feature-owned
+    render contributions.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-RENDER-PG-003 still owns feature-owned render contribution collectors.
+  - PM-RENDER-PG-004 still owns render execution graph compiler maturity.
+  - PM-RENDER-PG-005 still owns broad product-surface hardening beyond viewport and material preview request ergonomics.
+  - PM-RENDER-PG-006 through PM-RENDER-PG-008 remain incomplete and must not be inferred complete from PM-002.
+  - PM-002 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md
+  diagram_call:
+  - return-only helpers
+  - typed request diagnostics
+  - viewport and material preview only
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-041-pm-render-pg-002-render-contract-ergonomics/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-002 implementation must follow the bounded production implementation contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-contract-ergonomics-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-002 implementation must follow the accepted bounded render contract ergonomics design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-002 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  ddd_owner: engine render plugin with apps/runenwerk_editor producer ownership
+  adr_requirement: No ADR required while helpers remain return-only and product truth, freshness, fallback legality, authority,
+    rebuild policy, and residency policy stay outside renderer helpers.
+  fitness_function_requirement: Helper-built descriptor/view/invocation tests, typed duplicate diagnostics, prepared-frame
+    inspection, viewport render job tests, material preview tests, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned editor producers.
+- id: WR-042
+  title: PM-RENDER-PG-003 Feature-Owned Render Contributions
+  diagram_title: PM-003 feature-owned contributions
+  alias: WR042
+  lane: Core support
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: Bounded PM-003 collector registry slice after PM-002 ergonomics completion
+  kano: Basic
+  dependencies:
+  - WR-041
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/feature-owned-render-contributions-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-042-pm-render-pg-003-feature-owned-render-contributions/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-003-bounded-implementation-
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_feature_contributions
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md.
+    Feature-owned render contribution collection now has a typed collector registry, registered payload bridge, diagnostics,
+    prepared-frame inspection, and one migrated scene-route contribution path.
+  current_decision: WR-042 is completed as the bounded PM-RENDER-PG-003 feature-owned render contribution implementation.
+    New render features can register typed collectors without adding central payload variants; collectors declare prepared
+    resource reads, produce typed diagnostics, and submit still consumes validated prepared-frame data only.
+  current_call: Completed. Do not reopen WR-042 for render fragments, hot reload, render graph compiler maturity, product-surface
+    hardening, multi-surface presentation, material lowering, all-feature migration, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-003 contribution collector slice. PM-RENDER-PG-004 remains the next dependency for render
+    execution graph compiler maturity.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-RENDER-PG-004 still owns render execution graph compiler maturity.
+  - PM-RENDER-PG-005 still owns broad product-surface platform hardening.
+  - PM-RENDER-PG-006 still owns multi-surface presentation.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay, budgets, final examples, and final inspection evidence.
+  - PM-003 migrated only the scene-route contribution path; remaining feature migrations require future legal WR slices.
+  - PM-003 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md
+  diagram_call:
+  - typed contribution collectors
+  - registered payload bridge
+  - scene route migrated only
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-042-pm-render-pg-003-feature-owned-render-contributions/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-003 implementation must follow the bounded production promotion and implementation-readiness contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/feature-owned-render-contributions-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-003 implementation must follow the accepted feature-owned render contribution collector contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-003 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-003 depends on completed PM-002 ergonomics closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-003 requires completed bounded feature-owned render contribution closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required while the collector contract remains engine-local and does not become a cross-domain ABI,
+    persisted plugin contract, or external mod interface.
+  fitness_function_requirement: Collector registry tests, duplicate/conflict diagnostics, registered payload inspection, compatibility
+    adapter output, one migrated feature equivalence proof, submit-boundary tests, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned feature and product teams.
+- id: WR-043
+  title: PM-RENDER-PG-004 Render Execution Graph Compiler Maturity
+  diagram_title: PM-004 compiler maturity
+  alias: WR043
+  lane: Core support
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.6
+  rice: Bounded PM-004 compiler maturity slice after PM-003 feature-owned contribution completion
+  kano: Basic
+  dependencies:
+  - WR-042
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-043-pm-render-pg-004-render-execution-graph-compiler-maturity/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-004-bounded-implementation-
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_flow
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md.
+    Render execution graph compilation now has typed compiler diagnostics, prepared-frame preflight, backend-neutral capability
+    checks, resource lifetime windows, inspection, and submit-boundary coverage.
+  current_decision: WR-043 is completed as the bounded PM-RENDER-PG-004 render execution graph compiler maturity implementation.
+    The compiler validates render execution resources, pass order, aliases, history signatures, resource lifetimes, and backend
+    capability constraints without owning product truth or product policy.
+  current_call: Completed. Do not reopen WR-043 for render fragments, hot reload, broad product-surface hardening, native
+    multi-window, material lowering, production-readiness inspection, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-004 compiler maturity slice. PM-RENDER-PG-005 remains the next dependency for broad product-surface
+    platform hardening.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-RENDER-PG-005 still owns broad product-surface platform hardening.
+  - PM-RENDER-PG-006 still owns multi-surface presentation.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay, budgets, final examples, and final inspection evidence.
+  - PM-004 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md
+  diagram_call:
+  - typed compiler diagnostics
+  - prepared-frame preflight
+  - resource lifetime windows
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-043-pm-render-pg-004-render-execution-graph-compiler-maturity/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-004 implementation must follow the bounded production promotion and implementation-readiness contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-004 implementation must follow the accepted render execution graph compiler maturity design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-004 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-004 depends on completed PM-003 feature-owned render contribution closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-004 requires completed bounded render execution graph compiler maturity closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required while the compiler contract remains engine-local and does not become a cross-domain ABI,
+    persisted graph format, external mod contract, or source-of-truth ownership change.
+  fitness_function_requirement: Static flow validation tests, prepared-frame preflight tests, alias/dynamic target compatibility
+    tests, history/lifetime tests, backend capability mismatch tests, inspection tests, and submit-boundary tests.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product and editor producers.
+- id: WR-044
+  title: PM-RENDER-PG-005 Product Surface Platform Hardening
+  diagram_title: PM-005 product-surface hardening
+  alias: WR044
+  lane: Core support
+  dependency_level: L1
+  gate: Completed
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.6
+  rice: Bounded PM-005 shared product-surface hardening slice after PM-004 compiler maturity completion
+  kano: Basic
+  dependencies:
+  - WR-041
+  - WR-043
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - domain/ui/ui_render_data
+  - apps/runenwerk_editor/src/runtime/viewport
+  - apps/runenwerk_editor/src/runtime/systems/material_preview.rs
+  - apps/runenwerk_editor/src/runtime/systems/texture_preview.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - apps/runenwerk_editor/tests
+  - apps/runenwerk_draw/src
+  - apps/runenwerk_draw/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/product-surface-platform-hardening-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-044-pm-render-pg-005-product-surface-platform-hardening/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-005-product-surface-platfor
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow
+  - cargo test -p runenwerk_editor viewport
+  - cargo test -p runenwerk_editor material_preview
+  - cargo test -p runenwerk_editor texture_preview
+  - cargo test -p runenwerk_draw product_surface
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md.
+    Product-surface producers now share one typed manifest, diagnostics, UI binding, dynamic target/upload, prepared view,
+    invocation, history, and inspection contract without renderer-owned product policy.
+  current_decision: WR-044 is completed as the bounded PM-RENDER-PG-005 product-surface platform hardening implementation.
+    Flow-backed and upload-backed producers use a shared return-only manifest vocabulary while producer systems still publish
+    explicitly into ECS resources.
+  current_call: Completed. Do not reopen WR-044 for native multi-window, render fragments, hot reload, material lowering,
+    drawing semantics, SDF acceleration, production-readiness budgets, capture/replay, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-005 product-surface platform hardening slice. PM-RENDER-PG-008 remains an incomplete
+    follow-up milestone.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-RENDER-PG-006 still owns multi-surface presentation.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay, budgets, final examples, and final inspection evidence.
+  - PM-005 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md
+  diagram_call:
+  - shared surface manifest
+  - upload and flow backed
+  - no product policy
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-044-pm-render-pg-005-product-surface-platform-hardening/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-005 implementation must follow the bounded production promotion and implementation-readiness contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/product-surface-platform-hardening-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-005 implementation must follow the accepted product-surface platform hardening design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-005 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-005 depends on completed PM-002 render contract ergonomics evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-005 depends on completed PM-004 render execution graph compiler maturity evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-005 requires completed bounded product-surface platform hardening closeout evidence.
+  ddd_owner: engine render plugin with editor and drawing producer ownership
+  adr_requirement: No ADR required while this remains an engine/app runtime contract and does not become a cross-domain ABI,
+    persisted plugin contract, external mod interface, or source-of-truth ownership change.
+  fitness_function_requirement: Manifest helper tests, duplicate/conflict diagnostics, UI binding traceability tests, non-sampleable
+    UI rejection tests, upload-backed product-surface tests, field/debug status tests, drawing product-surface tests, prepared-frame
+    inspection tests, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product, editor, and drawing producers.
+- id: WR-009
+  title: Native multi-window editor presentation
+  diagram_title: Native multi-window editor
+  alias: WINDOW
+  lane: Productization
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P2
+  value: 3
+  blocker: 2
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Bounded PM-006 multi-surface presentation contract slice after product-surface hardening
+  kano: Performance
+  dependencies:
+  - WR-003
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - apps/runenwerk_editor/src/runtime/viewport
+  - apps/runenwerk_editor/tests
+  - engine/src/runtime
+  - engine/src/app
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-009-native-multi-window-editor-presentation/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/render-final-architecture-migration.md
+  - docs-site/src/content/docs/engine/plugins/render/docs/roadmap.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p editor_shell multi_window
+  - cargo test -p engine window
+  - cargo test -p engine --test render_multi_surface
+  - cargo test -p runenwerk_editor window
+  - cargo test -p runenwerk_editor --test viewport_architecture_guards
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md.
+    PM-006 completed as a bounded multi-surface presentation contract with typed editor-window, native-window, render-surface,
+    prepared-frame, inspection, and submit-mismatch diagnostics; GPU/native two-swapchain proof remains a known bounded_contract
+    gap.
+  current_decision: WR-009 is completed as the bounded PM-RENDER-PG-006 multi-surface presentation implementation. The editor
+    app owns editor-window to native-window to render-surface bindings, engine runtime owns native-window records, and render
+    runtime owns render-surface identity and submit mismatch rejection.
+  current_call: Completed. Do not reopen WR-009 for render fragments, hot reload, final production-readiness inspection, capture/replay
+    policy, performance budgets, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-006 multi-surface presentation slice. PM-RENDER-PG-008 remains an incomplete follow-up
+    milestone.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Secondary native windows are created from engine-owned requests, but independent GPU presentation into two native swapchains
+    is not runtime-proven in this environment.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay policy, performance budgets, final examples, and final
+    inspection hardening.
+  - PM-006 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+  diagram_call:
+  - bounded multi-surface
+  - native/window/surface ids
+  - no product policy
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Multi-surface presentation must follow the accepted render product graph boundary.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Native multi-window implementation requires accepted window, input, UI frame, and swapchain ownership.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-009-native-multi-window-editor-presentation/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-RENDER-PG-006 implementation must follow the bounded WR-009 promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-006 requires completed bounded multi-surface presentation closeout evidence.
+  ddd_owner: apps/runenwerk_editor with engine runtime and render runtime collaboration
+  adr_requirement: No ADR required while this remains a bounded app/runtime/render contract and does not replace global platform/window
+    ownership policy.
+  fitness_function_requirement: Logical window tests, native window registry tests, window-scoped platform event tests, render-surface
+    registry tests, prepared-frame surface inspection tests, submit mismatch diagnostics, and workflow validation.
+  ownership_mode: Stream-aligned editor owner with platform/render collaboration.
+- id: WR-010
+  title: Render fragment and data-driven maturity R10
+  diagram_title: Render fragments R10
+  alias: FRAGMENTS
+  lane: Productization
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P2
+  value: 3
+  blocker: 2
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Bounded PM-007 render fragment contract slice after compiler and product-surface hardening
+  kano: Neutral
+  dependencies:
+  - WR-003
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - engine/examples
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-010-render-fragment-and-data-driven-maturity-r10/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine --test render_flow_fragments
+  - cargo test -p engine --test render_flow_v2
+  - cargo test -p engine --test render_runtime_inspect
+  - cargo test -p engine --example render_fragment_compositor
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md.
+    PM-007 completed as a bounded render fragment contract with typed fragment packages, validation, merge provenance, last-good
+    reload state, inspection, and a normal RenderFlow compositor example.
+  current_decision: WR-010 is completed as the bounded PM-RENDER-PG-007 render fragment and hot reload implementation. Fragment
+    descriptors validate before merge, local labels are namespace-qualified, valid fragments compile through normal RenderFlow,
+    and invalid reloads preserve the last-good active package revision.
+  current_call: Completed. Do not reopen WR-010 for PM-008 production-readiness inspection, capture/replay policy, performance
+    budgets, project asset watching, editor catalog ownership, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-007 fragment slice. PM-RENDER-PG-008 remains the next dependency for production readiness.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Project asset watching, package catalog ownership, migration UI, and save/load workflow remain asset/editor-owned follow-up
+    work.
+  - The fragment compositor example proves normal RenderFlow compilation, not a host-backed GPU pixel proof.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay policy, performance budgets, broad examples, and final
+    inspection hardening.
+  - PM-007 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+  diagram_call:
+  - typed fragment contracts
+  - merge provenance
+  - last-good reload
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Render fragment execution must follow the accepted product/render execution boundary.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Fragment assets, validation, schema/versioning, merge, and hot reload require accepted fragment design.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-010-render-fragment-and-data-driven-maturity-r10/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-RENDER-PG-007 implementation must follow the bounded WR-010 promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-007 requires completed bounded render fragment and hot reload closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: ADR only if data-driven fragments become a cross-domain contract, external package ABI, or source-of-truth
+    ownership shift.
+  fitness_function_requirement: Fragment validation, merge provenance, backend capability rejection, last-good reload, inspection,
+    example compile proof, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner.
+- id: WR-045
+  title: PM-RENDER-PG-008 Production Readiness And Inspection
+  diagram_title: PM-008 readiness
+  alias: WR045
+  lane: Productization
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: Bounded PM-008 production-readiness hardening after product surfaces, multi-surface presentation, and render fragments
+  kano: Basic
+  dependencies:
+  - WR-044
+  - WR-009
+  - WR-010
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - engine/examples
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-045-pm-render-pg-008-production-readiness-and-inspection/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-008-production-readiness-an
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine --test render_flow_v2
+  - cargo test -p engine --test render_flow_fragments
+  - cargo test -p engine --test render_multi_surface
+  - cargo test -p engine --example render_fragment_compositor
+  - cargo test -p engine --example render_readiness_inspection
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md.
+    PM-008 completed as a bounded renderer production-readiness contract with typed readiness reports, renderer budget
+    diagnostics, fail-closed replay-manifest validation, public API docs, and example proof.
+  current_decision: WR-045 is completed as the bounded PM-RENDER-PG-008 production readiness and inspection implementation.
+    Render readiness aggregates existing prepared-frame, product-surface, preflight, fragment, capture, budget, and replay
+    manifest evidence without moving product truth or policy into the renderer.
+  current_call: Completed. Do not reopen WR-045 for host-backed capture/replay runtime proof, durable capture ABI work,
+    renderer-owned product policy, material lowering, product-family semantics, or unrelated renderer hardening.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and only continue if the production-track gate selects a legal
+    next action.
+  main_blocker: Completed bounded PM-008 production readiness and inspection slice. Host-backed GPU capture/replay and
+    deterministic multi-surface runtime proof remain known bounded_contract gaps, not PM-008 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Replay manifests validate required renderer evidence and fail closed, but they do not execute deterministic GPU replay
+    in this environment.
+  - Budget reports diagnose renderer execution evidence only; they do not decide product fallback, rebuild, freshness,
+    authority, or residency policy.
+  - The readiness example proves the public inspection DTO path, not a host-backed production capture pipeline.
+  - PM-008 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
+  diagram_call:
+  - readiness inspection
+  - replay manifests fail closed
+  - budget diagnostics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-045-pm-render-pg-008-production-readiness-and-inspection/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-008 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-008 implementation followed the accepted production readiness and inspection design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-008 preserved the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-008 depended on completed product-surface platform hardening evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-008 depended on completed multi-surface presentation evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-008 depended on completed render fragments and hot reload evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-008 requires completed bounded production readiness closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required while this remains an engine-runtime hardening slice over existing accepted render contracts.
+  fitness_function_requirement: Readiness inspection tests, capture/replay manifest tests, renderer budget report tests, product-surface
+    and prepared-frame inspection tests, fragment inspection tests, multi-surface diagnostic tests, example checks, and workflow
+    validation.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned product, editor, drawing, and future world/product
+    teams.

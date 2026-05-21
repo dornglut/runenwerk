@@ -446,7 +446,7 @@ fn assert_split_viewport_products_match_embeds(app: &engine::App) {
             "scene-color dynamic target dimensions must follow viewport-local embed bounds"
         );
         assert_eq!(
-            job.prepared_flow_invocation
+            job.prepared_flow_invocation()
                 .uniform_overrides
                 .get(&scene_uniform_id),
             Some(

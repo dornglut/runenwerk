@@ -24,7 +24,6 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 ### Editor Domain
 
 - [Editor Asset Pipeline and Content Workflow Design](editor-asset-pipeline-and-content-workflow-design.md)
-- [Editor Native Multi-Window Presentation Design](editor-native-multi-window-presentation-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
 - [Editor Rendered World And Multi Entity Viewport Design](editor-rendered-world-and-multi-entity-viewport-design.md)
 - [Editor Shell Menu And Tab Chrome Polish Design](editor-shell-menu-and-tab-chrome-polish-design.md)
@@ -38,8 +37,6 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 
 - [ECS Parallel System Execution Design](ecs-parallel-system-execution-design.md)
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Design](engine-game-runtime-editor-ecs-scripting-hot-reload-design.md)
-- [Render Fragment Data-Driven Maturity Design](render-fragment-data-driven-maturity-design.md)
-- [Render Product Graph Platform](render-product-graph-platform-design.md)
 
 ### Gameplay
 

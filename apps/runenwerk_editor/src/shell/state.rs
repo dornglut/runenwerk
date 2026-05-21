@@ -1,14 +1,17 @@
 use editor_shell::{
     ActiveTabDragVisualState, ActiveTabStackPopupMenu, BODY_CONSOLE_SPLIT_WIDGET_ID,
     CENTER_RIGHT_SPLIT_WIDGET_ID, DockDropCandidate, DockDropCandidateState, DockSplitSide,
-    DockingInteractionVisualState, DockingPreviewDropTarget, LEFT_RIGHT_SPLIT_WIDGET_ID,
-    MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId, SCENE_WORKSPACE_PROFILE_ID,
-    ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind, ToolSurfaceInstanceId,
-    ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId, WorkspaceId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId, WorkspaceProfileRegistry,
-    WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis, WorkspaceState,
-    WorkspaceStateError, reduce_workspace,
+    DockingInteractionVisualState, DockingPreviewDropTarget, EditorWindowId, EditorWindowRegistry,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId,
+    SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind,
+    ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
+    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
+    WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis,
+    WorkspaceState, WorkspaceStateError, reduce_workspace,
 };
+use engine::plugins::render::backend::RenderSurfaceId;
+use engine::runtime::NativeWindowId;
+use std::collections::BTreeMap;
 use ui_math::{UiPoint, UiRect};
 
 use crate::shell::{
@@ -59,6 +62,21 @@ pub struct CornerAreaSplitSession {
     pub projection_epoch: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditorWindowPresentationBinding {
+    pub native_window_id: NativeWindowId,
+    pub render_surface_id: RenderSurfaceId,
+}
+
+impl EditorWindowPresentationBinding {
+    pub fn primary() -> Self {
+        Self {
+            native_window_id: NativeWindowId::primary(),
+            render_surface_id: RenderSurfaceId::primary(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RunenwerkEditorShellState {
     runtime: UiRuntime,
@@ -69,6 +87,9 @@ pub struct RunenwerkEditorShellState {
     identity_allocator: WorkspaceIdentityAllocator,
     active_workspace_profile_id: WorkspaceProfileId,
     open_workspace_profile_ids: Vec<WorkspaceProfileId>,
+    editor_windows: EditorWindowRegistry,
+    editor_window_bindings: BTreeMap<EditorWindowId, EditorWindowPresentationBinding>,
+    pending_editor_window_presentations: Vec<EditorWindowId>,
     active_toolbar_menu: Option<ToolbarMenuKind>,
     active_tab_stack_popup_menu: Option<ActiveTabStackPopupMenu>,
     workspace_state: WorkspaceState,
@@ -183,7 +204,7 @@ impl RunenwerkEditorShellState {
     }
 
     fn from_bootstrapped_workspace_with_open_profiles(
-        identity_allocator: WorkspaceIdentityAllocator,
+        mut identity_allocator: WorkspaceIdentityAllocator,
         active_workspace_profile_id: WorkspaceProfileId,
         workspace_state: WorkspaceState,
         open_workspace_profile_ids: Vec<WorkspaceProfileId>,
@@ -198,6 +219,14 @@ impl RunenwerkEditorShellState {
             .install_editor_bindings(checked_in_definitions.bindings)
             .expect("checked-in editor bindings should activate");
 
+        let primary_editor_window_id = identity_allocator.allocate_editor_window_id();
+        let editor_windows =
+            EditorWindowRegistry::new(primary_editor_window_id, workspace_state.workspace_id());
+        let editor_window_bindings = BTreeMap::from([(
+            primary_editor_window_id,
+            EditorWindowPresentationBinding::primary(),
+        )]);
+
         Self {
             runtime: UiRuntime::new(),
             last_tree: None,
@@ -207,6 +236,9 @@ impl RunenwerkEditorShellState {
             identity_allocator,
             active_workspace_profile_id,
             open_workspace_profile_ids,
+            editor_windows,
+            editor_window_bindings,
+            pending_editor_window_presentations: Vec::new(),
             active_toolbar_menu: None,
             active_tab_stack_popup_menu: None,
             workspace_state,
@@ -273,6 +305,43 @@ impl RunenwerkEditorShellState {
 
     pub fn open_workspace_profile_ids(&self) -> &[WorkspaceProfileId] {
         &self.open_workspace_profile_ids
+    }
+
+    pub fn editor_windows(&self) -> &EditorWindowRegistry {
+        &self.editor_windows
+    }
+
+    pub fn editor_window_binding(
+        &self,
+        editor_window_id: EditorWindowId,
+    ) -> Option<EditorWindowPresentationBinding> {
+        self.editor_window_bindings.get(&editor_window_id).copied()
+    }
+
+    pub fn bind_editor_window_presentation(
+        &mut self,
+        editor_window_id: EditorWindowId,
+        binding: EditorWindowPresentationBinding,
+    ) -> bool {
+        if self.editor_windows.record(editor_window_id).is_none() {
+            return false;
+        }
+        self.editor_window_bindings
+            .insert(editor_window_id, binding);
+        true
+    }
+
+    pub fn drain_pending_editor_window_presentations(&mut self) -> Vec<EditorWindowId> {
+        std::mem::take(&mut self.pending_editor_window_presentations)
+    }
+
+    pub fn open_editor_window_for_active_workspace(&mut self) -> EditorWindowId {
+        let editor_window_id = self.identity_allocator.allocate_editor_window_id();
+        self.editor_windows
+            .open_secondary_window(editor_window_id, self.workspace_state.workspace_id());
+        self.pending_editor_window_presentations
+            .push(editor_window_id);
+        editor_window_id
     }
 
     pub fn active_toolbar_menu(&self) -> Option<ToolbarMenuKind> {
@@ -422,8 +491,12 @@ impl RunenwerkEditorShellState {
     }
 
     pub fn replace_workspace_state(&mut self, workspace_state: WorkspaceState) {
-        self.identity_allocator =
-            WorkspaceIdentityAllocator::from_seed(workspace_state.next_identity_seed());
+        let mut seed = workspace_state.next_identity_seed();
+        seed.next_editor_window_id = self
+            .identity_allocator
+            .seed_snapshot()
+            .next_editor_window_id;
+        self.identity_allocator = WorkspaceIdentityAllocator::from_seed(seed);
         self.workspace_state = workspace_state;
         self.clear_split_resize();
         self.clear_cached_projection();

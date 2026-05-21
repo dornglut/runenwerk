@@ -25,6 +25,16 @@ impl App {
             };
             self.world.insert_resource(state);
         }
+        if !self.world.has_resource::<WindowStateRegistryResource>() {
+            let registry = self
+                .world
+                .resource::<WindowState>()
+                .ok()
+                .map(|window| WindowStateRegistryResource::from_legacy(window));
+            if let Some(registry) = registry {
+                self.world.insert_resource(registry);
+            }
+        }
         if !self
             .world
             .has_resource::<NativeWindowHookRegistryResource>()

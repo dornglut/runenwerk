@@ -30,6 +30,8 @@ impl Renderer {
             last_pass_timings: Vec::new(),
             last_runtime_resources: Vec::new(),
             last_pass_provenance: Vec::new(),
+            last_preflight_report:
+                crate::plugins::render::graph::RenderExecutionGraphPreparedReport::default(),
             last_capture_plan: crate::plugins::render::inspect::ResolvedRenderCapturePlan::default(
             ),
             last_capture_selector_results: Vec::new(),
@@ -51,6 +53,12 @@ impl Renderer {
         &self,
     ) -> &[crate::plugins::render::inspect::RenderPassProvenanceRecord] {
         &self.last_pass_provenance
+    }
+
+    pub fn last_preflight_report(
+        &self,
+    ) -> &crate::plugins::render::graph::RenderExecutionGraphPreparedReport {
+        &self.last_preflight_report
     }
 
     pub fn last_capture_plan(&self) -> &crate::plugins::render::inspect::ResolvedRenderCapturePlan {

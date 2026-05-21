@@ -7,6 +7,9 @@ use id_macros::id;
 pub struct WorkspaceId;
 
 #[id]
+pub struct EditorWindowId;
+
+#[id]
 pub struct PanelHostId;
 
 #[id]
@@ -21,6 +24,7 @@ pub struct TabStackId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorkspaceIdentitySeed {
     pub next_workspace_id: u64,
+    pub next_editor_window_id: u64,
     pub next_panel_host_id: u64,
     pub next_panel_instance_id: u64,
     pub next_tool_surface_instance_id: u64,
@@ -31,6 +35,7 @@ impl Default for WorkspaceIdentitySeed {
     fn default() -> Self {
         Self {
             next_workspace_id: 1,
+            next_editor_window_id: 1,
             next_panel_host_id: 1,
             next_panel_instance_id: 1,
             next_tool_surface_instance_id: 1,
@@ -42,6 +47,7 @@ impl Default for WorkspaceIdentitySeed {
 #[derive(Debug, PartialEq, Eq)]
 pub struct WorkspaceIdentityAllocator {
     workspace_ids: WorkspaceIdSequence,
+    editor_window_ids: EditorWindowIdSequence,
     panel_host_ids: PanelHostIdSequence,
     panel_instance_ids: PanelInstanceIdSequence,
     tool_surface_instance_ids: ToolSurfaceInstanceIdSequence,
@@ -56,6 +62,7 @@ impl WorkspaceIdentityAllocator {
     pub fn from_seed(seed: WorkspaceIdentitySeed) -> Self {
         Self {
             workspace_ids: WorkspaceIdSequence::new(seed.next_workspace_id),
+            editor_window_ids: EditorWindowIdSequence::new(seed.next_editor_window_id),
             panel_host_ids: PanelHostIdSequence::new(seed.next_panel_host_id),
             panel_instance_ids: PanelInstanceIdSequence::new(seed.next_panel_instance_id),
             tool_surface_instance_ids: ToolSurfaceInstanceIdSequence::new(
@@ -68,6 +75,7 @@ impl WorkspaceIdentityAllocator {
     pub fn seed_snapshot(&self) -> WorkspaceIdentitySeed {
         WorkspaceIdentitySeed {
             next_workspace_id: self.workspace_ids.next_raw(),
+            next_editor_window_id: self.editor_window_ids.next_raw(),
             next_panel_host_id: self.panel_host_ids.next_raw(),
             next_panel_instance_id: self.panel_instance_ids.next_raw(),
             next_tool_surface_instance_id: self.tool_surface_instance_ids.next_raw(),
@@ -77,6 +85,10 @@ impl WorkspaceIdentityAllocator {
 
     pub fn allocate_workspace_id(&mut self) -> WorkspaceId {
         self.workspace_ids.allocate().into()
+    }
+
+    pub fn allocate_editor_window_id(&mut self) -> EditorWindowId {
+        self.editor_window_ids.allocate().into()
     }
 
     pub fn allocate_panel_host_id(&mut self) -> PanelHostId {
@@ -115,6 +127,11 @@ mod tests {
         assert_eq!(workspace_a.raw(), 1);
         assert_eq!(workspace_b.raw(), 2);
 
+        let window_a = allocator.allocate_editor_window_id();
+        let window_b = allocator.allocate_editor_window_id();
+        assert_eq!(window_a.raw(), 1);
+        assert_eq!(window_b.raw(), 2);
+
         let host_a = allocator.allocate_panel_host_id();
         let host_b = allocator.allocate_panel_host_id();
         assert_eq!(host_a.raw(), 1);
@@ -144,10 +161,12 @@ mod tests {
         let _ = allocator.allocate_workspace_id();
         let _ = allocator.allocate_workspace_id();
         let host = allocator.allocate_panel_host_id();
+        let window = allocator.allocate_editor_window_id();
         let panel = allocator.allocate_panel_instance_id();
         let surface = allocator.allocate_tool_surface_instance_id();
         let stack = allocator.allocate_tab_stack_id();
 
+        assert_eq!(window.raw(), 1);
         assert_eq!(host.raw(), 1);
         assert_eq!(panel.raw(), 1);
         assert_eq!(surface.raw(), 1);
@@ -158,6 +177,7 @@ mod tests {
     fn allocator_seed_snapshot_roundtrip_is_deterministic() {
         let seed = WorkspaceIdentitySeed {
             next_workspace_id: 11,
+            next_editor_window_id: 16,
             next_panel_host_id: 21,
             next_panel_instance_id: 31,
             next_tool_surface_instance_id: 41,
@@ -166,6 +186,7 @@ mod tests {
 
         let mut allocator = WorkspaceIdentityAllocator::from_seed(seed);
         assert_eq!(allocator.allocate_workspace_id().raw(), 11);
+        assert_eq!(allocator.allocate_editor_window_id().raw(), 16);
         assert_eq!(allocator.allocate_panel_host_id().raw(), 21);
         assert_eq!(allocator.allocate_panel_instance_id().raw(), 31);
         assert_eq!(allocator.allocate_tool_surface_instance_id().raw(), 41);
@@ -176,6 +197,7 @@ mod tests {
             snapshot,
             WorkspaceIdentitySeed {
                 next_workspace_id: 12,
+                next_editor_window_id: 17,
                 next_panel_host_id: 22,
                 next_panel_instance_id: 32,
                 next_tool_surface_instance_id: 42,
@@ -185,6 +207,7 @@ mod tests {
 
         let mut restored = WorkspaceIdentityAllocator::from_seed(snapshot);
         assert_eq!(restored.allocate_workspace_id().raw(), 12);
+        assert_eq!(restored.allocate_editor_window_id().raw(), 17);
         assert_eq!(restored.allocate_panel_host_id().raw(), 22);
         assert_eq!(restored.allocate_panel_instance_id().raw(), 32);
         assert_eq!(restored.allocate_tool_surface_instance_id().raw(), 42);

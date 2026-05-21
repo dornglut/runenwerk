@@ -13,8 +13,12 @@ related_designs:
   - ../../design/active/editor-rendered-world-and-multi-entity-viewport-design.md
   - ../../design/active/field-visualizer-product-workflow-design.md
   - ../../design/active/material-lab-and-material-preview-design.md
-  - ../../design/active/render-fragment-data-driven-maturity-design.md
-  - ../../design/active/render-product-graph-platform-design.md
+  - ../../design/accepted/render-contract-ergonomics-design.md
+  - ../../design/accepted/feature-owned-render-contributions-design.md
+  - ../../design/accepted/render-execution-graph-compiler-maturity-design.md
+  - ../../design/accepted/render-fragment-data-driven-maturity-design.md
+  - ../../design/accepted/render-production-readiness-and-inspection-design.md
+  - ../../design/accepted/render-product-graph-platform-design.md
 related_roadmaps:
   - ./render-final-architecture-migration.md
   - ../plugins/render/docs/roadmap.md
@@ -82,6 +86,13 @@ The renderer must support:
 - The render product surface foundation is implemented: dynamic product
   targets, target aliases, prepared views/invocations, history signatures, UI
   sampling, and inspection now exist as engine capabilities.
+- The bounded render fragment foundation is implemented: fragment packages,
+  typed fragment ids/namespaces, validation, merge provenance, last-good reload
+  state, and fragment inspection merge into normal `RenderFlow` compilation.
+- The bounded production readiness inspection surface is implemented: readiness
+  reports aggregate existing prepared-frame, product-surface, graph/preflight,
+  fragment, capture, timing, and budget DTOs; replay manifests fail closed
+  before evidence is treated as valid.
 - The final render architecture migration defines the prepared/compiled/executed
   cut: ECS prepares packets, graph compilation shapes execution, and renderer
   runtime owns backend artifacts.
@@ -101,7 +112,7 @@ engine docs, render plugin docs, and editor rendered-world docs.
 
 ### FR-1 - Render Contract Hardening And API Ergonomics
 
-Continue `WR-003` as support-only renderer contract work: prepared product
+Continue renderer contract work through bounded WR rows: prepared product
 selection, derived residency, target aliases, history signatures, diagnostics,
 and public API ergonomics. Keep render as a contract-following consumer.
 
@@ -158,9 +169,10 @@ requests while its domain keeps semantic truth and mutation policy.
 
 ### FR-7 - Render Fragments, Hot Reload, And Authoring
 
-Implement `WR-010` through the render-fragment design: typed fragment ids,
-validation, merge into `RenderFlow`, registry, hot reload, last-good fallback,
-inspection, and later asset/editor catalog integration.
+`WR-010` implements the bounded render-fragment design: typed fragment ids and
+namespaces, validation, merge into `RenderFlow`, registry reload state,
+last-good fallback, inspection, and a fragment compositor example. Later
+asset/editor catalog integration remains outside this renderer slice.
 
 Exit criteria: fragment-driven flows run through normal compiled execution;
 invalid fragments cannot affect active rendering; provenance and reload
@@ -168,8 +180,10 @@ diagnostics are inspectable.
 
 ### FR-8 - Production Readiness
 
-Finish renderer inspection, performance budgets, failure diagnostics, examples,
-and documentation needed for serious app/editor development.
+`PM-RENDER-PG-008` is gated by the accepted render production readiness and
+inspection design. `WR-045` implements the bounded readiness-report, budget,
+fail-closed replay-manifest, public API documentation, and example proof slice
+without moving product truth or product policy into renderer code.
 
 Exit criteria: complex renderer behavior can be understood from inspection
 tools, examples, roadmap docs, and tests without reading internal backend code
@@ -177,8 +191,26 @@ first.
 
 ## Roadmap Mapping
 
-- `WR-003` remains the support-only render contract track for FR-1 and shared
-  renderer enabling work.
+- `WR-003` remains support-only context for FR-1 and shared renderer enabling
+  work; bounded production-track implementation rows carry PM-RENDER-PG slices.
+- `WR-041` implements the bounded `PM-RENDER-PG-002` ergonomics slice for
+  return-only render product-surface request helpers, typed prepared-frame
+  request diagnostics, and editor viewport plus material preview producer
+  migration.
+- `PM-RENDER-PG-003` is gated by the accepted feature-owned render
+  contributions design. Its implementation must add the typed collector
+  registry beside the current central path and keep render fragments, hot
+  reload, and compiler maturity out of the slice.
+- `PM-RENDER-PG-004` is gated by the accepted render execution graph compiler
+  maturity design. Its implementation must mature static flow validation and
+  prepared-frame execution preflight for resources, pass order, aliases,
+  history, lifetimes, and backend capabilities without implementing fragment
+  assets or hot reload.
+- `PM-RENDER-PG-005` is gated by the accepted product-surface platform
+  hardening design. Its implementation must make flow-backed and upload-backed
+  product-surface producers share one manifest, diagnostics, UI binding,
+  dynamic target, prepared view, invocation, history, and inspection contract
+  without moving product truth or product policy into the renderer.
 - `WR-019` implements viewport-owned Field Visualizer product routing and
   presentation settings as part of FR-2.
 - `WR-026` implements editor asset adapters that feed source-backed renderer

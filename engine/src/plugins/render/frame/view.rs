@@ -39,4 +39,9 @@ impl PreparedViewFrame {
             history_signature: None,
         }
     }
+
+    pub fn with_history_signature(mut self, signature: impl Into<String>) -> Self {
+        self.history_signature = Some(signature.into());
+        self
+    }
 }

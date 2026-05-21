@@ -11,6 +11,7 @@ pub mod reducer;
 pub mod state;
 pub mod surface_contract;
 pub mod viewport_embed_slot;
+pub mod window;
 
 pub use definition_form::*;
 pub use identity::*;
@@ -22,3 +23,4 @@ pub use reducer::*;
 pub use state::*;
 pub use surface_contract::*;
 pub use viewport_embed_slot::*;
+pub use window::*;

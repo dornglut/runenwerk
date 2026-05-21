@@ -7,11 +7,11 @@ layer: engine-runtime
 canonical: true
 last_reviewed: 2026-05-16
 related_designs:
-  - ./editor-native-multi-window-presentation-design.md
-  - ./render-fragment-data-driven-maturity-design.md
+  - ../accepted/editor-native-multi-window-presentation-design.md
+  - ../accepted/render-fragment-data-driven-maturity-design.md
   - ./viewport-dynamic-product-target-allocation-design.md
-  - ./workspace-viewport-expression-upgrade-design.md
-  - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
+  - ../active/workspace-viewport-expression-upgrade-design.md
+  - ../active/engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related_roadmaps:
   - ../../engine/plugins/render/docs/roadmap.md
   - ../../engine/roadmaps/render-final-architecture-migration.md
@@ -458,4 +458,4 @@ This bundle pulls these render roadmap items forward together:
 - R9 inspection/tooling for target and invocation debugging;
 - R6 and R7 proof workloads after the foundation is in place.
 
-This does not make every later render feature complete. Full native multi-window presentation is specified separately in `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md`, and full fragment/data-driven maturity is specified in `docs-site/src/content/docs/design/active/render-fragment-data-driven-maturity-design.md`.
+This does not make every later render feature complete. Full native multi-window presentation is specified separately in `docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md`, and full fragment/data-driven maturity is specified in `docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md`.

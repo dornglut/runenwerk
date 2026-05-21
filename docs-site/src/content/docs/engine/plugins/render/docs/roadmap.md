@@ -8,8 +8,9 @@ canonical: true
 last_reviewed: 2026-05-16
 related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
-  - ../../../../design/active/editor-native-multi-window-presentation-design.md
-  - ../../../../design/active/render-fragment-data-driven-maturity-design.md
+  - ../../../../design/accepted/editor-native-multi-window-presentation-design.md
+  - ../../../../design/accepted/render-fragment-data-driven-maturity-design.md
+  - ../../../../design/accepted/render-production-readiness-and-inspection-design.md
   - ../../../../design/implemented/render-product-surface-foundation-bundle-design.md
   - ../../../../design/implemented/viewport-dynamic-product-target-allocation-design.md
 related_roadmaps:
@@ -81,14 +82,17 @@ Already complete:
 - builtin execution exists for `compute_pass`, `fullscreen_pass`, `graphics_pass`, `copy_pass`, `present_pass`, and `builtin_ui_composite_pass`
 - hard cutover removed duplicate legacy ownership trees
 - examples and tests validate the new architecture
+- bounded production readiness inspection now aggregates prepared-frame,
+  product-surface, graph/preflight, fragment, capture, timing, replay-manifest,
+  and budget evidence as typed read-only DTOs
 
 Still missing or incomplete:
 
 - broader graphics/resource-heavy workflow coverage beyond the current proof examples
 - additional serious feature proofs on top of the new architecture
 - persistent/history resource workflows beyond invocation-scoped history and dynamic target history signatures
-- fragment/data-driven maturation
-- better inspection/tooling polish
+- host-backed production capture/replay and multi-surface runtime proof beyond
+  bounded DTO and example evidence
 - final public API ergonomics polish
 
 ---
@@ -881,7 +885,7 @@ Complex mixed flows are inspectable without digging through internal implementat
 
 Owning design:
 
-- `docs-site/src/content/docs/design/active/render-fragment-data-driven-maturity-design.md`
+- `docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md`
 
 ## Goal
 
@@ -902,45 +906,52 @@ This phase removes the remaining awkwardness.
 ## Target files
 
 - `engine/src/plugins/render/composition/fragments.rs`
+- `engine/src/plugins/render/composition/fragment_validation.rs`
+- `engine/src/plugins/render/composition/fragment_registry.rs`
 - `engine/src/plugins/render/composition/hot_reload.rs`
-- `engine/src/plugins/render/api/ids.rs`
 - `engine/src/plugins/render/graph/merge.rs`
+- `engine/src/plugins/render/inspect/graph_dump.rs`
+- `engine/src/plugins/render/inspect/pass_provenance.rs`
+- `engine/tests/render_flow_fragments.rs`
+- `engine/examples/render_fragment_compositor.rs`
 
 ## Required implementation
 
-### 1. Better ID model
-Reduce reliance on internal string-interning bridges where possible.
-
-Long-term target:
-- stronger owned/typed IDs internally
-- less friction for data-driven authored fragments
+### 1. Typed fragment model
+Use typed package ids, fragment ids, namespaces, revisions, descriptors,
+diagnostics, and provenance records. Fragments are authored descriptions, not
+backend objects.
 
 ### 2. Better fragment validation
-Improve diagnostics for:
+Diagnostics cover:
 - invalid fragment references
 - missing resources
 - namespace collisions
 - incompatible fragment composition
 
 ### 3. Better hot reload loop
-Improve:
+Reload state tracks:
 - revision tracking
 - reload diagnostics
-- failure recovery
+- last-good failure recovery
 
 ### 4. Example proof
-At least one fragment-driven flow or contribution example should demonstrate the model clearly.
+`engine/examples/render_fragment_compositor.rs` demonstrates a fragment-driven
+flow that still compiles through normal `RenderFlow`.
 
 ## Verification
 
 ### Tests
-- fragment parse/validate test
-- fragment merge collision test
-- hot reload revision/error state test
+- `cargo test -p engine --test render_flow_fragments`
+- `cargo test -p engine --test render_flow_v2`
+- `cargo test -p engine --test render_runtime_inspect`
+- `cargo test -p engine --example render_fragment_compositor`
 
 ## Exit criteria
 
-Fragments and hot reload feel like first-class extensions of the architecture.
+Fragments and hot reload are first-class engine render composition contracts.
+Production-readiness inspection, capture/replay policy, budgets, and broad
+example coverage remain owned by `PM-RENDER-PG-008`.
 
 ---
 
@@ -961,7 +972,7 @@ Builtin pass completion is done. The highest-value continuation is the product-s
 These make the system robust and debuggable after the main execution and product-surface paths are proven.
 
 ## Then
-7. **Native multi-window presentation** from `docs-site/src/content/docs/design/active/editor-native-multi-window-presentation-design.md` when second-monitor editor workflows become the active product priority.
+7. **Native multi-window presentation** from `docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md` when second-monitor editor workflows become the active product priority.
 8. **R10 — Fragment/data-driven maturation**
 
 These extend the stable product-surface foundation into multi-swapchain editor presentation and authored render-flow composition.

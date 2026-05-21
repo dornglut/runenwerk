@@ -1,0 +1,110 @@
+version: 1
+idea: PM-RENDER-PG-003 bounded implementation WR for feature-owned render contribution collectors.
+source_path: docs-site/src/content/docs/design/accepted/feature-owned-render-contributions-design.md
+owner: engine
+created_at: '2026-05-21'
+governance_notes:
+- Architecture governance review selected an engine-local design update, not a new ADR, while the contract remains inside
+  engine/src/plugins/render and preserves the accepted Render Product Graph Platform boundary.
+- WR-010 remains the render-fragment and hot-reload row for PM-RENDER-PG-007; it must not be repurposed for PM-003.
+- PM-003 implementation must keep product truth, product freshness, authority, fallback legality, rebuild policy, product
+  dependencies, and residency policy outside render collectors.
+open_questions: []
+item:
+  id: WR-042
+  title: PM-RENDER-PG-003 Feature-Owned Render Contributions
+  diagram_title: PM-003 feature-owned contributions
+  alias: WR042
+  lane: Core support
+  dependency_level: L1
+  gate: Accepted PM-003 design and PM-002 completion evidence
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: Bounded PM-003 collector registry slice after PM-002 ergonomics completion
+  kano: Basic
+  dependencies:
+  - WR-041
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/feature-owned-render-contributions-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-042-pm-render-pg-003-feature-owned-render-contributions/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-21-pm-render-pg-003-bounded-implementation-
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine render_feature_contributions
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: Accepted PM-RENDER-PG-003 design at docs-site/src/content/docs/design/accepted/feature-owned-render-contributions-design.md
+    and PM-RENDER-PG-002 closeout at docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md.
+  current_decision: PM-003 should implement a bounded feature-owned contribution collector registry beside the current central
+    PreparedFeaturePayload and build_frame_feature_contributions path. The first implementation must preserve the submit
+    prepared-frame-only boundary and use a compatibility adapter.
+  current_call: Promote only a bounded collector-registry slice. Do not implement render fragments, hot reload, compiler
+    maturity, material lowering, all-feature migration, or renderer-owned product policy in WR-042.
+  first_move: Run task production:plan -- --milestone PM-RENDER-PG-003 --roadmap WR-042 after roadmap promotion selects WR-042
+    as the current candidate.
+  main_blocker: Ready for promotion once roadmap preflight confirms dependency completion and no current-candidate conflict.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - typed contribution collectors
+  - compatibility adapter
+  - no fragment implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-042-pm-render-pg-003-feature-owned-render-contributions/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-003 implementation must follow the bounded production promotion and implementation-readiness contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/feature-owned-render-contributions-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-003 implementation must follow the accepted feature-owned render contribution collector contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-003 must preserve the accepted Product Graph versus Render Execution Graph ownership boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-003 depends on completed PM-002 ergonomics closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required while the collector contract remains engine-local and does not become a cross-domain ABI,
+    persisted plugin contract, or external mod interface.
+  fitness_function_requirement: Collector registry tests, duplicate/conflict diagnostics, registered payload inspection, compatibility
+    adapter output, one migrated feature equivalence proof, and submit-boundary tests.
+  ownership_mode: Complicated-subsystem render owner enabling stream-aligned feature and product teams.
+edges: []

@@ -28,6 +28,12 @@ impl Renderer {
         self.last_pass_timings.clear();
         self.last_runtime_resources.clear();
         self.last_pass_provenance.clear();
+        self.last_preflight_report = preflight_prepared_render_frame(
+            prepared_frame,
+            compiled_flows,
+            &RenderBackendCapabilityProfile::runtime_default(),
+        )
+        .map_err(anyhow::Error::new)?;
         self.last_capture_plan = ResolvedRenderCapturePlan::default();
         self.last_capture_selector_results.clear();
         self.last_captured_textures.clear();

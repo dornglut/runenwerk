@@ -1065,6 +1065,11 @@ fn hash_prepared_feature_contribution(
                 stream.output_buffer_ref.hash(&mut hasher);
             }
         }
+        crate::plugins::render::PreparedFeaturePayload::Registered(value) => {
+            "registered".hash(&mut hasher);
+            value.kind().hash(&mut hasher);
+            value.runtime_signature().hash(&mut hasher);
+        }
     }
     hasher.finish()
 }

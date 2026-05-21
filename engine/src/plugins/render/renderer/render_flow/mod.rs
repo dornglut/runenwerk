@@ -7,7 +7,8 @@ use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledComputeExecutionPlan,
     CompiledCopyExecutionPlan, CompiledPassBindings, CompiledPassExecutionPlan,
     CompiledPresentExecutionPlan, CompiledRasterExecutionPlan, CompiledRenderFlowPlan,
-    CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderShaderReference,
+    CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderBackendCapabilityProfile,
+    RenderShaderReference, preflight_prepared_render_frame,
 };
 use crate::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,

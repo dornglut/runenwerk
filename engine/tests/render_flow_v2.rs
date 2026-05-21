@@ -1,7 +1,9 @@
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, RenderFlow, RenderFlowValidationIssue, RenderFrameDataRegistry,
-    RenderPassId, RenderPassKind, RenderResourceDescriptor, RenderTextureFormatPolicy,
-    RenderTextureSizePolicy, RenderTextureTargetFormat, ShaderRegistryResource,
+    GpuStorage, GpuUniform, RenderBackendCapabilityProfile, RenderExecutionGraphDiagnosticKind,
+    RenderFlow, RenderFlowValidationIssue, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
+    RenderResourceDescriptor, RenderTextureFormatPolicy, RenderTextureSizePolicy,
+    RenderTextureTargetFormat, ShaderRegistryResource, compile_flow_plan,
+    compile_flow_plan_checked,
 };
 use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -132,6 +134,70 @@ fn v2_flow_keeps_graph_contract_inspectable() {
     assert_eq!(read_ids.len(), 2);
     assert_eq!(write_ids.len(), 2);
     assert_eq!(read_ids, write_ids);
+}
+
+#[test]
+fn render_flow_compiler_reports_typed_static_resource_diagnostics() {
+    let (flow, _cells) = RenderFlow::new("v2.invalid.compiler")
+        .with_surface_color()
+        .storage_array::<Cell>("cells", 4);
+    let flow = flow
+        .fullscreen_pass("compose")
+        .sample_texture("cells")
+        .write_surface_color()
+        .finish();
+
+    let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+        .expect_err("compiler should expose typed diagnostics for invalid static resources");
+
+    assert!(err.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::InvalidResource
+            && diagnostic.message.contains("samples resource")
+    }));
+}
+
+#[test]
+fn render_flow_compiler_reports_backend_capability_mismatches() {
+    let flow = RenderFlow::new("v2.compiler.capability")
+        .with_surface_color()
+        .compute_pass("simulate")
+        .dispatch([1, 1, 1])
+        .finish()
+        .validate()
+        .expect("flow should validate before capability check");
+
+    let err = compile_flow_plan_checked(
+        &flow,
+        &RenderBackendCapabilityProfile::unsupported_for_tests("compute"),
+    )
+    .expect_err("unsupported compute capability should be typed");
+
+    assert!(err.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch
+            && diagnostic.capability.as_deref() == Some("pass_kind::Compute")
+    }));
+}
+
+#[test]
+fn render_flow_compiler_exposes_resource_lifetime_windows() {
+    let flow = RenderFlow::new("v2.compiler.lifetimes")
+        .with_color_target("color")
+        .fullscreen_pass("compose")
+        .write_color_target("color")
+        .finish()
+        .validate()
+        .expect("flow should validate");
+
+    let compiled = compile_flow_plan(&flow).expect("flow should compile");
+    let color_window = compiled
+        .resource_lifetime_windows
+        .iter()
+        .find(|window| window.resource_label.as_deref() == Some("color"))
+        .expect("color target lifetime should be inspectable");
+
+    assert_eq!(color_window.first_write, Some(0));
+    assert_eq!(color_window.last_use, Some(0));
+    assert!(color_window.first_read.is_none());
 }
 
 #[test]

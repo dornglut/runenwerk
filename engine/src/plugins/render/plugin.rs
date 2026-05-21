@@ -1,5 +1,7 @@
-use super::backend::BackendResourceAllocatorResource;
-use super::composition::{RenderFlowRegistryResource, sync_render_flow_registry_system};
+use super::backend::{BackendResourceAllocatorResource, RenderSurfaceRegistryResource};
+use super::composition::{
+    RenderFlowRegistryResource, RenderFragmentRegistryResource, sync_render_flow_registry_system,
+};
 use super::features::{
     EditorPickingResultResource, PreparedCaveFeatureResource, PreparedDeformationFeatureResource,
     PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
@@ -43,6 +45,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<SceneResource>();
         app.init_resource::<ShaderRegistryResource>();
         app.init_resource::<RenderFlowRegistryResource>();
+        app.init_resource::<RenderFragmentRegistryResource>();
         app.init_resource::<RenderFeatureRegistryResource>();
         app.init_resource::<PreparedUiFrameResource>();
         app.init_resource::<ViewportSurfaceBindingRegistryResource>();
@@ -69,6 +72,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderDynamicTextureUploadRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
         app.init_resource::<BackendResourceAllocatorResource>();
+        app.init_resource::<RenderSurfaceRegistryResource>();
         app.init_resource::<RenderDebugOverlayState>();
         app.init_resource::<RenderRuntimeResourceInspectorState>();
         app.init_resource::<RenderTextureInspectorState>();
