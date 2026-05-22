@@ -792,3 +792,27 @@ edges:
 - source: WR-048
   target: WR-055
   label: timing and preflight evidence before runtime pacing repair
+- source: WR-055
+  target: WR-056
+  label: runtime pacing baseline before GPU timing
+- source: WR-056
+  target: WR-057
+  label: GPU evidence before guard enforcement
+- source: WR-057
+  target: WR-058
+  label: guard contracts before procedural API
+- source: WR-058
+  target: WR-059
+  label: procedural API before boids rewrite
+- source: WR-056
+  target: WR-060
+  label: GPU timing evidence before production closeout
+- source: WR-057
+  target: WR-060
+  label: pass guards before production closeout
+- source: WR-058
+  target: WR-060
+  label: procedural API before production closeout
+- source: WR-059
+  target: WR-060
+  label: boids proof before production closeout

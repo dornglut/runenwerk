@@ -98,6 +98,21 @@ package "PT-RENDER-PG Render Product Graph Platform" {
 
 }
 
+package "PT-RENDER-GPU Renderer GPU Evidence And Procedural Visuals Platform" {
+  component "PM-RENDER-GPU-001 GPU Evidence And Procedural Visuals Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_GPU_001 <<active>>
+
+  component "PM-RENDER-GPU-002 GPU Pass Timing Foundation\nkind=implementation\nstate=designing\nWR=WR-056" as PM_RENDER_GPU_002 <<designing>>
+
+  component "PM-RENDER-GPU-003 Render-Flow Pass-Shape And Instance Guards\nkind=implementation\nstate=designing\nWR=WR-057" as PM_RENDER_GPU_003 <<designing>>
+
+  component "PM-RENDER-GPU-004 Hybrid Procedural Instance Rendering API\nkind=implementation\nstate=designing\nWR=WR-058" as PM_RENDER_GPU_004 <<designing>>
+
+  component "PM-RENDER-GPU-005 Canonical Boids Hybrid Procedural Rewrite\nkind=implementation\nstate=designing\nWR=WR-059" as PM_RENDER_GPU_005 <<designing>>
+
+  component "PM-RENDER-GPU-006 Procedural Visuals Production Readiness\nkind=hardening\nstate=designing\nWR=WR-060" as PM_RENDER_GPU_006 <<designing>>
+
+}
+
 package "PT-UI-DESIGN UI Designer And Interface Lab Platform" {
   component "PM-UI-DESIGN-001 UI Designer Doctrine And Target Boundary Ratification\nkind=design\nstate=completed\nWR=WR-046" as PM_UI_DESIGN_001 <<completed>>
 
@@ -158,6 +173,14 @@ PM_RENDER_PG_005 -down-> PM_RENDER_PG_007 : production prerequisite
 PM_RENDER_PG_005 -down-> PM_RENDER_PG_008 : production prerequisite
 PM_RENDER_PG_006 -down-> PM_RENDER_PG_008 : production prerequisite
 PM_RENDER_PG_007 -down-> PM_RENDER_PG_008 : production prerequisite
+PM_RENDER_GPU_001 -down-> PM_RENDER_GPU_002 : production prerequisite
+PM_RENDER_GPU_002 -down-> PM_RENDER_GPU_003 : production prerequisite
+PM_RENDER_GPU_003 -down-> PM_RENDER_GPU_004 : production prerequisite
+PM_RENDER_GPU_004 -down-> PM_RENDER_GPU_005 : production prerequisite
+PM_RENDER_GPU_002 -down-> PM_RENDER_GPU_006 : production prerequisite
+PM_RENDER_GPU_003 -down-> PM_RENDER_GPU_006 : production prerequisite
+PM_RENDER_GPU_004 -down-> PM_RENDER_GPU_006 : production prerequisite
+PM_RENDER_GPU_005 -down-> PM_RENDER_GPU_006 : production prerequisite
 PM_UI_DESIGN_001 -down-> PM_UI_DESIGN_002 : production prerequisite
 PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_003 : production prerequisite
 PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_004 : production prerequisite

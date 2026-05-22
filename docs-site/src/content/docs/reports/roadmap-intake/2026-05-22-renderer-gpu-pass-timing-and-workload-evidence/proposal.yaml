@@ -1,0 +1,76 @@
+version: 1
+idea: Renderer GPU Pass Timing And Workload Evidence
+source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+owner: engine/src/plugins/render
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Which timestamp-query capability matrix is required for runtime_proven evidence?
+- How should unsupported GPU timing be surfaced in readiness budgets and runtime inspection?
+- Which boids/runtime smoke evidence is mandatory before closing the timing foundation?
+item:
+  id: WR-056
+  title: Renderer GPU Pass Timing And Workload Evidence
+  diagram_title: GPU pass timing evidence
+  alias: GPUTIMING
+  lane: Render platform
+  dependency_level: L2
+  gate: Accepted GPU evidence design and architecture governance
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: GPU pass timing unlocks runtime evidence for renderer performance and boids acceptance.
+  kano: Basic
+  dependencies:
+  - WR-055
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-gpu-pass-timing-and-workload-evidence
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_gpu_timing
+  - task docs:validate
+  next_evidence: Accepted renderer GPU evidence design plus architecture governance for timestamp query capability gating.
+  current_decision: Deferred foundation row for GPU pass timing and workload evidence; do not implement until the active design is accepted and this row is promoted.
+  current_call: Keep GPU timing as renderer execution diagnostics only; do not use it to decide product truth, freshness, fallback, authority, rebuild, or residency policy.
+  first_move: Accept the GPU evidence/procedural visuals design, then run architecture governance before adding timestamp query DTOs and diagnostics.
+  main_blocker: The renderer GPU evidence and procedural visuals design is active, not accepted.
+  why_not_ready: GPU timing changes submit-adjacent renderer evidence policy and requires accepted design plus architecture governance before code.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - capability-gated timestamps
+  - CPU/GPU timing DTOs
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: GPU timing implementation must follow the accepted renderer evidence and ownership contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Public renderer timing and readiness evidence must extend the accepted inspection contract.
+  ddd_owner: engine render runtime diagnostics
+  adr_requirement: ADR only if GPU timing changes durable backend ownership, public dependency direction, or cross-domain evidence authority.
+  fitness_function_requirement: GPU timing capability diagnostics, unsupported-state tests, runtime inspection DTO tests, and docs validation.
+  ownership_mode: Enabling renderer platform work with no product-truth ownership.
+edges:
+- source: WR-055
+  target: WR-056
+  label: runtime pacing baseline before GPU timing

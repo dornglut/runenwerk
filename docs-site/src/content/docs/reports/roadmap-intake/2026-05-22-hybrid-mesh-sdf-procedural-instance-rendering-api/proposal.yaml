@@ -1,0 +1,83 @@
+version: 1
+idea: Hybrid Mesh/SDF Procedural Instance Rendering API
+source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+owner: engine/src/plugins/render
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Should the first public SDF impostor API be 2D-only or include 3D hooks?
+- Which blend, depth, cull, and primitive policies must be explicit in v1?
+- Which examples are required to make the procedural path discoverable without renderer-private handles?
+item:
+  id: WR-058
+  title: Hybrid Mesh/SDF Procedural Instance Rendering API
+  diagram_title: Hybrid procedural instance API
+  alias: PROCVIS
+  lane: Render platform
+  dependency_level: L3
+  gate: Accepted GPU evidence design and pass-shape guards
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.5
+  expected_score: 0.6
+  rice: A discoverable procedural API prevents examples and products from hand-rolling unsafe render-flow shapes.
+  kano: Basic
+  dependencies:
+  - WR-057
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/examples
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-hybrid-mesh-sdf-procedural-instance-rendering-api
+  validations:
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural_instance
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  next_evidence: Accepted renderer GPU evidence design, completed pass-shape guard row, and API examples for normal procedural usage.
+  current_decision: Deferred API row for mesh/quad sprites, local 2D SDF impostors, shared instance buffers, and explicit render-state policy.
+  current_call: Renderer may own procedural execution APIs and derived GPU resources, but not gameplay, particle, VFX, material, model, or product truth.
+  first_move: Promote after WR-057 completion, then design the public procedural instance API around explicit buffers, primitives, blend/depth/cull policy, validation, and examples.
+  main_blocker: Depends on WR-057 and accepted procedural visuals design.
+  why_not_ready: Procedural APIs need pass-shape guard doctrine and accepted ownership boundaries before implementation.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - mesh/SDF sprites
+  - explicit render policy
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Procedural instance APIs must follow the accepted renderer ownership and visual model.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Procedural visuals must not move product truth into renderer-owned helpers.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: SDF impostor support must preserve accepted SDF product and GPU residency boundaries.
+  ddd_owner: engine render public API and derived procedural GPU resources
+  adr_requirement: ADR only if procedural rendering changes durable public render-flow ownership or product/render dependency direction.
+  fitness_function_requirement: Procedural API validation tests, public examples, inspection DTO tests, and docs validation.
+  ownership_mode: Enabling renderer platform API with product truth outside renderer.
+edges:
+- source: WR-057
+  target: WR-058
+  label: guard contracts before procedural API

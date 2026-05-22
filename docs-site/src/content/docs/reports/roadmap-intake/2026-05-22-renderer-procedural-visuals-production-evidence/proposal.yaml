@@ -1,0 +1,97 @@
+version: 1
+idea: Renderer Procedural Visuals Production Evidence
+source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+owner: docs-site/src/content/docs/engine/reference/plugins/render
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Which runtime machines and GPU capability profiles are required for closeout?
+- Which examples and benchmarks are mandatory for runtime_proven production quality?
+- What known quality gaps block any future perfectionist_verified claim?
+item:
+  id: WR-060
+  title: Renderer Procedural Visuals Production Evidence
+  diagram_title: Procedural visuals production evidence
+  alias: PROCEVIDENCE
+  lane: Render hardening
+  dependency_level: L3
+  gate: Completed GPU timing, guards, procedural API, and boids proof
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: Production evidence closes the renderer platform track with docs, benchmarks, examples, and runtime GPU proof.
+  kano: Basic
+  dependencies:
+  - WR-056
+  - WR-057
+  - WR-058
+  - WR-059
+  write_scopes:
+  - engine/benches
+  - engine/examples
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-procedural-visuals-production-evidence
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed renderer GPU timing, pass-shape guard, procedural API, and boids runtime proof rows.
+  current_decision: Deferred production hardening row for docs, benchmarks, examples, runtime evidence, and closeout.
+  current_call: Close the GPU/procedural visual platform as runtime_proven only after evidence exists; do not claim perfectionist_verified with known gaps.
+  first_move: Promote after WR-056 through WR-059 complete, then generate runtime evidence, benchmark reports, docs, and closeout materials.
+  main_blocker: Depends on all prior PT-RENDER-GPU implementation rows.
+  why_not_ready: Production evidence cannot exist until the foundation, guards, API, and canonical boids proof are complete.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - runtime GPU proof
+  - production closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Production evidence must follow the accepted renderer GPU evidence and procedural visuals contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Renderer production evidence must extend the accepted inspection/readiness model.
+  ddd_owner: engine render docs, examples, benchmarks, and production evidence
+  adr_requirement: ADR only if production evidence changes renderer ownership, release gates, or cross-domain evidence authority.
+  fitness_function_requirement: Benchmarks, runtime GPU evidence, inspection DTO tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Renderer production hardening and evidence closeout.
+edges:
+- source: WR-056
+  target: WR-060
+  label: GPU timing evidence before production closeout
+- source: WR-057
+  target: WR-060
+  label: pass guards before production closeout
+- source: WR-058
+  target: WR-060
+  label: procedural API before production closeout
+- source: WR-059
+  target: WR-060
+  label: boids proof before production closeout

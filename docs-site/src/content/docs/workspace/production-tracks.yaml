@@ -910,6 +910,169 @@ tracks:
           - The readiness example proves the public inspection DTO path, not a host-backed production capture pipeline.
           - PM-008 did not claim runtime_proven or perfectionist_verified evidence.
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
+  - id: PT-RENDER-GPU
+    title: Renderer GPU Evidence And Procedural Visuals Platform
+    state: active
+    owner: engine
+    strategic_goal: Add runtime GPU evidence, render-flow shape guards, hybrid procedural visual APIs, and canonical boids proof without moving product truth or product policy into the renderer.
+    success_criteria:
+      - GPU pass timing distinguishes CPU encode/submit work from GPU execution cost and exposes unsupported timing diagnostics when backend capabilities are absent.
+      - Render-flow validation and prepared-frame preflight diagnose dangerous pass-shape and instance-count combinations before they can become runtime stutter.
+      - Procedural instance APIs cover mesh/quad sprites, local SDF impostors, shared storage-backed instance buffers, and explicit blend/depth/cull/primitive policy.
+      - The canonical boids example uses storage-backed compute simulation plus bounded local per-boid mesh/SDF sprite rendering, with no fullscreen-per-boid rendering.
+      - Runtime inspection, docs, benchmarks, examples, and closeout evidence support a runtime_proven production quality target.
+      - Product truth, product selection, freshness, authority, fallback legality, rebuild policy, residency policy, field/VFX emitters, and gameplay particle semantics stay outside the renderer.
+    milestones:
+      - id: PM-RENDER-GPU-001
+        title: GPU Evidence And Procedural Visuals Doctrine
+        kind: design
+        state: active
+        goal: Define the renderer-owned GPU evidence and procedural visual contracts before implementation rows can start.
+        outcome: The active design and production track identify ownership, sequence, gates, non-goals, open decisions, and runtime_proven target evidence.
+        dependencies: []
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: active
+            reason: The doctrine milestone is anchored by the active GPU evidence and procedural visuals design.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: The new track extends, but does not reopen, the completed Render Product Graph Platform.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+            required_status: accepted
+            reason: GPU evidence and production closeout must extend the accepted renderer readiness and inspection contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - The active design names renderer-owned evidence and procedural API responsibilities separately from product-domain truth.
+          - The production track exists with PM-RENDER-GPU-001 through PM-RENDER-GPU-006 in dependency order.
+          - Bounded WR intake rows exist for GPU timing, pass-shape guards, procedural APIs, boids rewrite, and production evidence.
+          - No completed PT-RENDER-PG milestone is reopened or repurposed.
+      - id: PM-RENDER-GPU-002
+        title: GPU Pass Timing Foundation
+        kind: implementation
+        state: designing
+        goal: Add capability-gated GPU pass timing and public timing DTOs that distinguish CPU encode/submit work from GPU execution cost.
+        outcome: Renderer inspection reports GPU pass cost when timestamp queries are supported and explicit unsupported diagnostics when they are not.
+        dependencies:
+          - PM-RENDER-GPU-001
+        roadmap_links:
+          - WR-056
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: GPU timing implementation requires the active design to become an accepted implementation contract.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+            required_status: accepted
+            reason: GPU timing extends the accepted renderer readiness and inspection DTO contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - Timestamp query support is capability-gated and fails closed with typed unsupported diagnostics.
+          - Public timing DTOs expose CPU encode/submit timing separately from GPU pass timing without backend handles.
+          - Runtime inspection and readiness budgets can identify timing source, cache state, pass cost, and unsupported status.
+      - id: PM-RENDER-GPU-003
+        title: Render-Flow Pass-Shape And Instance Guards
+        kind: implementation
+        state: designing
+        goal: Add render-flow validation and preflight diagnostics for pass-shape and instance-count hazards.
+        outcome: Fullscreen-style rendering multiplied by instance count is diagnosed before submit unless an accepted explicit opt-in path exists.
+        dependencies:
+          - PM-RENDER-GPU-002
+        roadmap_links:
+          - WR-057
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: Pass-shape guard policy must follow the accepted GPU evidence and procedural visuals contract.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+            required_status: accepted
+            reason: Pass-shape guards extend the accepted render execution graph validation model.
+        evidence_gates: []
+        acceptance_criteria:
+          - Typed diagnostics identify dangerous fullscreen-plus-instance and procedural-shape hazards.
+          - Guard enforcement happens in renderer validation/preflight, not in boids-specific code.
+          - Existing valid compute, fullscreen, and graphics paths remain valid when they do not express the hazardous combination.
+      - id: PM-RENDER-GPU-004
+        title: Hybrid Procedural Instance Rendering API
+        kind: implementation
+        state: designing
+        goal: Add discoverable procedural instance APIs for mesh sprites, local SDF impostors, shared instance buffers, and explicit render-state policy.
+        outcome: Renderer users can build bounded local procedural visuals without renderer-private handles or unsafe pass-shape conventions.
+        dependencies:
+          - PM-RENDER-GPU-003
+        roadmap_links:
+          - WR-058
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: Procedural API implementation requires the accepted hybrid visual model.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Procedural helpers must preserve the product/render ownership boundary.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+            required_status: accepted
+            reason: SDF impostor support must respect accepted SDF product and GPU residency boundaries.
+        evidence_gates: []
+        acceptance_criteria:
+          - Mesh/quad sprite and local SDF impostor APIs are discoverable from public renderer docs and examples.
+          - Shared storage-backed instance buffers and explicit blend/depth/cull/primitive policy are validated.
+          - Procedural APIs derive GPU execution resources only and do not infer product semantics, freshness, authority, fallback, rebuild, or residency policy.
+      - id: PM-RENDER-GPU-005
+        title: Canonical Boids Hybrid Procedural Rewrite
+        kind: implementation
+        state: designing
+        goal: Rewrite boids to use the hybrid procedural visual path and runtime GPU evidence.
+        outcome: Boids compute simulation remains storage-backed while rendering uses bounded local per-boid mesh/SDF sprite work with no fullscreen-per-boid pass.
+        dependencies:
+          - PM-RENDER-GPU-004
+        roadmap_links:
+          - WR-059
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: The canonical boids rewrite must prove the accepted procedural visual and evidence model.
+        evidence_gates: []
+        acceptance_criteria:
+          - Boids rendering no longer issues a fullscreen draw multiplied by boid count.
+          - Compute simulation remains storage-backed and render consumption goes through public renderer procedural APIs.
+          - Runtime evidence reports compute, render, and present costs with GPU timing when supported or unsupported diagnostics when not.
+      - id: PM-RENDER-GPU-006
+        title: Procedural Visuals Production Readiness
+        kind: hardening
+        state: designing
+        goal: Close the renderer GPU/procedural visuals platform with docs, benchmarks, examples, inspection, and runtime evidence.
+        outcome: The track can claim runtime_proven only after completed evidence demonstrates GPU timing, guards, procedural APIs, and canonical boids behavior.
+        dependencies:
+          - PM-RENDER-GPU-002
+          - PM-RENDER-GPU-003
+          - PM-RENDER-GPU-004
+          - PM-RENDER-GPU-005
+        roadmap_links:
+          - WR-060
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: Production evidence must follow the accepted renderer GPU evidence and procedural visuals contract.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+            required_status: accepted
+            reason: Production closeout must extend the accepted renderer readiness and inspection model.
+        evidence_gates: []
+        acceptance_criteria:
+          - Renderer docs explain GPU timing, pass-shape guards, procedural sprites/SDF impostors, and the canonical boids path.
+          - Benchmarks and runtime smoke evidence prove boids uses bounded per-instance work and reports GPU pass cost.
+          - Completion quality is runtime_proven only after validation, runtime evidence, and closeout exist; perfectionist_verified remains blocked by any known quality gap.
   - id: PT-UI-DESIGN
     title: UI Designer And Interface Lab Platform
     state: completed

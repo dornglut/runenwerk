@@ -240,3 +240,331 @@ items:
   adr_requirement: Accepted gameplay design/ADR required before implementation.
   fitness_function_requirement: Gameplay dependency-direction and editor boundary checks required.
   ownership_mode: Deferred stream-aligned product work.
+- id: WR-056
+  title: Renderer GPU Pass Timing And Workload Evidence
+  diagram_title: GPU pass timing evidence
+  alias: GPUTIMING
+  lane: Render platform
+  dependency_level: L2
+  gate: Accepted GPU evidence design and architecture governance
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: GPU pass timing unlocks runtime evidence for renderer performance and boids acceptance.
+  kano: Basic
+  dependencies:
+  - WR-055
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-gpu-pass-timing-and-workload-evidence
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_gpu_timing
+  - task docs:validate
+  next_evidence: Accepted renderer GPU evidence design plus architecture governance for timestamp query capability gating.
+  current_decision: Deferred foundation row for GPU pass timing and workload evidence; do not implement until the active design
+    is accepted and this row is promoted.
+  current_call: Keep GPU timing as renderer execution diagnostics only; do not use it to decide product truth, freshness,
+    fallback, authority, rebuild, or residency policy.
+  first_move: Accept the GPU evidence/procedural visuals design, then run architecture governance before adding timestamp
+    query DTOs and diagnostics.
+  main_blocker: The renderer GPU evidence and procedural visuals design is active, not accepted.
+  why_not_ready: GPU timing changes submit-adjacent renderer evidence policy and requires accepted design plus architecture
+    governance before code.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - capability-gated timestamps
+  - CPU/GPU timing DTOs
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: GPU timing implementation must follow the accepted renderer evidence and ownership contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Public renderer timing and readiness evidence must extend the accepted inspection contract.
+  ddd_owner: engine render runtime diagnostics
+  adr_requirement: ADR only if GPU timing changes durable backend ownership, public dependency direction, or cross-domain
+    evidence authority.
+  fitness_function_requirement: GPU timing capability diagnostics, unsupported-state tests, runtime inspection DTO tests,
+    and docs validation.
+  ownership_mode: Enabling renderer platform work with no product-truth ownership.
+- id: WR-057
+  title: Render Flow Pass Shape And Instance Contract Guards
+  diagram_title: Pass-shape and instance guards
+  alias: PASSGUARDS
+  lane: Render platform
+  dependency_level: L2
+  gate: Accepted GPU evidence design and GPU timing foundation
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: Pass-shape guards prevent accidental fullscreen multiplied work before examples or products reach runtime.
+  kano: Basic
+  dependencies:
+  - WR-056
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-flow-pass-shape-and-instance-contract-guards
+  validations:
+  - cargo test -p engine render_flow
+  - cargo test -p engine render_cutoff_guard
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  next_evidence: Accepted renderer GPU evidence design and completed GPU timing foundation before guard implementation.
+  current_decision: Deferred render-flow validation row for pass-shape and instance-count hazards.
+  current_call: Guard renderer execution contracts only; do not encode boids-specific shortcuts or product-domain policy.
+  first_move: Promote after WR-056 completion, then implement typed diagnostics for fullscreen-plus-instance and procedural-shape
+    hazards.
+  main_blocker: Depends on WR-056 and the active GPU evidence/procedural visuals design becoming accepted.
+  why_not_ready: Pass-shape enforcement needs the accepted evidence doctrine and timing foundation before implementation.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - fullscreen hazard guard
+  - typed preflight diagnostics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Pass-shape guards must follow the accepted procedural visuals and evidence contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Pass-shape validation extends the accepted render-flow/compiler validation model.
+  ddd_owner: engine render-flow validation and preflight diagnostics
+  adr_requirement: ADR only if guard policy changes public render-flow ownership or rejects previously documented supported
+    shapes.
+  fitness_function_requirement: Render-flow guard diagnostics, cutoff/preflight enforcement tests, and docs validation.
+  ownership_mode: Enabling renderer platform validation.
+- id: WR-058
+  title: Hybrid Mesh/SDF Procedural Instance Rendering API
+  diagram_title: Hybrid procedural instance API
+  alias: PROCVIS
+  lane: Render platform
+  dependency_level: L3
+  gate: Accepted GPU evidence design and pass-shape guards
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.5
+  expected_score: 0.6
+  rice: A discoverable procedural API prevents examples and products from hand-rolling unsafe render-flow shapes.
+  kano: Basic
+  dependencies:
+  - WR-057
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/examples
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-hybrid-mesh-sdf-procedural-instance-rendering-api
+  validations:
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural_instance
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  next_evidence: Accepted renderer GPU evidence design, completed pass-shape guard row, and API examples for normal procedural
+    usage.
+  current_decision: Deferred API row for mesh/quad sprites, local 2D SDF impostors, shared instance buffers, and explicit
+    render-state policy.
+  current_call: Renderer may own procedural execution APIs and derived GPU resources, but not gameplay, particle, VFX, material,
+    model, or product truth.
+  first_move: Promote after WR-057 completion, then design the public procedural instance API around explicit buffers, primitives,
+    blend/depth/cull policy, validation, and examples.
+  main_blocker: Depends on WR-057 and accepted procedural visuals design.
+  why_not_ready: Procedural APIs need pass-shape guard doctrine and accepted ownership boundaries before implementation.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - mesh/SDF sprites
+  - explicit render policy
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Procedural instance APIs must follow the accepted renderer ownership and visual model.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Procedural visuals must not move product truth into renderer-owned helpers.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: SDF impostor support must preserve accepted SDF product and GPU residency boundaries.
+  ddd_owner: engine render public API and derived procedural GPU resources
+  adr_requirement: ADR only if procedural rendering changes durable public render-flow ownership or product/render dependency
+    direction.
+  fitness_function_requirement: Procedural API validation tests, public examples, inspection DTO tests, and docs validation.
+  ownership_mode: Enabling renderer platform API with product truth outside renderer.
+- id: WR-059
+  title: Boids Hybrid SDF/Mesh Procedural Sprite Rewrite
+  diagram_title: Boids procedural sprite rewrite
+  alias: BOIDSPROC
+  lane: Render example
+  dependency_level: L3
+  gate: Procedural instance API and GPU timing evidence
+  planning_state: blocked_deferred
+  priority: P1
+  value: 3
+  blocker: 4
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.0
+  rice: Canonical boids proof demonstrates the renderer path users should copy and prevents recurrence of fullscreen-per-instance
+    work.
+  kano: Performance
+  dependencies:
+  - WR-058
+  write_scopes:
+  - engine/examples/boids_render_flow
+  - assets/shaders/boids_compose.wgsl
+  - assets/shaders/boids_compute.wgsl
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-boids-hybrid-sdf-mesh-procedural-sprite-rewrite
+  validations:
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  next_evidence: Completed procedural instance API plus runtime proof that boids no longer multiply fullscreen rendering by
+    instance count.
+  current_decision: Deferred canonical example rewrite; do not patch boids locally before the procedural API and guard rows
+    exist.
+  current_call: Boids should use renderer public procedural APIs and runtime GPU evidence, not example-specific renderer bypasses.
+  first_move: Promote after WR-058 completion, then rewrite boids around storage-backed compute simulation and local per-boid
+    mesh/SDF sprite rendering.
+  main_blocker: Depends on WR-058 procedural instance API and accepted GPU evidence/procedural visuals design.
+  why_not_ready: The canonical boids rewrite must consume the new API instead of inventing a temporary example-only path.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - storage compute
+  - local sprite render
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Boids rewrite must prove the accepted procedural visual model and runtime evidence contract.
+  ddd_owner: engine render example and shader assets
+  adr_requirement: No ADR expected if the example consumes public renderer APIs without changing ownership boundaries.
+  fitness_function_requirement: Boids example compile/run smoke, no fullscreen-per-boid pass-shape evidence, GPU timing evidence,
+    and docs validation.
+  ownership_mode: Canonical renderer example consuming platform APIs.
+- id: WR-060
+  title: Renderer Procedural Visuals Production Evidence
+  diagram_title: Procedural visuals production evidence
+  alias: PROCEVIDENCE
+  lane: Render hardening
+  dependency_level: L3
+  gate: Completed GPU timing, guards, procedural API, and boids proof
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: Production evidence closes the renderer platform track with docs, benchmarks, examples, and runtime GPU proof.
+  kano: Basic
+  dependencies:
+  - WR-056
+  - WR-057
+  - WR-058
+  - WR-059
+  write_scopes:
+  - engine/benches
+  - engine/examples
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-procedural-visuals-production-evidence
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed renderer GPU timing, pass-shape guard, procedural API, and boids runtime proof rows.
+  current_decision: Deferred production hardening row for docs, benchmarks, examples, runtime evidence, and closeout.
+  current_call: Close the GPU/procedural visual platform as runtime_proven only after evidence exists; do not claim perfectionist_verified
+    with known gaps.
+  first_move: Promote after WR-056 through WR-059 complete, then generate runtime evidence, benchmark reports, docs, and closeout
+    materials.
+  main_blocker: Depends on all prior PT-RENDER-GPU implementation rows.
+  why_not_ready: Production evidence cannot exist until the foundation, guards, API, and canonical boids proof are complete.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - runtime GPU proof
+  - production closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Production evidence must follow the accepted renderer GPU evidence and procedural visuals contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Renderer production evidence must extend the accepted inspection/readiness model.
+  ddd_owner: engine render docs, examples, benchmarks, and production evidence
+  adr_requirement: ADR only if production evidence changes renderer ownership, release gates, or cross-domain evidence authority.
+  fitness_function_requirement: Benchmarks, runtime GPU evidence, inspection DTO tests, docs validation, roadmap validation,
+    production validation, and planning validation.
+  ownership_mode: Renderer production hardening and evidence closeout.

@@ -1,0 +1,77 @@
+version: 1
+idea: Render Flow Pass Shape And Instance Contract Guards
+source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+owner: engine/src/plugins/render
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What explicit opt-in should permit fullscreen-style passes with large instance counts?
+- Which diagnostics should distinguish intentional advanced passes from accidental multiplied work?
+- Which cutoff/preflight tests should fail if pass-shape guards are bypassed?
+item:
+  id: WR-057
+  title: Render Flow Pass Shape And Instance Contract Guards
+  diagram_title: Pass-shape and instance guards
+  alias: PASSGUARDS
+  lane: Render platform
+  dependency_level: L2
+  gate: Accepted GPU evidence design and GPU timing foundation
+  planning_state: blocked_deferred
+  priority: P1
+  value: 4
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: Pass-shape guards prevent accidental fullscreen multiplied work before examples or products reach runtime.
+  kano: Basic
+  dependencies:
+  - WR-056
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-flow-pass-shape-and-instance-contract-guards
+  validations:
+  - cargo test -p engine render_flow
+  - cargo test -p engine render_cutoff_guard
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  next_evidence: Accepted renderer GPU evidence design and completed GPU timing foundation before guard implementation.
+  current_decision: Deferred render-flow validation row for pass-shape and instance-count hazards.
+  current_call: Guard renderer execution contracts only; do not encode boids-specific shortcuts or product-domain policy.
+  first_move: Promote after WR-056 completion, then implement typed diagnostics for fullscreen-plus-instance and procedural-shape hazards.
+  main_blocker: Depends on WR-056 and the active GPU evidence/procedural visuals design becoming accepted.
+  why_not_ready: Pass-shape enforcement needs the accepted evidence doctrine and timing foundation before implementation.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - fullscreen hazard guard
+  - typed preflight diagnostics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Pass-shape guards must follow the accepted procedural visuals and evidence contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Pass-shape validation extends the accepted render-flow/compiler validation model.
+  ddd_owner: engine render-flow validation and preflight diagnostics
+  adr_requirement: ADR only if guard policy changes public render-flow ownership or rejects previously documented supported shapes.
+  fitness_function_requirement: Render-flow guard diagnostics, cutoff/preflight enforcement tests, and docs validation.
+  ownership_mode: Enabling renderer platform validation.
+edges:
+- source: WR-056
+  target: WR-057
+  label: GPU evidence before guard enforcement

@@ -1,0 +1,73 @@
+version: 1
+idea: Boids Hybrid SDF/Mesh Procedural Sprite Rewrite
+source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+owner: engine/examples/boids_render_flow
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Which boids count and runtime duration should define the production smoke evidence?
+- Should the canonical boid visual default to mesh sprites, local SDF impostors, or a toggleable comparison?
+- What GPU timing threshold should fail the boids runtime evidence closeout?
+item:
+  id: WR-059
+  title: Boids Hybrid SDF/Mesh Procedural Sprite Rewrite
+  diagram_title: Boids procedural sprite rewrite
+  alias: BOIDSPROC
+  lane: Render example
+  dependency_level: L3
+  gate: Procedural instance API and GPU timing evidence
+  planning_state: blocked_deferred
+  priority: P1
+  value: 3
+  blocker: 4
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.0
+  rice: Canonical boids proof demonstrates the renderer path users should copy and prevents recurrence of fullscreen-per-instance work.
+  kano: Performance
+  dependencies:
+  - WR-058
+  write_scopes:
+  - engine/examples/boids_render_flow
+  - assets/shaders/boids_compose.wgsl
+  - assets/shaders/boids_compute.wgsl
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-boids-hybrid-sdf-mesh-procedural-sprite-rewrite
+  validations:
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow
+  - cargo test -p engine render_runtime_inspect
+  - task docs:validate
+  next_evidence: Completed procedural instance API plus runtime proof that boids no longer multiply fullscreen rendering by instance count.
+  current_decision: Deferred canonical example rewrite; do not patch boids locally before the procedural API and guard rows exist.
+  current_call: Boids should use renderer public procedural APIs and runtime GPU evidence, not example-specific renderer bypasses.
+  first_move: Promote after WR-058 completion, then rewrite boids around storage-backed compute simulation and local per-boid mesh/SDF sprite rendering.
+  main_blocker: Depends on WR-058 procedural instance API and accepted GPU evidence/procedural visuals design.
+  why_not_ready: The canonical boids rewrite must consume the new API instead of inventing a temporary example-only path.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - storage compute
+  - local sprite render
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Boids rewrite must prove the accepted procedural visual model and runtime evidence contract.
+  ddd_owner: engine render example and shader assets
+  adr_requirement: No ADR expected if the example consumes public renderer APIs without changing ownership boundaries.
+  fitness_function_requirement: Boids example compile/run smoke, no fullscreen-per-boid pass-shape evidence, GPU timing evidence, and docs validation.
+  ownership_mode: Canonical renderer example consuming platform APIs.
+edges:
+- source: WR-058
+  target: WR-059
+  label: procedural API before boids rewrite
