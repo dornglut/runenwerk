@@ -21,7 +21,7 @@ item:
   lane: Core support
   dependency_level: L1
   gate: Governed render regression repair
-  planning_state: current_candidate
+  planning_state: completed
   priority: P1
   value: 4
   blocker: 2
@@ -47,6 +47,7 @@ item:
   - docs-site/src/content/docs/engine/benchmarks/render-flow-planning.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-prepared-frame-preflight-cache-an
   - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair
   validations:
   - cargo test -p engine render_dynamic_targets
   - cargo test -p engine render_runtime_inspect
@@ -58,18 +59,20 @@ item:
   - task roadmap:validate
   - task roadmap:check
   - task planning:validate
-  next_evidence: Implement cached prepared-frame structural preflight, strict validation control, public preflight/flow encode timings, inspection evidence, benchmark coverage, and closeout validation.
-  current_decision: Current bounded render regression repair row. Full preflight remains the correctness authority, but unchanged prepared-frame structures must use cached successful preflight reports in steady state.
-  current_call: Implement the cache/timing repair only within render compiler, renderer runtime, inspection, tests, benchmark, docs, and closeout scopes. Preserve unrelated UI-design dirty docs.
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
+  current_decision: Completed bounded render regression repair. Full preflight remains the correctness authority, and unchanged prepared-frame structures reuse cached successful preflight reports in steady state after runtime guards pass.
+  current_call: Complete. Use WR-055 for the separate runtime pacing, shader reload throttle, and diagnostics tier repair.
   first_move: Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional per-frame render_packet execution.
-  main_blocker: Needs implementation and focused validation.
+  main_blocker: Complete.
   why_not_ready: ''
-  completion_quality: not_applicable
-  known_quality_gaps: []
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Benchmark coverage measures CPU preflight/cache overhead, not a full windowed GPU runtime frame-rate proof.
+  - Runtime stutter still needs the separate governed frame pacing, shader reload throttle, and diagnostics tier repair.
   completion_audit: ''
   diagram_call:
-  - cache structural preflight
-  - expose timing cost
+  - cached preflight complete
+  - timing evidence exposed
   decision_gates:
   - kind: design
     path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md

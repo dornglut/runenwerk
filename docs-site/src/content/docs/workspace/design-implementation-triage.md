@@ -110,7 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-048 | Render Prepared-Frame Preflight Cache And Timing Repair | P1 | V4 | B2 | 1.5 | Implement the cache/timing repair only within render compiler, renderer runtime, inspection, tests, benchmark, docs, and closeout scopes. Preserve unrelated UI-design dirty docs. | Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional per-frame render_packet execution. |
+| WR-055 | Runtime Frame Pacing, Shader Reload Throttle, And Render Diagnostics Tiers | P1 | V5 | B3 | 1.6 | Implement only runtime pacing, shader reload throttle, render diagnostics tiering, timing/inspection/debug overlay evidence, tests, docs, and closeout evidence. Do not lower boid count, disable preflight correctness, or move product policy. | Add runtime-owned frame pacing policy and remove unconditional steady-state redraw requests from the winit runner. |
 
 ## Support Only
 

@@ -641,44 +641,46 @@ items:
   fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add focused
     domain/UI fitness functions before code.
   ownership_mode: Enabling support owned by editor/UI maintainers.
-- id: WR-048
-  title: Render Prepared-Frame Preflight Cache And Timing Repair
-  diagram_title: Render preflight cache and timings
-  alias: WR048
+- id: WR-055
+  title: Runtime Frame Pacing, Shader Reload Throttle, And Render Diagnostics Tiers
+  diagram_title: Runtime pacing and steady-state render diagnostics
+  alias: WR055
   lane: Core support
   dependency_level: L1
-  gate: Governed render regression repair
-  planning_state: completed
+  gate: Governed runtime performance repair
+  planning_state: current_candidate
   priority: P1
-  value: 4
-  blocker: 2
+  value: 5
+  blocker: 3
   tc: 3
   rr_oe: 4
   du: 4
   effort: 8
   confidence: 0.8
-  expected_score: 1.5
-  rice: Repair render-flow runtime regression without weakening typed compiler/preflight contracts.
+  expected_score: 1.6
+  rice: Repair runtime stutter without weakening render validation, product policy, or diagnostics availability.
   kano: Performance
   dependencies:
-  - WR-043
-  - WR-045
+  - WR-048
   write_scopes:
-  - engine/src/plugins/render/graph
-  - engine/src/plugins/render/renderer
-  - engine/src/plugins/render/runtime/frame_submit.rs
+  - engine/src/app
+  - engine/src/runtime
+  - engine/src/plugins/render/shader
+  - engine/src/plugins/render/runtime
   - engine/src/plugins/render/inspect
-  - engine/benches/render_flow_planning.rs
+  - engine/src/plugins/debug_metrics
+  - engine/examples/boids_render_flow
   - engine/tests
   - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/reference/plugins/debug-metrics
   - docs-site/src/content/docs/engine/benchmarks/render-flow-planning.md
-  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-prepared-frame-preflight-cache-an
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-runtime-frame-pacing-shader-reload-throt
   - docs-site/src/content/docs/reports/closeouts
-  - docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair
   validations:
-  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine frame_pacing
+  - cargo test -p engine shader
   - cargo test -p engine render_runtime_inspect
-  - cargo test -p engine render_cutoff_guard
+  - cargo test -p engine --test render_cutoff_guard
   - cargo test -p engine --example boids_render_flow
   - cargo bench -p engine --bench render_flow_planning
   - task docs:validate
@@ -686,40 +688,35 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task planning:validate
-  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
-  current_decision: Completed bounded render regression repair. Full preflight remains the correctness authority, and unchanged
-    prepared-frame structures reuse cached successful preflight reports in steady state after runtime guards pass.
-  current_call: Complete. Use WR-055 for the separate runtime pacing, shader reload throttle, and diagnostics tier repair.
-  first_move: Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional
-    per-frame render_packet execution.
-  main_blocker: Complete.
+  next_evidence: Implement runtime frame pacing, shader reload throttling, diagnostics tiering, timing/inspection evidence,
+    boids runtime smoke evidence, and closeout validation.
+  current_decision: Current bounded runtime performance repair. Animated windowed runtime defaults to 60 FPS capped continuous
+    pacing, shader reload polling is throttled by default, and full render diagnostics are tiered out of healthy steady state.
+  current_call: Implement only runtime pacing, shader reload throttle, render diagnostics tiering, timing/inspection/debug
+    overlay evidence, tests, docs, and closeout evidence. Do not lower boid count, disable preflight correctness, or move
+    product policy.
+  first_move: Add runtime-owned frame pacing policy and remove unconditional steady-state redraw requests from the winit runner.
+  main_blocker: Needs implementation, local boids smoke evidence, and focused validation.
   why_not_ready: ''
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Benchmark coverage measures CPU preflight/cache overhead, not a full windowed GPU runtime frame-rate proof.
-  - Runtime stutter still needs the separate governed frame pacing, shader reload throttle, and diagnostics tier repair.
+  completion_quality: not_applicable
+  known_quality_gaps: []
   completion_audit: ''
   diagram_call:
-  - cached preflight complete
-  - timing evidence exposed
+  - cap runtime frames
+  - tier diagnostics
   decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
-    required_status: accepted
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
+    required_status: completed
     applies_to: implementation
-    reason: Prepared-frame preflight remains the typed render execution validation contract.
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Runtime timing and readiness evidence must stay read-only and renderer-scoped.
-  ddd_owner: engine render execution graph and renderer runtime
-  adr_requirement: No new ADR required because ownership and dependency direction remain unchanged; add ADR only if implementation
-    moves validation policy outside engine render or exposes backend handles.
-  fitness_function_requirement: Cache-hit/miss invalidation tests, strict-mode tests, timing/readiness inspection tests, boids
-    example test, and render-flow preflight/cache benchmark.
-  ownership_mode: Complicated-subsystem engine render owner with stream-aligned app/product producers consuming prepared-frame
-    contracts.
+    reason: Preflight cache and timing visibility are prerequisites for diagnosing steady-state runtime cost.
+  ddd_owner: engine runtime loop and engine render diagnostics
+  adr_requirement: No new ADR required because the repair keeps scheduling policy in engine runtime and render diagnostics
+    in engine render; add ADR only if implementation changes ownership, dependency direction, or product policy boundaries.
+  fitness_function_requirement: Frame pacing policy tests, shader throttle tests, diagnostics-tier tests, render inspection
+    tests, cutoff guard, boids example test, render-flow benchmark, and local boids smoke evidence.
+  ownership_mode: Complicated-subsystem engine runtime/render owner with stream-aligned apps consuming explicit pacing and
+    diagnostics policies.
 edges:
 - source: WR-002
   target: WR-001
@@ -868,3 +865,6 @@ edges:
 - source: WR-038
   target: WR-040
   label: product and service plane before external sandbox
+- source: WR-048
+  target: WR-055
+  label: timing and preflight evidence before runtime pacing repair

@@ -68,7 +68,7 @@ package "Level 1 - Near-Term Productization" {
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
-  component "WR-048 Render preflight cache and timings\nstate=current_candidate\nscore=1.5 gate=governed render regression repair\nV4 B2\ncall=cache structural preflight\nexpose timing cost" as WR048 <<V4>>
+  component "WR-055 Runtime pacing and steady-state render diagnostics\nstate=current_candidate\nscore=1.6 gate=governed runtime performance repair\nV5 B3\ncall=cap runtime frames\ntier diagnostics" as WR055 <<V5>>
 
 }
 
