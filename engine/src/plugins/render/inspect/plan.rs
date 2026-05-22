@@ -6,6 +6,7 @@ use crate::plugins::render::graph::{
     CompiledRenderFlowPlan, CompiledResourceAccessKind, CompiledResourceLifetimeWindow,
     RenderBackendCapabilityInspection, RenderBackendCapabilityProfile,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphPreparedReport,
+    RenderPreparedFramePreflightCacheState,
 };
 use std::path::PathBuf;
 
@@ -57,6 +58,9 @@ pub struct RenderExecutionGraphPlanInspection {
 pub struct RenderExecutionGraphPreflightInspection {
     pub diagnostic_count: usize,
     pub error_count: usize,
+    pub cache_mode: Option<String>,
+    pub cache_status: Option<String>,
+    pub report_source: Option<String>,
     pub diagnostics: Vec<RenderExecutionGraphDiagnosticInspection>,
 }
 
@@ -121,9 +125,19 @@ pub fn inspect_compiled_render_flow_plan(
 pub fn inspect_render_execution_graph_preflight(
     report: &RenderExecutionGraphPreparedReport,
 ) -> RenderExecutionGraphPreflightInspection {
+    inspect_render_execution_graph_preflight_with_cache(report, None)
+}
+
+pub fn inspect_render_execution_graph_preflight_with_cache(
+    report: &RenderExecutionGraphPreparedReport,
+    cache_state: Option<&RenderPreparedFramePreflightCacheState>,
+) -> RenderExecutionGraphPreflightInspection {
     RenderExecutionGraphPreflightInspection {
         diagnostic_count: report.diagnostics.len(),
         error_count: report.error_count(),
+        cache_mode: cache_state.map(|state| state.mode.as_str().to_string()),
+        cache_status: cache_state.map(|state| state.status.as_str().to_string()),
+        report_source: cache_state.map(|state| state.report_source.as_str().to_string()),
         diagnostics: report
             .diagnostics
             .iter()

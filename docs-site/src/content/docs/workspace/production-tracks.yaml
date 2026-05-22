@@ -912,7 +912,7 @@ tracks:
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
   - id: PT-UI-DESIGN
     title: UI Designer And Interface Lab Platform
-    state: active
+    state: completed
     owner: editor
     strategic_goal: Make UI/interface authoring a generic, definition-driven, target-profile-aware Designer/Lab platform for editor/workbench UI and game-runtime UI without moving domain semantics into the Designer.
     success_criteria:
@@ -925,26 +925,37 @@ tracks:
       - id: PM-UI-DESIGN-001
         title: UI Designer Doctrine And Target Boundary Ratification
         kind: design
-        state: active
+        state: completed
         goal: Ratify the generic UI/interface Designer doctrine, target-profile boundary, and Workbench-versus-game-runtime split before implementation work begins.
         outcome: The active design defines source truth, domain boundaries, target profiles, and planning-only constraints without changing runtime behavior.
         dependencies: []
-        roadmap_links: []
+        roadmap_links:
+          - WR-046
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
             required_status: active
             reason: The doctrine slice requires an active canonical design before it can guide production sequencing.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-001-ui-designer-doctrine/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGN-001 requires completed doctrine and target-boundary closeout evidence.
         acceptance_criteria:
           - The active canonical design exists and uses the generic UI Designer And Interface Lab Platform framing.
           - Workbench is treated as one target profile and game-runtime UI is treated as a separate target profile.
           - Designer documents are source truth only for UI/interface definitions and not for editor, gameplay, render, material, scene, asset, simulation, save-game, network, or project truth.
           - Production, roadmap, docs, and planning validators pass without changing WR roadmap execution state.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-DESIGN-002 and later milestones remain separately governed and must not be inferred complete from this doctrine closeout.
+          - The active design is not yet an accepted implementation contract.
+          - Future implementation slices must resolve accepted Canonical UI IR, target projection, and game-runtime UI ownership gates before code.
+          - No runtime behavior changed in this slice, so this is not runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-001-ui-designer-doctrine/closeout.md
       - id: PM-UI-DESIGN-002
         title: Canonical UI IR And Composition Pipeline
         kind: design
-        state: designing
+        state: completed
         goal: Define authored UI documents, Canonical UI IR, deterministic composition, validation, migration, and projection planning.
         outcome: Visual and textual authoring converge through one typed, inspectable, versioned UI definition pipeline.
         dependencies:
@@ -952,19 +963,29 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-canonical-ir-and-composition-design.md
             required_status: accepted
-            reason: Canonical IR and composition implementation requires the generic source-truth boundary to be accepted.
-        evidence_gates: []
+            reason: Canonical IR and composition implementation requires an accepted source-truth, validation, migration, and composition contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-002-canonical-ir-and-composition/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGN-002 requires completed Canonical UI IR and composition design closeout evidence.
         acceptance_criteria:
           - Authored documents parse through schema/version checks into Canonical UI IR before composition or activation.
           - Composition has deterministic strength ordering for base libraries, recipes, target defaults, project/game/editor overrides, skins, themes, platform overrides, accessibility modes, localization modes, user preferences, preview overrides, and host/runtime policy overlays.
           - Conflict resolution is inspectable and reports winning source, losing source, affected target profile, owning domain, and activation impact.
           - Visual edits round-trip through Canonical UI IR with stable ids and reviewable textual diffs.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-DESIGN-003 and later milestones remain separately governed and must not be inferred complete from this design closeout.
+          - PM-UI-DESIGN-004 through PM-UI-DESIGN-010 remain incomplete and must not be inferred complete from this design closeout.
+          - No Canonical UI IR implementation code changed in this slice.
+          - PM-002 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-002-canonical-ir-and-composition/closeout.md
       - id: PM-UI-DESIGN-003
         title: Target Projection Profiles
         kind: design
-        state: designing
+        state: completed
         goal: Define target projection profiles for editor/workbench UI and game-runtime UI without coupling game UI to editor shell ownership.
         outcome: Editor Workbench Projection and Game Runtime UI Projection consume shared Canonical UI IR through explicit target-profile rules.
         dependencies:
@@ -972,140 +993,224 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-target-projection-profiles-design.md
             required_status: accepted
-            reason: Target projection work requires accepted ownership for editor and game-runtime UI profiles.
-        evidence_gates: []
+            reason: Target projection work requires accepted ownership for editor/workbench and game-runtime UI profiles.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-003-target-projection-profiles/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGN-003 requires completed target projection profile design closeout evidence.
         acceptance_criteria:
           - Editor/workbench projection rules cover profiles, suites, panels, docking/splits/tabs, menus, shortcuts, tool surfaces, provider families, host policy, capability gates, editor command routing, diagnostics, and tool-lab surfaces.
           - Game-runtime projection rules cover HUD layers, bars, inventory/equipment, hotbars, quests, dialogue, minimaps, damage numbers, nameplates, boss frames, world-space UI, split-screen UI, safe areas, platform prompt glyphs, accessibility modes, and game-runtime performance/readability budgets.
           - Runtime projections are reproducible from authored definitions, target profile, policy, fixtures, and validated composition.
           - Preview/runtime/app/provider layers consume projection output and cannot become source truth.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-DESIGN-004 through PM-UI-DESIGN-010 remain incomplete and must not be inferred complete from this design closeout.
+          - No target projection implementation code changed in this slice.
+          - PM-003 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-003-target-projection-profiles/closeout.md
       - id: PM-UI-DESIGN-004
         title: Visual Layout And Interface Composition
         kind: implementation
-        state: designing
+        state: completed
         goal: Implement visual layout authoring over Canonical UI IR and deterministic target-profile composition.
         outcome: Designers can author layouts visually while preserving typed definitions, stable ids, and reviewable textual diffs.
         dependencies:
           - PM-UI-DESIGN-002
           - PM-UI-DESIGN-003
-        roadmap_links: []
+        roadmap_links:
+          - WR-047
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
             required_status: accepted
-            reason: Visual layout implementation must follow accepted Canonical UI IR and target-profile composition rules.
-        evidence_gates: []
+            reason: Visual layout implementation must follow accepted stable-id, deterministic diff, preview-only, and diagnostics rules.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGN-004 requires completed bounded visual layout core editing implementation closeout evidence.
         acceptance_criteria:
           - Visual layout edits preserve stable ids and deterministic formatting.
           - Layout/composition diagnostics identify source location, affected target/profile/host/suite, owning domain, severity, activation impact, and suggested fix.
           - Preview-only edits cannot activate unless they produce a valid Canonical UI IR diff.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted visual Designer/Lab UI remains future work.
+          - Game-runtime UI projection execution is not implemented or runtime-proven in this slice.
+          - PM-UI-DESIGN-005 through PM-UI-DESIGN-010 remain incomplete and must not be inferred complete from this bounded definition-layer closeout.
+          - PM-004 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md
       - id: PM-UI-DESIGN-005
         title: Theme Tokens Modes Skins And State Variants
         kind: implementation
-        state: designing
+        state: completed
         goal: Implement deterministic styling through primitive, semantic, component, state, mode, theme, skin, platform, and accessibility token layers.
         outcome: Style resolution is reproducible, inspectable, target-profile-aware, and guarded by typed token/theme diagnostics.
         dependencies:
           - PM-UI-DESIGN-002
-        roadmap_links: []
+        roadmap_links:
+          - WR-049
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
             required_status: accepted
-            reason: Styling implementation must follow accepted Canonical UI IR and composition semantics.
-        evidence_gates: []
+            reason: Styling implementation must follow accepted deterministic token graph, mode, skin, state, and diagnostics rules.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md
+            required_status: completed
+            reason: PM-005 requires completed bounded theme token graph and mode resolution closeout evidence.
         acceptance_criteria:
           - Token alias graphs, token modes, themes, skins, platform overrides, and accessibility overrides resolve deterministically.
           - Token cycles, missing aliases, incompatible modes, and accessibility override conflicts fail closed with typed diagnostics.
           - State variants can be previewed and evidenced across editor/workbench and game-runtime target profiles.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted Theme Designer and Interface Lab UI remain future work.
+          - Editor-specific theme package storage and project file IO remain future work.
+          - Game-runtime theme package loading and renderer/material lowering are not implemented or runtime-proven in this slice.
+          - Component recipes, view-model binding, preview fixture matrices, persistence activation, accessibility/performance evidence, and production-readiness hardening remain PM-UI-DESIGN-006 through PM-UI-DESIGN-010 work.
+          - PM-005 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md
       - id: PM-UI-DESIGN-006
         title: Component Surface And Widget Recipe Library
         kind: implementation
-        state: designing
+        state: completed
         goal: Build a reusable component, surface, and widget recipe library over shared UI primitives and target-profile declarations.
         outcome: Editor/workbench and game-runtime UI reuse common recipes without sharing domain semantics or direct mutation authority.
         dependencies:
           - PM-UI-DESIGN-002
           - PM-UI-DESIGN-005
-        roadmap_links: []
+        roadmap_links:
+          - WR-050
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
             required_status: accepted
-            reason: Component and widget implementation must follow accepted UI definition and target-profile ownership.
-        evidence_gates: []
+            reason: Component and widget implementation must follow accepted recipe ownership, slot, token, accessibility, and target-profile rules.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md
+            required_status: completed
+            reason: PM-006 requires completed bounded component, widget, and surface recipe closeout evidence.
         acceptance_criteria:
           - Component recipes declare inputs, tokens, state variants, accessibility metadata, layout behavior, and target-profile compatibility.
           - Widget and surface declarations do not own editor, gameplay, render, material, scene, asset, simulation, save-game, network, or project truth.
           - Unsupported target-profile features fail closed with provider/surface or capability diagnostics.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted component, widget, and surface recipe browsing or editing remain future work.
+          - Editor-specific recipe package persistence and project file IO remain future work.
+          - Game-runtime recipe package loading is not implemented or runtime-proven in this slice.
+          - Renderer material lowering, shader styles, GPU policy, and visual target projection execution remain future work.
+          - View-model capability binding, live preview fixture matrices, persistence activation, accessibility/performance evidence, and production-readiness hardening remain PM-UI-DESIGN-007 through PM-UI-DESIGN-010 work.
+          - PM-006 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md
       - id: PM-UI-DESIGN-007
         title: View-Model Capability And Intent Binding
         kind: implementation
-        state: designing
+        state: completed
         goal: Implement read-only domain-owned view-model bindings and validated command/intent declarations without direct domain mutation.
         outcome: UI definitions can display domain-owned state and emit validated intents while domains retain semantic authority.
         dependencies:
           - PM-UI-DESIGN-003
           - PM-UI-DESIGN-004
-        roadmap_links: []
+        roadmap_links:
+          - WR-051
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
             required_status: accepted
             reason: Binding implementation must follow accepted source-truth, capability, and target-profile rules.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md
+            required_status: completed
+            reason: PM-007 requires completed bounded view-model binding, capability, and intent proposal closeout evidence.
         acceptance_criteria:
           - UI definitions bind only to read-only domain-owned view models.
           - Editor command, menu, shortcut, and game UI intents are validated before activation.
           - Denied capabilities and command/shortcut/focus conflicts fail closed with typed diagnostics.
           - UI definitions cannot mutate domain truth directly.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted binding and intent Designer/Lab UI remain future work.
+          - Editor-specific binding package persistence and project file IO remain future work.
+          - Game-runtime view-model package loading is not implemented or runtime-proven in this slice.
+          - Concrete editor command execution and concrete game intent execution remain target-adapter-owned and are not implemented in this slice.
+          - Live preview fixture matrices, persistence activation, accessibility/performance evidence, and production-readiness hardening remain PM-UI-DESIGN-008 through PM-UI-DESIGN-010 work.
+          - PM-007 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md
       - id: PM-UI-DESIGN-008
         title: Live Preview Fixtures Scenarios And Target Matrix
         kind: implementation
-        state: designing
+        state: completed
         goal: Add target-profile-aware fixtures, scenarios, host/runtime policy matrices, and replayable preview evidence.
         outcome: Designer previews prove empty, loading, error, denied, offline, heavy, accessibility, performance, and interaction behavior across targets.
         dependencies:
           - PM-UI-DESIGN-003
           - PM-UI-DESIGN-004
           - PM-UI-DESIGN-007
-        roadmap_links: []
+        roadmap_links:
+          - WR-052
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
             required_status: accepted
             reason: Preview implementation must follow accepted target projection, binding, and diagnostics boundaries.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md
+            required_status: completed
+            reason: PM-008 requires completed bounded preview fixture, scenario, matrix, and evidence descriptor closeout evidence.
         acceptance_criteria:
           - Fixtures cover empty, loading, error, denied, offline, and heavy states.
           - Replayable scenarios define expected diagnostics, UI state transitions, and validated intent emissions.
           - Host/runtime policy matrices prove fail-closed behavior for denied capabilities and unsupported target-profile features.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted Preview Lab UI is not implemented in this slice.
+          - Screenshot capture, visual diffing, and renderer golden comparison are not implemented in this slice.
+          - Provider session orchestration and game-runtime replay loading remain future work.
+          - Persistence migration, diff, and activation gates remain PM-UI-DESIGN-009 work.
+          - Accessibility/performance reporting, visual captures, production examples, and production-readiness evidence remain PM-UI-DESIGN-010 work.
+          - PM-008 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md
       - id: PM-UI-DESIGN-009
         title: Persistence Migration Diff And Activation
         kind: implementation
-        state: designing
+        state: completed
         goal: Implement deterministic persistence, migration, diff, and activation gates for authored UI/interface definitions.
         outcome: UI definition changes are reviewable, migratable, dry-runnable, and fail closed before runtime activation.
         dependencies:
           - PM-UI-DESIGN-002
           - PM-UI-DESIGN-008
-        roadmap_links: []
+        roadmap_links:
+          - WR-053
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
             required_status: accepted
             reason: Persistence and activation implementation must follow accepted Canonical UI IR, migration, and evidence rules.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md
+            required_status: completed
+            reason: PM-009 requires completed bounded persistence, migration dry-run, deterministic diff, and activation closeout evidence.
         acceptance_criteria:
           - Schema/version failures, incompatible migrations, and unknown unsupported fields fail closed before activation.
           - Migration dry-runs produce source-mapped reports and do not mutate active definitions.
           - Persisted definitions preserve compatible unknown fields where possible and always produce reviewable textual diffs.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted persistence UI, project save/load UI, and user-facing diff review UI are not implemented in this slice.
+          - Concrete project file IO in apps/runenwerk_editor is not implemented in this slice.
+          - Runtime activation plumbing and runtime consumption of activation reports remain future work.
+          - Provider session orchestration, screenshot capture, visual regression, and renderer golden evidence remain future work.
+          - Accessibility/performance reporting, production examples, and production-readiness evidence remain PM-UI-DESIGN-010 work.
+          - PM-009 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md
       - id: PM-UI-DESIGN-010
         title: Production Readiness And Evidence
         kind: hardening
-        state: designing
+        state: completed
         goal: Harden diagnostics, inspection, examples, visual regression, interaction, accessibility, migration, compatibility, performance, and golden evidence.
         outcome: UI/interface authoring is inspectable and validated enough for production editor/workbench and game-runtime UI work.
         dependencies:
@@ -1114,14 +1219,26 @@ tracks:
           - PM-UI-DESIGN-007
           - PM-UI-DESIGN-008
           - PM-UI-DESIGN-009
-        roadmap_links: []
+        roadmap_links:
+          - WR-054
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
             required_status: accepted
             reason: Production readiness must follow the accepted generic UI/interface Designer platform boundary.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md
+            required_status: completed
+            reason: PM-010 requires completed bounded production readiness evidence closeout evidence.
         acceptance_criteria:
           - Golden projection snapshots, visual captures, accessibility reports, migration reports, and performance budget reports are generated for relevant target profiles.
           - Diagnostics and inspection DTOs let authors understand composition, style, binding, capability, provider, accessibility, performance, migration, and compatibility failures without runtime internals.
           - Production closeout evidence proves the Designer remains definition-driven and does not own domain semantics.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - App-hosted readiness UI is not implemented in this slice.
+          - Screenshot capture, renderer golden comparison, and visual regression tooling are not implemented in this slice.
+          - Accessibility engine integration and performance runner integration remain future work.
+          - Concrete production examples, project IO, provider sessions, runtime replay, release tooling, and gameplay mutation remain target-adapter-owned future work.
+          - PM-010 did not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md

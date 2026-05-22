@@ -18,6 +18,8 @@ Measured scenarios:
 
 - `render_flow/simple_fullscreen`
 - `render_flow/boids_ping_pong`
+- `render_flow/boids_preflight_cold`
+- `render_flow/boids_preflight_cached`
 - `render_flow/multi_pass_compute_compose`
 - `render_flow/sdf_compute_compose`
 - `render_flow/mixed_ui_chain`
@@ -31,6 +33,11 @@ For each scenario, the benchmark runs:
 3. alias candidate discovery
 4. transient alias slot assignment planning
 
+The boids preflight scenarios separately measure prepared-frame preflight cost:
+
+- `boids_preflight_cold` runs full fail-fast prepared-frame validation.
+- `boids_preflight_cached` runs the steady-state cache key plus runtime guard path and reuses the cached successful report.
+
 ## Run
 
 ```bash
@@ -39,5 +46,5 @@ cargo bench -p engine --bench render_flow_planning
 
 ## Notes
 
-- Treat this benchmark as planning/validation overhead, not GPU runtime throughput.
+- Treat this benchmark as CPU planning/preflight overhead, not GPU runtime throughput.
 - Store raw benchmark output under criterion artifacts; keep this file human-readable.

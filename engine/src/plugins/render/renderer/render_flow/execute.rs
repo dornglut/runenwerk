@@ -19,25 +19,26 @@ impl Renderer {
         packet: RendererPreparedPacket,
         compiled_flows: &[CompiledRenderFlowPlan],
         shader_registry: &ShaderRegistryResource,
+        preflight_config: crate::plugins::render::graph::RenderPreflightValidationConfigResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
     ) -> Result<RendererFrameTimings> {
-        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("engine_render_encoder"),
-        });
+        let mut timings = packet.prepare_timings;
         self.last_pass_timings.clear();
         self.last_runtime_resources.clear();
         self.last_pass_provenance.clear();
-        self.last_preflight_report = preflight_prepared_render_frame(
-            prepared_frame,
-            compiled_flows,
-            &RenderBackendCapabilityProfile::runtime_default(),
-        )
-        .map_err(anyhow::Error::new)?;
+        let preflight_start = Instant::now();
+        self.last_preflight_report =
+            self.preflight_prepared_frame(prepared_frame, compiled_flows, preflight_config)?;
+        timings.preflight_ms = preflight_start.elapsed().as_secs_f32() * 1000.0;
         self.last_capture_plan = ResolvedRenderCapturePlan::default();
         self.last_capture_selector_results.clear();
         self.last_captured_textures.clear();
 
+        let flow_encode_start = Instant::now();
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("engine_render_encoder"),
+        });
         let frame_index = prepared_frame.context.frame_index;
         let mut capture_runtime =
             FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
@@ -287,8 +288,8 @@ impl Renderer {
         })();
         self.flow_runtime_cache = flow_runtime_cache;
         render_result?;
+        timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
 
-        let mut timings = packet.prepare_timings;
         let encode_submit_start = Instant::now();
         {
             let _span = tracing::info_span!("renderer.encode_submit").entered();
@@ -323,6 +324,7 @@ impl Renderer {
         ui_font_atlas: &UiFontAtlasResource,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         surface_format: TextureFormat,
+        preflight_config: crate::plugins::render::graph::RenderPreflightValidationConfigResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
     ) -> Result<RendererFrameTimings> {
@@ -345,6 +347,7 @@ impl Renderer {
             packet,
             compiled_flows,
             shader_registry,
+            preflight_config,
             debug_control,
             debug_config,
         )

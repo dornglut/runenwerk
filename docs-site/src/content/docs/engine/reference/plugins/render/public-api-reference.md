@@ -219,8 +219,13 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `RenderExecutionGraphCompileError`
   - `RenderExecutionGraphPreparedError`
   - `RenderExecutionGraphPreparedReport`
+  - `RenderPreflightValidationConfigResource`
+  - `RenderPreparedFramePreflightMode`
+  - `RenderPreparedFramePreflightCacheState`
   - `validate_prepared_render_frame`
   - `preflight_prepared_render_frame`
+  - `preflight_prepared_render_frame_runtime_guards`
+  - `prepared_render_frame_preflight_cache_key`
   - `RenderBackendCapabilityProfile`
   - `RenderBackendCapabilityInspection`
   - `validate_compiled_flow_capabilities`
@@ -230,6 +235,8 @@ Contract:
 - `compile_flow_plan_checked(...)` wraps static `RenderFlow` validation, resource lifetime window derivation, and backend-neutral capability validation in typed diagnostics.
 - `CompiledRenderFlowPlan::resource_lifetime_windows` exposes first/last read/write/use windows derived from compiled pass order.
 - `validate_prepared_render_frame(...)` checks a prepared frame against compiled flows before backend encoding: target alias bindings, dynamic target descriptors, sampleability, dispatch preparation, uniform presence, feature gates, history signatures, and capability mismatches.
+- Runtime submit uses cached strict prepared-frame preflight by default. Full structural preflight runs on cold cache, structural key changes, failures, or strict mode; cheap runtime guards still run each frame for flow/view/invocation existence, dispatch validity, uniform presence, and history conflicts.
+- `RenderPreflightValidationConfigResource` can force strict full preflight every frame. `RUNENWERK_RENDER_STRICT_PREFLIGHT=1` is the local/test override.
 - The compiler/preflight diagnostics are render execution diagnostics. They do not own product truth, freshness, authority, fallback legality, rebuild policy, product dependency truth, or residency policy.
 
 ## Render Fragment APIs
@@ -358,7 +365,9 @@ Compiler/preflight inspection contract:
 
 - `inspect_compiled_render_flow_plan(...)` summarizes compiled pass/resource counts, resource lifetime windows, compiler diagnostics, and the active backend-neutral capability profile.
 - `inspect_render_execution_graph_preflight(...)` summarizes prepared-frame preflight diagnostics for tooling.
-- `Renderer::last_preflight_report()` exposes the last successful submit preflight report without exposing backend handles.
+- `inspect_render_execution_graph_preflight_with_cache(...)` adds cache mode, cache status, and report source without exposing backend handles.
+- `Renderer::last_preflight_report()` exposes the last successful submit preflight report, and `Renderer::last_preflight_cache_state()` exposes whether it came from full validation or cache.
+- `RendererFrameTimings` separates `preflight_ms`, `flow_encode_ms`, and `encode_submit_ms` so frame budgets can identify validation cost separately from GPU submission.
 
 Production readiness inspection contract:
 

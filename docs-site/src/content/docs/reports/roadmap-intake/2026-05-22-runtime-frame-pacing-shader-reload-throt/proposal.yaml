@@ -1,0 +1,60 @@
+version: 1
+idea: 'Runtime Frame Pacing, Shader Reload Throttle, And Render Diagnostics Tiers: governed repair for boids/system stutter
+  caused by unbounded window redraw scheduling, per-frame shader directory polling, and full render diagnostics work in steady
+  state. Add runtime-owned frame pacing policy with continuous capped 60 FPS default and on-demand mode, throttle shader hot
+  reload polling to 500ms with force reload bypass, tier render diagnostics so cheap timings/cache state remain every frame
+  while full JSON diagnostics run only for debug/capture/provenance/probes/diffs/export/slow-frame/explicit request, and update
+  render timing/inspection/debug overlay evidence. Keep render preflight strict and do not lower boid count or move product
+  policy.'
+source_path: ''
+owner: ''
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-055
+  title: 'Runtime Frame Pacing, Shader Reload Throttle, And Render Diagnostics Tiers: governed repair for '
+  diagram_title: Runtime Frame Pacing, Shader Reload Throttle, An
+  alias: WR055
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes: []
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: TBD
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+edges: []

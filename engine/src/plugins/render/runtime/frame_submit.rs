@@ -101,6 +101,11 @@ pub(crate) fn frame_render_submit_system(
         .ok()
         .cloned()
         .unwrap_or_default();
+    let preflight_config = world
+        .resource::<RenderPreflightValidationConfigResource>()
+        .ok()
+        .copied()
+        .unwrap_or_default();
 
     let render_result = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
@@ -130,6 +135,7 @@ pub(crate) fn frame_render_submit_system(
             ui_rect_shader,
             &ui_font_atlas,
             &prepared_frame.viewport_surface_bindings,
+            preflight_config,
             &debug_control,
             &debug_config,
         )
@@ -284,12 +290,16 @@ pub(crate) fn frame_render_submit_system(
                 + timings.renderer.prepare_ui_ms
                 + timings.renderer.prepare_mesh_ms
                 + timings.renderer.world_prepare_ms
+                + timings.renderer.preflight_ms
+                + timings.renderer.flow_encode_ms
                 + timings.renderer.encode_submit_ms
                 + timings.present_ms;
 
             let workload_ms = timings.renderer.prepare_ui_ms
                 + timings.renderer.prepare_mesh_ms
                 + timings.renderer.world_prepare_ms
+                + timings.renderer.preflight_ms
+                + timings.renderer.flow_encode_ms
                 + timings.renderer.encode_submit_ms;
 
             if startup_ready_before
@@ -303,6 +313,8 @@ pub(crate) fn frame_render_submit_system(
                     prepare_ui_ms = timings.renderer.prepare_ui_ms,
                     prepare_mesh_ms = timings.renderer.prepare_mesh_ms,
                     world_prepare_ms = timings.renderer.world_prepare_ms,
+                    preflight_ms = timings.renderer.preflight_ms,
+                    flow_encode_ms = timings.renderer.flow_encode_ms,
                     encode_submit_ms = timings.renderer.encode_submit_ms,
                     present_ms = timings.present_ms,
                     mesh_model_collect_ms = mesh_hot.model_collect_ms,

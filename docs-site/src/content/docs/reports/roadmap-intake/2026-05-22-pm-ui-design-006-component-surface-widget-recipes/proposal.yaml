@@ -1,0 +1,85 @@
+version: 1
+idea: PM-UI-DESIGN-006 Component Surface And Widget Recipe Library
+source_path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+owner: domain/ui/ui_definition
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance for PM-UI-DESIGN-006 keeps generic component, widget, and surface recipe contracts in `domain/ui/ui_definition`,
+  token id consumption in `domain/ui/ui_theme`, editor/workbench adapters in `domain/editor/editor_definition`, and app-hosted
+  recipe browser/preview surfaces in `apps/runenwerk_editor`.
+- No new ADR is required for the first bounded generic recipe contract row.
+open_questions:
+- None for ready-next planning; implementation still requires task production:plan, promotion preflight, focused tests, and
+  closeout evidence before PM-UI-DESIGN-006 can be completed.
+item:
+  id: WR-050
+  title: PM-UI-DESIGN-006 Component Surface And Widget Recipe Contracts
+  diagram_title: PM-UI-DESIGN-006 Component Surface Recipe Contracts
+  alias: UIRECIPES
+  lane: Product workflow
+  dependency_level: L2
+  gate: After PM-UI-DESIGN-006 design acceptance
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First code-bearing UI Designer component, widget, and surface recipe contract slice after PM-002, PM-005, and PM-006 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-049
+  write_scopes:
+  - domain/ui/ui_definition
+  - domain/ui/ui_theme
+  - docs-site/src/content/docs/design/accepted
+  validations:
+  - cargo test -p ui_definition component_recipe
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  next_evidence: Production plan and implementation contract for generic component, widget, and surface recipe ids,
+    slot contracts, token-family requirements, accessibility metadata, target-profile compatibility, and recipe diagnostics.
+  current_decision: Ready-next bounded implementation row for the PM-UI-DESIGN-006 generic recipe contract slice; no product
+    code has started.
+  current_call: Run task production:plan before implementation. Keep app-hosted recipe browsers, editor-specific package
+    persistence, game-runtime loading, renderer lowering, binding activation, preview matrices, and persistence activation
+    out of this first generic recipe row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGN-006 --roadmap WR-050 and follow the generated promotion
+    or implementation contract.
+  main_blocker: Needs production planning, promotion preflight, and focused implementation contract before code.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - recipe contracts
+  - slots and token refs
+  - target-profile diagnostics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Component, widget, and surface recipe implementation requires accepted recipe ownership, slot, token, accessibility,
+      and target-profile rules.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR for the first generic recipe contract slice; ADR required before app/runtime/editor shell state,
+    renderer material handles, provider sessions, or gameplay state become recipe source truth.
+  fitness_function_requirement: Stable recipe id preservation, deterministic Canonical UI IR expansion, slot compatibility
+    diagnostics, token-family diagnostics, accessibility metadata diagnostics, target-profile compatibility diagnostics,
+    preview-only activation rejection, and editor/workbench plus game-runtime target-profile examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor app consumption.
+edges:
+- source: WR-049
+  target: WR-050
+  label: theme tokens before recipes

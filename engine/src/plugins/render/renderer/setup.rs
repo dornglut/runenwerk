@@ -26,12 +26,15 @@ impl Renderer {
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
             flow_runtime_cache: std::collections::BTreeMap::new(),
             flow_pipeline_cache: super::pipeline_cache::FlowPipelineArtifactCache::default(),
+            preflight_cache: None,
             last_good_ui_prepared: None,
             last_pass_timings: Vec::new(),
             last_runtime_resources: Vec::new(),
             last_pass_provenance: Vec::new(),
             last_preflight_report:
                 crate::plugins::render::graph::RenderExecutionGraphPreparedReport::default(),
+            last_preflight_cache_state:
+                crate::plugins::render::graph::RenderPreparedFramePreflightCacheState::default(),
             last_capture_plan: crate::plugins::render::inspect::ResolvedRenderCapturePlan::default(
             ),
             last_capture_selector_results: Vec::new(),
@@ -59,6 +62,12 @@ impl Renderer {
         &self,
     ) -> &crate::plugins::render::graph::RenderExecutionGraphPreparedReport {
         &self.last_preflight_report
+    }
+
+    pub fn last_preflight_cache_state(
+        &self,
+    ) -> &crate::plugins::render::graph::RenderPreparedFramePreflightCacheState {
+        &self.last_preflight_cache_state
     }
 
     pub fn last_capture_plan(&self) -> &crate::plugins::render::inspect::ResolvedRenderCapturePlan {

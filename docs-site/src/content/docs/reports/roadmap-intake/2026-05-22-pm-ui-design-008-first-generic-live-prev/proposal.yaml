@@ -1,0 +1,85 @@
+version: 1
+idea: PM-UI-DESIGN-008 first generic live preview fixture, scenario, target matrix, and evidence descriptor contract slice
+  for domain/ui/ui_definition, consuming PM008 accepted design without app-hosted Preview Lab UI, screenshot capture, renderer
+  golden comparison, provider sessions, runtime replay, persistence activation, or production-readiness hardening.
+source_path: ''
+owner: ''
+created_at: '2026-05-22'
+governance_notes:
+- Architecture governance review was run before intake. The accepted PM-008 design keeps generic fixture, scenario, matrix,
+  and evidence descriptor contracts in domain/ui/ui_definition, target-specific adapters in editor or future game UI domains,
+  and preview orchestration/captures in app/runtime/renderer consumer layers.
+- No new ADR is required for the first bounded generic contract slice because ADR-0004, ADR-0005, ADR-0006, and ADR-0012
+  already govern description-versus-execution, derived projections, provider proposal boundaries, and capability policy.
+open_questions: []
+item:
+  id: WR-052
+  title: PM-UI-DESIGN-008 Preview Fixture Scenario And Target Matrix Contracts
+  diagram_title: PM-UI-DESIGN-008 Preview Matrix Contracts
+  alias: UIPREVIEW
+  lane: Product workflow
+  dependency_level: L2
+  gate: After PM-UI-DESIGN-008 design acceptance
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer live preview fixture, scenario, target matrix, and evidence descriptor contract slice after
+    PM-004, PM-007, and PM-008 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-047
+  - WR-051
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  validations:
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  next_evidence: PM-UI-DESIGN-008 accepted preview fixture design establishes the bounded generic fixture, scenario, target
+    matrix, and evidence descriptor contract at docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md.
+  current_decision: PM-UI-DESIGN-008 accepted design selects WR-052 as the first bounded generic UI preview fixture, scenario,
+    target matrix, and evidence descriptor row over domain/ui/ui_definition.
+  current_call: Run task production:plan before implementation. Keep app-hosted Preview Lab UI, screenshot capture, renderer
+    golden comparison, provider sessions, runtime replay, persistence activation, and production-readiness hardening out of
+    this first generic preview row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGN-008 --roadmap WR-052 and follow the generated promotion
+    or implementation contract. Add the implementation-plan path to write scopes when that contract file exists.
+  main_blocker: Needs production planning, promotion preflight, and focused implementation contract before code.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - preview fixtures
+  - scenarios and matrix
+  - evidence descriptors
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Preview fixture implementation requires accepted fixture, scenario, matrix, target-profile, and evidence descriptor
+      ownership rules.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR for the first generic preview fixture and target matrix contract slice; ADR required before
+    generic UI fixtures own provider sessions, runtime state, renderer handles, screenshots, app windows, or gameplay truth.
+  fitness_function_requirement: Stable fixture/scenario/matrix id preservation, target-profile diagnostics, fixture data-state
+    coverage, denied capability diagnostics, missing data package diagnostics, invalid scenario step diagnostics, matrix axis
+    compatibility diagnostics, expected diagnostic mismatch diagnostics, preview-only activation rejection, and editor/workbench
+    plus game-runtime examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
+edges:
+- source: WR-051
+  target: WR-052
+  label: bindings before preview scenarios

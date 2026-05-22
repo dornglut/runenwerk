@@ -14,6 +14,15 @@ related_adrs:
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
   - ../../adr/accepted/0012-capability-workbench-clean-break.md
 related_designs:
+  - ../accepted/ui-designer-canonical-ir-and-composition-design.md
+  - ../accepted/ui-designer-target-projection-profiles-design.md
+  - ../accepted/ui-designer-visual-layout-and-interface-composition-design.md
+  - ../accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
+  - ../accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+  - ../accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+  - ../accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+  - ../accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+  - ../accepted/ui-designer-production-readiness-and-evidence-design.md
   - ./editor-tool-suite-registry-and-workbench-host-design.md
   - ./runenwerk-capability-workbench-target-architecture.md
   - ./editor-ui-workspace-tool-surface-architecture.md
@@ -73,11 +82,12 @@ Workbench is one target profile, not the whole Designer platform.
 primitives, style primitives, focus/input/navigation substrate, accessibility
 substrate, and reusable interaction substrate.
 
-`domain/ui_definition` is the future owner for authored UI/interface definition
-documents, Canonical UI IR, tokens, themes, component recipes, layout trees,
-screen definitions, target profile declarations, validation, diagnostics,
-migration, and evidence models. This design names the intended boundary; it does
-not create the crate in the first slice.
+`domain/ui/ui_definition` is the current owner for generic authored
+UI/interface definition documents, Canonical UI IR, validation, normalization,
+migration, diagnostics, source maps, and retained UI formation. The accepted
+PM-UI-DESIGN-002 design fixes this as the near-term owner. A future standalone
+`domain/ui_definition` crate remains a possible extraction only after a new
+accepted design or ADR.
 
 `domain/editor/editor_definition` owns editor/workbench-specific extensions:
 workbench profiles, suites, panels, menus, shortcuts, docking/splits/tabs, tool
@@ -328,8 +338,9 @@ This first slice does not include:
 - external plugin sandbox work;
 - roadmap execution-state changes except registering the planning track.
 
-This design also does not make `domain/ui_definition`, `domain/game_ui`, or
-`domain/game/interface` existing crates. Those are future boundary decisions.
+This design also does not create a standalone `domain/ui_definition`,
+`domain/game_ui`, or `domain/game/interface` crate. Those are future boundary
+decisions.
 
 ## Promotion Criteria
 

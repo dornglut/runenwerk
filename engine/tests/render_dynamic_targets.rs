@@ -12,7 +12,8 @@ use engine::plugins::render::{
     RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
     RenderProductSurfaceRequestKind, RenderProductSurfaceStatusKind, RenderResourceId,
     RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
-    RenderTextureUploadAlphaMode, compile_flow_plan, validate_prepared_render_frame,
+    RenderTextureUploadAlphaMode, compile_flow_plan, prepared_render_frame_preflight_cache_key,
+    validate_prepared_render_frame,
 };
 use std::collections::BTreeMap;
 use ui_render_data::{ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry};
@@ -496,6 +497,154 @@ fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() 
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::HistorySignatureConflict
             && diagnostic.dynamic_target_key.as_ref() == Some(&key)
     }));
+}
+
+#[test]
+fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_uniform_values() {
+    let flow = RenderFlow::new("preflight.cache.stable")
+        .with_color_target_alias("scene_color")
+        .fullscreen_pass("draw_scene")
+        .offscreen_products_only()
+        .write_target_alias("scene_color")
+        .finish()
+        .validate()
+        .expect("flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("flow should compile");
+    let key = RenderDynamicTextureTargetKey::new("preflight", "cache-stable");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+        key.clone(),
+        320,
+        180,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "scene_color".to_string(),
+        PreparedTargetBinding::DynamicTexture(key),
+    );
+    let mut invocation = invocation("viewport.cache", compiled.flow_id, "viewport.1", bindings);
+    invocation.inputs.projected_uniform_bytes.insert(
+        RenderResourceId::try_from_raw(77).expect("test resource id"),
+        vec![1, 2, 3, 4],
+    );
+    let mut frame = prepared_frame_for_invocations(
+        vec![PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (320, 180),
+        )],
+        vec![invocation],
+        vec![descriptor],
+    );
+    let baseline = prepared_render_frame_preflight_cache_key(
+        &frame,
+        std::slice::from_ref(&compiled),
+        &RenderBackendCapabilityProfile::runtime_default(),
+    );
+
+    frame.context.frame_index += 1;
+    frame.context.prepare_epoch += 1;
+    frame.flow_invocations[0]
+        .inputs
+        .projected_uniform_bytes
+        .get_mut(&RenderResourceId::try_from_raw(77).expect("test resource id"))
+        .expect("uniform should exist")
+        .copy_from_slice(&[9, 8, 7, 6]);
+    let changed_values = prepared_render_frame_preflight_cache_key(
+        &frame,
+        std::slice::from_ref(&compiled),
+        &RenderBackendCapabilityProfile::runtime_default(),
+    );
+
+    assert_eq!(baseline, changed_values);
+}
+
+#[test]
+fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inputs() {
+    let flow = RenderFlow::new("preflight.cache.invalidates")
+        .with_color_target_alias("scene_color")
+        .fullscreen_pass("draw_scene")
+        .offscreen_products_only()
+        .write_target_alias("scene_color")
+        .finish()
+        .validate()
+        .expect("flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("flow should compile");
+    let key = RenderDynamicTextureTargetKey::new("preflight", "cache-invalidates");
+    let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
+        key.clone(),
+        320,
+        180,
+        RenderTextureTargetFormat::Rgba8Unorm,
+        RenderTextureSampleMode::FilterableFloat,
+        RenderDynamicTextureRetention::RetainWhileRequested,
+    );
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "scene_color".to_string(),
+        PreparedTargetBinding::DynamicTexture(key.clone()),
+    );
+    let mut invocation = invocation(
+        "viewport.cache.invalidate",
+        compiled.flow_id,
+        "viewport.1",
+        bindings,
+    );
+    invocation.history_signature = Some("history:a".to_string());
+    invocation.inputs.projected_uniform_bytes.insert(
+        RenderResourceId::try_from_raw(78).expect("test resource id"),
+        vec![1, 2, 3, 4],
+    );
+    let frame = prepared_frame_for_invocations(
+        vec![PreparedViewFrame::offscreen_product(
+            "viewport.1",
+            (320, 180),
+        )],
+        vec![invocation],
+        vec![descriptor],
+    );
+    let baseline = prepared_render_frame_preflight_cache_key(
+        &frame,
+        std::slice::from_ref(&compiled),
+        &RenderBackendCapabilityProfile::runtime_default(),
+    );
+
+    let mut alias_changed = frame.clone();
+    alias_changed.flow_invocations[0]
+        .target_alias_bindings
+        .insert(
+            "scene_color".to_string(),
+            PreparedTargetBinding::DynamicTexture(RenderDynamicTextureTargetKey::new(
+                "preflight",
+                "cache-other",
+            )),
+        );
+    let mut descriptor_changed = frame.clone();
+    descriptor_changed.dynamic_texture_targets[0].width = 640;
+    let mut history_changed = frame.clone();
+    history_changed.flow_invocations[0].history_signature = Some("history:b".to_string());
+    let mut uniform_shape_changed = frame.clone();
+    uniform_shape_changed.flow_invocations[0]
+        .inputs
+        .projected_uniform_bytes
+        .get_mut(&RenderResourceId::try_from_raw(78).expect("test resource id"))
+        .expect("uniform should exist")
+        .push(5);
+
+    for changed in [
+        alias_changed,
+        descriptor_changed,
+        history_changed,
+        uniform_shape_changed,
+    ] {
+        let changed_key = prepared_render_frame_preflight_cache_key(
+            &changed,
+            std::slice::from_ref(&compiled),
+            &RenderBackendCapabilityProfile::runtime_default(),
+        );
+        assert_ne!(baseline, changed_key);
+    }
 }
 
 #[test]

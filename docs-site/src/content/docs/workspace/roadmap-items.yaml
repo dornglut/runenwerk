@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-21'
+  last_reviewed: '2026-05-22'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -585,6 +585,141 @@ items:
   adr_requirement: Accepted sandbox/security ADR or design required before implementation.
   fitness_function_requirement: Docs and planning validation only until implementation is unblocked.
   ownership_mode: Blocked platform security design.
+- id: WR-046
+  title: UI Designer doctrine and target boundary ratification
+  diagram_title: UI Designer doctrine and target boundary ratific
+  alias: UIDESIGNDOC
+  lane: Product planning
+  dependency_level: L0
+  gate: Support-only doctrine evidence
+  planning_state: support_only
+  priority: P1
+  value: 3
+  blocker: 1
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 2
+  confidence: 0.8
+  expected_score: 4.0
+  rice: N/A
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-001-ui-designer-doctrine/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-DESIGN-001 closeout proving active UI Designer doctrine, target-profile boundaries, no runtime/code
+    changes, and passing production, roadmap, docs, and planning validators.
+  current_decision: Support-only planning row for PM-UI-DESIGN-001; link doctrine closeout to the production track without
+    changing WR execution state.
+  current_call: Use only for UI Designer doctrine and target-boundary planning evidence. Do not use this row as permission
+    for UI Designer product implementation.
+  first_move: Close PM-UI-DESIGN-001 with active design evidence, architecture governance review, planning validation, and
+    task ai:goal -- --track PT-UI-DESIGN.
+  main_blocker: N/A; support-only doctrine row.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - doctrine support
+  - no WR execution state change
+  decision_gates: []
+  ddd_owner: editor/UI planning with domain/ui and editor domain boundaries
+  adr_requirement: No new ADR for this planning-only doctrine row; ADR or accepted design required before changing durable
+    UI definition ownership, dependency direction, or game-runtime UI crate ownership.
+  fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add focused
+    domain/UI fitness functions before code.
+  ownership_mode: Enabling support owned by editor/UI maintainers.
+- id: WR-048
+  title: Render Prepared-Frame Preflight Cache And Timing Repair
+  diagram_title: Render preflight cache and timings
+  alias: WR048
+  lane: Core support
+  dependency_level: L1
+  gate: Governed render regression repair
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: Repair render-flow runtime regression without weakening typed compiler/preflight contracts.
+  kano: Performance
+  dependencies:
+  - WR-043
+  - WR-045
+  write_scopes:
+  - engine/src/plugins/render/graph
+  - engine/src/plugins/render/renderer
+  - engine/src/plugins/render/runtime/frame_submit.rs
+  - engine/src/plugins/render/inspect
+  - engine/benches/render_flow_planning.rs
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/benchmarks/render-flow-planning.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-prepared-frame-preflight-cache-an
+  - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair
+  validations:
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_cutoff_guard
+  - cargo test -p engine --example boids_render_flow
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
+  current_decision: Completed bounded render regression repair. Full preflight remains the correctness authority, and unchanged
+    prepared-frame structures reuse cached successful preflight reports in steady state after runtime guards pass.
+  current_call: Complete. Use WR-055 for the separate runtime pacing, shader reload throttle, and diagnostics tier repair.
+  first_move: Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional
+    per-frame render_packet execution.
+  main_blocker: Complete.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Benchmark coverage measures CPU preflight/cache overhead, not a full windowed GPU runtime frame-rate proof.
+  - Runtime stutter still needs the separate governed frame pacing, shader reload throttle, and diagnostics tier repair.
+  completion_audit: ''
+  diagram_call:
+  - cached preflight complete
+  - timing evidence exposed
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Prepared-frame preflight remains the typed render execution validation contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime timing and readiness evidence must stay read-only and renderer-scoped.
+  ddd_owner: engine render execution graph and renderer runtime
+  adr_requirement: No new ADR required because ownership and dependency direction remain unchanged; add ADR only if implementation
+    moves validation policy outside engine render or exposes backend handles.
+  fitness_function_requirement: Cache-hit/miss invalidation tests, strict-mode tests, timing/readiness inspection tests, boids
+    example test, and render-flow preflight/cache benchmark.
+  ownership_mode: Complicated-subsystem engine render owner with stream-aligned app/product producers consuming prepared-frame
+    contracts.
 edges:
 - source: WR-002
   target: WR-001

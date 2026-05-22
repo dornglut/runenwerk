@@ -2,6 +2,7 @@
 //! Purpose: Authored UI definitions, validation, normalization, and retained UI formation.
 
 pub mod availability;
+pub mod component_recipe;
 pub mod diagnostic;
 pub mod embed;
 pub mod form;
@@ -11,13 +12,19 @@ pub mod menu;
 pub mod migration;
 pub mod node;
 pub mod normalize;
+pub mod persistence_activation;
+pub mod preview_fixture;
+pub mod production_readiness;
 pub mod slot;
 pub mod source;
 pub mod template;
 pub mod validate;
 pub mod value;
+pub mod view_binding;
+pub mod visual_layout;
 
 pub use availability::*;
+pub use component_recipe::*;
 pub use diagnostic::*;
 pub use embed::*;
 pub use form::*;
@@ -27,11 +34,16 @@ pub use menu::*;
 pub use migration::*;
 pub use node::*;
 pub use normalize::*;
+pub use persistence_activation::*;
+pub use preview_fixture::*;
+pub use production_readiness::*;
 pub use slot::*;
 pub use source::*;
 pub use template::*;
 pub use validate::*;
 pub use value::*;
+pub use view_binding::*;
+pub use visual_layout::*;
 
 #[cfg(test)]
 mod fixture_tests {

@@ -2,7 +2,7 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
 use crate::plugins::render::{RenderPassId, RenderResourceId, ShaderHandle};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderPassKind {
     Compute,
     Fullscreen,

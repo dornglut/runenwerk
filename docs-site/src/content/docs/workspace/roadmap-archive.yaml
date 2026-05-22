@@ -2093,24 +2093,24 @@ items:
   - task planning:validate
   - task ai:goal -- --track PT-RENDER-PG
   next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md.
-    PM-008 completed as a bounded renderer production-readiness contract with typed readiness reports, renderer budget
-    diagnostics, fail-closed replay-manifest validation, public API docs, and example proof.
+    PM-008 completed as a bounded renderer production-readiness contract with typed readiness reports, renderer budget diagnostics,
+    fail-closed replay-manifest validation, public API docs, and example proof.
   current_decision: WR-045 is completed as the bounded PM-RENDER-PG-008 production readiness and inspection implementation.
     Render readiness aggregates existing prepared-frame, product-surface, preflight, fragment, capture, budget, and replay
     manifest evidence without moving product truth or policy into the renderer.
-  current_call: Completed. Do not reopen WR-045 for host-backed capture/replay runtime proof, durable capture ABI work,
-    renderer-owned product policy, material lowering, product-family semantics, or unrelated renderer hardening.
-  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and only continue if the production-track gate selects a legal
-    next action.
-  main_blocker: Completed bounded PM-008 production readiness and inspection slice. Host-backed GPU capture/replay and
-    deterministic multi-surface runtime proof remain known bounded_contract gaps, not PM-008 completion blockers.
+  current_call: Completed. Do not reopen WR-045 for host-backed capture/replay runtime proof, durable capture ABI work, renderer-owned
+    product policy, material lowering, product-family semantics, or unrelated renderer hardening.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-008 production readiness and inspection slice. Host-backed GPU capture/replay and deterministic
+    multi-surface runtime proof remain known bounded_contract gaps, not PM-008 completion blockers.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
   - Replay manifests validate required renderer evidence and fail closed, but they do not execute deterministic GPU replay
     in this environment.
-  - Budget reports diagnose renderer execution evidence only; they do not decide product fallback, rebuild, freshness,
-    authority, or residency policy.
+  - Budget reports diagnose renderer execution evidence only; they do not decide product fallback, rebuild, freshness, authority,
+    or residency policy.
   - The readiness example proves the public inspection DTO path, not a host-backed production capture pipeline.
   - PM-008 did not claim runtime_proven or perfectionist_verified evidence.
   completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
@@ -2161,3 +2161,739 @@ items:
     validation.
   ownership_mode: Complicated-subsystem render owner enabling stream-aligned product, editor, drawing, and future world/product
     teams.
+- id: WR-047
+  title: PM-UI-DESIGN-004 Visual Layout Core Editing
+  diagram_title: PM-UI-DESIGN-004 Visual Layout Core Editing
+  alias: UILAYOUTEDIT
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First code-bearing UI Designer core layout edit slice after PM-002 and PM-003 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-047-pm-ui-design-004-visual-layout-core-editing/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md.
+    PM-004 completed as a bounded definition-layer visual layout core editing contract with typed operations, deterministic
+    diffs, preview-only activation rejection, source-mapped diagnostics, and target-profile compatibility tests.
+  current_decision: WR-047 is completed as the bounded PM-UI-DESIGN-004 visual layout core editing implementation. The implementation
+    keeps visual layout edits in domain/ui/ui_definition and does not move app, runtime, provider, renderer, or session identifiers
+    into Canonical UI IR.
+  current_call: Completed. Do not reopen WR-047 for app-hosted Designer/Lab UI, game-runtime projection execution, theme tokens,
+    component recipes, bindings, preview matrices, persistence activation, or production-readiness hardening.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-004 definition-layer slice. App-hosted visual editing and runtime-proven UI projection
+    remain later milestone work, not PM-004 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted visual Designer/Lab UI is not implemented in this slice.
+  - Game-runtime UI projection execution is not implemented or runtime-proven in this slice.
+  - Theme/token resolution, component recipes, view-model binding, preview matrices, persistence activation, accessibility/performance
+    evidence, and production readiness remain PM-UI-DESIGN-005 through PM-UI-DESIGN-010 work.
+  - PM-004 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md
+  diagram_call:
+  - visual layout edit ops
+  - stable ids and deterministic diffs
+  - preview activation guard
+  - target-profile diagnostics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-004 implementation followed the accepted visual layout and interface composition design.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-047-pm-ui-design-004-visual-layout-core-editing/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-004 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-004 requires completed bounded visual layout core editing closeout evidence.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No ADR required while this remains a definition-layer visual layout edit contract over accepted source-truth
+    and derived-projection ADRs.
+  fitness_function_requirement: Stable-id preservation tests, deterministic textual diff tests, preview-only activation rejection
+    tests, source-mapped diagnostic tests, target-profile compatibility tests, and workflow validation.
+  ownership_mode: Complicated-subsystem UI definition owner enabling stream-aligned editor app consumption.
+- id: WR-049
+  title: PM-UI-DESIGN-005 Theme Token Graph And Mode Resolution
+  diagram_title: PM-UI-DESIGN-005 Theme Token Graph And Mode Resolution
+  alias: UITOKENS
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First code-bearing UI Designer theme token graph slice after PM-002 and PM-005 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  write_scopes:
+  - domain/ui/ui_theme
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-049-pm-ui-design-005-theme-token-graph-and-mode-resolution/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_theme token
+  - cargo test -p ui_theme
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md.
+    PM-005 completed as a bounded generic UI theme token graph and mode resolution contract with deterministic precedence,
+    alias diagnostics, source-path diagnostics, target-profile compatibility, and preview-only activation rejection.
+  current_decision: WR-049 is completed as the bounded PM-UI-DESIGN-005 theme token graph implementation. The implementation
+    keeps generic style source truth in domain/ui/ui_theme and does not move app, runtime, renderer, material, provider, project,
+    or editor shell state into token graph ownership.
+  current_call: Completed. Do not reopen WR-049 for app-hosted Theme Designer UI, editor-specific package persistence, game-runtime
+    package loading, renderer material lowering, component recipes, bindings, preview matrices, persistence activation, or
+    production-readiness hardening.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-005 domain theme-token slice. App-hosted theme editing and runtime-proven style projection
+    remain later milestone work, not PM-005 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted Theme Designer and Interface Lab UI are not implemented in this slice.
+  - Editor-specific theme package storage and project file IO are not implemented in this slice.
+  - Game-runtime theme package loading and renderer/material lowering are not implemented or runtime-proven in this slice.
+  - Component recipes, view-model binding, preview fixture matrices, persistence activation, accessibility/performance evidence,
+    and production readiness remain PM-UI-DESIGN-006 through PM-UI-DESIGN-010 work.
+  - PM-005 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md
+  diagram_call:
+  - deterministic token graph
+  - mode and state precedence
+  - target-profile diagnostics
+  - preview activation guard
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-005 implementation followed the accepted deterministic token graph, mode, skin, state, and diagnostics rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-049-pm-ui-design-005-theme-token-graph-and-mode-resolution/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-005 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-005 requires completed bounded theme token graph and mode resolution closeout evidence.
+  ddd_owner: domain/ui/ui_theme
+  adr_requirement: No ADR required while this remains a generic UI theme-token contract over accepted source-truth and derived-projection
+    ADRs.
+  fitness_function_requirement: Deterministic layer ordering tests, alias cycle tests, missing alias tests, family mismatch
+    diagnostics, malformed value diagnostics, duplicate selector diagnostics, mode/state precedence tests, accessibility conflict
+    diagnostics, preview-only activation rejection tests, target-profile compatibility tests, and workflow validation.
+  ownership_mode: Complicated-subsystem UI theme owner enabling stream-aligned editor app consumption.
+- id: WR-050
+  title: PM-UI-DESIGN-006 Component Surface And Widget Recipe Contracts
+  diagram_title: PM-UI-DESIGN-006 Component Surface Recipe Contracts
+  alias: UIRECIPES
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First code-bearing UI Designer component, widget, and surface recipe contract slice after PM-002, PM-005, and PM-006
+    design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-049
+  write_scopes:
+  - domain/ui/ui_definition
+  - domain/ui/ui_theme
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-050-pm-ui-design-006-component-surface-and-widget-recipe-contracts/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_definition component_recipe
+  - cargo test -p ui_definition
+  - cargo test -p ui_theme
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md.
+    PM-006 completed as a bounded generic UI component, widget, and surface recipe contract with deterministic Canonical UI
+    IR expansion, slot diagnostics, token-family diagnostics, accessibility diagnostics, target-profile compatibility, and
+    preview-only activation rejection.
+  current_decision: WR-050 is completed as the bounded PM-UI-DESIGN-006 component, widget, and surface recipe implementation.
+    The implementation keeps generic recipe source truth in domain/ui/ui_definition and consumes token ids/families from domain/ui/ui_theme
+    without moving app, runtime, editor shell, provider, renderer, material, project, or gameplay state into recipe ownership.
+  current_call: Completed. Do not reopen WR-050 for app-hosted recipe browsers, editor-specific package persistence, game-runtime
+    package loading, renderer/material lowering, view-model binding, preview matrices, persistence activation, or production-readiness
+    hardening.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-006 domain recipe-contract slice. App-hosted recipe editing, runtime package loading,
+    renderer lowering, binding activation, preview matrices, persistence activation, and production readiness remain later
+    milestone work, not PM-006 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted component, widget, and surface recipe browsing or editing is not implemented in this slice.
+  - Editor-specific recipe package persistence and project file IO are not implemented in this slice.
+  - Game-runtime recipe package loading is not implemented or runtime-proven in this slice.
+  - Renderer material lowering, shader styles, GPU policy, and visual target projection execution remain future work.
+  - View-model capability binding, live preview fixture matrices, persistence activation, accessibility/performance evidence,
+    and production readiness remain PM-UI-DESIGN-007 through PM-UI-DESIGN-010 work.
+  - PM-006 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md
+  diagram_call:
+  - recipe contracts
+  - slots and token refs
+  - target-profile diagnostics
+  - preview activation guard
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-006 implementation followed the accepted component, widget, and surface recipe ownership, slot, token, accessibility,
+      and target-profile rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-050-pm-ui-design-006-component-surface-and-widget-recipe-contracts/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-006 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-006 requires completed bounded recipe-contract closeout evidence.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No ADR required while this remains a generic UI recipe contract over accepted source-truth and derived-projection
+    ADRs.
+  fitness_function_requirement: Stable recipe id preservation, deterministic Canonical UI IR expansion, slot compatibility
+    diagnostics, token-family diagnostics, accessibility metadata diagnostics, target-profile compatibility diagnostics, preview-only
+    activation rejection, and editor/workbench plus game-runtime target-profile examples.
+  ownership_mode: Complicated-subsystem UI definition owner enabling stream-aligned editor app consumption.
+- id: WR-051
+  title: PM-UI-DESIGN-007 View-Model Capability And Intent Binding Contracts
+  diagram_title: PM-UI-DESIGN-007 Binding And Intent Contracts
+  alias: UIBIND
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer view-model binding, capability, and intent declaration contract slice after PM-003, PM-004,
+    and PM-007 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-047
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-051-pm-ui-design-007-view-model-capability-and-intent-binding-contracts/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_definition view_binding
+  - cargo test -p ui_definition
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md.
+    PM-007 completed as a bounded generic UI view-model binding, capability, and intent proposal contract with read-only binding
+    declarations, proposal-only intents, capability diagnostics, target-profile diagnostics, trigger conflict diagnostics,
+    payload diagnostics, and preview-only activation rejection.
+  current_decision: WR-051 is completed as the bounded PM-UI-DESIGN-007 view-model capability and intent binding implementation.
+    The implementation keeps generic binding and intent source truth in domain/ui/ui_definition and does not move concrete
+    command execution, game intent execution, editor shell state, provider sessions, app state, runtime state, or direct domain
+    mutation into generic UI definitions.
+  current_call: Completed. Do not reopen WR-051 for app-hosted binding UI, editor-specific package persistence, game-runtime
+    package loading, concrete command execution, preview matrices, persistence activation, or production-readiness hardening.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-007 domain binding and intent contract slice. App-hosted binding UI, preview matrices,
+    persistence activation, accessibility/performance evidence, and production readiness remain later milestone work, not
+    PM-007 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted binding and intent Designer/Lab UI is not implemented in this slice.
+  - Editor-specific binding package persistence and project file IO are not implemented in this slice.
+  - Game-runtime view-model package loading is not implemented or runtime-proven in this slice.
+  - Concrete editor command execution and concrete game intent execution remain target-adapter-owned and are not implemented
+    in this slice.
+  - Live preview fixture matrices, persistence activation, accessibility/performance evidence, and production readiness remain
+    PM-UI-DESIGN-008 through PM-UI-DESIGN-010 work.
+  - PM-007 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md
+  diagram_call:
+  - read-only bindings
+  - capability gates
+  - validated intents
+  - preview activation guard
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-007 implementation followed the accepted read-only view-model, capability, intent proposal, and target-profile
+      ownership rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-051-pm-ui-design-007-view-model-capability-and-intent-binding-contracts/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-007 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-007 requires completed bounded binding and intent closeout evidence.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No ADR required while this remains a generic UI binding and intent proposal contract over accepted source-truth,
+    command ownership, and derived-projection ADRs.
+  fitness_function_requirement: Stable binding id preservation, value type compatibility diagnostics, missing/stale view-model
+    diagnostics, denied capability diagnostics, unsupported target-profile diagnostics, intent proposal diagnostics, command/shortcut/payload/focus
+    conflict diagnostics, preview/dry-run/activation validation differences, and editor/workbench plus game-runtime examples.
+  ownership_mode: Complicated-subsystem UI definition owner enabling stream-aligned editor and future game target consumption.
+- id: WR-052
+  title: PM-UI-DESIGN-008 Preview Fixture Scenario And Target Matrix Contracts
+  diagram_title: PM-UI-DESIGN-008 Preview Matrix Contracts
+  alias: UIPREVIEW
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer live preview fixture, scenario, target matrix, and evidence descriptor contract slice after
+    PM-004, PM-007, and PM-008 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-047
+  - WR-051
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-052-pm-ui-design-008-preview-fixture-scenario-and-target-matrix-contracts/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p ui_definition
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md.
+    PM-008 completed as a bounded generic UI preview fixture, scenario, target matrix, and evidence descriptor contract with
+    data-state coverage diagnostics, target-profile diagnostics, denied capability diagnostics, missing data package diagnostics,
+    invalid scenario step diagnostics, matrix axis diagnostics, expected diagnostic mismatch diagnostics, and preview-only
+    activation rejection.
+  current_decision: WR-052 is completed as the bounded PM-UI-DESIGN-008 preview fixture, scenario, target matrix, and evidence
+    descriptor implementation. The implementation keeps generic preview source truth in domain/ui/ui_definition and does not
+    move provider sessions, runtime state, renderer handles, screenshots, app windows, project state, or gameplay truth into
+    generic UI definitions.
+  current_call: Completed. Do not reopen WR-052 for app-hosted Preview Lab UI, screenshot capture, renderer golden comparison,
+    provider session orchestration, game-runtime replay loading, persistence activation, accessibility/performance reporting,
+    or production-readiness hardening.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-008 domain preview fixture contract slice. App-hosted preview UI, screenshot capture,
+    runtime replay, persistence activation, accessibility/performance evidence, and production readiness remain later milestone
+    work, not PM-008 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted Preview Lab UI is not implemented in this slice.
+  - Screenshot capture, visual diffing, and renderer golden comparison are not implemented in this slice.
+  - Provider session orchestration and game-runtime replay loading remain future work.
+  - Persistence migration, diff, and activation gates remain PM-UI-DESIGN-009 work.
+  - Accessibility/performance reporting, visual captures, production examples, and production-readiness evidence remain PM-UI-DESIGN-010
+    work.
+  - PM-008 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md
+  diagram_call:
+  - preview fixtures
+  - scenarios and matrix
+  - evidence descriptors
+  - activation guard
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-008 implementation followed the accepted fixture, scenario, matrix, target-profile, and evidence descriptor
+      ownership rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-052-pm-ui-design-008-preview-fixture-scenario-and-target-matrix-contracts/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-008 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-008 requires completed bounded preview fixture closeout evidence.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR required while this remains a generic UI preview fixture, scenario, target matrix, and evidence
+    descriptor contract over accepted source-truth, target-projection, visual layout, and binding ADR/design boundaries.
+  fitness_function_requirement: Stable fixture/scenario/matrix id preservation, target-profile diagnostics, fixture data-state
+    coverage, denied capability diagnostics, missing data package diagnostics, invalid scenario step diagnostics, matrix axis
+    compatibility diagnostics, expected diagnostic mismatch diagnostics, preview-only activation rejection, and editor/workbench
+    plus game-runtime examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
+- id: WR-053
+  title: PM-UI-DESIGN-009 Persistence Migration Diff And Activation Contracts
+  diagram_title: PM-UI-DESIGN-009 Persistence Activation Contracts
+  alias: UIPERSIST
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer persistence, migration dry-run, deterministic diff, and activation gate contract slice after
+    PM-002, PM-008, and PM-009 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-052
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-053-pm-ui-design-009-persistence-migration-diff-and-activation-contracts/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_definition persistence_activation
+  - cargo test -p ui_definition
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md.
+    PM-009 completed as a bounded generic UI definition persistence, migration dry-run, deterministic diff, and activation
+    gate contract with schema/version diagnostics, incompatible migration diagnostics, unknown-field preservation diagnostics,
+    deterministic diff diagnostics, activation preflight diagnostics, target-profile diagnostics, expected diagnostic mismatch
+    diagnostics, and preview-only activation rejection.
+  current_decision: WR-053 is completed as the bounded PM-UI-DESIGN-009 persistence migration diff and activation implementation.
+    The implementation keeps generic persistence and activation source truth in domain/ui/ui_definition and does not move
+    project IO, provider sessions, runtime state, renderer handles, screenshots, app windows, gameplay state, concrete editor
+    commands, or direct mutation into generic UI definitions.
+  current_call: Completed. Do not reopen WR-053 for app-hosted persistence UI, project save/load UI, user-facing diff review
+    UI, runtime activation plumbing, provider session orchestration, renderer resources, screenshot capture, accessibility/performance
+    reporting, or production-readiness hardening.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action.
+  main_blocker: Completed bounded PM-009 domain persistence activation contract slice. App-hosted persistence UI, project
+    IO, runtime activation, provider sessions, renderer evidence, accessibility/performance evidence, and production readiness
+    remain later milestone work, not PM-009 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted persistence UI, project save/load UI, and user-facing diff review UI are not implemented in this slice.
+  - Concrete project file IO in apps/runenwerk_editor is not implemented in this slice.
+  - Runtime activation plumbing and runtime consumption of activation reports remain future work.
+  - Provider session orchestration, screenshot capture, visual regression, and renderer golden evidence remain future work.
+  - Accessibility/performance reporting, production examples, and production-readiness evidence remain PM-UI-DESIGN-010 work.
+  - PM-009 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md
+  diagram_call:
+  - persistence contracts
+  - migration dry-run
+  - deterministic diff
+  - activation gate
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-009 implementation followed the accepted schema/version, dry-run migration, deterministic diff, and activation
+      ownership rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-053-pm-ui-design-009-persistence-migration-diff-and-activation-contracts/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-009 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-009 requires completed bounded persistence activation closeout evidence.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR required while this remains a generic UI persistence, migration dry-run, deterministic diff,
+    and activation gate contract over accepted source-truth, derived-projection, and command ownership ADR/design boundaries.
+  fitness_function_requirement: Current-version migration, unsupported schema version diagnostics, incompatible migration
+    diagnostics, unknown-field preservation diagnostics, deterministic textual diff output, preview-only activation rejection,
+    activation preflight report diagnostics, target-profile compatibility diagnostics, expected diagnostic mismatch diagnostics,
+    and editor/workbench plus game-runtime examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
+- id: WR-054
+  title: PM-UI-DESIGN-010 Production Readiness Evidence Contracts
+  diagram_title: PM-UI-DESIGN-010 Readiness Evidence Contracts
+  alias: UIREADY
+  lane: Product workflow
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer production readiness evidence packet, inspection report, readiness request, readiness decision,
+    and readiness diagnostic contract slice after PM-005 through PM-010 design gates.
+  kano: Basic
+  dependencies:
+  - WR-049
+  - WR-050
+  - WR-051
+  - WR-052
+  - WR-053
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  - docs-site/src/content/docs/reports/implementation-plans/wr-054-pm-ui-design-010-production-readiness-evidence-contracts/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p ui_definition production_readiness
+  - cargo test -p ui_definition
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-DESIGN
+  next_evidence: 2026-05-22 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md.
+    PM-010 completed as a bounded generic UI definition production readiness evidence, inspection, request, decision, and
+    diagnostic contract with required evidence diagnostics, target-profile diagnostics, stale evidence diagnostics, missing
+    inspection diagnostics, expected diagnostic mismatch diagnostics, artifact ownership diagnostics, and preview-only production
+    readiness rejection.
+  current_decision: WR-054 is completed as the bounded PM-UI-DESIGN-010 production readiness evidence implementation. The
+    implementation keeps generic readiness evidence source truth in domain/ui/ui_definition and does not move project IO,
+    provider sessions, runtime state, renderer handles, screenshots, app windows, accessibility tools, performance runners,
+    gameplay state, concrete editor commands, release tooling, or direct mutation into generic UI definitions.
+  current_call: Completed. Do not reopen WR-054 for app-hosted readiness UI, screenshot capture, renderer golden comparison,
+    accessibility engine integration, performance runner integration, project IO, provider sessions, runtime replay, concrete
+    release tooling, gameplay mutation, or user-visible Interface Lab release workflows.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGN and only continue if the production-track gate selects a legal next
+    action or confirms completion.
+  main_blocker: Completed bounded PM-010 domain production readiness evidence contract slice. App-hosted Interface Lab readiness
+    UI, visual capture infrastructure, runtime replay, accessibility/performance tool integration, project IO, release tooling,
+    and runtime-proven target integrations remain future work, not PM-010 completion blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - App-hosted readiness UI is not implemented in this slice.
+  - Screenshot capture, renderer golden comparison, and visual regression tooling are not implemented in this slice.
+  - Accessibility engine integration and performance runner integration remain future work.
+  - Concrete production examples, project IO, provider sessions, runtime replay, release tooling, and gameplay mutation remain
+    target-adapter-owned future work.
+  - PM-010 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md
+  diagram_call:
+  - readiness evidence
+  - inspection reports
+  - target-profile gates
+  - production guard
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-010 implementation followed the accepted evidence packet, inspection report, readiness request, and readiness
+      diagnostic ownership rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-054-pm-ui-design-010-production-readiness-evidence-contracts/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-010 implementation followed the bounded production promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-010 requires completed bounded production readiness evidence closeout.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR required while this remains a generic UI production readiness evidence contract over accepted
+    source-truth, target-projection, preview evidence, persistence activation, and readiness ownership design boundaries.
+  fitness_function_requirement: Required evidence kind coverage, target-profile compatibility diagnostics, stale evidence
+    diagnostics, missing projection snapshot diagnostics, missing diagnostic inspection diagnostics, missing accessibility
+    diagnostics, missing compatibility diagnostics, missing performance diagnostics, expected diagnostic mismatch diagnostics,
+    artifact ownership violation diagnostics, preview-only production readiness rejection, and editor/workbench plus game-runtime
+    examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.

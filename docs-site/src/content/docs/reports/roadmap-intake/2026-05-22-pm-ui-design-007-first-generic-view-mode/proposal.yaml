@@ -1,0 +1,83 @@
+version: 1
+idea: PM-UI-DESIGN-007 first generic view-model capability and intent binding contract slice for domain/ui/ui_definition,
+  consuming PM007 accepted design without app-hosted Designer UI, concrete command execution, game-runtime loading, preview
+  matrices, persistence activation, or production-readiness hardening.
+source_path: ''
+owner: ''
+created_at: '2026-05-22'
+governance_notes:
+- Architecture governance review was run before intake. The accepted PM-007 design keeps generic binding and intent contracts
+  in domain/ui/ui_definition, concrete editor/workbench adapters in domain/editor/editor_definition, future game adapters in
+  game-owned UI domains, and app/runtime layers as consumers.
+- No new ADR is required for the first bounded generic contract slice because ADR-0001, ADR-0004, ADR-0005, ADR-0006,
+  and ADR-0012 already govern domain-owned commands, description-versus-execution, derived projections, provider proposals,
+  and capability policy.
+open_questions: []
+item:
+  id: WR-051
+  title: PM-UI-DESIGN-007 View-Model Capability And Intent Binding Contracts
+  diagram_title: PM-UI-DESIGN-007 Binding And Intent Contracts
+  alias: UIBIND
+  lane: Product workflow
+  dependency_level: L2
+  gate: After PM-UI-DESIGN-007 design acceptance
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer view-model binding, capability, and intent declaration contract slice after PM-003, PM-004,
+    and PM-007 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-047
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  validations:
+  - cargo test -p ui_definition view_binding
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  next_evidence: PM-UI-DESIGN-007 accepted binding and intent design establishes the bounded generic read-only view-model
+    binding, capability requirement, and validated intent declaration contract at docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md.
+  current_decision: PM-UI-DESIGN-007 accepted design selects WR-051 as the first bounded generic UI binding and intent contract
+    row over domain/ui/ui_definition.
+  current_call: Run task production:plan before implementation. Keep app-hosted binding UI, concrete command execution, game-runtime
+    package loading, preview matrices, persistence activation, and production-readiness hardening out of this first generic binding row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGN-007 --roadmap WR-051 and follow the generated promotion
+    or implementation contract. Add the implementation-plan path to write scopes when that contract file exists.
+  main_blocker: Needs production planning, promotion preflight, and focused implementation contract before code.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - read-only bindings
+  - capability gates
+  - validated intents
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Binding and intent implementation requires accepted read-only view-model, capability, intent proposal, and target-profile
+      ownership rules.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR for the first generic binding and intent contract slice; ADR required before generic UI owns
+    concrete command payloads, direct mutation, cross-domain reflection authority, or game-runtime state truth.
+  fitness_function_requirement: Stable binding id preservation, value type compatibility diagnostics, missing/stale view-model
+    diagnostics, denied capability diagnostics, unsupported target-profile diagnostics, intent proposal diagnostics, command/shortcut/payload/focus
+    conflict diagnostics, preview/dry-run/activation validation differences, and editor/workbench plus game-runtime examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
+edges:
+- source: WR-047
+  target: WR-051
+  label: visual layout contracts before bindings

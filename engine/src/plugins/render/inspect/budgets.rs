@@ -7,6 +7,7 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RenderReadinessBudgetKind {
     FrameTotalMillis,
+    PreflightMillis,
     PassTotalMillis,
     DynamicTextureTargetCount,
     DynamicTextureUploadBytes,
@@ -21,6 +22,7 @@ impl RenderReadinessBudgetKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::FrameTotalMillis => "frame_total_ms",
+            Self::PreflightMillis => "preflight_ms",
             Self::PassTotalMillis => "pass_total_ms",
             Self::DynamicTextureTargetCount => "dynamic_texture_target_count",
             Self::DynamicTextureUploadBytes => "dynamic_texture_upload_bytes",
@@ -95,6 +97,7 @@ impl RenderReadinessBudgetReport {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RenderReadinessBudgetMeasurements {
     pub frame_total_ms: Option<f64>,
+    pub preflight_ms: Option<f64>,
     pub pass_total_ms: Option<f64>,
     pub dynamic_texture_target_count: Option<f64>,
     pub dynamic_texture_upload_bytes: Option<f64>,
@@ -141,6 +144,7 @@ impl RenderReadinessBudgetMeasurements {
         };
         Self {
             frame_total_ms: timings.map(|value| f64::from(value.total_ms)),
+            preflight_ms: timings.map(|value| f64::from(value.preflight_ms)),
             pass_total_ms: timings.map(|value| f64::from(value.total_pass_millis)),
             dynamic_texture_target_count: dynamic_texture_target_count.map(|value| value as f64),
             dynamic_texture_upload_bytes: dynamic_texture_upload_bytes.map(|value| value as f64),
@@ -175,6 +179,7 @@ impl RenderReadinessBudgetMeasurements {
     pub fn measure(&self, kind: RenderReadinessBudgetKind) -> Option<f64> {
         match kind {
             RenderReadinessBudgetKind::FrameTotalMillis => self.frame_total_ms,
+            RenderReadinessBudgetKind::PreflightMillis => self.preflight_ms,
             RenderReadinessBudgetKind::PassTotalMillis => self.pass_total_ms,
             RenderReadinessBudgetKind::DynamicTextureTargetCount => {
                 self.dynamic_texture_target_count

@@ -31,6 +31,7 @@ mod bindings;
 mod capture;
 mod execute;
 mod execute_passes;
+mod preflight_cache;
 mod provenance;
 mod runtime_resources;
 
@@ -40,6 +41,7 @@ pub(super) use capture::{
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
+pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(super) use provenance::{
     EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
     collect_pass_resource_truth, compiled_storage_access_to_storage_texture_access,

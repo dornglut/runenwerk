@@ -1,0 +1,90 @@
+version: 1
+idea: PM-UI-DESIGN-010 first generic UI definition production readiness evidence packet, diagnostic inspection report, readiness
+  request, readiness decision, and readiness diagnostic contracts in domain/ui/ui_definition. Bounded to runtime-neutral evidence
+  descriptors and diagnostics; excludes app-hosted readiness UI, screenshot capture, renderer golden comparison, accessibility
+  engine integration, performance runner integration, project IO, provider sessions, runtime replay, concrete release tooling,
+  and gameplay mutation.
+source_path: ''
+owner: ''
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-054
+  title: PM-UI-DESIGN-010 Production Readiness Evidence Contracts
+  diagram_title: PM-UI-DESIGN-010 Readiness Evidence Contracts
+  alias: UIREADY
+  lane: Product workflow
+  dependency_level: L2
+  gate: After PM-UI-DESIGN-010 design acceptance
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer production readiness evidence packet, inspection report, readiness request, readiness decision,
+    and readiness diagnostic contract slice after PM-005 through PM-010 design gates.
+  kano: Basic
+  dependencies:
+  - WR-049
+  - WR-050
+  - WR-051
+  - WR-052
+  - WR-053
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  validations:
+  - cargo test -p ui_definition production_readiness
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  next_evidence: PM-UI-DESIGN-010 accepted production readiness design establishes the bounded generic UI definition readiness
+    evidence packet, inspection report, readiness request, readiness decision, and diagnostics contract path.
+  current_decision: PM-UI-DESIGN-010 accepted production readiness design can be planned as the first generic UI definition
+    readiness evidence contract.
+  current_call: Run task production:plan before implementation. Keep app-hosted readiness UI, screenshot capture, renderer
+    golden comparison, accessibility engine integration, performance runner integration, project IO, provider sessions, runtime
+    replay, concrete release tooling, and gameplay mutation out of this first generic readiness row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGN-010 --roadmap WR-054 and follow the generated promotion
+    or implementation contract. Add the implementation-plan path to write scopes when that contract file exists.
+  main_blocker: Needs production planning, promotion preflight, and focused implementation contract before code.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - readiness evidence
+  - inspection reports
+  - target-profile gates
+  - production guard
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Production readiness implementation requires accepted evidence packet, inspection report, readiness request, and
+      readiness diagnostic ownership rules.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR for the first generic production readiness evidence contract slice; ADR required before generic
+    readiness evidence owns screenshot bytes, renderer handles, runtime sessions, provider sessions, project storage, gameplay
+    truth, or concrete editor command execution.
+  fitness_function_requirement: Required evidence kind coverage, target-profile compatibility diagnostics, stale evidence
+    diagnostics, missing projection snapshot diagnostics, missing diagnostic inspection diagnostics, missing accessibility
+    diagnostics, missing compatibility diagnostics, missing performance diagnostics, expected diagnostic mismatch diagnostics,
+    artifact ownership violation diagnostics, preview-only production readiness rejection, and editor/workbench plus game-runtime
+    examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
+edges: []

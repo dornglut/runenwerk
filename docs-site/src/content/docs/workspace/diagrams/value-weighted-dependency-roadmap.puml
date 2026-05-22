@@ -59,12 +59,16 @@ package "Level 0 - Support Substrate" {
 
   component "WR-005 Design lifecycle cleanup\nstate=support_only\nscore=4.0 gate=docs now\nV3 B1\ncall=implemented lifecycle promoted\nstrict docs validation" as DOCS <<support_only>>
 
+  component "WR-046 UI Designer doctrine and target boundary ratific\nstate=support_only\nscore=4.0 gate=support-only doctrine evidence\nV3 B1\ncall=doctrine support\nno WR execution state change" as UIDESIGNDOC <<support_only>>
+
 }
 
 package "Level 1 - Near-Term Productization" {
   component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
+
+  component "WR-048 Render preflight cache and timings\nstate=current_candidate\nscore=1.5 gate=governed render regression repair\nV4 B2\ncall=cache structural preflight\nexpose timing cost" as WR048 <<V4>>
 
 }
 

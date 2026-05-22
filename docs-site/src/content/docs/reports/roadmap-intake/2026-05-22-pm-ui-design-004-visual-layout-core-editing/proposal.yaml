@@ -1,0 +1,75 @@
+version: 1
+idea: PM-UI-DESIGN-004 Visual Layout Core Editing
+source_path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+owner: domain/ui/ui_definition
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance for PM-UI-DESIGN-004 keeps canonical visual layout edits in `domain/ui/ui_definition`
+  and concrete Designer/Lab UI surfaces in `apps/runenwerk_editor`.
+- No new ADR is required for the first bounded definition-layer edit operation slice.
+open_questions:
+- None for ready-next planning; implementation still requires task production:plan, promotion preflight, focused tests, and
+  closeout evidence before PM-UI-DESIGN-004 can be completed.
+item:
+  id: WR-047
+  title: PM-UI-DESIGN-004 Visual Layout Core Editing
+  diagram_title: PM-UI-DESIGN-004 Visual Layout Core Editing
+  alias: UILAYOUTEDIT
+  lane: Product workflow
+  dependency_level: L2
+  gate: After PM-UI-DESIGN-004 design acceptance
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First code-bearing UI Designer core layout edit slice after PM-002 and PM-003 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  validations:
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  next_evidence: Production plan and implementation contract for core visual layout edit operations, stable-id preservation,
+    deterministic textual diffs, preview-only activation rejection, and source-mapped layout/composition diagnostics.
+  current_decision: Ready-next bounded implementation row for the PM-UI-DESIGN-004 definition-layer edit operation slice;
+    no product code has started.
+  current_call: Run task production:plan before implementation. Keep app-hosted Designer/Lab UI and broad visual UX out of
+    this first core edit row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGN-004 --roadmap WR-047 and follow the generated promotion
+    or implementation contract.
+  main_blocker: Needs production planning, promotion preflight, and focused implementation contract before code.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - core layout edit ops
+  - stable ids and diffs
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Visual layout core editing requires accepted stable-id, deterministic diff, preview-only, and diagnostics rules.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR for the first definition-layer edit operation slice; ADR required before preview/runtime/app
+    layers become source truth or visual edits mutate domain truth directly.
+  fitness_function_requirement: Stable-id preservation, deterministic textual diff, preview-only activation rejection,
+    source-mapped diagnostics, and target-profile compatibility tests.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor app consumption.
+edges: []

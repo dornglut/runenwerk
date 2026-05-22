@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+  component "WR-048 Render preflight cache and timings\nstate=current_candidate\nscore=1.5 V4 B2\ncall=cache structural preflight\nexpose timing cost" as WR048 <<candidate>>
 
 }
 

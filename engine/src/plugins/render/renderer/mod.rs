@@ -4,7 +4,10 @@ use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
 };
 use crate::plugins::render::frame::PreparedRenderFrame;
-use crate::plugins::render::graph::{CompiledRenderFlowPlan, RenderExecutionGraphPreparedReport};
+use crate::plugins::render::graph::{
+    CompiledRenderFlowPlan, RenderExecutionGraphPreparedReport,
+    RenderPreparedFramePreflightCacheState,
+};
 use crate::plugins::render::inspect::{
     PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
     RenderDebugConfigResource, RenderDebugControlResource, RenderPassProvenanceRecord,
@@ -426,6 +429,8 @@ pub struct RendererFrameTimings {
     pub prepare_ui_ms: f32,
     pub prepare_mesh_ms: f32,
     pub world_prepare_ms: f32,
+    pub preflight_ms: f32,
+    pub flow_encode_ms: f32,
     pub encode_submit_ms: f32,
     pub mesh_hot_path: MeshPrepareHotPath,
 }
@@ -737,11 +742,13 @@ pub struct Renderer {
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
     flow_pipeline_cache: pipeline_cache::FlowPipelineArtifactCache,
+    preflight_cache: Option<render_flow::RendererPreparedFramePreflightCacheEntry>,
     last_good_ui_prepared: Option<UiPreparedDraws>,
     last_pass_timings: Vec<PassTimingSample>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
     last_pass_provenance: Vec<RenderPassProvenanceRecord>,
     last_preflight_report: RenderExecutionGraphPreparedReport,
+    last_preflight_cache_state: RenderPreparedFramePreflightCacheState,
     last_capture_plan: ResolvedRenderCapturePlan,
     last_capture_selector_results: Vec<RenderCaptureSelectorResult>,
     last_captured_textures: Vec<RenderCapturedTexture>,
@@ -782,6 +789,7 @@ impl Gfx {
         ui_rect_shader: Option<ShaderHandle>,
         ui_font_atlas: &UiFontAtlasResource,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
+        preflight_config: crate::plugins::render::graph::RenderPreflightValidationConfigResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
     ) -> Result<GfxFrameTimings> {
@@ -802,6 +810,7 @@ impl Gfx {
             ui_font_atlas,
             viewport_surface_bindings,
             self.ctx.surface_config.format,
+            preflight_config,
             debug_control,
             debug_config,
         )?;

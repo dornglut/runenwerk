@@ -1,7 +1,8 @@
 use crate::plugins::render::features::FeatureFallbackPolicy;
 use crate::plugins::render::graph::{
-    CompiledBindingEntry, CompiledBuiltinImport, CompiledPassExecutionPlan, CompiledRenderFlowPlan,
-    CompiledResourceRef, CompiledStorageAccess, CompiledTargetAliasRef,
+    CompiledBindingEntry, CompiledBuiltinImport, CompiledDispatchPlan, CompiledPassBindings,
+    CompiledPassExecutionPlan, CompiledRasterExecutionPlan, CompiledRenderFlowPlan,
+    CompiledResourceRef, CompiledStorageAccess, CompiledTargetAliasRef, CompiledViewMask,
     RenderBackendCapabilityProfile, RenderExecutionGraphDiagnostic,
     RenderExecutionGraphDiagnosticKind, RenderExecutionGraphPreparedError,
     validate_compiled_flow_capabilities,
@@ -11,7 +12,9 @@ use crate::plugins::render::{
     PreparedViewFrame, RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderResourceDescriptor, RenderResourceId, RenderTargetAliasKind,
 };
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RenderExecutionGraphPreparedReport {
@@ -34,6 +37,150 @@ impl RenderExecutionGraphPreparedReport {
             .iter()
             .filter(|diagnostic| diagnostic.is_error())
             .count()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RenderPreparedFramePreflightMode {
+    #[default]
+    CachedStrict,
+    StrictEveryFrame,
+}
+
+impl RenderPreparedFramePreflightMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::CachedStrict => "cached_strict",
+            Self::StrictEveryFrame => "strict_every_frame",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ecs::Component, ecs::Resource)]
+pub struct RenderPreflightValidationConfigResource {
+    pub mode: RenderPreparedFramePreflightMode,
+}
+
+impl Default for RenderPreflightValidationConfigResource {
+    fn default() -> Self {
+        Self {
+            mode: RenderPreparedFramePreflightMode::CachedStrict,
+        }
+    }
+}
+
+impl RenderPreflightValidationConfigResource {
+    pub fn strict_every_frame() -> Self {
+        Self {
+            mode: RenderPreparedFramePreflightMode::StrictEveryFrame,
+        }
+    }
+
+    pub fn effective_mode(self) -> RenderPreparedFramePreflightMode {
+        self.effective_mode_for_env(std::env::var("RUNENWERK_RENDER_STRICT_PREFLIGHT").ok())
+    }
+
+    pub fn effective_mode_for_env(
+        self,
+        env_value: Option<impl AsRef<str>>,
+    ) -> RenderPreparedFramePreflightMode {
+        if env_value
+            .as_ref()
+            .is_some_and(|value| render_strict_preflight_env_value_enabled(value.as_ref()))
+        {
+            RenderPreparedFramePreflightMode::StrictEveryFrame
+        } else {
+            self.mode
+        }
+    }
+}
+
+fn render_strict_preflight_env_value_enabled(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RenderPreparedFramePreflightReportSource {
+    #[default]
+    FullValidation,
+    CachedReport,
+    RuntimeGuard,
+}
+
+impl RenderPreparedFramePreflightReportSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::FullValidation => "full_validation",
+            Self::CachedReport => "cached_report",
+            Self::RuntimeGuard => "runtime_guard",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RenderPreparedFramePreflightCacheStatus {
+    #[default]
+    ColdMiss,
+    KeyMismatch,
+    Hit,
+    StrictMode,
+    GuardRejected,
+}
+
+impl RenderPreparedFramePreflightCacheStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ColdMiss => "cold_miss",
+            Self::KeyMismatch => "key_mismatch",
+            Self::Hit => "hit",
+            Self::StrictMode => "strict_mode",
+            Self::GuardRejected => "guard_rejected",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenderPreparedFramePreflightCacheKey {
+    pub profile_key: String,
+    pub flow_registry_revision: u64,
+    pub shader_registry_revision: u64,
+    pub prepared_structure_hash: u64,
+    pub compiled_flow_hash: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderPreparedFramePreflightCacheState {
+    pub mode: RenderPreparedFramePreflightMode,
+    pub status: RenderPreparedFramePreflightCacheStatus,
+    pub report_source: RenderPreparedFramePreflightReportSource,
+    pub cache_key: Option<RenderPreparedFramePreflightCacheKey>,
+}
+
+impl Default for RenderPreparedFramePreflightCacheState {
+    fn default() -> Self {
+        Self {
+            mode: RenderPreparedFramePreflightMode::CachedStrict,
+            status: RenderPreparedFramePreflightCacheStatus::ColdMiss,
+            report_source: RenderPreparedFramePreflightReportSource::FullValidation,
+            cache_key: None,
+        }
+    }
+}
+
+pub fn prepared_render_frame_preflight_cache_key(
+    frame: &PreparedRenderFrame,
+    compiled_flows: &[CompiledRenderFlowPlan],
+    profile: &RenderBackendCapabilityProfile,
+) -> RenderPreparedFramePreflightCacheKey {
+    RenderPreparedFramePreflightCacheKey {
+        profile_key: profile.key.clone(),
+        flow_registry_revision: frame.context.flow_registry_revision,
+        shader_registry_revision: frame.context.shader_registry_revision,
+        prepared_structure_hash: hash_prepared_frame_structure(frame),
+        compiled_flow_hash: hash_compiled_flow_structure(compiled_flows),
     }
 }
 
@@ -66,6 +213,79 @@ pub fn preflight_prepared_render_frame(
     } else {
         Ok(report)
     }
+}
+
+pub fn preflight_prepared_render_frame_runtime_guards(
+    frame: &PreparedRenderFrame,
+    compiled_flows: &[CompiledRenderFlowPlan],
+) -> Result<RenderExecutionGraphPreparedReport, RenderExecutionGraphPreparedError> {
+    let report = validate_prepared_render_frame_runtime_guards(frame, compiled_flows);
+    if report.has_errors() {
+        Err(RenderExecutionGraphPreparedError::new(report.diagnostics))
+    } else {
+        Ok(report)
+    }
+}
+
+pub fn validate_prepared_render_frame_runtime_guards(
+    frame: &PreparedRenderFrame,
+    compiled_flows: &[CompiledRenderFlowPlan],
+) -> RenderExecutionGraphPreparedReport {
+    let mut diagnostics = Vec::<RenderExecutionGraphDiagnostic>::new();
+    let flows_by_id = compiled_flows
+        .iter()
+        .map(|flow| (flow.flow_id, flow))
+        .collect::<BTreeMap<_, _>>();
+    let views_by_id = frame
+        .views
+        .iter()
+        .map(|view| (view.view_id.as_str(), view))
+        .collect::<BTreeMap<_, _>>();
+
+    diagnose_duplicate_invocation_ids(frame, &mut diagnostics);
+    diagnose_dynamic_target_history_conflicts(frame, &views_by_id, &mut diagnostics);
+
+    for invocation in &frame.flow_invocations {
+        let Some(flow) = flows_by_id.get(&invocation.flow_id).copied() else {
+            diagnostics.push(
+                RenderExecutionGraphDiagnostic::error(
+                    RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
+                    format!(
+                        "prepared invocation '{}' references unknown compiled flow '{:?}'",
+                        invocation.invocation_id.0, invocation.flow_id
+                    ),
+                )
+                .with_invocation(invocation.invocation_id.clone())
+                .with_view(invocation.view_id.clone()),
+            );
+            continue;
+        };
+        let Some(view) = views_by_id.get(invocation.view_id.as_str()).copied() else {
+            diagnostics.push(
+                RenderExecutionGraphDiagnostic::error(
+                    RenderExecutionGraphDiagnosticKind::PreparedViewMissing,
+                    format!(
+                        "prepared invocation '{}' references missing view '{}'",
+                        invocation.invocation_id.0, invocation.view_id
+                    ),
+                )
+                .with_flow(flow.flow_id, flow.flow_label.clone())
+                .with_invocation(invocation.invocation_id.clone())
+                .with_view(invocation.view_id.clone()),
+            );
+            continue;
+        };
+
+        for pass in &flow.execution.passes {
+            if !pass_targets_view(pass, view) {
+                continue;
+            }
+            validate_pass_dispatch(flow, pass, invocation, &mut diagnostics);
+            validate_pass_uniforms(flow, pass, invocation, &mut diagnostics);
+        }
+    }
+
+    RenderExecutionGraphPreparedReport::new(diagnostics)
 }
 
 pub fn validate_prepared_render_frame(
@@ -829,6 +1049,352 @@ fn pass_uniform_order(pass: &CompiledPassExecutionPlan) -> &[RenderResourceId] {
         | CompiledPassExecutionPlan::Present(_)
         | CompiledPassExecutionPlan::BuiltinUiComposite(_) => &[],
     }
+}
+
+fn hash_prepared_frame_structure(frame: &PreparedRenderFrame) -> u64 {
+    hash_with(|hasher| {
+        frame.context.flow_registry_revision.hash(hasher);
+        frame.context.shader_registry_revision.hash(hasher);
+        frame.shader.registry_revision.hash(hasher);
+        frame.surface.render_surface_id.raw().hash(hasher);
+        frame
+            .surface
+            .native_window_id
+            .map(|id| id.raw())
+            .hash(hasher);
+        frame.surface.target_size_px.hash(hasher);
+
+        frame.views.len().hash(hasher);
+        for view in &frame.views {
+            view.view_id.hash(hasher);
+            view_kind_tag(view.kind).hash(hasher);
+            view.target_size_px.hash(hasher);
+            view.history_signature.hash(hasher);
+        }
+
+        frame.flow_invocations.len().hash(hasher);
+        for invocation in &frame.flow_invocations {
+            invocation.invocation_id.hash(hasher);
+            invocation.flow_id.hash(hasher);
+            invocation.view_id.hash(hasher);
+            invocation.history_signature.hash(hasher);
+            invocation.target_alias_bindings.len().hash(hasher);
+            for (alias, binding) in &invocation.target_alias_bindings {
+                alias.hash(hasher);
+                hash_prepared_target_binding(binding, hasher);
+            }
+            invocation.inputs.projected_uniform_bytes.len().hash(hasher);
+            for (resource_id, bytes) in &invocation.inputs.projected_uniform_bytes {
+                resource_id.hash(hasher);
+                bytes.len().hash(hasher);
+            }
+            invocation
+                .inputs
+                .projected_dispatch_workgroups
+                .len()
+                .hash(hasher);
+            for pass_id in invocation.inputs.projected_dispatch_workgroups.keys() {
+                pass_id.hash(hasher);
+            }
+            invocation.inputs.required_state_types.len().hash(hasher);
+            for state in &invocation.inputs.required_state_types {
+                state.type_name.hash(hasher);
+            }
+        }
+
+        frame.dynamic_texture_targets.len().hash(hasher);
+        for descriptor in &frame.dynamic_texture_targets {
+            descriptor.key.hash(hasher);
+            descriptor.signature().hash(hasher);
+        }
+
+        frame.contributions.by_feature.len().hash(hasher);
+        for (feature_id, contribution) in &frame.contributions.by_feature {
+            feature_id.hash(hasher);
+            contribution.status.hash(hasher);
+            contribution.fallback_policy.hash(hasher);
+        }
+    })
+}
+
+fn hash_compiled_flow_structure(compiled_flows: &[CompiledRenderFlowPlan]) -> u64 {
+    hash_with(|hasher| {
+        compiled_flows.len().hash(hasher);
+        for flow in compiled_flows {
+            flow.flow_id.hash(hasher);
+            flow.flow_label.hash(hasher);
+            flow.pass_order.len().hash(hasher);
+            for pass in &flow.pass_order {
+                pass.pass_id().hash(hasher);
+                pass.pass_label().hash(hasher);
+                pass.node().kind.hash(hasher);
+            }
+            flow.resources.resources.len().hash(hasher);
+            for descriptor in &flow.resources.resources {
+                descriptor.id().hash(hasher);
+                hash_resource_descriptor_kind(descriptor, hasher);
+            }
+            flow.resource_ids_by_label.len().hash(hasher);
+            for (label, resource_id) in &flow.resource_ids_by_label {
+                label.hash(hasher);
+                resource_id.hash(hasher);
+            }
+            flow.execution.passes.len().hash(hasher);
+            for pass in &flow.execution.passes {
+                hash_compiled_pass_structure(pass, hasher);
+            }
+            flow.compiler_diagnostics.len().hash(hasher);
+            for diagnostic in &flow.compiler_diagnostics {
+                diagnostic.kind.hash(hasher);
+                diagnostic.severity.hash(hasher);
+            }
+        }
+    })
+}
+
+fn hash_compiled_pass_structure(pass: &CompiledPassExecutionPlan, hasher: &mut impl Hasher) {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => {
+            "compute".hash(hasher);
+            value.pass_id.hash(hasher);
+            value.order_index.hash(hasher);
+            value.feature_id.hash(hasher);
+            hash_view_mask(&value.view_mask, hasher);
+            hash_bindings(&value.bindings, hasher);
+            hash_dispatch_plan(value.dispatch.as_ref(), hasher);
+        }
+        CompiledPassExecutionPlan::Fullscreen(value) => {
+            "fullscreen".hash(hasher);
+            hash_raster_pass_structure(value, hasher);
+        }
+        CompiledPassExecutionPlan::Graphics(value) => {
+            "graphics".hash(hasher);
+            hash_raster_pass_structure(value, hasher);
+        }
+        CompiledPassExecutionPlan::Copy(value) => {
+            "copy".hash(hasher);
+            value.pass_id.hash(hasher);
+            value.order_index.hash(hasher);
+            value.feature_id.hash(hasher);
+            hash_view_mask(&value.view_mask, hasher);
+            hash_compiled_resource_ref(value.source.as_ref(), hasher);
+            hash_compiled_resource_ref(value.destination.as_ref(), hasher);
+        }
+        CompiledPassExecutionPlan::Present(value) => {
+            "present".hash(hasher);
+            value.pass_id.hash(hasher);
+            value.order_index.hash(hasher);
+            value.feature_id.hash(hasher);
+            hash_view_mask(&value.view_mask, hasher);
+            hash_compiled_resource_ref(value.source.as_ref(), hasher);
+        }
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => {
+            "builtin_ui".hash(hasher);
+            value.pass_id.hash(hasher);
+            value.order_index.hash(hasher);
+            value.feature_id.hash(hasher);
+            hash_view_mask(&value.view_mask, hasher);
+            hash_compiled_resource_ref(Some(&value.color_output), hasher);
+        }
+    }
+}
+
+fn hash_raster_pass_structure(value: &CompiledRasterExecutionPlan, hasher: &mut impl Hasher) {
+    value.pass_id.hash(hasher);
+    value.order_index.hash(hasher);
+    value.feature_id.hash(hasher);
+    hash_view_mask(&value.view_mask, hasher);
+    hash_bindings(&value.bindings, hasher);
+    value.targets.color_outputs.len().hash(hasher);
+    for resource in &value.targets.color_outputs {
+        hash_compiled_resource_ref(Some(resource), hasher);
+    }
+    hash_compiled_resource_ref(value.targets.depth_output.as_ref(), hasher);
+    value.targets.reads.len().hash(hasher);
+    for resource in &value.targets.reads {
+        hash_compiled_resource_ref(Some(resource), hasher);
+    }
+    value.draw_buffers.vertex_buffers.len().hash(hasher);
+    for binding in &value.draw_buffers.vertex_buffers {
+        hash_compiled_resource_ref(Some(&binding.resource), hasher);
+        binding.layout.hash(hasher);
+    }
+    value.draw_buffers.instance_buffers.len().hash(hasher);
+    for resource in &value.draw_buffers.instance_buffers {
+        hash_compiled_resource_ref(Some(resource), hasher);
+    }
+    value.draw_buffers.index_buffers.len().hash(hasher);
+    for resource in &value.draw_buffers.index_buffers {
+        hash_compiled_resource_ref(Some(resource), hasher);
+    }
+    value.draw_buffers.indirect_buffers.len().hash(hasher);
+    for resource in &value.draw_buffers.indirect_buffers {
+        hash_compiled_resource_ref(Some(resource), hasher);
+    }
+    if let Some(clear_color) = value.clear_color {
+        true.hash(hasher);
+        for channel in clear_color {
+            channel.to_bits().hash(hasher);
+        }
+    } else {
+        false.hash(hasher);
+    }
+    value.draw.hash(hasher);
+}
+
+fn hash_bindings(bindings: &CompiledPassBindings, hasher: &mut impl Hasher) {
+    bindings.uniform_order.hash(hasher);
+    bindings.storage_order.len().hash(hasher);
+    for binding in &bindings.storage_order {
+        hash_compiled_resource_ref(Some(&binding.resource), hasher);
+        hash_storage_access(binding.access, hasher);
+    }
+    bindings.bind_group.entries.len().hash(hasher);
+    for entry in &bindings.bind_group.entries {
+        match entry {
+            CompiledBindingEntry::SampledTexture { resource } => {
+                "sampled_texture".hash(hasher);
+                hash_compiled_resource_ref(Some(&resource), hasher);
+            }
+            CompiledBindingEntry::Sampler => {
+                "sampler".hash(hasher);
+            }
+            CompiledBindingEntry::StorageTexture { resource, access } => {
+                "storage_texture".hash(hasher);
+                hash_compiled_resource_ref(Some(&resource), hasher);
+                hash_storage_access(*access, hasher);
+            }
+            CompiledBindingEntry::UniformBuffer { resource } => {
+                "uniform_buffer".hash(hasher);
+                resource.hash(hasher);
+            }
+            CompiledBindingEntry::StorageBuffer { resource, access } => {
+                "storage_buffer".hash(hasher);
+                hash_compiled_resource_ref(Some(&resource), hasher);
+                hash_storage_access(*access, hasher);
+            }
+        }
+    }
+}
+
+fn hash_compiled_resource_ref(resource: Option<&CompiledResourceRef>, hasher: &mut impl Hasher) {
+    match resource {
+        Some(CompiledResourceRef::FlowOwned(resource_id)) => {
+            "flow_owned".hash(hasher);
+            resource_id.hash(hasher);
+        }
+        Some(CompiledResourceRef::TargetAlias(alias)) => {
+            "target_alias".hash(hasher);
+            alias.resource_id.hash(hasher);
+            alias.label.hash(hasher);
+            alias.kind.hash(hasher);
+        }
+        Some(CompiledResourceRef::ImportedBuiltin(value)) => {
+            "imported_builtin".hash(hasher);
+            hash_builtin_import(*value, hasher);
+        }
+        Some(CompiledResourceRef::Imported(resource_id)) => {
+            "imported".hash(hasher);
+            resource_id.hash(hasher);
+        }
+        None => {
+            "none".hash(hasher);
+        }
+    }
+}
+
+fn hash_view_mask(mask: &CompiledViewMask, hasher: &mut impl Hasher) {
+    match mask {
+        CompiledViewMask::AllViews => "all_views".hash(hasher),
+        CompiledViewMask::MainSurfaceOnly => "main_surface_only".hash(hasher),
+        CompiledViewMask::OffscreenProductsOnly => "offscreen_products_only".hash(hasher),
+        CompiledViewMask::Explicit(values) => {
+            "explicit".hash(hasher);
+            values.len().hash(hasher);
+            for value in values {
+                value.hash(hasher);
+            }
+        }
+    }
+}
+
+fn hash_dispatch_plan(dispatch: Option<&CompiledDispatchPlan>, hasher: &mut impl Hasher) {
+    match dispatch {
+        Some(CompiledDispatchPlan::Fixed(value)) => {
+            "fixed".hash(hasher);
+            value.hash(hasher);
+        }
+        Some(CompiledDispatchPlan::FromState {
+            state_type_name, ..
+        }) => {
+            "from_state".hash(hasher);
+            state_type_name.hash(hasher);
+        }
+        None => {
+            "none".hash(hasher);
+        }
+    }
+}
+
+fn hash_storage_access(access: CompiledStorageAccess, hasher: &mut impl Hasher) {
+    match access {
+        CompiledStorageAccess::ReadOnly => "read_only",
+        CompiledStorageAccess::WriteOnly => "write_only",
+        CompiledStorageAccess::ReadWrite => "read_write",
+    }
+    .hash(hasher);
+}
+
+fn hash_builtin_import(value: CompiledBuiltinImport, hasher: &mut impl Hasher) {
+    match value {
+        CompiledBuiltinImport::SurfaceColor => "surface_color",
+        CompiledBuiltinImport::SurfaceDepth => "surface_depth",
+    }
+    .hash(hasher);
+}
+
+fn hash_prepared_target_binding(binding: &PreparedTargetBinding, hasher: &mut impl Hasher) {
+    match binding {
+        PreparedTargetBinding::DynamicTexture(key) => {
+            "dynamic_texture".hash(hasher);
+            key.hash(hasher);
+        }
+        PreparedTargetBinding::SurfaceColor => "surface_color".hash(hasher),
+        PreparedTargetBinding::SurfaceDepth => "surface_depth".hash(hasher),
+        PreparedTargetBinding::FlowOwned(resource_id) => {
+            "flow_owned".hash(hasher);
+            resource_id.hash(hasher);
+        }
+    }
+}
+
+fn hash_resource_descriptor_kind(descriptor: &RenderResourceDescriptor, hasher: &mut impl Hasher) {
+    match descriptor {
+        RenderResourceDescriptor::UniformBuffer(_) => "uniform_buffer",
+        RenderResourceDescriptor::StorageBuffer(_) => "storage_buffer",
+        RenderResourceDescriptor::SampledTexture(_) => "sampled_texture",
+        RenderResourceDescriptor::StorageTexture(_) => "storage_texture",
+        RenderResourceDescriptor::ColorTarget(_) => "color_target",
+        RenderResourceDescriptor::DepthTarget(_) => "depth_target",
+        RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
+        RenderResourceDescriptor::TargetAlias(_) => "target_alias",
+        RenderResourceDescriptor::ImportedTexture(_) => "imported_texture",
+        RenderResourceDescriptor::ImportedBuffer(_) => "imported_buffer",
+    }
+    .hash(hasher);
+}
+
+fn view_kind_tag(kind: crate::plugins::render::PreparedViewKind) -> &'static str {
+    match kind {
+        crate::plugins::render::PreparedViewKind::MainSurface => "main_surface",
+        crate::plugins::render::PreparedViewKind::OffscreenProduct => "offscreen_product",
+    }
+}
+
+fn hash_with(f: impl FnOnce(&mut DefaultHasher)) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    f(&mut hasher);
+    hasher.finish()
 }
 
 fn is_texture_descriptor(descriptor: &RenderResourceDescriptor) -> bool {

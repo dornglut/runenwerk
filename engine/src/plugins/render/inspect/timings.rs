@@ -4,6 +4,9 @@ use crate::plugins::render::renderer::GfxFrameTimings;
 pub struct RenderDebugTimingsState {
     pub workload_ms: f32,
     pub total_ms: f32,
+    pub preflight_ms: f32,
+    pub flow_encode_ms: f32,
+    pub encode_submit_ms: f32,
     pub pass_sample_count: usize,
     pub total_pass_millis: f32,
     pub slowest_pass_id: Option<String>,
@@ -19,8 +22,13 @@ impl RenderDebugTimingsState {
         self.workload_ms = timings.renderer.prepare_ui_ms
             + timings.renderer.prepare_mesh_ms
             + timings.renderer.world_prepare_ms
+            + timings.renderer.preflight_ms
+            + timings.renderer.flow_encode_ms
             + timings.renderer.encode_submit_ms;
         self.total_ms = timings.acquire_ms + self.workload_ms + timings.present_ms;
+        self.preflight_ms = timings.renderer.preflight_ms;
+        self.flow_encode_ms = timings.renderer.flow_encode_ms;
+        self.encode_submit_ms = timings.renderer.encode_submit_ms;
     }
 
     pub fn observe_pass_timings(&mut self, samples: &[PassTimingSample]) {

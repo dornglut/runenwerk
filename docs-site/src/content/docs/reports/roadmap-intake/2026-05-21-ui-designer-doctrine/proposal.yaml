@@ -1,0 +1,74 @@
+version: 1
+idea: UI Designer doctrine and target boundary ratification
+source_path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+owner: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+created_at: '2026-05-21'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance for PM-UI-DESIGN-001 found no code, crate, dependency-direction, or runtime ownership change in
+  this bounded doctrine slice.
+- A future ADR or accepted design update is still required before moving canonical UI definition ownership out of the
+  existing domain/ui/ui_definition crate or creating a separate game-runtime UI owner crate.
+open_questions:
+- None for this support-only doctrine row; implementation remains blocked until later PM-UI-DESIGN milestones clear their
+  accepted design gates and WR execution rows.
+item:
+  id: WR-046
+  title: UI Designer doctrine and target boundary ratification
+  diagram_title: UI Designer doctrine and target boundary ratific
+  alias: UIDESIGNDOC
+  lane: Product planning
+  dependency_level: L0
+  gate: Support-only doctrine evidence
+  planning_state: support_only
+  priority: P1
+  value: 3
+  blocker: 1
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 2
+  confidence: 0.8
+  expected_score: 4.0
+  rice: N/A
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-001-ui-designer-doctrine/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-DESIGN-001 closeout proving active UI Designer doctrine, target-profile boundaries, no runtime/code
+    changes, and passing production, roadmap, docs, and planning validators.
+  current_decision: Support-only planning row for PM-UI-DESIGN-001; link doctrine closeout to the production track without
+    changing WR execution state.
+  current_call: Use only for UI Designer doctrine and target-boundary planning evidence. Do not use this row as permission
+    for UI Designer product implementation.
+  first_move: Close PM-UI-DESIGN-001 with active design evidence, architecture governance review, planning validation, and
+    task ai:goal -- --track PT-UI-DESIGN.
+  main_blocker: N/A; support-only doctrine row.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - doctrine support
+  - no WR execution state change
+  decision_gates: []
+  ddd_owner: editor/UI planning with domain/ui and editor domain boundaries
+  adr_requirement: No new ADR for this planning-only doctrine row; ADR or accepted design required before changing durable
+    UI definition ownership, dependency direction, or game-runtime UI crate ownership.
+  fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add
+    focused domain/UI fitness functions before code.
+  ownership_mode: Enabling support owned by editor/UI maintainers.
+edges: []

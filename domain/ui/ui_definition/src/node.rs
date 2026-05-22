@@ -217,4 +217,16 @@ impl UiNodeDefinition {
             _ => &[],
         }
     }
+
+    pub fn children_mut(&mut self) -> Option<&mut Vec<UiNodeDefinition>> {
+        match self {
+            Self::Panel { children, .. }
+            | Self::Row { children, .. }
+            | Self::Column { children, .. }
+            | Self::Stack { children, .. }
+            | Self::Scroll { children, .. }
+            | Self::Split { children, .. } => Some(children),
+            _ => None,
+        }
+    }
 }

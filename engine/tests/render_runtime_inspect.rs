@@ -13,27 +13,29 @@ use engine::plugins::render::inspect::{
     deterministic_capture_filename, evaluate_render_readiness_budgets,
     inspect_compiled_render_flow_plan, inspect_fragment_pass_provenance,
     inspect_prepared_render_frame, inspect_render_execution_graph_preflight,
-    inspect_render_fragment_merge_report, inspect_render_gpu_residency,
-    inspect_render_product_surface_manifest, inspect_render_readiness, inspect_resources,
-    inspect_texture_resources, resource_kind_name, summarize_pass_timings,
-    validate_render_replay_manifest,
+    inspect_render_execution_graph_preflight_with_cache, inspect_render_fragment_merge_report,
+    inspect_render_gpu_residency, inspect_render_product_surface_manifest,
+    inspect_render_readiness, inspect_resources, inspect_texture_resources, resource_kind_name,
+    summarize_pass_timings, validate_render_replay_manifest,
 };
 use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
 use engine::plugins::render::{
-    FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInputs, PreparedFlowInvocation,
-    PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedFrameContext,
-    PreparedFrameContributions, PreparedRegisteredFeaturePayload, PreparedRenderFrame,
-    PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedTargetBinding, PreparedViewFrame,
-    RenderBackendCapabilityProfile, RenderDynamicTextureRetention,
+    FeatureContributionStatus, FeatureFallbackPolicy, GfxFrameTimings, PreparedFlowInputs,
+    PreparedFlowInvocation, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
+    PreparedFrameContext, PreparedFrameContributions, PreparedRegisteredFeaturePayload,
+    PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedTargetBinding,
+    PreparedViewFrame, RenderBackendCapabilityProfile, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFeatureId, RenderFlow, RenderFragmentDescriptor,
     RenderFragmentPackageDescriptor, RenderFragmentPassDescriptor,
     RenderFragmentResourceDescriptor, RenderFrameProducerId, RenderGpuResidencyBudgetResource,
-    RenderGpuResidencyResource, RenderProductSurfaceManifest, RenderProductSurfaceRequest,
-    RenderProductSurfaceRequestBatch, RenderProductSurfaceStatusKind, RenderResourceDescriptor,
-    RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureUploadAlphaMode, StaticRegisteredFeaturePayload, compile_flow_plan,
-    merge_fragment_package_into_flow, validate_prepared_render_frame,
+    RenderGpuResidencyResource, RenderPreparedFramePreflightCacheState,
+    RenderPreparedFramePreflightCacheStatus, RenderPreparedFramePreflightMode,
+    RenderPreparedFramePreflightReportSource, RenderProductSurfaceManifest,
+    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceStatusKind,
+    RenderResourceDescriptor, RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderTextureUploadAlphaMode, RendererFrameTimings, StaticRegisteredFeaturePayload,
+    compile_flow_plan, merge_fragment_package_into_flow, validate_prepared_render_frame,
 };
 use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
@@ -105,6 +107,31 @@ fn render_runtime_inspect_debug_timing_state_extracts_compute_dispatch_samples()
 }
 
 #[test]
+fn render_runtime_inspect_debug_timing_state_includes_preflight_and_flow_encode() {
+    let mut state = RenderDebugTimingsState::default();
+
+    state.observe_frame_timings(GfxFrameTimings {
+        acquire_ms: 0.5,
+        renderer: RendererFrameTimings {
+            prepare_ui_ms: 1.0,
+            prepare_mesh_ms: 2.0,
+            world_prepare_ms: 3.0,
+            preflight_ms: 4.0,
+            flow_encode_ms: 5.0,
+            encode_submit_ms: 6.0,
+            ..RendererFrameTimings::default()
+        },
+        present_ms: 0.25,
+    });
+
+    assert_eq!(state.preflight_ms, 4.0);
+    assert_eq!(state.flow_encode_ms, 5.0);
+    assert_eq!(state.encode_submit_ms, 6.0);
+    assert_eq!(state.workload_ms, 21.0);
+    assert_eq!(state.total_ms, 21.75);
+}
+
+#[test]
 fn render_runtime_inspect_budget_report_flags_renderer_evidence_without_product_policy() {
     let measurements = RenderReadinessBudgetMeasurements {
         frame_total_ms: Some(18.0),
@@ -137,6 +164,31 @@ fn render_runtime_inspect_budget_report_flags_renderer_evidence_without_product_
     assert_eq!(
         report.results[2].status,
         RenderReadinessBudgetStatus::NotMeasured
+    );
+}
+
+#[test]
+fn render_runtime_inspect_budget_measurements_report_preflight_cost() {
+    let timings = RenderDebugTimingsState {
+        preflight_ms: 7.5,
+        total_ms: 20.0,
+        ..RenderDebugTimingsState::default()
+    };
+    let measurements =
+        RenderReadinessBudgetMeasurements::from_reports(None, &[], None, &[], None, Some(&timings));
+    let report = evaluate_render_readiness_budgets(
+        &measurements,
+        &[RenderReadinessBudgetThreshold::max(
+            RenderReadinessBudgetKind::PreflightMillis,
+            4.0,
+        )],
+    );
+
+    assert_eq!(measurements.preflight_ms, Some(7.5));
+    assert_eq!(report.over_budget_count(), 1);
+    assert_eq!(
+        report.results[0].kind,
+        RenderReadinessBudgetKind::PreflightMillis
     );
 }
 
@@ -203,6 +255,9 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
     let preflight = RenderExecutionGraphPreflightInspection {
         diagnostic_count: 1,
         error_count: 1,
+        cache_mode: Some("cached_strict".to_string()),
+        cache_status: Some("hit".to_string()),
+        report_source: Some("cached_report".to_string()),
         diagnostics: vec![RenderExecutionGraphDiagnosticInspection {
             severity: "Error".to_string(),
             kind: "TargetAliasMissingBinding".to_string(),
@@ -427,6 +482,7 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
     let preflight = inspect_render_execution_graph_preflight(&report);
 
     assert_eq!(preflight.error_count, 1);
+    assert_eq!(preflight.cache_mode, None);
     assert_eq!(preflight.diagnostics[0].kind, "TargetAliasMissingBinding");
     assert_eq!(
         preflight.diagnostics[0].alias_label.as_deref(),
@@ -436,6 +492,25 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
         preflight.diagnostics[0].view_id.as_deref(),
         Some("viewport.1")
     );
+}
+
+#[test]
+fn render_runtime_inspect_preflight_cache_state_is_reported_without_backend_handles() {
+    let report = engine::plugins::render::RenderExecutionGraphPreparedReport::default();
+    let cache_state = RenderPreparedFramePreflightCacheState {
+        mode: RenderPreparedFramePreflightMode::CachedStrict,
+        status: RenderPreparedFramePreflightCacheStatus::Hit,
+        report_source: RenderPreparedFramePreflightReportSource::CachedReport,
+        cache_key: None,
+    };
+
+    let inspection =
+        inspect_render_execution_graph_preflight_with_cache(&report, Some(&cache_state));
+
+    assert_eq!(inspection.cache_mode.as_deref(), Some("cached_strict"));
+    assert_eq!(inspection.cache_status.as_deref(), Some("hit"));
+    assert_eq!(inspection.report_source.as_deref(), Some("cached_report"));
+    assert_eq!(inspection.error_count, 0);
 }
 
 #[test]

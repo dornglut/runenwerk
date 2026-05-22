@@ -1,0 +1,208 @@
+---
+title: UI Designer View-Model Capability And Intent Binding Design
+description: Accepted design for PM-UI-DESIGN-007 read-only view-model bindings, capability gates, and validated UI intent declarations.
+status: accepted
+owner: editor
+layer: domain/ui-definition
+canonical: true
+last_reviewed: 2026-05-22
+related_adrs:
+  - ../../adr/accepted/0001-use-domain-owned-commands.md
+  - ../../adr/accepted/0004-separate-description-from-execution.md
+  - ../../adr/accepted/0005-projections-are-derived-state.md
+  - ../../adr/accepted/0006-editor-surface-provider-plugin-seam.md
+  - ../../adr/accepted/0012-capability-workbench-clean-break.md
+related_designs:
+  - ./ui-designer-canonical-ir-and-composition-design.md
+  - ./ui-designer-target-projection-profiles-design.md
+  - ./ui-designer-visual-layout-and-interface-composition-design.md
+  - ./ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
+  - ./ui-designer-component-surface-and-widget-recipe-library-design.md
+  - ../active/ui-designer-interface-lab-platform-design.md
+  - ../active/editor-tool-suite-registry-and-workbench-host-design.md
+  - ../active/runenwerk-capability-workbench-target-architecture.md
+related_roadmaps:
+  - ../../workspace/production-tracks.yaml
+  - ../../workspace/roadmap-items.yaml
+---
+
+# UI Designer View-Model Capability And Intent Binding Design
+
+## Status
+
+This is the accepted implementation design for `PM-UI-DESIGN-007`.
+
+It defines the ownership and contract shape for read-only view-model bindings,
+capability-gated target-profile compatibility, and validated UI intent
+declarations. It does not implement code, select a WR roadmap row, or authorize
+product code until a linked WR row exists and passes `task production:plan`.
+
+## Goal
+
+The UI Designer needs UI definitions that can display domain-owned state and
+emit user intents without moving semantic authority into generic UI contracts:
+
+```text
+domain-owned state
+  -> read-only view-model package
+  -> UI binding reference
+  -> target-profile projection
+  -> validated intent proposal
+  -> owning domain command or runtime intent gate
+```
+
+The binding layer must make normal UI authoring discoverable while preserving
+the command and capability boundaries from the accepted architecture ADRs.
+
+## Architecture Governance Result
+
+Architecture governance accepts this implementation direction:
+
+- `domain/ui/ui_definition` owns runtime-neutral binding references, binding
+  value types, intent declaration references, capability requirements, target
+  compatibility checks, and typed binding diagnostics.
+- `domain/editor/editor_definition` owns editor/workbench-specific view-model
+  package declarations, editor command intent adapters, menu/shortcut intent
+  adapters, and workbench capability vocabulary.
+- Future game-runtime UI domains own game-specific view-model packages and game
+  intent adapters.
+- `foundation/commands` may provide shared descriptor vocabulary, but concrete
+  command families remain domain-owned.
+- `apps/runenwerk_editor` may host previews, command bridges, and Designer/Lab
+  interaction surfaces, but it must not own generic binding or domain semantic
+  truth.
+
+No new ADR is required for the first PM-007 design because ADR-0001 already
+requires domain-owned commands, ADR-0004 separates description from execution,
+ADR-0005 treats projections as derived state, ADR-0006 keeps provider proposals
+behind command boundaries, and ADR-0012 defines host capability policy. A new
+ADR or accepted design update is required before generic UI definitions own
+concrete command payloads, direct mutation, cross-domain reflection authority,
+or game-runtime state truth.
+
+## Binding Contract
+
+Every generic binding declaration includes:
+
+- stable binding id;
+- target profile compatibility;
+- view-model package id and source package provenance;
+- read-only field reference;
+- declared value type;
+- optional formatter or localization strategy reference;
+- required capability ids;
+- freshness and missing-data policy;
+- diagnostic provenance.
+
+Bindings may reference domain-owned view-model fields, but they never own the
+underlying domain state. A binding reads a projected value packet supplied by
+the owning domain or target adapter. Missing packages, denied capabilities,
+type mismatches, stale data, unsupported target profiles, and missing formatter
+strategies fail closed with typed diagnostics before activation.
+
+## Intent Contract
+
+Every generic UI intent declaration includes:
+
+- stable intent id;
+- user-facing trigger source, such as button, menu, shortcut, selection, focus,
+  or pointer gesture;
+- target profile compatibility;
+- required capability ids;
+- owning domain or adapter family id;
+- domain-owned command descriptor or game intent descriptor reference;
+- payload binding references, not embedded domain mutation logic;
+- validation mode for preview, dry-run, and activation;
+- diagnostic provenance.
+
+UI definitions emit validated intent proposals. They do not execute commands,
+mutate domain truth, bypass capability policy, or create concrete command
+payloads without the owning domain or target adapter validating the proposal.
+Denied capabilities and command, shortcut, focus, or payload conflicts block
+activation.
+
+## Target Profiles
+
+The editor/workbench target profile consumes generic bindings through
+editor/workbench adapters for asset browsers, material inspectors, diagnostics,
+graph editors, tool surfaces, menus, shortcuts, and command palettes. Workbench
+capability policy remains the gate for provider proposals, shell commands, and
+editor-domain mutations.
+
+The game-runtime target profile consumes generic bindings for combat HUDs,
+inventory, abilities, quests, dialogue, minimaps, player status, party frames,
+boss frames, world-space UI, safe-area layouts, and platform prompts. Game
+intent adapters must remain game-owned and must not depend on editor shell
+ownership.
+
+## Diagnostics
+
+Binding and intent diagnostics include:
+
+- stable diagnostic code;
+- severity;
+- source location when available;
+- binding id or intent id;
+- affected node, slot, target profile, and trigger source;
+- owning domain;
+- source package;
+- required and denied capability ids;
+- activation impact;
+- suggested fix.
+
+The first taxonomy covers unknown view-model package references, unknown field
+references, value type mismatches, stale or missing data policy violations,
+unknown capability ids, denied capabilities, unsupported target profiles,
+unknown command or intent descriptors, invalid payload bindings, command and
+shortcut conflicts, focus conflicts, preview-only validation attempts, and
+direct mutation attempts.
+
+## Implementation Row
+
+No PM-007 implementation WR row is selected by this design action.
+
+The next legal production-track action after this design is accepted is to add
+or select one bounded WR row. That row should cover only the first generic
+`domain/ui/ui_definition` binding and intent declaration contract slice and
+should not implement app-hosted Designer/Lab binding UI, editor-specific package
+persistence, game-runtime package loading, concrete command execution, preview
+fixture matrices, persistence activation, or production readiness.
+
+## Required Fitness Functions
+
+The first implementation row must add focused validation for:
+
+- read-only binding declarations that preserve stable ids;
+- binding value type compatibility diagnostics;
+- missing or stale view-model package diagnostics;
+- denied capability diagnostics;
+- unsupported target-profile diagnostics;
+- intent declarations that produce proposals rather than direct mutation;
+- command, shortcut, payload, and focus conflict diagnostics;
+- preview/dry-run/activation validation differences;
+- editor/workbench and game-runtime examples without sharing semantic authority.
+
+## Non-Goals
+
+PM-007 design acceptance does not:
+
+- implement app-hosted binding or intent Designer/Lab UI;
+- implement editor-specific binding package storage;
+- implement game-runtime view-model package loading;
+- execute editor commands or game intents;
+- implement renderer material lowering or GPU policy;
+- implement live preview fixture matrices from PM-UI-DESIGN-008;
+- implement persistence activation from PM-UI-DESIGN-009;
+- implement production readiness from PM-UI-DESIGN-010;
+- move editor, gameplay, render, material, scene, asset, simulation, save-game,
+  network, project, provider, app, or runtime truth into generic UI bindings.
+
+## Acceptance Bar
+
+PM-007 can move from `designing` to `ready_next` when:
+
+- this accepted design exists;
+- the production milestone points to this accepted design gate;
+- production, roadmap, docs, and planning validators pass;
+- `task ai:goal -- --track PT-UI-DESIGN` reports the next action as
+  `add_or_select_wr_roadmap_link`.

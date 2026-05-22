@@ -277,12 +277,16 @@ fn render_flow_submit_runs_compiler_preflight_without_live_world_extraction() {
     let execute = read("src/plugins/render/renderer/render_flow/execute.rs");
     let render_packet = function_body(&execute, "    pub(crate) fn render_packet(");
     assert!(
-        render_packet.contains("preflight_prepared_render_frame"),
-        "render_packet must run typed prepared-frame graph preflight before backend encoding"
+        render_packet.contains("preflight_prepared_frame"),
+        "render_packet must run typed prepared-frame graph preflight through the renderer-owned cache before backend encoding"
     );
     assert!(
         render_packet.contains("compiled_flows"),
         "preflight must consume compiled flows, not raw flow graph extraction"
+    );
+    assert!(
+        !render_packet.contains("preflight_prepared_render_frame("),
+        "render_packet must not rerun full structural preflight directly every frame"
     );
     for forbidden in [
         "WorldMut",

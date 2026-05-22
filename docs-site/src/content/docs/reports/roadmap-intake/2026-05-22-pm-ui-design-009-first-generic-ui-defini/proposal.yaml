@@ -1,0 +1,85 @@
+version: 1
+idea: PM-UI-DESIGN-009 first generic UI definition persistence, migration dry-run, deterministic diff, and activation gate
+  contracts in domain/ui/ui_definition. Bounded to runtime-neutral contracts and diagnostics; excludes app-hosted project
+  IO, diff review UI, provider sessions, runtime activation plumbing, renderer resources, screenshot capture, gameplay mutation,
+  and production-readiness hardening.
+source_path: ''
+owner: ''
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-053
+  title: PM-UI-DESIGN-009 Persistence Migration Diff And Activation Contracts
+  diagram_title: PM-UI-DESIGN-009 Persistence Activation Contracts
+  alias: UIPERSIST
+  lane: Product workflow
+  dependency_level: L2
+  gate: After PM-UI-DESIGN-009 design acceptance
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.9
+  rice: First generic UI Designer persistence, migration dry-run, deterministic diff, and activation gate contract slice after
+    PM-002, PM-008, and PM-009 design gates.
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-052
+  write_scopes:
+  - domain/ui/ui_definition
+  - docs-site/src/content/docs/design/accepted
+  validations:
+  - cargo test -p ui_definition migration
+  - cargo test -p ui_definition
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  next_evidence: PM-UI-DESIGN-009 accepted persistence design establishes the bounded generic UI definition persistence,
+    migration dry-run, deterministic diff, and activation contract path.
+  current_decision: PM-UI-DESIGN-009 accepted persistence design can be planned as the first generic UI definition persistence
+    and activation gate contract.
+  current_call: Run task production:plan before implementation. Keep app-hosted project IO, diff review UI, provider sessions,
+    runtime activation plumbing, renderer resources, screenshot capture, gameplay mutation, and production-readiness hardening
+    out of this first generic persistence row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGN-009 --roadmap WR-053 and follow the generated promotion
+    or implementation contract. Add the implementation-plan path to write scopes when that contract file exists.
+  main_blocker: Needs production planning, promotion preflight, and focused implementation contract before code.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - persistence contracts
+  - migration dry-run
+  - deterministic diff
+  - activation gate
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Persistence implementation requires accepted schema/version, dry-run migration, deterministic diff, and activation
+      ownership rules.
+  ddd_owner: domain/ui/ui_definition
+  adr_requirement: No new ADR for the first generic persistence, migration dry-run, diff, and activation contract slice; ADR
+    required before generic UI persistence owns project storage, provider sessions, runtime state, renderer handles, gameplay
+    truth, or concrete editor command execution.
+  fitness_function_requirement: Current-version migration, unsupported schema version diagnostics, incompatible migration
+    diagnostics, unknown-field preservation diagnostics, deterministic textual diff output, preview-only activation rejection,
+    activation preflight report diagnostics, target-profile compatibility diagnostics, expected diagnostic mismatch diagnostics,
+    and editor/workbench plus game-runtime examples.
+  ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
+edges: []

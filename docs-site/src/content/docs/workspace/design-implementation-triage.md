@@ -110,6 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
+| WR-048 | Render Prepared-Frame Preflight Cache And Timing Repair | P1 | V4 | B2 | 1.5 | Implement the cache/timing repair only within render compiler, renderer runtime, inspection, tests, benchmark, docs, and closeout scopes. Preserve unrelated UI-design dirty docs. | Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional per-frame render_packet execution. |
 
 ## Support Only
 
@@ -120,6 +121,7 @@ Blocker weight:
 | WR-004 | UI/editor guard and sequencing maintenance | P0 | V4 | B1 | 7.5 | Keep active while any editor surface work lands. The 2026-05-14 parallel batch added entity-table and SDF operation routing/capability guards. | 2026-05-14 entity-table and SDF surface routing/capability guards landed. |
 | WR-005 | Design lifecycle cleanup for implemented active designs | P1 | V3 | B1 | 4.0 | Use only for future lifecycle drift or source-of-truth cleanup. Current validation now rejects active designs that claim implementation without an explicit phase-evidence marker and rejects missing crate-doc coverage. | 2026-05-16 docs governance milestone moved implemented active designs into implemented lifecycle, aligned canonical ownership maps with workspace truth, indexed preserved batch artifacts, and hardened docs validation against lifecycle drift, missing crate coverage, stale prompt paths, and stale active-looking batches. |
 | WR-040 | External Component Sandbox Design | P2 | V3 | B5 | 0.7 | Keep this as design-only future work. | Accepted sandbox/security design before any external dynamic component implementation. |
+| WR-046 | UI Designer doctrine and target boundary ratification | P1 | V3 | B1 | 4.0 | Use only for UI Designer doctrine and target-boundary planning evidence. Do not use this row as permission for UI Designer product implementation. | PM-UI-DESIGN-001 closeout proving active UI Designer doctrine, target-profile boundaries, no runtime/code changes, and passing production, roadmap, docs, and planning validators. |
 
 ## Ready Next
 
