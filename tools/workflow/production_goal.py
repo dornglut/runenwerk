@@ -54,6 +54,13 @@ class MilestoneGoalStep:
     next_action: str
 
 
+@dataclass(frozen=True)
+class TrackGoalSummary:
+    track: ProductionTrack
+    steps: tuple[MilestoneGoalStep, ...]
+    completion_errors: tuple[str, ...]
+
+
 def find_track(planning: ProductionPlanningState, track_id: str) -> ProductionTrack:
     for track in planning.tracks:
         if track.id == track_id:
@@ -117,6 +124,65 @@ def build_goal_steps(
     return steps
 
 
+def production_stack_track_order(planning: ProductionPlanningState, root_track: ProductionTrack) -> list[ProductionTrack]:
+    milestone_to_track_id = {
+        milestone.id: track.id for track in planning.tracks for milestone in track.milestones
+    }
+    tracks_by_id = {track.id: track for track in planning.tracks}
+    production_order = {track.id: index for index, track in enumerate(planning.tracks)}
+    milestone_by_id = planning.by_milestone_id
+    relevant_track_ids: set[str] = set()
+    visited_milestones: set[str] = set()
+    visiting_milestones: set[str] = set()
+
+    def collect_milestone(milestone_id: str) -> None:
+        if milestone_id in visited_milestones:
+            return
+        if milestone_id in visiting_milestones:
+            raise WorkflowError(f"{root_track.id}: milestone dependency cycle includes {milestone_id}")
+        milestone = milestone_by_id.get(milestone_id)
+        if milestone is None:
+            raise WorkflowError(f"{root_track.id}: missing milestone dependency {milestone_id}")
+        visiting_milestones.add(milestone_id)
+        relevant_track_ids.add(milestone_to_track_id[milestone_id])
+        for dependency in milestone.dependencies:
+            collect_milestone(dependency)
+        visiting_milestones.remove(milestone_id)
+        visited_milestones.add(milestone_id)
+
+    for milestone in root_track.milestones:
+        collect_milestone(milestone.id)
+
+    track_dependencies: dict[str, set[str]] = {track_id: set() for track_id in relevant_track_ids}
+    for track_id in relevant_track_ids:
+        for milestone in tracks_by_id[track_id].milestones:
+            for dependency in milestone.dependencies:
+                dependency_track_id = milestone_to_track_id.get(dependency)
+                if dependency_track_id and dependency_track_id != track_id and dependency_track_id in relevant_track_ids:
+                    track_dependencies[track_id].add(dependency_track_id)
+
+    ordered_track_ids: list[str] = []
+    visited_tracks: set[str] = set()
+    visiting_tracks: set[str] = set()
+
+    def visit_track(track_id: str) -> None:
+        if track_id in visited_tracks:
+            return
+        if track_id in visiting_tracks:
+            raise WorkflowError(f"{root_track.id}: track dependency cycle includes {track_id}")
+        visiting_tracks.add(track_id)
+        for dependency_track_id in sorted(track_dependencies[track_id], key=production_order.__getitem__):
+            visit_track(dependency_track_id)
+        visiting_tracks.remove(track_id)
+        visited_tracks.add(track_id)
+        ordered_track_ids.append(track_id)
+
+    for track_id in sorted(relevant_track_ids, key=production_order.__getitem__):
+        visit_track(track_id)
+
+    return [tracks_by_id[track_id] for track_id in ordered_track_ids]
+
+
 def dependency_state(dependency: str, milestone_by_id: dict[str, ProductionMilestone]) -> str:
     dependency_milestone = milestone_by_id.get(dependency)
     state = dependency_milestone.state if dependency_milestone else "missing"
@@ -168,6 +234,8 @@ def classify_milestone_next_action(
         return "repair_blocker_before_implementation"
     if milestone.state == "deferred":
         return "keep_deferred_until_reprioritized"
+    if milestone.kind == "design" and milestone.state in {"active", "ready_next"} and not roadmap_actions:
+        return "accept_design_or_record_design_evidence"
     if milestone.state in {"active", "ready_next"}:
         if not roadmap_actions:
             return "add_or_select_wr_roadmap_link"
@@ -221,6 +289,85 @@ def render_track_goal(
     return "\n".join(lines)
 
 
+def render_stack_goal(
+    planning: ProductionPlanningState,
+    roadmap: RoadmapState,
+    root_track: ProductionTrack,
+    *,
+    roadmap_source: Path = ROADMAP_SOURCE,
+    scope: GoalScope = GoalScope.full,
+) -> str:
+    stack_tracks = production_stack_track_order(planning, root_track)
+    summaries = [
+        TrackGoalSummary(
+            track=track,
+            steps=tuple(build_goal_steps(planning, roadmap, track, roadmap_source=roadmap_source)),
+            completion_errors=tuple(
+                track_completion_errors(planning, roadmap_source=roadmap_source, track=track, scope=scope)
+            ),
+        )
+        for track in stack_tracks
+    ]
+    current_summary = next((summary for summary in summaries if summary.completion_errors), None)
+    lines = [
+        f"# Production Stack /goal Kickoff: {root_track.id}",
+        "",
+        f"Overall end goal: {root_track.title}",
+        f"State: {root_track.state}",
+        f"Owner: {root_track.owner}",
+        f"Strategic goal: {root_track.strategic_goal}",
+        "",
+        "## Dependency Track Order",
+        "",
+    ]
+    for summary in summaries:
+        step = first_incomplete_or_evidence_step(summary.steps)
+        if summary.completion_errors and step is not None:
+            lines.append(
+                f"- {summary.track.id} - {summary.track.title}: {step.milestone.id} -> {step.next_action}"
+            )
+        elif summary.completion_errors:
+            lines.append(f"- {summary.track.id} - {summary.track.title}: completion evidence repair required")
+        else:
+            lines.append(f"- {summary.track.id} - {summary.track.title}: completed")
+    lines.extend(["", "## Current Stack Driver", ""])
+    if current_summary is None:
+        lines.append("All stack tracks currently satisfy completion gates. Run the final production, roadmap, and planning checks before any completion-quality claim.")
+    else:
+        current_step = first_incomplete_or_evidence_step(current_summary.steps)
+        lines.append(f"Track: {current_summary.track.id} - {current_summary.track.title}")
+        if current_step is not None:
+            lines.append(f"Milestone: {current_step.milestone.id} - {current_step.milestone.title}")
+            lines.append(f"Next legal action: {current_step.next_action}")
+        else:
+            lines.append("Milestone: completion evidence repair required")
+        lines.append(f"Single-track command: task ai:goal -- --track {current_summary.track.id}")
+    lines.extend(["", "## Stack Completion Gate", ""])
+    stack_completion_errors = [
+        f"{summary.track.id}: {error}"
+        for summary in summaries
+        for error in summary.completion_errors
+    ]
+    if stack_completion_errors:
+        lines.append("Stack completion is blocked until:")
+        lines.extend(f"- {error}" for error in stack_completion_errors)
+    else:
+        lines.append("Stack completion metadata may be considered after final roadmap, production, docs, and planning gates pass.")
+    lines.extend(render_stack_goal_prompt(root_track, summaries, current_summary=current_summary, scope=scope))
+    return "\n".join(lines)
+
+
+def first_incomplete_or_evidence_step(steps: tuple[MilestoneGoalStep, ...]) -> MilestoneGoalStep | None:
+    return next(
+        (
+            step
+            for step in steps
+            if step.milestone.state != "completed" or step.evidence_errors or step.gate_errors
+        ),
+        None,
+    )
+
+
 def render_milestone_step(step: MilestoneGoalStep, *, scope: GoalScope = GoalScope.full) -> list[str]:
     milestone = step.milestone
     lines = [
@@ -270,6 +417,75 @@ def render_milestone_step(step: MilestoneGoalStep, *, scope: GoalScope = GoalSco
                     lines.append("    validations:")
                     lines.extend(f"      - {validation}" for validation in action.item.validations)
     lines.append("")
+    return lines
+
+
+def render_stack_goal_prompt(
+    root_track: ProductionTrack,
+    summaries: list[TrackGoalSummary],
+    *,
+    current_summary: TrackGoalSummary | None,
+    scope: GoalScope,
+) -> list[str]:
+    if scope == GoalScope.non_deferred:
+        scope_rule = "Preserve blocked or deferred milestones as explicit out-of-scope gaps for each stack track."
+        completion_rule = (
+            "- The bounded renderer stack is complete only when every in-scope milestone in every dependency track is completed with valid evidence gates and final production, roadmap, docs, and planning checks pass."
+        )
+    else:
+        scope_rule = "Complete every milestone in every dependency track; do not preserve blocked or deferred gaps unless the source track says so."
+        completion_rule = (
+            "- The renderer stack is complete only when every milestone in every dependency track is completed with valid evidence gates and final production, roadmap, docs, and planning checks pass."
+        )
+    current_command = (
+        f"task ai:goal -- --track {current_summary.track.id}"
+        if current_summary is not None
+        else f"task ai:goal -- --track {root_track.id} --stack"
+    )
+    lines = [
+        "",
+        "## Ready-to-paste /goal Prompt",
+        "",
+        "```text",
+        f"/goal Complete the production stack ending in {root_track.id} - {root_track.title}.",
+        "",
+        "Use the current production tracks, roadmap items, design docs, and task workflow.",
+        f"Use task ai:goal -- --track {root_track.id} --stack as the stack coordinator after every bounded action.",
+        "Do not stop merely because the target track is waiting for dependency completion; resolve the first incomplete dependency track named by the stack coordinator.",
+        "For each iteration, run the selected single-track command, perform exactly one legal next action, validate it, close it out, then rerun the stack coordinator.",
+        "Do not bypass design gates, ADR gates, WR roadmap state, write scopes, validation, closeout evidence, or completion-quality rules.",
+        scope_rule,
+        "",
+        "Dependency track order and current next actions:",
+    ]
+    for summary in summaries:
+        step = first_incomplete_or_evidence_step(summary.steps)
+        if summary.completion_errors and step is not None:
+            lines.append(f"- {summary.track.id}: {step.milestone.id} -> {step.next_action}")
+        elif summary.completion_errors:
+            lines.append(f"- {summary.track.id}: completion_evidence_repair")
+        else:
+            lines.append(f"- {summary.track.id}: completed")
+    lines.extend(
+        [
+            "",
+            f"Current single-track command: {current_command}",
+            "",
+            "Coordinator rules:",
+            "- Completed milestones: verify evidence gates and completion-quality claims before relying on them.",
+            "- Designing, blocked, or deferred milestones: do design, ADR, or unblock work only; do not implement product code.",
+            "- Active or ready_next milestones: use linked WR rows and task production:plan before code changes.",
+            "- Cross-track dependency waits are routing signals in stack mode; switch to the named prerequisite track instead of treating the overall goal as blocked.",
+            "- After a failed roadmap:promote or gate command, only repair exact metadata, run task roadmap:switch-current, or stop/report; do not investigate adjacent WR evidence.",
+            "- Implement only one bounded WR slice or design-gate repair at a time.",
+            "- After implementation, run focused validation, closeout or drift-check routines, roadmap render/validate/check, production render/validate/check, docs validation, and planning validation as applicable.",
+            completion_rule,
+            "",
+            "Stop immediately if ownership is unclear, a gate is unmet, a WR row is not ready for its required action, validation fails, closeout evidence is missing, or source files changed enough that this command must be rerun.",
+            "```",
+            "",
+        ]
+    )
     return lines
 
 
@@ -410,6 +626,11 @@ def goal(
         "--scope",
         help="Goal completion scope. Use non-deferred to preserve blocked/deferred milestones out of scope.",
     ),
+    stack: bool = typer.Option(
+        False,
+        "--stack",
+        help="Render a dependency-stack coordinator prompt that works prerequisite production tracks before the target track.",
+    ),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
 ) -> None:
@@ -417,6 +638,12 @@ def goal(
         planning = load_production_tracks(production_source)
         roadmap = load_roadmap(roadmap_source)
         production_track = find_track(planning, track)
+        if stack:
+            console.print(
+                render_stack_goal(planning, roadmap, production_track, roadmap_source=roadmap_source, scope=scope),
+                soft_wrap=True,
+            )
+            return
         console.print(
             render_track_goal(planning, roadmap, production_track, roadmap_source=roadmap_source, scope=scope),
             soft_wrap=True,

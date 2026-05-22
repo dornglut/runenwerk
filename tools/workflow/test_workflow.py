@@ -50,6 +50,7 @@ from production_goal import (
     app as production_goal_app,
     build_goal_steps,
     find_track,
+    render_stack_goal,
     render_track_goal,
 )
 from roadmap_state import (
@@ -209,6 +210,47 @@ def valid_production_state() -> dict:
             }
         ],
     }
+
+
+def valid_production_stack_state() -> dict:
+    state = valid_production_state()
+    state["tracks"] = [
+        {
+            "id": "PT-BASE",
+            "title": "Base production track",
+            "state": "active",
+            "owner": "workspace",
+            "strategic_goal": "Complete the prerequisite renderer foundation.",
+            "success_criteria": ["The base track validates."],
+            "milestones": [
+                production_milestone("PM-BASE-001", roadmap_links=["WR-001"]),
+                production_milestone(
+                    "PM-BASE-002",
+                    kind="hardening",
+                    state="designing",
+                    dependencies=["PM-BASE-001"],
+                    roadmap_links=["WR-002"],
+                ),
+            ],
+        },
+        {
+            "id": "PT-END",
+            "title": "Final production audit",
+            "state": "active",
+            "owner": "workspace",
+            "strategic_goal": "Finish only after prerequisites complete.",
+            "success_criteria": ["The final track validates."],
+            "milestones": [
+                production_milestone(
+                    "PM-END-001",
+                    kind="release",
+                    state="designing",
+                    dependencies=["PM-BASE-002"],
+                )
+            ],
+        },
+    ]
+    return state
 
 
 def production_milestone(
@@ -730,6 +772,21 @@ def test_production_goal_designing_milestone_renders_design_first() -> None:
     assert steps[0].next_action == "write_or_accept_design_before_implementation"
 
 
+def test_production_goal_active_design_without_wr_routes_to_design_evidence() -> None:
+    production_data = valid_production_state()
+    milestone = production_data["tracks"][0]["milestones"][0]
+    milestone["kind"] = "design"
+    milestone["state"] = "active"
+    milestone["roadmap_links"] = []
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    steps = build_goal_steps(planning, roadmap, track)
+
+    assert steps[0].next_action == "accept_design_or_record_design_evidence"
+
+
 def test_production_goal_active_milestone_uses_wr_action_classification() -> None:
     planning = ProductionPlanningState.model_validate(valid_production_state())
     roadmap = RoadmapState.model_validate(valid_state())
@@ -819,6 +876,46 @@ def test_production_goal_completion_prompt_includes_render_validate_check_gates(
     assert "task roadmap:render" in rendered
     assert "task roadmap:validate" in rendered
     assert "task roadmap:check" in rendered
+
+
+def test_production_goal_stack_routes_to_first_incomplete_dependency_track() -> None:
+    planning = ProductionPlanningState.model_validate(valid_production_stack_state())
+    roadmap = RoadmapState.model_validate(valid_state())
+    root_track = find_track(planning, "PT-END")
+
+    rendered = render_stack_goal(planning, roadmap, root_track)
+
+    assert "Production Stack /goal Kickoff: PT-END" in rendered
+    assert "- PT-BASE - Base production track: PM-BASE-001 -> execute_next_wr_implementation_contract" in rendered
+    assert "- PT-END - Final production audit: PM-END-001 -> wait_for_dependency_completion" in rendered
+    assert "Current single-track command: task ai:goal -- --track PT-BASE" in rendered
+    assert "Use task ai:goal -- --track PT-END --stack as the stack coordinator" in rendered
+    assert "Cross-track dependency waits are routing signals in stack mode" in rendered
+
+
+def test_production_goal_stack_cli_renders_dependency_stack(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    write_yaml(production_path, valid_production_stack_state())
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-END",
+            "--stack",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Production Stack /goal Kickoff: PT-END" in result.stdout
+    assert "task ai:goal -- --track PT-BASE" in result.stdout
 
 
 def test_ai_task_list_includes_goal_shape() -> None:

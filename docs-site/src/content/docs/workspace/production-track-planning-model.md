@@ -115,6 +115,7 @@ Normal long-term planning follows this order:
 Validation entrypoints:
 
 ```sh
+task ai:goal -- --track PT-RENDER-PERFECTION --stack
 task production:plan -- --milestone PM-SDF-OW-001 --roadmap WR-019
 task production:validate
 task production:render
@@ -129,3 +130,9 @@ implementation contract. The command checks that the WR row is linked by the
 milestone, reports readiness, classifies the next action, and prints the prompt
 for a durable implementation contract. It is read-only unless
 `--write-scaffold` is explicitly passed.
+
+Use `task ai:goal -- --track <PT-ID> --stack` when a target production track is
+an end-state audit with cross-track prerequisites. Stack mode keeps the
+production tracks as the sequencing layer, resolves prerequisite track order
+from milestone dependencies, and selects the first incomplete track for the
+normal one-action production loop.

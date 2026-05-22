@@ -175,6 +175,7 @@ class ProductionTrack(StrictModel):
     title: str
     state: ProductionTrackState
     owner: str
+    target_completion_quality: ProductionCompletionQuality = "not_applicable"
     strategic_goal: str
     success_criteria: list[str]
     milestones: list[ProductionMilestone]

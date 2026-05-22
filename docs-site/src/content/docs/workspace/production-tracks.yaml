@@ -914,6 +914,7 @@ tracks:
     title: Renderer GPU Evidence And Procedural Visuals Platform
     state: active
     owner: engine
+    target_completion_quality: runtime_proven
     strategic_goal: Add runtime GPU evidence, render-flow shape guards, hybrid procedural visual APIs, and canonical boids proof without moving product truth or product policy into the renderer.
     success_criteria:
       - GPU pass timing distinguishes CPU encode/submit work from GPU execution cost and exposes unsupported timing diagnostics when backend capabilities are absent.
@@ -930,7 +931,8 @@ tracks:
         goal: Define the renderer-owned GPU evidence and procedural visual contracts before implementation rows can start.
         outcome: The active design and production track identify ownership, sequence, gates, non-goals, open decisions, and runtime_proven target evidence.
         dependencies: []
-        roadmap_links: []
+        roadmap_links:
+          - WR-082
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
@@ -1073,6 +1075,699 @@ tracks:
           - Renderer docs explain GPU timing, pass-shape guards, procedural sprites/SDF impostors, and the canonical boids path.
           - Benchmarks and runtime smoke evidence prove boids uses bounded per-instance work and reports GPU pass cost.
           - Completion quality is runtime_proven only after validation, runtime evidence, and closeout exist; perfectionist_verified remains blocked by any known quality gap.
+  - id: PT-RENDER-SCALE
+    title: Renderer Scale Residency And GPU Driven Visibility Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Make renderer scale explicit through finite resident, visible, and submitted working sets for millions-scale content without per-entity CPU submission or renderer-owned product truth.
+    success_criteria:
+      - Renderer-facing chunk, page, cluster, and instance registries define bounded working sets derived from product selections.
+      - GPU memory budgets, upload budgets, dynamic target pressure, and residency pressure are inspectable.
+      - GPU-driven culling, LOD, visible-list compaction, and indirect draw or dispatch generation bound submitted work.
+      - Scale evidence distinguishes addressable records, resident GPU records, visible candidates, submitted commands, and actual frame cost.
+      - Product truth, streaming policy, freshness, fallback legality, authority, rebuild policy, and residency intent stay outside the renderer.
+    milestones:
+      - id: PM-RENDER-SCALE-001
+        title: Scale Residency And Visibility Doctrine
+        kind: design
+        state: active
+        goal: Accept the finite-working-set renderer scale doctrine before implementation rows start.
+        outcome: Active design records unbounded world/product space as finite renderer working sets with explicit evidence requirements.
+        dependencies:
+          - PM-RENDER-PG-008
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            required_status: active
+            reason: Scale doctrine is anchored by the active renderer scale design.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+            required_status: accepted
+            reason: Scale work must extend the completed render product graph foundation.
+        evidence_gates: []
+        acceptance_criteria:
+          - The active design defines finite resident, visible, and submitted renderer working sets.
+          - Millions-scale evidence targets do not imply per-entity CPU submission.
+          - Renderer-derived registries and buffers are separated from product truth and residency policy.
+      - id: PM-RENDER-SCALE-002
+        title: Working Set Registry And Residency Budgets
+        kind: implementation
+        state: designing
+        goal: Add renderer-facing chunk/page/cluster/instance registries plus memory and upload budget diagnostics.
+        outcome: Renderer inspection can explain resident GPU working sets, budget pressure, eviction or downgrade needs, and product-lineage keys.
+        dependencies:
+          - PM-RENDER-SCALE-001
+        roadmap_links:
+          - WR-061
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            required_status: accepted
+            reason: Working-set implementation requires accepted scale doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Registries expose stable debug identity, product lineage, bounds, scale band, and resident buffer ranges.
+          - GPU memory and upload budgets report pressure without deciding product fallback policy.
+          - Dynamic targets, history resources, buffers, and derived pages are included in residency diagnostics.
+      - id: PM-RENDER-SCALE-003
+        title: GPU Driven Culling LOD And Indirect Submission
+        kind: implementation
+        state: designing
+        goal: Bound submitted renderer work through GPU-visible culling, LOD selection, visible-list compaction, and indirect commands.
+        outcome: Large addressable populations produce bounded draw or dispatch work with visible diagnostics for culled, visible, and submitted counts.
+        dependencies:
+          - PM-RENDER-SCALE-002
+          - PM-RENDER-GPU-002
+        roadmap_links:
+          - WR-062
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            required_status: accepted
+            reason: Culling, LOD, and indirect submission must follow accepted scale contracts.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: GPU timing evidence is required before runtime scale claims.
+        evidence_gates: []
+        acceptance_criteria:
+          - Frustum culling, screen-size LOD, visible-list compaction, and indirect command generation are inspectable.
+          - Submitted work remains bounded even when addressable records are large.
+          - Unsupported capability states are diagnosed rather than silently falling back to unbounded CPU work.
+      - id: PM-RENDER-SCALE-004
+        title: Scale Evidence And Production Readiness
+        kind: hardening
+        state: designing
+        goal: Prove renderer scale behavior through examples, benchmarks, hardware profiles, docs, and closeout evidence.
+        outcome: Runtime evidence can support millions-scale renderer claims without hiding culled, degraded, unsupported, or over-budget states.
+        dependencies:
+          - PM-RENDER-SCALE-002
+          - PM-RENDER-SCALE-003
+        roadmap_links:
+          - WR-063
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            required_status: accepted
+            reason: Production scale evidence must follow accepted scale doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Evidence distinguishes addressable, resident, visible, and submitted populations.
+          - Hardware-profile reports include timing, memory, upload, culling, LOD, and indirect metrics.
+          - Completion quality remains runtime_proven until the final perfectionist audit closes known gaps.
+  - id: PT-RENDER-SDF
+    title: Sparse SDF World Rendering And Raymarch Acceleration Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Build sparse SDF world rendering on product selection and derived GPU residency with conservative raymarch acceleration and visible diagnostics.
+    success_criteria:
+      - Sparse SDF bricks, page tables, clipmaps, analytic instances, cluster fields, and aggregate fields are derived renderer representations.
+      - Distance mips, empty-space skipping, screen-tile/depth-slice candidate lists, and temporal raymarch caches are conservative and inspectable.
+      - Fullscreen raymarching is bounded per view and never multiplied by per-entity instance counts.
+      - SDF runtime evidence exposes step counts, missed-surface risk, overstep risk, cache pressure, residency pressure, and GPU pass cost.
+    milestones:
+      - id: PM-RENDER-SDF-001
+        title: Sparse SDF Rendering Doctrine
+        kind: design
+        state: active
+        goal: Accept the SDF world rendering and raymarch acceleration doctrine.
+        outcome: Active design identifies renderer-owned SDF residency and acceleration separately from SDF product truth.
+        dependencies:
+          - PM-RENDER-PG-008
+          - PM-RENDER-SCALE-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            required_status: active
+            reason: SDF rendering doctrine is anchored by the active SDF raymarch design.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+            required_status: accepted
+            reason: SDF renderer work must preserve accepted product and GPU residency boundaries.
+        evidence_gates: []
+        acceptance_criteria:
+          - The design covers bricks, page tables, clipmaps, distance mips, candidate lists, and conservative acceleration.
+          - Domain SDF truth, physics truth, and query policy remain outside renderer execution.
+          - Fullscreen raymarching rules prohibit per-entity multiplication.
+      - id: PM-RENDER-SDF-002
+        title: SDF Brick Page And Clipmap Residency
+        kind: implementation
+        state: designing
+        goal: Add derived GPU residency for sparse SDF bricks, page tables, and clipmap windows.
+        outcome: Renderer can inspect SDF resident pages, brick atlases, generation keys, cache pressure, and invalidation state.
+        dependencies:
+          - PM-RENDER-SDF-001
+          - PM-RENDER-SCALE-002
+        roadmap_links:
+          - WR-064
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            required_status: accepted
+            reason: SDF residency implementation requires accepted SDF rendering doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Sparse SDF page and brick residency is tied to product/source generation.
+          - Clipmap windows report coverage, scale band, memory, and fallback state.
+          - Renderer-owned cache state does not become product truth.
+      - id: PM-RENDER-SDF-003
+        title: Raymarch Acceleration And Candidate Lists
+        kind: implementation
+        state: designing
+        goal: Add conservative raymarch acceleration through distance mips, empty-space data, candidate lists, and diagnostics.
+        outcome: SDF raymarch flows avoid scanning all SDF sources per ray step and report unsafe-overstep or candidate explosion risks.
+        dependencies:
+          - PM-RENDER-SDF-002
+          - PM-RENDER-SCALE-003
+        roadmap_links:
+          - WR-065
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            required_status: accepted
+            reason: Raymarch acceleration must follow accepted conservative stepping policy.
+        evidence_gates: []
+        acceptance_criteria:
+          - Distance mips and empty-space steps never overestimate safe travel distance.
+          - Screen-tile and depth-slice candidate lists bound deep-scene raymarch work.
+          - Diagnostics expose step counts, missed-surface risk, overstep risk, and cache pressure.
+      - id: PM-RENDER-SDF-004
+        title: SDF World Runtime Evidence
+        kind: hardening
+        state: designing
+        goal: Prove sparse SDF world rendering through runtime examples, docs, benchmarks, and inspection evidence.
+        outcome: SDF world rendering can claim runtime_proven with visible near/mid/far/summary behavior and diagnostic evidence.
+        dependencies:
+          - PM-RENDER-SDF-002
+          - PM-RENDER-SDF-003
+        roadmap_links:
+          - WR-066
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            required_status: accepted
+            reason: SDF production evidence must follow accepted SDF rendering doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Examples prove sparse SDF rendering with GPU timings and residency diagnostics.
+          - Benchmarks cover cold and warm residency, ray step budgets, and candidate-list behavior.
+          - Known quality gaps block perfectionist_verified until the final audit track.
+  - id: PT-RENDER-MESH-MATERIAL
+    title: Mesh Material Lighting Shader And Asset Handoff Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Connect mesh, material, lighting, shader, and asset handoff work to renderer execution without moving asset, material, model, or scene truth into the renderer.
+    success_criteria:
+      - Mesh/model/skinning/deformation render contributions are prepared data, not live ECS extraction.
+      - Material graph lowering, shader specialization, pipeline cache policy, and last-good shader fallback are validated and inspectable.
+      - Material and mesh previews route through product surfaces and share renderer contracts with SDF and procedural paths.
+      - Asset cooking hooks feed renderer artifacts without making renderer state canonical.
+    milestones:
+      - id: PM-RENDER-MESH-MATERIAL-001
+        title: Mesh Material Lighting Handoff Doctrine
+        kind: design
+        state: active
+        goal: Accept mesh, material, lighting, shader, and asset-handoff ownership boundaries.
+        outcome: Active design records renderer responsibilities and asset/material/domain-owned truth boundaries.
+        dependencies:
+          - PM-RENDER-PG-008
+          - PM-RENDER-GPU-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            required_status: active
+            reason: Mesh/material renderer doctrine is anchored by the active handoff design.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+            required_status: active
+            reason: Material Lab remains the material source-truth owner.
+        evidence_gates: []
+        acceptance_criteria:
+          - The design separates renderer pipeline artifacts from material and asset source truth.
+          - Mesh/material previews use product surfaces and prepared renderer data.
+          - Shader fallback and pipeline cache policy are renderer diagnostics, not material truth.
+      - id: PM-RENDER-MESH-MATERIAL-002
+        title: Mesh Material Shader Asset Handoff
+        kind: implementation
+        state: designing
+        goal: Implement prepared mesh/material/shader handoff paths and visible preview products.
+        outcome: Mesh/material previews and scene material paths produce visible pixels through prepared renderer contracts.
+        dependencies:
+          - PM-RENDER-MESH-MATERIAL-001
+          - PM-RENDER-GPU-004
+        roadmap_links:
+          - WR-067
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            required_status: accepted
+            reason: Mesh/material handoff implementation requires accepted renderer handoff doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Prepared mesh, material, and shader inputs are validated before renderer submission.
+          - Material and mesh preview products route through product surfaces.
+          - Renderer artifacts preserve asset and material lineage without owning source truth.
+      - id: PM-RENDER-MESH-MATERIAL-003
+        title: Lighting Pipeline Cache And Last Good Fallback
+        kind: implementation
+        state: designing
+        goal: Add lighting inputs, pipeline specialization, cache diagnostics, and last-good shader fallback behavior.
+        outcome: Shader and pipeline failures are diagnosable and prior valid visual products can remain available when owning policy allows fallback.
+        dependencies:
+          - PM-RENDER-MESH-MATERIAL-002
+        roadmap_links:
+          - WR-068
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            required_status: accepted
+            reason: Pipeline cache and shader fallback policy must follow accepted handoff boundaries.
+        evidence_gates: []
+        acceptance_criteria:
+          - Lighting inputs and shader specialization are prepared renderer data.
+          - Pipeline cache diagnostics expose misses, failures, and fallback state.
+          - Last-good fallback does not invent product freshness or authority policy.
+      - id: PM-RENDER-MESH-MATERIAL-004
+        title: Mesh Material Production Evidence
+        kind: hardening
+        state: designing
+        goal: Close mesh/material/lighting handoff with docs, examples, tests, benchmarks, and runtime evidence.
+        outcome: Mesh/material renderer handoff can claim runtime_proven while known quality gaps stay visible.
+        dependencies:
+          - PM-RENDER-MESH-MATERIAL-002
+          - PM-RENDER-MESH-MATERIAL-003
+        roadmap_links:
+          - WR-069
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            required_status: accepted
+            reason: Production evidence must follow accepted mesh/material renderer doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Runtime examples prove mesh/material pixels, preview products, shader fallback, and inspection.
+          - Docs align material, asset, scene, and renderer ownership boundaries.
+          - Completion does not imply perfectionist_verified until cross-track audit passes.
+  - id: PT-RENDER-TEMPORAL
+    title: Temporal Reconstruction Dynamic Resolution And Upscaling Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Build portable temporal reconstruction and dynamic resolution before optional FSR-style or vendor-specific upscaling adapters.
+    success_criteria:
+      - TAA/TAAU, jitter, history validity, motion vectors, depth, exposure, and reactive-mask style inputs are explicit renderer contracts.
+      - Dynamic internal resolution is separate from output resolution and visible in diagnostics.
+      - Raymarch and ray-query reconstruction inputs are supported by prepared products and history invalidation.
+      - FSR-style adapters are optional capability paths with unsupported diagnostics, not the baseline renderer.
+    milestones:
+      - id: PM-RENDER-TEMPORAL-001
+        title: Temporal Reconstruction Doctrine
+        kind: design
+        state: active
+        goal: Accept the portable temporal reconstruction and dynamic resolution doctrine.
+        outcome: Active design records temporal inputs, history validity, upscaling adapter policy, and fallback requirements.
+        dependencies:
+          - PM-RENDER-PG-008
+          - PM-RENDER-SCALE-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            required_status: active
+            reason: Temporal doctrine is anchored by the active temporal reconstruction design.
+        evidence_gates: []
+        acceptance_criteria:
+          - Temporal reconstruction starts with portable renderer contracts, not vendor lock-in.
+          - Required inputs and fallback behavior are explicit.
+          - Dynamic resolution and upscaling diagnostics are part of the design.
+      - id: PM-RENDER-TEMPORAL-002
+        title: Temporal Inputs History And Dynamic Resolution
+        kind: implementation
+        state: designing
+        goal: Add jitter, motion-vector/depth/exposure inputs, history invalidation, and dynamic internal resolution.
+        outcome: Renderer inspection explains temporal input availability, history validity, reconstruction mode, and internal/output resolution.
+        dependencies:
+          - PM-RENDER-TEMPORAL-001
+          - PM-RENDER-SCALE-002
+        roadmap_links:
+          - WR-070
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            required_status: accepted
+            reason: Temporal input implementation requires accepted reconstruction doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - History resources are scoped, signature-keyed, and invalidated on input mismatch.
+          - Motion vectors, depth, exposure, and reactive-mask style inputs are diagnosable.
+          - Dynamic internal resolution does not hide output quality or performance state.
+      - id: PM-RENDER-TEMPORAL-003
+        title: Upscaling Adapters And Ray Reconstruction Inputs
+        kind: implementation
+        state: designing
+        goal: Add FSR-style optional adapter hooks and reconstruction inputs for raymarch or ray-query scenes.
+        outcome: Upscaling adapters can run when capabilities and inputs exist, and fail closed with diagnostics when they do not.
+        dependencies:
+          - PM-RENDER-TEMPORAL-002
+        roadmap_links:
+          - WR-071
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            required_status: accepted
+            reason: Upscaling adapters must follow accepted portable temporal contracts.
+        evidence_gates: []
+        acceptance_criteria:
+          - Vendor-specific adapter paths are optional and capability-gated.
+          - Raymarch/ray-query reconstruction has explicit depth, velocity, and history inputs.
+          - Unsupported or missing-input states fall back visibly to native rendering.
+      - id: PM-RENDER-TEMPORAL-004
+        title: Temporal Production Evidence
+        kind: hardening
+        state: designing
+        goal: Prove temporal reconstruction and dynamic resolution through examples, docs, benchmarks, and inspection.
+        outcome: Temporal reconstruction can claim runtime_proven with quality, timing, fallback, and history evidence.
+        dependencies:
+          - PM-RENDER-TEMPORAL-002
+          - PM-RENDER-TEMPORAL-003
+        roadmap_links:
+          - WR-072
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            required_status: accepted
+            reason: Temporal production evidence must follow accepted reconstruction doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Examples prove TAA/TAAU, dynamic resolution, fallback, and temporal diagnostics.
+          - Runtime evidence reports timing, input availability, history validity, and quality state.
+          - Vendor-specific claims are limited to adapters actually proven on supported hardware.
+  - id: PT-RENDER-RT
+    title: Hardware Ray Query And Hybrid Tracing Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Add optional capability-gated hardware ray-query and hybrid tracing paths without making RT hardware a baseline requirement.
+    success_criteria:
+      - Ray-query and acceleration-resource support is feature-detected and reports explicit unsupported diagnostics.
+      - Derived acceleration resources preserve product, mesh, material, and SDF ownership boundaries.
+      - Hybrid raster, SDF raymarch, and ray-query paths share timing, reconstruction, and inspection evidence.
+      - Non-RT fallback is mandatory and production-valid.
+    milestones:
+      - id: PM-RENDER-RT-001
+        title: Hardware Ray Query Doctrine
+        kind: design
+        state: active
+        goal: Accept optional ray-query and hybrid tracing capability doctrine.
+        outcome: Active design records capability gating, fallback, and ownership boundaries for hardware ray-query work.
+        dependencies:
+          - PM-RENDER-PG-008
+          - PM-RENDER-TEMPORAL-001
+          - PM-RENDER-SDF-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            required_status: active
+            reason: RT doctrine is anchored by the active hardware ray-query design.
+        evidence_gates: []
+        acceptance_criteria:
+          - Ray-query is optional and capability-gated.
+          - Fallback paths are part of the doctrine, not a later patch.
+          - Derived acceleration structures do not own scene, material, or SDF truth.
+      - id: PM-RENDER-RT-002
+        title: Ray Query Capability And Acceleration Resources
+        kind: implementation
+        state: designing
+        goal: Add backend capability detection, unsupported diagnostics, and derived acceleration-resource inspection.
+        outcome: Renderer can expose optional ray-query capability state and derived acceleration resources without leaking backend handles.
+        dependencies:
+          - PM-RENDER-RT-001
+          - PM-RENDER-SCALE-002
+        roadmap_links:
+          - WR-073
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            required_status: accepted
+            reason: Ray-query implementation requires accepted capability doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Unsupported hardware or backend states are explicit diagnostics.
+          - Acceleration resources are derived from prepared products and renderer handoff data.
+          - Public DTOs expose evidence, not mutable backend handles.
+      - id: PM-RENDER-RT-003
+        title: Hybrid Ray SDF Raster Runtime Proof
+        kind: implementation
+        state: designing
+        goal: Prove a hybrid path that composes raster, SDF raymarch, and optional ray-query work.
+        outcome: Hybrid tracing can run when supported and produce equivalent or diagnosed fallback behavior when unsupported.
+        dependencies:
+          - PM-RENDER-RT-002
+          - PM-RENDER-SDF-003
+          - PM-RENDER-TEMPORAL-002
+        roadmap_links:
+          - WR-074
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            required_status: accepted
+            reason: Hybrid runtime proof must follow accepted ray-query and fallback doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Hybrid scenes have non-RT fallback evidence.
+          - GPU timing distinguishes raster, SDF, ray-query, and reconstruction costs where supported.
+          - Visual differences and unsupported paths are documented and inspectable.
+      - id: PM-RENDER-RT-004
+        title: Ray Query Production Evidence
+        kind: hardening
+        state: designing
+        goal: Close optional ray-query support with docs, examples, hardware matrix, fallback evidence, and diagnostics.
+        outcome: RT support can claim runtime_proven only as an optional path with mandatory fallback.
+        dependencies:
+          - PM-RENDER-RT-002
+          - PM-RENDER-RT-003
+        roadmap_links:
+          - WR-075
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            required_status: accepted
+            reason: RT production evidence must follow accepted optional capability doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Hardware matrix documents supported, unsupported, and fallback behavior.
+          - Examples and docs do not imply RT hardware is required for baseline rendering.
+          - Completion remains runtime_proven, not perfectionist_verified.
+  - id: PT-RENDER-PRODUCT-VISUALS
+    title: Product Visual Producers Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Integrate product-owned particles, VFX, vegetation, water, atmosphere, weather, trails, decals, and animation producers with renderer execution contracts.
+    success_criteria:
+      - Product domains emit prepared render contributions and residency requests without moving semantic truth into the renderer.
+      - Particles, VFX, trails, decals, vegetation, grass, water, atmosphere, weather, and animation/deformation visuals use shared renderer contracts.
+      - Scale, SDF, temporal, and mesh/material capabilities are consumed when available and diagnosed when missing.
+      - Missing, stale, fallback, over-budget, and unsupported product visual states remain visible.
+    milestones:
+      - id: PM-RENDER-PRODUCT-VISUALS-001
+        title: Product Visual Producer Doctrine
+        kind: design
+        state: active
+        goal: Accept the product visual producer ownership and renderer integration doctrine.
+        outcome: Active design separates renderer execution APIs from particles, VFX, vegetation, water, atmosphere, weather, and animation product truth.
+        dependencies:
+          - PM-RENDER-PG-008
+          - PM-RENDER-SCALE-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            required_status: active
+            reason: Product visual producer doctrine is anchored by the active producer integration design.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
+            required_status: accepted
+            reason: Product visual producers must preserve accepted field product contracts.
+        evidence_gates: []
+        acceptance_criteria:
+          - Product domains own source truth and policy.
+          - Renderer owns prepared contribution execution, residency, timing, and diagnostics only.
+          - Producer families are sequenced behind their owning product contracts.
+      - id: PM-RENDER-PRODUCT-VISUALS-002
+        title: Particles VFX Trails And Decals
+        kind: implementation
+        state: designing
+        goal: Integrate particle, VFX, trail, decal, sorting, and transparency visual products with renderer execution.
+        outcome: Particle-style product visuals can submit prepared contributions and residency requests through shared renderer APIs.
+        dependencies:
+          - PM-RENDER-PRODUCT-VISUALS-001
+          - PM-RENDER-GPU-004
+          - PM-RENDER-SCALE-003
+          - PM-RENDER-TEMPORAL-001
+        roadmap_links:
+          - WR-076
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            required_status: accepted
+            reason: Particle/VFX integration requires accepted producer doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Particle/VFX truth stays in owning product domains.
+          - Sorting, transparency, trails, decals, and temporal inputs are explicit and inspectable.
+          - Renderer scale and timing diagnostics cover submitted visual work.
+      - id: PM-RENDER-PRODUCT-VISUALS-003
+        title: Vegetation Water Atmosphere Weather And Field Visuals
+        kind: implementation
+        state: designing
+        goal: Integrate vegetation, grass, water, wetness, atmosphere, weather, and field-driven visual products.
+        outcome: World visual product families consume renderer scale, SDF, temporal, and product-surface capabilities without moving semantics into renderer code.
+        dependencies:
+          - PM-RENDER-PRODUCT-VISUALS-001
+          - PM-RENDER-SCALE-003
+          - PM-RENDER-SDF-002
+          - PM-RENDER-TEMPORAL-001
+        roadmap_links:
+          - WR-077
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            required_status: accepted
+            reason: World visual producer integration requires accepted producer doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Vegetation, water, atmosphere, weather, and field visual states remain product-owned.
+          - Renderer diagnostics expose residency, scale band, fallback, and unsupported capability state.
+          - Far-field and summary visual products use bounded working sets.
+      - id: PM-RENDER-PRODUCT-VISUALS-004
+        title: Animation Deformation And Product Visual Evidence
+        kind: hardening
+        state: designing
+        goal: Integrate animation/deformation visual producers and close product visual producer evidence.
+        outcome: Product visual producers can claim runtime_proven with examples, docs, benchmarks, and diagnostics across representative families.
+        dependencies:
+          - PM-RENDER-PRODUCT-VISUALS-002
+          - PM-RENDER-PRODUCT-VISUALS-003
+          - PM-RENDER-MESH-MATERIAL-002
+          - PM-RENDER-SDF-003
+        roadmap_links:
+          - WR-078
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            required_status: accepted
+            reason: Product visual production evidence must follow accepted producer doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Representative product visual examples prove particles/VFX, world visuals, and animation/deformation handoff.
+          - Docs explain product-domain ownership and renderer execution boundaries.
+          - Any missing product-domain contracts are recorded as quality gaps.
+  - id: PT-RENDER-PERFECTION
+    title: Renderer Production Audit And Perfectionist Verification
+    state: active
+    owner: workspace
+    target_completion_quality: perfectionist_verified
+    strategic_goal: Verify the complete renderer production stack after runtime-proven tracks close, with no known quality gaps or ownership leaks.
+    success_criteria:
+      - Cross-track evidence matrix covers GPU, scale, SDF, mesh/material, temporal, RT, and product visual tracks.
+      - Docs, public APIs, examples, benchmarks, and inspection DTOs agree.
+      - Hardware evidence is explicit and unsupported states are documented.
+      - No renderer track moves product truth, freshness, fallback legality, authority, rebuild policy, or residency policy across ownership boundaries.
+      - Final completion can claim perfectionist_verified only when known quality gaps are empty.
+    milestones:
+      - id: PM-RENDER-PERFECTION-001
+        title: Renderer Audit Doctrine
+        kind: design
+        state: active
+        goal: Accept the renderer perfectionist audit doctrine and evidence matrix.
+        outcome: Active audit design defines what blocks perfectionist_verified across renderer production tracks.
+        dependencies:
+          - PM-RENDER-GPU-006
+          - PM-RENDER-SCALE-004
+          - PM-RENDER-SDF-004
+          - PM-RENDER-MESH-MATERIAL-004
+          - PM-RENDER-TEMPORAL-004
+          - PM-RENDER-RT-004
+          - PM-RENDER-PRODUCT-VISUALS-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-production-audit-and-perfectionist-verification-design.md
+            required_status: active
+            reason: Perfectionist audit doctrine is anchored by the active audit design.
+        evidence_gates: []
+        acceptance_criteria:
+          - The audit track is blocked by runtime-proven renderer tracks.
+          - Perfectionist verification is separate from feature implementation.
+          - Known quality gaps are first-class blockers.
+      - id: PM-RENDER-PERFECTION-002
+        title: Cross Track Evidence Matrix
+        kind: hardening
+        state: designing
+        goal: Build the renderer evidence matrix across docs, APIs, examples, benchmarks, hardware profiles, and diagnostics.
+        outcome: Reviewers can see which renderer features are proven, unsupported, deferred, or blocked.
+        dependencies:
+          - PM-RENDER-PERFECTION-001
+        roadmap_links:
+          - WR-079
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-production-audit-and-perfectionist-verification-design.md
+            required_status: accepted
+            reason: Evidence matrix must follow accepted audit doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Matrix covers every renderer production track and canonical example.
+          - Hardware, unsupported, degraded, and fallback states are explicit.
+          - Generated production and roadmap docs stay in sync.
+      - id: PM-RENDER-PERFECTION-003
+        title: Gap Closure And Consistency Audit
+        kind: hardening
+        state: designing
+        goal: Resolve or explicitly defer every renderer quality gap before final verification.
+        outcome: Public docs, APIs, examples, diagnostics, and closeout evidence agree with no hidden renderer ownership leaks.
+        dependencies:
+          - PM-RENDER-PERFECTION-002
+        roadmap_links:
+          - WR-080
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-production-audit-and-perfectionist-verification-design.md
+            required_status: accepted
+            reason: Gap closure must follow accepted audit doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Known quality gaps are closed or moved to explicit future tracks before final verification.
+          - Docs and examples do not claim unsupported features as production-ready.
+          - Ownership-boundary audit finds no product truth movement into renderer code.
+      - id: PM-RENDER-PERFECTION-004
+        title: Perfectionist Verification Closeout
+        kind: release
+        state: designing
+        goal: Complete the final renderer production audit and claim perfectionist_verified only if all evidence gates pass.
+        outcome: Renderer production stack has a completed audit with empty known quality gaps and coherent runtime evidence.
+        dependencies:
+          - PM-RENDER-PERFECTION-003
+        roadmap_links:
+          - WR-081
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-production-audit-and-perfectionist-verification-design.md
+            required_status: accepted
+            reason: Final verification must follow accepted audit doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Final audit report is completed and linked as completion evidence.
+          - All prerequisite renderer tracks are completed with runtime_proven or stronger evidence.
+          - completion_quality may be perfectionist_verified only with no known quality gaps.
   - id: PT-UI-DESIGN
     title: UI Designer And Interface Lab Platform
     state: completed

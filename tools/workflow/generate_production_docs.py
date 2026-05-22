@@ -69,12 +69,12 @@ def render_production_index(planning: ProductionPlanningState) -> str:
         "",
         "## Tracks",
         "",
-        "| ID | Track | State | Owner | Strategic goal | Success criteria |",
-        "|---|---|---|---|---|---|",
+        "| ID | Track | State | Owner | Target quality | Strategic goal | Success criteria |",
+        "|---|---|---|---|---|---|---|",
     ]
     for track in planning.tracks:
         lines.append(
-            f"| {track.id} | {track.title} | {track.state} | {track.owner} | "
+            f"| {track.id} | {track.title} | {track.state} | {track.owner} | {track.target_completion_quality} | "
             f"{track.strategic_goal} | {'<br>'.join(track.success_criteria)} |"
         )
     lines.extend(["", "## Current Milestone States", ""])

@@ -6,6 +6,16 @@ owner: engine
 layer: engine
 canonical: true
 last_reviewed: 2026-05-22
+related_designs:
+  - ../accepted/render-product-graph-platform-design.md
+  - ../accepted/render-production-readiness-and-inspection-design.md
+  - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
+  - ./sdf-world-rendering-and-raymarch-acceleration-design.md
+  - ./renderer-mesh-material-lighting-and-asset-handoff-design.md
+  - ./renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+  - ./renderer-hardware-ray-query-and-hybrid-tracing-design.md
+  - ./renderer-product-visual-producers-platform-design.md
+  - ./renderer-production-audit-and-perfectionist-verification-design.md
 ---
 
 # Renderer GPU Evidence And Procedural Visuals Platform
@@ -34,6 +44,32 @@ The deeper issue is not boids alone. The renderer lacks durable runtime evidence
 5. Rewrite boids as the canonical hybrid procedural visual example: storage-backed compute simulation plus per-boid local mesh/SDF sprite rendering.
 6. Produce runtime evidence, docs, benchmarks, and examples that support a `runtime_proven` production quality target.
 
+## Focused Track Stack
+
+This track is the GPU evidence and procedural-visual foundation. It does not
+try to cover every renderer feature in one production track. The complete
+renderer program is split into focused tracks:
+
+- `PT-RENDER-GPU`: GPU timings, pass-shape guards, procedural mesh/SDF sprite
+  APIs, and the corrected boids proof.
+- `PT-RENDER-SCALE`: finite working sets, residency, GPU-driven visibility,
+  LOD, culling, indirect drawing, and millions-scale evidence.
+- `PT-RENDER-SDF`: sparse SDF bricks, page tables, clipmaps, distance mips,
+  candidate lists, and conservative raymarch acceleration.
+- `PT-RENDER-MESH-MATERIAL`: mesh, material, lighting, shader specialization,
+  pipeline cache policy, last-good shader fallback, and asset handoff.
+- `PT-RENDER-TEMPORAL`: TAA, TAAU, dynamic resolution, history validity, and
+  FSR-style optional adapters.
+- `PT-RENDER-RT`: optional hardware ray-query and hybrid tracing paths with
+  mandatory fallback.
+- `PT-RENDER-PRODUCT-VISUALS`: product-owned particles, VFX, vegetation, water,
+  atmosphere, weather, trails, decals, and animation render producers.
+- `PT-RENDER-PERFECTION`: final cross-track audit and perfectionist
+  verification after runtime-proven implementation tracks complete.
+
+Completed `PT-RENDER-PG` remains the product-graph foundation. These tracks
+extend it without reopening its completed milestones.
+
 ## Non-Goals
 
 - Do not move product truth, selection, freshness, authority, fallback legality, rebuild policy, or residency policy into the renderer.
@@ -41,6 +77,10 @@ The deeper issue is not boids alone. The renderer lacks durable runtime evidence
 - Do not hide expensive work by lowering boid count, disabling validation, disabling diagnostics, or weakening prepared-frame preflight.
 - Do not add a renderer-owned gameplay/VFX product system in this track. Product-domain emitters may link to this renderer platform later.
 - Do not reopen completed `PT-RENDER-PG` milestones; this track builds on their accepted contracts.
+- Do not use this track to implement SDF brick/page-table residency, clipmaps,
+  raymarch acceleration, temporal reconstruction, hardware ray tracing,
+  material truth/lowering, product visual emitters, or perfectionist audit
+  closeout. Those are governed by the focused tracks above.
 
 ## Ownership
 

@@ -99,7 +99,7 @@ package "PT-RENDER-PG Render Product Graph Platform" {
 }
 
 package "PT-RENDER-GPU Renderer GPU Evidence And Procedural Visuals Platform" {
-  component "PM-RENDER-GPU-001 GPU Evidence And Procedural Visuals Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_GPU_001 <<active>>
+  component "PM-RENDER-GPU-001 GPU Evidence And Procedural Visuals Doctrine\nkind=design\nstate=active\nWR=WR-082" as PM_RENDER_GPU_001 <<active>>
 
   component "PM-RENDER-GPU-002 GPU Pass Timing Foundation\nkind=implementation\nstate=designing\nWR=WR-056" as PM_RENDER_GPU_002 <<designing>>
 
@@ -110,6 +110,83 @@ package "PT-RENDER-GPU Renderer GPU Evidence And Procedural Visuals Platform" {
   component "PM-RENDER-GPU-005 Canonical Boids Hybrid Procedural Rewrite\nkind=implementation\nstate=designing\nWR=WR-059" as PM_RENDER_GPU_005 <<designing>>
 
   component "PM-RENDER-GPU-006 Procedural Visuals Production Readiness\nkind=hardening\nstate=designing\nWR=WR-060" as PM_RENDER_GPU_006 <<designing>>
+
+}
+
+package "PT-RENDER-SCALE Renderer Scale Residency And GPU Driven Visibility Platform" {
+  component "PM-RENDER-SCALE-001 Scale Residency And Visibility Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_SCALE_001 <<active>>
+
+  component "PM-RENDER-SCALE-002 Working Set Registry And Residency Budgets\nkind=implementation\nstate=designing\nWR=WR-061" as PM_RENDER_SCALE_002 <<designing>>
+
+  component "PM-RENDER-SCALE-003 GPU Driven Culling LOD And Indirect Submission\nkind=implementation\nstate=designing\nWR=WR-062" as PM_RENDER_SCALE_003 <<designing>>
+
+  component "PM-RENDER-SCALE-004 Scale Evidence And Production Readiness\nkind=hardening\nstate=designing\nWR=WR-063" as PM_RENDER_SCALE_004 <<designing>>
+
+}
+
+package "PT-RENDER-SDF Sparse SDF World Rendering And Raymarch Acceleration Platform" {
+  component "PM-RENDER-SDF-001 Sparse SDF Rendering Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_SDF_001 <<active>>
+
+  component "PM-RENDER-SDF-002 SDF Brick Page And Clipmap Residency\nkind=implementation\nstate=designing\nWR=WR-064" as PM_RENDER_SDF_002 <<designing>>
+
+  component "PM-RENDER-SDF-003 Raymarch Acceleration And Candidate Lists\nkind=implementation\nstate=designing\nWR=WR-065" as PM_RENDER_SDF_003 <<designing>>
+
+  component "PM-RENDER-SDF-004 SDF World Runtime Evidence\nkind=hardening\nstate=designing\nWR=WR-066" as PM_RENDER_SDF_004 <<designing>>
+
+}
+
+package "PT-RENDER-MESH-MATERIAL Mesh Material Lighting Shader And Asset Handoff Platform" {
+  component "PM-RENDER-MESH-MATERIAL-001 Mesh Material Lighting Handoff Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_MESH_MATERIAL_001 <<active>>
+
+  component "PM-RENDER-MESH-MATERIAL-002 Mesh Material Shader Asset Handoff\nkind=implementation\nstate=designing\nWR=WR-067" as PM_RENDER_MESH_MATERIAL_002 <<designing>>
+
+  component "PM-RENDER-MESH-MATERIAL-003 Lighting Pipeline Cache And Last Good Fallback\nkind=implementation\nstate=designing\nWR=WR-068" as PM_RENDER_MESH_MATERIAL_003 <<designing>>
+
+  component "PM-RENDER-MESH-MATERIAL-004 Mesh Material Production Evidence\nkind=hardening\nstate=designing\nWR=WR-069" as PM_RENDER_MESH_MATERIAL_004 <<designing>>
+
+}
+
+package "PT-RENDER-TEMPORAL Temporal Reconstruction Dynamic Resolution And Upscaling Platform" {
+  component "PM-RENDER-TEMPORAL-001 Temporal Reconstruction Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_TEMPORAL_001 <<active>>
+
+  component "PM-RENDER-TEMPORAL-002 Temporal Inputs History And Dynamic Resolution\nkind=implementation\nstate=designing\nWR=WR-070" as PM_RENDER_TEMPORAL_002 <<designing>>
+
+  component "PM-RENDER-TEMPORAL-003 Upscaling Adapters And Ray Reconstruction Inputs\nkind=implementation\nstate=designing\nWR=WR-071" as PM_RENDER_TEMPORAL_003 <<designing>>
+
+  component "PM-RENDER-TEMPORAL-004 Temporal Production Evidence\nkind=hardening\nstate=designing\nWR=WR-072" as PM_RENDER_TEMPORAL_004 <<designing>>
+
+}
+
+package "PT-RENDER-RT Hardware Ray Query And Hybrid Tracing Platform" {
+  component "PM-RENDER-RT-001 Hardware Ray Query Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_RT_001 <<active>>
+
+  component "PM-RENDER-RT-002 Ray Query Capability And Acceleration Resources\nkind=implementation\nstate=designing\nWR=WR-073" as PM_RENDER_RT_002 <<designing>>
+
+  component "PM-RENDER-RT-003 Hybrid Ray SDF Raster Runtime Proof\nkind=implementation\nstate=designing\nWR=WR-074" as PM_RENDER_RT_003 <<designing>>
+
+  component "PM-RENDER-RT-004 Ray Query Production Evidence\nkind=hardening\nstate=designing\nWR=WR-075" as PM_RENDER_RT_004 <<designing>>
+
+}
+
+package "PT-RENDER-PRODUCT-VISUALS Product Visual Producers Platform" {
+  component "PM-RENDER-PRODUCT-VISUALS-001 Product Visual Producer Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_PRODUCT_VISUALS_001 <<active>>
+
+  component "PM-RENDER-PRODUCT-VISUALS-002 Particles VFX Trails And Decals\nkind=implementation\nstate=designing\nWR=WR-076" as PM_RENDER_PRODUCT_VISUALS_002 <<designing>>
+
+  component "PM-RENDER-PRODUCT-VISUALS-003 Vegetation Water Atmosphere Weather And Field Visuals\nkind=implementation\nstate=designing\nWR=WR-077" as PM_RENDER_PRODUCT_VISUALS_003 <<designing>>
+
+  component "PM-RENDER-PRODUCT-VISUALS-004 Animation Deformation And Product Visual Evidence\nkind=hardening\nstate=designing\nWR=WR-078" as PM_RENDER_PRODUCT_VISUALS_004 <<designing>>
+
+}
+
+package "PT-RENDER-PERFECTION Renderer Production Audit And Perfectionist Verification" {
+  component "PM-RENDER-PERFECTION-001 Renderer Audit Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_PERFECTION_001 <<active>>
+
+  component "PM-RENDER-PERFECTION-002 Cross Track Evidence Matrix\nkind=hardening\nstate=designing\nWR=WR-079" as PM_RENDER_PERFECTION_002 <<designing>>
+
+  component "PM-RENDER-PERFECTION-003 Gap Closure And Consistency Audit\nkind=hardening\nstate=designing\nWR=WR-080" as PM_RENDER_PERFECTION_003 <<designing>>
+
+  component "PM-RENDER-PERFECTION-004 Perfectionist Verification Closeout\nkind=release\nstate=designing\nWR=WR-081" as PM_RENDER_PERFECTION_004 <<designing>>
 
 }
 
@@ -181,6 +258,68 @@ PM_RENDER_GPU_002 -down-> PM_RENDER_GPU_006 : production prerequisite
 PM_RENDER_GPU_003 -down-> PM_RENDER_GPU_006 : production prerequisite
 PM_RENDER_GPU_004 -down-> PM_RENDER_GPU_006 : production prerequisite
 PM_RENDER_GPU_005 -down-> PM_RENDER_GPU_006 : production prerequisite
+PM_RENDER_PG_008 -down-> PM_RENDER_SCALE_001 : production prerequisite
+PM_RENDER_SCALE_001 -down-> PM_RENDER_SCALE_002 : production prerequisite
+PM_RENDER_SCALE_002 -down-> PM_RENDER_SCALE_003 : production prerequisite
+PM_RENDER_GPU_002 -down-> PM_RENDER_SCALE_003 : production prerequisite
+PM_RENDER_SCALE_002 -down-> PM_RENDER_SCALE_004 : production prerequisite
+PM_RENDER_SCALE_003 -down-> PM_RENDER_SCALE_004 : production prerequisite
+PM_RENDER_PG_008 -down-> PM_RENDER_SDF_001 : production prerequisite
+PM_RENDER_SCALE_001 -down-> PM_RENDER_SDF_001 : production prerequisite
+PM_RENDER_SDF_001 -down-> PM_RENDER_SDF_002 : production prerequisite
+PM_RENDER_SCALE_002 -down-> PM_RENDER_SDF_002 : production prerequisite
+PM_RENDER_SDF_002 -down-> PM_RENDER_SDF_003 : production prerequisite
+PM_RENDER_SCALE_003 -down-> PM_RENDER_SDF_003 : production prerequisite
+PM_RENDER_SDF_002 -down-> PM_RENDER_SDF_004 : production prerequisite
+PM_RENDER_SDF_003 -down-> PM_RENDER_SDF_004 : production prerequisite
+PM_RENDER_PG_008 -down-> PM_RENDER_MESH_MATERIAL_001 : production prerequisite
+PM_RENDER_GPU_001 -down-> PM_RENDER_MESH_MATERIAL_001 : production prerequisite
+PM_RENDER_MESH_MATERIAL_001 -down-> PM_RENDER_MESH_MATERIAL_002 : production prerequisite
+PM_RENDER_GPU_004 -down-> PM_RENDER_MESH_MATERIAL_002 : production prerequisite
+PM_RENDER_MESH_MATERIAL_002 -down-> PM_RENDER_MESH_MATERIAL_003 : production prerequisite
+PM_RENDER_MESH_MATERIAL_002 -down-> PM_RENDER_MESH_MATERIAL_004 : production prerequisite
+PM_RENDER_MESH_MATERIAL_003 -down-> PM_RENDER_MESH_MATERIAL_004 : production prerequisite
+PM_RENDER_PG_008 -down-> PM_RENDER_TEMPORAL_001 : production prerequisite
+PM_RENDER_SCALE_001 -down-> PM_RENDER_TEMPORAL_001 : production prerequisite
+PM_RENDER_TEMPORAL_001 -down-> PM_RENDER_TEMPORAL_002 : production prerequisite
+PM_RENDER_SCALE_002 -down-> PM_RENDER_TEMPORAL_002 : production prerequisite
+PM_RENDER_TEMPORAL_002 -down-> PM_RENDER_TEMPORAL_003 : production prerequisite
+PM_RENDER_TEMPORAL_002 -down-> PM_RENDER_TEMPORAL_004 : production prerequisite
+PM_RENDER_TEMPORAL_003 -down-> PM_RENDER_TEMPORAL_004 : production prerequisite
+PM_RENDER_PG_008 -down-> PM_RENDER_RT_001 : production prerequisite
+PM_RENDER_TEMPORAL_001 -down-> PM_RENDER_RT_001 : production prerequisite
+PM_RENDER_SDF_001 -down-> PM_RENDER_RT_001 : production prerequisite
+PM_RENDER_RT_001 -down-> PM_RENDER_RT_002 : production prerequisite
+PM_RENDER_SCALE_002 -down-> PM_RENDER_RT_002 : production prerequisite
+PM_RENDER_RT_002 -down-> PM_RENDER_RT_003 : production prerequisite
+PM_RENDER_SDF_003 -down-> PM_RENDER_RT_003 : production prerequisite
+PM_RENDER_TEMPORAL_002 -down-> PM_RENDER_RT_003 : production prerequisite
+PM_RENDER_RT_002 -down-> PM_RENDER_RT_004 : production prerequisite
+PM_RENDER_RT_003 -down-> PM_RENDER_RT_004 : production prerequisite
+PM_RENDER_PG_008 -down-> PM_RENDER_PRODUCT_VISUALS_001 : production prerequisite
+PM_RENDER_SCALE_001 -down-> PM_RENDER_PRODUCT_VISUALS_001 : production prerequisite
+PM_RENDER_PRODUCT_VISUALS_001 -down-> PM_RENDER_PRODUCT_VISUALS_002 : production prerequisite
+PM_RENDER_GPU_004 -down-> PM_RENDER_PRODUCT_VISUALS_002 : production prerequisite
+PM_RENDER_SCALE_003 -down-> PM_RENDER_PRODUCT_VISUALS_002 : production prerequisite
+PM_RENDER_TEMPORAL_001 -down-> PM_RENDER_PRODUCT_VISUALS_002 : production prerequisite
+PM_RENDER_PRODUCT_VISUALS_001 -down-> PM_RENDER_PRODUCT_VISUALS_003 : production prerequisite
+PM_RENDER_SCALE_003 -down-> PM_RENDER_PRODUCT_VISUALS_003 : production prerequisite
+PM_RENDER_SDF_002 -down-> PM_RENDER_PRODUCT_VISUALS_003 : production prerequisite
+PM_RENDER_TEMPORAL_001 -down-> PM_RENDER_PRODUCT_VISUALS_003 : production prerequisite
+PM_RENDER_PRODUCT_VISUALS_002 -down-> PM_RENDER_PRODUCT_VISUALS_004 : production prerequisite
+PM_RENDER_PRODUCT_VISUALS_003 -down-> PM_RENDER_PRODUCT_VISUALS_004 : production prerequisite
+PM_RENDER_MESH_MATERIAL_002 -down-> PM_RENDER_PRODUCT_VISUALS_004 : production prerequisite
+PM_RENDER_SDF_003 -down-> PM_RENDER_PRODUCT_VISUALS_004 : production prerequisite
+PM_RENDER_GPU_006 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_SCALE_004 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_SDF_004 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_MESH_MATERIAL_004 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_TEMPORAL_004 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_RT_004 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_PRODUCT_VISUALS_004 -down-> PM_RENDER_PERFECTION_001 : production prerequisite
+PM_RENDER_PERFECTION_001 -down-> PM_RENDER_PERFECTION_002 : production prerequisite
+PM_RENDER_PERFECTION_002 -down-> PM_RENDER_PERFECTION_003 : production prerequisite
+PM_RENDER_PERFECTION_003 -down-> PM_RENDER_PERFECTION_004 : production prerequisite
 PM_UI_DESIGN_001 -down-> PM_UI_DESIGN_002 : production prerequisite
 PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_003 : production prerequisite
 PM_UI_DESIGN_002 -down-> PM_UI_DESIGN_004 : production prerequisite

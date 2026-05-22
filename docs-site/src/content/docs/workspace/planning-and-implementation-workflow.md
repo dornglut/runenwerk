@@ -37,6 +37,7 @@ task roadmap:intake -- --idea "<design or change idea>"
 task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
 task ai:goal -- --track "<PT-ID>"
 task ai:goal -- --track "<PT-ID>" --scope non-deferred
+task ai:goal -- --track "<PT-ID>" --stack
 task production:validate
 task production:check
 task ai:architecture-governance -- --task "<decision>" --scope "<crate/files/subsystem>"
@@ -80,6 +81,11 @@ Validation commands execute checks:
   `/goal` coordinator prompt. Add `--scope non-deferred` when blocked or
   deferred milestones should remain explicit out-of-scope gaps. It is read-only
   and must coordinate one legal milestone or WR slice at a time.
+- `task ai:goal -- --track <PT-ID> --stack` prints a dependency-stack
+  coordinator prompt. Use it when the target track is an end-state audit or
+  perfection track whose milestones wait on prerequisite production tracks.
+  Stack mode routes dependency waits to the first incomplete prerequisite track
+  instead of treating the target track as terminally blocked.
 - `task planning:validate` runs the roadmap, production, and docs planning
   gates together.
 - `task puml:validate` validates workspace PlantUML diagrams with PlantUML.
@@ -115,6 +121,10 @@ Run task ai:goal -- --track PT-SDF-OW to generate a full production-track /goal 
 
 ```text
 Run task ai:goal -- --track PT-WB-CAP --scope non-deferred to generate a bounded production-track /goal coordinator prompt.
+```
+
+```text
+Run task ai:goal -- --track PT-RENDER-PERFECTION --stack to generate a dependency-stack /goal coordinator prompt.
 ```
 
 `batch:kickoff` creates the proposed batch from current `planning_state=current_candidate`
@@ -175,6 +185,14 @@ and rerun after each bounded milestone or WR slice. A production track may only
 be completed after every milestone has completed evidence, linked WR rows
 satisfy completion-quality rules across active, archive, and deferred roadmap
 sources, and production plus roadmap render/validate/check gates pass.
+
+For a final audit or perfection track that intentionally depends on other
+production tracks, use `task ai:goal -- --track <PT-ID> --stack`. Stack mode
+collects prerequisite production tracks through milestone dependencies, prints
+the dependency order, selects the first incomplete prerequisite track, and keeps
+the same one-legal-action loop. A cross-track dependency wait is a routing
+signal in stack mode: switch to the named prerequisite track, complete exactly
+one legal action there, validate and close out, then rerun the stack command.
 
 Use workflow commands to automate Codex prompt, checklist, and gate setup, not
 blind mutation. A typical architecture-sensitive flow is:

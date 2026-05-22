@@ -568,3 +568,883 @@ items:
   fitness_function_requirement: Benchmarks, runtime GPU evidence, inspection DTO tests, docs validation, roadmap validation,
     production validation, and planning validation.
   ownership_mode: Renderer production hardening and evidence closeout.
+- id: WR-061
+  title: Renderer Scale Working Set Registry And Residency Budgets
+  diagram_title: Renderer Scale Working Set Registry And Residenc
+  alias: WR061
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-062
+  title: Renderer Scale GPU Driven Culling LOD And Indirect Submission
+  diagram_title: Renderer Scale GPU Driven Culling LOD And Indire
+  alias: WR062
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-063
+  title: Renderer Scale Evidence And Production Readiness
+  diagram_title: Renderer Scale Evidence And Production Readiness
+  alias: WR063
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-064
+  title: Sparse SDF Brick Page And Clipmap Residency
+  diagram_title: Sparse SDF Brick Page And Clipmap Residency
+  alias: WR064
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-065
+  title: SDF Raymarch Acceleration And Candidate Lists
+  diagram_title: SDF Raymarch Acceleration And Candidate Lists
+  alias: WR065
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-066
+  title: SDF World Runtime Evidence
+  diagram_title: SDF World Runtime Evidence
+  alias: WR066
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/examples
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/examples
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-067
+  title: Renderer Mesh Material Shader Asset Handoff
+  diagram_title: Renderer Mesh Material Shader Asset Handoff
+  alias: WR067
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-068
+  title: Renderer Lighting Pipeline Cache And Last Good Fallback
+  diagram_title: Renderer Lighting Pipeline Cache And Last Good F
+  alias: WR068
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-069
+  title: Renderer Mesh Material Production Evidence
+  diagram_title: Renderer Mesh Material Production Evidence
+  alias: WR069
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-070
+  title: Renderer Temporal Inputs History And Dynamic Resolution
+  diagram_title: Renderer Temporal Inputs History And Dynamic Res
+  alias: WR070
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-071
+  title: Renderer Upscaling Adapters And Ray Reconstruction Inputs
+  diagram_title: Renderer Upscaling Adapters And Ray Reconstructi
+  alias: WR071
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-072
+  title: Renderer Temporal Production Evidence
+  diagram_title: Renderer Temporal Production Evidence
+  alias: WR072
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-073
+  title: Renderer Ray Query Capability And Acceleration Resources
+  diagram_title: Renderer Ray Query Capability And Acceleration R
+  alias: WR073
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-074
+  title: Renderer Hybrid Ray SDF Raster Runtime Proof
+  diagram_title: Renderer Hybrid Ray SDF Raster Runtime Proof
+  alias: WR074
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/examples
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/examples
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-075
+  title: Renderer Ray Query Production Evidence
+  diagram_title: Renderer Ray Query Production Evidence
+  alias: WR075
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-076
+  title: Renderer Product Visuals Particles VFX Trails And Decals
+  diagram_title: Renderer Product Visuals Particles VFX Trails An
+  alias: WR076
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-077
+  title: Renderer Product Visuals Vegetation Water Atmosphere Weather And Field Visuals
+  diagram_title: Renderer Product Visuals Vegetation Water Atmosp
+  alias: WR077
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - engine/src/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine/src/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-078
+  title: Renderer Product Visuals Animation Deformation And Evidence
+  diagram_title: Renderer Product Visuals Animation Deformation A
+  alias: WR078
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-079
+  title: Renderer Cross Track Evidence Matrix
+  diagram_title: Renderer Cross Track Evidence Matrix
+  alias: WR079
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/reports
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/reports
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-080
+  title: Renderer Gap Closure And Consistency Audit
+  diagram_title: Renderer Gap Closure And Consistency Audit
+  alias: WR080
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/reports
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/reports
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-081
+  title: Renderer Perfectionist Verification Closeout
+  diagram_title: Renderer Perfectionist Verification Closeout
+  alias: WR081
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/reports
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/reports
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+- id: WR-082
+  title: Renderer GPU Evidence And Procedural Visuals Doctrine Acceptance
+  diagram_title: Renderer GPU Evidence And Procedural Visuals Doc
+  alias: WR082
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD

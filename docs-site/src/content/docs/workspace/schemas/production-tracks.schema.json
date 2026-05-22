@@ -257,6 +257,17 @@
           "title": "Success Criteria",
           "type": "array"
         },
+        "target_completion_quality": {
+          "default": "not_applicable",
+          "enum": [
+            "not_applicable",
+            "bounded_contract",
+            "runtime_proven",
+            "perfectionist_verified"
+          ],
+          "title": "Target Completion Quality",
+          "type": "string"
+        },
         "title": {
           "title": "Title",
           "type": "string"

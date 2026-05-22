@@ -1,0 +1,55 @@
+version: 1
+idea: Renderer Temporal Production Evidence
+source_path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+owner: docs-site/src/content/docs/engine/reference/plugins/render
+created_at: '2026-05-22'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-072
+  title: Renderer Temporal Production Evidence
+  diagram_title: Renderer Temporal Production Evidence
+  alias: WR072
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  validations: []
+  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
+  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
+  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
+  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: Assess during architecture governance review.
+  fitness_function_requirement: Define before promotion to current_candidate.
+  ownership_mode: TBD
+edges: []
