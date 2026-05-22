@@ -128,11 +128,7 @@ pub fn ratify_texture_descriptor(descriptor: &TextureDescriptor) -> TextureRatif
             "KTX2 artifact byte length must be non-zero when present",
         ));
     }
-    if ktx2
-        .level_byte_lengths
-        .iter()
-        .any(|level_length| *level_length == 0)
-    {
+    if ktx2.level_byte_lengths.contains(&0) {
         report.push(RatificationIssue::error(
             TextureIssueCode::Ktx2LevelByteLengthZero,
             TextureIssueSubject::Descriptor,

@@ -52,11 +52,11 @@ fn is_valid_identifier_segment(segment: &str) -> bool {
         return false;
     };
 
-    if !matches!(first, 'a'..='z') {
+    if !first.is_ascii_lowercase() {
         return false;
     }
 
-    chars.all(|ch| matches!(ch, 'a'..='z' | '0'..='9' | '_'))
+    chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
 }
 
 macro_rules! stable_identity {

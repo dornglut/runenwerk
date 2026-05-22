@@ -220,7 +220,7 @@ impl ResourceRefCanonicalEncoder {
         self.bytes.extend_from_slice(label.as_bytes());
         self.bytes.push(b'=');
         self.bytes
-            .extend_from_slice(value.as_bytes().len().to_string().as_bytes());
+            .extend_from_slice(value.len().to_string().as_bytes());
         self.bytes.push(b':');
         self.bytes.extend_from_slice(value.as_bytes());
         self.bytes.push(b'\n');

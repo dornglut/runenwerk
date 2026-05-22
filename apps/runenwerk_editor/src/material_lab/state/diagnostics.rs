@@ -88,21 +88,21 @@ impl MaterialLabRuntime {
             }
         }
 
-        if rows.is_empty() {
-            if let Some(preview) = &self.active_preview {
-                rows.extend(preview.resolved_resources.iter().map(|resource| {
-                    let status = catalog
-                        .artifact(resource.artifact_id)
-                        .map(|artifact| match artifact.payload_kind {
-                            ArtifactPayloadKind::GeneratedTextureProduct { .. } => {
-                                MaterialResourceBindingStatusKind::GeneratedAvailable
-                            }
-                            _ => MaterialResourceBindingStatusKind::Resolved,
-                        })
-                        .unwrap_or(MaterialResourceBindingStatusKind::Resolved);
-                    material_resource_binding_resolved_row(resource, status)
-                }));
-            }
+        if rows.is_empty()
+            && let Some(preview) = &self.active_preview
+        {
+            rows.extend(preview.resolved_resources.iter().map(|resource| {
+                let status = catalog
+                    .artifact(resource.artifact_id)
+                    .map(|artifact| match artifact.payload_kind {
+                        ArtifactPayloadKind::GeneratedTextureProduct { .. } => {
+                            MaterialResourceBindingStatusKind::GeneratedAvailable
+                        }
+                        _ => MaterialResourceBindingStatusKind::Resolved,
+                    })
+                    .unwrap_or(MaterialResourceBindingStatusKind::Resolved);
+                material_resource_binding_resolved_row(resource, status)
+            }));
         }
 
         rows

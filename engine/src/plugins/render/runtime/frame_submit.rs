@@ -154,6 +154,8 @@ pub(crate) fn frame_render_submit_system(
             if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
                 render_debug_timings.observe_frame_timings(timings);
                 render_debug_timings.observe_pass_timings(gfx.renderer.last_pass_timings());
+                render_debug_timings
+                    .observe_gpu_pass_timing_evidence(gfx.renderer.last_gpu_pass_timing_evidence());
             }
 
             let cache_stats = gfx.renderer.flow_pipeline_cache_stats();

@@ -32,6 +32,9 @@ pub enum RenderExecutionGraphDiagnosticKind {
     ResourceLifetimeUseBeforeWrite,
     BackendCapabilityMismatch,
     UnsupportedImportedResource,
+    FullscreenInstancedWork,
+    AmbiguousProceduralShape,
+    InvalidPassShapeIntent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

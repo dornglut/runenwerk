@@ -586,7 +586,7 @@ fn tool_suite_profile_definitions_for_composition(
 ) -> Vec<ToolSuiteProfileDefinition> {
     workspace_profile_specs_for_composition(composition)
         .iter()
-        .map(|spec| tool_suite_profile_definition(spec))
+        .map(tool_suite_profile_definition)
         .collect()
 }
 

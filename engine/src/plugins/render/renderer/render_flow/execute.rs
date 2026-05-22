@@ -22,9 +22,11 @@ impl Renderer {
         preflight_config: crate::plugins::render::graph::RenderPreflightValidationConfigResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
+        gpu_timing_capability: RenderGpuTimingCapability,
     ) -> Result<RendererFrameTimings> {
         let mut timings = packet.prepare_timings;
         self.last_pass_timings.clear();
+        self.last_gpu_pass_timing_evidence.clear();
         self.last_runtime_resources.clear();
         self.last_pass_provenance.clear();
         let preflight_start = Instant::now();
@@ -43,6 +45,16 @@ impl Renderer {
         let mut capture_runtime =
             FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
         let mut pending_capture_readbacks = Vec::<PendingCaptureReadback>::new();
+        let mut gpu_pass_timing_frame =
+            if gpu_timing_capability == RenderGpuTimingCapability::Supported {
+                GpuPassTimingFrame::new(
+                    device,
+                    queue,
+                    gpu_timing_pass_capacity(prepared_frame, compiled_flows),
+                )
+            } else {
+                None
+            };
 
         let dynamic_target_history_signatures =
             prepared_frame.dynamic_target_history_signatures()?;
@@ -157,6 +169,26 @@ impl Renderer {
                                 )?;
                             }
                             let pass_encode_start = Instant::now();
+                            let pass_kind = execution_pass_kind_name(pass).to_string();
+                            let gpu_timestamp_indices = if pass_supports_gpu_timestamp_writes(pass)
+                            {
+                                gpu_pass_timing_frame.as_mut().and_then(|frame| {
+                                    frame.reserve_pass(
+                                        frame_index,
+                                        prepared_frame.surface.render_surface_id.raw(),
+                                        flow.flow_id.to_string(),
+                                        pass_label.clone(),
+                                        pass_kind.clone(),
+                                    )
+                                })
+                            } else {
+                                None
+                            };
+                            let gpu_timestamp_writes = gpu_timestamp_indices.and_then(|indices| {
+                                gpu_pass_timing_frame
+                                    .as_ref()
+                                    .map(|frame| frame.timestamp_writes(indices))
+                            });
                             let evidence = self.encode_compiled_pass(
                                 device,
                                 &mut encoder,
@@ -168,6 +200,7 @@ impl Renderer {
                                 pass,
                                 shader_registry,
                                 runtime_resources,
+                                gpu_timestamp_writes,
                             )?;
                             if capture_runtime.should_attempt_stage(CaptureStage::After) {
                                 self.queue_pass_texture_captures(
@@ -186,10 +219,22 @@ impl Renderer {
                             self.last_pass_timings.push(PassTimingSample {
                                 flow_id: flow.flow_id.to_string(),
                                 pass_id: pass_label.clone(),
-                                pass_kind: execution_pass_kind_name(pass).to_string(),
+                                pass_kind: pass_kind.clone(),
                                 millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
                                 dispatch_workgroups: evidence.dispatch_workgroups,
                             });
+                            if gpu_timestamp_writes.is_none() {
+                                self.last_gpu_pass_timing_evidence.push(
+                                    gpu_timing_diagnostic_evidence_for_pass(
+                                        gpu_timing_capability,
+                                        frame_index,
+                                        prepared_frame.surface.render_surface_id.raw(),
+                                        flow.flow_id.to_string(),
+                                        pass_label.clone(),
+                                        pass_kind.clone(),
+                                    ),
+                                );
+                            }
                             if debug_control.provenance_enabled {
                                 let pass_resource_truth = collect_pass_resource_truth(
                                     flow.flow_id,
@@ -289,6 +334,9 @@ impl Renderer {
         self.flow_runtime_cache = flow_runtime_cache;
         render_result?;
         timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
+        let pending_gpu_pass_timing_readback = gpu_pass_timing_frame
+            .take()
+            .and_then(|frame| frame.resolve(&mut encoder));
 
         let encode_submit_start = Instant::now();
         {
@@ -296,6 +344,9 @@ impl Renderer {
             queue.submit(std::iter::once(encoder.finish()));
         }
         timings.encode_submit_ms = encode_submit_start.elapsed().as_secs_f32() * 1000.0;
+        if let Some(pending) = pending_gpu_pass_timing_readback {
+            self.last_gpu_pass_timing_evidence = read_gpu_pass_timing_evidence(device, pending);
+        }
         if !pending_capture_readbacks.is_empty() {
             for pending in pending_capture_readbacks.drain(..) {
                 let (selector_index, capture) = read_capture_back(device, pending);
@@ -327,6 +378,7 @@ impl Renderer {
         preflight_config: crate::plugins::render::graph::RenderPreflightValidationConfigResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
+        gpu_timing_capability: RenderGpuTimingCapability,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
             device,
@@ -350,6 +402,7 @@ impl Renderer {
             preflight_config,
             debug_control,
             debug_config,
+            gpu_timing_capability,
         )
     }
 
@@ -754,4 +807,70 @@ impl Renderer {
         }
         Ok(())
     }
+}
+
+fn gpu_timing_pass_capacity(
+    prepared_frame: &PreparedRenderFrame,
+    compiled_flows: &[CompiledRenderFlowPlan],
+) -> usize {
+    compiled_flows
+        .iter()
+        .map(|flow| {
+            let invocation_count = prepared_frame
+                .flow_invocations_for_flow(flow.flow_id)
+                .count()
+                .max(1);
+            let timestamped_pass_count = flow
+                .execution
+                .passes
+                .iter()
+                .filter(|pass| pass_supports_gpu_timestamp_writes(pass))
+                .count();
+            invocation_count.saturating_mul(timestamped_pass_count)
+        })
+        .sum()
+}
+
+fn pass_supports_gpu_timestamp_writes(pass: &CompiledPassExecutionPlan) -> bool {
+    matches!(
+        pass,
+        CompiledPassExecutionPlan::Compute(_)
+            | CompiledPassExecutionPlan::Fullscreen(_)
+            | CompiledPassExecutionPlan::Graphics(_)
+            | CompiledPassExecutionPlan::BuiltinUiComposite(_)
+    )
+}
+
+fn gpu_timing_diagnostic_evidence_for_pass(
+    capability: RenderGpuTimingCapability,
+    frame_index: u64,
+    render_surface_id: u64,
+    flow_id: String,
+    pass_id: String,
+    pass_kind: String,
+) -> RenderPassTimingEvidence {
+    let diagnostic = match capability {
+        RenderGpuTimingCapability::Supported => RenderGpuTimingDiagnostic::unavailable_this_frame(
+            "timestamp queries are supported, but GPU pass timestamp resolve/readback is not available for this frame",
+        ),
+        RenderGpuTimingCapability::Unsupported => RenderGpuTimingDiagnostic::unsupported(
+            "timestamp queries are not supported by the active WGPU backend",
+        ),
+        RenderGpuTimingCapability::UnavailableThisFrame => {
+            RenderGpuTimingDiagnostic::unavailable_this_frame(
+                "GPU pass timestamp data is unavailable for this frame",
+            )
+        }
+        RenderGpuTimingCapability::ReadbackPending => {
+            RenderGpuTimingDiagnostic::readback_pending("GPU pass timestamp readback is pending")
+        }
+    };
+    RenderPassTimingEvidence::gpu_diagnostic(
+        Some(frame_index),
+        Some(render_surface_id),
+        flow_id,
+        pass_id,
+        pass_kind,
+        diagnostic,
+    )
 }

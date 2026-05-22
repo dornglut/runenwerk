@@ -269,9 +269,8 @@ impl TextureDescriptor {
     }
 
     pub fn ktx2_metadata(&self) -> &Ktx2TextureMetadata {
-        match &self.container {
-            TextureContainerMetadata::Ktx2(metadata) => metadata,
-        }
+        let TextureContainerMetadata::Ktx2(metadata) = &self.container;
+        metadata
     }
 
     pub fn descriptor_hash(&self) -> &str {
@@ -287,9 +286,7 @@ impl TextureDescriptor {
 }
 
 fn canonical_descriptor_hash(descriptor: &TextureDescriptor) -> String {
-    let metadata = match &descriptor.container {
-        TextureContainerMetadata::Ktx2(metadata) => metadata,
-    };
+    let TextureContainerMetadata::Ktx2(metadata) = &descriptor.container;
     let mut bytes = Vec::<u8>::new();
     field(
         &mut bytes,
@@ -351,7 +348,7 @@ fn field(bytes: &mut Vec<u8>, label: &str, value: impl AsRef<str>) {
     let value = value.as_ref();
     bytes.extend_from_slice(label.as_bytes());
     bytes.push(b'=');
-    bytes.extend_from_slice(value.as_bytes().len().to_string().as_bytes());
+    bytes.extend_from_slice(value.len().to_string().as_bytes());
     bytes.push(b':');
     bytes.extend_from_slice(value.as_bytes());
     bytes.push(b'\n');

@@ -178,7 +178,7 @@ impl RunenwerkEditorApp {
             &selected_edges,
             &action,
         )
-        .map_err(|message| editor_core::EditorMutationError::runtime_rejected(message))?;
+        .map_err(editor_core::EditorMutationError::runtime_rejected)?;
         if changed {
             self.material_lab_runtime_mut()
                 .push_undo_snapshot(asset_id, before);

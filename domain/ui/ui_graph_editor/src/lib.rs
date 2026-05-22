@@ -394,7 +394,7 @@ impl GraphCanvasViewModel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct GraphEditorViewModel {
     pub viewport: GraphViewport,
     pub selection: GraphSelection,
@@ -403,20 +403,6 @@ pub struct GraphEditorViewModel {
     pub can_undo: bool,
     pub can_redo: bool,
     pub active_edit_group: Option<u64>,
-}
-
-impl Default for GraphEditorViewModel {
-    fn default() -> Self {
-        Self {
-            viewport: GraphViewport::default(),
-            selection: GraphSelection::default(),
-            hit_test_scene: GraphHitTestScene::default(),
-            canvas: GraphCanvasViewModel::default(),
-            can_undo: false,
-            can_redo: false,
-            active_edit_group: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

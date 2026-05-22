@@ -22,6 +22,7 @@ pub struct EditorMaterialPreviewProduct {
 }
 
 impl EditorMaterialPreviewProduct {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         asset_id: AssetId,
         source_id: AssetSourceId,

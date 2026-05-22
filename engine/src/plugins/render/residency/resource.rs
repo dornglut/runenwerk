@@ -55,6 +55,8 @@ pub struct RenderGpuResidencyEntry {
     pub hard_pin: bool,
     pub status: RenderGpuResidencyStatus,
     pub cache_handle: RenderGpuCacheHandle,
+    pub resident_bytes: u64,
+    pub upload_bytes: u64,
     pub diagnostics: Vec<FieldProductDiagnostic>,
 }
 
@@ -68,29 +70,72 @@ pub struct RenderGpuResidencyJournalEntry {
     pub priority: i32,
     pub hard_pin: bool,
     pub cache_handle: Option<RenderGpuCacheHandle>,
+    pub resident_bytes: u64,
+    pub upload_bytes: u64,
     pub diagnostics: Vec<FieldProductDiagnostic>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RenderGpuResidencyBudgetStatus {
+    #[default]
+    NotMeasured,
+    WithinBudget,
+    OverBudget,
+    InvalidBudget,
+}
+
+impl RenderGpuResidencyBudgetStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NotMeasured => "not_measured",
+            Self::WithinBudget => "within_budget",
+            Self::OverBudget => "over_budget",
+            Self::InvalidBudget => "invalid_budget",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RenderGpuResidencySummary {
+    pub addressable_count: usize,
+    pub selected_count: usize,
+    pub requested_count: usize,
+    pub accepted_count: usize,
     pub resident_count: usize,
     pub allocated_count: usize,
     pub preserved_count: usize,
     pub invalidated_count: usize,
     pub evicted_count: usize,
     pub rejected_count: usize,
+    pub resident_bytes: u64,
+    pub upload_bytes: u64,
+    pub max_resident_entries: usize,
+    pub max_resident_bytes: u64,
+    pub max_upload_bytes_per_frame: u64,
+    pub resident_entry_budget_status: RenderGpuResidencyBudgetStatus,
+    pub resident_byte_budget_status: RenderGpuResidencyBudgetStatus,
+    pub upload_byte_budget_status: RenderGpuResidencyBudgetStatus,
+    pub hard_pinned_over_entry_budget: bool,
     pub diagnostic_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ecs::Component, ecs::Resource)]
 pub struct RenderGpuResidencyBudgetResource {
     pub max_resident_entries: usize,
+    pub max_resident_bytes: u64,
+    pub max_upload_bytes_per_frame: u64,
+    pub resident_bytes_per_entry: u64,
+    pub upload_bytes_per_allocation: u64,
 }
 
 impl Default for RenderGpuResidencyBudgetResource {
     fn default() -> Self {
         Self {
             max_resident_entries: 64,
+            max_resident_bytes: 64 * 1024 * 1024,
+            max_upload_bytes_per_frame: 8 * 1024 * 1024,
+            resident_bytes_per_entry: 256 * 1024,
+            upload_bytes_per_allocation: 64 * 1024,
         }
     }
 }
@@ -145,7 +190,13 @@ impl RenderGpuResidencyResource {
         self.diagnostics.clear();
 
         let residency_plan = build_residency_plan(selections);
-        let mut summary = RenderGpuResidencySummary::default();
+        let mut summary = RenderGpuResidencySummary {
+            addressable_count: residency_plan.addressable_count,
+            selected_count: residency_plan.selected_count,
+            requested_count: residency_plan.requested_count,
+            accepted_count: residency_plan.accepted.len(),
+            ..RenderGpuResidencySummary::default()
+        };
 
         for (product_id, diagnostics) in residency_plan.rejected {
             summary.rejected_count = summary.rejected_count.saturating_add(1);
@@ -194,6 +245,8 @@ impl RenderGpuResidencyResource {
                         hard_pin: item.hard_pin,
                         status: RenderGpuResidencyStatus::Preserved,
                         cache_handle: previous.cache_handle,
+                        resident_bytes: budget.resident_bytes_per_entry,
+                        upload_bytes: 0,
                         diagnostics: Vec::new(),
                     };
                     self.entries.insert(item.product_id, entry.clone());
@@ -222,21 +275,27 @@ impl RenderGpuResidencyResource {
                         &previous,
                         diagnostics,
                     );
-                    self.allocate_entry(item, &mut summary);
+                    self.allocate_entry(item, budget, &mut summary);
                 }
             } else {
-                self.allocate_entry(item, &mut summary);
+                self.allocate_entry(item, budget, &mut summary);
             }
         }
 
         self.evict_to_budget(budget, &mut summary);
         summary.resident_count = self.entries.len();
+        self.evaluate_budget_pressure(budget, &mut summary);
         summary.diagnostic_count = self.diagnostics.len();
         self.last_summary = summary;
         summary
     }
 
-    fn allocate_entry(&mut self, item: ResidencyPlanItem, summary: &mut RenderGpuResidencySummary) {
+    fn allocate_entry(
+        &mut self,
+        item: ResidencyPlanItem,
+        budget: &RenderGpuResidencyBudgetResource,
+        summary: &mut RenderGpuResidencySummary,
+    ) {
         let cache_handle = self.allocate_handle();
         let entry = RenderGpuResidencyEntry {
             product_id: item.product_id,
@@ -247,6 +306,8 @@ impl RenderGpuResidencyResource {
             hard_pin: item.hard_pin,
             status: RenderGpuResidencyStatus::Resident,
             cache_handle,
+            resident_bytes: budget.resident_bytes_per_entry,
+            upload_bytes: budget.upload_bytes_per_allocation,
             diagnostics: Vec::new(),
         };
         self.entries.insert(item.product_id, entry.clone());
@@ -281,6 +342,7 @@ impl RenderGpuResidencyResource {
                     self.entries.len(),
                     budget.max_resident_entries,
                 ));
+                summary.hard_pinned_over_entry_budget = true;
                 return;
             };
             if let Some(entry) = self.entries.remove(&product_id) {
@@ -291,6 +353,63 @@ impl RenderGpuResidencyResource {
                     Vec::new(),
                 );
             }
+        }
+    }
+
+    fn evaluate_budget_pressure(
+        &mut self,
+        budget: &RenderGpuResidencyBudgetResource,
+        summary: &mut RenderGpuResidencySummary,
+    ) {
+        summary.max_resident_entries = budget.max_resident_entries;
+        summary.max_resident_bytes = budget.max_resident_bytes;
+        summary.max_upload_bytes_per_frame = budget.max_upload_bytes_per_frame;
+        summary.resident_bytes = self
+            .entries
+            .values()
+            .map(|entry| entry.resident_bytes)
+            .fold(0_u64, u64::saturating_add);
+        summary.upload_bytes =
+            (summary.allocated_count as u64).saturating_mul(budget.upload_bytes_per_allocation);
+
+        summary.resident_entry_budget_status =
+            entry_budget_status(summary.resident_count, budget.max_resident_entries);
+        summary.resident_byte_budget_status = byte_budget_status(
+            summary.resident_bytes,
+            budget.max_resident_bytes,
+            budget.resident_bytes_per_entry,
+        );
+        summary.upload_byte_budget_status = byte_budget_status(
+            summary.upload_bytes,
+            budget.max_upload_bytes_per_frame,
+            budget.upload_bytes_per_allocation,
+        );
+
+        if summary.resident_byte_budget_status == RenderGpuResidencyBudgetStatus::InvalidBudget {
+            self.diagnostics.push(invalid_budget_diagnostic(
+                "resident_bytes_per_entry",
+                "renderer gpu residency cannot report memory pressure with a zero resident-byte estimate",
+            ));
+        } else if summary.resident_byte_budget_status == RenderGpuResidencyBudgetStatus::OverBudget
+        {
+            self.diagnostics.push(residency_budget_exceeded_diagnostic(
+                "resident bytes",
+                summary.resident_bytes,
+                budget.max_resident_bytes,
+            ));
+        }
+
+        if summary.upload_byte_budget_status == RenderGpuResidencyBudgetStatus::InvalidBudget {
+            self.diagnostics.push(invalid_budget_diagnostic(
+                "upload_bytes_per_allocation",
+                "renderer gpu residency cannot report upload pressure with a zero upload-byte estimate",
+            ));
+        } else if summary.upload_byte_budget_status == RenderGpuResidencyBudgetStatus::OverBudget {
+            self.diagnostics.push(residency_budget_exceeded_diagnostic(
+                "upload bytes",
+                summary.upload_bytes,
+                budget.max_upload_bytes_per_frame,
+            ));
         }
     }
 
@@ -308,6 +427,8 @@ impl RenderGpuResidencyResource {
             priority: 0,
             hard_pin: false,
             cache_handle: None,
+            resident_bytes: 0,
+            upload_bytes: 0,
             diagnostics,
         });
     }
@@ -327,6 +448,8 @@ impl RenderGpuResidencyResource {
             priority: entry.priority,
             hard_pin: entry.hard_pin,
             cache_handle: Some(entry.cache_handle),
+            resident_bytes: entry.resident_bytes,
+            upload_bytes: entry.upload_bytes,
             diagnostics,
         });
     }
@@ -342,6 +465,9 @@ impl RenderGpuResidencyResource {
 struct ResidencyPlan {
     accepted: BTreeMap<ProductIdentity, ResidencyPlanItem>,
     rejected: BTreeMap<ProductIdentity, Vec<FieldProductDiagnostic>>,
+    addressable_count: usize,
+    selected_count: usize,
+    requested_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -357,6 +483,14 @@ struct ResidencyPlanItem {
 fn build_residency_plan(selections: &[RenderProductSelection]) -> ResidencyPlan {
     let mut selected = BTreeMap::<ProductIdentity, RenderSelectedProduct>::new();
     let mut rejected = BTreeMap::<ProductIdentity, Vec<FieldProductDiagnostic>>::new();
+    let addressable_count = selections
+        .iter()
+        .map(|selection| selection.selected_products.len())
+        .sum();
+    let requested_count = selections
+        .iter()
+        .map(|selection| selection.residency_requests.len())
+        .sum();
 
     let mut sorted_selections = selections.iter().collect::<Vec<_>>();
     sorted_selections.sort_by(|left, right| left.view_id.cmp(&right.view_id));
@@ -422,7 +556,36 @@ fn build_residency_plan(selections: &[RenderProductSelection]) -> ResidencyPlan 
         accepted.remove(product_id);
     }
 
-    ResidencyPlan { accepted, rejected }
+    let selected_count = selected.len();
+    ResidencyPlan {
+        accepted,
+        rejected,
+        addressable_count,
+        selected_count,
+        requested_count,
+    }
+}
+
+fn entry_budget_status(observed: usize, limit: usize) -> RenderGpuResidencyBudgetStatus {
+    if observed > limit {
+        RenderGpuResidencyBudgetStatus::OverBudget
+    } else {
+        RenderGpuResidencyBudgetStatus::WithinBudget
+    }
+}
+
+fn byte_budget_status(
+    observed: u64,
+    limit: u64,
+    unit_estimate: u64,
+) -> RenderGpuResidencyBudgetStatus {
+    if observed > 0 && unit_estimate == 0 {
+        RenderGpuResidencyBudgetStatus::InvalidBudget
+    } else if observed > limit {
+        RenderGpuResidencyBudgetStatus::OverBudget
+    } else {
+        RenderGpuResidencyBudgetStatus::WithinBudget
+    }
 }
 
 fn selected_state_conflicts(left: &RenderSelectedProduct, right: &RenderSelectedProduct) -> bool {
@@ -551,6 +714,30 @@ fn pinned_budget_exceeded_diagnostic(
             "renderer gpu residency has {resident_count} hard-pinned entries with budget {budget}"
         ),
     )
+}
+
+fn residency_budget_exceeded_diagnostic(
+    budget_kind: &str,
+    observed: u64,
+    budget: u64,
+) -> FieldProductDiagnostic {
+    FieldProductDiagnostic::new(
+        FieldProductDiagnosticCode::RebuildBudgetExhausted,
+        FieldProductDiagnosticSeverity::Warning,
+        format!("renderer gpu residency {budget_kind} observed {observed} exceeds budget {budget}"),
+    )
+}
+
+fn invalid_budget_diagnostic(field: &str, message: &str) -> FieldProductDiagnostic {
+    let mut diagnostic = FieldProductDiagnostic::new(
+        FieldProductDiagnosticCode::RebuildBudgetExhausted,
+        FieldProductDiagnosticSeverity::Error,
+        message,
+    );
+    diagnostic.cause = format!("invalid renderer residency budget field: {field}");
+    diagnostic.suggested_action =
+        "configure a non-zero byte estimate before treating scale evidence as complete".to_string();
+    diagnostic
 }
 
 pub fn derive_render_gpu_residency_system(
@@ -724,6 +911,7 @@ mod tests {
         let mut residency = RenderGpuResidencyResource::default();
         let budget = RenderGpuResidencyBudgetResource {
             max_resident_entries: 2,
+            ..RenderGpuResidencyBudgetResource::default()
         };
         let selections = [
             selection("a", 1, 1, 10, false),
@@ -745,6 +933,7 @@ mod tests {
         let mut residency = RenderGpuResidencyResource::default();
         let budget = RenderGpuResidencyBudgetResource {
             max_resident_entries: 1,
+            ..RenderGpuResidencyBudgetResource::default()
         };
         let selections = [
             selection("a", 1, 1, 10, true),
@@ -756,5 +945,10 @@ mod tests {
         assert_eq!(summary.resident_count, 2);
         assert_eq!(summary.evicted_count, 0);
         assert_eq!(summary.diagnostic_count, 1);
+        assert!(summary.hard_pinned_over_entry_budget);
+        assert_eq!(
+            summary.resident_entry_budget_status,
+            RenderGpuResidencyBudgetStatus::OverBudget
+        );
     }
 }

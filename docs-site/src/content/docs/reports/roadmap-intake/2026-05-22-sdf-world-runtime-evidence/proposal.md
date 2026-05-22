@@ -1,7 +1,7 @@
 ---
 title: Roadmap Intake WR-066
-description: Roadmap intake proposal generated from a new idea.
-status: draft
+description: Roadmap intake proposal for SDF world runtime evidence.
+status: completed
 owner: workspace
 layer: workspace
 canonical: false
@@ -14,6 +14,10 @@ Idea: SDF World Runtime Evidence
 Suggested title: SDF World Runtime Evidence
 Initial planning state: `blocked_deferred`
 
+Updated planning state: `completed` after design-first contract preparation,
+roadmap promotion, runtime evidence implementation, focused validation, and
+closeout.
+
 ## Governance Notes
 
 - Run architecture governance review before implementation.
@@ -22,9 +26,21 @@ Initial planning state: `blocked_deferred`
 
 ## Open Questions
 
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+Resolved by:
+
+- accepted SDF world rendering and raymarch acceleration doctrine;
+- accepted renderer production-readiness and GPU evidence doctrine;
+- completed WR-064 sparse SDF brick/page/clipmap residency closeout;
+- completed WR-065 SDF raymarch acceleration and candidate-list closeout;
+- completed WR-063 renderer scale evidence and production-readiness closeout;
+- WR-066 design-first implementation contract at
+  `docs-site/src/content/docs/reports/implementation-plans/wr-066-sdf-world-runtime-evidence/plan.md`.
+
+Completed closeout evidence is recorded at
+`docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md`.
+
+WR-066 closes at `runtime_proven`: final `perfectionist_verified` remains the
+explicit responsibility of `PT-RENDER-PERFECTION`.
 
 ## Apply Command
 

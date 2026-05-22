@@ -4,7 +4,7 @@ struct BoidAgent {
 };
 
 struct ComputeParams {
-    frame_meta: vec4<u32>, // tick, step, read_from_a, boid_count
+    frame_meta: vec4<u32>, // tick, step, publish_to_render_buffer, boid_count
     sim_a: vec4<f32>, // delta_seconds, max_speed, max_force, neighbor_radius
     sim_b: vec4<f32>, // separation_radius, alignment_weight, cohesion_weight, separation_weight
     sim_c: vec4<f32>, // center_weight, jitter_strength, simulation_fps, padding
@@ -50,21 +50,6 @@ fn normalize_or_zero(value: vec2<f32>) -> vec2<f32> {
     return value / len;
 }
 
-fn read_boid(index: u32, read_from_a: bool) -> BoidAgent {
-    if (read_from_a) {
-        return boids_a[index];
-    }
-    return boids_b[index];
-}
-
-fn write_boid(index: u32, read_from_a: bool, boid: BoidAgent) {
-    if (read_from_a) {
-        boids_b[index] = boid;
-    } else {
-        boids_a[index] = boid;
-    }
-}
-
 fn seed_boid(index: u32, boid_count: u32) -> BoidAgent {
     let i = f32(index);
     let count = max(f32(boid_count), 1.0);
@@ -93,7 +78,12 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let tick = params.frame_meta.x;
     let step_enabled = params.frame_meta.y != 0u;
-    let read_from_a = params.frame_meta.z != 0u;
+    let publish_to_render_buffer = params.frame_meta.z != 0u;
+
+    if (publish_to_render_buffer) {
+        boids_a[index] = boids_b[index];
+        return;
+    }
 
     if (tick == 0u) {
         let seeded = seed_boid(index, boid_count);
@@ -113,9 +103,9 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let center_weight = params.sim_c.x;
     let jitter_strength = params.sim_c.y;
 
-    var boid = read_boid(index, read_from_a);
+    var boid = boids_a[index];
     if (!step_enabled) {
-        write_boid(index, read_from_a, boid);
+        boids_b[index] = boid;
         return;
     }
 
@@ -129,7 +119,7 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (i == index) {
             continue;
         }
-        let other = read_boid(i, read_from_a);
+        let other = boids_a[i];
         let delta = wrap_delta(other.position - boid.position);
         let dist = length(delta);
         if (dist < neighbor_radius) {
@@ -186,5 +176,5 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     boid.position = fract(boid.position + boid.velocity * delta_seconds);
 
-    write_boid(index, read_from_a, boid);
+    boids_b[index] = boid;
 }

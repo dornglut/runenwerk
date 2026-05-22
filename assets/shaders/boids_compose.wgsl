@@ -1,94 +1,63 @@
-struct BoidAgent {
-    position: vec2<f32>,
-    velocity: vec2<f32>,
-};
-
-struct ComposeParams {
-    frame_meta: vec4<u32>, // boid_count, current_is_a, _, _
-    surface: vec4<f32>, // width, height, inv_width, inv_height
-    draw: vec4<f32>, // body_radius, glow_radius, tail_strength, _
-    background: vec4<f32>,
-    boid_color: vec4<f32>,
-};
-
-@group(0) @binding(0)
-var<uniform> params: ComposeParams;
-
-@group(0) @binding(1)
-var<storage, read> boids_a: array<BoidAgent>;
-
-@group(0) @binding(2)
-var<storage, read> boids_b: array<BoidAgent>;
-
 struct VsOut {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
+    @location(0) local_position: vec2<f32>,
+    @location(1) local_velocity: vec2<f32>,
 };
 
-@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {
-    let pos = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -3.0),
-        vec2<f32>(-1.0, 1.0),
-        vec2<f32>(3.0, 1.0),
-    );
-
-    let p = pos[vertex_index];
-    var out: VsOut;
-    out.clip_position = vec4<f32>(p, 0.0, 1.0);
-    out.uv = vec2<f32>((p.x + 1.0) * 0.5, 1.0 - (p.y + 1.0) * 0.5);
-    return out;
-}
-
-fn wrap_delta(delta: vec2<f32>) -> vec2<f32> {
-    return delta - round(delta);
-}
-
-fn normalize_or_zero(value: vec2<f32>) -> vec2<f32> {
+fn normalize_or_up(value: vec2<f32>) -> vec2<f32> {
     let len = length(value);
     if (len <= 0.000001) {
-        return vec2<f32>(0.0, 0.0);
+        return vec2<f32>(0.0, -1.0);
     }
     return value / len;
 }
 
+@vertex
+fn vs_main(
+    @builtin(vertex_index) vertex_index: u32,
+    @location(0) instance_position: vec2<f32>,
+    @location(1) instance_velocity: vec2<f32>,
+) -> VsOut {
+    let corners = array<vec2<f32>, 6>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, -1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, 1.0),
+    );
+
+    let local = corners[vertex_index];
+    let direction = normalize_or_up(instance_velocity);
+    let right = vec2<f32>(direction.y, -direction.x);
+    let radius = 0.022;
+    let oriented_offset = (right * local.x * 0.72 + direction * local.y * 1.35) * radius;
+    let uv_position = instance_position + oriented_offset;
+    let clip_position = vec2<f32>(uv_position.x * 2.0 - 1.0, 1.0 - uv_position.y * 2.0);
+
+    var out: VsOut;
+    out.clip_position = vec4<f32>(clip_position, 0.0, 1.0);
+    out.local_position = local;
+    out.local_velocity = direction;
+    return out;
+}
+
 @fragment
 fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
-    let boid_count = max(params.frame_meta.x, 1u);
-    let use_a = params.frame_meta.y != 0u;
-    let aspect = max(params.surface.x * params.surface.w, 0.0001);
+    let local = input.local_position;
+    let body = 1.0 - smoothstep(0.46, 0.58, length(vec2<f32>(local.x * 1.16, local.y + 0.10)));
+    let nose = 1.0 - smoothstep(0.22, 0.32, length(vec2<f32>(local.x * 1.75, local.y - 0.48)));
+    let tail_axis = clamp((-local.y - 0.08) * 1.6, 0.0, 1.0);
+    let tail_width = mix(0.34, 0.08, tail_axis);
+    let tail = (1.0 - smoothstep(tail_width, tail_width + 0.08, abs(local.x)))
+        * smoothstep(-0.86, -0.08, local.y);
+    let halo = 1.0 - smoothstep(0.60, 1.05, length(local));
 
-    let body_radius = max(params.draw.x, 0.001);
-    let glow_radius = max(params.draw.y, body_radius * 1.5);
-    let tail_strength = max(params.draw.z, 0.0);
-
-    var min_dist = 10.0;
-    var glow = 0.0;
-
-    for (var i: u32 = 0u; i < boid_count; i = i + 1u) {
-        var boid = boids_b[i];
-        if (use_a) {
-            boid = boids_a[i];
-        }
-        let delta = wrap_delta(input.uv - boid.position);
-        let delta_aspect = vec2<f32>(delta.x * aspect, delta.y);
-        let dist = length(delta_aspect);
-        min_dist = min(min_dist, dist);
-
-        let glow_density = exp(-dist * (10.0 / glow_radius));
-        glow = glow + glow_density * 0.014;
-
-        let dir = normalize_or_zero(boid.velocity);
-        let tail_anchor = boid.position - dir * body_radius * 2.2;
-        let tail_delta = wrap_delta(input.uv - tail_anchor);
-        let tail_dist = length(vec2<f32>(tail_delta.x * aspect, tail_delta.y));
-        glow = glow + exp(-tail_dist * 48.0) * tail_strength * 0.004;
-    }
-
-    let body = 1.0 - smoothstep(body_radius, body_radius * 1.8, min_dist);
-    let halo = clamp(glow, 0.0, 1.0);
-    let blend = clamp(body + halo * 0.65, 0.0, 1.0);
-
-    let color = mix(params.background.rgb, params.boid_color.rgb, blend);
-    return vec4<f32>(color, 1.0);
+    let mask = clamp(max(max(body, nose), tail * 0.78), 0.0, 1.0);
+    let glow = halo * 0.34;
+    let base = vec3<f32>(0.30, 0.95, 0.82);
+    let hot = vec3<f32>(0.88, 1.0, 0.92);
+    let color = mix(base * 0.45, hot, clamp(mask + glow, 0.0, 1.0));
+    let alpha = clamp(mask + glow * 0.62, 0.0, 1.0);
+    return vec4<f32>(color, alpha);
 }

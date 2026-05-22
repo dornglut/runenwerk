@@ -1,7 +1,10 @@
 use super::*;
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::CompiledDrawBufferPlan;
-use crate::plugins::render::{RenderVertexFormat, RenderVertexStepMode};
+use crate::plugins::render::{
+    RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderPrimitiveTopology, RenderRasterState,
+    RenderVertexFormat, RenderVertexStepMode,
+};
 
 impl Renderer {
     #[allow(clippy::too_many_arguments)]
@@ -17,6 +20,7 @@ impl Renderer {
         pass: &CompiledPassExecutionPlan,
         shader_registry: &ShaderRegistryResource,
         runtime_resources: &FlowRuntimeResources,
+        gpu_timestamp_writes: Option<GpuPassTimestampWrites<'_>>,
     ) -> Result<EncodedPassEvidence> {
         match pass {
             CompiledPassExecutionPlan::Compute(value) => self
@@ -30,6 +34,7 @@ impl Renderer {
                     runtime_resources,
                     value,
                     shader_registry,
+                    gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
                     dispatch_workgroups: value.dispatch_workgroups,
@@ -49,6 +54,7 @@ impl Renderer {
                     runtime_resources,
                     value,
                     shader_registry,
+                    gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
                     dispatch_workgroups: None,
@@ -68,6 +74,7 @@ impl Renderer {
                     runtime_resources,
                     value,
                     shader_registry,
+                    gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
                     dispatch_workgroups: None,
@@ -106,6 +113,7 @@ impl Renderer {
                     &packet.viewport_surface_bindings,
                     packet.surface_size,
                     packet.surface_format,
+                    gpu_timestamp_writes,
                 );
                 Ok(EncodedPassEvidence {
                     dispatch_workgroups: None,
@@ -130,6 +138,7 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
         pass: &CompiledComputeExecutionPlan,
         shader_registry: &ShaderRegistryResource,
+        gpu_timestamp_writes: Option<GpuPassTimestampWrites<'_>>,
     ) -> Result<EncodedPipelinePass> {
         let shader = resolve_shader_material(
             pass.shader.as_ref(),
@@ -174,6 +183,7 @@ impl Renderer {
             Vec::new(),
             None,
             0,
+            0,
             FlowPrimitiveTopologyClass::None,
             runtime_resources,
         )?;
@@ -211,9 +221,14 @@ impl Renderer {
                     })
                 });
 
+        let timestamp_writes = gpu_timestamp_writes.map(|writes| ComputePassTimestampWrites {
+            query_set: writes.query_set,
+            beginning_of_pass_write_index: Some(writes.indices.begin),
+            end_of_pass_write_index: Some(writes.indices.end),
+        });
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some("engine_compiled_compute_pass"),
-            timestamp_writes: None,
+            timestamp_writes,
         });
         pass.set_pipeline(&pipeline);
         if let Some(bind_group) = bind_group.as_ref() {
@@ -241,6 +256,7 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
         plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
+        gpu_timestamp_writes: Option<GpuPassTimestampWrites<'_>>,
     ) -> Result<EncodedPipelinePass> {
         if !plan.draw_buffers.vertex_buffers.is_empty()
             || !plan.draw_buffers.index_buffers.is_empty()
@@ -296,6 +312,7 @@ impl Renderer {
             true,
             vec![color_target.format],
             None,
+            0,
             0,
             FlowPrimitiveTopologyClass::TriangleList,
             runtime_resources,
@@ -399,11 +416,16 @@ impl Renderer {
                 store: StoreOp::Store,
             },
         });
+        let timestamp_writes = gpu_timestamp_writes.map(|writes| RenderPassTimestampWrites {
+            query_set: writes.query_set,
+            beginning_of_pass_write_index: Some(writes.indices.begin),
+            end_of_pass_write_index: Some(writes.indices.end),
+        });
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("engine_compiled_fullscreen_pass"),
             color_attachments: &[color_attachment],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes,
             occlusion_query_set: None,
         });
         pass.set_pipeline(&pipeline);
@@ -437,6 +459,7 @@ impl Renderer {
         runtime_resources: &FlowRuntimeResources,
         plan: &CompiledRasterExecutionPlan,
         shader_registry: &ShaderRegistryResource,
+        gpu_timestamp_writes: Option<GpuPassTimestampWrites<'_>>,
     ) -> Result<EncodedPipelinePass> {
         let color_target = self.resolve_color_target_from_plan(
             runtime_resources,
@@ -469,6 +492,7 @@ impl Renderer {
         )?;
 
         let vertex_layout_signature_hash = plan.draw_buffers.vertex_layout_signature_hash();
+        let raster_state_signature_hash = plan.raster_state.signature_hash();
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
             frame_texture,
@@ -485,7 +509,8 @@ impl Renderer {
             vec![color_target.format],
             depth_target.as_ref().map(|value| value.format),
             vertex_layout_signature_hash,
-            FlowPrimitiveTopologyClass::TriangleList,
+            raster_state_signature_hash,
+            primitive_topology_class(plan.raster_state.primitive_topology()),
             runtime_resources,
         )?;
 
@@ -560,18 +585,18 @@ impl Renderer {
                             compilation_options: PipelineCompilationOptions::default(),
                             targets: &[Some(ColorTargetState {
                                 format: color_target.format,
-                                blend: blend_state_for_color_format(color_target.format),
+                                blend: blend_state_for_policy(
+                                    color_target.format,
+                                    plan.raster_state.state.blend_mode,
+                                ),
                                 write_mask: ColorWrites::ALL,
                             })],
                         }),
-                        primitive: PrimitiveState::default(),
-                        depth_stencil: depth_target.as_ref().map(|target| DepthStencilState {
-                            format: target.format,
-                            depth_write_enabled: true,
-                            depth_compare: CompareFunction::LessEqual,
-                            stencil: StencilState::default(),
-                            bias: DepthBiasState::default(),
-                        }),
+                        primitive: primitive_state_from_raster_state(plan.raster_state.state),
+                        depth_stencil: depth_stencil_state_for_policy(
+                            depth_target.as_ref().map(|target| target.format),
+                            plan.raster_state.state.depth_policy,
+                        ),
                         multisample: MultisampleState::default(),
                         multiview: None,
                         cache: None,
@@ -596,23 +621,33 @@ impl Renderer {
                 store: StoreOp::Store,
             },
         });
-        let depth_attachment =
-            depth_target
-                .as_ref()
-                .map(|target| RenderPassDepthStencilAttachment {
-                    view: &target.view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                });
+        let depth_attachment = depth_target
+            .as_ref()
+            .filter(|_| {
+                !matches!(
+                    plan.raster_state.state.depth_policy,
+                    RenderDepthPolicy::Disabled
+                )
+            })
+            .map(|target| RenderPassDepthStencilAttachment {
+                view: &target.view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            });
 
+        let timestamp_writes = gpu_timestamp_writes.map(|writes| RenderPassTimestampWrites {
+            query_set: writes.query_set,
+            beginning_of_pass_write_index: Some(writes.indices.begin),
+            end_of_pass_write_index: Some(writes.indices.end),
+        });
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("engine_compiled_graphics_pass"),
             color_attachments: &[color_attachment],
             depth_stencil_attachment: depth_attachment,
-            timestamp_writes: None,
+            timestamp_writes,
             occlusion_query_set: None,
         });
         pass.set_pipeline(&pipeline);
@@ -1082,6 +1117,13 @@ fn build_vertex_attribute_sets(draw_buffers: &CompiledDrawBufferPlan) -> Vec<Vec
 }
 
 fn blend_state_for_color_format(format: TextureFormat) -> Option<BlendState> {
+    blend_state_for_policy(format, RenderBlendMode::Alpha)
+}
+
+fn blend_state_for_policy(format: TextureFormat, policy: RenderBlendMode) -> Option<BlendState> {
+    if matches!(policy, RenderBlendMode::Replace) {
+        return None;
+    }
     match format {
         TextureFormat::R8Uint
         | TextureFormat::R8Sint
@@ -1105,6 +1147,70 @@ fn blend_state_for_color_format(format: TextureFormat) -> Option<BlendState> {
     }
 }
 
+fn primitive_state_from_raster_state(state: RenderRasterState) -> PrimitiveState {
+    PrimitiveState {
+        topology: render_primitive_topology_to_wgpu(state.primitive_topology),
+        strip_index_format: match state.primitive_topology {
+            RenderPrimitiveTopology::TriangleStrip | RenderPrimitiveTopology::LineStrip => {
+                Some(IndexFormat::Uint32)
+            }
+            RenderPrimitiveTopology::TriangleList
+            | RenderPrimitiveTopology::LineList
+            | RenderPrimitiveTopology::PointList => None,
+        },
+        front_face: FrontFace::Ccw,
+        cull_mode: render_cull_mode_to_wgpu(state.cull_mode),
+        unclipped_depth: false,
+        polygon_mode: PolygonMode::Fill,
+        conservative: false,
+    }
+}
+
+fn render_primitive_topology_to_wgpu(value: RenderPrimitiveTopology) -> PrimitiveTopology {
+    match value {
+        RenderPrimitiveTopology::TriangleList => PrimitiveTopology::TriangleList,
+        RenderPrimitiveTopology::TriangleStrip => PrimitiveTopology::TriangleStrip,
+        RenderPrimitiveTopology::LineList => PrimitiveTopology::LineList,
+        RenderPrimitiveTopology::LineStrip => PrimitiveTopology::LineStrip,
+        RenderPrimitiveTopology::PointList => PrimitiveTopology::PointList,
+    }
+}
+
+fn primitive_topology_class(value: RenderPrimitiveTopology) -> FlowPrimitiveTopologyClass {
+    match value {
+        RenderPrimitiveTopology::TriangleList => FlowPrimitiveTopologyClass::TriangleList,
+        RenderPrimitiveTopology::TriangleStrip => FlowPrimitiveTopologyClass::TriangleStrip,
+        RenderPrimitiveTopology::LineList => FlowPrimitiveTopologyClass::LineList,
+        RenderPrimitiveTopology::LineStrip => FlowPrimitiveTopologyClass::LineStrip,
+        RenderPrimitiveTopology::PointList => FlowPrimitiveTopologyClass::PointList,
+    }
+}
+
+fn render_cull_mode_to_wgpu(value: RenderCullMode) -> Option<Face> {
+    match value {
+        RenderCullMode::None => None,
+        RenderCullMode::Front => Some(Face::Front),
+        RenderCullMode::Back => Some(Face::Back),
+    }
+}
+
+fn depth_stencil_state_for_policy(
+    depth_format: Option<TextureFormat>,
+    policy: RenderDepthPolicy,
+) -> Option<DepthStencilState> {
+    let format = depth_format?;
+    if matches!(policy, RenderDepthPolicy::Disabled) {
+        return None;
+    }
+    Some(DepthStencilState {
+        format,
+        depth_write_enabled: !matches!(policy, RenderDepthPolicy::ReadOnly),
+        depth_compare: CompareFunction::LessEqual,
+        stencil: StencilState::default(),
+        bias: DepthBiasState::default(),
+    })
+}
+
 fn copy_formats_are_raw_compatible(source: TextureFormat, destination: TextureFormat) -> bool {
     if texture_format_is_depth_or_stencil(source) || texture_format_is_depth_or_stencil(destination)
     {
@@ -1115,55 +1221,6 @@ fn copy_formats_are_raw_compatible(source: TextureFormat, destination: TextureFo
 
 fn texture_format_is_depth_or_stencil(format: TextureFormat) -> bool {
     format.is_depth_stencil_format()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn raw_copy_formats_accept_srgb_suffix_pairs() {
-        assert!(copy_formats_are_raw_compatible(
-            TextureFormat::Rgba8Unorm,
-            TextureFormat::Rgba8UnormSrgb
-        ));
-        assert!(copy_formats_are_raw_compatible(
-            TextureFormat::Rgba8UnormSrgb,
-            TextureFormat::Rgba8Unorm
-        ));
-        assert!(copy_formats_are_raw_compatible(
-            TextureFormat::Bgra8Unorm,
-            TextureFormat::Bgra8UnormSrgb
-        ));
-        assert!(copy_formats_are_raw_compatible(
-            TextureFormat::Bgra8UnormSrgb,
-            TextureFormat::Bgra8Unorm
-        ));
-    }
-
-    #[test]
-    fn raw_copy_formats_reject_unrelated_color_formats() {
-        assert!(!copy_formats_are_raw_compatible(
-            TextureFormat::Rgba8Unorm,
-            TextureFormat::Bgra8Unorm
-        ));
-        assert!(!copy_formats_are_raw_compatible(
-            TextureFormat::Rgba8Unorm,
-            TextureFormat::Rgba16Float
-        ));
-    }
-
-    #[test]
-    fn raw_copy_formats_reject_depth_stencil_formats() {
-        assert!(!copy_formats_are_raw_compatible(
-            TextureFormat::Depth32Float,
-            TextureFormat::Depth32Float
-        ));
-        assert!(!copy_formats_are_raw_compatible(
-            TextureFormat::Rgba8Unorm,
-            TextureFormat::Depth32Float
-        ));
-    }
 }
 
 fn build_vertex_buffer_layouts<'a>(
@@ -1222,5 +1279,54 @@ fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {
         RenderVertexFormat::Sint32x2 => VertexFormat::Sint32x2,
         RenderVertexFormat::Sint32x3 => VertexFormat::Sint32x3,
         RenderVertexFormat::Sint32x4 => VertexFormat::Sint32x4,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_copy_formats_accept_srgb_suffix_pairs() {
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba8UnormSrgb
+        ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Rgba8Unorm
+        ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Bgra8Unorm,
+            TextureFormat::Bgra8UnormSrgb
+        ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::Bgra8UnormSrgb,
+            TextureFormat::Bgra8Unorm
+        ));
+    }
+
+    #[test]
+    fn raw_copy_formats_reject_unrelated_color_formats() {
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Bgra8Unorm
+        ));
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba16Float
+        ));
+    }
+
+    #[test]
+    fn raw_copy_formats_reject_depth_stencil_formats() {
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Depth32Float,
+            TextureFormat::Depth32Float
+        ));
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Depth32Float
+        ));
     }
 }

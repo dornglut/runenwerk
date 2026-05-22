@@ -1527,15 +1527,10 @@ fn tab_stack_chrome_surface_target_pending_c6(
 ) -> Option<TabStackChromeSurfaceTarget> {
     // C6D repair: corner split is still app-shell chrome, but it must preserve
     // stable-key identity instead of inventing viewport legacy fallback.
-    let Some(tab_stack) = shell_state.workspace_state().tab_stack(tab_stack_id) else {
-        return None;
-    };
-    let Some(panel_id) = tab_stack
+    let tab_stack = shell_state.workspace_state().tab_stack(tab_stack_id)?;
+    let panel_id = tab_stack
         .active_panel
-        .or_else(|| tab_stack.ordered_panels.first().copied())
-    else {
-        return None;
-    };
+        .or_else(|| tab_stack.ordered_panels.first().copied())?;
     let panel = shell_state.workspace_state().panel(panel_id)?;
     let surface = panel
         .active_tool_surface

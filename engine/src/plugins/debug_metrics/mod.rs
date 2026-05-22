@@ -40,6 +40,7 @@ fn setup_debug_metrics_input_binding(mut input: ResMut<InputState>) {
     input.map_key(ACTION_TOGGLE_METRICS, KeyCode::F10);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn debug_metrics_overlay_system(
     input: Res<InputState>,
     time: Res<Time>,

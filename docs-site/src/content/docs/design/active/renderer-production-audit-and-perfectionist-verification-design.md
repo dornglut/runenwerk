@@ -7,9 +7,9 @@ layer: workspace / engine-runtime
 canonical: true
 last_reviewed: 2026-05-22
 related_designs:
-  - ./renderer-gpu-evidence-and-procedural-visuals-design.md
-  - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
-  - ./sdf-world-rendering-and-raymarch-acceleration-design.md
+  - ../accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - ../accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+  - ../accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
   - ./renderer-temporal-reconstruction-and-dynamic-resolution-design.md
   - ./renderer-hardware-ray-query-and-hybrid-tracing-design.md
   - ./renderer-product-visual-producers-platform-design.md

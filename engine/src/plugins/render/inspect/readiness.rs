@@ -1,6 +1,7 @@
 use super::{
     PreparedRenderFrameInspection, RenderCapturePointIdentity, RenderCaptureTerminalCode,
-    RenderDebugFrameReport, RenderExecutionGraphPreflightInspection, RenderFragmentMergeInspection,
+    RenderDebugFrameReport, RenderDebugTimingsState, RenderExecutionGraphPreflightInspection,
+    RenderFragmentMergeInspection, RenderGpuTimingCapability,
     RenderProductSurfaceManifestInspection, RenderReadinessBudgetReport,
     RenderReadinessBudgetStatus,
 };
@@ -35,6 +36,7 @@ pub enum RenderReadinessDiagnosticKind {
     CaptureReplayManifestInvalid,
     BudgetOverrun,
     BudgetNotMeasured,
+    GpuTimingDiagnostics,
 }
 
 impl RenderReadinessDiagnosticKind {
@@ -50,6 +52,7 @@ impl RenderReadinessDiagnosticKind {
             Self::CaptureReplayManifestInvalid => "capture_replay_manifest_invalid",
             Self::BudgetOverrun => "budget_overrun",
             Self::BudgetNotMeasured => "budget_not_measured",
+            Self::GpuTimingDiagnostics => "gpu_timing_diagnostics",
         }
     }
 }
@@ -115,6 +118,8 @@ pub struct RenderReadinessSourceReportSummary {
     pub capture_failure_count: usize,
     pub budget_result_count: usize,
     pub budget_overrun_count: usize,
+    pub gpu_pass_sample_count: usize,
+    pub gpu_timing_diagnostic_count: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -124,6 +129,7 @@ pub struct RenderReadinessReportRequest {
     pub preflight: Option<RenderExecutionGraphPreflightInspection>,
     pub fragment_merges: Vec<RenderFragmentMergeInspection>,
     pub capture_report: Option<RenderDebugFrameReport>,
+    pub timings: Option<RenderDebugTimingsState>,
     pub budget_report: RenderReadinessBudgetReport,
     pub replay_validation: Option<RenderReplayManifestValidation>,
 }
@@ -331,6 +337,24 @@ pub fn inspect_render_readiness(request: RenderReadinessReportRequest) -> Render
         }
     }
 
+    if let Some(timings) = &request.timings {
+        for diagnostic in &timings.gpu_timing_diagnostics {
+            diagnostics.push(RenderReadinessDiagnostic {
+                frame_index: diagnostic.frame_index.or(frame_index),
+                render_surface_id: diagnostic.render_surface_id.or(render_surface_id),
+                native_window_id,
+                flow_id: diagnostic.flow_id.clone(),
+                pass_id: diagnostic.pass_id.clone(),
+                ..RenderReadinessDiagnostic::new(
+                    gpu_timing_readiness_severity(diagnostic.capability),
+                    RenderReadinessDiagnosticKind::GpuTimingDiagnostics,
+                    "render_gpu_timing",
+                    diagnostic.message.clone(),
+                )
+            });
+        }
+    }
+
     if let Some(validation) = &request.replay_validation {
         diagnostics.extend(validation.diagnostics.iter().cloned());
     }
@@ -508,6 +532,27 @@ fn summarize_sources(request: &RenderReadinessReportRequest) -> RenderReadinessS
             .unwrap_or(0),
         budget_result_count: request.budget_report.results.len(),
         budget_overrun_count: request.budget_report.over_budget_count(),
+        gpu_pass_sample_count: request
+            .timings
+            .as_ref()
+            .map(|timings| timings.gpu_pass_sample_count)
+            .unwrap_or(0),
+        gpu_timing_diagnostic_count: request
+            .timings
+            .as_ref()
+            .map(|timings| timings.gpu_timing_diagnostics.len())
+            .unwrap_or(0),
+    }
+}
+
+fn gpu_timing_readiness_severity(
+    capability: RenderGpuTimingCapability,
+) -> RenderReadinessDiagnosticSeverity {
+    match capability {
+        RenderGpuTimingCapability::Supported => RenderReadinessDiagnosticSeverity::Info,
+        RenderGpuTimingCapability::ReadbackPending
+        | RenderGpuTimingCapability::UnavailableThisFrame
+        | RenderGpuTimingCapability::Unsupported => RenderReadinessDiagnosticSeverity::Warning,
     }
 }
 

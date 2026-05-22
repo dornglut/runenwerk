@@ -1,6 +1,6 @@
 version: 1
 idea: Renderer GPU Pass Timing And Workload Evidence
-source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
@@ -37,7 +37,7 @@ item:
   - engine/src/plugins/render
   - engine/tests
   - docs-site/src/content/docs/engine/reference/plugins/render
-  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-gpu-pass-timing-and-workload-evidence
   validations:
   - cargo test -p engine render_runtime_inspect
@@ -57,7 +57,7 @@ item:
   - CPU/GPU timing DTOs
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
     required_status: accepted
     applies_to: implementation
     reason: GPU timing implementation must follow the accepted renderer evidence and ownership contract.

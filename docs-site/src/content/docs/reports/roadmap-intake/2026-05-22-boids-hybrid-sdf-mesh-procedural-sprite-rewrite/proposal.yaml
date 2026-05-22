@@ -1,16 +1,20 @@
 version: 1
 idea: Boids Hybrid SDF/Mesh Procedural Sprite Rewrite
-source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
 owner: engine/examples/boids_render_flow
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- Which boids count and runtime duration should define the production smoke evidence?
-- Should the canonical boid visual default to mesh sprites, local SDF impostors, or a toggleable comparison?
-- What GPU timing threshold should fail the boids runtime evidence closeout?
+open_questions: []
+resolved_questions:
+- Runtime smoke uses the existing default boids configuration for the canonical example; broader stress counts and duration
+  budgets belong to WR-060 production evidence.
+- The canonical visual defaults to local 2D SDF impostors through the public procedural API. Mesh or quad comparison paths
+  are out of scope unless they remain incidental public-API tests and do not replace the canonical proof.
+- WR-059 has no fixed GPU timing failure threshold. It fails on missing runtime timing or explicit unsupported diagnostics,
+  missing compute/render/present evidence, fullscreen-per-boid draw shape, or fragment loops over all boids.
 item:
   id: WR-059
   title: Boids Hybrid SDF/Mesh Procedural Sprite Rewrite
@@ -18,11 +22,11 @@ item:
   alias: BOIDSPROC
   lane: Render example
   dependency_level: L3
-  gate: Procedural instance API and GPU timing evidence
-  planning_state: blocked_deferred
+  gate: Design-first procedural boids contract accepted
+  planning_state: completed
   priority: P1
   value: 3
-  blocker: 4
+  blocker: 2
   tc: 4
   rr_oe: 5
   du: 4
@@ -38,28 +42,41 @@ item:
   - assets/shaders/boids_compose.wgsl
   - assets/shaders/boids_compute.wgsl
   - docs-site/src/content/docs/engine/reference/plugins/render
-  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-boids-hybrid-sdf-mesh-procedural-sprite-rewrite
+  - docs-site/src/content/docs/reports/implementation-plans/wr-059-boids-hybrid-sdf-mesh-procedural-sprite-rewrite/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-059-boids-hybrid-sdf-mesh-procedural-sprite-rewrite/closeout.md
   validations:
   - cargo test -p engine --example boids_render_flow
   - cargo run -p engine --example boids_render_flow
   - cargo test -p engine render_runtime_inspect
   - task docs:validate
-  next_evidence: Completed procedural instance API plus runtime proof that boids no longer multiply fullscreen rendering by instance count.
-  current_decision: Deferred canonical example rewrite; do not patch boids locally before the procedural API and guard rows exist.
-  current_call: Boids should use renderer public procedural APIs and runtime GPU evidence, not example-specific renderer bypasses.
-  first_move: Promote after WR-058 completion, then rewrite boids around storage-backed compute simulation and local per-boid mesh/SDF sprite rendering.
-  main_blocker: Depends on WR-058 procedural instance API and accepted GPU evidence/procedural visuals design.
-  why_not_ready: The canonical boids rewrite must consume the new API instead of inventing a temporary example-only path.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed boids procedural rewrite closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-059-boids-hybrid-sdf-mesh-procedural-sprite-rewrite/closeout.md.
+  current_decision: Completed. Boids keeps storage-backed compute simulation, publishes simulated state into the render instance buffer, and renders local 2D SDF impostors through the public procedural API without a history copy or fullscreen fragment loop over all boids.
+  current_call: Completed. Future boids and procedural examples should preserve public procedural API consumption and keep product truth, freshness, fallback, rebuild, and residency policy outside renderer-owned helpers.
+  first_move: Use the WR-059 closeout as evidence before starting WR-060 production runtime evidence.
+  main_blocker: Complete; finite runtime timing artifacts, numeric budgets, and production stress evidence remain WR-060.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-060 still owns production runtime evidence, numeric timing budgets, and stress thresholds for the complete procedural visual chain.
+  - The local windowed smoke was manually interrupted and did not capture a finite compute, draw, and present timing artifact.
+  - The current procedural API path does not bind compose-pass uniforms for the boids impostor style; the shader uses constants
+    for visual scale and color.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-059-boids-hybrid-sdf-mesh-procedural-sprite-rewrite/closeout.md
   diagram_call:
   - storage compute
-  - local sprite render
+  - local SDF impostor
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
     required_status: accepted
     applies_to: implementation
     reason: Boids rewrite must prove the accepted procedural visual model and runtime evidence contract.

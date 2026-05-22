@@ -99,46 +99,46 @@ package "PT-RENDER-PG Render Product Graph Platform" {
 }
 
 package "PT-RENDER-GPU Renderer GPU Evidence And Procedural Visuals Platform" {
-  component "PM-RENDER-GPU-001 GPU Evidence And Procedural Visuals Doctrine\nkind=design\nstate=active\nWR=WR-082" as PM_RENDER_GPU_001 <<active>>
+  component "PM-RENDER-GPU-001 GPU Evidence And Procedural Visuals Doctrine\nkind=design\nstate=completed\nWR=WR-082" as PM_RENDER_GPU_001 <<completed>>
 
-  component "PM-RENDER-GPU-002 GPU Pass Timing Foundation\nkind=implementation\nstate=designing\nWR=WR-056" as PM_RENDER_GPU_002 <<designing>>
+  component "PM-RENDER-GPU-002 GPU Pass Timing Foundation\nkind=implementation\nstate=completed\nWR=WR-056" as PM_RENDER_GPU_002 <<completed>>
 
-  component "PM-RENDER-GPU-003 Render-Flow Pass-Shape And Instance Guards\nkind=implementation\nstate=designing\nWR=WR-057" as PM_RENDER_GPU_003 <<designing>>
+  component "PM-RENDER-GPU-003 Render-Flow Pass-Shape And Instance Guards\nkind=implementation\nstate=completed\nWR=WR-057" as PM_RENDER_GPU_003 <<completed>>
 
-  component "PM-RENDER-GPU-004 Hybrid Procedural Instance Rendering API\nkind=implementation\nstate=designing\nWR=WR-058" as PM_RENDER_GPU_004 <<designing>>
+  component "PM-RENDER-GPU-004 Hybrid Procedural Instance Rendering API\nkind=implementation\nstate=completed\nWR=WR-058" as PM_RENDER_GPU_004 <<completed>>
 
-  component "PM-RENDER-GPU-005 Canonical Boids Hybrid Procedural Rewrite\nkind=implementation\nstate=designing\nWR=WR-059" as PM_RENDER_GPU_005 <<designing>>
+  component "PM-RENDER-GPU-005 Canonical Boids Hybrid Procedural Rewrite\nkind=implementation\nstate=completed\nWR=WR-059" as PM_RENDER_GPU_005 <<completed>>
 
-  component "PM-RENDER-GPU-006 Procedural Visuals Production Readiness\nkind=hardening\nstate=designing\nWR=WR-060" as PM_RENDER_GPU_006 <<designing>>
+  component "PM-RENDER-GPU-006 Procedural Visuals Production Readiness\nkind=hardening\nstate=completed\nWR=WR-060" as PM_RENDER_GPU_006 <<completed>>
 
 }
 
 package "PT-RENDER-SCALE Renderer Scale Residency And GPU Driven Visibility Platform" {
-  component "PM-RENDER-SCALE-001 Scale Residency And Visibility Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_SCALE_001 <<active>>
+  component "PM-RENDER-SCALE-001 Scale Residency And Visibility Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_SCALE_001 <<completed>>
 
-  component "PM-RENDER-SCALE-002 Working Set Registry And Residency Budgets\nkind=implementation\nstate=designing\nWR=WR-061" as PM_RENDER_SCALE_002 <<designing>>
+  component "PM-RENDER-SCALE-002 Working Set Registry And Residency Budgets\nkind=implementation\nstate=completed\nWR=WR-061" as PM_RENDER_SCALE_002 <<completed>>
 
-  component "PM-RENDER-SCALE-003 GPU Driven Culling LOD And Indirect Submission\nkind=implementation\nstate=designing\nWR=WR-062" as PM_RENDER_SCALE_003 <<designing>>
+  component "PM-RENDER-SCALE-003 GPU Driven Culling LOD And Indirect Submission\nkind=implementation\nstate=completed\nWR=WR-062" as PM_RENDER_SCALE_003 <<completed>>
 
-  component "PM-RENDER-SCALE-004 Scale Evidence And Production Readiness\nkind=hardening\nstate=designing\nWR=WR-063" as PM_RENDER_SCALE_004 <<designing>>
+  component "PM-RENDER-SCALE-004 Scale Evidence And Production Readiness\nkind=hardening\nstate=completed\nWR=WR-063" as PM_RENDER_SCALE_004 <<completed>>
 
 }
 
 package "PT-RENDER-SDF Sparse SDF World Rendering And Raymarch Acceleration Platform" {
-  component "PM-RENDER-SDF-001 Sparse SDF Rendering Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_SDF_001 <<active>>
+  component "PM-RENDER-SDF-001 Sparse SDF Rendering Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_SDF_001 <<completed>>
 
-  component "PM-RENDER-SDF-002 SDF Brick Page And Clipmap Residency\nkind=implementation\nstate=designing\nWR=WR-064" as PM_RENDER_SDF_002 <<designing>>
+  component "PM-RENDER-SDF-002 SDF Brick Page And Clipmap Residency\nkind=implementation\nstate=completed\nWR=WR-064" as PM_RENDER_SDF_002 <<completed>>
 
-  component "PM-RENDER-SDF-003 Raymarch Acceleration And Candidate Lists\nkind=implementation\nstate=designing\nWR=WR-065" as PM_RENDER_SDF_003 <<designing>>
+  component "PM-RENDER-SDF-003 Raymarch Acceleration And Candidate Lists\nkind=implementation\nstate=completed\nWR=WR-065" as PM_RENDER_SDF_003 <<completed>>
 
-  component "PM-RENDER-SDF-004 SDF World Runtime Evidence\nkind=hardening\nstate=designing\nWR=WR-066" as PM_RENDER_SDF_004 <<designing>>
+  component "PM-RENDER-SDF-004 SDF World Runtime Evidence\nkind=hardening\nstate=completed\nWR=WR-066" as PM_RENDER_SDF_004 <<completed>>
 
 }
 
 package "PT-RENDER-MESH-MATERIAL Mesh Material Lighting Shader And Asset Handoff Platform" {
-  component "PM-RENDER-MESH-MATERIAL-001 Mesh Material Lighting Handoff Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_MESH_MATERIAL_001 <<active>>
+  component "PM-RENDER-MESH-MATERIAL-001 Mesh Material Lighting Handoff Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_MESH_MATERIAL_001 <<completed>>
 
-  component "PM-RENDER-MESH-MATERIAL-002 Mesh Material Shader Asset Handoff\nkind=implementation\nstate=designing\nWR=WR-067" as PM_RENDER_MESH_MATERIAL_002 <<designing>>
+  component "PM-RENDER-MESH-MATERIAL-002 Mesh Material Shader Asset Handoff\nkind=implementation\nstate=completed\nWR=WR-067" as PM_RENDER_MESH_MATERIAL_002 <<completed>>
 
   component "PM-RENDER-MESH-MATERIAL-003 Lighting Pipeline Cache And Last Good Fallback\nkind=implementation\nstate=designing\nWR=WR-068" as PM_RENDER_MESH_MATERIAL_003 <<designing>>
 

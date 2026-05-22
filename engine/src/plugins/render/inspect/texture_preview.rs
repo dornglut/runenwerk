@@ -211,7 +211,7 @@ mod tests {
         let level_index_offset = ktx2::Header::LENGTH;
         let dfd_offset = level_index_offset + ktx2::LevelIndex::LENGTH;
         let after_dfd = dfd_offset + dfd_total_size;
-        let level_data_offset = (after_dfd + 3) / 4 * 4;
+        let level_data_offset = after_dfd.div_ceil(4) * 4;
         let texel_count = width as usize * height as usize * depth.max(1) as usize;
         let level_data_size = texel_count * 4;
         let mut bytes = vec![0u8; level_data_offset + level_data_size];

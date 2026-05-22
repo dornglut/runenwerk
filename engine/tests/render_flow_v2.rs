@@ -1,16 +1,25 @@
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, RenderBackendCapabilityProfile, RenderExecutionGraphDiagnosticKind,
+    GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation, PreparedFrameContext,
+    PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo,
+    PreparedViewFrame, RenderBackendCapabilityProfile, RenderExecutionGraphDiagnosticKind,
     RenderFlow, RenderFlowValidationIssue, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
-    RenderResourceDescriptor, RenderTextureFormatPolicy, RenderTextureSizePolicy,
-    RenderTextureTargetFormat, ShaderRegistryResource, compile_flow_plan,
-    compile_flow_plan_checked,
+    RenderPassShapeIntent, RenderResourceDescriptor, RenderTextureFormatPolicy,
+    RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
+    RenderVertexFormat, ShaderRegistryResource, compile_flow_plan, compile_flow_plan_checked,
+    preflight_prepared_render_frame_runtime_guards,
 };
 use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet};
+use ui_render_data::ViewportSurfaceBindingRegistry;
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
 struct Cell {
     alive: u32,
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct Vertex {
+    position: [f32; 3],
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -98,6 +107,46 @@ fn pass_id_by_label(flow: &RenderFlow, label: &str) -> RenderPassId {
         .expect("pass label should exist")
 }
 
+fn prepared_frame_for_flow(flow_id: engine::plugins::render::RenderFlowId) -> PreparedRenderFrame {
+    PreparedRenderFrame {
+        context: PreparedFrameContext {
+            frame_index: 1,
+            flow_registry_revision: 1,
+            shader_registry_revision: 1,
+            prepare_epoch: 1,
+        },
+        surface: PreparedSurfaceInfo::primary((800, 600)),
+        views: vec![PreparedViewFrame::main((800, 600))],
+        flows: BTreeMap::new(),
+        flow_invocations: vec![PreparedFlowInvocation::main(
+            flow_id,
+            PreparedFlowInputs::default(),
+        )],
+        dynamic_texture_targets: Vec::new(),
+        dynamic_texture_uploads: Vec::new(),
+        product_selections: Vec::new(),
+        viewport_surface_bindings: ViewportSurfaceBindingRegistry::default(),
+        contributions: PreparedFrameContributions::default(),
+        shader: PreparedShaderSnapshot {
+            registry_revision: 1,
+        },
+    }
+}
+
+fn instanced_fullscreen_style_flow(instance_count: u32) -> RenderFlow {
+    let (flow, cells) = RenderFlow::new("v2.pass-shape.fullscreen-instanced")
+        .with_surface_color()
+        .storage_array::<Cell>("cells", 64);
+    flow.graphics_pass("compose")
+        .shader_asset("assets/shaders/game_of_life_compose.wgsl")
+        .bind_storage(cells)
+        .write_surface_color()
+        .draw(3, instance_count)
+        .finish()
+        .validate()
+        .expect("legacy-valid graphics shape should reach compiler guard")
+}
+
 #[test]
 fn v2_flow_keeps_graph_contract_inspectable() {
     let flow = build_flow();
@@ -175,6 +224,123 @@ fn render_flow_compiler_reports_backend_capability_mismatches() {
     assert!(err.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch
             && diagnostic.capability.as_deref() == Some("pass_kind::Compute")
+    }));
+}
+
+#[test]
+fn render_flow_compiler_rejects_instanced_fullscreen_style_graphics_by_default() {
+    let flow = instanced_fullscreen_style_flow(512);
+
+    let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+        .expect_err("instanced fullscreen-style work should require explicit intent");
+
+    assert!(err.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::FullscreenInstancedWork
+            && diagnostic.capability.as_deref() == Some("pass_shape::fullscreen_instanced_work")
+            && diagnostic.pass_label.as_deref() == Some("compose")
+    }));
+}
+
+#[test]
+fn render_flow_compiler_accepts_bounded_instanced_fullscreen_intent() {
+    let (flow, cells) = RenderFlow::new("v2.pass-shape.explicit")
+        .with_surface_color()
+        .storage_array::<Cell>("cells", 64);
+    let flow = flow
+        .graphics_pass("compose")
+        .shader_asset("assets/shaders/game_of_life_compose.wgsl")
+        .bind_storage(cells)
+        .write_surface_color()
+        .draw(3, 512)
+        .allow_instanced_fullscreen(1024, "bounded diagnostic stress pass")
+        .finish()
+        .validate()
+        .expect("explicit advanced intent should preserve legacy-valid graph shape");
+
+    let compiled =
+        compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+            .expect("bounded explicit intent should pass compiler guard");
+    let pass = compiled
+        .pass_order
+        .iter()
+        .find(|pass| pass.pass_label() == "compose")
+        .expect("compose pass should compile");
+    let RenderPassShapeIntent::AdvancedInstancedFullscreen {
+        max_instances,
+        reason,
+    } = &pass.node().shape_intent
+    else {
+        panic!("compose should record explicit advanced pass-shape intent");
+    };
+    assert_eq!(*max_instances, 1024);
+    assert_eq!(reason, "bounded diagnostic stress pass");
+}
+
+#[test]
+fn render_flow_compiler_rejects_instanced_fullscreen_intent_over_limit() {
+    let (flow, cells) = RenderFlow::new("v2.pass-shape.explicit-over-limit")
+        .with_surface_color()
+        .storage_array::<Cell>("cells", 64);
+    let flow = flow
+        .graphics_pass("compose")
+        .shader_asset("assets/shaders/game_of_life_compose.wgsl")
+        .bind_storage(cells)
+        .write_surface_color()
+        .draw(3, 2048)
+        .allow_instanced_fullscreen(1024, "bounded diagnostic stress pass")
+        .finish()
+        .validate()
+        .expect("limit enforcement belongs to compiler guard");
+
+    let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+        .expect_err("advanced intent must enforce its own bound");
+
+    assert!(err.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::FullscreenInstancedWork
+            && diagnostic.capability.as_deref()
+                == Some("pass_shape::advanced_instanced_fullscreen_limit")
+    }));
+}
+
+#[test]
+fn render_flow_compiler_preserves_instanced_graphics_with_local_geometry() {
+    let (flow, vertices) = RenderFlow::new("v2.pass-shape.local-geometry")
+        .with_surface_color()
+        .storage_array::<Vertex>("vertices", 3);
+    let (flow, instances) = flow.storage_array::<Cell>("instances", 512);
+    let flow = flow
+        .graphics_pass("sprites")
+        .shader_asset("assets/shaders/game_of_life_compose.wgsl")
+        .vertex_buffer(
+            vertices,
+            RenderVertexBufferLayout::vertex(0, 16).attribute(0, 0, RenderVertexFormat::Float32x3),
+        )
+        .instance_buffer(
+            instances,
+            RenderVertexBufferLayout::instance(1, 16).attribute(1, 0, RenderVertexFormat::Uint32),
+        )
+        .write_surface_color()
+        .draw(3, 512)
+        .finish()
+        .validate()
+        .expect("local geometry path should remain valid");
+
+    compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+        .expect("local vertex/instance geometry should not need fullscreen opt-in");
+}
+
+#[test]
+fn render_flow_runtime_guard_rejects_cached_instanced_fullscreen_hazard() {
+    let flow = instanced_fullscreen_style_flow(512);
+    let compiled = compile_flow_plan(&flow).expect("unchecked compile keeps legacy shape visible");
+    let frame = prepared_frame_for_flow(compiled.flow_id);
+
+    let err = preflight_prepared_render_frame_runtime_guards(&frame, &[compiled])
+        .expect_err("runtime guard should reject pass-shape hazards before cache hit");
+
+    assert!(err.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::FullscreenInstancedWork
+            && diagnostic.pass_label.as_deref() == Some("compose")
     }));
 }
 

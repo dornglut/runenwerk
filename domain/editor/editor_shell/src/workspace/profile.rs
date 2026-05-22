@@ -155,11 +155,11 @@ pub enum WorkspaceProfileRegistryBackedBuildError {
     },
     WorkspaceCompatibility {
         profile_id: WorkspaceProfileId,
-        report: WorkspaceToolSurfaceRegistryCompatibilityReport,
+        report: Box<WorkspaceToolSurfaceRegistryCompatibilityReport>,
     },
     WorkspaceState {
         profile_id: WorkspaceProfileId,
-        error: WorkspaceStateError,
+        error: Box<WorkspaceStateError>,
     },
 }
 
@@ -328,7 +328,7 @@ impl WorkspaceProfile {
             .map_err(
                 |error| WorkspaceProfileRegistryBackedBuildError::WorkspaceState {
                     profile_id: self.id,
-                    error,
+                    error: Box::new(error),
                 },
             )?;
         let report = workspace.validate_tool_surface_registry_compatibility(registry);
@@ -338,7 +338,7 @@ impl WorkspaceProfile {
             Err(
                 WorkspaceProfileRegistryBackedBuildError::WorkspaceCompatibility {
                     profile_id: self.id,
-                    report,
+                    report: Box::new(report),
                 },
             )
         }

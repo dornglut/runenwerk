@@ -98,6 +98,14 @@ path = "examples/render_flow_postprocess_compositor/main.rs"
 name = "render_flow_debug_inspect"
 path = "examples/render_flow_debug_inspect/main.rs"
 
+[[example]]
+name = "render_scale_evidence"
+path = "examples/render_scale_evidence.rs"
+
+[[example]]
+name = "render_sdf_runtime_evidence"
+path = "examples/render_sdf_runtime_evidence.rs"
+
 [[bench]]
 name = "phase35_runtime"
 harness = false

@@ -912,7 +912,7 @@ tracks:
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
   - id: PT-RENDER-GPU
     title: Renderer GPU Evidence And Procedural Visuals Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Add runtime GPU evidence, render-flow shape guards, hybrid procedural visual APIs, and canonical boids proof without moving product truth or product policy into the renderer.
@@ -927,17 +927,17 @@ tracks:
       - id: PM-RENDER-GPU-001
         title: GPU Evidence And Procedural Visuals Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Define the renderer-owned GPU evidence and procedural visual contracts before implementation rows can start.
-        outcome: The active design and production track identify ownership, sequence, gates, non-goals, open decisions, and runtime_proven target evidence.
+        outcome: The accepted design and production track identify ownership, sequence, gates, non-goals, acceptance decisions, and runtime_proven target evidence.
         dependencies: []
         roadmap_links:
           - WR-082
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
-            required_status: active
-            reason: The doctrine milestone is anchored by the active GPU evidence and procedural visuals design.
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: The doctrine milestone is anchored by the accepted GPU evidence and procedural visuals design.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
             required_status: accepted
@@ -946,16 +946,27 @@ tracks:
             path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
             required_status: accepted
             reason: GPU evidence and production closeout must extend the accepted renderer readiness and inspection contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-GPU-001 requires completed design-only doctrine closeout evidence.
         acceptance_criteria:
-          - The active design names renderer-owned evidence and procedural API responsibilities separately from product-domain truth.
+          - The accepted design names renderer-owned evidence and procedural API responsibilities separately from product-domain truth.
           - The production track exists with PM-RENDER-GPU-001 through PM-RENDER-GPU-006 in dependency order.
           - Bounded WR intake rows exist for GPU timing, pass-shape guards, procedural APIs, boids rewrite, and production evidence.
           - No completed PT-RENDER-PG milestone is reopened or repurposed.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - GPU pass timing is not implemented until WR-056.
+          - Render-flow pass-shape guards are not implemented until WR-057.
+          - Hybrid procedural instance APIs are not implemented until WR-058.
+          - Canonical boids runtime proof is not implemented until WR-059.
+          - Runtime production evidence is not complete until WR-060.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md
       - id: PM-RENDER-GPU-002
         title: GPU Pass Timing Foundation
         kind: implementation
-        state: designing
+        state: completed
         goal: Add capability-gated GPU pass timing and public timing DTOs that distinguish CPU encode/submit work from GPU execution cost.
         outcome: Renderer inspection reports GPU pass cost when timestamp queries are supported and explicit unsupported diagnostics when they are not.
         dependencies:
@@ -964,22 +975,30 @@ tracks:
           - WR-056
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
             required_status: accepted
             reason: GPU timing implementation requires the active design to become an accepted implementation contract.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
             required_status: accepted
             reason: GPU timing extends the accepted renderer readiness and inspection DTO contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-056-renderer-gpu-pass-timing-and-workload-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-GPU-002 requires completed GPU timing implementation and runtime evidence closeout.
         acceptance_criteria:
           - Timestamp query support is capability-gated and fails closed with typed unsupported diagnostics.
           - Public timing DTOs expose CPU encode/submit timing separately from GPU pass timing without backend handles.
           - Runtime inspection and readiness budgets can identify timing source, cache state, pass cost, and unsupported status.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Logical copy and present command nodes report explicit unavailable GPU timing diagnostics because WGPU pass timestamp writes do not cover command-encoder copy/present operations in this slice.
+          - Local runtime evidence proves the timestamp query readback path through a headless WGPU adapter test; bounded windowed render-flow smoke evidence remains deferred until a finite windowed runner exists.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-056-renderer-gpu-pass-timing-and-workload-evidence/closeout.md
       - id: PM-RENDER-GPU-003
         title: Render-Flow Pass-Shape And Instance Guards
         kind: implementation
-        state: designing
+        state: completed
         goal: Add render-flow validation and preflight diagnostics for pass-shape and instance-count hazards.
         outcome: Fullscreen-style rendering multiplied by instance count is diagnosed before submit unless an accepted explicit opt-in path exists.
         dependencies:
@@ -988,22 +1007,31 @@ tracks:
           - WR-057
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
             required_status: accepted
             reason: Pass-shape guard policy must follow the accepted GPU evidence and procedural visuals contract.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
             required_status: accepted
             reason: Pass-shape guards extend the accepted render execution graph validation model.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-057-render-flow-pass-shape-and-instance-contract-guards/closeout.md
+            required_status: completed
+            reason: PM-RENDER-GPU-003 requires completed pass-shape guard implementation and closeout evidence.
         acceptance_criteria:
           - Typed diagnostics identify dangerous fullscreen-plus-instance and procedural-shape hazards.
           - Guard enforcement happens in renderer validation/preflight, not in boids-specific code.
           - Existing valid compute, fullscreen, and graphics paths remain valid when they do not express the hazardous combination.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - The guard classifies declared draw, buffer, storage-binding, and intent metadata; it does not inspect shader source to detect fragment loops over storage arrays.
+          - Runtime evidence is a prepared-frame preflight guard test, not a windowed swapchain smoke run.
+          - Later procedural API and boids proof rows must show the preferred local geometry path in a production example.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-057-render-flow-pass-shape-and-instance-contract-guards/closeout.md
       - id: PM-RENDER-GPU-004
         title: Hybrid Procedural Instance Rendering API
         kind: implementation
-        state: designing
+        state: completed
         goal: Add discoverable procedural instance APIs for mesh sprites, local SDF impostors, shared instance buffers, and explicit render-state policy.
         outcome: Renderer users can build bounded local procedural visuals without renderer-private handles or unsafe pass-shape conventions.
         dependencies:
@@ -1012,7 +1040,7 @@ tracks:
           - WR-058
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
             required_status: accepted
             reason: Procedural API implementation requires the accepted hybrid visual model.
           - kind: design
@@ -1023,15 +1051,24 @@ tracks:
             path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
             required_status: accepted
             reason: SDF impostor support must respect accepted SDF product and GPU residency boundaries.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md
+            required_status: completed
+            reason: PM-RENDER-GPU-004 requires completed procedural API implementation and closeout evidence.
         acceptance_criteria:
           - Mesh/quad sprite and local SDF impostor APIs are discoverable from public renderer docs and examples.
           - Shared storage-backed instance buffers and explicit blend/depth/cull/primitive policy are validated.
           - Procedural APIs derive GPU execution resources only and do not infer product semantics, freshness, authority, fallback, rebuild, or residency policy.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - The canonical boids example still needs to consume the procedural API in WR-059.
+          - Runtime GPU evidence for the complete procedural visual chain remains a WR-060 requirement.
+          - Local 2D SDF impostors intentionally do not include 3D SDF raymarch, sparse residency, or product-owned SDF authority decisions.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md
       - id: PM-RENDER-GPU-005
         title: Canonical Boids Hybrid Procedural Rewrite
         kind: implementation
-        state: designing
+        state: completed
         goal: Rewrite boids to use the hybrid procedural visual path and runtime GPU evidence.
         outcome: Boids compute simulation remains storage-backed while rendering uses bounded local per-boid mesh/SDF sprite work with no fullscreen-per-boid pass.
         dependencies:
@@ -1040,18 +1077,27 @@ tracks:
           - WR-059
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
             required_status: accepted
             reason: The canonical boids rewrite must prove the accepted procedural visual and evidence model.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-059-boids-hybrid-sdf-mesh-procedural-sprite-rewrite/closeout.md
+            required_status: completed
+            reason: PM-RENDER-GPU-005 requires completed canonical boids procedural rewrite closeout evidence.
         acceptance_criteria:
           - Boids rendering no longer issues a fullscreen draw multiplied by boid count.
           - Compute simulation remains storage-backed and render consumption goes through public renderer procedural APIs.
           - Runtime evidence reports compute, render, and present costs with GPU timing when supported or unsupported diagnostics when not.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - WR-060 still owns production runtime evidence, numeric timing budgets, and stress thresholds for the complete procedural visual chain.
+          - The local windowed smoke was manually interrupted and did not capture a finite compute, draw, and present timing artifact.
+          - The current procedural API path does not bind compose-pass uniforms for the boids impostor style; the shader uses constants for visual scale and color.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-059-boids-hybrid-sdf-mesh-procedural-sprite-rewrite/closeout.md
       - id: PM-RENDER-GPU-006
         title: Procedural Visuals Production Readiness
         kind: hardening
-        state: designing
+        state: completed
         goal: Close the renderer GPU/procedural visuals platform with docs, benchmarks, examples, inspection, and runtime evidence.
         outcome: The track can claim runtime_proven only after completed evidence demonstrates GPU timing, guards, procedural APIs, and canonical boids behavior.
         dependencies:
@@ -1063,21 +1109,30 @@ tracks:
           - WR-060
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
             required_status: accepted
             reason: Production evidence must follow the accepted renderer GPU evidence and procedural visuals contract.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
             required_status: accepted
             reason: Production closeout must extend the accepted renderer readiness and inspection model.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-060-renderer-procedural-visuals-production-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-GPU-006 requires completed procedural visuals production evidence closeout.
         acceptance_criteria:
           - Renderer docs explain GPU timing, pass-shape guards, procedural sprites/SDF impostors, and the canonical boids path.
           - Benchmarks and runtime smoke evidence prove boids uses bounded per-instance work and reports GPU pass cost.
           - Completion quality is runtime_proven only after validation, runtime evidence, and closeout exist; perfectionist_verified remains blocked by any known quality gap.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - The non-windowed boids evidence command measures prepared-frame preflight and records pass shape, but it does not run a finite swapchain submit/present frame for boids.
+          - Criterion reported relative regressions against older local baselines in several pre-existing render-flow planning cases; automated benchmark thresholds remain future hardening work.
+          - perfectionist_verified remains blocked until PT-RENDER-PERFECTION performs the final no-gap renderer audit.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-060-renderer-procedural-visuals-production-evidence/closeout.md
   - id: PT-RENDER-SCALE
     title: Renderer Scale Residency And GPU Driven Visibility Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Make renderer scale explicit through finite resident, visible, and submitted working sets for millions-scale content without per-entity CPU submission or renderer-owned product truth.
@@ -1091,30 +1146,39 @@ tracks:
       - id: PM-RENDER-SCALE-001
         title: Scale Residency And Visibility Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Accept the finite-working-set renderer scale doctrine before implementation rows start.
-        outcome: Active design records unbounded world/product space as finite renderer working sets with explicit evidence requirements.
+        outcome: Accepted design records unbounded world/product space as finite renderer working sets with explicit evidence requirements.
         dependencies:
           - PM-RENDER-PG-008
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
-            required_status: active
-            reason: Scale doctrine is anchored by the active renderer scale design.
+            path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            required_status: accepted
+            reason: Scale doctrine is anchored by the accepted renderer scale design.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
             required_status: accepted
             reason: Scale work must extend the completed render product graph foundation.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-scale-001-scale-residency-and-visibility-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SCALE-001 requires accepted scale doctrine closeout evidence.
         acceptance_criteria:
-          - The active design defines finite resident, visible, and submitted renderer working sets.
+          - The accepted design defines finite resident, visible, and submitted renderer working sets.
           - Millions-scale evidence targets do not imply per-entity CPU submission.
           - Renderer-derived registries and buffers are separated from product truth and residency policy.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - GPU-driven visibility and indirect submission are only complete at bounded_contract quality through WR-062 deterministic inspection evidence.
+          - Runtime scale evidence, hardware profiles, benchmarks, and production docs remain blocked until WR-063 is applied, promoted, implemented, and closed.
+          - PM-RENDER-SCALE-001 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-scale-001-scale-residency-and-visibility-doctrine/closeout.md
       - id: PM-RENDER-SCALE-002
         title: Working Set Registry And Residency Budgets
         kind: implementation
-        state: designing
+        state: completed
         goal: Add renderer-facing chunk/page/cluster/instance registries plus memory and upload budget diagnostics.
         outcome: Renderer inspection can explain resident GPU working sets, budget pressure, eviction or downgrade needs, and product-lineage keys.
         dependencies:
@@ -1123,18 +1187,32 @@ tracks:
           - WR-061
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
             required_status: accepted
             reason: Working-set implementation requires accepted scale doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-061-renderer-scale-working-set-registry-and-residency-budgets/plan.md
+            required_status: active
+            reason: WR-061 implementation must follow the bounded registry and residency budget contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SCALE-002 requires WR-061 working-set registry and residency budget closeout evidence.
         acceptance_criteria:
           - Registries expose stable debug identity, product lineage, bounds, scale band, and resident buffer ranges.
           - GPU memory and upload budgets report pressure without deciding product fallback policy.
           - Dynamic targets, history resources, buffers, and derived pages are included in residency diagnostics.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - GPU-driven visibility and indirect submission are completed separately by WR-062 at bounded_contract quality.
+          - Runtime scale production examples, hardware profiles, benchmarks, and production docs remain WR-063 scope.
+          - Byte evidence is deterministic renderer budget estimation, not backend allocator measurement or hardware memory residency proof.
+          - PM-RENDER-SCALE-002 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
       - id: PM-RENDER-SCALE-003
         title: GPU Driven Culling LOD And Indirect Submission
         kind: implementation
-        state: designing
+        state: completed
         goal: Bound submitted renderer work through GPU-visible culling, LOD selection, visible-list compaction, and indirect commands.
         outcome: Large addressable populations produce bounded draw or dispatch work with visible diagnostics for culled, visible, and submitted counts.
         dependencies:
@@ -1144,22 +1222,35 @@ tracks:
           - WR-062
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
             required_status: accepted
             reason: Culling, LOD, and indirect submission must follow accepted scale contracts.
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
             required_status: accepted
             reason: GPU timing evidence is required before runtime scale claims.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/plan.md
+            required_status: active
+            reason: WR-062 implementation must follow the bounded visibility, LOD, compaction, and indirect-submission contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SCALE-003 requires WR-062 visibility, LOD, compaction, and indirect-submission closeout evidence.
         acceptance_criteria:
           - Frustum culling, screen-size LOD, visible-list compaction, and indirect command generation are inspectable.
           - Submitted work remains bounded even when addressable records are large.
           - Unsupported capability states are diagnosed rather than silently falling back to unbounded CPU work.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - WR-062 provides deterministic renderer inspection evidence, not hardware command-buffer execution proof.
+          - Production scale examples, hardware profiles, benchmarks, and final scale-readiness evidence remain WR-063 scope.
+          - PM-RENDER-SCALE-003 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/closeout.md
       - id: PM-RENDER-SCALE-004
         title: Scale Evidence And Production Readiness
         kind: hardening
-        state: designing
+        state: completed
         goal: Prove renderer scale behavior through examples, benchmarks, hardware profiles, docs, and closeout evidence.
         outcome: Runtime evidence can support millions-scale renderer claims without hiding culled, degraded, unsupported, or over-budget states.
         dependencies:
@@ -1169,17 +1260,39 @@ tracks:
           - WR-063
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
             required_status: accepted
             reason: Production scale evidence must follow accepted scale doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: Hardware-dependent scale evidence must follow accepted GPU timing and unsupported-diagnostic contracts.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+            required_status: accepted
+            reason: Scale production readiness must follow accepted inspection, validation, and closeout quality rules.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-063-renderer-scale-evidence-and-production-readiness/plan.md
+            required_status: active
+            reason: WR-063 implementation must follow the runtime scale evidence, benchmark, hardware-profile, and closeout contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SCALE-004 requires WR-063 runtime scale evidence and production readiness closeout.
         acceptance_criteria:
           - Evidence distinguishes addressable, resident, visible, and submitted populations.
           - Hardware-profile reports include timing, memory, upload, culling, LOD, and indirect metrics.
           - Completion quality remains runtime_proven until the final perfectionist audit closes known gaps.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - The canonical scale evidence command uses deterministic renderer inspection DTOs and a capability profile; it does not submit a finite swapchain frame for a million-instance scene.
+          - Benchmark output is local Criterion evidence and not a universal FPS promise.
+          - Hardware-specific timestamp, readback, storage-compaction, and indirect submission gaps must stay explicit through diagnostics on adapters that do not support them.
+          - perfectionist_verified remains blocked until PT-RENDER-PERFECTION performs the final no-gap renderer audit.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md
   - id: PT-RENDER-SDF
     title: Sparse SDF World Rendering And Raymarch Acceleration Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Build sparse SDF world rendering on product selection and derived GPU residency with conservative raymarch acceleration and visible diagnostics.
@@ -1192,31 +1305,41 @@ tracks:
       - id: PM-RENDER-SDF-001
         title: Sparse SDF Rendering Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Accept the SDF world rendering and raymarch acceleration doctrine.
-        outcome: Active design identifies renderer-owned SDF residency and acceleration separately from SDF product truth.
+        outcome: Accepted design identifies renderer-owned SDF residency and acceleration separately from SDF product truth.
         dependencies:
           - PM-RENDER-PG-008
           - PM-RENDER-SCALE-001
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
-            required_status: active
-            reason: SDF rendering doctrine is anchored by the active SDF raymarch design.
+            path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
+            required_status: accepted
+            reason: SDF rendering doctrine is anchored by the accepted SDF raymarch design.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
             required_status: accepted
             reason: SDF renderer work must preserve accepted product and GPU residency boundaries.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-sdf-001-sparse-sdf-rendering-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SDF-001 requires accepted sparse SDF rendering doctrine closeout evidence.
         acceptance_criteria:
           - The design covers bricks, page tables, clipmaps, distance mips, candidate lists, and conservative acceleration.
           - Domain SDF truth, physics truth, and query policy remain outside renderer execution.
           - Fullscreen raymarching rules prohibit per-entity multiplication.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Sparse SDF brick, page, and clipmap residency remains WR-064 scope.
+          - Raymarch acceleration, distance mips, empty-space skipping, and candidate lists remain WR-065 scope.
+          - SDF world runtime examples, benchmarks, visual proof, and production evidence remain WR-066 scope.
+          - PM-RENDER-SDF-001 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-sdf-001-sparse-sdf-rendering-doctrine/closeout.md
       - id: PM-RENDER-SDF-002
         title: SDF Brick Page And Clipmap Residency
         kind: implementation
-        state: designing
+        state: completed
         goal: Add derived GPU residency for sparse SDF bricks, page tables, and clipmap windows.
         outcome: Renderer can inspect SDF resident pages, brick atlases, generation keys, cache pressure, and invalidation state.
         dependencies:
@@ -1226,18 +1349,39 @@ tracks:
           - WR-064
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
             required_status: accepted
             reason: SDF residency implementation requires accepted SDF rendering doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+            required_status: accepted
+            reason: SDF residency implementation must preserve product-owned SDF truth and renderer-owned derived cache boundaries.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+            required_status: accepted
+            reason: SDF residency evidence must reuse finite renderer working-set and budget vocabulary.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-064-sparse-sdf-brick-page-and-clipmap-residency/plan.md
+            required_status: active
+            reason: WR-064 implementation must follow the design-first SDF residency, invalidation, diagnostics, and closeout contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-064-sparse-sdf-brick-page-and-clipmap-residency/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SDF-002 requires completed sparse SDF residency closeout evidence.
         acceptance_criteria:
           - Sparse SDF page and brick residency is tied to product/source generation.
           - Clipmap windows report coverage, scale band, memory, and fallback state.
           - Renderer-owned cache state does not become product truth.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Raymarch acceleration, distance mips, empty-space skipping, step counts, and candidate lists remain WR-065 scope.
+          - Runtime SDF examples, visual proof, benchmarks, hardware/profile evidence, and production readiness remain WR-066 scope.
+          - PM-RENDER-SDF-002 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-064-sparse-sdf-brick-page-and-clipmap-residency/closeout.md
       - id: PM-RENDER-SDF-003
         title: Raymarch Acceleration And Candidate Lists
         kind: implementation
-        state: designing
+        state: completed
         goal: Add conservative raymarch acceleration through distance mips, empty-space data, candidate lists, and diagnostics.
         outcome: SDF raymarch flows avoid scanning all SDF sources per ray step and report unsafe-overstep or candidate explosion risks.
         dependencies:
@@ -1247,18 +1391,39 @@ tracks:
           - WR-065
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
             required_status: accepted
             reason: Raymarch acceleration must follow accepted conservative stepping policy.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-064-sparse-sdf-brick-page-and-clipmap-residency/closeout.md
+            required_status: completed
+            reason: Raymarch acceleration requires completed SDF residency evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/closeout.md
+            required_status: completed
+            reason: Candidate-list work must preserve completed bounded visibility, compaction, and submitted-work evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-065-sdf-raymarch-acceleration-and-candidate-lists/plan.md
+            required_status: active
+            reason: WR-065 implementation must follow the conservative raymarch acceleration and candidate-list contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SDF-003 requires completed SDF raymarch acceleration and candidate-list closeout evidence.
         acceptance_criteria:
           - Distance mips and empty-space steps never overestimate safe travel distance.
           - Screen-tile and depth-slice candidate lists bound deep-scene raymarch work.
           - Diagnostics expose step counts, missed-surface risk, overstep risk, and cache pressure.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Runtime SDF examples, visual proof, benchmarks, hardware/profile evidence, and production readiness remain WR-066 scope.
+          - PM-RENDER-SDF-003 derives deterministic renderer acceleration and candidate-list inspection DTOs; it does not claim runtime_proven or perfectionist_verified evidence.
+          - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
       - id: PM-RENDER-SDF-004
         title: SDF World Runtime Evidence
         kind: hardening
-        state: designing
+        state: completed
         goal: Prove sparse SDF world rendering through runtime examples, docs, benchmarks, and inspection evidence.
         outcome: SDF world rendering can claim runtime_proven with visible near/mid/far/summary behavior and diagnostic evidence.
         dependencies:
@@ -1268,14 +1433,47 @@ tracks:
           - WR-066
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+            path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
             required_status: accepted
             reason: SDF production evidence must follow accepted SDF rendering doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+            required_status: accepted
+            reason: SDF runtime evidence must follow accepted renderer production-readiness and inspection doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+            required_status: accepted
+            reason: SDF runtime evidence must preserve GPU timing and unsupported-diagnostic contracts.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-064-sparse-sdf-brick-page-and-clipmap-residency/closeout.md
+            required_status: completed
+            reason: Runtime evidence requires completed SDF residency evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+            required_status: completed
+            reason: Runtime evidence requires completed SDF raymarch acceleration and candidate-list evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md
+            required_status: completed
+            reason: SDF runtime evidence should reuse completed renderer production evidence and benchmark closeout patterns.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-066-sdf-world-runtime-evidence/plan.md
+            required_status: active
+            reason: WR-066 implementation must follow the design-first SDF runtime evidence contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-SDF-004 requires completed SDF runtime evidence closeout.
         acceptance_criteria:
           - Examples prove sparse SDF rendering with GPU timings and residency diagnostics.
           - Benchmarks cover cold and warm residency, ray step budgets, and candidate-list behavior.
           - Known quality gaps block perfectionist_verified until the final audit track.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - The canonical SDF evidence commands are deterministic non-windowed closeout evidence paths and do not promise universal FPS.
+          - Timestamp-query evidence is capability-gated; portable examples record unsupported timestamp queries as typed diagnostics.
+          - Perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
   - id: PT-RENDER-MESH-MATERIAL
     title: Mesh Material Lighting Shader And Asset Handoff Platform
     state: active
@@ -1291,31 +1489,41 @@ tracks:
       - id: PM-RENDER-MESH-MATERIAL-001
         title: Mesh Material Lighting Handoff Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Accept mesh, material, lighting, shader, and asset-handoff ownership boundaries.
-        outcome: Active design records renderer responsibilities and asset/material/domain-owned truth boundaries.
+        outcome: Accepted design records renderer responsibilities and asset/material/domain-owned truth boundaries.
         dependencies:
           - PM-RENDER-PG-008
           - PM-RENDER-GPU-001
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
-            required_status: active
-            reason: Mesh/material renderer doctrine is anchored by the active handoff design.
+            path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            required_status: accepted
+            reason: Mesh/material renderer doctrine is anchored by the accepted handoff design.
           - kind: design
             path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
             required_status: active
             reason: Material Lab remains the material source-truth owner.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-MESH-MATERIAL-001 requires completed doctrine acceptance closeout evidence.
         acceptance_criteria:
           - The design separates renderer pipeline artifacts from material and asset source truth.
           - Mesh/material previews use product surfaces and prepared renderer data.
           - Shader fallback and pipeline cache policy are renderer diagnostics, not material truth.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Prepared mesh/material/shader handoff remains blocked until WR-067 is applied, promoted, implemented, validated, and closed.
+          - Lighting pipeline cache and last-good fallback behavior remain blocked until WR-068 is applied, promoted, implemented, validated, and closed.
+          - Mesh/material production evidence remains blocked until WR-069 is applied, promoted, implemented, validated, and closed.
+          - This design-only milestone does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
       - id: PM-RENDER-MESH-MATERIAL-002
         title: Mesh Material Shader Asset Handoff
         kind: implementation
-        state: designing
+        state: completed
         goal: Implement prepared mesh/material/shader handoff paths and visible preview products.
         outcome: Mesh/material previews and scene material paths produce visible pixels through prepared renderer contracts.
         dependencies:
@@ -1325,14 +1533,44 @@ tracks:
           - WR-067
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
             required_status: accepted
             reason: Mesh/material handoff implementation requires accepted renderer handoff doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+            required_status: active
+            reason: Material Lab remains the material source-truth and preview product owner.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+            required_status: completed
+            reason: Mesh/material handoff implementation requires completed doctrine acceptance evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md
+            required_status: completed
+            reason: Mesh/material handoff consumes completed material preview product evidence without moving material truth into the renderer.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md
+            required_status: completed
+            reason: Mesh/material handoff reuses completed renderer procedural API handoff patterns from PM-RENDER-GPU-004.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-067-renderer-mesh-material-shader-asset-handoff/plan.md
+            required_status: active
+            reason: WR-067 implementation must follow the design-first prepared material handoff contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+            required_status: completed
+            reason: PM-RENDER-MESH-MATERIAL-002 requires completed renderer mesh/material/shader handoff closeout evidence.
         acceptance_criteria:
           - Prepared mesh, material, and shader inputs are validated before renderer submission.
           - Material and mesh preview products route through product surfaces.
           - Renderer artifacts preserve asset and material lineage without owning source truth.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Lighting pipeline cache diagnostics and last-good shader fallback behavior remain WR-068 scope.
+          - Runtime mesh/material production examples, benchmarks, visible runtime proof, and production evidence remain WR-069 scope.
+          - PM-RENDER-MESH-MATERIAL-002 proves renderer handoff inspection and pass-consumption evidence; it does not claim runtime_proven or perfectionist_verified evidence.
+          - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
       - id: PM-RENDER-MESH-MATERIAL-003
         title: Lighting Pipeline Cache And Last Good Fallback
         kind: implementation
@@ -1345,7 +1583,7 @@ tracks:
           - WR-068
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
             required_status: accepted
             reason: Pipeline cache and shader fallback policy must follow accepted handoff boundaries.
         evidence_gates: []
@@ -1366,7 +1604,7 @@ tracks:
           - WR-069
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
             required_status: accepted
             reason: Production evidence must follow accepted mesh/material renderer doctrine.
         evidence_gates: []

@@ -831,6 +831,9 @@ mod tests {
             bindings: CompiledPassBindings::default(),
             targets: CompiledTargetPlan::default(),
             draw_buffers: CompiledDrawBufferPlan::default(),
+            raster_state: crate::plugins::render::CompiledRasterState {
+                state: crate::plugins::render::RenderRasterState::default(),
+            },
             clear_color: None,
             draw: None,
         })

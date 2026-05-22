@@ -1093,6 +1093,7 @@ fn insert_texture_product(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_foreign_mesh_reference_artifact(
     catalog: &mut AssetCatalog,
     asset_id: AssetId,

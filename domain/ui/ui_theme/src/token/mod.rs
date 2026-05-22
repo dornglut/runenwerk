@@ -149,21 +149,21 @@ impl ThemeTokenValue {
     }
 
     fn validation_error_code(&self, family: ThemeTokenFamily) -> Option<&'static str> {
-        let kind_matches = match (family, self) {
-            (ThemeTokenFamily::Color, Self::Color(_)) => true,
-            (
-                ThemeTokenFamily::Spacing
-                | ThemeTokenFamily::Radius
-                | ThemeTokenFamily::Typography
-                | ThemeTokenFamily::Opacity
-                | ThemeTokenFamily::Elevation
-                | ThemeTokenFamily::BorderWidth
-                | ThemeTokenFamily::Duration,
-                Self::Number(_),
-            ) => true,
-            (ThemeTokenFamily::Easing, Self::Text(_)) => true,
-            _ => false,
-        };
+        let kind_matches = matches!(
+            (family, self),
+            (ThemeTokenFamily::Color, Self::Color(_))
+                | (
+                    ThemeTokenFamily::Spacing
+                        | ThemeTokenFamily::Radius
+                        | ThemeTokenFamily::Typography
+                        | ThemeTokenFamily::Opacity
+                        | ThemeTokenFamily::Elevation
+                        | ThemeTokenFamily::BorderWidth
+                        | ThemeTokenFamily::Duration,
+                    Self::Number(_),
+                )
+                | (ThemeTokenFamily::Easing, Self::Text(_))
+        );
 
         if !kind_matches {
             Some("ui.theme.token.family_mismatch")
@@ -465,20 +465,20 @@ pub fn resolve_theme_tokens(
             ));
             continue;
         }
-        if let ThemeTokenValueSource::Value(value) = &declaration.value {
-            if let Some(code) = value.validation_error_code(declaration.family) {
-                diagnostics.push(error_for_declaration(
-                    code,
-                    format!(
-                        "token '{}' value does not match family {:?}",
-                        declaration.id, declaration.family
-                    ),
-                    &declaration,
-                    request,
-                    "use a token value compatible with the declared family",
-                ));
-                continue;
-            }
+        if let ThemeTokenValueSource::Value(value) = &declaration.value
+            && let Some(code) = value.validation_error_code(declaration.family)
+        {
+            diagnostics.push(error_for_declaration(
+                code,
+                format!(
+                    "token '{}' value does not match family {:?}",
+                    declaration.id, declaration.family
+                ),
+                &declaration,
+                request,
+                "use a token value compatible with the declared family",
+            ));
+            continue;
         }
         let selector_key = (
             declaration.id.clone(),

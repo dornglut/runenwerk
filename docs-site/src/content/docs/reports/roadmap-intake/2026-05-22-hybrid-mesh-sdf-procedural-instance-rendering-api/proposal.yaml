@@ -1,16 +1,18 @@
 version: 1
 idea: Hybrid Mesh/SDF Procedural Instance Rendering API
-source_path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- Should the first public SDF impostor API be 2D-only or include 3D hooks?
-- Which blend, depth, cull, and primitive policies must be explicit in v1?
-- Which examples are required to make the procedural path discoverable without renderer-private handles?
+open_questions: []
+resolved_questions:
+- The first public SDF impostor API is local 2D only; 3D SDF raymarch and sparse residency hooks are out of scope.
+- v1 requires explicit primitive, blend, depth, cull, target, local mesh or generated quad, and instance layout policy.
+- Discoverability is bounded by public renderer docs, focused procedural instance tests, and a minimal example if docs/tests do not
+  demonstrate normal use without renderer-private handles.
 item:
   id: WR-058
   title: Hybrid Mesh/SDF Procedural Instance Rendering API
@@ -18,11 +20,11 @@ item:
   alias: PROCVIS
   lane: Render platform
   dependency_level: L3
-  gate: Accepted GPU evidence design and pass-shape guards
-  planning_state: blocked_deferred
+  gate: Design-first procedural API contract accepted
+  planning_state: completed
   priority: P1
   value: 4
-  blocker: 4
+  blocker: 2
   tc: 4
   rr_oe: 4
   du: 4
@@ -38,28 +40,40 @@ item:
   - engine/examples
   - engine/tests
   - docs-site/src/content/docs/engine/reference/plugins/render
-  - docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-hybrid-mesh-sdf-procedural-instance-rendering-api
+  - docs-site/src/content/docs/reports/implementation-plans/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md
   validations:
   - cargo test -p engine render_flow
   - cargo test -p engine procedural_instance
   - cargo test -p engine render_runtime_inspect
   - task docs:validate
-  next_evidence: Accepted renderer GPU evidence design, completed pass-shape guard row, and API examples for normal procedural usage.
-  current_decision: Deferred API row for mesh/quad sprites, local 2D SDF impostors, shared instance buffers, and explicit render-state policy.
-  current_call: Renderer may own procedural execution APIs and derived GPU resources, but not gameplay, particle, VFX, material, model, or product truth.
-  first_move: Promote after WR-057 completion, then design the public procedural instance API around explicit buffers, primitives, blend/depth/cull policy, validation, and examples.
-  main_blocker: Depends on WR-057 and accepted procedural visuals design.
-  why_not_ready: Procedural APIs need pass-shape guard doctrine and accepted ownership boundaries before implementation.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed procedural instance API closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md.
+  current_decision: Completed. Renderer-owned procedural descriptors now build mesh sprite, generated quad sprite, and local 2D SDF impostor graphics passes with typed storage-backed instance buffers and explicit render policy.
+  current_call: Completed. Future procedural rendering work should consume the public renderer procedural API and keep product truth, freshness, fallback, rebuild, and residency policy outside renderer.
+  first_move: Use the WR-058 closeout as evidence before starting WR-059.
+  main_blocker: Complete; canonical boids runtime consumption and production runtime evidence remain later-row quality gaps.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - The canonical boids example still needs to consume the procedural API in WR-059.
+  - Runtime GPU evidence for the complete procedural visual chain remains a WR-060 requirement.
+  - Local 2D SDF impostors intentionally do not include 3D SDF raymarch, sparse residency, or product-owned SDF authority decisions.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md
   diagram_call:
   - mesh/SDF sprites
   - explicit render policy
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/renderer-gpu-evidence-and-procedural-visuals-design.md
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
     required_status: accepted
     applies_to: implementation
     reason: Procedural instance APIs must follow the accepted renderer ownership and visual model.
@@ -75,7 +89,7 @@ item:
     reason: SDF impostor support must preserve accepted SDF product and GPU residency boundaries.
   ddd_owner: engine render public API and derived procedural GPU resources
   adr_requirement: ADR only if procedural rendering changes durable public render-flow ownership or product/render dependency direction.
-  fitness_function_requirement: Procedural API validation tests, public examples, inspection DTO tests, and docs validation.
+  fitness_function_requirement: Procedural API validation tests, public examples, inspection DTO tests, docs validation, roadmap validation, and production validation.
   ownership_mode: Enabling renderer platform API with product truth outside renderer.
 edges:
 - source: WR-057

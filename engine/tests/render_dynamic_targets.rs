@@ -176,7 +176,7 @@ fn render_dynamic_targets_product_surface_manifest_builds_upload_backed_batches(
         manifest.diagnostics().is_empty(),
         "valid upload-backed product surface should have no manifest diagnostics"
     );
-    assert_eq!(manifest.product_bindings()[0].upload_required, true);
+    assert!(manifest.product_bindings()[0].upload_required);
 
     let (targets, uploads, views, invocations) = manifest.into_render_parts();
     assert_eq!(targets, vec![descriptor]);

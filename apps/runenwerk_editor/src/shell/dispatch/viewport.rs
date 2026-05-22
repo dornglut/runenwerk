@@ -212,6 +212,7 @@ pub(crate) fn dispatch_domain_mutation(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn dispatch_patch_field_visualizer_settings(
     app: &mut RunenwerkEditorApp,
     shell_state: Option<&RunenwerkEditorShellState>,

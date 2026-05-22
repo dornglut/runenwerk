@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-21
+last_reviewed: 2026-05-22
 ---
 
 # Render Public API Reference
@@ -32,6 +32,20 @@ These are the APIs most users should start with.
   - `RenderVertexFormat`
   - `RenderVertexStepMode`
   - `RenderDrawDescriptor`
+  - `RenderRasterState`
+  - `RenderPrimitiveTopology`
+  - `RenderBlendMode`
+  - `RenderDepthPolicy`
+  - `RenderCullMode`
+- procedural authoring:
+  - `ProceduralPassDescriptor`
+  - `ProceduralVisualDescriptor`
+  - `ProceduralBufferBinding`
+  - `ProceduralIndexBuffer`
+  - `ProceduralRenderPolicy`
+  - `ProceduralTargetDescriptor`
+  - `ProceduralSdf2dImpostorDescriptor`
+  - `ProceduralValidationError`
 - handles and IDs:
   - `PassHandle`
   - `RenderFlowId`
@@ -173,6 +187,7 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `RenderFlowGraph`
   - `RenderPassNode`
   - `RenderPassKind`
+  - `RenderPassShapeIntent`
   - `RenderShaderReference`
   - `FlowValidationReport`
   - `RenderFlowValidationError`
@@ -206,6 +221,7 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `CompiledVertexBufferBinding`
   - `CompiledVertexBufferLayout`
   - `CompiledDrawPlan`
+  - `CompiledRasterState`
   - `CompiledResourceRef`
   - `CompiledBuiltinImport`
   - `CompiledStateRequirement`
@@ -229,13 +245,18 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `RenderBackendCapabilityProfile`
   - `RenderBackendCapabilityInspection`
   - `validate_compiled_flow_capabilities`
+  - `diagnose_compiled_pass_shapes`
 
 Contract:
 
-- `compile_flow_plan_checked(...)` wraps static `RenderFlow` validation, resource lifetime window derivation, and backend-neutral capability validation in typed diagnostics.
+- `compile_flow_plan_checked(...)` wraps static `RenderFlow` validation, resource lifetime window derivation, pass-shape guard diagnostics, and backend-neutral capability validation in typed diagnostics.
 - `CompiledRenderFlowPlan::resource_lifetime_windows` exposes first/last read/write/use windows derived from compiled pass order.
 - `validate_prepared_render_frame(...)` checks a prepared frame against compiled flows before backend encoding: target alias bindings, dynamic target descriptors, sampleability, dispatch preparation, uniform presence, feature gates, history signatures, and capability mismatches.
-- Runtime submit uses cached strict prepared-frame preflight by default. Full structural preflight runs on cold cache, structural key changes, failures, or strict mode; cheap runtime guards still run each frame for flow/view/invocation existence, dispatch validity, uniform presence, and history conflicts.
+- Pass-shape guards reject fullscreen-style generated graphics multiplied by instance count unless `GraphicsPassBuilder::allow_instanced_fullscreen(...)` records explicit bounded author intent. Diagnostics use `FullscreenInstancedWork`, `AmbiguousProceduralShape`, and `InvalidPassShapeIntent`.
+- `RenderFlow::procedural_pass(...)` builds normal graphics passes from renderer-owned procedural descriptors. Mesh sprites, quad sprites, and local 2D SDF impostors use typed storage-backed instance buffers and explicit render policy; the API derives renderer execution resources only and does not own product truth or residency policy.
+- `engine/examples/boids_render_flow` is the canonical procedural-consumer example: compute updates storage-backed boids, a publish pass makes the current buffer available as instance data, `boids.draw` is built with `ProceduralPassDescriptor::local_sdf_2d_impostors(...)`, and the compose shader shades one local impostor without a fullscreen fragment loop over the whole boid set.
+- `cargo run -p engine --example boids_render_flow -- --evidence` prints the canonical boids production-evidence report, including pass order, local instance geometry, typed GPU-timing diagnostic evidence, CPU timing fields, and the renderer benchmark command. `cargo bench -p engine --bench render_flow_planning` includes procedural-boids planning and preflight cases.
+- Runtime submit uses cached strict prepared-frame preflight by default. Full structural preflight runs on cold cache, structural key changes, failures, or strict mode; cheap runtime guards still run each frame for flow/view/invocation existence, pass-shape hazards, dispatch validity, uniform presence, and history conflicts.
 - `RenderPreflightValidationConfigResource` can force strict full preflight every frame. `RUNENWERK_RENDER_STRICT_PREFLIGHT=1` is the local/test override.
 - The compiler/preflight diagnostics are render execution diagnostics. They do not own product truth, freshness, authority, fallback legality, rebuild policy, product dependency truth, or residency policy.
 
@@ -308,6 +329,76 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `RenderReadinessBudgetStatus`
   - `RenderReadinessBudgetReport`
   - `evaluate_render_readiness_budgets`
+  - `RenderGpuResidencyResource`
+  - `RenderGpuResidencyBudgetResource`
+  - `RenderGpuResidencyBudgetStatus`
+  - `RenderGpuResidencyInspection`
+  - `RenderGpuResidencyBudgetInspection`
+  - `RenderGpuResidencyInspectionEntry`
+  - `RenderGpuResidencyJournalInspectionEntry`
+  - `inspect_render_gpu_residency`
+  - `RenderScaleVisibilityCandidate`
+  - `RenderScaleVisibilityCapabilities`
+  - `RenderScaleVisibilityCapabilityStatus`
+  - `RenderScaleVisibilityConfig`
+  - `RenderScaleVisibilityInspection`
+  - `RenderScaleVisibilityRecord`
+  - `RenderScaleVisibilityDiagnostic`
+  - `inspect_render_scale_visibility`
+  - `RenderScaleProductionHardwareProfile`
+  - `RenderScaleProductionHardwareProfileInspection`
+  - `RenderScaleProductionEvidenceRequest`
+  - `RenderScaleProductionEvidenceReport`
+  - `RenderScaleProductionEvidenceCounts`
+  - `RenderScaleProductionTimingEvidence`
+  - `RenderScaleProductionEvidenceDiagnostic`
+  - `RenderScaleProductionEvidenceSeverity`
+  - `inspect_render_scale_production_evidence`
+  - `RenderMeshMaterialHandoffInspectionRequest`
+  - `RenderMeshMaterialHandoffInspection`
+  - `RenderMeshMaterialHandoffCounts`
+  - `RenderMeshMaterialHandoffDiagnostic`
+  - `RenderMeshMaterialHandoffDiagnosticSeverity`
+  - `inspect_render_mesh_material_handoff`
+  - `RenderSdfResidencySourceResource`
+  - `RenderSdfResidencySourceProduct`
+  - `RenderSdfResidencyResource`
+  - `RenderSdfResidencyBudgetResource`
+  - `RenderSdfResidencyBudgetStatus`
+  - `RenderSdfResidencySummary`
+  - `RenderSdfChunkResidencyEntry`
+  - `RenderSdfPageResidencyRecord`
+  - `RenderSdfBrickAtlasRecord`
+  - `RenderSdfClipmapWindowRecord`
+  - `RenderSdfResidencyInspection`
+  - `RenderSdfResidencyBudgetInspection`
+  - `RenderSdfChunkResidencyInspectionEntry`
+  - `RenderSdfPageResidencyInspectionEntry`
+  - `RenderSdfBrickAtlasInspectionEntry`
+  - `RenderSdfClipmapWindowInspectionEntry`
+  - `inspect_render_sdf_residency`
+  - `RenderSdfRaymarchAccelerationConfig`
+  - `RenderSdfRaymarchAccelerationResource`
+  - `RenderSdfRaymarchAccelerationReport`
+  - `RenderSdfRaymarchDiagnostic`
+  - `RenderSdfRaymarchDiagnosticKind`
+  - `RenderSdfRaymarchDiagnosticSeverity`
+  - `RenderSdfDistanceMipLevel`
+  - `RenderSdfRaymarchCandidate`
+  - `RenderSdfRaymarchCandidateList`
+  - `inspect_sdf_raymarch_acceleration`
+  - `inspect_render_sdf_raymarch_acceleration`
+  - `inspect_last_render_sdf_raymarch_acceleration`
+  - `RenderSdfProductionHardwareProfile`
+  - `RenderSdfProductionHardwareProfileInspection`
+  - `RenderSdfProductionEvidenceRequest`
+  - `RenderSdfProductionEvidenceReport`
+  - `RenderSdfProductionEvidenceCounts`
+  - `RenderSdfProductionTimingEvidence`
+  - `RenderSdfProductionEvidenceDiagnostic`
+  - `RenderSdfProductionEvidenceSeverity`
+  - `RenderSdfRuntimeVisualEvidence`
+  - `inspect_render_sdf_production_evidence`
   - `RenderReplayManifest`
   - `RenderReplayArtifactReference`
   - `RenderReplayManifestValidation`
@@ -373,14 +464,33 @@ Compiler/preflight inspection contract:
 - `inspect_render_execution_graph_preflight_with_cache(...)` adds cache mode, cache status, and report source without exposing backend handles.
 - `Renderer::last_preflight_report()` exposes the last successful submit preflight report, and `Renderer::last_preflight_cache_state()` exposes whether it came from full validation or cache.
 - `RendererFrameTimings` separates `preflight_ms`, `flow_encode_ms`, and `encode_submit_ms` so frame budgets can identify validation cost separately from GPU submission.
+- `RenderPassTimingEvidence`, `RenderTimingSource`, `RenderGpuTimingCapability`, and `RenderGpuTimingDiagnostic` keep CPU encode/submit samples separate from GPU timestamp-query evidence. Unsupported, unavailable-this-frame, and readback-pending GPU timing states are explicit DTOs, not missing data.
+- `WgpuCtx` records backend timestamp-query capability after device creation. The renderer requests `Features::TIMESTAMP_QUERY` when the adapter supports it, writes pass timestamps for supported pass types, resolves/readbacks timestamp queries after submit, and reports unsupported or unavailable diagnostics when measured GPU data is unavailable.
 - `ShaderRegistryResource` performs the first live-reload poll immediately, then throttles normal watch polling to 500 ms by default. `request_reload()` bypasses the throttle.
 - `RenderFrameDiagnosticsPolicyResource` defaults to tiered diagnostics: lightweight timing/cache/pacing state every frame, full `RenderDebugFrameReport` only for debug capture/provenance/readback/probes/diffs/export, slow frames, explicit request, or full-every-frame mode.
-- `RenderDebugTimingsState` includes shader poll timing/status, diagnostics report timing/mode, preflight cache mode/status/source, and frame pacing mode/cap evidence without exposing backend handles.
+- `RenderDebugTimingsState` includes shader poll timing/status, diagnostics report timing/mode, preflight cache mode/status/source, GPU timing capability/diagnostics, and frame pacing mode/cap evidence without exposing backend handles.
 
 Production readiness inspection contract:
 
 - `inspect_render_readiness(...)` aggregates existing prepared-frame, product-surface, graph/preflight, fragment, capture, timing, and budget inspection DTOs. It is a read-only tooling surface, not a renderer-owned product policy layer.
-- `evaluate_render_readiness_budgets(...)` reports renderer execution evidence budgets for timing, capture failures, preflight errors, fragment errors, dynamic targets/uploads, and product-surface diagnostics. Budget overruns produce diagnostics; they do not choose product rebuilds or fallback.
+- `evaluate_render_readiness_budgets(...)` reports renderer execution evidence budgets for CPU timing, GPU pass timing, GPU timing diagnostics, capture failures, preflight errors, fragment errors, dynamic targets/uploads, and product-surface diagnostics. Budget overruns produce diagnostics; they do not choose product rebuilds or fallback.
+- `RenderGpuResidencyResource::derive_from_selections(...)` derives the finite renderer GPU working set from prepared product selections and residency requests. Its summary distinguishes addressable, selected, requested, accepted, resident, allocated, preserved, evicted, rejected, resident-byte, upload-byte, and budget-pressure evidence.
+- `inspect_render_gpu_residency(...)` exposes that working-set evidence through backend-neutral DTOs with string cache identities, source-state lineage, byte estimates, budget statuses, and diagnostics. It does not expose WGPU handles, backend allocator internals, product source objects, fallback policy, streaming policy, or product truth.
+- `RenderGpuResidencyBudgetResource` configures renderer execution limits for resident entries, resident bytes, upload bytes per frame, and per-entry byte estimates. Over-budget states produce explicit diagnostics and inspection statuses; they never silently downgrade product quality or choose product fallback.
+- `inspect_render_scale_visibility(...)` consumes renderer-resident candidates and reports visible, culled, compacted, submitted draw, and indirect command counts. Unsupported storage compaction or indirect submission is explicit and produces zero submitted work rather than an unbounded CPU fallback.
+- `RenderScaleVisibilityConfig` owns renderer execution thresholds only: frustum extent, minimum screen size, LOD screen-size bands, and maximum compacted visible candidates. It does not own product semantic LOD, streaming, fallback, freshness, authority, or visibility truth.
+- `inspect_render_scale_production_evidence(...)` aggregates residency, visibility, timing, hardware profile, benchmark command, and artifact-path evidence for WR-063 production readiness. Missing hardware profiles, benchmark commands, artifact paths, timing evidence, or broken count invariants are fail-closed diagnostics.
+- `RenderScaleProductionEvidenceReport` keeps addressable, selected, resident, visible, compacted, submitted, indirect, CPU timing, GPU timing, and capability-profile evidence separate. It may report unsupported GPU timing or readback as explicit degraded diagnostics, but it must not collapse those states into success-shaped data.
+- `inspect_render_mesh_material_handoff(...)` aggregates prepared material instances, scene material shader bundle identity, model/mesh material selections, portable-limit checks, and pass material-binding evidence for WR-067 handoff readiness. Missing source-backed material instances, missing scene shader bundle identity, transient model/mesh region keys, broken pass-count invariants, and absent material-consuming pass evidence are fail-closed diagnostics. Material, asset, model, scene, and product truth remain outside renderer inspection.
+- `RenderSdfResidencyResource::derive_from_sources(...)` derives renderer-owned sparse SDF brick, page, and clipmap residency from prepared product selections plus domain-owned `SdfChunkPayload` sources. Missing payloads, stale products, generation mismatches, nonresident products, unsupported query policy, and absent residency requests fail closed with diagnostics.
+- `inspect_render_sdf_residency(...)` exposes SDF product, page-table, brick-atlas, clipmap-window, generation, byte, upload, invalidation, and budget-pressure evidence without exposing backend handles or moving SDF product truth into the renderer.
+- `RenderSdfResidencyBudgetResource` configures renderer execution limits for resident pages, resident bricks, resident bytes, upload bytes, and clipmap pages per window. Over-budget states are visible diagnostics; product fallback, query authority, collision truth, and rebuild policy remain product-owned.
+- `RenderSdfRaymarchAccelerationResource::derive_from_residency(...)` consumes the derived `RenderSdfResidencyResource` evidence and builds conservative renderer-owned SDF distance-mip and screen-tile/depth-slice candidate-list evidence. It does not read product sources directly or become SDF product truth.
+- `inspect_sdf_raymarch_acceleration(...)` and `inspect_render_sdf_raymarch_acceleration(...)` expose bounded raymarch acceleration evidence: resident product/page/brick counts, distance mip safe-step limits, per-tile candidate lists, rejected-candidate counts, step budgets, and diagnostics for missing residency, invalid budgets, unsafe overstep risk, candidate explosion, fullscreen-per-entity multiplication, and residency pressure.
+- `RenderSdfRaymarchAccelerationConfig` owns renderer execution limits only: screen-tile count, depth-slice count, per-list candidate budget, per-ray step budget, conservative empty-space step bound, and fullscreen entity multiplier. Query authority, collision truth, product fallback, source generation, and runtime visual proof remain outside this bounded renderer acceleration contract.
+- `inspect_render_sdf_production_evidence(...)` aggregates SDF residency, SDF raymarch acceleration, runtime visual proof references, CPU/GPU timing evidence, hardware profile identity, benchmark commands, and artifact paths for WR-066 SDF runtime readiness. Missing visual evidence, missing benchmark commands, broken residency/raymarch count invariants, missing timing diagnostics, and unsafe overstep evidence are fail-closed diagnostics.
+- `RenderSdfProductionEvidenceReport` keeps resident product/page/brick/clipmap counts, distance mips, candidate-list counts, rejected candidates, visual evidence bands, CPU timing, GPU timing, and capability diagnostics separate. It can report unsupported timestamp queries as explicit diagnostics, but it must not collapse missing GPU timing into success-shaped data.
+- `RenderSdfRuntimeVisualEvidence` records near, mid, far, and summary view evidence references with step counts and missed-surface or overstep risk flags. These are runtime evidence references, not SDF product truth or authoring data.
 - `validate_render_replay_manifest(...)` is fail-closed. It rejects missing capability profiles, prepared-frame digests, artifact paths, formats, and empty artifact sets before replay evidence can be treated as valid.
 - Readiness, budget, and replay DTOs must not expose WGPU handles, mutable backend caches, product source objects, app workflow state, or domain-owned product truth.
 

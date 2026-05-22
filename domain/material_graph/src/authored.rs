@@ -131,9 +131,10 @@ impl Default for MaterialGraphViewportState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MaterialGraphPreviewFixture {
+    #[default]
     Sphere,
     Box,
     Plane,
@@ -141,23 +142,12 @@ pub enum MaterialGraphPreviewFixture {
     FieldMaterial,
 }
 
-impl Default for MaterialGraphPreviewFixture {
-    fn default() -> Self {
-        Self::Sphere
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MaterialGraphPreviewSelection {
     SceneProduct,
+    #[default]
     MaterialPreviewProduct,
-}
-
-impl Default for MaterialGraphPreviewSelection {
-    fn default() -> Self {
-        Self::MaterialPreviewProduct
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

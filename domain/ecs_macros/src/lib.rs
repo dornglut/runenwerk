@@ -171,7 +171,7 @@ fn fresh_system_param_lifetime(generics: &syn::Generics) -> Lifetime {
         matches!(
             param,
             syn::GenericParam::Lifetime(lifetime)
-                if lifetime.lifetime.ident.to_string() == candidate
+                if lifetime.lifetime.ident == candidate.as_str()
         )
     }) {
         suffix += 1;

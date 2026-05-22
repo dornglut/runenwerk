@@ -9,6 +9,8 @@ pub enum RenderReadinessBudgetKind {
     FrameTotalMillis,
     PreflightMillis,
     PassTotalMillis,
+    GpuPassTotalMillis,
+    GpuTimingDiagnosticCount,
     DynamicTextureTargetCount,
     DynamicTextureUploadBytes,
     CaptureCount,
@@ -24,6 +26,8 @@ impl RenderReadinessBudgetKind {
             Self::FrameTotalMillis => "frame_total_ms",
             Self::PreflightMillis => "preflight_ms",
             Self::PassTotalMillis => "pass_total_ms",
+            Self::GpuPassTotalMillis => "gpu_pass_total_ms",
+            Self::GpuTimingDiagnosticCount => "gpu_timing_diagnostic_count",
             Self::DynamicTextureTargetCount => "dynamic_texture_target_count",
             Self::DynamicTextureUploadBytes => "dynamic_texture_upload_bytes",
             Self::CaptureCount => "capture_count",
@@ -99,6 +103,8 @@ pub struct RenderReadinessBudgetMeasurements {
     pub frame_total_ms: Option<f64>,
     pub preflight_ms: Option<f64>,
     pub pass_total_ms: Option<f64>,
+    pub gpu_pass_total_ms: Option<f64>,
+    pub gpu_timing_diagnostic_count: Option<f64>,
     pub dynamic_texture_target_count: Option<f64>,
     pub dynamic_texture_upload_bytes: Option<f64>,
     pub capture_count: Option<f64>,
@@ -146,6 +152,11 @@ impl RenderReadinessBudgetMeasurements {
             frame_total_ms: timings.map(|value| f64::from(value.total_ms)),
             preflight_ms: timings.map(|value| f64::from(value.preflight_ms)),
             pass_total_ms: timings.map(|value| f64::from(value.total_pass_millis)),
+            gpu_pass_total_ms: timings.and_then(|value| {
+                (value.gpu_pass_sample_count > 0).then_some(f64::from(value.gpu_total_pass_millis))
+            }),
+            gpu_timing_diagnostic_count: timings
+                .map(|value| value.gpu_timing_diagnostics.len() as f64),
             dynamic_texture_target_count: dynamic_texture_target_count.map(|value| value as f64),
             dynamic_texture_upload_bytes: dynamic_texture_upload_bytes.map(|value| value as f64),
             capture_count: capture_report.map(|report| report.capture_results.len() as f64),
@@ -181,6 +192,8 @@ impl RenderReadinessBudgetMeasurements {
             RenderReadinessBudgetKind::FrameTotalMillis => self.frame_total_ms,
             RenderReadinessBudgetKind::PreflightMillis => self.preflight_ms,
             RenderReadinessBudgetKind::PassTotalMillis => self.pass_total_ms,
+            RenderReadinessBudgetKind::GpuPassTotalMillis => self.gpu_pass_total_ms,
+            RenderReadinessBudgetKind::GpuTimingDiagnosticCount => self.gpu_timing_diagnostic_count,
             RenderReadinessBudgetKind::DynamicTextureTargetCount => {
                 self.dynamic_texture_target_count
             }

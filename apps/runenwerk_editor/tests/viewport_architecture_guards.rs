@@ -1458,10 +1458,13 @@ fn wr029_phase4_requires_real_model_mesh_renderable_contract_before_pixel_claim(
     assert!(
         roadmap.contains("- id: WR-030")
             && roadmap.contains("Model Mesh Renderable Scene Contract")
-            && roadmap.contains("planning_state: current_candidate")
+            && roadmap.contains("planning_state: ready_next")
+            && roadmap.contains(
+                "Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032"
+            )
             && roadmap.contains("Current Mesh Preview pixel proof")
             && roadmap.contains("PreparedModelMeshMaterialSelection"),
-        "active roadmap must keep WR-030 as the current Mesh Preview prerequisite for WR-029 Phase 4",
+        "active roadmap must keep WR-030 as the ready-next Mesh Preview prerequisite for WR-029 Phase 4",
     );
     assert!(
         roadmap.contains("- id: WR-029")

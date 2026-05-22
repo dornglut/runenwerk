@@ -45,15 +45,14 @@ pub(super) fn validate_ir(ir: &MaterialIr) -> Result<(), MaterialShaderCompileEr
                 node_id,
                 output_name,
             } = &input.source
+                && !outputs.contains(&(node_id.raw(), output_name.clone()))
             {
-                if !outputs.contains(&(node_id.raw(), output_name.clone())) {
-                    return Err(MaterialShaderCompileError::MissingConnectedOutput {
-                        node_id: node.node_id.raw(),
-                        input: input.name.clone(),
-                        source_node_id: node_id.raw(),
-                        output: output_name.clone(),
-                    });
-                }
+                return Err(MaterialShaderCompileError::MissingConnectedOutput {
+                    node_id: node.node_id.raw(),
+                    input: input.name.clone(),
+                    source_node_id: node_id.raw(),
+                    output: output_name.clone(),
+                });
             }
         }
     }

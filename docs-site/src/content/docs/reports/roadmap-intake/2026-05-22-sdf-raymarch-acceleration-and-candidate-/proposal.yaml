@@ -1,28 +1,25 @@
 version: 1
 idea: SDF Raymarch Acceleration And Candidate Lists
-source_path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
+source_path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+open_questions: []
 item:
   id: WR-065
   title: SDF Raymarch Acceleration And Candidate Lists
   diagram_title: SDF Raymarch Acceleration And Candidate Lists
   alias: WR065
-  lane: Discovery
+  lane: Render implementation
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed SDF raymarch acceleration bounded contract
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,76 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-064
+  - WR-062
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-sdf-raymarch-acceleration-and-candidate-
+  - docs-site/src/content/docs/reports/implementation-plans/wr-065-sdf-raymarch-acceleration-and-candidate-lists/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_sdf
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_scale
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md.
+  current_decision: Completed. Renderer SDF raymarch acceleration now derives conservative distance mip, safe-step, screen-tile/depth-slice candidate-list, rejected-candidate, and diagnostic evidence from SDF residency.
+  current_call: Use WR-065 as completed PM-RENDER-SDF-003 evidence before starting WR-066 runtime SDF evidence work.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; runtime SDF proof and final perfectionist verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Runtime SDF examples, visual proof, benchmarks, hardware/profile evidence, and production readiness remain WR-066 scope.
+  - WR-065 derives deterministic renderer acceleration and candidate-list inspection DTOs and does not submit a full SDF raymarch frame or claim runtime_proven.
+  - Perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  - raymarch proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: SDF raymarch acceleration must follow accepted conservative stepping policy.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-064-sparse-sdf-brick-page-and-clipmap-residency/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Raymarch acceleration requires completed SDF brick/page/clipmap residency evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Candidate-list work must preserve completed bounded visibility, compaction, and submitted-work evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-065-sdf-raymarch-acceleration-and-candidate-lists/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-065 implementation followed the design-first conservative raymarch acceleration and candidate-list contract.
+  ddd_owner: engine renderer SDF raymarch acceleration, candidate lists, inspection, and diagnostics
+  adr_requirement: No ADR required because the implementation adds renderer-owned acceleration evidence without moving SDF product/collision/query policy, persisted cross-domain ABI, or dependency direction into renderer code.
+  fitness_function_requirement: render_sdf raymarch tests, runtime inspection guards, scale/candidate regression tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned SDF product producers.
+edges:
+- source: WR-064
+  target: WR-065
+  label: SDF residency evidence before raymarch acceleration
+- source: WR-062
+  target: WR-065
+  label: bounded visibility and submitted-work evidence before candidate lists

@@ -5,7 +5,7 @@ use crate::plugins::render::graph::{
     CompiledResourceRef, CompiledStorageAccess, CompiledTargetAliasRef, CompiledViewMask,
     RenderBackendCapabilityProfile, RenderExecutionGraphDiagnostic,
     RenderExecutionGraphDiagnosticKind, RenderExecutionGraphPreparedError,
-    validate_compiled_flow_capabilities,
+    diagnose_compiled_pass_shapes, validate_compiled_flow_capabilities,
 };
 use crate::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedRenderFrame, PreparedTargetBinding,
@@ -245,6 +245,7 @@ pub fn validate_prepared_render_frame_runtime_guards(
     diagnose_duplicate_invocation_ids(frame, &mut diagnostics);
     diagnose_dynamic_target_history_conflicts(frame, &views_by_id, &mut diagnostics);
 
+    let mut pass_shape_checked_flows = BTreeSet::<crate::plugins::render::RenderFlowId>::new();
     for invocation in &frame.flow_invocations {
         let Some(flow) = flows_by_id.get(&invocation.flow_id).copied() else {
             diagnostics.push(
@@ -260,6 +261,9 @@ pub fn validate_prepared_render_frame_runtime_guards(
             );
             continue;
         };
+        if pass_shape_checked_flows.insert(flow.flow_id) {
+            diagnostics.extend(diagnose_compiled_pass_shapes(flow));
+        }
         let Some(view) = views_by_id.get(invocation.view_id.as_str()).copied() else {
             diagnostics.push(
                 RenderExecutionGraphDiagnostic::error(
@@ -309,6 +313,7 @@ pub fn validate_prepared_render_frame(
     diagnose_dynamic_target_history_conflicts(frame, &views_by_id, &mut diagnostics);
 
     for flow in compiled_flows {
+        diagnostics.extend(diagnose_compiled_pass_shapes(flow));
         diagnostics.extend(validate_compiled_flow_capabilities(flow, profile));
     }
 
@@ -734,38 +739,36 @@ fn validate_alias_kind_binding(
     binding: &PreparedTargetBinding,
     diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
 ) {
-    let compatible = match (requirement.alias.kind, requirement.role, binding) {
+    let compatible = matches!(
+        (requirement.alias.kind, requirement.role, binding),
         (
             RenderTargetAliasKind::Color,
             AliasUseRole::ColorOutput
-            | AliasUseRole::SampledTexture
-            | AliasUseRole::CopySource
-            | AliasUseRole::CopyDestination
-            | AliasUseRole::PresentSource,
+                | AliasUseRole::SampledTexture
+                | AliasUseRole::CopySource
+                | AliasUseRole::CopyDestination
+                | AliasUseRole::PresentSource,
             PreparedTargetBinding::SurfaceColor
-            | PreparedTargetBinding::DynamicTexture(_)
-            | PreparedTargetBinding::FlowOwned(_),
-        ) => true,
-        (
+                | PreparedTargetBinding::DynamicTexture(_)
+                | PreparedTargetBinding::FlowOwned(_),
+        ) | (
             RenderTargetAliasKind::Depth,
             AliasUseRole::DepthOutput | AliasUseRole::SampledTexture,
             PreparedTargetBinding::SurfaceDepth
-            | PreparedTargetBinding::DynamicTexture(_)
-            | PreparedTargetBinding::FlowOwned(_),
-        ) => true,
-        (
+                | PreparedTargetBinding::DynamicTexture(_)
+                | PreparedTargetBinding::FlowOwned(_),
+        ) | (
             RenderTargetAliasKind::Texture,
             AliasUseRole::SampledTexture
-            | AliasUseRole::StorageTextureWrite
-            | AliasUseRole::CopySource
-            | AliasUseRole::CopyDestination
-            | AliasUseRole::PresentSource,
+                | AliasUseRole::StorageTextureWrite
+                | AliasUseRole::CopySource
+                | AliasUseRole::CopyDestination
+                | AliasUseRole::PresentSource,
             PreparedTargetBinding::DynamicTexture(_)
-            | PreparedTargetBinding::FlowOwned(_)
-            | PreparedTargetBinding::SurfaceColor,
-        ) => true,
-        _ => false,
-    };
+                | PreparedTargetBinding::FlowOwned(_)
+                | PreparedTargetBinding::SurfaceColor,
+        )
+    );
     if compatible {
         return;
     }
@@ -1254,14 +1257,14 @@ fn hash_bindings(bindings: &CompiledPassBindings, hasher: &mut impl Hasher) {
         match entry {
             CompiledBindingEntry::SampledTexture { resource } => {
                 "sampled_texture".hash(hasher);
-                hash_compiled_resource_ref(Some(&resource), hasher);
+                hash_compiled_resource_ref(Some(resource), hasher);
             }
             CompiledBindingEntry::Sampler => {
                 "sampler".hash(hasher);
             }
             CompiledBindingEntry::StorageTexture { resource, access } => {
                 "storage_texture".hash(hasher);
-                hash_compiled_resource_ref(Some(&resource), hasher);
+                hash_compiled_resource_ref(Some(resource), hasher);
                 hash_storage_access(*access, hasher);
             }
             CompiledBindingEntry::UniformBuffer { resource } => {
@@ -1270,7 +1273,7 @@ fn hash_bindings(bindings: &CompiledPassBindings, hasher: &mut impl Hasher) {
             }
             CompiledBindingEntry::StorageBuffer { resource, access } => {
                 "storage_buffer".hash(hasher);
-                hash_compiled_resource_ref(Some(&resource), hasher);
+                hash_compiled_resource_ref(Some(resource), hasher);
                 hash_storage_access(*access, hasher);
             }
         }

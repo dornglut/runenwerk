@@ -1225,7 +1225,7 @@ mod tests {
         .expect("shell state should build from hosted registry")
     }
 
-    fn workspace_with_v5_conversion_error() -> WorkspaceState {
+    fn workspace_with_registered_stable_key_replacement() -> WorkspaceState {
         let shell_state = shell_state();
         let workspace = shell_state.workspace_state();
         let panel_id = workspace
@@ -1636,8 +1636,8 @@ mod tests {
     }
 
     #[test]
-    fn inspector_v5_preview_reports_conversion_error_as_diagnostic() {
-        let workspace = workspace_with_v5_conversion_error();
+    fn inspector_v5_preview_accepts_registered_stable_key_replacement() {
+        let workspace = workspace_with_registered_stable_key_replacement();
 
         let (summary, rows) = build_v5_persistence_preview_for_workspace(
             editor_shell::SCENE_WORKSPACE_PROFILE_ID,
@@ -1646,25 +1646,26 @@ mod tests {
 
         assert_eq!(
             summary.preview_status,
-            ToolSuiteRegistryInspectorPersistencePreviewStatus::Error
+            ToolSuiteRegistryInspectorPersistencePreviewStatus::Available
         );
-        assert!(summary.invalid_surface_count > 0);
+        assert_eq!(summary.invalid_surface_count, 0);
         assert!(rows.iter().any(|row| {
-            row.diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == "inspector.v5_preview.conversion_error")
+            row.stable_surface_key == "runenwerk.material_lab.preview"
+                && row.v5_primary_identity == row.stable_surface_key
+                && row.validation_status
+                    == ToolSuiteRegistryInspectorPersistenceValidationStatus::Valid
         }));
     }
 
     #[test]
-    fn v5_conversion_error_appears_as_persistence_preview_diagnostic() {
+    fn registered_stable_key_replacement_has_no_persistence_preview_error() {
         let app = RunenwerkEditorApp::new();
         let mut shell_state = shell_state();
-        shell_state.replace_workspace_state(workspace_with_v5_conversion_error());
+        shell_state.replace_workspace_state(workspace_with_registered_stable_key_replacement());
 
         let view_model = view_model_from_shell_state(&app, &shell_state);
 
-        assert!(view_model.diagnostic_rows.iter().any(|row| {
+        assert!(!view_model.diagnostic_rows.iter().any(|row| {
             row.scope == ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview
                 && row.code == "inspector.v5_preview.conversion_error"
         }));

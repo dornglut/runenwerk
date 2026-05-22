@@ -1,5 +1,6 @@
 use super::{
-    build_surface_config, configure_surface, preferred_surface_format, request_device_and_queue,
+    RenderBackendTimingCapabilities, build_surface_config, configure_surface,
+    preferred_surface_format, request_device_and_queue,
 };
 use anyhow::Result;
 use pollster::block_on;
@@ -13,6 +14,7 @@ pub struct WgpuCtx<'window> {
     pub surface_config: SurfaceConfiguration,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
+    pub timing_capabilities: RenderBackendTimingCapabilities,
 }
 
 impl<'window> WgpuCtx<'window> {
@@ -28,7 +30,7 @@ impl<'window> WgpuCtx<'window> {
             })
             .await?;
 
-        let (device, queue) = request_device_and_queue(&adapter).await?;
+        let (device, queue, timing_capabilities) = request_device_and_queue(&adapter).await?;
 
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
@@ -42,6 +44,7 @@ impl<'window> WgpuCtx<'window> {
             surface_config,
             device,
             queue,
+            timing_capabilities,
         })
     }
 
@@ -57,5 +60,9 @@ impl<'window> WgpuCtx<'window> {
 
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
         self.surface.get_current_texture()
+    }
+
+    pub fn timing_capabilities(&self) -> RenderBackendTimingCapabilities {
+        self.timing_capabilities
     }
 }

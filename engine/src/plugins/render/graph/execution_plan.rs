@@ -6,9 +6,9 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
-    RenderDrawDescriptor, RenderPassId, RenderResourceDescriptor, RenderResourceId,
-    RenderShaderReference, RenderTargetAliasKind, RenderVertexAttribute, RenderVertexBufferLayout,
-    RenderVertexStepMode,
+    RenderDrawDescriptor, RenderPassId, RenderPrimitiveTopology, RenderRasterState,
+    RenderResourceDescriptor, RenderResourceId, RenderShaderReference, RenderTargetAliasKind,
+    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeSet;
@@ -57,6 +57,7 @@ pub struct CompiledRasterExecutionPlan {
     pub bindings: CompiledPassBindings,
     pub targets: CompiledTargetPlan,
     pub draw_buffers: CompiledDrawBufferPlan,
+    pub raster_state: CompiledRasterState,
     pub clear_color: Option<[f32; 4]>,
     pub draw: Option<CompiledDrawPlan>,
 }
@@ -197,6 +198,23 @@ pub struct CompiledDrawPlan {
     pub first_instance: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CompiledRasterState {
+    pub state: RenderRasterState,
+}
+
+impl CompiledRasterState {
+    pub const fn primitive_topology(self) -> RenderPrimitiveTopology {
+        self.state.primitive_topology
+    }
+
+    pub fn signature_hash(self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompiledDispatchPlan {
     Fixed([u32; 3]),
@@ -291,6 +309,7 @@ fn compile_pass_execution(
                 bindings,
                 targets: compile_target_plan(node, resources),
                 draw_buffers: CompiledDrawBufferPlan::default(),
+                raster_state: compile_raster_state(node.raster_state),
                 clear_color: node.clear_color,
                 draw: None,
             })
@@ -305,6 +324,7 @@ fn compile_pass_execution(
                 bindings,
                 targets: compile_target_plan(node, resources),
                 draw_buffers: compile_draw_buffer_plan(node, resources),
+                raster_state: compile_raster_state(node.raster_state),
                 clear_color: node.clear_color,
                 draw: node.draw.map(compile_draw_plan),
             })
@@ -542,6 +562,10 @@ fn compile_draw_plan(draw: RenderDrawDescriptor) -> CompiledDrawPlan {
         first_vertex: draw.first_vertex,
         first_instance: draw.first_instance,
     }
+}
+
+fn compile_raster_state(state: RenderRasterState) -> CompiledRasterState {
+    CompiledRasterState { state }
 }
 
 impl CompiledDrawBufferPlan {

@@ -266,7 +266,7 @@ pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
             match prepared_material_resource_for_preview_with_resolved_scene_materials_and_bundle(
                 Some(preview),
                 scene_material_assignments,
-                &slot_products,
+                slot_products,
                 scene_table_bundle,
             ) {
                 Ok(resource) => {
@@ -1071,6 +1071,7 @@ mod tests {
         assert!(!selections[0].used_default_fallback);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn texture_preview(
         asset_id: asset::AssetId,
         product_id: u64,

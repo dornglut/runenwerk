@@ -491,24 +491,23 @@ fn collect_registered_feature_contributions(
 
     for collector in collector_registry.collectors() {
         let descriptor = &collector.descriptor;
-        if let Some(feature_registry) = feature_registry {
-            if feature_registry
+        if let Some(feature_registry) = feature_registry
+            && feature_registry
                 .descriptor(&descriptor.feature_id)
                 .is_none()
-            {
-                contributions.push_diagnostic(
-                    PreparedFeatureContributionDiagnostic::error(
-                        descriptor.feature_id,
-                        format!(
-                            "collector '{}' references unknown render feature {:?}",
-                            descriptor.collector_id, descriptor.feature_id
-                        ),
-                    )
-                    .with_collector_id(descriptor.collector_id.clone())
-                    .with_payload_kind(descriptor.payload_kind.clone()),
-                );
-                continue;
-            }
+        {
+            contributions.push_diagnostic(
+                PreparedFeatureContributionDiagnostic::error(
+                    descriptor.feature_id,
+                    format!(
+                        "collector '{}' references unknown render feature {:?}",
+                        descriptor.collector_id, descriptor.feature_id
+                    ),
+                )
+                .with_collector_id(descriptor.collector_id.clone())
+                .with_payload_kind(descriptor.payload_kind.clone()),
+            );
+            continue;
         }
         if let Err(diagnostic) = validate_collector_resources(world, descriptor) {
             contributions.push_diagnostic(diagnostic);

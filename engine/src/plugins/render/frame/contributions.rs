@@ -816,16 +816,11 @@ impl Error for PreparedMaterialBindingTableError {}
 const MATERIAL_PARAMETER_PAYLOAD_FORMAT_V1: &str = "runenwerk.material-parameters.v1";
 pub const PREPARED_MATERIAL_PARAMETER_PAYLOAD_V1_MAX_PARAMETERS: usize = 256;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PreparedMaterialParameterProfile {
+    #[default]
     PbrPreview,
     RenderMaterial,
-}
-
-impl Default for PreparedMaterialParameterProfile {
-    fn default() -> Self {
-        Self::PbrPreview
-    }
 }
 
 impl PreparedMaterialParameterProfile {
@@ -845,17 +840,12 @@ impl PreparedMaterialParameterProfile {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PreparedMaterialOutputTarget {
+    #[default]
     PbrPreview,
     FieldMaterialChannel,
     RenderMaterial,
-}
-
-impl Default for PreparedMaterialOutputTarget {
-    fn default() -> Self {
-        Self::PbrPreview
-    }
 }
 
 impl PreparedMaterialOutputTarget {
@@ -877,20 +867,15 @@ impl PreparedMaterialOutputTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PreparedMaterialParameterKind {
+    #[default]
     Scalar,
     Vector2,
     Vector3,
     Vector4,
     Texture2D,
     Texture3D,
-}
-
-impl Default for PreparedMaterialParameterKind {
-    fn default() -> Self {
-        Self::Scalar
-    }
 }
 
 impl PreparedMaterialParameterKind {

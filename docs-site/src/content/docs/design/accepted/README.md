@@ -51,4 +51,8 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [Render Production Readiness And Inspection Design](render-production-readiness-and-inspection-design.md)
 - [Render Contract Ergonomics Design](render-contract-ergonomics-design.md)
 - [Render Product Graph Platform](render-product-graph-platform-design.md)
+- [Renderer GPU Evidence And Procedural Visuals Platform](renderer-gpu-evidence-and-procedural-visuals-design.md)
+- [Renderer Mesh Material Lighting And Asset Handoff Platform](renderer-mesh-material-lighting-and-asset-handoff-design.md)
+- [Renderer Scale Residency And GPU Driven Visibility Platform](renderer-scale-residency-and-gpu-driven-visibility-design.md)
 - [SDF Product Renderer and GPU Residency Design](sdf-product-renderer-and-gpu-residency-design.md)
+- [SDF World Rendering And Raymarch Acceleration Platform](sdf-world-rendering-and-raymarch-acceleration-design.md)

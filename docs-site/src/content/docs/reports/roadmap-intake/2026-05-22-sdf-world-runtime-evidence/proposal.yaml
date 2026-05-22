@@ -1,28 +1,25 @@
 version: 1
 idea: SDF World Runtime Evidence
-source_path: docs-site/src/content/docs/design/active/sdf-world-rendering-and-raymarch-acceleration-design.md
-owner: engine/examples
+source_path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
+owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+open_questions: []
 item:
   id: WR-066
   title: SDF World Runtime Evidence
   diagram_title: SDF World Runtime Evidence
   alias: WR066
-  lane: Discovery
+  lane: Render hardening
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed SDF runtime evidence
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,104 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-064
+  - WR-065
+  - WR-063
   write_scopes:
   - engine/examples
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/benches/render_flow_planning.rs
+  - engine/benchmark-artifacts
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/benchmarks
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-sdf-world-runtime-evidence
+  - docs-site/src/content/docs/reports/implementation-plans/wr-066-sdf-world-runtime-evidence/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_sdf
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_scale
+  - cargo test -p engine --example sdf_render_flow
+  - cargo test -p engine --example render_sdf_runtime_evidence
+  - cargo run -p engine --example sdf_render_flow -- --evidence
+  - cargo run -p engine --example render_sdf_runtime_evidence -- --evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md.
+  current_decision: Completed. SDF runtime evidence now aggregates executable examples, visual evidence references, benchmark evidence, residency diagnostics, raymarch diagnostics, timing evidence, hardware profile identity, artifact paths, and production reports without moving SDF product truth into the renderer.
+  current_call: Use WR-066 as completed PM-RENDER-SDF-004 evidence before starting downstream renderer stack dependency tracks.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; final no-gap verification remains PT-RENDER-PERFECTION scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - The canonical SDF evidence commands are deterministic non-windowed closeout evidence paths and do not promise universal FPS.
+  - Timestamp-query evidence is capability-gated; portable examples record unsupported timestamp queries as typed diagnostics.
+  - Perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: engine/examples
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  - runtime proof
+  - SDF closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: SDF runtime evidence must follow accepted sparse SDF rendering and conservative raymarch doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime evidence must follow accepted renderer production-readiness and inspection doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime evidence must preserve GPU timing and unsupported-diagnostic contracts.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-064-sparse-sdf-brick-page-and-clipmap-residency/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Runtime evidence requires completed SDF residency evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Runtime evidence requires completed SDF raymarch acceleration and candidate-list evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: SDF production evidence should reuse completed renderer production evidence and benchmark closeout patterns.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-066-sdf-world-runtime-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-066 implementation followed the design-first SDF runtime evidence contract.
+  ddd_owner: engine renderer SDF runtime evidence, examples, benchmarks, inspection, and diagnostics
+  adr_requirement: No ADR required because the implementation adds renderer-owned runtime evidence, examples, benchmarks, and docs without moving SDF product/collision/query/fallback policy, persisted cross-domain ABI, or dependency direction into renderer code.
+  fitness_function_requirement: SDF runtime evidence example tests, evidence command, residency/raymarch production report guards, benchmark command, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned SDF product producers.
+edges:
+- source: WR-064
+  target: WR-066
+  label: SDF residency evidence before runtime proof
+- source: WR-065
+  target: WR-066
+  label: SDF raymarch acceleration evidence before runtime proof
+- source: WR-063
+  target: WR-066
+  label: renderer production evidence pattern before SDF runtime proof

@@ -66,10 +66,11 @@ Runtime performance policy is split by ownership:
   throttles normal directory polling to 500 ms after the first poll while
   `request_reload()` still bypasses the throttle;
 - render diagnostics are tiered by `RenderFrameDiagnosticsPolicyResource`.
-  Cheap timings, pass samples, shader poll state, preflight cache state, and
-  pacing state remain available every frame. Full `RenderDebugFrameReport`
-  mapping runs for provenance/capture/readback/pixel probes/texture diffs/export,
-  slow frames, explicit requests, or full-every-frame policy.
+  Cheap CPU timings, pass samples, GPU timing capability/diagnostics, shader
+  poll state, pass-shape guard diagnostics, preflight cache state, and pacing
+  state remain available every frame. Full `RenderDebugFrameReport` mapping runs for
+  provenance/capture/readback/pixel probes/texture diffs/export, slow frames,
+  explicit requests, or full-every-frame policy.
 
 ## Prepared Frame Surface
 

@@ -14,10 +14,11 @@ use crate::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
     RenderCapturePointIdentity, RenderCaptureSelector, RenderCaptureSelectorResult,
     RenderCaptureTerminal, RenderCaptureTerminalCode, RenderDebugConfigResource,
-    RenderDebugControlResource, RenderPassMaterialBindingEvidence,
-    RenderPassModelMeshMaterialSelectionEvidence, RenderPassProvenanceRecord,
-    RenderSelectorResolution, ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
-    RuntimeResourceReuse, resource_kind_name,
+    RenderDebugControlResource, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
+    RenderPassMaterialBindingEvidence, RenderPassModelMeshMaterialSelectionEvidence,
+    RenderPassProvenanceRecord, RenderPassTimingEvidence, RenderSelectorResolution,
+    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry, RuntimeResourceReuse,
+    resource_kind_name,
 };
 use crate::plugins::render::pipelines::{
     FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey, FlowPrimitiveTopologyClass,
@@ -31,6 +32,7 @@ mod bindings;
 mod capture;
 mod execute;
 mod execute_passes;
+mod gpu_timing;
 mod preflight_cache;
 mod provenance;
 mod runtime_resources;
@@ -41,6 +43,9 @@ pub(super) use capture::{
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
+pub(super) use gpu_timing::{
+    GpuPassTimestampWrites, GpuPassTimingFrame, read_gpu_pass_timing_evidence,
+};
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(super) use provenance::{
     EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,

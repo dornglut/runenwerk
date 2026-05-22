@@ -10,7 +10,7 @@ related_designs:
   - ../accepted/field-product-contracts-diagnostics-and-residency-design.md
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-procedural-content-and-simulation-workflow-plan.md
-  - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
+  - ../accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
 ---
 
 # Renderer Product Visual Producers Platform

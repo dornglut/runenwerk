@@ -107,17 +107,19 @@ pub fn default_material_graph_document_for_source_with_target(
     let base_color_port = PortId::new(1);
     let output_node = NodeId::new(2);
     let output_base_color_port = PortId::new(2);
-    let mut editor_state = material_graph::MaterialGraphEditorState::default();
-    editor_state.selected_fixture = material_graph::MaterialGraphPreviewFixture::SdfPrimitive;
-    editor_state.selected_preview = if output_target == MaterialOutputTarget::RenderMaterial {
-        material_graph::MaterialGraphPreviewSelection::SceneProduct
-    } else {
-        material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct
+    let editor_state = material_graph::MaterialGraphEditorState {
+        selected_fixture: material_graph::MaterialGraphPreviewFixture::SdfPrimitive,
+        selected_preview: if output_target == MaterialOutputTarget::RenderMaterial {
+            material_graph::MaterialGraphPreviewSelection::SceneProduct
+        } else {
+            material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct
+        },
+        node_layouts: vec![
+            material_graph::MaterialGraphNodeLayout::new(base_color_node, 40, 96),
+            material_graph::MaterialGraphNodeLayout::new(output_node, 360, 96),
+        ],
+        ..material_graph::MaterialGraphEditorState::default()
     };
-    editor_state.node_layouts = vec![
-        material_graph::MaterialGraphNodeLayout::new(base_color_node, 40, 96),
-        material_graph::MaterialGraphNodeLayout::new(output_node, 360, 96),
-    ];
 
     MaterialGraphDocument::new(
         material_document_id_for_source(asset_id, source.source_id),

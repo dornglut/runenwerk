@@ -1,17 +1,17 @@
 ---
 title: SDF World Rendering And Raymarch Acceleration Platform
-description: Active design for sparse SDF bricks, page tables, clipmaps, distance mips, candidate lists, and conservative raymarch acceleration.
-status: active
+description: Accepted design for sparse SDF bricks, page tables, clipmaps, distance mips, candidate lists, and conservative raymarch acceleration.
+status: accepted
 owner: engine
 layer: engine-runtime / renderer / sdf-products
 canonical: true
 last_reviewed: 2026-05-22
 related_designs:
-  - ../accepted/sdf-first-field-world-platform-design.md
-  - ../accepted/sdf-product-renderer-and-gpu-residency-design.md
-  - ../accepted/field-product-contracts-diagnostics-and-residency-design.md
+  - ./sdf-first-field-world-platform-design.md
+  - ./sdf-product-renderer-and-gpu-residency-design.md
+  - ./field-product-contracts-diagnostics-and-residency-design.md
   - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
-  - ./sdf-procedural-animation-and-animated-models-design.md
+  - ../active/sdf-procedural-animation-and-animated-models-design.md
 ---
 
 # SDF World Rendering And Raymarch Acceleration Platform

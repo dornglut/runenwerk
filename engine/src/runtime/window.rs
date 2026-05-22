@@ -312,7 +312,10 @@ mod tests {
 
         assert_ne!(request.native_window_id, NativeWindowId::primary());
         assert_eq!(request.title, "Secondary");
-        assert_eq!(registry.pending_creation_requests(), &[request.clone()]);
+        assert_eq!(
+            registry.pending_creation_requests(),
+            std::slice::from_ref(&request)
+        );
         assert_eq!(
             registry
                 .record(request.native_window_id)

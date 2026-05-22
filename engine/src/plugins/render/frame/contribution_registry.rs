@@ -378,21 +378,21 @@ pub fn validate_collected_contribution(
     descriptor: &RenderFeatureContributionCollectorDescriptor,
     contribution: &PreparedFeatureContribution,
 ) -> Result<(), PreparedFeatureContributionDiagnostic> {
-    if let PreparedFeaturePayload::Registered(payload) = &contribution.payload {
-        if payload.kind() != &descriptor.payload_kind {
-            return Err(PreparedFeatureContributionDiagnostic::error(
-                descriptor.feature_id,
-                format!(
-                    "collector '{}' emitted payload kind '{}' but registered '{}'",
-                    descriptor.collector_id,
-                    payload.kind(),
-                    descriptor.payload_kind
-                ),
-            )
-            .with_collector_id(descriptor.collector_id.clone())
-            .with_payload_kind(payload.kind().clone())
-            .with_status(contribution.status));
-        }
+    if let PreparedFeaturePayload::Registered(payload) = &contribution.payload
+        && payload.kind() != &descriptor.payload_kind
+    {
+        return Err(PreparedFeatureContributionDiagnostic::error(
+            descriptor.feature_id,
+            format!(
+                "collector '{}' emitted payload kind '{}' but registered '{}'",
+                descriptor.collector_id,
+                payload.kind(),
+                descriptor.payload_kind
+            ),
+        )
+        .with_collector_id(descriptor.collector_id.clone())
+        .with_payload_kind(payload.kind().clone())
+        .with_status(contribution.status));
     }
     Ok(())
 }

@@ -9,7 +9,11 @@ use super::features::{
     PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureRegistryResource,
     UiFontAtlasResource, UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
     prepare_ui_feature_resource_system, sync_render_feature_registry_system,
-    world::{WorldLodPolicyResource, WorldLodSelectionResource, WorldRuntimeCacheResource},
+    world::{
+        RenderSdfRaymarchAccelerationResource, RenderSdfResidencyBudgetResource,
+        RenderSdfResidencyResource, RenderSdfResidencySourceResource, WorldLodPolicyResource,
+        WorldLodSelectionResource, WorldRuntimeCacheResource,
+    },
 };
 use super::frame::{
     PreparedRenderFrameRequestResource, PreparedRenderFrameResource,
@@ -62,6 +66,10 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedDeformationFeatureResource>();
         app.init_resource::<PreparedWindFieldFeatureResource>();
         app.init_resource::<WorldRuntimeCacheResource>();
+        app.init_resource::<RenderSdfResidencySourceResource>();
+        app.init_resource::<RenderSdfResidencyResource>();
+        app.init_resource::<RenderSdfResidencyBudgetResource>();
+        app.init_resource::<RenderSdfRaymarchAccelerationResource>();
         app.init_resource::<WorldLodPolicyResource>();
         app.init_resource::<WorldLodSelectionResource>();
         app.init_resource::<PreparedRenderFrameResource>();

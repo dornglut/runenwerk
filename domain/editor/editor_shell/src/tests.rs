@@ -35,8 +35,7 @@ use crate::{
     tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
     tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
     tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_surface_menu_list_widget_id, tab_stack_surface_menu_popup_widget_id,
-    tab_stack_surface_menu_scroll_widget_id, tab_stack_surface_submenu_anchor_widget_id,
+    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_submenu_anchor_widget_id,
     tool_surface_definition_id, tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
@@ -2019,7 +2018,10 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
     let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
+    let frame_model = frame_model_for_workspace(&workspace)
+        .with_available_tool_surface_create_candidates(create_candidates_for_kinds(&[
+            ToolSurfaceKind::Viewport,
+        ]));
     let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
     let projection_epoch = build.projection_artifacts.projection_epoch;
 
@@ -2035,7 +2037,6 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
         },
         &build.projection_artifacts,
     );
-
     assert!(matches!(
         commands.as_slice(),
         [
@@ -2110,7 +2111,7 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
 }
 
 #[test]
-fn tab_stack_area_actions_are_projected_as_popup_menu() {
+fn tab_stack_area_actions_project_structural_commands_without_surface_submenu() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
     let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
@@ -2145,38 +2146,29 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
         &active_build.tree.root,
         tab_stack_split_horizontal_button_widget_id(viewport_stack)
     ));
+    assert!(!ui_tree_contains_widget(
+        &active_build.tree.root,
+        tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
+    ));
 
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
-            items: vec![
-                UiInteraction::Activated(tab_stack_surface_submenu_anchor_widget_id(
-                    viewport_stack,
-                )),
-                UiInteraction::Activated(tab_stack_split_horizontal_button_widget_id(
-                    viewport_stack,
-                )),
-            ],
+            items: vec![UiInteraction::Activated(
+                tab_stack_split_horizontal_button_widget_id(viewport_stack),
+            )],
         },
         &active_build.projection_artifacts,
     );
 
     assert!(matches!(
         commands.as_slice(),
-        [
-            ShellCommand::ToggleTabStackSurfaceMenu {
-                tab_stack_id,
-                anchor_widget_id,
-            },
-            ShellCommand::SplitTabStackAreaStableKey {
-                tab_stack_id: split_stack,
-                axis: split_axis,
-                panel_kind: split_panel_kind,
-                stable_surface_key: split_surface_key,
-                projection_epoch: split_epoch,
-            },
-        ] if *tab_stack_id == viewport_stack
-            && *anchor_widget_id == tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
-            && *split_stack == viewport_stack
+        [ShellCommand::SplitTabStackAreaStableKey {
+            tab_stack_id: split_stack,
+            axis: split_axis,
+            panel_kind: split_panel_kind,
+            stable_surface_key: split_surface_key,
+            projection_epoch: split_epoch,
+        }] if *split_stack == viewport_stack
             && *split_axis == WorkspaceSplitAxis::Horizontal
             && *split_panel_kind == PanelKind::Viewport
             && split_surface_key.as_str() == "runenwerk.scene.viewport"
@@ -2185,7 +2177,7 @@ fn tab_stack_area_actions_are_projected_as_popup_menu() {
 }
 
 #[test]
-fn tab_stack_surface_submenu_keeps_parent_menu_stack_scope() {
+fn tab_stack_surface_submenu_is_not_formed_for_stable_key_chrome() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
     let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
@@ -2202,77 +2194,45 @@ fn tab_stack_surface_submenu_keeps_parent_menu_stack_scope() {
         &active_build.tree.root,
         tab_stack_action_menu_popup_widget_id(viewport_stack)
     ));
-    assert!(ui_tree_contains_widget(
+    assert!(!ui_tree_contains_widget(
         &active_build.tree.root,
         tab_stack_surface_submenu_anchor_widget_id(viewport_stack)
     ));
-    assert!(ui_tree_contains_widget(
+    assert!(!ui_tree_contains_widget(
         &active_build.tree.root,
         tab_stack_surface_menu_popup_widget_id(viewport_stack)
     ));
-
-    let layouts = ui_runtime::compute_tree_layout(
-        &active_build.tree,
-        ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
-        &ui_runtime::UiRuntimeState::default(),
-    );
-    let surface_popup = layouts
-        .get(&tab_stack_surface_menu_popup_widget_id(viewport_stack))
-        .expect("surface submenu popup should lay out from its parent menu anchor");
-    assert!(
-        surface_popup.bounds.width > 0.0 && surface_popup.bounds.height > 0.0,
-        "surface submenu must not fall back to a zero-size unanchored layout",
-    );
 
     let scopes = &active_build
         .projection_artifacts
         .interaction_model
         .menu_scopes;
-    let parent_scope = scopes
+    let _parent_scope = scopes
         .iter()
         .find(|scope| {
             scope.popup_widget_id == tab_stack_action_menu_popup_widget_id(viewport_stack)
         })
         .expect("parent area-actions menu scope should be formed");
-    let child_scope = scopes
-        .iter()
-        .find(|scope| {
-            scope.popup_widget_id == tab_stack_surface_menu_popup_widget_id(viewport_stack)
-        })
-        .expect("surface submenu scope should be formed");
     assert_eq!(
-        child_scope.parent_scope_id.as_deref(),
-        Some(parent_scope.scope_id.as_str()),
-        "surface submenu should declare the parent area-actions menu scope",
-    );
-    assert_eq!(
-        child_scope.anchor_widget_id,
-        tab_stack_surface_submenu_anchor_widget_id(viewport_stack),
-    );
-    assert!(
-        active_build
-            .projection_artifacts
-            .interaction_model
-            .scroll_owners
+        scopes
             .iter()
-            .any(|owner| owner.widget_id == tab_stack_surface_menu_scroll_widget_id(viewport_stack)),
-        "surface submenu scroll should be a formed Interaction V2 scroll owner",
+            .filter(|scope| {
+                scope.popup_widget_id == tab_stack_surface_menu_popup_widget_id(viewport_stack)
+            })
+            .count(),
+        0,
+        "removed surface-kind submenu should not form a child menu scope",
     );
     assert!(
-        active_build
+        !active_build
             .projection_artifacts
             .interaction_model
             .menu_sizing
             .iter()
             .any(|sizing| {
                 sizing.popup_widget_id == tab_stack_surface_menu_popup_widget_id(viewport_stack)
-                    && sizing.list_widget_id
-                        == tab_stack_surface_menu_list_widget_id(viewport_stack)
-                    && sizing.item_width
-                        == ui_definition::UiMenuItemWidthDefinition::FillToMenuWidth
-                    && sizing.overflow == ui_definition::UiMenuOverflowDefinition::ScrollWhenClamped
             }),
-        "surface submenu should expose formed Interaction V2 menu sizing",
+        "removed surface-kind submenu should not expose menu sizing",
     );
 }
 

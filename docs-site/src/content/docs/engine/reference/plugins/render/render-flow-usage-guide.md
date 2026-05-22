@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-21
+last_reviewed: 2026-05-22
 ---
 
 # Render Flow Usage Guide
@@ -123,6 +123,345 @@ let flow = flow
     .finish()
     .validate()?;
 ```
+
+## Procedural Mesh, Quad, And Local SDF Instance Passes
+
+Use `RenderFlow::procedural_pass(...)` when a flow needs bounded local
+procedural visuals instead of hand-written fullscreen-plus-instance work. The
+procedural API consumes typed storage array handles and emits ordinary graphics
+passes with local instance geometry, explicit render policy, and normal
+render-flow validation.
+
+```rust
+use engine::plugins::render::{
+    GpuStorage, ProceduralBufferBinding, ProceduralPassDescriptor,
+    ProceduralRenderPolicy, RenderBlendMode, RenderCullMode, RenderDepthPolicy,
+    RenderFlow, RenderVertexBufferLayout, RenderVertexFormat,
+    SURFACE_COLOR_RESOURCE_LABEL,
+};
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct SpriteInstance {
+    position: [f32; 2],
+    radius: f32,
+    flags: u32,
+}
+
+let (flow, instances) = RenderFlow::new("procedural.flow")
+    .with_surface_color()
+    .storage_array::<SpriteInstance>("sprites.instances", 512);
+
+let flow = flow
+    .procedural_pass(
+        ProceduralPassDescriptor::quad_sprites(
+            "sprites.draw",
+            ProceduralBufferBinding::storage(
+                instances,
+                RenderVertexBufferLayout::instance(0, 16)
+                    .attribute(0, 0, RenderVertexFormat::Float32x2)
+                    .attribute(1, 8, RenderVertexFormat::Float32)
+                    .attribute(2, 12, RenderVertexFormat::Uint32),
+            ),
+            512,
+        )
+        .shader_asset("assets/shaders/sprites.wgsl")
+        .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
+        .policy(
+            ProceduralRenderPolicy::default()
+                .blend_mode(RenderBlendMode::Alpha)
+                .depth_policy(RenderDepthPolicy::Default)
+                .cull_mode(RenderCullMode::None),
+        ),
+    )?
+    .validate()?;
+```
+
+Use `ProceduralPassDescriptor::mesh_sprites(...)` when the pass has an explicit
+mesh vertex buffer. Use `ProceduralPassDescriptor::local_sdf_2d_impostors(...)`
+for local 2D SDF impostor sprites. The first public SDF impostor path is
+intentionally 2D-local only; product-owned SDF authority, 3D raymarching, sparse
+residency, freshness, fallback, and rebuild policy stay outside the renderer
+procedural API.
+
+The canonical boids example is the reference path for storage-backed procedural
+instance rendering. `engine/examples/boids_render_flow/rendering/graph.rs`
+keeps simulation in compute passes, publishes the current storage buffer into
+the instance buffer consumed by `RenderFlow::procedural_pass(...)`, draws local
+2D SDF impostors from `assets/shaders/boids_compose.wgsl`, and presents directly
+from the flow-owned color target. It intentionally does not keep a history copy
+or use a fullscreen fragment loop over all boids.
+
+For production evidence, run `cargo run -p engine --example boids_render_flow --
+--evidence` to print the canonical boids pass-shape, timing-diagnostic, and
+benchmark contract. Pair that with `cargo bench -p engine --bench
+render_flow_planning`, which includes procedural-boids planning and preflight
+cases for the public procedural path.
+
+## Scale Working-Set Residency Evidence
+
+Renderer scale evidence starts with finite working sets, not with unbounded
+world size. Product jobs publish selected products and residency requests; the
+renderer derives a GPU residency working set with explicit addressable,
+selected, requested, accepted, resident, byte, upload, and budget-pressure
+counts.
+
+```rust
+use engine::plugins::render::{
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
+};
+use engine::plugins::render::inspect::inspect_render_gpu_residency;
+use product::RenderProductSelection;
+
+let mut residency = RenderGpuResidencyResource::default();
+let budget = RenderGpuResidencyBudgetResource {
+    max_resident_entries: 4096,
+    max_resident_bytes: 512 * 1024 * 1024,
+    max_upload_bytes_per_frame: 32 * 1024 * 1024,
+    ..RenderGpuResidencyBudgetResource::default()
+};
+
+let selections: Vec<RenderProductSelection> = Vec::new();
+let summary = residency.derive_from_selections(&selections, &budget);
+let inspection = inspect_render_gpu_residency(&residency);
+
+assert_eq!(summary.resident_count, inspection.resident_count);
+```
+
+`RenderGpuResidencyBudgetResource` is a renderer execution budget. It classifies
+resident-entry, resident-byte, and upload-byte pressure and emits diagnostics
+when limits are exceeded or byte estimates are invalid. It does not choose
+product fallback, streaming, freshness, authority, semantic LOD, or rebuild
+policy. Those decisions remain with product owners and later product-specific
+tracks. WR-062 adds GPU-driven visibility and indirect submission; WR-063 adds
+production examples, benchmarks, and hardware evidence.
+
+## Sparse SDF Brick Page And Clipmap Residency
+
+Sparse SDF renderer residency is derived cache evidence over product-owned SDF
+payloads. Product producers publish selected products and residency requests;
+the renderer pairs those selections with domain-owned `SdfChunkPayload` sources
+and derives page-table, brick-atlas, clipmap-window, invalidation, byte, upload,
+and budget-pressure DTOs.
+
+```rust
+use engine::plugins::render::features::world::sdf_residency::{
+    RenderSdfResidencyBudgetResource, RenderSdfResidencyResource,
+    RenderSdfResidencySourceResource,
+};
+use engine::plugins::render::inspect::inspect_render_sdf_residency;
+use product::{ProductIdentity, RenderProductSelection};
+use world_sdf::SdfChunkPayload;
+
+let product_id = ProductIdentity::new(7);
+let mut sources = RenderSdfResidencySourceResource::default();
+sources.upsert_payload(product_id, 3, SdfChunkPayload::default());
+
+let mut residency = RenderSdfResidencyResource::default();
+let selections: Vec<RenderProductSelection> = Vec::new();
+let summary = residency.derive_from_sources(
+    &selections,
+    &sources,
+    &RenderSdfResidencyBudgetResource::default(),
+);
+let inspection = inspect_render_sdf_residency(&residency);
+
+assert_eq!(summary.resident_product_count, inspection.resident_product_count);
+```
+
+Missing payloads, stale products, generation mismatches, nonresident products,
+unsupported query policy, and missing residency requests are diagnostics, not
+silent success. `RenderSdfResidencyBudgetResource` reports resident page,
+resident brick, resident byte, upload byte, and clipmap window pressure. It
+does not choose product fallback, rebuild policy, query authority, collision
+truth, gameplay semantics, or SDF authoring behavior. WR-065 owns raymarch
+acceleration and candidate lists; WR-066 owns runtime SDF examples, visual
+evidence, benchmarks, and production readiness.
+
+## SDF Raymarch Acceleration And Candidate Lists
+
+SDF raymarch acceleration is derived from renderer-owned residency evidence.
+The renderer consumes `RenderSdfResidencyResource`, then reports conservative
+distance mip safe-step data and screen-tile/depth-slice candidate lists. The
+acceleration layer bounds raymarch work and exposes unsafe-overstep or
+candidate-explosion diagnostics; it does not read product sources directly,
+choose fallback policy, own collision truth, or prove runtime visuals.
+
+```rust
+use engine::plugins::render::features::world::sdf_raymarch::{
+    RenderSdfRaymarchAccelerationConfig, RenderSdfRaymarchAccelerationResource,
+};
+use engine::plugins::render::features::world::sdf_residency::RenderSdfResidencyResource;
+use engine::plugins::render::inspect::inspect_last_render_sdf_raymarch_acceleration;
+
+let residency = RenderSdfResidencyResource::default();
+let mut acceleration = RenderSdfRaymarchAccelerationResource::default();
+let report = acceleration.derive_from_residency(
+    &residency,
+    RenderSdfRaymarchAccelerationConfig {
+        screen_tile_count: 4,
+        depth_slice_count: 4,
+        max_candidates_per_list: 16,
+        ..RenderSdfRaymarchAccelerationConfig::default()
+    },
+);
+let last_report = inspect_last_render_sdf_raymarch_acceleration(&acceleration);
+
+assert_eq!(report.total_candidate_count, last_report.total_candidate_count);
+```
+
+Missing SDF residency, zero step or candidate budgets, empty tile/depth
+partitions, unsafe empty-space steps, and fullscreen raymarching multiplied per
+entity are fail-closed diagnostics. Candidate-list overflow is explicit
+rejected-candidate evidence. Residency budget pressure remains visible as a
+diagnostic instead of becoming a silent product fallback. WR-066 owns runtime
+SDF examples, visual proof, benchmark artifacts, hardware/profile evidence,
+and production-readiness claims.
+
+## SDF Runtime Evidence
+
+SDF runtime evidence aggregates the completed SDF residency and raymarch
+contracts with executable example, visual, timing, benchmark, and artifact
+evidence. Use `inspect_render_sdf_production_evidence(...)` for closeout-ready
+reports; it keeps unsupported timestamp queries, missing visual proof, broken
+count invariants, and missing benchmark evidence explicit.
+
+```rust
+use engine::plugins::render::inspect::{
+    RenderDebugTimingsState, RenderGpuTimingCapability,
+    RenderSdfProductionEvidenceRequest, RenderSdfProductionHardwareProfile,
+    RenderSdfResidencyInspection, RenderSdfRuntimeVisualEvidence,
+    inspect_render_sdf_production_evidence,
+};
+# use engine::plugins::render::features::world::sdf_raymarch::RenderSdfRaymarchAccelerationReport;
+# fn example(residency: RenderSdfResidencyInspection, raymarch: RenderSdfRaymarchAccelerationReport) {
+let report = inspect_render_sdf_production_evidence(
+    RenderSdfProductionEvidenceRequest {
+        hardware_profile: RenderSdfProductionHardwareProfile {
+            profile_key: "portable-sdf-runtime".to_string(),
+            adapter_name: None,
+            backend: Some("wgpu".to_string()),
+            timestamp_query: RenderGpuTimingCapability::Unsupported,
+        },
+        residency,
+        raymarch,
+        timings: RenderDebugTimingsState::default(),
+        visual_evidence: vec![RenderSdfRuntimeVisualEvidence {
+            view_label: "sdf.lit.near".to_string(),
+            coverage_band: "near".to_string(),
+            artifact_path: "engine/benchmark-artifacts/render-sdf-runtime-evidence/near.txt".to_string(),
+            step_count: 32,
+            missed_surface_risk: false,
+            overstep_risk: false,
+        }],
+        benchmark_commands: vec![
+            "cargo bench -p engine --bench render_flow_planning".to_string(),
+        ],
+        artifact_paths: vec![
+            "docs-site/src/content/docs/engine/benchmarks/render-sdf-runtime-evidence.md".to_string(),
+        ],
+    },
+);
+
+assert_eq!(report.counts.visual_evidence_count, 1);
+# }
+```
+
+Run the canonical SDF evidence command with:
+
+```text
+cargo run -p engine --example sdf_render_flow -- --evidence
+```
+
+Run the standalone evidence report with:
+
+```text
+cargo run -p engine --example render_sdf_runtime_evidence -- --evidence
+```
+
+Raw SDF runtime artifacts belong under
+`engine/benchmark-artifacts/render-sdf-runtime-evidence`. Human-readable
+benchmark notes belong in
+`docs-site/src/content/docs/engine/benchmarks/render-sdf-runtime-evidence.md`.
+The report is runtime evidence only: SDF product truth, query authority,
+fallback legality, collision semantics, and rebuild policy remain product-owned.
+
+## Scale Visibility And Indirect Submission Evidence
+
+After residency, renderer scale evidence distinguishes resident candidates from
+visible candidates and submitted work. `inspect_render_scale_visibility(...)`
+applies renderer-owned bounds, screen-size LOD, compaction budgets, and
+capability status to resident candidates and returns explicit visible, culled,
+compacted, submitted, and indirect command counts.
+
+```rust
+use engine::plugins::render::inspect::{
+    RenderScaleVisibilityCandidate, RenderScaleVisibilityCapabilities,
+    RenderScaleVisibilityConfig, inspect_render_scale_visibility,
+};
+
+let candidates = vec![RenderScaleVisibilityCandidate {
+    product_id: 7,
+    cache_id: "render-gpu-cache:7".to_string(),
+    center: [0.0, 0.0, 0.0],
+    radius: 0.1,
+    screen_size_px: 128.0,
+    resident_bytes: 128,
+}];
+
+let visibility = inspect_render_scale_visibility(
+    &candidates,
+    RenderScaleVisibilityConfig::default(),
+    RenderScaleVisibilityCapabilities::supported(),
+);
+
+assert_eq!(visibility.visible_count, 1);
+assert_eq!(visibility.submitted_draw_count, 1);
+assert_eq!(visibility.indirect_command_count, 1);
+```
+
+Unsupported storage compaction or indirect submission produces diagnostics and
+zero submitted work; it does not fall back to per-entity CPU submission.
+Renderer LOD bands are execution buckets only. Product semantic LOD, streaming,
+fallback, freshness, authority, and visibility truth remain product-owned.
+
+## Scale Production Evidence
+
+`inspect_render_scale_production_evidence(...)` aggregates the renderer scale
+chain into a runtime-readiness report. It consumes residency inspection,
+visibility inspection, timing state, a hardware or capability profile, benchmark
+commands, and artifact paths. The report keeps addressable, resident, visible,
+submitted, and measured costs separate and fails closed when required evidence
+is missing.
+
+```rust
+use engine::plugins::render::inspect::{
+    RenderScaleProductionEvidenceRequest, RenderScaleProductionHardwareProfile,
+    inspect_render_scale_production_evidence,
+};
+
+# fn example(request: RenderScaleProductionEvidenceRequest) {
+let report = inspect_render_scale_production_evidence(request);
+
+assert!(report.is_runtime_ready());
+assert_eq!(report.error_count(), 0);
+# }
+```
+
+Run the canonical evidence example with:
+
+```text
+cargo run -p engine --example render_scale_evidence -- --evidence
+```
+
+Run the benchmark command with:
+
+```text
+cargo bench -p engine --bench render_flow_planning
+```
+
+Raw scale benchmark and profile artifacts belong under
+`engine/benchmark-artifacts/render-scale-evidence`. Human-readable benchmark
+notes belong in `docs-site/src/content/docs/engine/benchmarks`.
 
 ## Fullscreen Compose + Present
 
@@ -356,6 +695,8 @@ Graphics contract:
 - `graphics_pass(...)` must declare exactly one color output and explicit draw parameters with `.draw(...)` or `.draw_with_offsets(...)`.
 - Vertex and instance buffers are runtime-backed when authored with `RenderVertexBufferLayout::{vertex, instance}` attributes. Layout slots must be dense from `0`, shader locations must be unique, and every buffer must have a matching layout.
 - Graphics storage bindings are bind-group storage reads/writes. Raster color/depth writes must use `.write_color_target(...)` / `.depth_target(...)`; storage bindings are not color attachments.
+- Graphics passes that draw fullscreen-style generated geometry with `instance_count > 1` are rejected by compiler/preflight diagnostics unless `.allow_instanced_fullscreen(max_instances, reason)` records explicit bounded author intent. Prefer local vertex/instance geometry for procedural sprites and impostors.
+- Storage-backed procedural graphics passes without local vertex, index, or instance geometry produce `AmbiguousProceduralShape` diagnostics before submit; this is renderer execution validation, not product truth or fallback policy.
 
 Runtime boundary note:
 

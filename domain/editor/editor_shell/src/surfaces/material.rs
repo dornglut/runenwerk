@@ -45,7 +45,7 @@ pub struct MaterialGraphSourceDetailViewModel {
     pub edge_count: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MaterialGraphEditorViewModel {
     pub document_id: Option<material_graph::MaterialGraphDocumentId>,
     pub output_target: Option<material_graph::MaterialOutputTarget>,
@@ -56,22 +56,6 @@ pub struct MaterialGraphEditorViewModel {
     pub groups: Vec<MaterialGraphGroupViewModel>,
     pub selected_node_ids: Vec<graph::NodeId>,
     pub selected_edge_ids: Vec<graph::EdgeId>,
-}
-
-impl Default for MaterialGraphEditorViewModel {
-    fn default() -> Self {
-        Self {
-            document_id: None,
-            output_target: None,
-            graph_editor: ui_graph_editor::GraphEditorViewModel::default(),
-            viewport: material_graph::MaterialGraphViewportState::default(),
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            groups: Vec::new(),
-            selected_node_ids: Vec::new(),
-            selected_edge_ids: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,19 +98,10 @@ pub struct MaterialGraphResourceBindingViewModel {
     pub resolved_artifact_id: Option<asset::AssetArtifactId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MaterialTextureResourcePickerViewModel {
     pub search_query: String,
     pub options: Vec<MaterialTextureResourceOptionViewModel>,
-}
-
-impl Default for MaterialTextureResourcePickerViewModel {
-    fn default() -> Self {
-        Self {
-            search_query: String::new(),
-            options: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,16 +1,13 @@
 version: 1
 idea: Renderer Scale GPU Driven Culling LOD And Indirect Submission
-source_path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+open_questions: []
 item:
   id: WR-062
   title: Renderer Scale GPU Driven Culling LOD And Indirect Submission
@@ -18,11 +15,11 @@ item:
   alias: WR062
   lane: Discovery
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed renderer scale visibility and indirect contract
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,61 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-061
+  - WR-056
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-scale-gpu-driven-culling-lod-an
+  - docs-site/src/content/docs/reports/implementation-plans/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/closeout.md
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_scale
+  - cargo test -p engine render_flow
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: WR-063 production scale examples, hardware profiles, benchmark evidence, and final scale-readiness closeout remain future scope.
+  current_decision: Completed WR-062 as bounded renderer visibility, LOD, compaction, and indirect-submission inspection evidence for PM-RENDER-SCALE-003.
+  current_call: Use WR-062 completion as PM-RENDER-SCALE-003 evidence before starting WR-063 scale production examples and runtime evidence.
+  first_move: Rerun the production stack coordinator and select the next incomplete dependency track or milestone.
+  main_blocker: Runtime scale proof, hardware profiles, benchmarks, and production readiness remain WR-063 scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-062 provides deterministic renderer inspection evidence, not hardware command-buffer execution proof.
+  - Production scale examples, hardware profiles, benchmarks, and final scale-readiness evidence remain WR-063 scope.
+  - WR-062 does not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - visibility done
+  - indirect gated
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: GPU-driven culling, LOD, and indirect submission must follow the accepted finite-working-set scale doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime scale claims need accepted GPU evidence and unsupported-diagnostic contracts.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-062-renderer-scale-gpu-driven-culling-lod-and-indirect-submission/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-062 implementation must follow the design-first visibility and indirect-submission contract.
   ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
+  adr_requirement: ADR only if implementation moves product semantic LOD, streaming, fallback, freshness, visibility truth, or cross-domain ABI ownership into renderer code.
+  fitness_function_requirement: Renderer visible/submitted count tests, unsupported capability diagnostics, render-flow guard tests, docs, roadmap, production, and planning validators.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned product producers.
 edges: []

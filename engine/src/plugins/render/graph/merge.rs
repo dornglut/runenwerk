@@ -228,10 +228,11 @@ fn merge_pass_into_flow(
         RenderFragmentPassKind::Compute => {
             let mut builder = flow.compute_pass(label);
             builder = apply_compute_view_scope(builder, pass.view_scope);
-            if let Some(shader) = &pass.shader {
-                if let crate::plugins::render::composition::RenderFragmentShaderReference::AssetPath(path) = shader {
-                    builder = builder.shader_asset(path.clone());
-                }
+            if let Some(
+                crate::plugins::render::composition::RenderFragmentShaderReference::AssetPath(path),
+            ) = &pass.shader
+            {
+                builder = builder.shader_asset(path.clone());
             }
             for write in &pass.write_textures {
                 builder = builder.write_texture(write.resolve(namespace));

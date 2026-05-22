@@ -10,8 +10,9 @@ use crate::plugins::render::graph::{
 };
 use crate::plugins::render::inspect::{
     PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
-    RenderDebugConfigResource, RenderDebugControlResource, RenderPassProvenanceRecord,
-    ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
+    RenderDebugConfigResource, RenderDebugControlResource, RenderGpuTimingCapability,
+    RenderPassProvenanceRecord, RenderPassTimingEvidence, ResolvedRenderCapturePlan,
+    RuntimeResourceInspectionEntry,
 };
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use anyhow::Result;
@@ -745,6 +746,7 @@ pub struct Renderer {
     preflight_cache: Option<render_flow::RendererPreparedFramePreflightCacheEntry>,
     last_good_ui_prepared: Option<UiPreparedDraws>,
     last_pass_timings: Vec<PassTimingSample>,
+    last_gpu_pass_timing_evidence: Vec<RenderPassTimingEvidence>,
     last_runtime_resources: Vec<RuntimeResourceInspectionEntry>,
     last_pass_provenance: Vec<RenderPassProvenanceRecord>,
     last_preflight_report: RenderExecutionGraphPreparedReport,
@@ -798,6 +800,11 @@ impl Gfx {
         let frame = self.ctx.get_current_texture()?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
         let view = frame.texture.create_view(&Default::default());
+        let gpu_timing_capability = if self.ctx.timing_capabilities().timestamp_query {
+            RenderGpuTimingCapability::Supported
+        } else {
+            RenderGpuTimingCapability::Unsupported
+        };
         timings.renderer = self.renderer.render(
             &self.ctx.device,
             &self.ctx.queue,
@@ -813,6 +820,7 @@ impl Gfx {
             preflight_config,
             debug_control,
             debug_config,
+            gpu_timing_capability,
         )?;
 
         let present_start = Instant::now();

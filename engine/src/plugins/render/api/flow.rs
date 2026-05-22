@@ -4,6 +4,9 @@ use crate::plugins::render::api::{
     PresentPassBuilder, ProjectedUniformSet, StorageArrayHandle, UniformHandle,
     project_uniform_bindings_for_pass,
 };
+use crate::plugins::render::procedural::{
+    ProceduralPassDescriptor, ProceduralValidationError, build_procedural_pass,
+};
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
@@ -180,6 +183,13 @@ impl RenderFlow {
 
     pub fn graphics_pass(self, label: impl Into<String>) -> GraphicsPassBuilder {
         GraphicsPassBuilder::new(self, label.into())
+    }
+
+    pub fn procedural_pass(
+        self,
+        descriptor: ProceduralPassDescriptor,
+    ) -> Result<Self, ProceduralValidationError> {
+        build_procedural_pass(self, descriptor)
     }
 
     pub fn copy_pass(self, label: impl Into<String>) -> CopyPassBuilder {

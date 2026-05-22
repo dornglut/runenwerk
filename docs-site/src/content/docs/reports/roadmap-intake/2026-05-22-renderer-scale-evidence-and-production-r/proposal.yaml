@@ -1,28 +1,25 @@
 version: 1
 idea: Renderer Scale Evidence And Production Readiness
-source_path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
-owner: docs-site/src/content/docs/engine/reference/plugins/render
+source_path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+open_questions: []
 item:
   id: WR-063
   title: Renderer Scale Evidence And Production Readiness
   diagram_title: Renderer Scale Evidence And Production Readiness
   alias: WR063
-  lane: Discovery
+  lane: Render hardening
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed renderer scale production evidence
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,87 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-061
+  - WR-062
+  - WR-060
   write_scopes:
+  - engine/benches
+  - engine/examples
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/benchmarks
   - docs-site/src/content/docs/engine/reference/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-scale-evidence-and-production-r
+  - docs-site/src/content/docs/reports/implementation-plans/wr-063-renderer-scale-evidence-and-production-readiness/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_scale
+  - cargo test -p engine render_flow
+  - cargo run -p engine --example render_scale_evidence -- --evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md.
+  current_decision: Completed. Renderer scale production evidence now aggregates residency, visibility, timing, capability-profile, benchmark-command, and artifact-path evidence with fail-closed count invariants.
+  current_call: Use WR-063 as completed PM-RENDER-SCALE-004 evidence before starting downstream renderer stack dependency tracks.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; final no-gap verification remains PT-RENDER-PERFECTION scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - The canonical scale evidence command uses deterministic renderer inspection DTOs and a capability profile; it does not submit a finite swapchain frame for a million-instance scene.
+  - Benchmark output is local Criterion evidence and not a universal FPS promise.
+  - Hardware-specific timestamp, readback, storage-compaction, and indirect submission gaps must stay explicit through diagnostics on adapters that do not support them.
+  - Perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-063-renderer-scale-evidence-and-production-readiness/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  - runtime proof
+  - scale closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime scale evidence must follow the accepted finite-working-set scale doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Hardware-dependent scale claims require accepted GPU timing and unsupported-diagnostic contracts.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Production readiness evidence must follow accepted inspection, validation, and closeout quality rules.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-063-renderer-scale-evidence-and-production-readiness/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-063 implementation must follow the design-first runtime evidence, benchmark, hardware-profile, and closeout contract.
+  ddd_owner: engine renderer execution, inspection, examples, benchmarks, and production evidence
+  adr_requirement: ADR only if implementation introduces persisted cross-domain evidence ABI, changes dependency direction, or moves product policy into renderer code.
+  fitness_function_requirement: Runtime scale evidence command, benchmark command, hardware/capability profile diagnostics, count-invariant tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned product producers.
+edges:
+- source: WR-061
+  target: WR-063
+  label: resident working-set and budget evidence before production scale proof
+- source: WR-062
+  target: WR-063
+  label: visible, compacted, and submitted evidence before runtime scale proof
+- source: WR-060
+  target: WR-063
+  label: renderer runtime evidence and benchmark pattern before scale closeout

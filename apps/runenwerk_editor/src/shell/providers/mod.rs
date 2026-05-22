@@ -746,12 +746,24 @@ fn build_tool_surface_create_candidates(
     let mut candidates = Vec::new();
     let mut seen = BTreeSet::new();
 
-    for surface in tool_surface_registry.iter() {
-        if !available_tool_surface_keys.is_empty()
-            && !available_tool_surface_keys.contains(&surface.key)
-        {
-            continue;
+    if available_tool_surface_keys.is_empty() {
+        for surface in tool_surface_registry.iter() {
+            if seen.insert(surface.key.clone()) {
+                candidates.push(ToolSurfaceCreateCandidate::new(
+                    surface.key.clone(),
+                    surface.label.clone(),
+                    surface.panel_kind,
+                ));
+            }
         }
+
+        return candidates;
+    }
+
+    for key in available_tool_surface_keys {
+        let Some(surface) = tool_surface_registry.get(key) else {
+            continue;
+        };
         if seen.insert(surface.key.clone()) {
             candidates.push(ToolSurfaceCreateCandidate::new(
                 surface.key.clone(),

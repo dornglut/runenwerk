@@ -1,28 +1,25 @@
 version: 1
 idea: Renderer Mesh Material Shader Asset Handoff
-source_path: docs-site/src/content/docs/design/active/renderer-mesh-material-lighting-and-asset-handoff-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Architecture governance reviewed PM-RENDER-MESH-MATERIAL-001 doctrine acceptance before WR-067 implementation gates.
+- Confirm Clean Architecture dependency direction before implementation.
+- Record ADR only if implementation changes material, asset, model, scene, fallback, product, or renderer ABI ownership.
+open_questions: []
 item:
   id: WR-067
   title: Renderer Mesh Material Shader Asset Handoff
   diagram_title: Renderer Mesh Material Shader Asset Handoff
   alias: WR067
-  lane: Discovery
+  lane: Render implementation
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed renderer mesh/material handoff bounded contract
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,87 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-021
+  - WR-058
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-mesh-material-shader-asset-hand
+  - docs-site/src/content/docs/reports/implementation-plans/wr-067-renderer-mesh-material-shader-asset-handoff/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_mesh_material
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md.
+  current_decision: Completed. Renderer inspection now reports prepared material instances, scene shader bundle identity, source-backed model/mesh selections, portable-limit diagnostics, material-consuming pass evidence, and count drift without moving material, asset, model, scene, product, or fallback truth into the renderer.
+  current_call: Use WR-067 as completed PM-RENDER-MESH-MATERIAL-002 evidence before starting WR-068 lighting pipeline cache and last-good fallback work.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; lighting pipeline cache, last-good fallback, production evidence, and final perfectionist verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Lighting pipeline cache and last-good fallback behavior remain WR-068 scope.
+  - Runtime production examples, benchmarks, and closeout evidence remain WR-069 scope.
+  - Final perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  - handoff proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Mesh/material handoff implementation must follow the accepted renderer handoff doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/material-lab-and-material-preview-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Material Lab remains the material source-truth and preview product owner.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-067 requires completed PM-RENDER-MESH-MATERIAL-001 doctrine acceptance evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-021-material-lab-and-material-preview-products/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Renderer handoff consumes completed material preview product evidence without moving material truth into the renderer.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-058-hybrid-mesh-sdf-procedural-instance-rendering-api/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-RENDER-MESH-MATERIAL-002 depends on completed renderer procedural API handoff patterns from PM-RENDER-GPU-004.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-067-renderer-mesh-material-shader-asset-handoff/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-067 implementation must follow the design-first prepared material handoff contract.
+  ddd_owner: engine renderer prepared material, shader artifact, pass provenance, and inspection contracts
+  adr_requirement: No ADR required for hardening existing renderer-owned prepared handoff contracts; ADR required if implementation moves material/asset/model/source truth, fallback authority, or persisted cross-domain ABI into renderer code.
+  fitness_function_requirement: Prepared material handoff guards, source-backed model/mesh material selection guards, pass provenance inspection tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product producers.
+edges:
+- source: WR-021
+  target: WR-067
+  label: material preview product evidence before renderer material handoff
+- source: WR-058
+  target: WR-067
+  label: procedural API handoff patterns before mesh/material renderer handoff

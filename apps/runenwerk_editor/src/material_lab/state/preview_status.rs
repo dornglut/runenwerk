@@ -345,10 +345,10 @@ pub fn material_artifact_lines(catalog: &AssetCatalog) -> Vec<String> {
     lines
 }
 
-pub fn previous_valid_material_artifact<'a>(
-    catalog: &'a AssetCatalog,
+pub fn previous_valid_material_artifact(
+    catalog: &AssetCatalog,
     asset_id: AssetId,
-) -> Option<&'a asset::AssetArtifactDescriptor> {
+) -> Option<&asset::AssetArtifactDescriptor> {
     let record = catalog.asset(asset_id)?;
     record
         .artifact_ids

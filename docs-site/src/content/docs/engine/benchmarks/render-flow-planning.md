@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-05-22
 ---
 
 # Render Flow Planning Benchmarks
@@ -23,6 +23,8 @@ Measured scenarios:
 - `render_flow/multi_pass_compute_compose`
 - `render_flow/sdf_compute_compose`
 - `render_flow/mixed_ui_chain`
+- `render_scale/production_evidence_report_4096`
+- `render_sdf/runtime_evidence_report_4096`
 
 ## What is measured
 
@@ -37,6 +39,15 @@ The boids preflight scenarios separately measure prepared-frame preflight cost:
 
 - `boids_preflight_cold` runs full fail-fast prepared-frame validation.
 - `boids_preflight_cached` runs the steady-state cache key plus runtime guard path and reuses the cached successful report.
+
+The production evidence scenarios measure renderer-owned report aggregation:
+
+- `render_scale/production_evidence_report_4096` covers scale residency,
+  visibility, timing, hardware-profile, benchmark-command, and artifact-path
+  evidence.
+- `render_sdf/runtime_evidence_report_4096` covers SDF residency, raymarch
+  candidate, visual proof, timing, benchmark-command, and artifact-path
+  evidence.
 
 ## Run
 

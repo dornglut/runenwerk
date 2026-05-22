@@ -6,7 +6,8 @@ use crate::plugins::render::api::{
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
     GpuParams, RenderDrawDescriptor, RenderPassId, RenderPassKind, RenderPassNode,
-    RenderPassViewScope, RenderResourceId, RenderVertexBufferLayout, ShaderHandle,
+    RenderPassShapeIntent, RenderPassViewScope, RenderRasterState, RenderResourceId,
+    RenderVertexBufferLayout, ShaderHandle,
 };
 
 #[derive(Debug)]
@@ -418,34 +419,23 @@ impl GraphicsPassBuilder {
     }
 
     pub fn vertex_buffer<T>(
-        mut self,
+        self,
         handle: StorageArrayHandle<T>,
         layout: RenderVertexBufferLayout,
     ) -> Self {
-        let id = *handle.id();
-        push_unique_resource(&mut self.pass.reads, id);
-        push_unique_resource(&mut self.pass.vertex_buffers, id);
-        self.pass.vertex_buffer_layouts.push(layout);
-        self
+        self.push_vertex_buffer_resource(*handle.id(), layout)
     }
 
-    pub fn index_buffer<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
-        let id = *handle.id();
-        push_unique_resource(&mut self.pass.reads, id);
-        push_unique_resource(&mut self.pass.index_buffers, id);
-        self
+    pub fn index_buffer<T>(self, handle: StorageArrayHandle<T>) -> Self {
+        self.push_index_buffer_resource(*handle.id())
     }
 
     pub fn instance_buffer<T>(
-        mut self,
+        self,
         handle: StorageArrayHandle<T>,
         layout: RenderVertexBufferLayout,
     ) -> Self {
-        let id = *handle.id();
-        push_unique_resource(&mut self.pass.reads, id);
-        push_unique_resource(&mut self.pass.instance_buffers, id);
-        self.pass.instance_buffer_layouts.push(layout);
-        self
+        self.push_instance_buffer_resource(*handle.id(), layout)
     }
 
     pub fn indirect_buffer<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
@@ -457,6 +447,11 @@ impl GraphicsPassBuilder {
 
     pub fn clear_color(mut self, color: [f32; 4]) -> Self {
         self.pass.clear_color = Some(color);
+        self
+    }
+
+    pub fn raster_state(mut self, state: RenderRasterState) -> Self {
+        self.pass.raster_state = state;
         self
     }
 
@@ -481,6 +476,18 @@ impl GraphicsPassBuilder {
         self
     }
 
+    pub fn allow_instanced_fullscreen(
+        mut self,
+        max_instances: u32,
+        reason: impl Into<String>,
+    ) -> Self {
+        self.pass.shape_intent = RenderPassShapeIntent::AdvancedInstancedFullscreen {
+            max_instances,
+            reason: reason.into(),
+        };
+        self
+    }
+
     pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
         add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
@@ -488,6 +495,34 @@ impl GraphicsPassBuilder {
 
     pub fn finish(self) -> RenderFlow {
         self.flow.push_pass(self.pass)
+    }
+
+    pub(crate) fn push_vertex_buffer_resource(
+        mut self,
+        id: RenderResourceId,
+        layout: RenderVertexBufferLayout,
+    ) -> Self {
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.vertex_buffers, id);
+        self.pass.vertex_buffer_layouts.push(layout);
+        self
+    }
+
+    pub(crate) fn push_index_buffer_resource(mut self, id: RenderResourceId) -> Self {
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.index_buffers, id);
+        self
+    }
+
+    pub(crate) fn push_instance_buffer_resource(
+        mut self,
+        id: RenderResourceId,
+        layout: RenderVertexBufferLayout,
+    ) -> Self {
+        push_unique_resource(&mut self.pass.reads, id);
+        push_unique_resource(&mut self.pass.instance_buffers, id);
+        self.pass.instance_buffer_layouts.push(layout);
+        self
     }
 }
 

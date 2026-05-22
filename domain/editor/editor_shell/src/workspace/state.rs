@@ -2084,7 +2084,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_registry_compatibility_reports_unregistered_legacy_surface() {
+    fn workspace_registry_compatibility_reports_unknown_registered_stable_key() {
         let mut workspace = workspace_with_surfaces(&[ToolSurfaceKind::MaterialGraphCanvas]);
         workspace.populate_stable_surface_keys_from_legacy();
         let registry = ToolSuiteRegistry::new(Vec::new()).expect("empty registry is valid");
@@ -2092,13 +2092,11 @@ mod tests {
         let report = workspace.validate_tool_surface_registry_compatibility(registry.surfaces());
 
         assert_eq!(report.compatible_surfaces.len(), 0);
-        assert_eq!(report.unregistered_legacy_surfaces.len(), 1);
-        assert_eq!(report.unknown_stable_keys.len(), 0);
+        assert_eq!(report.unregistered_legacy_surfaces.len(), 0);
+        assert_eq!(report.unknown_stable_keys.len(), 1);
         assert_eq!(report.incompatible_surfaces.len(), 0);
         assert_eq!(
-            report.unregistered_legacy_surfaces[0]
-                .stable_surface_key
-                .as_str(),
+            report.unknown_stable_keys[0].stable_surface_key.as_str(),
             "runenwerk.material_lab.graph_canvas"
         );
     }
@@ -2158,7 +2156,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_registry_compatibility_rejects_unknown_stable_key_metadata_for_mapped_surface() {
+    fn workspace_registry_compatibility_reports_unknown_stable_key_without_legacy_inference() {
         let unknown_key = ToolSurfaceStableKey::new("runenwerk.unknown.surface").unwrap();
         let mut workspace = workspace_with_surfaces(&[ToolSurfaceKind::Placeholder]);
         let surface = workspace
@@ -2171,24 +2169,17 @@ mod tests {
 
         let report = workspace.validate_tool_surface_registry_compatibility(registry.surfaces());
 
-        assert_eq!(report.incompatible_surfaces.len(), 1);
+        assert_eq!(report.incompatible_surfaces.len(), 0);
+        assert_eq!(report.unknown_stable_keys.len(), 1);
         assert_eq!(
-            report.incompatible_surfaces[0].actual_stable_surface_key,
+            report.unknown_stable_keys[0].stable_surface_key,
             unknown_key
         );
-        assert_eq!(
-            report.incompatible_surfaces[0]
-                .expected_stable_surface_key
-                .as_ref()
-                .map(ToolSurfaceStableKey::as_str),
-            Some("runenwerk.diagnostics.placeholder")
-        );
-        assert_eq!(report.unknown_stable_keys.len(), 0);
         assert_eq!(report.unregistered_legacy_surfaces.len(), 0);
     }
 
     #[test]
-    fn workspace_registry_compatibility_reports_incompatible_stable_key_metadata() {
+    fn workspace_registry_compatibility_accepts_registered_stable_key_as_authority() {
         let mut workspace = workspace_with_surfaces(&[ToolSurfaceKind::MaterialGraphCanvas]);
         let surface = workspace
             .tool_surfaces_by_id
@@ -2201,18 +2192,10 @@ mod tests {
 
         let report = workspace.validate_tool_surface_registry_compatibility(registry.surfaces());
 
-        assert_eq!(report.incompatible_surfaces.len(), 1);
+        assert_eq!(report.incompatible_surfaces.len(), 0);
+        assert_eq!(report.compatible_surfaces.len(), 1);
         assert_eq!(
-            report.incompatible_surfaces[0]
-                .expected_stable_surface_key
-                .as_ref()
-                .map(ToolSurfaceStableKey::as_str),
-            Some("runenwerk.material_lab.graph_canvas")
-        );
-        assert_eq!(
-            report.incompatible_surfaces[0]
-                .actual_stable_surface_key
-                .as_str(),
+            report.compatible_surfaces[0].stable_surface_key.as_str(),
             "runenwerk.material_lab.preview"
         );
     }
@@ -2354,15 +2337,15 @@ mod tests {
             .expect("surface kind should exist")
     }
 
-    fn tool_surface_identity_snapshot(
-        workspace: &WorkspaceState,
-    ) -> Vec<(
+    type ToolSurfaceIdentitySnapshot = Vec<(
         ToolSurfaceInstanceId,
         String,
         ToolSurfaceMount,
         Option<ViewportId>,
         Option<ViewportRuntimeSettings>,
-    )> {
+    )>;
+
+    fn tool_surface_identity_snapshot(workspace: &WorkspaceState) -> ToolSurfaceIdentitySnapshot {
         workspace
             .tool_surfaces_by_id
             .values()

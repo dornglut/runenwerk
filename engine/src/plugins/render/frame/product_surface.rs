@@ -719,6 +719,7 @@ impl RenderProductSurfaceManifest {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn diagnostic(
         &self,
         surface_key: Option<String>,

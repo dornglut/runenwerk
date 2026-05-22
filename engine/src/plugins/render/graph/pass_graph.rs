@@ -19,6 +19,16 @@ pub enum RenderPassViewScope {
     OffscreenProductsOnly,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum RenderPassShapeIntent {
+    #[default]
+    Default,
+    AdvancedInstancedFullscreen {
+        max_instances: u32,
+        reason: String,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderShaderReference {
     AssetPath(String),
@@ -30,6 +40,55 @@ pub enum RenderShaderReference {
 pub enum RenderVertexStepMode {
     Vertex,
     Instance,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RenderPrimitiveTopology {
+    TriangleList,
+    TriangleStrip,
+    LineList,
+    LineStrip,
+    PointList,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RenderBlendMode {
+    Alpha,
+    Replace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RenderCullMode {
+    None,
+    Front,
+    Back,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RenderDepthPolicy {
+    Default,
+    Disabled,
+    ReadOnly,
+    ReadWrite,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RenderRasterState {
+    pub primitive_topology: RenderPrimitiveTopology,
+    pub blend_mode: RenderBlendMode,
+    pub cull_mode: RenderCullMode,
+    pub depth_policy: RenderDepthPolicy,
+}
+
+impl Default for RenderRasterState {
+    fn default() -> Self {
+        Self {
+            primitive_topology: RenderPrimitiveTopology::TriangleList,
+            blend_mode: RenderBlendMode::Alpha,
+            cull_mode: RenderCullMode::None,
+            depth_policy: RenderDepthPolicy::Default,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -155,6 +214,7 @@ pub struct RenderPassNode {
     pub kind: RenderPassKind,
     pub view_scope: RenderPassViewScope,
     pub feature_id: Option<RenderFeatureId>,
+    pub shape_intent: RenderPassShapeIntent,
     pub shader: Option<RenderShaderReference>,
     pub reads: Vec<RenderResourceId>,
     pub writes: Vec<RenderResourceId>,
@@ -171,6 +231,7 @@ pub struct RenderPassNode {
     pub instance_buffer_layouts: Vec<RenderVertexBufferLayout>,
     pub indirect_buffers: Vec<RenderResourceId>,
     pub depth_target: Option<RenderResourceId>,
+    pub raster_state: RenderRasterState,
     pub draw: Option<RenderDrawDescriptor>,
     pub uniform_bindings: Vec<PassParamBinding>,
 }
@@ -187,6 +248,7 @@ impl RenderPassNode {
             kind,
             view_scope: RenderPassViewScope::AllViews,
             feature_id: None,
+            shape_intent: RenderPassShapeIntent::Default,
             shader: None,
             reads: Vec::new(),
             writes: Vec::new(),
@@ -203,6 +265,7 @@ impl RenderPassNode {
             instance_buffer_layouts: Vec::new(),
             indirect_buffers: Vec::new(),
             depth_target: None,
+            raster_state: RenderRasterState::default(),
             draw: None,
             uniform_bindings: Vec::new(),
         }

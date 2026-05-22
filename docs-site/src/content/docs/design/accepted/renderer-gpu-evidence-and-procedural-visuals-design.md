@@ -1,21 +1,21 @@
 ---
 title: Renderer GPU Evidence And Procedural Visuals Platform
 description: Active design for renderer GPU pass evidence, render-flow contract guards, hybrid procedural sprite APIs, and a canonical boids runtime proof.
-status: active
+status: accepted
 owner: engine
 layer: engine
 canonical: true
 last_reviewed: 2026-05-22
 related_designs:
-  - ../accepted/render-product-graph-platform-design.md
-  - ../accepted/render-production-readiness-and-inspection-design.md
+  - ./render-product-graph-platform-design.md
+  - ./render-production-readiness-and-inspection-design.md
   - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
   - ./sdf-world-rendering-and-raymarch-acceleration-design.md
   - ./renderer-mesh-material-lighting-and-asset-handoff-design.md
-  - ./renderer-temporal-reconstruction-and-dynamic-resolution-design.md
-  - ./renderer-hardware-ray-query-and-hybrid-tracing-design.md
-  - ./renderer-product-visual-producers-platform-design.md
-  - ./renderer-production-audit-and-perfectionist-verification-design.md
+  - ../active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+  - ../active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+  - ../active/renderer-product-visual-producers-platform-design.md
+  - ../active/renderer-production-audit-and-perfectionist-verification-design.md
 ---
 
 # Renderer GPU Evidence And Procedural Visuals Platform
@@ -103,7 +103,7 @@ Producer/domain-owned:
 
 ### PM-RENDER-GPU-001: Doctrine And Accepted Design
 
-Lock the doctrine and acceptance gates for GPU evidence plus procedural visuals. This milestone is design-only. It creates the active design, links the production track, and records the WR intake proposals. Implementation remains blocked until this design is accepted.
+Lock the doctrine and acceptance gates for GPU evidence plus procedural visuals. This milestone is design-only. It accepts the doctrine, links the production track, and records the WR intake proposals. Implementation remains blocked until the linked implementation rows are promoted through their own gates.
 
 ### PM-RENDER-GPU-002: GPU Pass Timing Foundation
 
@@ -182,12 +182,46 @@ Future implementation rows must add focused tests and evidence for:
 - Boids render-flow shape no longer issuing multiplied fullscreen work.
 - Runtime GPU evidence for boids smoothness and pass cost.
 
-## Open Decisions For Acceptance
+## Acceptance Decisions
 
-Before this design moves to accepted, answer these questions:
+The doctrine can move toward acceptance with these decisions:
 
-1. Which explicit opt-in, if any, should allow a graphics pass to combine fullscreen topology and large instance counts?
-2. What is the minimum GPU timing evidence needed for `runtime_proven` on machines without timestamp-query support?
-3. Should local SDF impostors start as 2D-only sprites, or should the first public API include 3D signed-distance impostor hooks?
-4. Which renderer examples beyond boids are mandatory before production closeout?
-5. What benchmark thresholds define acceptable steady-state boids behavior for the production evidence milestone?
+1. Fullscreen-style graphics combined with large instance counts is rejected by
+   default. Any advanced opt-in must be explicit render-flow policy with typed
+   author intent, pass identity, bounded instance evidence, and inspection
+   output. The opt-in cannot be inferred from boids, shader names, topology
+   alone, or product fallback policy.
+2. Backends without timestamp-query support can still participate in
+   `runtime_proven` closeout only when they expose typed unsupported timing
+   diagnostics, CPU encode/submit timing, pass-shape evidence, and runtime
+   inspection proving that missing GPU timing is capability-driven rather than
+   silently absent. Hardware with timestamp support must provide GPU pass timing
+   evidence before the timing row can close.
+3. The first public SDF impostor API is local 2D sprite/impostor oriented. 3D
+   SDF impostor hooks stay out of scope until the sparse SDF and raymarch tracks
+   define accepted brick, page-table, residency, and acceleration contracts.
+4. Boids is the mandatory canonical runtime proof for this track. Additional
+   examples may support documentation and coverage, but they are not mandatory
+   before doctrine acceptance.
+5. Initial boids production evidence measures stable bounded work instead of
+   claiming universal frame-rate thresholds. The production evidence row must
+   record scene size, backend capability, CPU timing, GPU timing or unsupported
+   diagnostics, pass shape, instance count, and benchmark command.
+
+## Acceptance Gate Notes
+
+`PM-RENDER-GPU-001` remains design-only. The design-first implementation
+contract for `WR-082` lives at
+`docs-site/src/content/docs/reports/implementation-plans/wr-082-renderer-gpu-evidence-and-procedural-visuals-doctrine-acceptance/plan.md`.
+
+No ADR is required while this doctrine preserves the accepted renderer/product
+boundary: the renderer owns execution contracts, derived GPU resources,
+backend-neutral timing evidence, validation diagnostics, and inspection DTOs.
+Product producers retain product truth, selection, freshness, authority,
+fallback legality, rebuild policy, residency intent, gameplay/VFX semantics,
+material truth, and model truth.
+
+Create an ADR or stop before implementation if later work changes dependency
+direction, makes renderer state authoritative for product policy, introduces a
+persisted cross-domain ABI, or makes GPU timing/procedural visual APIs mandatory
+outside the renderer-owned boundary.

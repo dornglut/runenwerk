@@ -1,16 +1,13 @@
 version: 1
 idea: Renderer Scale Working Set Registry And Residency Budgets
-source_path: docs-site/src/content/docs/design/active/renderer-scale-residency-and-gpu-driven-visibility-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+open_questions: []
 item:
   id: WR-061
   title: Renderer Scale Working Set Registry And Residency Budgets
@@ -18,11 +15,11 @@ item:
   alias: WR061
   lane: Discovery
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed renderer scale working-set registry
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,55 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-060
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-scale-working-set-registry-and-
+  - docs-site/src/content/docs/reports/implementation-plans/wr-061-renderer-scale-working-set-registry-and-residency-budgets/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
+  validations:
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_scale
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md.
+  current_decision: Completed. Renderer inspection now exposes finite working-set counts, resident and upload byte evidence, and explicit residency budget pressure.
+  current_call: Use WR-061 as completed PM-RENDER-SCALE-002 evidence before starting GPU-driven culling, LOD, visible-list, indirect-submission, or scale production evidence rows.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer scale dependency milestone.
+  main_blocker: Complete; GPU-driven visibility and runtime scale production evidence remain later renderer scale milestones.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - GPU-driven culling, LOD, visible-list compaction, and indirect draw/dispatch generation remain WR-062 scope.
+  - Runtime scale production examples, hardware profiles, benchmarks, and final scale-readiness evidence remain WR-063 scope.
+  - Byte evidence is deterministic renderer budget estimation, not backend allocator measurement or hardware memory residency proof.
+  - Perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
+  - working set done
+  - budget diagnostics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Working-set registry and residency budgets must follow the accepted finite-working-set scale doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-061-renderer-scale-working-set-registry-and-residency-budgets/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-061 implementation must follow the design-first registry and budget contract.
+  ddd_owner: engine renderer execution and inspection
+  adr_requirement: ADR only if implementation moves product residency/fallback authority into renderer code, persists a cross-domain ABI, or changes dependency direction.
+  fitness_function_requirement: Renderer scale DTO, budget diagnostic, product-boundary, docs, roadmap, production, and planning validators.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned product producers.
 edges: []

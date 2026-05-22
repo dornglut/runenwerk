@@ -31,15 +31,15 @@ use texture::{
 fn graph_canvas_projects_source_document_without_formed_preview() {
     let asset_id = asset_id(7);
     let color_port = MaterialValueType::Color.port_type_id();
-    let mut editor_state = MaterialGraphEditorState::default();
-    editor_state.viewport = MaterialGraphViewportState {
-        pan_x: 12,
-        pan_y: -6,
-        zoom_milli: 1500,
+    let editor_state = MaterialGraphEditorState {
+        viewport: MaterialGraphViewportState {
+            pan_x: 12,
+            pan_y: -6,
+            zoom_milli: 1500,
+        },
+        node_layouts: vec![MaterialGraphNodeLayout::new(NodeId::new(3), 420, 90)],
+        ..MaterialGraphEditorState::default()
     };
-    editor_state
-        .node_layouts
-        .push(MaterialGraphNodeLayout::new(NodeId::new(3), 420, 90));
     let document = MaterialGraphDocument::new(
         material_graph::MaterialGraphDocumentId::new(70),
         "source-backed",
@@ -1149,6 +1149,7 @@ fn insert_texture_asset(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_foreign_mesh_reference_artifact(
     catalog: &mut AssetCatalog,
     asset_id: AssetId,

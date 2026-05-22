@@ -4,18 +4,20 @@ use engine::plugins::render::inspect::{
     RenderCaptureSelector, RenderCaptureSelectorResult, RenderDebugFrameReport,
     RenderDebugTimingsState, RenderExecutionGraphDiagnosticInspection,
     RenderExecutionGraphPreflightInspection, RenderFragmentMergeInspection,
-    RenderPassMaterialBindingEvidence, RenderPassProvenanceRecord, RenderPassProvenanceState,
+    RenderGpuTimingCapability, RenderGpuTimingDiagnostic, RenderPassMaterialBindingEvidence,
+    RenderPassProvenanceRecord, RenderPassProvenanceState, RenderPassTimingEvidence,
     RenderProductSurfaceManifestInspection, RenderReadinessBudgetKind,
     RenderReadinessBudgetMeasurements, RenderReadinessBudgetStatus, RenderReadinessBudgetThreshold,
     RenderReadinessDiagnosticKind, RenderReadinessDiagnosticSeverity, RenderReadinessReportRequest,
     RenderReplayArtifactReference, RenderReplayManifest, RenderReplayManifestStatus,
-    RenderSelectorResolution, ResolvedRenderCapturePlan, ResolvedRenderCaptureSelector,
-    deterministic_capture_filename, evaluate_render_readiness_budgets,
-    inspect_compiled_render_flow_plan, inspect_fragment_pass_provenance,
-    inspect_prepared_render_frame, inspect_render_execution_graph_preflight,
-    inspect_render_execution_graph_preflight_with_cache, inspect_render_fragment_merge_report,
-    inspect_render_gpu_residency, inspect_render_product_surface_manifest,
-    inspect_render_readiness, inspect_resources, inspect_texture_resources, resource_kind_name,
+    RenderSelectorResolution, RenderTimingSource, ResolvedRenderCapturePlan,
+    ResolvedRenderCaptureSelector, deterministic_capture_filename,
+    evaluate_render_readiness_budgets, inspect_compiled_render_flow_plan,
+    inspect_fragment_pass_provenance, inspect_prepared_render_frame,
+    inspect_render_execution_graph_preflight, inspect_render_execution_graph_preflight_with_cache,
+    inspect_render_fragment_merge_report, inspect_render_gpu_residency,
+    inspect_render_product_surface_manifest, inspect_render_readiness, inspect_resources,
+    inspect_texture_resources, resource_kind_name, summarize_gpu_pass_timing_evidence,
     summarize_pass_timings, validate_render_replay_manifest,
 };
 use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
@@ -106,6 +108,87 @@ fn render_runtime_inspect_debug_timing_state_extracts_compute_dispatch_samples()
     assert_eq!(state.compute_dispatches[0].flow_id, "flow.a");
     assert_eq!(state.compute_dispatches[0].pass_id, "a.compute");
     assert_eq!(state.compute_dispatches[0].workgroups, [10, 4, 1]);
+}
+
+#[test]
+fn render_runtime_inspect_gpu_timing_evidence_keeps_cpu_and_gpu_sources_separate() {
+    let cpu_samples = vec![PassTimingSample {
+        flow_id: "flow.gpu".to_string(),
+        pass_id: "gpu.compute".to_string(),
+        pass_kind: "compute".to_string(),
+        millis: 0.4,
+        dispatch_workgroups: Some([4, 2, 1]),
+    }];
+    let cpu_snapshot = summarize_pass_timings(&cpu_samples);
+    let gpu_samples = vec![RenderPassTimingEvidence::gpu_sample(
+        Some(9),
+        Some(3),
+        "flow.gpu",
+        "gpu.compute",
+        "compute",
+        1.25,
+    )];
+    let gpu_snapshot = summarize_gpu_pass_timing_evidence(&gpu_samples);
+
+    assert_eq!(
+        cpu_snapshot.evidence[0].source,
+        RenderTimingSource::CpuEncodeSubmit
+    );
+    assert_eq!(
+        cpu_snapshot.evidence[0].gpu_capability,
+        RenderGpuTimingCapability::UnavailableThisFrame
+    );
+    assert_eq!(
+        gpu_snapshot.capability,
+        RenderGpuTimingCapability::Supported
+    );
+    assert_eq!(gpu_snapshot.measured_pass_count, 1);
+    assert_eq!(gpu_snapshot.total_millis, 1.25);
+    assert_eq!(gpu_snapshot.slowest_pass_id.as_deref(), Some("gpu.compute"));
+    assert_eq!(
+        gpu_snapshot.per_pass[0].source,
+        RenderTimingSource::GpuTimestampQuery
+    );
+}
+
+#[test]
+fn render_runtime_inspect_gpu_timing_state_reports_unsupported_and_readback_pending() {
+    let unsupported = RenderPassTimingEvidence::gpu_diagnostic(
+        Some(7),
+        Some(2),
+        "flow.gpu",
+        "gpu.compose",
+        "fullscreen",
+        RenderGpuTimingDiagnostic::unsupported(
+            "timestamp queries are not supported by the active backend",
+        ),
+    );
+    let pending = RenderPassTimingEvidence::gpu_diagnostic(
+        Some(8),
+        Some(2),
+        "flow.gpu",
+        "gpu.compute",
+        "compute",
+        RenderGpuTimingDiagnostic::readback_pending("timestamp readback is pending"),
+    );
+    let mut state = RenderDebugTimingsState::default();
+    state.observe_gpu_pass_timing_evidence(&[unsupported, pending]);
+
+    assert_eq!(
+        state.gpu_timing_capability,
+        RenderGpuTimingCapability::Unsupported
+    );
+    assert_eq!(state.gpu_pass_sample_count, 0);
+    assert_eq!(state.gpu_total_pass_millis, 0.0);
+    assert_eq!(state.gpu_timing_diagnostics.len(), 2);
+    assert_eq!(
+        state.gpu_timing_diagnostics[0].flow_id.as_deref(),
+        Some("flow.gpu")
+    );
+    assert_eq!(
+        state.gpu_timing_diagnostics[0].pass_id.as_deref(),
+        Some("gpu.compose")
+    );
 }
 
 #[test]
@@ -236,6 +319,57 @@ fn render_runtime_inspect_budget_measurements_report_preflight_cost() {
         report.results[0].kind,
         RenderReadinessBudgetKind::PreflightMillis
     );
+}
+
+#[test]
+fn render_runtime_inspect_readiness_budgets_consume_gpu_timing_evidence() {
+    let mut timings = RenderDebugTimingsState::default();
+    timings.observe_gpu_pass_timing_evidence(&[
+        RenderPassTimingEvidence::gpu_sample(
+            Some(15),
+            Some(4),
+            "flow.gpu",
+            "gpu.compute",
+            "compute",
+            3.5,
+        ),
+        RenderPassTimingEvidence::gpu_diagnostic(
+            Some(15),
+            Some(4),
+            "flow.gpu",
+            "gpu.compose",
+            "fullscreen",
+            RenderGpuTimingDiagnostic::readback_pending("timestamp readback is pending"),
+        ),
+    ]);
+    let measurements =
+        RenderReadinessBudgetMeasurements::from_reports(None, &[], None, &[], None, Some(&timings));
+    let budget_report = evaluate_render_readiness_budgets(
+        &measurements,
+        &[
+            RenderReadinessBudgetThreshold::max(RenderReadinessBudgetKind::GpuPassTotalMillis, 2.0),
+            RenderReadinessBudgetThreshold::max(
+                RenderReadinessBudgetKind::GpuTimingDiagnosticCount,
+                0.0,
+            ),
+        ],
+    );
+    let report = inspect_render_readiness(RenderReadinessReportRequest {
+        timings: Some(timings),
+        budget_report,
+        ..RenderReadinessReportRequest::default()
+    });
+
+    assert_eq!(measurements.gpu_pass_total_ms, Some(3.5));
+    assert_eq!(measurements.gpu_timing_diagnostic_count, Some(1.0));
+    assert_eq!(report.source_reports.gpu_pass_sample_count, 1);
+    assert_eq!(report.source_reports.gpu_timing_diagnostic_count, 1);
+    assert_eq!(report.budget_report.over_budget_count(), 2);
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderReadinessDiagnosticKind::GpuTimingDiagnostics
+            && diagnostic.flow_id.as_deref() == Some("flow.gpu")
+            && diagnostic.pass_id.as_deref() == Some("gpu.compose")
+    }));
 }
 
 #[test]
@@ -395,6 +529,7 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
         preflight: Some(preflight),
         fragment_merges: vec![fragment],
         capture_report: Some(capture_report),
+        timings: None,
         budget_report,
         replay_validation: Some(replay_validation),
     });
@@ -909,9 +1044,15 @@ fn render_runtime_inspect_render_gpu_residency_inspection_exposes_logical_cache_
     residency.derive_from_selections(&[selection], &RenderGpuResidencyBudgetResource::default());
 
     let inspection = inspect_render_gpu_residency(&residency);
+    assert_eq!(inspection.addressable_count, 1);
+    assert_eq!(inspection.selected_count, 1);
+    assert_eq!(inspection.requested_count, 1);
+    assert_eq!(inspection.accepted_count, 1);
     assert_eq!(inspection.resident_count, 1);
+    assert_eq!(inspection.budget.resident_entry_status, "within_budget");
     assert_eq!(inspection.entries[0].product_id, 77);
     assert_eq!(inspection.entries[0].cache_id, "render-gpu-cache:1");
+    assert_eq!(inspection.entries[0].resident_bytes, 256 * 1024);
     assert_eq!(inspection.entries[0].diagnostic_count, 0);
     assert_eq!(inspection.journal[0].action, "Allocated");
     assert_eq!(

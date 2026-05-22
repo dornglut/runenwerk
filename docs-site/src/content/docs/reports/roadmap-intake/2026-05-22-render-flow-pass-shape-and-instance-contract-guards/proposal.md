@@ -1,7 +1,7 @@
 ---
 title: Roadmap Intake WR-057
 description: Roadmap intake proposal generated from a new idea.
-status: draft
+status: active
 owner: workspace
 layer: workspace
 canonical: false
@@ -12,7 +12,7 @@ last_reviewed: 2026-05-22
 
 Idea: Render Flow Pass Shape And Instance Contract Guards
 Suggested title: Render Flow Pass Shape And Instance Contract Guards
-Initial planning state: `blocked_deferred`
+Current planning state: `completed`
 
 ## Governance Notes
 
@@ -22,9 +22,9 @@ Initial planning state: `blocked_deferred`
 
 ## Open Questions
 
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Completion evidence is recorded in `docs-site/src/content/docs/reports/closeouts/wr-057-render-flow-pass-shape-and-instance-contract-guards/closeout.md`.
+- Dependency `WR-056` is completed with GPU timing closeout evidence.
+- Remaining quality gaps are carried by the later procedural API and boids proof rows.
 
 ## Apply Command
 

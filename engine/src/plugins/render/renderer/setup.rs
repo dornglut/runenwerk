@@ -29,6 +29,7 @@ impl Renderer {
             preflight_cache: None,
             last_good_ui_prepared: None,
             last_pass_timings: Vec::new(),
+            last_gpu_pass_timing_evidence: Vec::new(),
             last_runtime_resources: Vec::new(),
             last_pass_provenance: Vec::new(),
             last_preflight_report:
@@ -44,6 +45,12 @@ impl Renderer {
 
     pub fn last_pass_timings(&self) -> &[crate::plugins::render::inspect::PassTimingSample] {
         &self.last_pass_timings
+    }
+
+    pub fn last_gpu_pass_timing_evidence(
+        &self,
+    ) -> &[crate::plugins::render::inspect::RenderPassTimingEvidence] {
+        &self.last_gpu_pass_timing_evidence
     }
 
     pub fn last_runtime_resources(
@@ -845,11 +852,17 @@ impl Renderer {
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         _surface_size: (u32, u32),
         _surface_format: TextureFormat,
+        gpu_timestamp_writes: Option<super::render_flow::GpuPassTimestampWrites<'_>>,
     ) {
         let Some(rect_pass) = self.rect_pass.as_ref() else {
             return;
         };
 
+        let timestamp_writes = gpu_timestamp_writes.map(|writes| RenderPassTimestampWrites {
+            query_set: writes.query_set,
+            beginning_of_pass_write_index: Some(writes.indices.begin),
+            end_of_pass_write_index: Some(writes.indices.end),
+        });
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("engine_ui_pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -862,7 +875,7 @@ impl Renderer {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes,
             occlusion_query_set: None,
         });
 

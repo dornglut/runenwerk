@@ -335,6 +335,26 @@ fn publish_editor_field_products_at_barrier(
     Ok(())
 }
 
+fn publish_editor_material_preview_products_at_barrier(
+    barrier: &ExecutionBarrier,
+    world: &mut World,
+) -> anyhow::Result<()> {
+    let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
+        return Ok(());
+    };
+    let Some(mut publications) = world.remove_resource::<ProductPublicationRuntimeResource>()
+    else {
+        world.insert_resource(host);
+        return Ok(());
+    };
+
+    publish_pending_material_preview_publications(&mut host.app, &mut publications, barrier);
+
+    world.insert_resource(publications);
+    world.insert_resource(host);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,24 +387,4 @@ mod tests {
         );
         assert_eq!(window_registry.pending_creation_requests().len(), 1);
     }
-}
-
-fn publish_editor_material_preview_products_at_barrier(
-    barrier: &ExecutionBarrier,
-    world: &mut World,
-) -> anyhow::Result<()> {
-    let Some(mut host) = world.remove_resource::<EditorHostResource>() else {
-        return Ok(());
-    };
-    let Some(mut publications) = world.remove_resource::<ProductPublicationRuntimeResource>()
-    else {
-        world.insert_resource(host);
-        return Ok(());
-    };
-
-    publish_pending_material_preview_publications(&mut host.app, &mut publications, barrier);
-
-    world.insert_resource(publications);
-    world.insert_resource(host);
-    Ok(())
 }

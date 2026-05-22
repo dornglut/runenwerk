@@ -804,15 +804,3 @@ edges:
 - source: WR-058
   target: WR-059
   label: procedural API before boids rewrite
-- source: WR-056
-  target: WR-060
-  label: GPU timing evidence before production closeout
-- source: WR-057
-  target: WR-060
-  label: pass guards before production closeout
-- source: WR-058
-  target: WR-060
-  label: procedural API before production closeout
-- source: WR-059
-  target: WR-060
-  label: boids proof before production closeout

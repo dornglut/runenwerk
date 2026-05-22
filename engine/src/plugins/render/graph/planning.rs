@@ -4,7 +4,8 @@ use crate::plugins::render::graph::{
     CompiledFlowExecutionPlan, RenderBackendCapabilityProfile, RenderExecutionGraphCompileError,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind, RenderPassKind,
     RenderPassNode, ResourceGraph, compile_execution_plan, compile_resource_lifetime_windows,
-    diagnose_resource_lifetime_windows, validate_compiled_flow_capabilities,
+    diagnose_compiled_pass_shapes, diagnose_resource_lifetime_windows,
+    validate_compiled_flow_capabilities,
 };
 use crate::plugins::render::{RenderFlowId, RenderPassId, RenderResourceId};
 use std::collections::BTreeMap;
@@ -156,6 +157,7 @@ pub fn compile_flow_plan_checked(
         plan.flow_label.as_str(),
         &plan.resource_lifetime_windows,
     ));
+    diagnostics.extend(diagnose_compiled_pass_shapes(&plan));
     diagnostics.extend(validate_compiled_flow_capabilities(&plan, profile));
     plan.compiler_diagnostics = diagnostics.clone();
     if diagnostics

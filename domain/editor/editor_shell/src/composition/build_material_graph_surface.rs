@@ -171,6 +171,7 @@ fn build_toolbar(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_material_button(
     children: &mut Vec<UiNode>,
     routes: &mut SurfaceRouteTable,

@@ -159,7 +159,7 @@ impl EditorSurfaceProvider for DummyProvider {
     }
 
     fn support_mode(&self, _request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        self.support_mode.unwrap_or_else(|| {
+        self.support_mode.unwrap_or({
             if self.supports {
                 SurfaceProviderSupportMode::LegacyKind
             } else {
@@ -566,7 +566,7 @@ fn build_rgba8_ktx2(
     let level_index_offset = ktx2::Header::LENGTH;
     let dfd_offset = level_index_offset + ktx2::LevelIndex::LENGTH;
     let after_dfd = dfd_offset + dfd_total_size;
-    let level_data_offset = (after_dfd + 3) / 4 * 4;
+    let level_data_offset = after_dfd.div_ceil(4) * 4;
     let texel_count = width as usize * height as usize * depth.max(1) as usize;
     let level_data_size = texel_count * 4;
     let mut bytes = vec![0u8; level_data_offset + level_data_size];
@@ -970,14 +970,14 @@ fn material_graph_provider_supports_stable_key_first() {
 }
 
 #[test]
-fn material_graph_provider_legacy_support_still_works_when_stable_key_does_not_match() {
+fn material_graph_provider_rejects_mismatched_stable_key() {
     let provider = MaterialGraphCanvasProvider;
     let mut request = m6_material_request(ToolSurfaceKind::MaterialGraphCanvas);
     request.stable_surface_key = ToolSurfaceStableKey::new("runenwerk.fixture.other").unwrap();
 
     assert_eq!(
         provider.support_mode(&request),
-        SurfaceProviderSupportMode::LegacyKind
+        SurfaceProviderSupportMode::Unsupported
     );
 }
 

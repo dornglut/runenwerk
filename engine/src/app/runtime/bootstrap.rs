@@ -38,7 +38,7 @@ impl App {
                 .world
                 .resource::<WindowState>()
                 .ok()
-                .map(|window| WindowStateRegistryResource::from_legacy(window));
+                .map(WindowStateRegistryResource::from_legacy);
             if let Some(registry) = registry {
                 self.world.insert_resource(registry);
             }

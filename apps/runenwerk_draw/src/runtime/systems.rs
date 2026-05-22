@@ -1,5 +1,7 @@
 //! Runtime systems for the drawing app shell.
 
+use std::collections::BTreeSet;
+
 use engine::WindowState;
 use engine::plugins::render::inspect::RenderDebugConfigResource;
 use engine::plugins::render::{
@@ -485,13 +487,23 @@ fn drawing_ink_product_surface_manifest(
     committed_products: &[drawing::DrawingInkTileProduct],
     preview_products: &[drawing::DrawingInkTileProduct],
 ) -> RenderProductSurfaceManifest {
+    let upload_target_keys = uploads
+        .iter()
+        .map(|upload| upload.target_key.clone())
+        .collect::<BTreeSet<_>>();
     let manifest =
         RenderProductSurfaceManifest::new(DRAWING_RENDER_FRAME_PRODUCER_ID, "runenwerk_draw.ink")
             .with_dynamic_targets(target_descriptors)
             .with_dynamic_uploads(uploads);
     committed_products.iter().fold(
         preview_products.iter().fold(manifest, |manifest, product| {
-            with_ink_product_surface_binding(app, manifest, DrawingInkSurfaceKind::Preview, product)
+            with_ink_product_surface_binding(
+                app,
+                manifest,
+                DrawingInkSurfaceKind::Preview,
+                product,
+                &upload_target_keys,
+            )
         }),
         |manifest, product| {
             with_ink_product_surface_binding(
@@ -499,6 +511,7 @@ fn drawing_ink_product_surface_manifest(
                 manifest,
                 DrawingInkSurfaceKind::Committed,
                 product,
+                &upload_target_keys,
             )
         },
     )
@@ -509,13 +522,14 @@ fn with_ink_product_surface_binding(
     manifest: RenderProductSurfaceManifest,
     surface_kind: DrawingInkSurfaceKind,
     product: &drawing::DrawingInkTileProduct,
+    upload_target_keys: &BTreeSet<RenderDynamicTextureTargetKey>,
 ) -> RenderProductSurfaceManifest {
     let binding = ink_surface_binding(app, surface_kind, product);
     match binding.backing {
-        DrawingInkSurfaceBacking::Upload => {
+        DrawingInkSurfaceBacking::Upload if upload_target_keys.contains(&binding.target_key) => {
             manifest.with_upload_backed_product_surface_binding(binding.surface_key, binding.source)
         }
-        DrawingInkSurfaceBacking::DynamicTarget => {
+        DrawingInkSurfaceBacking::Upload | DrawingInkSurfaceBacking::DynamicTarget => {
             manifest.with_product_surface_binding(binding.surface_key, binding.source)
         }
     }
@@ -523,6 +537,7 @@ fn with_ink_product_surface_binding(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DrawingInkSurfaceBinding {
+    target_key: RenderDynamicTextureTargetKey,
     surface_key: String,
     source: ProductSurfaceTextureBindingSource,
     backing: DrawingInkSurfaceBacking,
@@ -634,6 +649,7 @@ fn ink_surface_binding(
     let visible_surface_kind = ink_visible_surface_kind(app, surface_kind, product);
     let key = ink_target_key(visible_surface_kind, product);
     DrawingInkSurfaceBinding {
+        target_key: key.clone(),
         surface_key: key.to_string(),
         source: ProductSurfaceTextureBindingSource::dynamic_texture(key.namespace, key.target_id),
         backing: ink_surface_backing(visible_surface_kind),
