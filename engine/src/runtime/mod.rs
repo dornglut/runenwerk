@@ -7,6 +7,7 @@
 pub(crate) mod fixed_step_executor;
 pub mod fixed_time;
 pub(crate) mod frame_lifecycle;
+pub mod frame_pacing;
 pub mod jobs;
 pub mod native_window_hooks;
 pub mod param;
@@ -20,6 +21,7 @@ pub mod window;
 pub mod winit_runner;
 
 pub use fixed_time::*;
+pub use frame_pacing::*;
 pub use jobs::*;
 pub use native_window_hooks::*;
 pub use param::*;

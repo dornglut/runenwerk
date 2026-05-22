@@ -4,7 +4,7 @@ use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::InputState;
 use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
-use crate::plugins::render::inspect::WorldRuntimeInspectorSnapshot;
+use crate::plugins::render::inspect::{RenderDebugTimingsState, WorldRuntimeInspectorSnapshot};
 use crate::plugins::time::domain::Time;
 use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
 use crate::state::{
@@ -30,6 +30,7 @@ impl Plugin for DebugMetricsPlugin {
         app.init_resource::<SceneRuntimeState>();
         app.init_resource::<UiOverlayState>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
+        app.init_resource::<RenderDebugTimingsState>();
         app.add_systems(Startup, setup_debug_metrics_input_binding);
         app.add_systems(RenderPrepare, debug_metrics_overlay_system);
     }
@@ -45,6 +46,7 @@ fn debug_metrics_overlay_system(
     startup: Res<StartupState>,
     scene: Res<SceneRuntimeState>,
     world_runtime: Res<WorldRuntimeInspectorSnapshot>,
+    render_debug_timings: Res<RenderDebugTimingsState>,
     mut debug_metrics: ResMut<DebugMetricsState>,
     mut ui: ResMut<UiOverlayState>,
 ) {
@@ -64,7 +66,7 @@ fn debug_metrics_overlay_system(
     let x = 12.0 * scale;
     let y = 12.0 * scale;
     let w = (380.0 * scale).min((screen_w - x * 2.0).max(120.0));
-    let h = 282.0 * scale;
+    let h = 350.0 * scale;
 
     let phase = match startup.phase {
         StartupPhase::Loading => "loading",
@@ -77,6 +79,8 @@ fn debug_metrics_overlay_system(
         t.renderer.prepare_ui_ms
             + t.renderer.prepare_mesh_ms
             + t.renderer.world_prepare_ms
+            + t.renderer.preflight_ms
+            + t.renderer.flow_encode_ms
             + t.renderer.encode_submit_ms
     });
 
@@ -105,13 +109,55 @@ fn debug_metrics_overlay_system(
             "world={:.2} enc={:.2} pres={:.2}",
             t.renderer.world_prepare_ms, t.renderer.encode_submit_ms, t.present_ms
         ));
+        lines.push(format!(
+            "pre={:.2} flow={:.2} diag={:.2}",
+            t.renderer.preflight_ms,
+            t.renderer.flow_encode_ms,
+            render_debug_timings.diagnostics_report_ms
+        ));
+        lines.push(format!(
+            "shader={} {:.2}ms",
+            render_debug_timings
+                .shader_reload_poll_status
+                .as_deref()
+                .unwrap_or("--"),
+            render_debug_timings.shader_reload_poll_ms
+        ));
     } else {
         lines.push("acq=-- ui=-- mesh=--".to_string());
         lines.push("world=-- enc=-- pres=--".to_string());
+        lines.push("pre=-- flow=-- diag=--".to_string());
+        lines.push("shader=-- --ms".to_string());
     }
     if let Some(workload) = workload_ms {
         lines.push(format!("workload={workload:.2}ms"));
     }
+    lines.push(format!(
+        "pace={} cap={} next={}",
+        render_debug_timings
+            .frame_pacing_mode
+            .as_deref()
+            .unwrap_or("--"),
+        render_debug_timings
+            .frame_pacing_target_fps
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "--".to_string()),
+        render_debug_timings
+            .frame_pacing_next_delay_ms
+            .map(|value| format!("{value:.1}ms"))
+            .unwrap_or_else(|| "--".to_string())
+    ));
+    lines.push(format!(
+        "preflight={} source={}",
+        render_debug_timings
+            .preflight_cache_status
+            .as_deref()
+            .unwrap_or("--"),
+        render_debug_timings
+            .preflight_report_source
+            .as_deref()
+            .unwrap_or("--")
+    ));
     lines.push(format!(
         "world rev={} dirty={} q={}/{}",
         world_runtime.world_revision,

@@ -16,11 +16,11 @@ pub use types::*;
 // Owner: Engine Render Shader Registry - Tests
 #[cfg(test)]
 mod tests {
-    use super::{ShaderRegistryEventKind, ShaderRegistryResource};
+    use super::{ShaderRegistryEventKind, ShaderRegistryResource, ShaderReloadPollStatus};
     use crate::plugins::render::shader::helpers::normalize_shader_id;
     use std::fs;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     fn temp_dir(prefix: &str) -> String {
         let unique = SystemTime::now()
@@ -89,5 +89,86 @@ mod tests {
             registry.register_shader_with_id("custom.main", "assets/shaders/custom_main_v2.wgsl");
         assert_eq!(first, second);
         assert_eq!(registry.shader_count(), 1);
+    }
+
+    #[test]
+    fn shader_reload_poll_first_poll_is_immediate_then_throttled() {
+        let root = temp_dir("shader_registry_throttle");
+        let file = Path::new(&root).join("main.wgsl");
+        fs::write(
+            &file,
+            "@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(); }",
+        )
+        .expect("shader should be written");
+
+        let now = Instant::now();
+        let mut registry = ShaderRegistryResource::with_roots([root.clone()]);
+        registry.set_reload_poll_interval(Duration::from_millis(500));
+
+        let first = registry.poll_updates_at(now);
+        assert!(!first.is_empty());
+        assert_eq!(
+            registry.last_reload_poll_report().status,
+            ShaderReloadPollStatus::Polled
+        );
+
+        let second = registry.poll_updates_at(now + Duration::from_millis(100));
+        assert!(second.is_empty());
+        assert_eq!(
+            registry.last_reload_poll_report().status,
+            ShaderReloadPollStatus::Throttled
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn shader_reload_poll_force_reload_bypasses_throttle() {
+        let root = temp_dir("shader_registry_force_reload");
+        let file = Path::new(&root).join("main.wgsl");
+        fs::write(
+            &file,
+            "@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(); }",
+        )
+        .expect("shader should be written");
+
+        let now = Instant::now();
+        let mut registry = ShaderRegistryResource::with_roots([root.clone()]);
+        registry.set_reload_poll_interval(Duration::from_millis(500));
+        let _ = registry.poll_updates_at(now);
+        registry.request_reload();
+
+        let forced = registry.poll_updates_at(now + Duration::from_millis(100));
+        assert!(!forced.is_empty());
+        let report = registry.last_reload_poll_report();
+        assert_eq!(report.status, ShaderReloadPollStatus::Polled);
+        assert!(report.force_reload);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn shader_reload_poll_elapsed_interval_allows_next_poll() {
+        let root = temp_dir("shader_registry_elapsed_reload");
+        let file = Path::new(&root).join("main.wgsl");
+        fs::write(
+            &file,
+            "@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(); }",
+        )
+        .expect("shader should be written");
+
+        let now = Instant::now();
+        let mut registry = ShaderRegistryResource::with_roots([root.clone()]);
+        registry.set_reload_poll_interval(Duration::from_millis(500));
+        let _ = registry.poll_updates_at(now);
+
+        let elapsed = registry.poll_updates_at(now + Duration::from_millis(500));
+        assert!(elapsed.is_empty());
+        assert_eq!(
+            registry.last_reload_poll_report().status,
+            ShaderReloadPollStatus::Polled
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 }

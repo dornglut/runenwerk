@@ -1,6 +1,6 @@
 use crate::rendering::{BoidsRenderState, build_render_flow};
 use anyhow::Result;
-use engine::plugins::{RenderPlugin, ScenePlugin, default_plugins};
+use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, Res, ResMut, Time, Update};
 
 pub(crate) fn run() -> Result<()> {
@@ -9,6 +9,7 @@ pub(crate) fn run() -> Result<()> {
     app.add_plugins(default_plugins());
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
+    app.add_plugin(DebugMetricsPlugin);
     app.insert_resource(BoidsRenderState::default());
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(build_render_flow());

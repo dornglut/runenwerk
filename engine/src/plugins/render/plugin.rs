@@ -18,8 +18,9 @@ use super::frame::{
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
     RenderDebugFrameReportState, RenderDebugGraphDumpState, RenderDebugOverlayState,
-    RenderDebugTimingsState, RenderPassProvenanceState, RenderRuntimeResourceInspectorState,
-    RenderTextureInspectorState, WorldRuntimeInspectorSnapshot,
+    RenderDebugTimingsState, RenderFrameDiagnosticsPolicyResource, RenderPassProvenanceState,
+    RenderRuntimeResourceInspectorState, RenderTextureInspectorState,
+    WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
 use super::residency::{
@@ -80,6 +81,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderDebugGraphDumpState>();
         app.init_resource::<RenderDebugControlResource>();
         app.init_resource::<RenderDebugConfigResource>();
+        app.init_resource::<RenderFrameDiagnosticsPolicyResource>();
         app.init_resource::<RenderCapturedTextureState>();
         app.init_resource::<RenderPassProvenanceState>();
         app.init_resource::<RenderDebugFrameReportState>();

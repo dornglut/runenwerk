@@ -317,6 +317,11 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `RenderFlowRegistryResource`
   - `ShaderRegistryResource`
   - `ShaderHandle`
+  - `ShaderReloadPollReport`
+  - `ShaderReloadPollStatus`
+- runtime diagnostics policy:
+  - `RenderFrameDiagnosticsPolicyResource`
+  - `RenderFrameDiagnosticsMode`
 - `RenderResourceDescriptor`
 - `RenderDynamicTextureTargetDescriptor`
 - `RenderDynamicTextureTargetKey`
@@ -368,6 +373,9 @@ Compiler/preflight inspection contract:
 - `inspect_render_execution_graph_preflight_with_cache(...)` adds cache mode, cache status, and report source without exposing backend handles.
 - `Renderer::last_preflight_report()` exposes the last successful submit preflight report, and `Renderer::last_preflight_cache_state()` exposes whether it came from full validation or cache.
 - `RendererFrameTimings` separates `preflight_ms`, `flow_encode_ms`, and `encode_submit_ms` so frame budgets can identify validation cost separately from GPU submission.
+- `ShaderRegistryResource` performs the first live-reload poll immediately, then throttles normal watch polling to 500 ms by default. `request_reload()` bypasses the throttle.
+- `RenderFrameDiagnosticsPolicyResource` defaults to tiered diagnostics: lightweight timing/cache/pacing state every frame, full `RenderDebugFrameReport` only for debug capture/provenance/readback/probes/diffs/export, slow frames, explicit request, or full-every-frame mode.
+- `RenderDebugTimingsState` includes shader poll timing/status, diagnostics report timing/mode, preflight cache mode/status/source, and frame pacing mode/cap evidence without exposing backend handles.
 
 Production readiness inspection contract:
 

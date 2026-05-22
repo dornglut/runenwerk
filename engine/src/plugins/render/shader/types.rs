@@ -1,8 +1,46 @@
 use super::helpers::build_shader_index;
 use super::*;
+use std::time::{Duration, Instant};
 
 // Owner: Engine Render Shader Registry - Types and Resources
 pub const DEFAULT_SHADER_ASSET_ROOT: &str = "assets/shaders";
+pub const DEFAULT_SHADER_RELOAD_POLL_INTERVAL_MS: u64 = 500;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShaderReloadPollStatus {
+    Disabled,
+    Throttled,
+    Polled,
+}
+
+impl ShaderReloadPollStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Throttled => "throttled",
+            Self::Polled => "polled",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShaderReloadPollReport {
+    pub status: ShaderReloadPollStatus,
+    pub elapsed_ms: f32,
+    pub interval_ms: f32,
+    pub force_reload: bool,
+}
+
+impl Default for ShaderReloadPollReport {
+    fn default() -> Self {
+        Self {
+            status: ShaderReloadPollStatus::Disabled,
+            elapsed_ms: 0.0,
+            interval_ms: DEFAULT_SHADER_RELOAD_POLL_INTERVAL_MS as f32,
+            force_reload: false,
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ShaderHandle(pub(super) usize);
@@ -28,6 +66,9 @@ pub(super) struct ShaderRegistryConfigResource {
     pub(super) roots: Vec<String>,
     pub(super) watch_enabled: bool,
     pub(super) force_reload: bool,
+    pub(super) poll_interval: Duration,
+    pub(super) last_poll_at: Option<Instant>,
+    pub(super) last_poll_report: ShaderReloadPollReport,
     pub(super) revision: u64,
 }
 
@@ -37,6 +78,9 @@ impl Default for ShaderRegistryConfigResource {
             roots: vec![DEFAULT_SHADER_ASSET_ROOT.to_string()],
             watch_enabled: true,
             force_reload: true,
+            poll_interval: Duration::from_millis(DEFAULT_SHADER_RELOAD_POLL_INTERVAL_MS),
+            last_poll_at: None,
+            last_poll_report: ShaderReloadPollReport::default(),
             revision: 0,
         }
     }

@@ -34,9 +34,11 @@ use engine::plugins::render::{
     RenderPreparedFramePreflightReportSource, RenderProductSurfaceManifest,
     RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceStatusKind,
     RenderResourceDescriptor, RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureUploadAlphaMode, RendererFrameTimings, StaticRegisteredFeaturePayload,
-    compile_flow_plan, merge_fragment_package_into_flow, validate_prepared_render_frame,
+    RenderTextureUploadAlphaMode, RendererFrameTimings, ShaderReloadPollReport,
+    ShaderReloadPollStatus, StaticRegisteredFeaturePayload, compile_flow_plan,
+    merge_fragment_package_into_flow, validate_prepared_render_frame,
 };
+use engine::runtime::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
     ProductScaleBand, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
@@ -129,6 +131,50 @@ fn render_runtime_inspect_debug_timing_state_includes_preflight_and_flow_encode(
     assert_eq!(state.encode_submit_ms, 6.0);
     assert_eq!(state.workload_ms, 21.0);
     assert_eq!(state.total_ms, 21.75);
+}
+
+#[test]
+fn render_runtime_inspect_debug_timing_state_exposes_steady_state_runtime_costs() {
+    let mut state = RenderDebugTimingsState::default();
+    state.observe_shader_reload_poll(
+        ShaderReloadPollReport {
+            status: ShaderReloadPollStatus::Throttled,
+            elapsed_ms: 100.0,
+            interval_ms: 500.0,
+            force_reload: false,
+        },
+        0.05,
+    );
+    state.observe_diagnostics_report("lightweight", 0.02);
+    state.observe_preflight_cache_state(&RenderPreparedFramePreflightCacheState {
+        mode: RenderPreparedFramePreflightMode::CachedStrict,
+        status: RenderPreparedFramePreflightCacheStatus::Hit,
+        report_source: RenderPreparedFramePreflightReportSource::CachedReport,
+        cache_key: None,
+    });
+    let mut pacing = FramePacingRuntimeStateResource::default();
+    pacing.observe_policy(FramePacingPolicyResource::continuous_capped(60));
+    state.observe_frame_pacing(&pacing);
+
+    assert_eq!(
+        state.shader_reload_poll_status.as_deref(),
+        Some("throttled")
+    );
+    assert_eq!(state.shader_reload_poll_interval_ms, 500.0);
+    assert_eq!(
+        state.diagnostics_report_mode.as_deref(),
+        Some("lightweight")
+    );
+    assert_eq!(state.preflight_cache_status.as_deref(), Some("hit"));
+    assert_eq!(
+        state.preflight_report_source.as_deref(),
+        Some("cached_report")
+    );
+    assert_eq!(
+        state.frame_pacing_mode.as_deref(),
+        Some("continuous_capped")
+    );
+    assert_eq!(state.frame_pacing_target_fps, Some(60));
 }
 
 #[test]

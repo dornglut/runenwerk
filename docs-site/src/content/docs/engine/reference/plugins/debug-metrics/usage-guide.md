@@ -33,6 +33,10 @@ app.add_plugin(DebugMetricsPlugin);
 - Schedule placement: Startup, RenderPrepare
 - Ownership: Debug overlay state and draw-list publication.
 - Non-ownership: Render submission execution and input transport.
+- Runtime timing surface: frame workload, preflight, flow encode, shader poll,
+  diagnostics report, frame pacing mode/FPS cap, and preflight cache status are
+  read from runtime/render inspection resources and displayed without owning
+  render policy or backend handles.
 
 ## Related
 

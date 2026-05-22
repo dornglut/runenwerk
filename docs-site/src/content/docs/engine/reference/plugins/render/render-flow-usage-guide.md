@@ -339,7 +339,7 @@ Full structural preflight validates the compiled flow against the prepared frame
 
 Use `validate_prepared_render_frame(...)` for tooling/tests that want a report and `preflight_prepared_render_frame(...)` for fail-fast full validation. Runtime submit should go through the renderer-owned cached preflight path. `RenderPreflightValidationConfigResource::strict_every_frame()` or `RUNENWERK_RENDER_STRICT_PREFLIGHT=1` forces full preflight every frame for audits and debugging.
 
-`Renderer::last_preflight_report()`, `Renderer::last_preflight_cache_state()`, `inspect_render_execution_graph_preflight(...)`, and `inspect_render_execution_graph_preflight_with_cache(...)` expose diagnostics and cache source for tooling. `RendererFrameTimings` reports `preflight_ms`, `flow_encode_ms`, and `encode_submit_ms` separately.
+`Renderer::last_preflight_report()`, `Renderer::last_preflight_cache_state()`, `inspect_render_execution_graph_preflight(...)`, and `inspect_render_execution_graph_preflight_with_cache(...)` expose diagnostics and cache source for tooling. `RendererFrameTimings` reports `preflight_ms`, `flow_encode_ms`, and `encode_submit_ms` separately. `RenderDebugTimingsState` also records shader reload poll time/status, diagnostics report time/mode, preflight cache status/source, and the runtime frame pacing mode so steady-state slow frames can be attributed without constructing full JSON diagnostics every frame.
 
 The compiler/preflight path owns render execution correctness only. Product jobs and producers still own product truth, selection, freshness, authority, fallback legality, rebuild policy, and residency intent.
 

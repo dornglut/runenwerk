@@ -31,4 +31,6 @@ pub use renderer::{Gfx, GfxFrameTimings, RenderFrameDataRegistry, Renderer, Rend
 pub use residency::*;
 pub use resource::*;
 pub use runtime::*;
-pub use shader::{ShaderHandle, ShaderRegistryResource};
+pub use shader::{
+    ShaderHandle, ShaderRegistryResource, ShaderReloadPollReport, ShaderReloadPollStatus,
+};

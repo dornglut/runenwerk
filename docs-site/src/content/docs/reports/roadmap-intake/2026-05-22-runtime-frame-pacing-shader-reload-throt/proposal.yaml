@@ -24,7 +24,7 @@ item:
   lane: Core support
   dependency_level: L1
   gate: Governed runtime performance repair
-  planning_state: current_candidate
+  planning_state: completed
   priority: P1
   value: 5
   blocker: 3
@@ -51,6 +51,7 @@ item:
   - docs-site/src/content/docs/engine/reference/plugins/debug-metrics
   - docs-site/src/content/docs/engine/benchmarks/render-flow-planning.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-runtime-frame-pacing-shader-reload-throt
+  - docs-site/src/content/docs/reports/closeouts/wr-055-runtime-frame-pacing-shader-reload-diagnostics-tiers/closeout.md
   - docs-site/src/content/docs/reports/closeouts
   validations:
   - cargo test -p engine frame_pacing
@@ -64,18 +65,21 @@ item:
   - task roadmap:validate
   - task roadmap:check
   - task planning:validate
-  next_evidence: Implement runtime frame pacing, shader reload throttling, diagnostics tiering, timing/inspection evidence,
-    boids runtime smoke evidence, and closeout validation.
+  next_evidence: Runtime frame pacing, shader reload throttling, diagnostics tiering, timing/inspection evidence, boids runtime
+    smoke evidence, and closeout validation completed in docs-site/src/content/docs/reports/closeouts/wr-055-runtime-frame-pacing-shader-reload-diagnostics-tiers/closeout.md.
   current_decision: Current bounded runtime performance repair. Animated windowed runtime defaults to 60 FPS capped continuous
-    pacing, shader reload polling is throttled by default, and full render diagnostics are tiered out of healthy steady state.
-  current_call: Implement only runtime pacing, shader reload throttle, render diagnostics tiering, timing/inspection/debug
-    overlay evidence, tests, docs, and closeout evidence. Do not lower boid count, disable preflight correctness, or move product
-    policy.
-  first_move: Add runtime-owned frame pacing policy and remove unconditional steady-state redraw requests from the winit runner.
-  main_blocker: Needs implementation, local boids smoke evidence, and focused validation.
+    pacing, shader reload polling is throttled by default, and full render diagnostics are tiered out of healthy steady state;
+    completion evidence is recorded in the WR-055 closeout.
+  current_call: Completed. Future work should preserve runtime-owned pacing, render-owned diagnostics policy, shader throttle
+    behavior, and strict prepared-frame preflight.
+  first_move: Use the WR-055 closeout as evidence before changing runtime pacing or diagnostics tiers again.
+  main_blocker: Complete; remaining quality gap is long-duration subjective smoothness certification outside this bounded repair.
   why_not_ready: ''
-  completion_quality: not_applicable
-  known_quality_gaps: []
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - The 8 second local smoke proves the windowed path starts and remains alive, but it is not a long-duration subjective human
+    smoothness certification.
+  - The boids F10 debug overlay is available for local inspection, but no screenshot artifact was captured in this closeout.
   completion_audit: ''
   diagram_call:
   - cap runtime frames

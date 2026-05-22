@@ -1,9 +1,11 @@
 use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
 use crate::runtime::{ResMut, WorldMut};
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 type ExtractedRenderStateMap<'a> = BTreeMap<TypeId, &'a dyn Any>;
 
@@ -21,7 +23,13 @@ pub(crate) fn frame_render_prepare_system(
         return Ok(());
     };
 
+    let shader_poll_start = Instant::now();
     let _ = shader_registry.poll_updates();
+    let shader_poll_ms = shader_poll_start.elapsed().as_secs_f32() * 1000.0;
+    let shader_poll_report = shader_registry.last_reload_poll_report();
+    if let Ok(render_debug_timings) = world.resource_mut::<RenderDebugTimingsState>() {
+        render_debug_timings.observe_shader_reload_poll(shader_poll_report, shader_poll_ms);
+    }
     let shader_reload_messages = shader_registry.drain_message_lines();
     if !shader_reload_messages.is_empty() {
         for msg in shader_reload_messages {

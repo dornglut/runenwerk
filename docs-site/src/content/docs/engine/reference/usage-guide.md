@@ -89,10 +89,18 @@ fn update_title(time: Res<Time>, mut window: ResMut<WindowState>) {
 fn main() -> Result<()> {
     let mut app = App::new();
     app.set_title("Engine Window");
+    app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
     app.add_plugin(WindowPlugin);
     app.run()
 }
 ```
+
+Windowed apps default to `FramePacingPolicyResource::continuous_capped(60)`.
+Use `App::with_frame_pacing(FramePacingPolicyResource::on_demand())` for tools
+that should redraw only after explicit input, resize, title, cursor, or app
+invalidations. The winit runner maps the policy to `WaitUntil` for capped
+animation and `Wait` for on-demand mode; systems publish redraw intent through
+`WindowState` / `WindowStateRegistryResource` instead of calling winit directly.
 
 ## Schedules You Will Use Most
 

@@ -3,6 +3,7 @@ use super::helpers::{
     normalize_shader_id, shader_event_state_label,
 };
 use super::*;
+use std::time::{Duration, Instant};
 
 // Owner: Engine Render Shader Registry - Core Registry Implementation
 impl ShaderRegistryResource {
@@ -66,6 +67,18 @@ impl ShaderRegistryResource {
 
     pub fn set_watch_enabled(&mut self, enabled: bool) {
         self.config.watch_enabled = enabled;
+    }
+
+    pub fn reload_poll_interval(&self) -> Duration {
+        self.config.poll_interval
+    }
+
+    pub fn set_reload_poll_interval(&mut self, interval: Duration) {
+        self.config.poll_interval = interval;
+    }
+
+    pub fn last_reload_poll_report(&self) -> ShaderReloadPollReport {
+        self.config.last_poll_report
     }
 
     pub fn request_reload(&mut self) {
@@ -298,12 +311,41 @@ impl ShaderRegistryResource {
     }
 
     pub fn poll_updates(&mut self) -> Vec<String> {
+        self.poll_updates_at(Instant::now())
+    }
+
+    pub fn poll_updates_at(&mut self, now: Instant) -> Vec<String> {
         let watch_enabled = self.watch_enabled();
         let force_reload = self.config.force_reload;
         if !should_poll(watch_enabled, force_reload) {
+            self.observe_poll_report(
+                ShaderReloadPollStatus::Disabled,
+                now,
+                force_reload,
+                self.config.last_poll_at,
+            );
+            return Vec::new();
+        }
+        if !force_reload
+            && let Some(last_poll_at) = self.config.last_poll_at
+            && now.saturating_duration_since(last_poll_at) < self.config.poll_interval
+        {
+            self.observe_poll_report(
+                ShaderReloadPollStatus::Throttled,
+                now,
+                force_reload,
+                Some(last_poll_at),
+            );
             return Vec::new();
         }
         self.config.force_reload = false;
+        self.observe_poll_report(
+            ShaderReloadPollStatus::Polled,
+            now,
+            force_reload,
+            self.config.last_poll_at,
+        );
+        self.config.last_poll_at = Some(now);
 
         let mut lines = self.discover_from_roots();
         let mut changed = false;
@@ -423,6 +465,23 @@ impl ShaderRegistryResource {
         }
 
         lines
+    }
+
+    fn observe_poll_report(
+        &mut self,
+        status: ShaderReloadPollStatus,
+        now: Instant,
+        force_reload: bool,
+        previous_poll_at: Option<Instant>,
+    ) {
+        self.config.last_poll_report = ShaderReloadPollReport {
+            status,
+            elapsed_ms: previous_poll_at
+                .map(|last| now.saturating_duration_since(last).as_secs_f32() * 1000.0)
+                .unwrap_or(0.0),
+            interval_ms: self.config.poll_interval.as_secs_f32() * 1000.0,
+            force_reload,
+        };
     }
 
     fn discover_from_roots(&mut self) -> Vec<String> {

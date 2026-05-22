@@ -58,6 +58,19 @@ Feature modules should register feature-owned flow declarations and state resour
 
 Feature fallback policy is resolved in prepare (`Ready | Stale | Disabled | Missing`) and submit/runtime executes the encoded policy without ECS back-fills.
 
+Runtime performance policy is split by ownership:
+
+- window redraw cadence is owned by `FramePacingPolicyResource` in the runtime
+  domain and defaults to capped continuous 60 FPS for windowed apps;
+- shader live reload stays enabled by default, but `ShaderRegistryResource`
+  throttles normal directory polling to 500 ms after the first poll while
+  `request_reload()` still bypasses the throttle;
+- render diagnostics are tiered by `RenderFrameDiagnosticsPolicyResource`.
+  Cheap timings, pass samples, shader poll state, preflight cache state, and
+  pacing state remain available every frame. Full `RenderDebugFrameReport`
+  mapping runs for provenance/capture/readback/pixel probes/texture diffs/export,
+  slow frames, explicit requests, or full-every-frame policy.
+
 ## Prepared Frame Surface
 
 `PreparedRenderFrame` carries the prepare/submit boundary payload:

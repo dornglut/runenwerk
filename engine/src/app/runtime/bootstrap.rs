@@ -25,6 +25,14 @@ impl App {
             };
             self.world.insert_resource(state);
         }
+        if !self.world.has_resource::<FramePacingPolicyResource>() {
+            self.world
+                .insert_resource(FramePacingPolicyResource::default());
+        }
+        if !self.world.has_resource::<FramePacingRuntimeStateResource>() {
+            self.world
+                .insert_resource(FramePacingRuntimeStateResource::default());
+        }
         if !self.world.has_resource::<WindowStateRegistryResource>() {
             let registry = self
                 .world

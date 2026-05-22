@@ -167,6 +167,57 @@ impl RenderDebugConfigResource {
     }
 }
 
+pub const DEFAULT_RENDER_DIAGNOSTICS_SLOW_FRAME_THRESHOLD_MS: f32 = 20.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderFrameDiagnosticsMode {
+    Tiered,
+    FullEveryFrame,
+}
+
+impl RenderFrameDiagnosticsMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Tiered => "tiered",
+            Self::FullEveryFrame => "full_every_frame",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, ecs::Component, ecs::Resource)]
+pub struct RenderFrameDiagnosticsPolicyResource {
+    pub mode: RenderFrameDiagnosticsMode,
+    pub slow_frame_threshold_ms: f32,
+    pub force_next_full_report: bool,
+}
+
+impl Default for RenderFrameDiagnosticsPolicyResource {
+    fn default() -> Self {
+        Self {
+            mode: RenderFrameDiagnosticsMode::Tiered,
+            slow_frame_threshold_ms: DEFAULT_RENDER_DIAGNOSTICS_SLOW_FRAME_THRESHOLD_MS,
+            force_next_full_report: false,
+        }
+    }
+}
+
+impl RenderFrameDiagnosticsPolicyResource {
+    pub fn tiered() -> Self {
+        Self::default()
+    }
+
+    pub fn full_every_frame() -> Self {
+        Self {
+            mode: RenderFrameDiagnosticsMode::FullEveryFrame,
+            ..Self::default()
+        }
+    }
+
+    pub fn request_full_report(&mut self) {
+        self.force_next_full_report = true;
+    }
+}
+
 #[derive(Debug, Clone, ecs::Component, ecs::Resource)]
 pub struct RenderDebugControlResource {
     pub provenance_enabled: bool,

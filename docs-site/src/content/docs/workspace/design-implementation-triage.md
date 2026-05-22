@@ -110,7 +110,6 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-055 | Runtime Frame Pacing, Shader Reload Throttle, And Render Diagnostics Tiers | P1 | V5 | B3 | 1.6 | Implement only runtime pacing, shader reload throttle, render diagnostics tiering, timing/inspection/debug overlay evidence, tests, docs, and closeout evidence. Do not lower boid count, disable preflight correctness, or move product policy. | Add runtime-owned frame pacing policy and remove unconditional steady-state redraw requests from the winit runner. |
 
 ## Support Only
 

@@ -54,7 +54,7 @@ impl App {
             startup_ran: false,
             mode,
             title: title.clone(),
-            control_flow: ControlFlow::Poll,
+            control_flow: ControlFlow::Wait,
         };
         app.install_builtin_resources();
         app
@@ -288,6 +288,14 @@ impl App {
 
     pub fn with_control_flow(&mut self, control_flow: ControlFlow) -> &mut Self {
         self.control_flow = control_flow;
+        self
+    }
+
+    pub fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
+        self.world.insert_resource(policy);
+        if let Ok(runtime_state) = self.world.resource_mut::<FramePacingRuntimeStateResource>() {
+            runtime_state.observe_policy(policy);
+        }
         self
     }
 

@@ -1,4 +1,7 @@
+use crate::plugins::render::graph::RenderPreparedFramePreflightCacheState;
 use crate::plugins::render::renderer::GfxFrameTimings;
+use crate::plugins::render::shader::ShaderReloadPollReport;
+use crate::runtime::FramePacingRuntimeStateResource;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct RenderDebugTimingsState {
@@ -15,6 +18,19 @@ pub struct RenderDebugTimingsState {
     pub world_rebuild_latency_ms: f32,
     pub world_rebuild_samples: u64,
     pub world_prepare_samples: u64,
+    pub shader_reload_poll_ms: f32,
+    pub shader_reload_poll_status: Option<String>,
+    pub shader_reload_poll_interval_ms: f32,
+    pub diagnostics_report_ms: f32,
+    pub diagnostics_report_mode: Option<String>,
+    pub preflight_cache_mode: Option<String>,
+    pub preflight_cache_status: Option<String>,
+    pub preflight_report_source: Option<String>,
+    pub frame_pacing_mode: Option<String>,
+    pub frame_pacing_target_fps: Option<u32>,
+    pub frame_pacing_last_interval_ms: f32,
+    pub frame_pacing_next_delay_ms: Option<f32>,
+    pub frame_pacing_redraw_requested: bool,
 }
 
 impl RenderDebugTimingsState {
@@ -58,6 +74,34 @@ impl RenderDebugTimingsState {
 
     pub fn observe_world_prepare_sample(&mut self) {
         self.world_prepare_samples = self.world_prepare_samples.saturating_add(1);
+    }
+
+    pub fn observe_shader_reload_poll(&mut self, report: ShaderReloadPollReport, measured_ms: f32) {
+        self.shader_reload_poll_ms = measured_ms.max(0.0);
+        self.shader_reload_poll_status = Some(report.status.as_str().to_string());
+        self.shader_reload_poll_interval_ms = report.interval_ms.max(0.0);
+    }
+
+    pub fn observe_diagnostics_report(&mut self, mode: impl Into<String>, measured_ms: f32) {
+        self.diagnostics_report_mode = Some(mode.into());
+        self.diagnostics_report_ms = measured_ms.max(0.0);
+    }
+
+    pub fn observe_preflight_cache_state(
+        &mut self,
+        state: &RenderPreparedFramePreflightCacheState,
+    ) {
+        self.preflight_cache_mode = Some(state.mode.as_str().to_string());
+        self.preflight_cache_status = Some(state.status.as_str().to_string());
+        self.preflight_report_source = Some(state.report_source.as_str().to_string());
+    }
+
+    pub fn observe_frame_pacing(&mut self, pacing: &FramePacingRuntimeStateResource) {
+        self.frame_pacing_mode = Some(pacing.mode.as_str().to_string());
+        self.frame_pacing_target_fps = pacing.mode.target_fps();
+        self.frame_pacing_last_interval_ms = pacing.last_frame_interval_ms;
+        self.frame_pacing_next_delay_ms = pacing.next_frame_delay_ms;
+        self.frame_pacing_redraw_requested = pacing.redraw_requested;
     }
 }
 
