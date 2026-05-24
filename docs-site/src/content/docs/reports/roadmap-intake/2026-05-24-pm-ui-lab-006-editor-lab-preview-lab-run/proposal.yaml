@@ -1,0 +1,102 @@
+version: 1
+idea: PM-UI-LAB-006 Editor Lab preview lab runtime evidence matrix
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md
+owner: editor
+created_at: '2026-05-24'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-087
+  title: UI Lab preview lab runtime evidence matrix
+  diagram_title: UI Lab preview lab evidence
+  alias: WR087
+  lane: Product hardening
+  dependency_level: L4
+  gate: PM006 design accepted; production plan required before code
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Editor Lab cannot claim runtime-proven productization until preview scenarios, visual/equivalent artifacts, diagnostics snapshots, accessibility, performance, and degraded-provider evidence are runtime-proven.
+  kano: Basic
+  dependencies:
+  - WR-086
+  write_scopes:
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/runtime
+  - domain/editor/editor_shell/src/composition
+  - docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md
+  - docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-087-ui-lab-preview-lab-runtime-evidence-matrix/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pm-ui-lab-006-editor-lab-preview-lab-run
+  validations:
+  - cargo fmt
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor pm_ui_lab_006
+  - "$env:RUNENWERK_WRITE_PM_UI_LAB_006_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_006_runtime_evidence_reports_preview_lab -- --nocapture"
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: PM-UI-LAB-006 runtime-proven closeout includes a generated Preview Lab evidence manifest, retained visual artifacts, diagnostics snapshots, accessibility snapshots, performance snapshots, unsupported-check diagnostics, and degraded-provider proof.
+  current_decision: Completed; WR-087 closes PM-UI-LAB-006 as runtime_proven and preserves PM007 public API/docs/examples/final closeout as the next dependency.
+  current_call: Completed. Do not reopen WR-087 for PM007 API docs, examples, final track closeout, game-runtime UI projection, native screenshot platform work, GPU visual diff platform work, or perfectionist no-gap certification.
+  first_move: Run task ai:goal -- --track PT-UI-LAB --scope non-deferred and follow the next legal PM-UI-LAB-007 action.
+  main_blocker: Completed.
+  why_not_ready: Completed and archived after runtime evidence closeout.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Native window screenshots, GPU visual diffing, native focus traversal, pixel contrast sampling, native screenshot timing, and GPU visual-diff timing remain explicit unsupported-check diagnostics in the PM006 evidence manifest.
+  - PM-UI-LAB-007 still owns public API ergonomics review, usage docs, examples, and final PT-UI-LAB runtime-proven closeout.
+  - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
+  - Perfectionist no-gap verification remains deferred to PT-UI-LAB-PERFECTION or equivalent later audit scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
+  diagram_call:
+  - preview scenarios
+  - runtime artifacts
+  - evidence manifest
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-UI-LAB-006 implementation must follow the accepted Preview Lab runtime evidence matrix design.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-UI-LAB-006 must preserve the productization ownership map and defer PM007 scope.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-UI-LAB-006 builds on completed PM005 project IO, apply, activation report, failure preservation, reload, and rollback evidence.
+  ddd_owner: editor app-owned Preview Lab evidence harness with editor_shell retained UI composition support and ui_definition behavior-free diagnostics support
+  adr_requirement: No ADR required while scenario execution, screenshot/equivalent capture, accessibility checks, performance measurement, provider sessions, and artifact writing remain app/runtime-owned; add an ADR or accepted design update before moving those responsibilities into domain/ui or domain/editor.
+  fitness_function_requirement: Scenario manifest validation, retained visual or screenshot artifact generation, diagnostics snapshots, unsupported-check diagnostics, accessibility snapshots, performance snapshots, degraded-provider proof, docs validation, roadmap validation, and production validation.
+  ownership_mode: Stream-aligned editor product hardening with complicated-subsystem support from editor_shell, ui_definition, and runtime owners.
+edges:
+- source: WR-086
+  target: WR-087
+  label: project IO/apply evidence precedes preview lab evidence matrix

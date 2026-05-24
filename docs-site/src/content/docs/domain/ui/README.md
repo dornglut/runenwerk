@@ -38,6 +38,7 @@ Renderer output is derived product data. It is not UI authority.
 
 ## Current UI Truth
 
+- [UI Definition Usage](./ui-definition-usage.md)
 - [Current Architecture](./architecture.md)
 - [Roadmap](./roadmap.md)
 

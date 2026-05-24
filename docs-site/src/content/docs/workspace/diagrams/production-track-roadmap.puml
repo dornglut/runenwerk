@@ -213,6 +213,38 @@ package "PT-UI-DESIGN UI Designer And Interface Lab Platform" {
 
 }
 
+package "PT-UI-LAB Runtime-Proven Editor Interface Lab Productization" {
+  component "PM-UI-LAB-001 Productization Governance And Code-Truth Reconciliation\nkind=design\nstate=completed\nWR=N/A" as PM_UI_LAB_001 <<completed>>
+
+  component "PM-UI-LAB-002 Registry And Command Source Of Truth\nkind=implementation\nstate=completed\nWR=WR-083" as PM_UI_LAB_002 <<completed>>
+
+  component "PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell\nkind=implementation\nstate=completed\nWR=WR-084" as PM_UI_LAB_003 <<completed>>
+
+  component "PM-UI-LAB-004 Operation-Driven Visual Authoring\nkind=implementation\nstate=completed\nWR=WR-085" as PM_UI_LAB_004 <<completed>>
+
+  component "PM-UI-LAB-005 Persistence Project IO Diff Apply And Rollback\nkind=implementation\nstate=completed\nWR=WR-086" as PM_UI_LAB_005 <<completed>>
+
+  component "PM-UI-LAB-006 Preview Lab And Runtime Evidence\nkind=hardening\nstate=completed\nWR=WR-087" as PM_UI_LAB_006 <<completed>>
+
+  component "PM-UI-LAB-007 API Docs Examples And Runtime-Proven Closeout\nkind=release\nstate=completed\nWR=WR-088" as PM_UI_LAB_007 <<completed>>
+
+}
+
+package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" {
+  component "PM-UI-LAB-PERF-001 Governance Audit Doctrine And Code Truth Matrix\nkind=design\nstate=active\nWR=WR-089" as PM_UI_LAB_PERF_001 <<active>>
+
+  component "PM-UI-LAB-PERF-002 Runtime Evidence Platform Closure\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_002 <<designing>>
+
+  component "PM-UI-LAB-PERF-003 Command And Surface Source Of Truth Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_003 <<designing>>
+
+  component "PM-UI-LAB-PERF-004 Direct Manipulation Editor Lab UX Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_004 <<designing>>
+
+  component "PM-UI-LAB-PERF-005 Persistence Diff Apply API And Examples Ergonomics\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_005 <<designing>>
+
+  component "PM-UI-LAB-PERF-006 Final No Gap Certification Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_006 <<designing>>
+
+}
+
 PM_SDF_OW_001 -down-> PM_SDF_OW_002 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_003 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_004 : production prerequisite
@@ -339,5 +371,18 @@ PM_UI_DESIGN_006 -down-> PM_UI_DESIGN_010 : production prerequisite
 PM_UI_DESIGN_007 -down-> PM_UI_DESIGN_010 : production prerequisite
 PM_UI_DESIGN_008 -down-> PM_UI_DESIGN_010 : production prerequisite
 PM_UI_DESIGN_009 -down-> PM_UI_DESIGN_010 : production prerequisite
+PM_UI_DESIGN_010 -down-> PM_UI_LAB_001 : production prerequisite
+PM_UI_LAB_001 -down-> PM_UI_LAB_002 : production prerequisite
+PM_UI_LAB_002 -down-> PM_UI_LAB_003 : production prerequisite
+PM_UI_LAB_003 -down-> PM_UI_LAB_004 : production prerequisite
+PM_UI_LAB_004 -down-> PM_UI_LAB_005 : production prerequisite
+PM_UI_LAB_005 -down-> PM_UI_LAB_006 : production prerequisite
+PM_UI_LAB_006 -down-> PM_UI_LAB_007 : production prerequisite
+PM_UI_LAB_007 -down-> PM_UI_LAB_PERF_001 : production prerequisite
+PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_002 : production prerequisite
+PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_003 : production prerequisite
+PM_UI_LAB_PERF_003 -down-> PM_UI_LAB_PERF_004 : production prerequisite
+PM_UI_LAB_PERF_004 -down-> PM_UI_LAB_PERF_005 : production prerequisite
+PM_UI_LAB_PERF_005 -down-> PM_UI_LAB_PERF_006 : production prerequisite
 
 @enduml

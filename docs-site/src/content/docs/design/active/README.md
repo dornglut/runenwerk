@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-05-24
 ---
 
 # Active Designs
@@ -32,6 +32,8 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Editor UI Popup Adornment Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
 - [UI Designer And Interface Lab Platform](ui-designer-interface-lab-platform-design.md)
+- [UI Lab Perfectionist Audit Design](ui-lab-perfectionist-audit-design.md)
+- [UI Lab Productization Design](ui-lab-productization-design.md)
 
 ### Engine Runtime
 

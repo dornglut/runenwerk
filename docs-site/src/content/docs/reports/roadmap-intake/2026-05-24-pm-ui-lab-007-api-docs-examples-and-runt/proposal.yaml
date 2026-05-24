@@ -1,0 +1,109 @@
+version: 1
+idea: PM-UI-LAB-007 API docs examples and runtime-proven closeout
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+owner: editor
+created_at: '2026-05-24'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-088
+  title: UI Lab API docs examples and runtime-proven closeout
+  diagram_title: UI Lab API docs closeout
+  alias: WR088
+  lane: Product release
+  dependency_level: L4
+  gate: PM007 design accepted; production plan required before code
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Editor Lab cannot close as a product until public APIs, usage docs, examples, final runtime evidence, and perfectionist-audit handoff are discoverable and validated.
+  kano: Basic
+  dependencies:
+  - WR-087
+  write_scopes:
+  - domain/ui/ui_definition
+  - domain/editor/editor_definition
+  - apps/runenwerk_editor/src/shell
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/domain/editor
+  - docs-site/src/content/docs/design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+  - docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-088-ui-lab-api-docs-examples-and-runtime-proven-closeout/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pt-ui-lab-perfection-no-gap-audit
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pm-ui-lab-007-api-docs-examples-and-runt
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition
+  - cargo test -p editor_definition
+  - cargo run -p ui_definition --example ui_definition_workflow
+  - cargo run -p editor_definition --example editor_definition_workflow
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor pm_ui_lab_006
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md.
+  current_decision: Completed; WR-088 closes PM-UI-LAB-007 and PT-UI-LAB as runtime_proven with focused public APIs, usage docs, examples, API ergonomics review, evidence aggregation, and separate no-gap audit intake.
+  current_call: Complete; preserve runtime_proven evidence and keep perfectionist verification in the separate PT-UI-LAB-PERFECTION no-gap audit intake.
+  first_move: Completed; use the no-gap audit intake before claiming perfectionist_verified.
+  main_blocker: Complete; remaining quality gaps are explicit later audit scope, not blockers for runtime_proven PT-UI-LAB closeout.
+  why_not_ready: Complete.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Native window screenshots, GPU visual diffing, native focus traversal, pixel contrast sampling, native screenshot timing, and GPU visual-diff timing remain unsupported-check diagnostics from PM006.
+  - Broad crate-level glob exports remain for compatibility; deeper API reshaping is deferred to a no-gap audit.
+  - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
+  - Module-structure perfectionist review, deeper UI ergonomics audit, native evidence platform decisions, accessibility and performance depth beyond retained evidence, and zero-known-gap certification remain separate audit scope.
+  - WR-088 does not claim perfectionist_verified completion.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+  diagram_call:
+  - public APIs
+  - examples
+  - final closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-UI-LAB-007 implementation must follow the accepted public API docs examples and closeout design.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-UI-LAB-007 must preserve the productization ownership map and runtime-proven closeout rules.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-UI-LAB-007 closes only after completed PM006 preview/runtime evidence.
+  ddd_owner: ui_definition owns behavior-free UI definition workflows; editor_definition owns runtime-neutral editor definition workflows; apps/runenwerk_editor owns Editor Lab runtime evidence and final app closeout
+  adr_requirement: No ADR required while API/doc/example work preserves existing dependency direction and ownership; add an ADR or accepted design update before moving runtime behavior into definition crates.
+  fitness_function_requirement: Focused public API tests, examples compile/run checks, docs validation, public API ergonomics review, PM001-PM006 evidence aggregation, final closeout validation, and separate perfectionist-audit intake.
+  ownership_mode: Stream-aligned editor release work with enabling support from ui_definition and editor_definition owners.
+edges:
+- source: WR-087
+  target: WR-088
+  label: preview/runtime evidence precedes API docs and final closeout

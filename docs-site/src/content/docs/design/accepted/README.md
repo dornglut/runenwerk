@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-05-24
 ---
 
 # Accepted Designs
@@ -32,6 +32,12 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [UI Designer Live Preview Fixtures Scenarios And Target Matrix Design](ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md)
 - [UI Designer Persistence Migration Diff And Activation Design](ui-designer-persistence-migration-diff-and-activation-design.md)
 - [UI Designer Production Readiness And Evidence Design](ui-designer-production-readiness-and-evidence-design.md)
+- [UI Lab Command Catalog And Surface Registry Design](ui-lab-command-catalog-and-surface-registry-design.md)
+- [UI Lab App-Hosted Editor Lab Surface Shell Design](ui-lab-app-hosted-editor-lab-surface-shell-design.md)
+- [UI Lab Operation-Driven Visual Authoring Design](ui-lab-operation-driven-visual-authoring-design.md)
+- [UI Lab Persistence Project IO Diff Apply Rollback Design](ui-lab-persistence-project-io-diff-apply-rollback-design.md)
+- [UI Lab Preview Lab Runtime Evidence Design](ui-lab-preview-lab-runtime-evidence-design.md)
+- [UI Lab API Docs Examples Runtime Closeout Design](ui-lab-api-docs-examples-runtime-closeout-design.md)
 
 ### Workspace / Cross-Domain
 

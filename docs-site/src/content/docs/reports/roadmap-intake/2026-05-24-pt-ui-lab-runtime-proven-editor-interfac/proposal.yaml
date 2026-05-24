@@ -1,0 +1,80 @@
+version: 1
+idea: PM-UI-LAB-002 command catalog and surface registry source-of-truth cleanup for the runtime-proven Editor Interface Lab track.
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-command-catalog-and-surface-registry-design.md
+owner: editor
+created_at: '2026-05-24'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-083
+  title: UI Lab command catalog and surface registry source of truth
+  diagram_title: UI Lab command catalog and registry
+  alias: WR083
+  lane: Discovery
+  dependency_level: L4
+  gate: Current-candidate implementation contract required
+  planning_state: current_candidate
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-004
+  - WR-046
+  write_scopes:
+  - apps/runenwerk_editor/src/shell
+  - domain/editor/editor_shell/src/tool_suite
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/composition
+  - assets/editor/ui
+  - docs-site/src/content/docs/design/accepted/ui-lab-command-catalog-and-surface-registry-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-083-ui-lab-command-catalog-and-surface-registry-source-of-truth/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pt-ui-lab-runtime-proven-editor-interfac
+  validations:
+  - cargo test -p editor_shell
+  - cargo test -p runenwerk_editor command
+  - cargo test -p runenwerk_editor surface
+  - task production:validate
+  - task production:render
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  next_evidence: Implement the current-candidate WR-083 command catalog and surface registry contract, then close with focused tests and launched-editor runtime evidence.
+  current_decision: WR-083 is current_candidate; accepted PM-UI-LAB-002 design and the implementation contract define the bounded source-of-truth cleanup, validation, stop conditions, and runtime evidence.
+  current_call: Current-candidate implementation contract written; product code must stay inside WR-083 write scopes and close with runtime evidence.
+  first_move: Re-read the accepted PM-UI-LAB-002 design and WR-083 implementation contract, then start the bounded command catalog and surface registry implementation inside the listed write scopes.
+  main_blocker: Implementation, focused tests, launched-editor runtime evidence, closeout, and production/roadmap completion updates remain.
+  why_not_ready: Current candidate is ready for bounded implementation; not complete until runtime evidence and closeout pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - current contract
+  - runtime evidence required
+  decision_gates: []
+  ddd_owner: editor app/shell command and surface registry boundaries
+  adr_requirement: No ADR for PM-UI-LAB-002; later rows need an ADR or accepted design update if they change durable ownership, dependency direction, or authority boundaries.
+  fitness_function_requirement: Catalog coverage, shell frame route projection tests, surface registry metadata tests, provider stable-key tests, docs validation, roadmap validation, and production validation.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from editor_shell and app runtime owners.
+edges:
+- source: WR-004
+  target: WR-083
+  label: editor surface guards
+- source: WR-046
+  target: WR-083
+  label: UI designer doctrine

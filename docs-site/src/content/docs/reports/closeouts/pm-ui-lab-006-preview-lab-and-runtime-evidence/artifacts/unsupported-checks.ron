@@ -1,0 +1,22 @@
+[
+    (
+        check: "native_screenshot_capture",
+        reason: "headless cargo test environment uses retained UI artifacts instead",
+    ),
+    (
+        check: "native_focus_traversal",
+        reason: "headless retained UI test cannot drive native focus traversal",
+    ),
+    (
+        check: "pixel_contrast_sampling",
+        reason: "retained UI artifact has theme tokens but no native pixels",
+    ),
+    (
+        check: "native_screenshot_timing",
+        reason: "native screenshot capture is unavailable in this headless runtime test",
+    ),
+    (
+        check: "gpu_visual_diff_timing",
+        reason: "GPU visual diff timing is outside the retained UI evidence harness",
+    ),
+]

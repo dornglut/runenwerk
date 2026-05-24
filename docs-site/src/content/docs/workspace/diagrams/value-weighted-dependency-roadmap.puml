@@ -64,7 +64,7 @@ package "Level 0 - Support Substrate" {
 }
 
 package "Level 1 - Near-Term Productization" {
-  component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B3\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
+  component "WR-008 Native tablet input\nstate=ready_next\nscore=1.0 gate=product evidence gate\nV3 B2\ncall=backend arbitration,\ndiagnostics, hardware acceptance" as TABLET <<V3>>
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
@@ -83,8 +83,15 @@ package "Level 3 - Active Domain Tracks" {
 
 }
 
+package "Level 4 - Active Discovery Context" {
+  component "WR-089 UI Lab perfectionist governance\nstate=current_candidate\nscore=1.0 gate=current-candidate governance contract\nV3 B3\ncall=governance contract\nno app code yet" as WR089 <<V3>>
+
+}
+
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 MESHRND -down-> MESHMAT : model mesh pixel proof prerequisite
+UIGUARDS -down-> WR089 : editor guardrails
+UIDESIGNDOC -down-> WR089 : UI doctrine
 
 @enduml

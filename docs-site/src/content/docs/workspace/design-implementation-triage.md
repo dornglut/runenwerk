@@ -110,6 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
+| WR-089 | UI Lab perfectionist governance and no-gap audit doctrine | P2 | V3 | B3 | 1.0 | Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until follow-on WRs are accepted. | Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-089, then finish the code-truth and evidence matrix closeout. |
 
 ## Support Only
 
@@ -126,7 +127,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | Main blocker |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B3 | 1.0 | Code work can continue after the WR-006 dependency, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
+| WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B2 | 1.0 | Code work can continue after the WR-006 dependency, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
 | WR-022 | SDF Prefab V2 | P2 | V4 | B3 | 0.8 | Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable; prefab renderer handoff must consume the fully featured renderer roadmap instead of adding a parallel scene path. | Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted product ownership. |
 | WR-023 | ECS Parallel Execution | P2 | V3 | B2 | 0.5 | Design now, implement later after diagnostics and deterministic merge policy are accepted. | Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics, and serial equivalence tests. |
 | WR-024 | Editor Shell Polish | P0 | V4 | B1 | 4.0 | Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome, docking, and status overflow slices instead of defining local policy. | Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming those contracts or as explicitly bounded compatibility evidence. |
