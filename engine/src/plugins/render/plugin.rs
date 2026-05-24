@@ -11,9 +11,10 @@ use super::features::{
     ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
     register_particle_vfx_feature_collector, sync_render_feature_registry_system,
     world::{
-        RenderSdfRaymarchAccelerationResource, RenderSdfResidencyBudgetResource,
-        RenderSdfResidencyResource, RenderSdfResidencySourceResource, WorldLodPolicyResource,
-        WorldLodSelectionResource, WorldRuntimeCacheResource,
+        PreparedWorldVisualFeatureResource, RenderSdfRaymarchAccelerationResource,
+        RenderSdfResidencyBudgetResource, RenderSdfResidencyResource,
+        RenderSdfResidencySourceResource, WorldLodPolicyResource, WorldLodSelectionResource,
+        WorldRuntimeCacheResource, register_world_visual_feature_collector,
     },
 };
 use super::frame::{
@@ -65,6 +66,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedProceduralWorldFeatureResource>();
         app.init_resource::<PreparedMaterialFeatureResource>();
         app.init_resource::<PreparedParticleVfxFeatureResource>();
+        app.init_resource::<PreparedWorldVisualFeatureResource>();
         app.init_resource::<PreparedDeformationFeatureResource>();
         app.init_resource::<PreparedWindFieldFeatureResource>();
         app.init_resource::<RenderFeatureContributionCollectorRegistryResource>();
@@ -74,6 +76,12 @@ impl Plugin for RenderPlugin {
                 .expect("render feature contribution collector registry should initialize"),
         )
         .expect("particle/VFX render feature collector should register");
+        register_world_visual_feature_collector(
+            app.world_mut()
+                .resource_mut::<RenderFeatureContributionCollectorRegistryResource>()
+                .expect("render feature contribution collector registry should initialize"),
+        )
+        .expect("world visual render feature collector should register");
         app.init_resource::<WorldRuntimeCacheResource>();
         app.init_resource::<RenderSdfResidencySourceResource>();
         app.init_resource::<RenderSdfResidencyResource>();

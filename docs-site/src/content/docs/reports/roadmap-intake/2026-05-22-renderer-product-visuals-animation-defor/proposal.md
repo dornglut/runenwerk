@@ -12,19 +12,18 @@ last_reviewed: 2026-05-22
 
 Idea: Renderer Product Visuals Animation Deformation And Evidence
 Suggested title: Renderer Product Visuals Animation Deformation And Evidence
-Initial planning state: `blocked_deferred`
+Current planning state: `completed`
 
 ## Governance Notes
 
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance completed in the WR-078 implementation contract.
+- Clean Architecture dependency direction and DDD owner are recorded in the contract.
+- No ADR is required while implementation stays inside renderer evidence aggregation and does not move product truth or fallback authority.
 
 ## Open Questions
 
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Closed: PM-RENDER-PRODUCT-VISUALS-004 was activated after WR-078 promotion and production planning.
+- Closed: WR-078 implementation completed with renderer-owned product visual evidence closeout.
 
 ## Apply Command
 

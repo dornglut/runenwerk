@@ -1,6 +1,6 @@
 version: 1
 idea: Renderer procedural population hardening track for indirect draw validation, reusable GPU primitive shader dispatch,
-  and fixed-step graph catch-up scheduling after PT-RENDER-PROCEDURAL-POPULATION runtime_proven closeout
+  fixed-step graph catch-up scheduling, and procedural camera projection after PT-RENDER-PROCEDURAL-POPULATION runtime_proven closeout
 source_path: docs-site/src/content/docs/reports/closeouts/pt-render-procedural-population-runtime-proven/closeout.md
 owner: engine/src/plugins/render
 created_at: '2026-05-24'
@@ -13,8 +13,8 @@ governance_notes:
   only if an implementation slice changes those boundaries.
 open_questions:
 - Can WR-089 remain doctrine-only and prevent hardening from becoming a monolithic implementation row?
-- Do WR-090 through WR-093 have disjoint enough write scopes to validate and close independently?
-- Is spatial hash/chunked unbounded population work kept in a separate intake instead of being folded into this track?
+- Do WR-090, WR-091, WR-092, WR-101, and WR-093 have disjoint enough write scopes to validate and close independently?
+- Are spatial hash/chunked unbounded populations and richer behavior authoring kept as separate intakes instead of being folded into this track?
 item:
   id: WR-089
   title: Renderer Procedural Population Hardening Doctrine And Track Activation
@@ -45,6 +45,8 @@ item:
   - docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.yaml
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.md
   validations:
   - task roadmap:render
   - task roadmap:validate
@@ -54,12 +56,13 @@ item:
   - task production:check
   - task docs:validate
   - task planning:validate
-  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090 through
-    WR-093 implementation contracts, and a bounded-contract closeout for WR-089.
+  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090, WR-091,
+    WR-092, WR-101 implementation contracts, WR-093 closeout contract, the separate behavior-authoring intake, and a bounded-contract
+    closeout for WR-089.
   current_decision: Intake accepted as a doctrine-first hardening track. WR-089 must not absorb indirect draw, primitive
-    dispatch, graph catch-up, or unbounded population implementation.
+    dispatch, graph catch-up, procedural camera, behavior-authoring, or unbounded population implementation.
   current_call: Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090
-    through WR-093.
+    WR-091, WR-092, WR-101, with WR-093 reserved for closeout.
   first_move: Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089
     only after planning metadata and contracts validate.
   main_blocker: Doctrine activation and planning metadata must validate before implementation slices can begin.
@@ -69,7 +72,8 @@ item:
   completion_audit: ''
   diagram_call:
   - hardening doctrine
-  - split WR-090 to WR-093
+  - split WR-090 WR-091 WR-092 WR-101
+  - WR-093 closeout
   decision_gates:
   - kind: design
     path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
@@ -85,6 +89,6 @@ item:
   adr_requirement: No ADR for doctrine activation while renderer remains the derived execution-data owner; ADR required before
     moving product, gameplay, world, or streaming source truth into renderer contracts.
   fitness_function_requirement: Production, roadmap, docs, and planning validators; later slices add focused render-flow,
-    GPU primitive, and catch-up runtime tests.
+    GPU primitive, catch-up runtime, and procedural camera projection tests.
   ownership_mode: Complicated-subsystem renderer owner.
 edges: []

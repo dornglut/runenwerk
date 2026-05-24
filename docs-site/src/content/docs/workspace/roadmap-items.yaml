@@ -681,9 +681,9 @@ items:
   - task production:check
   - task docs:validate
   - task planning:validate
-  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090,
-    WR-091, WR-092, WR-101 implementation contracts, WR-093 closeout contract, the separate behavior-authoring intake,
-    and a bounded-contract closeout for WR-089.
+  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090, WR-091,
+    WR-092, WR-101 implementation contracts, WR-093 closeout contract, the separate behavior-authoring intake, and a bounded-contract
+    closeout for WR-089.
   current_decision: Intake accepted as a doctrine-first hardening track. WR-089 must not absorb indirect draw, primitive dispatch,
     graph catch-up, procedural camera, behavior-authoring, or unbounded population implementation.
   current_call: Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090,
@@ -918,8 +918,8 @@ items:
   - task production:validate
   - task production:check
   - task planning:validate
-  next_evidence: Promote only after WR-091 closes. Implementation must prove graph-level bounded repeated pass execution
-    from runtime fixed-time resources, deterministic submitted substeps, iteration-scoped uniform projection, input/redraw-rate
+  next_evidence: Promote only after WR-091 closes. Implementation must prove graph-level bounded repeated pass execution from
+    runtime fixed-time resources, deterministic submitted substeps, iteration-scoped uniform projection, input/redraw-rate
     invariance, and resource sequencing across substeps.
   current_decision: Ready-next graph scheduling slice after primitive dispatch is runtime-proven.
   current_call: Add fixed-step catch-up as render-flow graph scheduling using FixedTimeConfig, FixedTimeState, and CatchupBudget;
@@ -1001,9 +1001,8 @@ items:
   - task production:validate
   - task production:check
   - task planning:validate
-  next_evidence: Promote only after WR-092 closes. Implementation must prove reusable procedural 2D camera projection,
-    fill-viewport aspect correctness, equal projected world x/y scale, and boids resize evidence without moving camera
-    truth into PreparedViewFrame.
+  next_evidence: Promote only after WR-092 closes. Implementation must prove reusable procedural 2D camera projection, fill-viewport
+    aspect correctness, equal projected world x/y scale, and boids resize evidence without moving camera truth into PreparedViewFrame.
   current_decision: Ready-next procedural camera slice after graph catch-up scheduling makes simulation timing independent
     from redraw/input cadence.
   current_call: Add reusable procedural camera projection and sprite sizing contracts; do not patch boids-only draw parameters
@@ -1085,7 +1084,8 @@ items:
   next_evidence: Promote only after WR-101 closes. Close the hardening track only when runtime evidence proves indirect validation,
     primitive shader dispatch, graph catch-up scheduling, procedural camera projection, benchmarks, and docs.
   current_decision: Ready-next evidence and closeout slice for PT-RENDER-PROCEDURAL-POPULATION-HARDENING.
-  current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and camera projection evidence.
+  current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and
+    camera projection evidence.
   first_move: After WR-101 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-006" --roadmap "WR-093".
   main_blocker: Waiting on WR-101 procedural camera projection closeout.
   why_not_ready: ''
@@ -1188,6 +1188,103 @@ items:
     focused runtime evidence and code tests before implementation.
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor shell,
     and app runtime evidence owners.
+- id: WR-103
+  title: Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation
+  diagram_title: Sparse SDF runtime governance
+  alias: RENDERSDFRUNTIME
+  lane: Render planning
+  dependency_level: L4
+  gate: Governed shader-bound sparse SDF runtime track activation
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 3
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.2
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-066
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/design/active/sparse-sdf-terrain-runtime-integration-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-103-shader-bound-sparse-sdf-terrain-runtime-governance-and-track-activation/plan.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task puml:validate
+  - task docs:validate
+  next_evidence: Complete PM-RENDER-SDF-RUNTIME-001 with active shader-bound sparse SDF terrain runtime design, production
+    track activation, WR-103 governance row, implementation contract, and follow-on runtime milestones before any engine or
+    shader implementation starts.
+  current_decision: WR-103 is a docs/governance row for PT-RENDER-SDF-RUNTIME. It may update planning docs, the active runtime
+    integration design, and the implementation contract only.
+  current_call: Activate a follow-on shader-bound sparse SDF terrain runtime track without reopening completed PT-RENDER-SDF
+    or adding Rust, shader, asset, or example implementation in this row.
+  first_move: Run task production:plan -- --milestone "PM-RENDER-SDF-RUNTIME-001" --roadmap "WR-103".
+  main_blocker: Awaiting explicit promotion or current-candidate switch after existing current governance candidates and after
+    PM-RENDER-SDF-RUNTIME-001 documentation validates.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - shader-bound runtime
+  - governance only
+  - no engine code
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/sparse-sdf-terrain-runtime-integration-design.md
+    required_status: active
+    applies_to: discovery
+    reason: Runtime governance must be anchored by the active shader-bound sparse SDF terrain integration design.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: WR-103 consumes the accepted sparse SDF residency and conservative raymarch doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: WR-103 must preserve product-owned SDF truth and renderer-owned derived GPU residency boundaries.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: WR-103 is a follow-up to completed SDF runtime evidence and records the shader-bound terrain runtime gap.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-103-shader-bound-sparse-sdf-terrain-runtime-governance-and-track-activation/plan.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-103 execution must follow the docs-only governance and track activation contract.
+  ddd_owner: engine render plugin with domain/world_sdf source-truth input ownership
+  adr_requirement: No ADR for docs-only governance. Require an ADR or accepted design update before a follow-on WR changes
+    durable GPU ABI ownership, dependency direction, SDF source-truth authority, fallback legality, or cross-domain product
+    contracts.
+  fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime
+    WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative,
+    shader-binding, evidence, and benchmark tests before implementation closeout.
+  ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
 edges:
 - source: WR-002
   target: WR-001
@@ -1423,3 +1520,33 @@ edges:
 - source: WR-099
   target: WR-100
   label: runtime-proven handoff
+- source: WR-062
+  target: WR-077
+  label: scale visibility and bounded working sets constrain world visual products
+- source: WR-064
+  target: WR-077
+  label: SDF residency supports field visual derived caches
+- source: WR-070
+  target: WR-077
+  label: temporal inputs support weather water atmosphere reconstruction data
+- source: WR-066
+  target: WR-103
+  label: completed SDF runtime evidence exposes shader-bound terrain runtime gap
+- source: WR-046
+  target: WR-104
+  label: UI doctrine
+- source: WR-054
+  target: WR-104
+  label: UI readiness contracts
+- source: WR-065
+  target: WR-078
+  label: SDF raymarch evidence supports field visual product evidence
+- source: WR-067
+  target: WR-078
+  label: mesh material handoff supports deformation evidence
+- source: WR-076
+  target: WR-078
+  label: particle VFX producer contract before cross-family evidence
+- source: WR-077
+  target: WR-078
+  label: world visual producer contract before cross-family evidence

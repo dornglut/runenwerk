@@ -1,16 +1,18 @@
 version: 1
 idea: Renderer procedural population behavior authoring and boids split merge dynamics after fixed-step and camera correctness
-source_path: ''
-owner: ''
+source_path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+owner: engine/procedural behavior ownership TBD
 created_at: '2026-05-24'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Deferred intake only. Do not fold behavior authoring into WR-089 or the hardening implementation slices.
+- Run architecture governance before applying or promoting this item because behavior authoring may belong to domain simulation,
+  product runtime, or another non-renderer owner.
+- Renderer can consume derived behavior evidence, but it must not become the source of product, gameplay, or semantic flock truth.
+- Record an ADR if the future design changes durable ownership, dependency direction, or cross-domain contracts.
 open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Which owner holds semantic flock identity, affinity, goals, wander fields, attractors, and split/merge policy?
+- Which active design should define source truth before this item leaves blocked_deferred?
+- What runtime evidence should prove behavior without making renderer procedural APIs own gameplay semantics?
 item:
   id: WR-102
   title: Procedural Population Behavior Authoring And Boids Dynamics
@@ -35,11 +37,14 @@ item:
   - WR-101
   write_scopes: []
   validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
+  next_evidence: Run architecture governance after WR-101 closes, choose the behavior source-truth owner, write or accept a
+    behavior-authoring design, then apply this intake only if the ownership and validation gates are clear.
+  current_decision: Deferred intake proposal only. It exists to keep richer flock behavior out of the renderer hardening track.
+  current_call: Keep behavior authoring separate from WR-089, WR-090, WR-091, WR-092, WR-101, and WR-093 until ownership,
+    dependencies, and validation evidence are explicit.
+  first_move: After WR-101 evidence exists, run architecture governance for behavior ownership and write an accepted design
+    before applying or promoting this proposal.
+  main_blocker: Behavior source-truth owner and accepted design evidence are intentionally unresolved.
   why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
   completion_quality: not_applicable
   known_quality_gaps: []
@@ -48,8 +53,10 @@ item:
   - intake proposal
   - await approval
   decision_gates: []
-  ddd_owner: TBD
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
+  ddd_owner: TBD; renderer is a consumer of derived behavior evidence, not semantic behavior source truth.
+  adr_requirement: ADR required if the future design changes behavior ownership, renderer dependency direction, or cross-domain
+    runtime contracts.
+  fitness_function_requirement: Define before promotion; must prove semantic behavior source truth, renderer consumption,
+    and no hidden renderer-owned gameplay policy.
+  ownership_mode: Deferred ownership review.
 edges: []

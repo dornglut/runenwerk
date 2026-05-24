@@ -118,6 +118,10 @@ path = "examples/render_temporal_production_evidence.rs"
 name = "render_hybrid_ray_sdf_raster_runtime_proof"
 path = "examples/render_hybrid_ray_sdf_raster_runtime_proof.rs"
 
+[[example]]
+name = "render_product_visual_evidence"
+path = "examples/render_product_visual_evidence.rs"
+
 [[bench]]
 name = "phase35_runtime"
 harness = false

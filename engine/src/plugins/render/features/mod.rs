@@ -21,6 +21,7 @@ pub const PROCEDURAL_WORLD_RENDER_FEATURE_LABEL: &str = "procedural.world";
 pub const DETAIL_RENDER_FEATURE_LABEL: &str = "detail";
 pub const MATERIAL_RENDER_FEATURE_LABEL: &str = "material";
 pub const PARTICLE_VFX_RENDER_FEATURE_LABEL: &str = "particle.vfx";
+pub const WORLD_VISUAL_RENDER_FEATURE_LABEL: &str = "world.visual";
 pub const DEFORMATION_RENDER_FEATURE_LABEL: &str = "deformation";
 pub const WIND_FIELDS_RENDER_FEATURE_LABEL: &str = "wind.fields";
 pub const EDITOR_PICKING_RENDER_FEATURE_LABEL: &str = "editor.picking";
@@ -36,6 +37,7 @@ pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(8);
 pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(9);
 pub const WIND_FIELDS_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(10);
 pub const PARTICLE_VFX_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(11);
+pub const WORLD_VISUAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(12);
 
 const fn render_feature_id(raw: u64) -> RenderFeatureId {
     match RenderFeatureId::try_from_raw(raw) {
@@ -361,6 +363,7 @@ impl RenderFeatureRegistryResource {
                 .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(particle_vfx_render_feature_descriptor());
+        self.upsert_descriptor(world::world_visual_render_feature_descriptor());
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 DEFORMATION_RENDER_FEATURE_ID,

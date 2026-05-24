@@ -1894,6 +1894,122 @@ tracks:
           - Timestamp-query evidence is capability-gated; portable examples record unsupported timestamp queries as typed diagnostics.
           - Perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
         completion_audit: docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
+  - id: PT-RENDER-SDF-RUNTIME
+    title: Shader-Bound Sparse SDF Terrain Runtime Platform
+    state: active
+    owner: engine
+    target_completion_quality: runtime_proven
+    strategic_goal: Turn completed SDF residency and raymarch inspection evidence into a reusable shader-bound sparse SDF terrain runtime path without making renderer code own SDF product truth.
+    success_criteria:
+      - Sparse SDF terrain rendering consumes renderer-owned page table, brick atlas, distance mip, and candidate-list GPU resources from shader bindings.
+      - Fullscreen terrain raymarching remains one bounded pass per prepared view and is never multiplied by chunks, entities, or source payload counts.
+      - Renderer diagnostics fail closed for missing residency, stale generations, unsupported limits, candidate explosion, unsafe overstep, over-budget residency, and empty candidate coverage.
+      - Camera-relative world framing keeps endless-world coordinates independent from fragile absolute f32 positions.
+      - The existing procedural sky SDF terrain example remains an analytic visual demo; production proof uses a dedicated sparse SDF runtime example.
+    milestones:
+      - id: PM-RENDER-SDF-RUNTIME-001
+        title: Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation
+        kind: design
+        state: active
+        goal: Establish the shader-bound sparse SDF terrain runtime track, source-truth contract, gap matrix, implementation milestones, and WR governance row.
+        outcome: Renderer SDF runtime work has an active design, applied WR-103 governance row, production milestones, and explicit non-goals before engine or shader code changes begin.
+        dependencies:
+          - PM-RENDER-SDF-004
+        roadmap_links:
+          - WR-103
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sparse-sdf-terrain-runtime-integration-design.md
+            required_status: active
+            reason: Governance must be anchored by the active shader-bound sparse SDF terrain runtime design.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-world-rendering-and-raymarch-acceleration-design.md
+            required_status: accepted
+            reason: Runtime governance consumes accepted sparse SDF residency and conservative raymarch doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/sdf-product-renderer-and-gpu-residency-design.md
+            required_status: accepted
+            reason: Runtime governance must preserve product-owned SDF truth and renderer-owned derived GPU residency boundaries.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-103-shader-bound-sparse-sdf-terrain-runtime-governance-and-track-activation/plan.md
+            required_status: active
+            reason: WR-103 execution must follow the docs-only governance and track activation contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - PT-RENDER-SDF remains completed and is not reopened to justify the runtime gap.
+          - The active design records current analytic-example behavior, existing inspection-only renderer SDF evidence, and the missing shader-bound sparse terrain runtime path.
+          - Follow-on implementation milestones have disjoint responsibilities for GPU ABI, runtime example, evidence, benchmarks, docs, and closeout.
+          - No Rust, shader, asset, or example implementation starts until a follow-on WR has accepted roadmap evidence and a production implementation contract.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Shader-bound sparse SDF GPU ABI and bind-plan implementation remains PM-RENDER-SDF-RUNTIME-002 scope.
+          - Dedicated sparse SDF terrain runtime example and WGSL binding consumption remains PM-RENDER-SDF-RUNTIME-003 scope.
+          - Runtime evidence, benchmarks, docs, and track closeout remain PM-RENDER-SDF-RUNTIME-004 scope.
+          - Real open-world terrain product integration remains linked to PM-SDF-OW-002 and is not closed by this renderer runtime track.
+          - Final no-gap renderer verification remains PT-RENDER-PERFECTION scope.
+        completion_audit: ''
+      - id: PM-RENDER-SDF-RUNTIME-002
+        title: Sparse SDF GPU ABI And Runtime Bind Plan
+        kind: implementation
+        state: designing
+        goal: Define and implement renderer-owned sparse SDF GPU resources, stable layout derivation, runtime bind plans, and fail-closed diagnostics for shader traversal.
+        outcome: Render flows can bind derived page table, brick atlas, distance mip, candidate-list, generation, and camera-relative framing resources without moving SDF source truth into renderer state.
+        dependencies:
+          - PM-RENDER-SDF-RUNTIME-001
+          - PM-RENDER-SDF-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sparse-sdf-terrain-runtime-integration-design.md
+            required_status: accepted
+            reason: GPU ABI and runtime bind-plan implementation requires accepted shader-bound runtime doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - domain/world_sdf::SdfChunkPayload remains source truth and renderer resources are derived from source generations.
+          - GPU layout derivation is deterministic, testable, and rejects stale, missing, over-budget, unsupported, or unsafe traversal inputs.
+          - Runtime bind plans are renderer-facing contracts, not backend handles leaking into domain, app, or UI layers.
+      - id: PM-RENDER-SDF-RUNTIME-003
+        title: Shader-Bound Sparse Terrain Runtime Example
+        kind: implementation
+        state: designing
+        goal: Add a dedicated sparse SDF terrain runtime example that proves fullscreen shader traversal over renderer-owned sparse SDF resources.
+        outcome: A production-oriented example renders deterministic synthetic SDF terrain payloads through shader-bound page table, brick atlas, distance mip, and candidate-list resources.
+        dependencies:
+          - PM-RENDER-SDF-RUNTIME-002
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sparse-sdf-terrain-runtime-integration-design.md
+            required_status: accepted
+            reason: Example implementation must follow the accepted runtime binding, diagnostics, and non-analytic proof contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - The example uses one fullscreen terrain raymarch pass per view.
+          - WGSL consumes sparse SDF resource bindings; analytic-only terrain math cannot satisfy the milestone.
+          - Deterministic synthetic `SdfChunkPayload` products unblock renderer proof without depending on final open-world procgen.
+      - id: PM-RENDER-SDF-RUNTIME-004
+        title: Sparse SDF Runtime Evidence Benchmarks Docs And Closeout
+        kind: hardening
+        state: designing
+        goal: Prove the shader-bound sparse SDF terrain runtime through evidence commands, focused tests, benchmarks, docs, and production closeout.
+        outcome: The follow-on runtime track can claim runtime_proven only with shader-bound evidence, performance diagnostics, docs, and explicit remaining quality gaps.
+        dependencies:
+          - PM-RENDER-SDF-RUNTIME-003
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/sparse-sdf-terrain-runtime-integration-design.md
+            required_status: accepted
+            reason: Closeout must follow accepted shader-bound sparse SDF runtime evidence doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+            required_status: accepted
+            reason: Evidence and closeout must preserve accepted renderer production-readiness diagnostics.
+        evidence_gates: []
+        acceptance_criteria:
+          - Evidence proves shader-bound sparse SDF traversal is not analytic-only terrain math.
+          - Tests cover GPU-layout derivation, missing and stale residency diagnostics, candidate-list bounds, distance-mip safety, and camera-relative far-origin behavior.
+          - Docs distinguish renderer runtime proof from PM-SDF-OW-002 real open-world terrain product integration.
   - id: PT-RENDER-MESH-MATERIAL
     title: Mesh Material Lighting Shader And Asset Handoff Platform
     state: completed
@@ -2364,7 +2480,7 @@ tracks:
         completion_audit: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
   - id: PT-RENDER-PRODUCT-VISUALS
     title: Product Visual Producers Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Integrate product-owned particles, VFX, vegetation, water, atmosphere, weather, trails, decals, and animation producers with renderer execution contracts.
@@ -2448,7 +2564,7 @@ tracks:
       - id: PM-RENDER-PRODUCT-VISUALS-003
         title: Vegetation Water Atmosphere Weather And Field Visuals
         kind: implementation
-        state: designing
+        state: completed
         goal: Integrate vegetation, grass, water, wetness, atmosphere, weather, and field-driven visual products.
         outcome: World visual product families consume renderer scale, SDF, temporal, and product-surface capabilities without moving semantics into renderer code.
         dependencies:
@@ -2463,15 +2579,24 @@ tracks:
             path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
             required_status: accepted
             reason: World visual producer integration requires accepted producer doctrine.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-077-renderer-product-visuals-vegetation-water-atmosphere-weather-and-field-visuals/closeout.md
+            required_status: completed
+            reason: PM-RENDER-PRODUCT-VISUALS-003 requires completed world visual producer contract closeout evidence.
         acceptance_criteria:
           - Vegetation, water, atmosphere, weather, and field visual states remain product-owned.
           - Renderer diagnostics expose residency, scale band, fallback, and unsupported capability state.
           - Far-field and summary visual products use bounded working sets.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Animation/deformation and cross-family product visual evidence remain PM-RENDER-PRODUCT-VISUALS-004 / WR-078 scope.
+          - Runtime production examples, benchmark artifacts, hardware profiles, and final no-gap stack verification remain downstream product-visual and perfectionist-audit scope.
+          - PM-RENDER-PRODUCT-VISUALS-003 does not claim product-domain simulation truth, water/weather authoring completeness, backend-specific visual quality, runtime_proven, or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-077-renderer-product-visuals-vegetation-water-atmosphere-weather-and-field-visuals/closeout.md
       - id: PM-RENDER-PRODUCT-VISUALS-004
         title: Animation Deformation And Product Visual Evidence
         kind: hardening
-        state: designing
+        state: completed
         goal: Integrate animation/deformation visual producers and close product visual producer evidence.
         outcome: Product visual producers can claim runtime_proven with examples, docs, benchmarks, and diagnostics across representative families.
         dependencies:
@@ -2486,11 +2611,20 @@ tracks:
             path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
             required_status: accepted
             reason: Product visual production evidence must follow accepted producer doctrine.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-PRODUCT-VISUALS-004 requires completed product visual evidence closeout.
         acceptance_criteria:
           - Representative product visual examples prove particles/VFX, world visuals, and animation/deformation handoff.
           - Docs explain product-domain ownership and renderer execution boundaries.
           - Any missing product-domain contracts are recorded as quality gaps.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - perfectionist_verified remains blocked until PT-RENDER-PERFECTION performs the final no-gap renderer audit.
+          - Product-domain animation, VFX, vegetation, water, atmosphere, weather, field, freshness, fallback legality, and authoring workflows remain outside renderer ownership.
+          - Hardware-specific visual quality, vendor certification, and backend-specific product visual captures remain outside this bounded product visual evidence slice.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md
   - id: PT-RENDER-PERFECTION
     title: Renderer Production Audit And Perfectionist Verification
     state: active
@@ -3304,3 +3438,181 @@ tracks:
           - Final audit report links completed runtime artifacts, API review, examples, docs, roadmap, production, and drift-check evidence.
           - Every prerequisite milestone is completed with runtime_proven or stronger evidence where implementation changed runtime behavior.
           - completion_quality may be perfectionist_verified only when known_quality_gaps is empty.
+  - id: PT-GAME-RUNTIME-UI
+    title: Game Runtime UI Projection And HUD Platform
+    state: active
+    owner: workspace
+    target_completion_quality: runtime_proven
+    strategic_goal: Turn completed UI Designer contracts into a runtime-proven game UI projection and HUD platform with explicit ownership, fail-closed diagnostics, engine-owned UI expression submission, and SDF screen-HUD proof without moving gameplay or render truth into UI.
+    success_criteria:
+      - PT-UI-DESIGN remains completed design-contract input and is not reopened to justify runtime claims.
+      - Game-runtime UI projection consumes shared Canonical UI IR and game-runtime target policy without depending on editor shell ownership.
+      - UI definitions bind only to read-only game/runtime view-model packets and emit validated intent proposals.
+      - Engine UI submission remains generic expression infrastructure; game HUD semantics stay with the accepted game-runtime UI owner or proof adapter.
+      - SDF render-flow proof shows FPS/status and tab controls rendered in-frame through UI composition, not WindowState title text or debug overlay reuse.
+      - Runtime-proven closeout lists known gaps truthfully and creates a separate perfectionist-audit intake before any no-gap claim.
+    milestones:
+      - id: PM-GAME-RUNTIME-UI-001
+        title: Governance Owner Boundary And Code Truth Matrix
+        kind: design
+        state: designing
+        goal: Establish the governance contract, active design, owner-boundary decision path, code-truth matrix, evidence matrix, hard blockers, and disjoint follow-on WR candidates before game UI implementation.
+        outcome: The game-runtime UI track has an active design, roadmap intake row, architecture-governance findings, production metadata, and follow-on implementation slices without changing app, domain, engine, renderer, or SDF runtime code.
+        dependencies:
+          - PM-UI-DESIGN-010
+        roadmap_links:
+          - WR-104
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: active
+            reason: Governance must be anchored by the active game-runtime UI projection and HUD platform design.
+        evidence_gates: []
+        acceptance_criteria:
+          - Architecture governance names DDD owner candidates, dependency direction, translation boundaries, ADR need, fitness functions, and ownership mode.
+          - Current SDF, engine UI submission, debug metrics, UI runtime, and UI definition code reality is reconciled against accepted UI Designer contracts.
+          - Follow-on WR candidates have disjoint write scopes, dependency order, validation gates, runtime evidence requirements, and stop conditions.
+          - No product implementation starts until a follow-on WR has accepted roadmap evidence and a production implementation contract.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - PM-GAME-RUNTIME-UI-002 through PM-GAME-RUNTIME-UI-007 remain unimplemented and must not be inferred complete from governance setup.
+          - No game-runtime UI owner crate, target extension implementation, engine UI producer registry, SDF HUD runtime proof, or evidence hardening is implemented in this milestone.
+        completion_audit: ''
+      - id: PM-GAME-RUNTIME-UI-002
+        title: Game Runtime Target Extension Contract
+        kind: design
+        state: designing
+        goal: Decide the accepted owner boundary for game-runtime UI target extensions, HUD vocabulary, safe-area and input policy, projection diagnostics, and ADR need.
+        outcome: Game-runtime UI target extensions have an accepted ownership and projection contract before code introduces a new owner crate or runtime behavior.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: Target extension implementation must follow an accepted game-runtime UI owner-boundary design.
+        evidence_gates: []
+        acceptance_criteria:
+          - Owner boundary for future game-runtime UI target extensions is accepted before any new crate or module owns game UI semantics.
+          - Game-runtime target profile covers screen HUD, safe areas, input/navigation policy, platform prompts, accessibility, performance/readability budgets, and unsupported-feature diagnostics.
+          - ADR need is explicitly resolved before any new owner crate or source-truth authority change.
+      - id: PM-GAME-RUNTIME-UI-003
+        title: View-Model And Intent Contract Activation
+        kind: implementation
+        state: designing
+        goal: Implement read-only game/runtime view-model packages and validated game UI intent proposals without UI-owned mutation.
+        outcome: Game-runtime UI can display domain-owned state and emit validated intent proposals while the owning domain, app, or example remains responsible for mutation.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-002
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: View-model and intent activation must preserve the accepted game-runtime UI mutation boundary.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+            required_status: accepted
+            reason: Game-runtime view-model and intent contracts must consume the accepted UI Designer binding doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - View-model packages are read-only snapshots or packets owned by the accepted game/runtime domain boundary.
+          - UI intent output is validated, typed, source-mapped, and rejected fail-closed when capability, binding, or policy checks fail.
+          - No UI definition, projection, or runtime frame mutates gameplay, render, scene, simulation, save-game, network, or project truth directly.
+      - id: PM-GAME-RUNTIME-UI-004
+        title: Generic Runtime UI Expression Submission
+        kind: implementation
+        state: designing
+        goal: Evolve engine UI submission into deterministic producer registration and ordering for screen HUD, scene overlay, debug overlay, and later UI routes.
+        outcome: Engine runtime owns generic UI expression submission while game HUD semantics stay with game-runtime UI owners and proof adapters.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-003
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: Engine UI submission must remain expression infrastructure and must not become game semantic authority.
+        evidence_gates: []
+        acceptance_criteria:
+          - Runtime UI producers have typed registration, deterministic ordering, and diagnostics for conflicts, denied capabilities, stale data, and unsupported target routes.
+          - Screen HUD, scene overlay, debug overlay, and later routes are ordered by policy rather than hardcoded special cases.
+          - Engine runtime composes expressions but does not own game HUD vocabulary, gameplay view-models, or game intent mutation.
+      - id: PM-GAME-RUNTIME-UI-005
+        title: SDF Screen HUD Runtime Proof
+        kind: implementation
+        state: designing
+        goal: Replace SDF window-title view controls with in-frame FPS/status and tab controls through runtime UI composition.
+        outcome: The SDF render-flow example proves screen HUD rendering and validated tab intent behavior while SDF/example state remains the mutation owner.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: The SDF proof must follow the accepted screen HUD target and render-flow composition contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - FPS/status and tab controls render in-frame through scene output copied to surface.color followed by built-in UI composite.
+          - WindowState title text no longer carries interactive SDF view-mode UI state.
+          - UI tab selection emits a validated view-mode intent proposal, and SDF/example state applies accepted mutation.
+          - The proof does not implement nameplates, damage numbers, boss frames, split-screen UI, or entity-attached/world-space UI.
+      - id: PM-GAME-RUNTIME-UI-006
+        title: Evidence Docs API Ergonomics And Hardening
+        kind: hardening
+        state: designing
+        goal: Add replayable proof, diagnostics snapshots, accessibility and performance evidence where supported, usage docs, and focused examples.
+        outcome: Game-runtime UI runtime behavior is inspectable, reproducible, documented, and honest about unsupported or deferred evidence.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-005
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: Evidence hardening must preserve the accepted runtime proof and ownership doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Replayable proof artifacts cover success, invalid intent, missing view-model, denied capability, stale data, and unsupported target-profile scenarios.
+          - Accessibility, performance, and visual evidence are recorded where the runtime supports them; unsupported checks are explicit typed gaps.
+          - Public guides and examples teach the preferred game-runtime UI target, view-model, intent, and engine submission flow without internal shortcuts.
+      - id: PM-GAME-RUNTIME-UI-007
+        title: Runtime-Proven Closeout And Perfectionist Audit Intake
+        kind: release
+        state: designing
+        goal: Close the track at runtime_proven only, list known gaps honestly, and create a separate no-gap/perfectionist audit intake before any perfectionist_verified claim.
+        outcome: PT-GAME-RUNTIME-UI has runtime-proven closeout evidence and a separate perfectionist audit path for zero-gap certification.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-006
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: Final closeout must follow accepted runtime-proven evidence and audit-handoff doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Closeout links completed runtime proof, diagnostics, docs, examples, planning, roadmap, and production evidence.
+          - Known quality gaps are listed truthfully and do not block runtime_proven completion unless they contradict the SDF screen-HUD proof.
+          - Any perfectionist_verified claim is blocked behind a separate accepted no-gap audit intake with empty known gaps.
+      - id: PM-GAME-RUNTIME-UI-008
+        title: World Space And Screen Projected Attachment UI
+        kind: design
+        state: deferred
+        goal: Defer nameplates, damage numbers, boss frames, split-screen attachment, and entity-attached UI until authored binding contracts and runtime formation seams are accepted.
+        outcome: World-space and screen-projected attachment UI remains outside the SDF screen-HUD proof and gets its own accepted design before implementation.
+        dependencies:
+          - PM-GAME-RUNTIME-UI-007
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: accepted
+            reason: Attachment UI requires explicit authored binding contracts and runtime formation seams.
+        evidence_gates: []
+        acceptance_criteria:
+          - Entity-attached UI is not treated as a follow-on patch to the SDF screen HUD proof.
+          - Authored binding, spatial anchor, visibility, culling, occlusion, safe-area, input, and accessibility contracts are accepted before implementation.
+          - Gameplay, world, entity, and render truth remain outside UI definition and projection ownership.

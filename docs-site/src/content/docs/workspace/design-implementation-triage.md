@@ -139,6 +139,7 @@ Blocker weight:
 | WR-092 | Fixed Step Graph Catch Up Scheduling | P0 | V4 | B2 | 2.6 | Add fixed-step catch-up as render-flow graph scheduling using FixedTimeConfig, FixedTimeState, and CatchupBudget; do not add boids-local timing logic. | Waiting on WR-091 primitive shader dispatch closeout. |
 | WR-101 | Procedural Camera And View Projection | P0 | V4 | B2 | 2.6 | Add reusable procedural camera projection and sprite sizing contracts; do not patch boids-only draw parameters or make PreparedViewFrame own camera truth. | Waiting on WR-092 graph catch-up scheduling closeout. |
 | WR-093 | Procedural Population Hardening Evidence Benchmarks Docs And Closeout | P0 | V4 | B2 | 3.7 | Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and camera projection evidence. | Waiting on WR-101 procedural camera projection closeout. |
+| WR-103 | Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation | P1 | V4 | B3 | 2.2 | Activate a follow-on shader-bound sparse SDF terrain runtime track without reopening completed PT-RENDER-SDF or adding Rust, shader, asset, or example implementation in this row. | Awaiting explicit promotion or current-candidate switch after existing current governance candidates and after PM-RENDER-SDF-RUNTIME-001 documentation validates. |
 
 ## Archived And Deferred Registers
 

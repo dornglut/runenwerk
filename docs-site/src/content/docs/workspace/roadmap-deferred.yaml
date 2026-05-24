@@ -240,86 +240,6 @@ items:
   adr_requirement: Accepted gameplay design/ADR required before implementation.
   fitness_function_requirement: Gameplay dependency-direction and editor boundary checks required.
   ownership_mode: Deferred stream-aligned product work.
-- id: WR-077
-  title: Renderer Product Visuals Vegetation Water Atmosphere Weather And Field Visuals
-  diagram_title: Renderer Product Visuals Vegetation Water Atmosp
-  alias: WR077
-  lane: Discovery
-  dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
-  priority: P3
-  value: 2
-  blocker: 5
-  tc: 1
-  rr_oe: 2
-  du: 1
-  effort: 8
-  confidence: 0.3
-  expected_score: 0.2
-  rice: N/A
-  kano: Unknown
-  dependencies: []
-  write_scopes:
-  - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
-  diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-- id: WR-078
-  title: Renderer Product Visuals Animation Deformation And Evidence
-  diagram_title: Renderer Product Visuals Animation Deformation A
-  alias: WR078
-  lane: Discovery
-  dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
-  priority: P3
-  value: 2
-  blocker: 5
-  tc: 1
-  rr_oe: 2
-  du: 1
-  effort: 8
-  confidence: 0.3
-  expected_score: 0.2
-  rice: N/A
-  kano: Unknown
-  dependencies: []
-  write_scopes:
-  - docs-site/src/content/docs/engine/reference/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
-  diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
 - id: WR-079
   title: Renderer Cross Track Evidence Matrix
   diagram_title: Renderer Cross Track Evidence Matrix
@@ -440,3 +360,79 @@ items:
   adr_requirement: Assess during architecture governance review.
   fitness_function_requirement: Define before promotion to current_candidate.
   ownership_mode: TBD
+- id: WR-104
+  title: Game Runtime UI Projection Governance And Track Activation
+  diagram_title: Game Runtime UI Governance
+  alias: GAMERTUI
+  lane: Product planning
+  dependency_level: L4
+  gate: Governance before game UI implementation
+  planning_state: blocked_deferred
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 3
+  rr_oe: 3
+  du: 3
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.3
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-046
+  - WR-054
+  write_scopes:
+  - docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-game-runtime-ui-projection-and-hud-platf
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task puml:validate
+  - task docs:validate
+  next_evidence: Complete PM-GAME-RUNTIME-UI-001 with active design, architecture governance findings, code-truth matrix,
+    evidence matrix, hard blockers, and disjoint follow-on WR candidates.
+  current_decision: Intake proposal only; keep as blocked_deferred until accepted and explicitly promoted.
+  current_call: Use WR-104 only for PT-GAME-RUNTIME-UI governance/design activation. Do not implement app, domain, engine,
+    renderer, or SDF UI behavior in this row.
+  first_move: Run task production:plan -- --milestone PM-GAME-RUNTIME-UI-001 --roadmap WR-104 only after this intake is accepted
+    and promoted.
+  main_blocker: Missing accepted owner-boundary design, production-track activation, and follow-on WR contracts.
+  why_not_ready: New game-runtime UI product track has not passed roadmap intake, architecture governance closeout, or dependency
+    review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - game UI governance
+  - no implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+    required_status: active
+    applies_to: discovery
+    reason: Game-runtime UI governance must be anchored by the active projection and HUD platform design.
+  ddd_owner: workspace governance for future game-runtime UI target owner, with domain/ui/ui_definition, engine runtime/render,
+    and SDF example evidence support
+  adr_requirement: No ADR for governance setup; ADR or accepted design update required before adding a game-runtime UI owner
+    crate, changing dependency direction, moving source-truth authority, or making projection output authoritative.
+  fitness_function_requirement: Production, roadmap, planning, PUML, and docs validators for governance; later WRs must add
+    focused target-profile, view-model/intent, UI submission ordering, render-flow composite, and SDF runtime proof tests.
+  ownership_mode: Stream-aligned game runtime product work with complicated-subsystem support from UI definition and engine
+    render/runtime owners.

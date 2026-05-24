@@ -195,6 +195,13 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedParticleVfxTransparencyMode`
 - `PreparedParticleVfxTemporalInput`
 - `PreparedParticleVfxBatchState`
+- `PreparedWorldVisualFeatureResource`
+- `PreparedWorldVisualFeatureContribution`
+- `PreparedWorldVisualBatch`
+- `PreparedWorldVisualWorkingSet`
+- `PreparedWorldVisualKind`
+- `PreparedWorldVisualTemporalInput`
+- `PreparedWorldVisualBatchState`
 - `PreparedDeformationFeatureContribution`
 - `PreparedDeformationStream`
 
@@ -233,6 +240,7 @@ Feature ordering and fallback policies are explicit and live in ECS metadata:
 - `PreparedDrawFeatureResource`
 - `PreparedMaterialFeatureResource`
 - `PreparedParticleVfxFeatureResource`
+- `PreparedWorldVisualFeatureResource`
 - `PreparedDeformationFeatureResource`
 - `FeatureContributionStatus` (`Ready | Stale | Disabled | Missing`)
 - `FeatureFallbackPolicy` (`ReuseLastGood | EmptyContribution | SkipFeaturePasses | FailFrame`)
@@ -244,6 +252,7 @@ Built-in feature IDs:
 - `WORLD_DRAW_RENDER_FEATURE_ID`
 - `MATERIAL_RENDER_FEATURE_ID`
 - `PARTICLE_VFX_RENDER_FEATURE_ID`
+- `WORLD_VISUAL_RENDER_FEATURE_ID`
 - `DEFORMATION_RENDER_FEATURE_ID`
 
 Contribution collector contract:
@@ -258,6 +267,16 @@ Contribution collector contract:
   prepare batches, sorting/transparency intent, temporal input declarations,
   residency requests, and fallback/unsupported/over-budget batch states; the
   renderer only orders, inspects, and diagnoses the prepared contribution.
+- vegetation/water/atmosphere/weather/field visual contributions use
+  `PreparedWorldVisualFeatureResource` plus the registered
+  `world.visual.prepared` payload kind. Product domains prepare scale-band
+  batches, bounded working-set counts, temporal input declarations, residency
+  requests, and fallback/unsupported/over-budget batch states; the renderer
+  only orders, inspects, and diagnoses the prepared contribution.
+- animation/deformation contributions use `PreparedDeformationFeatureContribution`
+  and `PreparedDeformationStream`. Product domains own pose, skeleton,
+  animation graph, cloth, or deformation semantics; renderer evidence only
+  records prepared stream handoff identity and whether it was consumed.
 - `PreparedFrameContributions::diagnostics()` exposes typed collector diagnostics for missing resources, duplicate collector registration, and invalid registered payloads.
 
 ## Graph and Execution Compilation APIs
@@ -484,6 +503,16 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `RenderTemporalProductionEvidenceDiagnostic`
   - `RenderTemporalProductionEvidenceSeverity`
   - `inspect_render_temporal_production_evidence`
+  - `RenderProductVisualEvidenceRequest`
+  - `RenderProductVisualEvidenceReport`
+  - `RenderProductVisualEvidenceCounts`
+  - `RenderProductVisualFamilyEvidence`
+  - `RenderProductVisualFamily`
+  - `RenderProductVisualEvidenceDiagnostic`
+  - `RenderProductVisualEvidenceSeverity`
+  - `inspect_render_product_visual_evidence`
+  - `inspect_render_product_visual_prepared_feature`
+  - `inspect_render_product_visual_deformation_handoff`
   - `RenderRayQueryCapabilityProfile`
   - `RenderRayQueryCapabilityState`
   - `RenderRayQueryAccelerationResourceEvidence`
@@ -633,6 +662,8 @@ Production readiness inspection contract:
 - `inspect_render_temporal_inputs(...)` reports WR-070 temporal input availability, dynamic internal/output resolution, jitter sequence and phase, history resource/signature validity, reconstruction mode, native fallback state, and fail-closed diagnostics. Missing required inputs, hidden dynamic resolution, invalid history signatures, invalid jitter evidence, TAAU without dynamic-resolution evidence, and temporal reconstruction with invalid history and no native fallback are explicit diagnostics. The report is renderer execution evidence only; camera, scene, product, exposure, material reactivity, SDF, ray-query, freshness, fallback legality, and authority truth remain producer-owned.
 - `inspect_render_temporal_upscaling(...)` reports WR-071 optional upscaling adapter capability, invocation eligibility, ray reconstruction input availability, native fallback visibility, and fail-closed diagnostics. Unsupported adapters and missing required ray reconstruction inputs are valid only when native fallback is visible; adapter-required rendering, hidden fallback, missing unsupported reasons, stale temporal inputs, and missing ray input product/generation evidence are diagnostics. The report is renderer execution evidence only; vendor SDKs, camera, scene, SDF, ray-query, material, exposure, product freshness, fallback legality, and authority truth remain outside renderer ownership.
 - `inspect_render_temporal_production_evidence(...)` aggregates WR-070 temporal input inspection, WR-071 adapter/ray input inspection, runtime visual evidence references, CPU/GPU timing evidence, hardware profile identity, benchmark commands, raw artifact paths, and human report paths for WR-072 runtime readiness. Missing visual evidence, missing benchmark or artifact paths, unconsumed temporal/upscaling inspections, fallback-only visual claims, invalid history visuals, missing timing diagnostics, and broken temporal/ray input invariants are fail-closed diagnostics. Runtime proof remains renderer execution evidence; docs, artifacts, benchmark summaries, camera, scene, product, SDF, ray-query, material, exposure, fallback legality, and authority truth remain outside renderer ownership.
+- `inspect_render_product_visual_evidence(...)` aggregates WR-076 particle/VFX, WR-077 world visual, and WR-078 deformation handoff evidence with benchmark commands, raw artifact paths, and human report paths. Missing representative families, missing prepared batches or streams, unconsumed handoff evidence, fallback-only claims, over-budget or unsupported prepared states, missing artifacts, and renderer-owned product truth are fail-closed diagnostics.
+- `inspect_render_product_visual_prepared_feature(...)` converts registered prepared-frame payload inspection for `particle.vfx.prepared` and `world.visual.prepared` into product visual family evidence. `inspect_render_product_visual_deformation_handoff(...)` records `PreparedDeformationFeatureContribution` stream evidence without making pose, skeleton, animation graph, cloth, product freshness, or fallback legality renderer-owned.
 - `inspect_render_ray_query_capability(...)` reports WR-073 optional ray-query capability state, required capability labels, unsupported reasons, visible non-RT fallback, derived acceleration-resource lineage, build/update status, memory evidence, and backend-handle privacy diagnostics. Unsupported or disabled hardware can be valid when the reason and fallback are visible; hidden fallback, missing unsupported reasons, missing source lineage, stale resources without invalidation reasons, over-budget resources, and public backend-handle exposure fail closed. The report is renderer execution evidence only; scene, mesh, material, product, SDF, temporal, camera, exposure, fallback legality, and source truth remain producer-owned.
 - `cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof` builds the WR-074 portable hybrid proof that composes raster pass labels, SDF production evidence, temporal production evidence, supported and unsupported ray-query inspections, visible non-RT fallback evidence, and separated raster/SDF/temporal/ray-query/fallback timing labels. The example consumes public renderer inspection DTOs only; hardware RT execution, source truth, fallback legality, and the WR-075 hardware matrix remain outside this bounded contract.
 - [Renderer Ray Query Production Evidence](ray-query-production-evidence.md) records the WR-075 optional RT production evidence packet: capability matrix, fallback behavior, acceleration-resource lineage expectations, diagnostics, validation commands, and remaining non-goals.

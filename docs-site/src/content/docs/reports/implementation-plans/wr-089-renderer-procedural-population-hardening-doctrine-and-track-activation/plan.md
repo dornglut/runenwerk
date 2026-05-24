@@ -94,6 +94,23 @@ Owned files and exact modules:
 - `docs-site/src/content/docs/reports/implementation-plans/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/plan.md`:
   closeout contract updated to depend on `WR-101` evidence.
 
+## Implementation Steps
+
+1. Keep `WR-089` docs-only and verify the active hardening design preserves
+   renderer ownership of derived execution data only.
+2. Align the hardening intake, production track, and roadmap rows so the
+   implementation sequence is `WR-090`, `WR-091`, `WR-092`, `WR-101`, then
+   `WR-093`.
+3. Keep spatial hash, chunked unbounded populations, and richer behavior
+   authoring outside the hardening track through separate intake evidence.
+4. Confirm every follow-on implementation contract names exact owning files,
+   validation commands, stop conditions, and closeout evidence before product
+   code changes begin.
+5. Run the planning and docs validation gates listed below.
+6. Create the `WR-089` bounded-contract closeout only after those gates pass,
+   then update roadmap and production completion metadata in the same bounded
+   closeout slice.
+
 ## Acceptance Criteria
 
 - The hardening track exists in `production-tracks.yaml` with target
@@ -160,6 +177,25 @@ Validation:
 - `task production:check`
 - `task docs:validate`
 - `task planning:validate`
+
+## Perfectionist Closeout Audit
+
+`WR-089` can only close as `bounded_contract`. It activates doctrine, metadata,
+intake boundaries, and implementation contracts; it does not provide runtime or
+GPU proof for indirect draws, primitive dispatch, graph catch-up scheduling, or
+procedural camera projection.
+
+The closeout audit must reject `runtime_proven` or `perfectionist_verified` for
+this row. The completion metadata must keep these gaps visible:
+
+- indirect draw runtime hardening remains `WR-090`;
+- primitive shader dispatch remains `WR-091`;
+- graph catch-up scheduling remains `WR-092`;
+- procedural camera and view projection remains `WR-101`;
+- evidence, benchmarks, docs, and track closeout remain `WR-093`;
+- behavior authoring and richer boids dynamics remain separate deferred intake
+  work;
+- final no-gap renderer verification remains `PT-RENDER-PERFECTION`.
 
 ## Critical Review
 

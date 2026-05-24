@@ -165,6 +165,17 @@ package "PT-RENDER-SDF Sparse SDF World Rendering And Raymarch Acceleration Plat
 
 }
 
+package "PT-RENDER-SDF-RUNTIME Shader-Bound Sparse SDF Terrain Runtime Platform" {
+  component "PM-RENDER-SDF-RUNTIME-001 Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation\nkind=design\nstate=active\nWR=WR-103" as PM_RENDER_SDF_RUNTIME_001 <<active>>
+
+  component "PM-RENDER-SDF-RUNTIME-002 Sparse SDF GPU ABI And Runtime Bind Plan\nkind=implementation\nstate=designing\nWR=N/A" as PM_RENDER_SDF_RUNTIME_002 <<designing>>
+
+  component "PM-RENDER-SDF-RUNTIME-003 Shader-Bound Sparse Terrain Runtime Example\nkind=implementation\nstate=designing\nWR=N/A" as PM_RENDER_SDF_RUNTIME_003 <<designing>>
+
+  component "PM-RENDER-SDF-RUNTIME-004 Sparse SDF Runtime Evidence Benchmarks Docs And Closeout\nkind=hardening\nstate=designing\nWR=N/A" as PM_RENDER_SDF_RUNTIME_004 <<designing>>
+
+}
+
 package "PT-RENDER-MESH-MATERIAL Mesh Material Lighting Shader And Asset Handoff Platform" {
   component "PM-RENDER-MESH-MATERIAL-001 Mesh Material Lighting Handoff Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_MESH_MATERIAL_001 <<completed>>
 
@@ -203,9 +214,9 @@ package "PT-RENDER-PRODUCT-VISUALS Product Visual Producers Platform" {
 
   component "PM-RENDER-PRODUCT-VISUALS-002 Particles VFX Trails And Decals\nkind=implementation\nstate=completed\nWR=WR-076" as PM_RENDER_PRODUCT_VISUALS_002 <<completed>>
 
-  component "PM-RENDER-PRODUCT-VISUALS-003 Vegetation Water Atmosphere Weather And Field Visuals\nkind=implementation\nstate=designing\nWR=WR-077" as PM_RENDER_PRODUCT_VISUALS_003 <<designing>>
+  component "PM-RENDER-PRODUCT-VISUALS-003 Vegetation Water Atmosphere Weather And Field Visuals\nkind=implementation\nstate=completed\nWR=WR-077" as PM_RENDER_PRODUCT_VISUALS_003 <<completed>>
 
-  component "PM-RENDER-PRODUCT-VISUALS-004 Animation Deformation And Product Visual Evidence\nkind=hardening\nstate=designing\nWR=WR-078" as PM_RENDER_PRODUCT_VISUALS_004 <<designing>>
+  component "PM-RENDER-PRODUCT-VISUALS-004 Animation Deformation And Product Visual Evidence\nkind=hardening\nstate=completed\nWR=WR-078" as PM_RENDER_PRODUCT_VISUALS_004 <<completed>>
 
 }
 
@@ -272,6 +283,25 @@ package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" 
   component "PM-UI-LAB-PERF-005 Persistence Diff Apply API And Examples Ergonomics\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_005 <<designing>>
 
   component "PM-UI-LAB-PERF-006 Final No Gap Certification Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_006 <<designing>>
+
+}
+
+package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
+  component "PM-GAME-RUNTIME-UI-001 Governance Owner Boundary And Code Truth Matrix\nkind=design\nstate=designing\nWR=WR-104" as PM_GAME_RUNTIME_UI_001 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-002 Game Runtime Target Extension Contract\nkind=design\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_002 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-003 View-Model And Intent Contract Activation\nkind=implementation\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_003 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-004 Generic Runtime UI Expression Submission\nkind=implementation\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_004 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-005 SDF Screen HUD Runtime Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_005 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-006 Evidence Docs API Ergonomics And Hardening\nkind=hardening\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_006 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-007 Runtime-Proven Closeout And Perfectionist Audit Intake\nkind=release\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_007 <<designing>>
+
+  component "PM-GAME-RUNTIME-UI-008 World Space And Screen Projected Attachment UI\nkind=design\nstate=deferred\nWR=N/A" as PM_GAME_RUNTIME_UI_008 <<deferred>>
 
 }
 
@@ -347,6 +377,11 @@ PM_RENDER_SDF_002 -down-> PM_RENDER_SDF_003 : production prerequisite
 PM_RENDER_SCALE_003 -down-> PM_RENDER_SDF_003 : production prerequisite
 PM_RENDER_SDF_002 -down-> PM_RENDER_SDF_004 : production prerequisite
 PM_RENDER_SDF_003 -down-> PM_RENDER_SDF_004 : production prerequisite
+PM_RENDER_SDF_004 -down-> PM_RENDER_SDF_RUNTIME_001 : production prerequisite
+PM_RENDER_SDF_RUNTIME_001 -down-> PM_RENDER_SDF_RUNTIME_002 : production prerequisite
+PM_RENDER_SDF_004 -down-> PM_RENDER_SDF_RUNTIME_002 : production prerequisite
+PM_RENDER_SDF_RUNTIME_002 -down-> PM_RENDER_SDF_RUNTIME_003 : production prerequisite
+PM_RENDER_SDF_RUNTIME_003 -down-> PM_RENDER_SDF_RUNTIME_004 : production prerequisite
 PM_RENDER_PG_008 -down-> PM_RENDER_MESH_MATERIAL_001 : production prerequisite
 PM_RENDER_GPU_001 -down-> PM_RENDER_MESH_MATERIAL_001 : production prerequisite
 PM_RENDER_MESH_MATERIAL_001 -down-> PM_RENDER_MESH_MATERIAL_002 : production prerequisite
@@ -427,5 +462,13 @@ PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_003 : production prerequisite
 PM_UI_LAB_PERF_003 -down-> PM_UI_LAB_PERF_004 : production prerequisite
 PM_UI_LAB_PERF_004 -down-> PM_UI_LAB_PERF_005 : production prerequisite
 PM_UI_LAB_PERF_005 -down-> PM_UI_LAB_PERF_006 : production prerequisite
+PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
+PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
+PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite
+PM_GAME_RUNTIME_UI_003 -down-> PM_GAME_RUNTIME_UI_004 : production prerequisite
+PM_GAME_RUNTIME_UI_004 -down-> PM_GAME_RUNTIME_UI_005 : production prerequisite
+PM_GAME_RUNTIME_UI_005 -down-> PM_GAME_RUNTIME_UI_006 : production prerequisite
+PM_GAME_RUNTIME_UI_006 -down-> PM_GAME_RUNTIME_UI_007 : production prerequisite
+PM_GAME_RUNTIME_UI_007 -down-> PM_GAME_RUNTIME_UI_008 : production prerequisite
 
 @enduml

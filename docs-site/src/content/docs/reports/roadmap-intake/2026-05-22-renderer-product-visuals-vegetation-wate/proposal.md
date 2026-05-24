@@ -12,19 +12,18 @@ last_reviewed: 2026-05-22
 
 Idea: Renderer Product Visuals Vegetation Water Atmosphere Weather And Field Visuals
 Suggested title: Renderer Product Visuals Vegetation Water Atmosphere Weather And Field Visuals
-Initial planning state: `blocked_deferred`
+Current planning state: `completed`
 
 ## Governance Notes
 
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance completed in the WR-077 implementation contract.
+- Clean Architecture dependency direction and DDD owner are recorded in the contract.
+- No ADR is required while implementation stays inside accepted renderer execution, field product, SDF residency, scale, and temporal contracts and does not move product truth.
 
 ## Open Questions
 
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Promote only after stack selection confirms PM-RENDER-PRODUCT-VISUALS-003 is active.
+- Re-run production planning before current-candidate promotion.
 
 ## Apply Command
 

@@ -4,25 +4,24 @@ source_path: docs-site/src/content/docs/design/accepted/renderer-product-visual-
 owner: docs-site/src/content/docs/engine/reference/plugins/render
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance completed in the WR-078 implementation contract.
+- Clean Architecture dependency direction and DDD owner are recorded in the contract.
+- No ADR is required while implementation stays inside renderer evidence aggregation and does not move product truth or fallback authority.
 open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- 'Closed: PM-RENDER-PRODUCT-VISUALS-004 was activated after WR-078 promotion and production planning.'
+- 'Closed: WR-078 implementation completed with renderer-owned product visual evidence closeout.'
 item:
   id: WR-078
   title: Renderer Product Visuals Animation Deformation And Evidence
   diagram_title: Renderer Product Visuals Animation Deformation A
   alias: WR078
-  lane: Discovery
+  lane: Renderer product visuals
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Accepted product visual evidence contract
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +30,107 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-065
+  - WR-067
+  - WR-076
+  - WR-077
   write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - engine/examples
+  - engine/benches
+  - engine/benchmark-artifacts
   - docs-site/src/content/docs/engine/reference/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - docs-site/src/content/docs/reports/benchmarks/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-product-visuals-animation-defor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-078-renderer-product-visuals-animation-deformation-and-evidence
+  - docs-site/src/content/docs/reports/closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt --check
+  - cargo test -p engine render_product_visual_particles
+  - cargo test -p engine render_product_visual_world
+  - cargo test -p engine render_product_visual_evidence
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine --example render_product_visual_evidence
+  - cargo run -p engine --example render_product_visual_evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md
+  current_decision: Completed; renderer-owned product visual evidence now aggregates particle/VFX, world visual, and deformation handoff families with fail-closed diagnostics.
+  current_call: Archive WR-078 as completed after validation and production-track closeout.
+  first_move: Verify WR-078 closeout evidence and keep product visual track completion gated by production and roadmap checks.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - perfectionist_verified remains blocked until PT-RENDER-PERFECTION performs the final no-gap renderer audit.
+  - Product-domain animation, VFX, vegetation, water, atmosphere, weather, field, freshness, fallback legality, and authoring workflows remain outside renderer ownership.
+  - Hardware-specific visual quality, vendor certification, and backend-specific product visual captures remain outside this bounded product visual evidence slice.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
-  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  - evidence contract
+  - promotion ready
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: WR-078 implementation must follow accepted product visual producer doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-078-renderer-product-visuals-animation-deformation-and-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-078 implementation must follow the design-first product visual evidence contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-078 consumes completed particle/VFX product visual evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-077-renderer-product-visuals-vegetation-water-atmosphere-weather-and-field-visuals/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-078 consumes completed world visual product evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-078 consumes completed mesh/material handoff evidence for deformation-adjacent renderer inputs.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-078 consumes completed SDF raymarch acceleration evidence for field visual product consumption.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-078-renderer-product-visuals-animation-deformation-and-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-078 completion requires completed product visual evidence closeout.
+  ddd_owner: engine/src/plugins/render product visual evidence and public renderer docs
+  adr_requirement: No ADR required unless implementation changes animation/deformation ownership, durable cross-domain ABI, dependency direction, or fallback authority.
+  fitness_function_requirement: Product visual evidence tests/examples plus particle, world visual, runtime inspect, docs, roadmap, production, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform enabling stream-aligned product visual evidence.
+edges:
+- source: WR-065
+  target: WR-078
+  label: SDF raymarch evidence supports field visual product evidence
+- source: WR-067
+  target: WR-078
+  label: mesh material handoff supports deformation evidence
+- source: WR-076
+  target: WR-078
+  label: particle VFX producer contract before cross-family evidence
+- source: WR-077
+  target: WR-078
+  label: world visual producer contract before cross-family evidence
