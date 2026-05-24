@@ -1502,14 +1502,17 @@ tracks:
     state: active
     owner: engine
     target_completion_quality: runtime_proven
-    strategic_goal: Close the direct procedural population runtime gaps with fail-closed indirect draw validation, reusable renderer-dispatched GPU primitives, and graph-level fixed-step catch-up scheduling.
+    strategic_goal: Close the direct procedural population runtime gaps with fail-closed indirect draw validation, reusable renderer-dispatched GPU primitives, graph-level fixed-step catch-up scheduling, and reusable procedural camera projection.
     success_criteria:
       - Indirect draw sources distinguish direct, indexed direct, indirect, and indexed indirect submission with typed fail-closed validation.
       - Indirect argument buffer type, element count, byte size, byte-offset alignment, and byte-offset bounds are validated before submit.
       - GPU primitive plans lower into reusable renderer-owned shader dispatches rather than descriptor-only contracts.
       - U32 prefix scan supports arbitrary total counts through hierarchical block scan, block-sum scan, and block-offset propagation.
-      - Fixed-step catch-up is graph-level bounded repeated pass execution, not boids-local timing logic.
+      - Fixed-step catch-up is graph-level bounded repeated pass execution from runtime fixed-time resources, not boids-local timing logic.
+      - Cursor movement, mouse motion, redraw bursts, and resize events do not increase submitted simulation steps per real second.
+      - Procedural camera projection fills the viewport without letterbox or non-uniform stretch while preserving equal world x/y scale.
       - Spatial hash and chunked unbounded populations remain a separate intake/design item.
+      - Richer flock split/merge behavior remains a separate behavior-authoring intake/design item.
       - The track closes at runtime_proven only and does not claim perfectionist_verified.
     milestones:
       - id: PM-RENDER-POP-HARDEN-001
@@ -1541,8 +1544,9 @@ tracks:
             reason: PM-RENDER-POP-HARDEN-001 requires doctrine activation closeout evidence.
         acceptance_criteria:
           - WR-089 remains doctrine and track activation only.
-          - Implementation is split into WR-090 through WR-093.
+          - Implementation is split into WR-090, WR-091, WR-092, and WR-094, with WR-093 reserved for closeout.
           - Spatial hash and chunked unbounded populations remain a separate intake.
+          - Behavior authoring and richer boids dynamics remain a separate intake.
           - Track target is runtime_proven only; final no-gap proof remains PT-RENDER-PERFECTION.
         completion_quality: not_applicable
         known_quality_gaps: []
@@ -1613,8 +1617,8 @@ tracks:
         title: Fixed Step Graph Catch Up Scheduling
         kind: hardening
         state: ready_next
-        goal: Add graph-level bounded repeated pass execution for fixed-step catch-up.
-        outcome: Render-flow scheduling can submit 0..N bounded substeps deterministically while preserving ping-pong and primitive resource sequencing.
+        goal: Add graph-level bounded repeated pass execution for fixed-step catch-up using the existing runtime fixed-time source.
+        outcome: Render-flow scheduling can submit 0..N bounded substeps deterministically from runtime fixed-time resources while preserving ping-pong, primitive resource sequencing, and iteration-scoped uniform projection.
         dependencies:
           - PM-RENDER-POP-HARDEN-003
         roadmap_links:
@@ -1634,19 +1638,52 @@ tracks:
             reason: PM-RENDER-POP-HARDEN-004 requires graph catch-up scheduling closeout evidence.
         acceptance_criteria:
           - Graph scheduling owns repeated pass execution; boids does not implement private catch-up logic.
+          - Scheduling state consumes `FixedTimeConfig`, `FixedTimeState`, and `CatchupBudget` as timing source truth.
           - Scheduling state exposes fixed dt, accumulated time, submitted substeps, max substeps, and dropped/deferred time diagnostics.
-          - Tests prove deterministic 0..N submitted substeps and resource sequencing across substeps.
+          - Iteration-scoped uniform projection is supported for repeated pass regions without breaking frame-scoped uniform projection APIs.
+          - Tests prove deterministic 0..N submitted substeps, input/redraw-rate invariance, and resource sequencing across substeps.
         completion_quality: not_applicable
         known_quality_gaps: []
         completion_audit: ''
       - id: PM-RENDER-POP-HARDEN-005
+        title: Procedural Camera And View Projection
+        kind: hardening
+        state: ready_next
+        goal: Add reusable procedural 2D camera projection and sprite sizing contracts for aspect-correct population rendering.
+        outcome: Procedural examples can fill the target without letterbox or non-uniform stretch while keeping producer-owned camera intent separate from prepared view packets.
+        dependencies:
+          - PM-RENDER-POP-HARDEN-004
+        roadmap_links:
+          - WR-094
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+            required_status: active
+            reason: Procedural camera projection must follow the active hardening doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md
+            required_status: active
+            reason: WR-094 implementation must follow the accepted procedural camera projection contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-094-procedural-camera-and-view-projection/closeout.md
+            required_status: completed
+            reason: PM-RENDER-POP-HARDEN-005 requires procedural camera projection closeout evidence.
+        acceptance_criteria:
+          - Procedural camera contracts expose `ProceduralCamera2d`, `ProceduralCamera2dAspectPolicy`, `ProceduralCamera2dUniform`, and `ProceduralSpriteSizing`.
+          - FillViewport with fixed vertical axis keeps vertical world scale stable and lets horizontal visible span follow viewport aspect.
+          - Renderer derives projection uniforms from producer/example camera intent and surface dimensions without storing camera truth in `PreparedViewFrame`.
+          - Boids evidence proves no world stretch, no sprite aspect stretch, and stable simulation world bounds across landscape, portrait, square, and extreme aspect surfaces.
+        completion_quality: not_applicable
+        known_quality_gaps: []
+        completion_audit: ''
+      - id: PM-RENDER-POP-HARDEN-006
         title: Hardening Evidence Benchmarks Docs And Closeout
         kind: hardening
         state: ready_next
         goal: Close the hardening track with runtime evidence, benchmarks, public docs, and honest completion-quality metadata.
-        outcome: Renderer users can rely on documented fail-closed indirect draws, reusable primitive dispatch, and graph catch-up scheduling with runtime-proven evidence.
+        outcome: Renderer users can rely on documented fail-closed indirect draws, reusable primitive dispatch, graph catch-up scheduling, and procedural camera projection with runtime-proven evidence.
         dependencies:
-          - PM-RENDER-POP-HARDEN-004
+          - PM-RENDER-POP-HARDEN-005
         roadmap_links:
           - WR-093
         design_gates:
@@ -1661,13 +1698,14 @@ tracks:
         evidence_gates:
           - path: docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
             required_status: completed
-            reason: PM-RENDER-POP-HARDEN-005 requires evidence, benchmark, docs, and closeout proof.
+            reason: PM-RENDER-POP-HARDEN-006 requires evidence, benchmark, docs, and closeout proof.
           - path: docs-site/src/content/docs/reports/closeouts/pt-render-procedural-population-hardening-runtime-proven/closeout.md
             required_status: completed
             reason: The hardening track closes at runtime_proven only with explicit track-level closeout evidence.
         acceptance_criteria:
-          - Benchmarks cover indirect validation, primitive dispatch planning/execution, and fixed-step catch-up planning/execution.
+          - Benchmarks cover indirect validation, primitive dispatch planning/execution, fixed-step catch-up planning/execution, and procedural camera evidence paths where measurable.
           - Public render-flow docs and API reference match the implemented contracts.
+          - Boids docs and evidence cover input/redraw-rate invariance plus aspect-correct procedural camera projection.
           - Track closeout lists remaining quality gaps honestly and does not claim perfectionist_verified.
         completion_quality: not_applicable
         known_quality_gaps: []

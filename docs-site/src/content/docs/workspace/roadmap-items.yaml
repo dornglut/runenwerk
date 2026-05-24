@@ -670,6 +670,8 @@ items:
   - docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.yaml
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.md
   validations:
   - task roadmap:render
   - task roadmap:validate
@@ -679,12 +681,13 @@ items:
   - task production:check
   - task docs:validate
   - task planning:validate
-  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090 through
-    WR-093 implementation contracts, and a bounded-contract closeout for WR-089.
+  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090,
+    WR-091, WR-092, WR-094 implementation contracts, WR-093 closeout contract, the separate behavior-authoring intake,
+    and a bounded-contract closeout for WR-089.
   current_decision: Intake accepted as a doctrine-first hardening track. WR-089 must not absorb indirect draw, primitive dispatch,
-    graph catch-up, or unbounded population implementation.
-  current_call: Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090
-    through WR-093.
+    graph catch-up, procedural camera, behavior-authoring, or unbounded population implementation.
+  current_call: Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090,
+    WR-091, WR-092, WR-094, with WR-093 reserved for closeout.
   first_move: Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089 only
     after planning metadata and contracts validate.
   main_blocker: Doctrine activation and planning metadata must validate before implementation slices can begin.
@@ -694,7 +697,8 @@ items:
   completion_audit: ''
   diagram_call:
   - hardening doctrine
-  - split WR-090 to WR-093
+  - split WR-090 WR-091 WR-092 WR-094
+  - WR-093 closeout
   decision_gates:
   - kind: design
     path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
@@ -710,7 +714,7 @@ items:
   adr_requirement: No ADR for doctrine activation while renderer remains the derived execution-data owner; ADR required before
     moving product, gameplay, world, or streaming source truth into renderer contracts.
   fitness_function_requirement: Production, roadmap, docs, and planning validators; later slices add focused render-flow,
-    GPU primitive, and catch-up runtime tests.
+    GPU primitive, catch-up runtime, and procedural camera projection tests.
   ownership_mode: Complicated-subsystem renderer owner.
 - id: WR-090
   title: Indirect Draw Contract Hardening
@@ -883,13 +887,20 @@ items:
   dependencies:
   - WR-091
   write_scopes:
+  - engine/src/runtime/fixed_time.rs
   - engine/src/plugins/render/api/flow.rs
   - engine/src/plugins/render/api/passes.rs
+  - engine/src/plugins/render/api/bindings.rs
   - engine/src/plugins/render/graph/pass_graph.rs
   - engine/src/plugins/render/graph/execution_plan.rs
   - engine/src/plugins/render/graph/validation.rs
   - engine/src/plugins/render/graph/prepared_validation.rs
+  - engine/src/plugins/render/runtime/frame_prepare.rs
+  - engine/src/plugins/render/renderer/render_flow/execute.rs
   - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/src/plugins/render/renderer/render_flow/runtime_resources.rs
+  - engine/src/plugins/render/renderer/render_flow/runtime_resources/realize.rs
+  - engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs
   - engine/examples/boids_render_flow/rendering/state.rs
   - engine/examples/boids_render_flow/rendering/evidence.rs
   - docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md
@@ -907,10 +918,12 @@ items:
   - task production:validate
   - task production:check
   - task planning:validate
-  next_evidence: Promote only after WR-091 closes. Implementation must prove graph-level bounded repeated pass execution,
-    deterministic submitted substeps, and resource sequencing across substeps.
+  next_evidence: Promote only after WR-091 closes. Implementation must prove graph-level bounded repeated pass execution
+    from runtime fixed-time resources, deterministic submitted substeps, iteration-scoped uniform projection, input/redraw-rate
+    invariance, and resource sequencing across substeps.
   current_decision: Ready-next graph scheduling slice after primitive dispatch is runtime-proven.
-  current_call: Add fixed-step catch-up as render-flow graph scheduling, not boids-local timing logic.
+  current_call: Add fixed-step catch-up as render-flow graph scheduling using FixedTimeConfig, FixedTimeState, and CatchupBudget;
+    do not add boids-local timing logic.
   first_move: After WR-091 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-004" --roadmap "WR-092".
   main_blocker: Waiting on WR-091 primitive shader dispatch closeout.
   why_not_ready: ''
@@ -920,6 +933,8 @@ items:
   diagram_call:
   - graph catch up
   - bounded substeps
+  - fixed-time source
+  - iteration uniforms
   decision_gates:
   - kind: design
     path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
@@ -935,7 +950,91 @@ items:
   adr_requirement: No ADR while scheduling remains renderer graph execution policy; ADR required before renderer takes gameplay
     simulation source truth.
   fitness_function_requirement: Render-flow tests proving deterministic 0..N substeps, max-substep diagnostics, dropped/deferred
-    time diagnostics, invalid repeat rejection, and ping-pong resource sequencing.
+    time diagnostics, invalid repeat rejection, iteration-scoped uniform projection, ping-pong resource sequencing, and no
+    input/redraw-rate simulation speedup in boids evidence.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-094
+  title: Procedural Camera And View Projection
+  diagram_title: Procedural camera projection
+  alias: RENDERPOPCAMERA
+  lane: Render hardening
+  dependency_level: L4
+  gate: After graph catch-up scheduling
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.6
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-092
+  write_scopes:
+  - engine/src/plugins/render/procedural/camera.rs
+  - engine/src/plugins/render/procedural/mod.rs
+  - engine/src/plugins/render/api/flow.rs
+  - engine/examples/boids_render_flow/rendering/state.rs
+  - engine/examples/boids_render_flow/rendering/graph.rs
+  - engine/examples/boids_render_flow/rendering/evidence.rs
+  - assets/shaders/boids_compute.wgsl
+  - assets/shaders/boids_compose.wgsl
+  - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine procedural
+  - cargo test -p engine render_flow
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Promote only after WR-092 closes. Implementation must prove reusable procedural 2D camera projection,
+    fill-viewport aspect correctness, equal projected world x/y scale, and boids resize evidence without moving camera
+    truth into PreparedViewFrame.
+  current_decision: Ready-next procedural camera slice after graph catch-up scheduling makes simulation timing independent
+    from redraw/input cadence.
+  current_call: Add reusable procedural camera projection and sprite sizing contracts; do not patch boids-only draw parameters
+    or make PreparedViewFrame own camera truth.
+  first_move: After WR-092 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-005" --roadmap "WR-094".
+  main_blocker: Waiting on WR-092 graph catch-up scheduling closeout.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - procedural camera
+  - fill viewport
+  - equal world scale
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Procedural camera projection must follow the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-094 implementation must follow the accepted procedural camera projection contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR while camera projection remains renderer-owned derived data and camera intent stays producer-owned;
+    ADR required before moving camera source truth into renderer or PreparedViewFrame.
+  fitness_function_requirement: Procedural camera tests for landscape, portrait, square, and extreme aspect ratios; shader/evidence
+    tests proving equal projected world x/y scale; boids evidence proving no input/redraw-rate speedup, no world stretch,
+    and no sprite aspect stretch.
   ownership_mode: Complicated-subsystem renderer owner.
 - id: WR-093
   title: Procedural Population Hardening Evidence Benchmarks Docs And Closeout
@@ -943,7 +1042,7 @@ items:
   alias: RENDERPOPHARDENCLOSE
   lane: Render evidence
   dependency_level: L4
-  gate: After graph catch-up scheduling
+  gate: After procedural camera projection
   planning_state: ready_next
   priority: P0
   value: 4
@@ -957,7 +1056,7 @@ items:
   rice: N/A
   kano: Performance
   dependencies:
-  - WR-092
+  - WR-094
   write_scopes:
   - engine/benches/render_flow_planning.rs
   - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
@@ -983,12 +1082,12 @@ items:
   - task production:validate
   - task production:check
   - task planning:validate
-  next_evidence: Promote only after WR-092 closes. Close the hardening track only when runtime evidence proves indirect validation,
-    primitive shader dispatch, graph catch-up scheduling, benchmarks, and docs.
+  next_evidence: Promote only after WR-094 closes. Close the hardening track only when runtime evidence proves indirect validation,
+    primitive shader dispatch, graph catch-up scheduling, procedural camera projection, benchmarks, and docs.
   current_decision: Ready-next evidence and closeout slice for PT-RENDER-PROCEDURAL-POPULATION-HARDENING.
-  current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior.
-  first_move: After WR-092 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-005" --roadmap "WR-093".
-  main_blocker: Waiting on WR-092 graph catch-up scheduling closeout.
+  current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and camera projection evidence.
+  first_move: After WR-094 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-006" --roadmap "WR-093".
+  main_blocker: Waiting on WR-094 procedural camera projection closeout.
   why_not_ready: ''
   completion_quality: not_applicable
   known_quality_gaps: []
@@ -996,6 +1095,7 @@ items:
   diagram_call:
   - runtime evidence
   - close hardening track
+  - camera proof
   decision_gates:
   - kind: design
     path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
@@ -1010,8 +1110,8 @@ items:
   ddd_owner: engine render plugin
   adr_requirement: No ADR for evidence and docs unless closeout changes source-truth ownership, dependency direction, fallback
     legality, or renderer ABI semantics.
-  fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, boids evidence, benchmark, docs, production,
-    roadmap, and planning validation suite.
+  fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, camera projection, boids evidence, benchmark,
+    docs, production, roadmap, and planning validation suite.
   ownership_mode: Complicated-subsystem renderer owner.
 edges:
 - source: WR-002
@@ -1219,5 +1319,8 @@ edges:
   target: WR-092
   label: primitive dispatch before graph catch-up
 - source: WR-092
+  target: WR-094
+  label: graph catch-up before camera projection proof
+- source: WR-094
   target: WR-093
-  label: graph catch-up before hardening closeout
+  label: camera projection proof before hardening closeout

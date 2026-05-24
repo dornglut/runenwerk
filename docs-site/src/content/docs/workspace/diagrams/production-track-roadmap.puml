@@ -97,7 +97,9 @@ package "PT-RENDER-PROCEDURAL-POPULATION-HARDENING Renderer Procedural Populatio
 
   component "PM-RENDER-POP-HARDEN-004 Fixed Step Graph Catch Up Scheduling\nkind=hardening\nstate=ready_next\nWR=WR-092" as PM_RENDER_POP_HARDEN_004 <<ready_next>>
 
-  component "PM-RENDER-POP-HARDEN-005 Hardening Evidence Benchmarks Docs And Closeout\nkind=hardening\nstate=ready_next\nWR=WR-093" as PM_RENDER_POP_HARDEN_005 <<ready_next>>
+  component "PM-RENDER-POP-HARDEN-005 Procedural Camera And View Projection\nkind=hardening\nstate=ready_next\nWR=WR-094" as PM_RENDER_POP_HARDEN_005 <<ready_next>>
+
+  component "PM-RENDER-POP-HARDEN-006 Hardening Evidence Benchmarks Docs And Closeout\nkind=hardening\nstate=ready_next\nWR=WR-093" as PM_RENDER_POP_HARDEN_006 <<ready_next>>
 
 }
 
@@ -166,6 +168,7 @@ PM_RENDER_POP_HARDEN_001 -down-> PM_RENDER_POP_HARDEN_002 : production prerequis
 PM_RENDER_POP_HARDEN_002 -down-> PM_RENDER_POP_HARDEN_003 : production prerequisite
 PM_RENDER_POP_HARDEN_003 -down-> PM_RENDER_POP_HARDEN_004 : production prerequisite
 PM_RENDER_POP_HARDEN_004 -down-> PM_RENDER_POP_HARDEN_005 : production prerequisite
+PM_RENDER_POP_HARDEN_005 -down-> PM_RENDER_POP_HARDEN_006 : production prerequisite
 PT_RENDER_PRODUCT_VISUALS_COMPLETED -down-> PM_RENDER_PRODUCT_VISUALS_003 : completed prerequisite
 PT_RENDER_SCALE_COMPLETED -down-> PM_RENDER_PRODUCT_VISUALS_003 : PT-RENDER-SCALE completed prerequisite
 PT_RENDER_SDF_COMPLETED -down-> PM_RENDER_PRODUCT_VISUALS_003 : PT-RENDER-SDF completed prerequisite

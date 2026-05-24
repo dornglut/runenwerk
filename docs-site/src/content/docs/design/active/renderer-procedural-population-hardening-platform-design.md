@@ -1,6 +1,6 @@
 ---
 title: Renderer Procedural Population Hardening Platform
-description: Active design for fail-closed indirect draw contracts, reusable GPU primitive dispatch, and graph-level fixed-step catch-up after the procedural population runtime proof.
+description: Active design for fail-closed indirect draw contracts, reusable GPU primitive dispatch, graph-level fixed-step catch-up, and reusable procedural camera projection after the procedural population runtime proof.
 status: active
 owner: engine
 layer: engine-runtime / renderer / procedural
@@ -23,7 +23,7 @@ left visible by the `PT-RENDER-PROCEDURAL-POPULATION` runtime-proven closeout.
 This is a focused hardening track, not a cleanup bucket and not a replacement
 for `PT-RENDER-PERFECTION`.
 
-The renderer must harden three production contracts before later population
+The renderer must harden four production contracts before later population
 expansion:
 
 - indirect draw submission must be typed, bounds-checked, indexed-aware, and
@@ -31,12 +31,20 @@ expansion:
 - GPU primitives must lower into reusable renderer-owned shader dispatches,
   including hierarchical prefix scan for arbitrary counts;
 - fixed-step catch-up must become graph scheduling with bounded repeated pass
-  execution, not example-local timing logic.
+  execution, iteration-scoped uniform projection, and runtime fixed-time source
+  reuse rather than example-local timing logic;
+- procedural 2D camera projection must become a reusable derived renderer
+  contract, so examples can fill the target without letterbox, non-uniform
+  stretch, or viewport-dependent simulation truth.
 
 Spatial hash and chunked unbounded populations are intentionally outside this
 track. They require a separate intake and design because they add collision
 policy, chunk residency, world-coordinate windows, and product ownership
 questions that are not direct hardening of the bounded population platform.
+
+Richer boids split/merge behavior is also outside this track. Flock cohorts,
+affinity, goals, wander fields, attractors, and semantic behavior evidence are
+simulation or product behavior-authoring concerns, not renderer source truth.
 
 ## Scope
 
@@ -53,9 +61,17 @@ This track covers:
   scatter/compaction, and indirect draw argument generation;
 - primitive plan lowering into normal render-flow compute passes with stable
   labels, typed diagnostics, and no hidden CPU fallback;
-- graph-level fixed-step scheduling for bounded repeated pass execution,
-  including accumulated time, fixed dt, submitted substeps, max substeps, and
-  dropped or deferred time diagnostics;
+- graph-level fixed-step scheduling for bounded repeated pass execution that
+  uses the existing runtime `FixedTimeConfig`, `FixedTimeState`, and
+  `CatchupBudget` resources as timing source truth;
+- iteration-scoped render-flow uniform projection for passes inside repeated
+  regions while existing frame-scoped `uniform_from_state` and
+  `uniform_from_state_with_surface` stay source-compatible;
+- submitted substep, max substep, accumulated-time, and dropped/deferred-time
+  diagnostics proving mouse motion, redraw bursts, cursor movement, and resize
+  events do not increase simulation steps per real second;
+- procedural 2D camera projection contracts for aspect-correct fill-viewport
+  rendering without moving camera truth into prepared views;
 - benchmarks, public renderer docs, and closeout evidence sufficient for
   `runtime_proven`.
 
@@ -68,6 +84,9 @@ This track does not implement:
 - world-coordinate streaming windows;
 - hash collision policy;
 - renderer-owned gameplay or product truth;
+- semantic flock identity, affinity groups, goals, or richer boids behavior
+  authoring;
+- camera source-truth ownership inside `PreparedViewFrame`;
 - final no-gap renderer verification.
 
 Those remain separate design or audit work. `perfectionist_verified` remains
@@ -84,7 +103,10 @@ Renderer owns:
 - GPU primitive kernels, primitive dispatch lowering, primitive diagnostics,
   and primitive benchmark evidence;
 - graph scheduling contracts for repeated pass execution and renderer-visible
-  fixed-step evidence;
+  fixed-step evidence derived from runtime fixed-time resources;
+- procedural camera descriptors, projection math, projection uniforms, sprite
+  sizing contracts, and evidence that renderer projection does not distort world
+  scale;
 - public renderer usage docs and API reference updates.
 
 Renderer does not own:
@@ -93,8 +115,14 @@ Renderer does not own:
 - semantic population identity;
 - product selection;
 - authored simulation meaning;
+- camera intent or gameplay camera state supplied by producers;
 - streaming authority;
 - fallback legality outside renderer capability diagnostics.
+
+`PreparedViewFrame` carries prepared target size, view identity, and history
+selection. It must not become the owner of camera intent in this track. Producer
+or example state supplies camera intent; renderer code derives projection
+uniforms from that intent and surface dimensions.
 
 ## Current Gaps
 
@@ -117,6 +145,13 @@ The completed procedural population track left these explicit gaps:
 - `engine/examples/boids_render_flow/rendering/state.rs::BoidsRenderState`
   exposes fixed-step evidence for one submitted simulation step, but multi-step
   catch-up is not graph scheduling and must not be added locally to boids.
+- The boids example can still tie simulation advancement to render/update
+  cadence if it bypasses runtime fixed-time source truth; cursor movement,
+  mouse motion, redraw bursts, or resize events must not increase simulation
+  steps per real second.
+- Boids resize handling needs a reusable renderer procedural camera/projection
+  contract. A boids-only draw-parameter patch would leave aspect correctness
+  unowned and would not prove equal world x/y scale after projection.
 
 ## Architecture Rules
 
@@ -139,13 +174,32 @@ The completed procedural population track left these explicit gaps:
   design explicitly names it as an offline/debug path, not as runtime proof.
 - Fixed-step catch-up must be graph-level bounded repeated pass execution that
   preserves resource sequencing across substeps.
+- Fixed-step source truth comes from existing runtime resources:
+  `FixedTimeConfig`, `FixedTimeState`, and `CatchupBudget`. Renderer execution
+  consumes the derived submitted substep count and diagnostics; it does not
+  become gameplay simulation truth.
+- Passes inside repeated regions require iteration-scoped uniform projection.
+  Existing `uniform_from_state` and `uniform_from_state_with_surface` remain
+  frame-scoped and source-compatible.
+- Procedural camera support belongs under renderer procedural infrastructure as
+  derived projection machinery. Camera intent remains producer/example state.
+- Fill viewport means no letterbox and no non-uniform stretch. The canonical
+  boids camera policy is `FillViewport { fixed_axis: Vertical }`: vertical
+  world scale stays stable and horizontal visible world span follows viewport
+  aspect.
+- Boids simulation uses stable world bounds and must not use viewport dimensions
+  as simulation truth.
+- Richer flock split/merge behavior requires a separate behavior-authoring
+  intake with ownership review before implementation.
 
 ## Production Slices
 
 - `WR-089`: doctrine and track activation.
 - `WR-090`: indirect draw contract hardening.
 - `WR-091`: reusable GPU primitive shader dispatch.
-- `WR-092`: fixed-step graph catch-up scheduling.
+- `WR-092`: fixed-step graph catch-up scheduling plus redraw/input-rate
+  invariance.
+- `WR-094`: procedural 2D camera and view projection contract.
 - `WR-093`: evidence, benchmarks, docs, and runtime-proven closeout.
 
 `WR-089` is the activation slice only. It must not absorb product code from
@@ -165,7 +219,17 @@ Closeout evidence must prove:
 - u32 prefix scan supports arbitrary counts through hierarchical dispatch;
 - primitive execution has typed diagnostics and no hidden CPU fallback in
   runtime proof paths;
-- graph fixed-step catch-up submits `0..N` bounded substeps deterministically;
+- graph fixed-step catch-up submits `0..N` bounded substeps deterministically
+  from runtime fixed-time state;
+- mouse motion, cursor movement, redraw bursts, and resize events do not
+  increase simulation steps per real second;
+- iteration-scoped uniform projection is visible and validated for repeated
+  regions;
 - ping-pong and other pass resource sequencing remain stable across substeps;
+- procedural camera projection keeps equal world x/y scale after projection for
+  landscape, portrait, square, and extreme aspect surfaces;
+- boids fills the viewport without letterbox, without non-uniform stretch, and
+  without viewport-dependent simulation truth;
+- behavior-authoring follow-up exists as separate intake and is not folded into
+  renderer hardening;
 - docs and benchmarks match the public API and runtime behavior.
-

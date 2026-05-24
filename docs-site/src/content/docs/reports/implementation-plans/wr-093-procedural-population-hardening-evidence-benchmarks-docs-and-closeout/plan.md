@@ -18,13 +18,13 @@ related_roadmaps:
 
 ## Goal
 
-Implement `PM-RENDER-POP-HARDEN-005` / `WR-093` as the evidence, benchmark,
+Implement `PM-RENDER-POP-HARDEN-006` / `WR-093` as the evidence, benchmark,
 documentation, and track closeout slice for
 `PT-RENDER-PROCEDURAL-POPULATION-HARDENING`.
 
 The track may close at `runtime_proven` only when indirect draw hardening,
-primitive shader dispatch, and graph catch-up scheduling are all proven by
-runtime evidence and documented public contracts.
+primitive shader dispatch, graph catch-up scheduling, and procedural camera
+projection are all proven by runtime evidence and documented public contracts.
 
 ## Source Of Truth
 
@@ -32,13 +32,15 @@ runtime evidence and documented public contracts.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-090-indirect-draw-contract-hardening/plan.md`
 - `docs-site/src/content/docs/reports/implementation-plans/wr-091-reusable-gpu-primitive-shader-dispatch/plan.md`
 - `docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md`
+- `docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md`
 - `docs-site/src/content/docs/workspace/production-tracks.yaml`
 - `docs-site/src/content/docs/workspace/roadmap-items.yaml`
 
 ## Readiness
 
-This slice depends on completed `WR-092`. It cannot close the track if any
-runtime proof remains descriptor-only, boids-only, or documentation-only.
+This slice depends on completed `WR-094`. It cannot close the track if any
+runtime proof remains descriptor-only, boids-only, camera-projection-only, or
+documentation-only.
 
 ## Implementation Scope
 
@@ -46,20 +48,23 @@ Owned files and exact modules/functions:
 
 - `engine/benches/render_flow_planning.rs`:
   benchmark cases for indirect validation, primitive dispatch planning and
-  execution, and fixed-step catch-up planning and execution.
+  execution, fixed-step catch-up planning and execution, and procedural camera
+  evidence paths where measurable.
 - `docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md`:
   user-facing authoring docs for hardened indirect draws, primitive dispatch,
-  and graph catch-up scheduling.
+  graph catch-up scheduling, and procedural camera projection.
 - `docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md`:
   public API reference for new or changed renderer contracts.
 - `docs-site/src/content/docs/engine/examples/boids-render-flow/README.md`:
-  boids evidence updates only if boids reports graph-submitted catch-up
-  evidence.
+  boids evidence updates for graph-submitted catch-up, input/redraw-rate
+  invariance, and aspect-correct procedural camera projection.
 - `docs-site/src/content/docs/reports/closeouts/wr-090-indirect-draw-contract-hardening/closeout.md`:
   evidence dependency.
 - `docs-site/src/content/docs/reports/closeouts/wr-091-reusable-gpu-primitive-shader-dispatch/closeout.md`:
   evidence dependency.
 - `docs-site/src/content/docs/reports/closeouts/wr-092-fixed-step-graph-catch-up-scheduling/closeout.md`:
+  evidence dependency.
+- `docs-site/src/content/docs/reports/closeouts/wr-094-procedural-camera-and-view-projection/closeout.md`:
   evidence dependency.
 - `docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md`:
   slice closeout.
@@ -79,9 +84,14 @@ Owned files and exact modules/functions:
   boids example.
 - Prefix scan benchmark and tests cover hierarchical multi-block behavior.
 - Fixed-step graph catch-up closeout proves deterministic `0..N` bounded
-  submitted substeps and resource sequencing across substeps.
+  submitted substeps, runtime fixed-time source reuse, input/redraw-rate
+  invariance, iteration-scoped uniform projection, and resource sequencing
+  across substeps.
+- Procedural camera projection closeout proves equal world x/y scale after
+  projection, fill-viewport behavior without letterbox or non-uniform stretch,
+  and no `PreparedViewFrame` camera source-truth ownership.
 - Public docs teach normal direct draw first, then explicit indirect and
-  scheduled advanced paths.
+  scheduled advanced paths, then procedural camera projection.
 - The track closeout lists remaining quality gaps honestly and does not claim
   `perfectionist_verified`.
 
@@ -90,6 +100,8 @@ Owned files and exact modules/functions:
 - Do not add new runtime features in the closeout slice unless required to fix
   evidence gaps found by validation.
 - Do not fold spatial hash or chunked unbounded populations into the closeout.
+- Do not fold behavior authoring or richer boids split/merge dynamics into the
+  closeout.
 - Do not mark `PT-RENDER-PERFECTION` complete.
 
 ## Stop Conditions
@@ -97,6 +109,8 @@ Owned files and exact modules/functions:
 - Stop if any earlier WR closeout is missing or only descriptor-level evidence.
 - Stop if benchmark output is stale or not reproducible by the listed command.
 - Stop if docs describe APIs or behavior not present in code.
+- Stop if camera evidence does not prove equal projected world scale across
+  landscape, portrait, square, and extreme aspect surfaces.
 - Stop if production validation rejects the completion-quality claim.
 
 ## Closeout Requirements
@@ -133,6 +147,7 @@ Validation:
 
 The closeout must not promote a checklist that proves only planning artifacts.
 Runtime proof requires executed primitive kernels, failed invalid indirect draw
-validation cases, and graph scheduling evidence. If any of those are missing,
-the correct closeout is blocked, not `runtime_proven`.
+validation cases, graph scheduling evidence, and procedural camera projection
+evidence. If any of those are missing, the correct closeout is blocked, not
+`runtime_proven`.
 

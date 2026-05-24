@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "WR-089 Renderer population hardening doctrine\nstate=current_candidate\nscore=5.6 V4 B2\ncall=hardening doctrine\nsplit WR-090 to WR-093" as RENDERPOPHARDEN <<candidate>>
+  component "WR-089 Renderer population hardening doctrine\nstate=current_candidate\nscore=5.6 V4 B2\ncall=hardening doctrine\nsplit WR-090 WR-091 WR-092 WR-094\nWR-093 closeout" as RENDERPOPHARDEN <<candidate>>
 
 }
 
