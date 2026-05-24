@@ -4198,7 +4198,7 @@ items:
     provenance inspection tests, docs validation, roadmap validation, production validation, and planning validation.
   ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product
     producers.
-- id: WR-083
+- id: WR-094
   title: UI Lab command catalog and surface registry source of truth
   diagram_title: UI Lab command catalog and registry
   alias: WR083
@@ -4250,10 +4250,10 @@ items:
   next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md.
     The generated runtime proof artifact records catalog-backed command dispatch, typed unavailable-command diagnostics, workspace
     switching, and registry-owned mounted surface provider metadata.
-  current_decision: WR-083 is completed as the bounded PM-UI-LAB-002 command catalog and surface registry source-of-truth
+  current_decision: WR-094 is completed as the bounded PM-UI-LAB-002 command catalog and surface registry source-of-truth
     implementation. Command behavior remains app-owned, shell projection remains app-neutral, and generic UI definitions remain
     behavior-free.
-  current_call: Completed. Do not reopen WR-083 for the app-hosted Editor Lab shell, operation-driven visual authoring, project
+  current_call: Completed. Do not reopen WR-094 for the app-hosted Editor Lab shell, operation-driven visual authoring, project
     IO, diff/apply/rollback, preview evidence matrix, API/examples closeout, or no-gap perfectionist audit.
   first_move: Rerun task ai:goal -- --track PT-UI-LAB --scope non-deferred and only continue if the production-track gate
     selects a legal next action.
@@ -4290,7 +4290,7 @@ items:
     path: docs-site/src/content/docs/reports/implementation-plans/wr-083-ui-lab-command-catalog-and-surface-registry-source-of-truth/plan.md
     required_status: active
     applies_to: implementation
-    reason: WR-083 implementation followed the bounded implementation contract and closeout requirements.
+    reason: WR-094 implementation followed the bounded implementation contract and closeout requirements.
   - kind: doc
     path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md
     required_status: completed
@@ -4304,7 +4304,7 @@ items:
     validation, and production validation.
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from editor_shell and app runtime
     owners.
-- id: WR-084
+- id: WR-095
   title: UI Lab app-hosted Editor Lab surface shell
   diagram_title: UI Lab Editor Lab shell
   alias: WR084
@@ -4326,7 +4326,7 @@ items:
   dependencies:
   - WR-004
   - WR-046
-  - WR-083
+  - WR-094
   write_scopes:
   - apps/runenwerk_editor/src/shell/providers
   - apps/runenwerk_editor/src/shell/tests.rs
@@ -4351,7 +4351,7 @@ items:
   - cargo test -p runenwerk_editor pm_ui_lab_003
   - $env:RUNENWERK_WRITE_PM_UI_LAB_003_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_003_runtime_evidence_reports_app_hosted_editor_lab_shell
     -- --nocapture
-  - task ai:closeout -- --task "WR-084 PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell" --scope "apps/runenwerk_editor/src/shell/providers/self_authoring.rs;
+  - task ai:closeout -- --task "WR-095 PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell" --scope "apps/runenwerk_editor/src/shell/providers/self_authoring.rs;
     domain/editor/editor_shell/src/surfaces/editor_definition.rs; domain/editor/editor_shell/src/composition; domain/editor/editor_shell/src/commands/map_interactions.rs;
     docs-site/src/content/docs/reports/implementation-plans/wr-084-ui-lab-app-hosted-editor-lab-surface-shell/plan.md; docs-site/src/content/docs/workspace/roadmap-items.yaml;
     docs-site/src/content/docs/workspace/production-tracks.yaml" --roadmap docs-site/src/content/docs/workspace/roadmap-items.yaml
@@ -4369,10 +4369,10 @@ items:
     The generated runtime proof artifact records typed Editor Lab frames, direct editor-definition routes, app-owned draft
     mutation through shell dispatch, retained preview update, typed degraded canvas state, diagnostics and review surfaces,
     and preview-console feedback.
-  current_decision: WR-084 is completed as the bounded PM-UI-LAB-003 app-hosted Editor Lab surface shell implementation. Direct-control
+  current_decision: WR-095 is completed as the bounded PM-UI-LAB-003 app-hosted Editor Lab surface shell implementation. Direct-control
     shell behavior remains app-owned, app-neutral surface composition remains in editor_shell, and generic UI definitions
     remain behavior-free.
-  current_call: Completed. Do not reopen WR-084 for operation-driven visual authoring, project IO, full diff/apply/rollback,
+  current_call: Completed. Do not reopen WR-095 for operation-driven visual authoring, project IO, full diff/apply/rollback,
     preview evidence matrix, API/examples closeout, game-runtime UI projection, or no-gap perfectionist audit.
   first_move: Rerun task ai:goal -- --track PT-UI-LAB --scope non-deferred and only continue if the production-track gate
     selects a legal next action.
@@ -4410,7 +4410,7 @@ items:
     path: docs-site/src/content/docs/reports/implementation-plans/wr-084-ui-lab-app-hosted-editor-lab-surface-shell/plan.md
     required_status: active
     applies_to: implementation
-    reason: WR-084 implementation followed the bounded implementation contract and closeout requirements.
+    reason: WR-095 implementation followed the bounded implementation contract and closeout requirements.
   - kind: doc
     path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md
     required_status: completed
@@ -4430,7 +4430,7 @@ items:
     and production validation.
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from editor_shell and ui_definition
     owners.
-- id: WR-085
+- id: WR-096
   title: UI Lab operation-driven visual authoring core
   diagram_title: UI Lab visual authoring ops
   alias: WR085
@@ -4452,8 +4452,8 @@ items:
   dependencies:
   - WR-004
   - WR-046
-  - WR-083
-  - WR-084
+  - WR-094
+  - WR-095
   write_scopes:
   - domain/ui/ui_definition/src/visual_layout
   - domain/editor/editor_definition/src
@@ -4495,10 +4495,10 @@ items:
     The generated runtime proof artifact records typed Editor Lab operation dispatch, accepted text edits, rejected theme
     diagnostics, draft preservation, undo/redo retained-preview refresh, generic UI visual layout operation reuse, deterministic
     operation diffs, and Command Diff surface review state.
-  current_decision: WR-085 is completed as the bounded PM-UI-LAB-004 operation-driven visual authoring core implementation.
+  current_decision: WR-096 is completed as the bounded PM-UI-LAB-004 operation-driven visual authoring core implementation.
     Generic UI visual layout mechanics remain in ui_definition, editor-definition-specific operation contracts remain in editor_definition,
     and app-owned draft mutation/history remain in runenwerk_editor.
-  current_call: Completed. Do not reopen WR-085 for project IO, full diff/apply/rollback, persisted operation logs, preview
+  current_call: Completed. Do not reopen WR-096 for project IO, full diff/apply/rollback, persisted operation logs, preview
     evidence matrix, API/examples closeout, game-runtime UI projection, or no-gap perfectionist audit.
   first_move: Rerun task ai:goal -- --track PT-UI-LAB --scope non-deferred and only continue if the production-track gate
     selects a legal next action.
@@ -4536,7 +4536,7 @@ items:
     path: docs-site/src/content/docs/reports/implementation-plans/wr-085-ui-lab-operation-driven-visual-authoring-core/plan.md
     required_status: active
     applies_to: implementation
-    reason: WR-085 implementation followed the bounded implementation contract and closeout requirements.
+    reason: WR-096 implementation followed the bounded implementation contract and closeout requirements.
   - kind: doc
     path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md
     required_status: completed
@@ -4556,7 +4556,7 @@ items:
     generated runtime proof artifact, docs validation, roadmap validation, and production validation.
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from ui_definition, editor_definition,
     and editor_shell owners.
-- id: WR-086
+- id: WR-097
   title: UI Lab project IO diff apply and rollback productization
   diagram_title: UI Lab project IO apply rollback
   alias: WR086
@@ -4577,7 +4577,7 @@ items:
     are real app flows.
   kano: Basic
   dependencies:
-  - WR-085
+  - WR-096
   write_scopes:
   - apps/runenwerk_editor/src/shell
   - apps/runenwerk_editor/src/editor_app
@@ -4611,7 +4611,7 @@ items:
   next_evidence: PM-UI-LAB-005 runtime evidence completed through app-owned project package save/reload, selected import/export,
     invalid package preservation, deterministic apply review, reject/apply, typed activation reports, failed activation preservation,
     reload-last-applied, rollback, and provider-surface proof.
-  current_decision: WR-086 completed PM-UI-LAB-005 as runtime_proven while keeping project IO, activation execution, failed
+  current_decision: WR-097 completed PM-UI-LAB-005 as runtime_proven while keeping project IO, activation execution, failed
     activation preservation, and rollback app-owned.
   current_call: Completed; continue with PM-UI-LAB-006 preview lab and runtime evidence only through the production goal workflow.
   first_move: Run task ai:goal -- --track PT-UI-LAB --scope non-deferred and follow the next legal PM-UI-LAB-006 action.
@@ -4650,12 +4650,12 @@ items:
     path: docs-site/src/content/docs/reports/implementation-plans/wr-086-ui-lab-project-io-diff-apply-and-rollback-productization/plan.md
     required_status: active
     applies_to: implementation
-    reason: WR-086 implementation must follow the decision-complete production implementation contract.
+    reason: WR-097 implementation must follow the decision-complete production implementation contract.
   - kind: doc
     path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
     required_status: completed
     applies_to: implementation
-    reason: WR-086 completion requires runtime-proven PM-UI-LAB-005 closeout evidence.
+    reason: WR-097 completion requires runtime-proven PM-UI-LAB-005 closeout evidence.
   ddd_owner: editor app-owned Editor Lab project IO with editor_definition review contracts and ui_definition persistence-validation
     support
   adr_requirement: No ADR required while project IO, activation execution, failed activation preservation, and rollback remain
@@ -4665,7 +4665,7 @@ items:
     rollback guards, reload-last-applied evidence, docs validation, roadmap validation, and production validation.
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from ui_definition, editor_definition,
     editor_shell, and runtime owners.
-- id: WR-087
+- id: WR-098
   title: UI Lab preview lab runtime evidence matrix
   diagram_title: UI Lab preview lab evidence
   alias: WR087
@@ -4686,7 +4686,7 @@ items:
     snapshots, accessibility, performance, and degraded-provider evidence are runtime-proven.
   kano: Basic
   dependencies:
-  - WR-086
+  - WR-097
   write_scopes:
   - apps/runenwerk_editor/src/shell
   - apps/runenwerk_editor/src/runtime
@@ -4717,9 +4717,9 @@ items:
   next_evidence: PM-UI-LAB-006 runtime-proven closeout includes a generated Preview Lab evidence manifest, retained visual
     artifacts, diagnostics snapshots, accessibility snapshots, performance snapshots, unsupported-check diagnostics, and degraded-provider
     proof.
-  current_decision: Completed; WR-087 closes PM-UI-LAB-006 as runtime_proven and preserves PM007 public API/docs/examples/final
+  current_decision: Completed; WR-098 closes PM-UI-LAB-006 as runtime_proven and preserves PM007 public API/docs/examples/final
     closeout as the next dependency.
-  current_call: Completed. Do not reopen WR-087 for PM007 API docs, examples, final track closeout, game-runtime UI projection,
+  current_call: Completed. Do not reopen WR-098 for PM007 API docs, examples, final track closeout, game-runtime UI projection,
     native screenshot platform work, GPU visual diff platform work, or perfectionist no-gap certification.
   first_move: Run task ai:goal -- --track PT-UI-LAB --scope non-deferred and follow the next legal PM-UI-LAB-007 action.
   main_blocker: Completed.
@@ -4763,7 +4763,7 @@ items:
     validation, roadmap validation, and production validation.
   ownership_mode: Stream-aligned editor product hardening with complicated-subsystem support from editor_shell, ui_definition,
     and runtime owners.
-- id: WR-088
+- id: WR-099
   title: UI Lab API docs examples and runtime-proven closeout
   diagram_title: UI Lab API docs closeout
   alias: WR088
@@ -4784,7 +4784,7 @@ items:
     handoff are discoverable and validated.
   kano: Basic
   dependencies:
-  - WR-087
+  - WR-098
   write_scopes:
   - domain/ui/ui_definition
   - domain/editor/editor_definition
@@ -4818,7 +4818,7 @@ items:
   - task planning:validate
   - git diff --check
   next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md.
-  current_decision: Completed; WR-088 closes PM-UI-LAB-007 and PT-UI-LAB as runtime_proven with focused public APIs, usage
+  current_decision: Completed; WR-099 closes PM-UI-LAB-007 and PT-UI-LAB as runtime_proven with focused public APIs, usage
     docs, examples, API ergonomics review, evidence aggregation, and separate no-gap audit intake.
   current_call: Complete; preserve runtime_proven evidence and keep perfectionist verification in the separate PT-UI-LAB-PERFECTION
     no-gap audit intake.
@@ -4834,7 +4834,7 @@ items:
   - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
   - Module-structure perfectionist review, deeper UI ergonomics audit, native evidence platform decisions, accessibility and
     performance depth beyond retained evidence, and zero-known-gap certification remain separate audit scope.
-  - WR-088 does not claim perfectionist_verified completion.
+  - WR-099 does not claim perfectionist_verified completion.
   completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
   diagram_call:
   - public APIs

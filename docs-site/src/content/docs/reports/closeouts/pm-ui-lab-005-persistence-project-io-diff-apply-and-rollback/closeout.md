@@ -1,6 +1,6 @@
 ---
 title: PM-UI-LAB-005 Persistence Project IO Diff Apply And Rollback Closeout
-description: Runtime-proven closeout evidence for WR-086 Editor Lab project packages, apply review, activation reports, failure preservation, reload, and rollback.
+description: Runtime-proven closeout evidence for WR-097 Editor Lab project packages, apply review, activation reports, failure preservation, reload, and rollback.
 status: completed
 owner: editor
 layer: app/editor-definition
@@ -26,7 +26,7 @@ related_roadmaps:
 
 ## Scope
 
-`WR-086` completes the bounded `PM-UI-LAB-005` implementation slice: Editor Lab
+`WR-097` completes the bounded `PM-UI-LAB-005` implementation slice: Editor Lab
 drafts now have an app-owned project package/store boundary, deterministic
 apply review, reject/apply decisions, typed activation reports, failed
 activation input preservation, reload-last-applied behavior, and
@@ -148,7 +148,7 @@ The artifact-writing test required escalated execution after sandboxed Cargo
 target-lock access was denied. It completed successfully after escalation.
 
 Final metadata validation completed after writing this closeout and moving
-`WR-086` to completed archive state:
+`WR-097` to completed archive state:
 
 ```text
 cargo test -p ui_definition persistence_activation
@@ -193,7 +193,7 @@ Known quality gaps:
 ## Drift Check
 
 The phase completion drift check found the implementation aligned with the
-accepted PM-005 persistence/project-IO/apply/rollback design and WR-086
+accepted PM-005 persistence/project-IO/apply/rollback design and WR-097
 contract:
 
 - App-owned project IO, activation execution, failed activation preservation,

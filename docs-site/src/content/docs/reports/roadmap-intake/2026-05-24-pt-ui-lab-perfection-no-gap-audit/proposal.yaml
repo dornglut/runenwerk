@@ -13,7 +13,7 @@ open_questions:
 - Which follow-on WR IDs should PM-UI-LAB-PERF-001 produce for PM-UI-LAB-PERF-002 through PM-UI-LAB-PERF-006?
 - Which runtime evidence checks are natively supportable and which are genuinely platform-impossible after the evidence-platform audit?
 item:
-  id: WR-089
+  id: WR-100
   title: UI Lab perfectionist governance and no-gap audit doctrine
   diagram_title: UI Lab perfectionist governance
   alias: WR089
@@ -35,7 +35,7 @@ item:
   dependencies:
   - WR-004
   - WR-046
-  - WR-088
+  - WR-099
   write_scopes:
   - docs-site/src/content/docs/workspace/production-tracks.yaml
   - docs-site/src/content/docs/workspace/roadmap-items.yaml
@@ -59,9 +59,9 @@ item:
   - task puml:validate
   - task docs:validate
   next_evidence: Complete PM-UI-LAB-PERF-001 with accepted audit doctrine, code-truth matrix, evidence matrix, hard blockers, and disjoint follow-on WR candidates.
-  current_decision: WR-089 is the current governance/design candidate for PT-UI-LAB-PERFECTION; it may update planning docs and audit doctrine only.
+  current_decision: WR-100 is the current governance/design candidate for PT-UI-LAB-PERFECTION; it may update planning docs and audit doctrine only.
   current_call: Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until follow-on WRs are accepted.
-  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-089, then finish the code-truth and evidence matrix closeout.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and evidence matrix closeout.
   main_blocker: Follow-on implementation WR candidates, accepted audit closeout, and phase drift-check evidence remain.
   why_not_ready: Ready for governance/design execution only; later implementation remains blocked until scoped WRs and production contracts exist.
   completion_quality: not_applicable
@@ -82,11 +82,11 @@ item:
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor shell, and app runtime evidence owners.
 edges:
 - source: WR-004
-  target: WR-089
+  target: WR-100
   label: editor guardrails
 - source: WR-046
-  target: WR-089
+  target: WR-100
   label: UI doctrine
-- source: WR-088
-  target: WR-089
+- source: WR-099
+  target: WR-100
   label: runtime-proven handoff

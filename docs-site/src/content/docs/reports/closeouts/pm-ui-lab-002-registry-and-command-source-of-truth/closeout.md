@@ -1,6 +1,6 @@
 ---
 title: PM-UI-LAB-002 Registry And Command Source Of Truth Closeout
-description: Closeout evidence for WR-083 command catalog and registry-owned surface metadata productization.
+description: Closeout evidence for WR-094 command catalog and registry-owned surface metadata productization.
 status: completed
 owner: editor
 layer: domain/app
@@ -22,7 +22,7 @@ related_roadmaps:
 
 ## Scope
 
-`WR-083` completes the bounded `PM-UI-LAB-002` implementation slice:
+`WR-094` completes the bounded `PM-UI-LAB-002` implementation slice:
 Runenwerk editor command affordances now route through one app-owned
 `EditorCommandCatalog`, and tool-surface metadata now resolves from
 registry-owned `ToolSurfaceDefinition` data before legacy compatibility
@@ -129,7 +129,7 @@ task production:validate
 task production:check
 task planning:validate
 task ai:goal -- --track PT-UI-LAB --scope non-deferred
-task ai:closeout -- --task "WR-083 PM-UI-LAB-002 Command Catalog And Surface Registry Source Of Truth" --scope "apps/runenwerk_editor/src/shell; domain/editor/editor_shell/src/tool_suite; domain/editor/editor_shell/src/workspace; domain/editor/editor_shell/src/composition; assets/editor/ui; docs-site/src/content/docs/reports/implementation-plans/wr-083-ui-lab-command-catalog-and-surface-registry-source-of-truth/plan.md; docs-site/src/content/docs/workspace/roadmap-items.yaml; docs-site/src/content/docs/workspace/production-tracks.yaml" --roadmap docs-site/src/content/docs/workspace/roadmap-items.yaml
+task ai:closeout -- --task "WR-094 PM-UI-LAB-002 Command Catalog And Surface Registry Source Of Truth" --scope "apps/runenwerk_editor/src/shell; domain/editor/editor_shell/src/tool_suite; domain/editor/editor_shell/src/workspace; domain/editor/editor_shell/src/composition; assets/editor/ui; docs-site/src/content/docs/reports/implementation-plans/wr-083-ui-lab-command-catalog-and-surface-registry-source-of-truth/plan.md; docs-site/src/content/docs/workspace/roadmap-items.yaml; docs-site/src/content/docs/workspace/production-tracks.yaml" --roadmap docs-site/src/content/docs/workspace/roadmap-items.yaml
 ```
 
 Final goal validation reports `PM-UI-LAB-002` as completed with
@@ -180,7 +180,7 @@ Known quality gaps:
 ## Drift Check
 
 The phase completion drift check found the implementation aligned with the
-accepted PM-002 design and WR-083 contract:
+accepted PM-002 design and WR-094 contract:
 
 - Command execution remains app-owned in `apps/runenwerk_editor`.
 - Generic `domain/ui/ui_definition` remains behavior-free and does not own

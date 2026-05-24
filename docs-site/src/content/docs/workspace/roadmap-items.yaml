@@ -641,7 +641,7 @@ items:
   fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add focused
     domain/UI fitness functions before code.
   ownership_mode: Enabling support owned by editor/UI maintainers.
-- id: WR-089
+- id: WR-100
   title: UI Lab perfectionist governance and no-gap audit doctrine
   diagram_title: UI Lab perfectionist governance
   alias: WR089
@@ -663,7 +663,7 @@ items:
   dependencies:
   - WR-004
   - WR-046
-  - WR-088
+  - WR-099
   write_scopes:
   - docs-site/src/content/docs/workspace/production-tracks.yaml
   - docs-site/src/content/docs/workspace/roadmap-items.yaml
@@ -688,11 +688,11 @@ items:
   - task docs:validate
   next_evidence: Complete PM-UI-LAB-PERF-001 with accepted audit doctrine, code-truth matrix, evidence matrix, hard blockers,
     and disjoint follow-on WR candidates.
-  current_decision: WR-089 is the current governance/design candidate for PT-UI-LAB-PERFECTION; it may update planning docs
+  current_decision: WR-100 is the current governance/design candidate for PT-UI-LAB-PERFECTION; it may update planning docs
     and audit doctrine only.
   current_call: Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until
     follow-on WRs are accepted.
-  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-089, then finish the code-truth and
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and
     evidence matrix closeout.
   main_blocker: Follow-on implementation WR candidates, accepted audit closeout, and phase drift-check evidence remain.
   why_not_ready: Ready for governance/design execution only; later implementation remains blocked until scoped WRs and production
@@ -880,26 +880,26 @@ edges:
   target: WR-059
   label: procedural API before boids rewrite
 - source: WR-004
-  target: WR-083
+  target: WR-094
   label: editor surface guards
 - source: WR-046
-  target: WR-083
+  target: WR-094
   label: UI designer doctrine
-- source: WR-085
-  target: WR-086
+- source: WR-096
+  target: WR-097
   label: operation-driven authoring precedes project IO/apply review
-- source: WR-086
-  target: WR-087
+- source: WR-097
+  target: WR-098
   label: project IO/apply evidence precedes preview lab evidence matrix
-- source: WR-087
-  target: WR-088
+- source: WR-098
+  target: WR-099
   label: preview/runtime evidence precedes API docs and final closeout
 - source: WR-004
-  target: WR-089
+  target: WR-100
   label: editor guardrails
 - source: WR-046
-  target: WR-089
+  target: WR-100
   label: UI doctrine
-- source: WR-088
-  target: WR-089
+- source: WR-099
+  target: WR-100
   label: runtime-proven handoff

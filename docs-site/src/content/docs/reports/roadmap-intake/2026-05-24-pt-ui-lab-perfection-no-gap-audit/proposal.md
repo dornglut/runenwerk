@@ -1,5 +1,5 @@
 ---
-title: Roadmap Intake WR-089
+title: Roadmap Intake WR-100
 description: Roadmap intake proposal generated from a new idea.
 status: draft
 owner: workspace
@@ -8,7 +8,7 @@ canonical: false
 last_reviewed: 2026-05-24
 ---
 
-# Roadmap Intake WR-089
+# Roadmap Intake WR-100
 
 Idea: PT-UI-LAB-PERFECTION no-gap audit
 Suggested title: UI Lab perfectionist governance and no-gap audit doctrine

@@ -12,7 +12,7 @@ open_questions:
 - Which existing WR items does this depend on?
 - Which exact write scopes and validation commands will bound implementation?
 item:
-  id: WR-087
+  id: WR-098
   title: UI Lab preview lab runtime evidence matrix
   diagram_title: UI Lab preview lab evidence
   alias: WR087
@@ -32,7 +32,7 @@ item:
   rice: Editor Lab cannot claim runtime-proven productization until preview scenarios, visual/equivalent artifacts, diagnostics snapshots, accessibility, performance, and degraded-provider evidence are runtime-proven.
   kano: Basic
   dependencies:
-  - WR-086
+  - WR-097
   write_scopes:
   - apps/runenwerk_editor/src/shell
   - apps/runenwerk_editor/src/runtime
@@ -60,8 +60,8 @@ item:
   - task planning:validate
   - git diff --check
   next_evidence: PM-UI-LAB-006 runtime-proven closeout includes a generated Preview Lab evidence manifest, retained visual artifacts, diagnostics snapshots, accessibility snapshots, performance snapshots, unsupported-check diagnostics, and degraded-provider proof.
-  current_decision: Completed; WR-087 closes PM-UI-LAB-006 as runtime_proven and preserves PM007 public API/docs/examples/final closeout as the next dependency.
-  current_call: Completed. Do not reopen WR-087 for PM007 API docs, examples, final track closeout, game-runtime UI projection, native screenshot platform work, GPU visual diff platform work, or perfectionist no-gap certification.
+  current_decision: Completed; WR-098 closes PM-UI-LAB-006 as runtime_proven and preserves PM007 public API/docs/examples/final closeout as the next dependency.
+  current_call: Completed. Do not reopen WR-098 for PM007 API docs, examples, final track closeout, game-runtime UI projection, native screenshot platform work, GPU visual diff platform work, or perfectionist no-gap certification.
   first_move: Run task ai:goal -- --track PT-UI-LAB --scope non-deferred and follow the next legal PM-UI-LAB-007 action.
   main_blocker: Completed.
   why_not_ready: Completed and archived after runtime evidence closeout.
@@ -97,6 +97,6 @@ item:
   fitness_function_requirement: Scenario manifest validation, retained visual or screenshot artifact generation, diagnostics snapshots, unsupported-check diagnostics, accessibility snapshots, performance snapshots, degraded-provider proof, docs validation, roadmap validation, and production validation.
   ownership_mode: Stream-aligned editor product hardening with complicated-subsystem support from editor_shell, ui_definition, and runtime owners.
 edges:
-- source: WR-086
-  target: WR-087
+- source: WR-097
+  target: WR-098
   label: project IO/apply evidence precedes preview lab evidence matrix

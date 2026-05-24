@@ -1,5 +1,5 @@
 ---
-title: WR-088 UI Lab API Docs Examples And Runtime-Proven Closeout Contract
+title: WR-099 UI Lab API Docs Examples And Runtime-Proven Closeout Contract
 description: Promotion and implementation-readiness contract for PM-UI-LAB-007 focused public APIs, usage docs, examples, API ergonomics review, final runtime-proven closeout, and perfectionist-audit handoff.
 status: active
 owner: editor
@@ -15,7 +15,7 @@ related:
   - ../../../workspace/roadmap-items.yaml
 ---
 
-# WR-088 UI Lab API Docs Examples And Runtime-Proven Closeout Contract
+# WR-099 UI Lab API Docs Examples And Runtime-Proven Closeout Contract
 
 ## Goal
 
@@ -25,7 +25,7 @@ a product: focused public workflow entry points for `ui_definition` and
 PT-UI-LAB runtime-proven closeout, and a separate perfectionist-audit intake.
 
 This contract covers promotion readiness and the future bounded implementation
-slice only. It must not implement product code until WR-088 is promoted by the
+slice only. It must not implement product code until WR-099 is promoted by the
 roadmap workflow and `task ai:goal -- --track PT-UI-LAB --scope non-deferred`
 selects a legal implementation action.
 
@@ -33,7 +33,7 @@ selects a legal implementation action.
 
 - Production milestone: `PM-UI-LAB-007` in
   `docs-site/src/content/docs/workspace/production-tracks.yaml`.
-- Roadmap row: `WR-088` in
+- Roadmap row: `WR-099` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Accepted PM007 design:
   `docs-site/src/content/docs/design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md`.
@@ -59,29 +59,29 @@ Current implementation sources to inspect before product code changes:
 
 ## Promotion Readiness
 
-`task production:plan -- --milestone PM-UI-LAB-007 --roadmap WR-088` reports
-WR-088 as `write_promotion_contract`, with promotion preflight status
+`task production:plan -- --milestone PM-UI-LAB-007 --roadmap WR-099` reports
+WR-099 as `write_promotion_contract`, with promotion preflight status
 `promotable`.
 
 Promotion is honest because:
 
 - `PM-UI-LAB-006` is completed with runtime-proven Preview Lab evidence.
-- `WR-087` is completed and archived as the direct prerequisite.
+- `WR-098` is completed and archived as the direct prerequisite.
 - `PM-UI-LAB-007` has an accepted API/docs/examples/runtime closeout design.
-- `WR-088` has bounded write scopes and explicit non-goals for game-runtime UI
+- `WR-099` has bounded write scopes and explicit non-goals for game-runtime UI
   projection and no-gap certification.
 - No product code is required before promotion.
 
 Use this evidence string for promotion:
 
 ```text
-Accepted PM-UI-LAB-007 API/docs/examples/runtime closeout design plus completed PM-UI-LAB-006 runtime-proven Preview Lab evidence clear WR-088 for current-candidate implementation planning; ui_definition remains behavior-free, editor_definition remains runtime-neutral, and perfectionist certification remains a separate audit intake.
+Accepted PM-UI-LAB-007 API/docs/examples/runtime closeout design plus completed PM-UI-LAB-006 runtime-proven Preview Lab evidence clear WR-099 for current-candidate implementation planning; ui_definition remains behavior-free, editor_definition remains runtime-neutral, and perfectionist certification remains a separate audit intake.
 ```
 
 Suggested command after this contract validates:
 
 ```text
-task roadmap:promote -- --id WR-088 --state current_candidate --evidence "Accepted PM-UI-LAB-007 API/docs/examples/runtime closeout design plus completed PM-UI-LAB-006 runtime-proven Preview Lab evidence clear WR-088 for current-candidate implementation planning; ui_definition remains behavior-free, editor_definition remains runtime-neutral, and perfectionist certification remains a separate audit intake."
+task roadmap:promote -- --id WR-099 --state current_candidate --evidence "Accepted PM-UI-LAB-007 API/docs/examples/runtime closeout design plus completed PM-UI-LAB-006 runtime-proven Preview Lab evidence clear WR-099 for current-candidate implementation planning; ui_definition remains behavior-free, editor_definition remains runtime-neutral, and perfectionist certification remains a separate audit intake."
 ```
 
 Do not run product-code implementation before promotion and a subsequent

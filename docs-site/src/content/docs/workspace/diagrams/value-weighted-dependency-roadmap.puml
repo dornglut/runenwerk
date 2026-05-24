@@ -84,7 +84,7 @@ package "Level 3 - Active Domain Tracks" {
 }
 
 package "Level 4 - Active Discovery Context" {
-  component "WR-089 UI Lab perfectionist governance\nstate=current_candidate\nscore=1.0 gate=current-candidate governance contract\nV3 B3\ncall=governance contract\nno app code yet" as WR089 <<V3>>
+  component "WR-100 UI Lab perfectionist governance\nstate=current_candidate\nscore=1.0 gate=current-candidate governance contract\nV3 B3\ncall=governance contract\nno app code yet" as WR089 <<V3>>
 
 }
 

@@ -29,7 +29,7 @@ related_roadmaps:
 
 ## Scope
 
-`WR-088` completes the bounded `PM-UI-LAB-007` release slice: normal
+`WR-099` completes the bounded `PM-UI-LAB-007` release slice: normal
 `ui_definition` and `editor_definition` workflows now have focused public
 entry points, usage docs, compile-backed examples, an API ergonomics review,
 and a final PT-UI-LAB closeout that aggregates PM001-PM006 runtime evidence.

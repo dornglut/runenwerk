@@ -2389,7 +2389,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-001
         roadmap_links:
-          - WR-083
+          - WR-094
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-command-catalog-and-surface-registry-design.md
@@ -2422,7 +2422,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-002
         roadmap_links:
-          - WR-084
+          - WR-095
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-app-hosted-editor-lab-surface-shell-design.md
@@ -2457,7 +2457,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-003
         roadmap_links:
-          - WR-085
+          - WR-096
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
@@ -2492,7 +2492,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-004
         roadmap_links:
-          - WR-086
+          - WR-097
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
@@ -2526,7 +2526,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-005
         roadmap_links:
-          - WR-087
+          - WR-098
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md
@@ -2560,7 +2560,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-006
         roadmap_links:
-          - WR-088
+          - WR-099
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
@@ -2609,7 +2609,7 @@ tracks:
         dependencies:
           - PM-UI-LAB-007
         roadmap_links:
-          - WR-089
+          - WR-100
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md

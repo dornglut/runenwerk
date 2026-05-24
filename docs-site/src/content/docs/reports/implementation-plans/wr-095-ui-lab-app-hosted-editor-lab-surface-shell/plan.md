@@ -1,5 +1,5 @@
 ---
-title: WR-084 UI Lab App-Hosted Editor Lab Surface Shell Contract
+title: WR-095 UI Lab App-Hosted Editor Lab Surface Shell Contract
 description: Design-first implementation contract for PM-UI-LAB-003 app-hosted Editor Lab direct-control shell.
 status: active
 owner: editor
@@ -14,7 +14,7 @@ related:
   - ../../../workspace/roadmap-items.yaml
 ---
 
-# WR-084 UI Lab App-Hosted Editor Lab Surface Shell Contract
+# WR-095 UI Lab App-Hosted Editor Lab Surface Shell Contract
 
 ## Goal
 
@@ -32,7 +32,7 @@ game-runtime UI projection execution.
 
 - Production milestone: `PM-UI-LAB-003` in
   `docs-site/src/content/docs/workspace/production-tracks.yaml`.
-- Roadmap row: `WR-084` in the roadmap source set.
+- Roadmap row: `WR-095` in the roadmap source set.
 - Accepted shell design:
   `docs-site/src/content/docs/design/accepted/ui-lab-app-hosted-editor-lab-surface-shell-design.md`.
 - Productization design:
@@ -56,15 +56,15 @@ Current implementation sources to inspect before code changes:
 
 ## Readiness
 
-Initial `task production:plan -- --milestone PM-UI-LAB-003 --roadmap WR-084`
-classified WR-084 as `repair_wr_promotion_metadata` because the roadmap row
+Initial `task production:plan -- --milestone PM-UI-LAB-003 --roadmap WR-095`
+classified WR-095 as `repair_wr_promotion_metadata` because the roadmap row
 referenced two missing write-scope paths.
 
 The exact metadata repair is:
 
 - create this implementation contract at
   `docs-site/src/content/docs/reports/implementation-plans/wr-084-ui-lab-app-hosted-editor-lab-surface-shell/plan.md`;
-- remove the future PM-003 closeout path from WR-084 write scopes until closeout
+- remove the future PM-003 closeout path from WR-095 write scopes until closeout
   exists.
 
 No product code is authorized by this repair. After this contract and metadata
@@ -119,7 +119,7 @@ Forbidden shortcuts:
   or console state into `ui_definition`;
 - claiming PM-003 runtime proof from descriptor data, static fixtures, or text
   status panels alone;
-- implementing PM-004, PM-005, PM-006, or PM-007 scope under WR-084.
+- implementing PM-004, PM-005, PM-006, or PM-007 scope under WR-095.
 
 ## Implementation Scope
 
@@ -216,7 +216,7 @@ metadata remain the normal path; legacy enum mapping remains compatibility.
 
 ## Runtime Evidence Contract
 
-WR-084 closeout must include app-hosted runtime evidence proving:
+WR-095 closeout must include app-hosted runtime evidence proving:
 
 - the Editor Design profile opens with typed Editor Lab surface frames;
 - definition hierarchy selection uses direct controls;
@@ -258,7 +258,7 @@ remain PM-006.
 
 ## Validation
 
-Minimum validation before WR-084 closeout:
+Minimum validation before WR-095 closeout:
 
 ```text
 cargo fmt
@@ -298,21 +298,21 @@ Focused tests should prove:
   claimed by the closeout.
 - Update `docs-site/src/content/docs/workspace/roadmap-items.yaml`,
   `docs-site/src/content/docs/workspace/roadmap-archive.yaml`, and
-  `docs-site/src/content/docs/workspace/production-tracks.yaml` so WR-084 and
+  `docs-site/src/content/docs/workspace/production-tracks.yaml` so WR-095 and
   PM-UI-LAB-003 claim `runtime_proven` only when the evidence supports it.
 - Run the roadmap, production, docs, planning, and PUML gates after evidence
-  edits and after moving WR-084 out of active roadmap items.
+  edits and after moving WR-095 out of active roadmap items.
 - Rerun `task ai:goal -- --track PT-UI-LAB --scope non-deferred` after closeout
   and follow the next milestone action instead of starting PM-004 from memory.
 
 ## Perfectionist Closeout Audit
 
-WR-084 may close PM-003 as `runtime_proven` if the app-hosted shell chain is
+WR-095 may close PM-003 as `runtime_proven` if the app-hosted shell chain is
 proved end to end and all known gaps are explicit. It must not claim
 `perfectionist_verified`; the final no-gap audit belongs to
 `PT-UI-LAB-PERFECTION` or an equivalent later track after PM-UI-LAB-007.
 
-Known quality gaps that must remain visible if WR-084 closes successfully:
+Known quality gaps that must remain visible if WR-095 closes successfully:
 
 - PM-004 still owns operation history, deterministic visual operations, and
   undo/redo productization.
@@ -327,13 +327,13 @@ Known quality gaps that must remain visible if WR-084 closes successfully:
 
 ## Promotion Evidence
 
-Use this evidence when promoting WR-084 after validation:
+Use this evidence when promoting WR-095 after validation:
 
 ```text
-Accepted PM-UI-LAB-003 shell design plus WR-084 implementation contract clear the app-hosted Editor Lab shell design gate; dependencies WR-004 and WR-046 are support-only and WR-083 is completed runtime-proven prerequisite evidence.
+Accepted PM-UI-LAB-003 shell design plus WR-095 implementation contract clear the app-hosted Editor Lab shell design gate; dependencies WR-004 and WR-046 are support-only and WR-094 is completed runtime-proven prerequisite evidence.
 ```
 
-If `task production:plan -- --milestone PM-UI-LAB-003 --roadmap WR-084` reports
+If `task production:plan -- --milestone PM-UI-LAB-003 --roadmap WR-095` reports
 promotion metadata blockers after this contract exists, repair only those exact
 metadata issues and rerun the planning gates.
 

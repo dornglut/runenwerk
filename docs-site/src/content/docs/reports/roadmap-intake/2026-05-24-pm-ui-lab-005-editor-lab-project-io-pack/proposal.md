@@ -1,5 +1,5 @@
 ---
-title: Roadmap Intake WR-086
+title: Roadmap Intake WR-097
 description: Roadmap intake proposal generated from a new idea.
 status: draft
 owner: workspace
@@ -8,7 +8,7 @@ canonical: false
 last_reviewed: 2026-05-24
 ---
 
-# Roadmap Intake WR-086
+# Roadmap Intake WR-097
 
 Idea: PM-UI-LAB-005 Editor Lab project IO package persistence diff apply activation report rollback productization
 Suggested title: UI Lab project IO diff apply and rollback productization
@@ -35,7 +35,7 @@ Initial planning state: `ready_next`
 ## First Move
 
 ```text
-task production:plan -- --milestone PM-UI-LAB-005 --roadmap WR-086
+task production:plan -- --milestone PM-UI-LAB-005 --roadmap WR-097
 ```
 
 ## Apply Command

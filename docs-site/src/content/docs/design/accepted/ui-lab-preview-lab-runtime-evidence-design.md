@@ -204,7 +204,7 @@ The preferred next WR is one bounded implementation row:
 - primary scope: `apps/runenwerk_editor/src/shell`, `apps/runenwerk_editor/src/runtime`,
   `domain/editor/editor_shell/src/composition`, PM006 closeout artifacts, and
   roadmap/production metadata;
-- dependencies: completed `WR-086`;
+- dependencies: completed `WR-097`;
 - closeout: `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md`;
 - runtime evidence: success, warning, error, reload, apply, rollback,
   degraded-provider, accessibility, performance, unsupported-check, and visual

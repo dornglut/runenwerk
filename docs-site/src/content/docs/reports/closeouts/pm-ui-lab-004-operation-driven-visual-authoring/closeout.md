@@ -1,6 +1,6 @@
 ---
 title: PM-UI-LAB-004 Operation-Driven Visual Authoring Closeout
-description: Runtime-proven closeout evidence for WR-085 Editor Lab typed operations, diffs, diagnostics, history, undo, and redo.
+description: Runtime-proven closeout evidence for WR-096 Editor Lab typed operations, diffs, diagnostics, history, undo, and redo.
 status: completed
 owner: editor
 layer: domain/app
@@ -24,7 +24,7 @@ related_roadmaps:
 
 ## Scope
 
-`WR-085` completes the bounded `PM-UI-LAB-004` implementation slice: supported
+`WR-096` completes the bounded `PM-UI-LAB-004` implementation slice: supported
 Editor Lab authoring edits now route through typed `EditorLabOperation`
 contracts with deterministic diffs, validation diagnostics, app-owned
 operation history, undo/redo, and retained preview or review-surface refresh.
@@ -138,7 +138,7 @@ The artifact-writing test required escalated execution after sandboxed Cargo
 target-lock access was denied. It completed successfully after escalation.
 
 Final metadata validation was run after writing this closeout and moving
-`WR-085` to completed archive state:
+`WR-096` to completed archive state:
 
 ```text
 task docs:validate
@@ -177,7 +177,7 @@ Known quality gaps:
 ## Drift Check
 
 The phase completion drift check found the implementation aligned with the
-accepted PM-004 operation design and WR-085 contract:
+accepted PM-004 operation design and WR-096 contract:
 
 - Generic `domain/ui/ui_definition` still owns only behavior-free generic UI
   visual layout operation mechanics.

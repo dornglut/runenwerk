@@ -1,6 +1,6 @@
 ---
 title: PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell Closeout
-description: Runtime-proven closeout evidence for WR-084 app-hosted Editor Lab direct-control surface shell.
+description: Runtime-proven closeout evidence for WR-095 app-hosted Editor Lab direct-control surface shell.
 status: completed
 owner: editor
 layer: domain/app
@@ -24,7 +24,7 @@ related_roadmaps:
 
 ## Scope
 
-`WR-084` completes the bounded `PM-UI-LAB-003` implementation slice: the
+`WR-095` completes the bounded `PM-UI-LAB-003` implementation slice: the
 Editor Design workspace now presents app-hosted Editor Lab surfaces through
 typed hierarchy, palette, retained preview or degraded canvas, inspector,
 review, diagnostics, and preview-console view models instead of normal
@@ -137,7 +137,7 @@ cargo test -p editor_shell editor_lab
 cargo test -p runenwerk_editor editor_lab
 cargo test -p runenwerk_editor pm_ui_lab_003
 $env:RUNENWERK_WRITE_PM_UI_LAB_003_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_003_runtime_evidence_reports_app_hosted_editor_lab_shell -- --nocapture
-task ai:closeout -- --task "WR-084 PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell" --scope "apps/runenwerk_editor/src/shell/providers/self_authoring.rs; domain/editor/editor_shell/src/surfaces/editor_definition.rs; domain/editor/editor_shell/src/composition; domain/editor/editor_shell/src/commands/map_interactions.rs; docs-site/src/content/docs/reports/implementation-plans/wr-084-ui-lab-app-hosted-editor-lab-surface-shell/plan.md; docs-site/src/content/docs/workspace/roadmap-items.yaml; docs-site/src/content/docs/workspace/production-tracks.yaml" --roadmap docs-site/src/content/docs/workspace/roadmap-items.yaml
+task ai:closeout -- --task "WR-095 PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell" --scope "apps/runenwerk_editor/src/shell/providers/self_authoring.rs; domain/editor/editor_shell/src/surfaces/editor_definition.rs; domain/editor/editor_shell/src/composition; domain/editor/editor_shell/src/commands/map_interactions.rs; docs-site/src/content/docs/reports/implementation-plans/wr-084-ui-lab-app-hosted-editor-lab-surface-shell/plan.md; docs-site/src/content/docs/workspace/roadmap-items.yaml; docs-site/src/content/docs/workspace/production-tracks.yaml" --roadmap docs-site/src/content/docs/workspace/roadmap-items.yaml
 ```
 
 The artifact-writing test and `task ai:closeout` required escalated execution
@@ -145,7 +145,7 @@ because sandboxed access to Cargo or uv cache state was denied. Both completed
 successfully after escalation.
 
 Final metadata validation was run after writing this closeout and moving
-`WR-084` to completed archive state:
+`WR-095` to completed archive state:
 
 ```text
 task docs:validate
@@ -184,7 +184,7 @@ Known quality gaps:
 ## Drift Check
 
 The phase completion drift check found the implementation aligned with the
-accepted PM-003 shell design and WR-084 contract:
+accepted PM-003 shell design and WR-095 contract:
 
 - Generic `domain/ui/ui_definition` remains behavior-free and only provides
   retained preview formation for authored UI definitions.
@@ -194,6 +194,6 @@ accepted PM-003 shell design and WR-084 contract:
   composition contracts without owning project IO, runtime activation, or app
   mutation authority.
 - Registry-backed surface metadata from PM-002 remains the normal mounted
-  surface path; WR-084 does not introduce a parallel surface identity source.
+  surface path; WR-095 does not introduce a parallel surface identity source.
 - Later productization slices remain incomplete and must not be inferred from
   the PM-003 shell proof.

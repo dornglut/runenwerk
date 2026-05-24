@@ -35,7 +35,7 @@ This is the accepted implementation design for `PM-UI-LAB-002`.
 It defines the command catalog and registry-owned surface metadata direction for
 the Editor Interface Lab productization track. It does not implement code and
 does not authorize product implementation until the linked WR row is promoted
-and `task production:plan -- --milestone PM-UI-LAB-002 --roadmap WR-083`
+and `task production:plan -- --milestone PM-UI-LAB-002 --roadmap WR-094`
 reports an implementation-contract action.
 
 ## Goal

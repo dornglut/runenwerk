@@ -371,7 +371,7 @@ task planning:validate
 ## WR Candidate
 
 The next roadmap row should be a bounded implementation slice, tentatively
-`WR-085: UI Lab operation-driven visual authoring core`.
+`WR-096: UI Lab operation-driven visual authoring core`.
 
 Primary write scopes:
 
@@ -393,12 +393,12 @@ Expected dependencies:
 
 - `WR-004` for editor surface guard support.
 - `WR-046` for UI Designer doctrine and target-boundary ratification.
-- `WR-083` for completed command catalog and surface registry source of truth.
-- `WR-084` for completed app-hosted Editor Lab shell surfaces and
+- `WR-094` for completed command catalog and surface registry source of truth.
+- `WR-095` for completed app-hosted Editor Lab shell surfaces and
   direct-control route evidence.
 
 The WR row should start as `ready_next`. Product code still requires
-`task production:plan -- --milestone PM-UI-LAB-004 --roadmap WR-085` and the
+`task production:plan -- --milestone PM-UI-LAB-004 --roadmap WR-096` and the
 implementation contract it produces.
 
 ## Non-Goals
@@ -440,7 +440,7 @@ Stop before implementation if PM-004 would:
 PM-004 can move from `designing` to `ready_next` when:
 
 - this accepted design exists;
-- a bounded WR row exists for `WR-085`;
+- a bounded WR row exists for `WR-096`;
 - the production milestone links this accepted design and WR row;
 - production, roadmap, docs, PUML, and planning validators pass;
 - `task ai:goal -- --track PT-UI-LAB --scope non-deferred` reports the next

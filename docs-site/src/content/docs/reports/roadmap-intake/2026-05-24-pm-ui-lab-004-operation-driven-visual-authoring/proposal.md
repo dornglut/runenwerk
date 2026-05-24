@@ -1,5 +1,5 @@
 ---
-title: Roadmap Intake WR-085
+title: Roadmap Intake WR-096
 description: Roadmap intake proposal generated from a new idea.
 status: draft
 owner: workspace
@@ -8,7 +8,7 @@ canonical: false
 last_reviewed: 2026-05-24
 ---
 
-# Roadmap Intake WR-085
+# Roadmap Intake WR-096
 
 Idea: PM-UI-LAB-004 operation-driven visual authoring core for Editor Lab: typed EditorLabOperation facade, deterministic diffs, diagnostics, app-owned edit history, undo/redo, and runtime proof without project IO or persistence
 Suggested title: UI Lab operation-driven visual authoring core
@@ -26,7 +26,7 @@ Source design:
 ## Open Questions
 
 - Accepted PM-UI-LAB-004 design and PM-UI-LAB-003 runtime-proven closeout justify ready-next planning.
-- Dependencies are WR-004, WR-046, WR-083, and WR-084.
+- Dependencies are WR-004, WR-046, WR-094, and WR-095.
 - Write scopes and validation are recorded in `proposal.yaml` and must be preserved when applying the intake.
 
 ## Apply Command

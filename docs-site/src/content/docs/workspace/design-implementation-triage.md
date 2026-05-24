@@ -110,7 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-089 | UI Lab perfectionist governance and no-gap audit doctrine | P2 | V3 | B3 | 1.0 | Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until follow-on WRs are accepted. | Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-089, then finish the code-truth and evidence matrix closeout. |
+| WR-100 | UI Lab perfectionist governance and no-gap audit doctrine | P2 | V3 | B3 | 1.0 | Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until follow-on WRs are accepted. | Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and evidence matrix closeout. |
 
 ## Support Only
 

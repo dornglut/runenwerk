@@ -1,5 +1,5 @@
 ---
-title: WR-087 UI Lab Preview Lab Runtime Evidence Matrix Contract
+title: WR-098 UI Lab Preview Lab Runtime Evidence Matrix Contract
 description: Promotion and implementation-readiness contract for PM-UI-LAB-006 app-owned Editor Lab preview scenarios, visual or equivalent runtime evidence, diagnostics snapshots, accessibility checks, performance evidence, and degraded-provider proof.
 status: active
 owner: editor
@@ -15,7 +15,7 @@ related:
   - ../../../workspace/roadmap-items.yaml
 ---
 
-# WR-087 UI Lab Preview Lab Runtime Evidence Matrix Contract
+# WR-098 UI Lab Preview Lab Runtime Evidence Matrix Contract
 
 ## Goal
 
@@ -26,7 +26,7 @@ rollback, degraded-provider, accessibility, performance, and unsupported-check
 states.
 
 This contract covers promotion readiness and the future bounded implementation
-slice only. It must not implement product code until WR-087 is promoted by the
+slice only. It must not implement product code until WR-098 is promoted by the
 roadmap workflow and `task ai:goal -- --track PT-UI-LAB --scope non-deferred`
 selects a legal implementation action.
 
@@ -34,7 +34,7 @@ selects a legal implementation action.
 
 - Production milestone: `PM-UI-LAB-006` in
   `docs-site/src/content/docs/workspace/production-tracks.yaml`.
-- Roadmap row: `WR-087` in
+- Roadmap row: `WR-098` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Accepted PM006 design:
   `docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md`.
@@ -55,8 +55,8 @@ Current implementation sources to inspect before product code changes:
 
 ## Promotion Readiness
 
-`task production:plan -- --milestone PM-UI-LAB-006 --roadmap WR-087` reports
-WR-087 as `write_promotion_contract`, with promotion preflight status
+`task production:plan -- --milestone PM-UI-LAB-006 --roadmap WR-098` reports
+WR-098 as `write_promotion_contract`, with promotion preflight status
 `promotable`.
 
 Promotion is honest because:
@@ -64,22 +64,22 @@ Promotion is honest because:
 - `PM-UI-LAB-005` is completed with runtime-proven project IO, diff/apply,
   activation report, failed activation preservation, reload, and rollback
   evidence.
-- `WR-086` is completed and archived as the direct implementation prerequisite.
+- `WR-097` is completed and archived as the direct implementation prerequisite.
 - `PM-UI-LAB-006` has an accepted Preview Lab runtime evidence design.
-- `WR-087` has bounded write scopes and explicit PM007/game-runtime
+- `WR-098` has bounded write scopes and explicit PM007/game-runtime
   non-goals.
 - No product code is required before promotion.
 
 Use this evidence string for promotion:
 
 ```text
-Accepted PM-UI-LAB-006 Preview Lab runtime evidence design plus completed PM-UI-LAB-005 runtime-proven project IO, diff/apply, activation report, reload, and rollback closeout clear WR-087 for current-candidate implementation planning; evidence capture remains app-owned and ui_definition remains behavior-free.
+Accepted PM-UI-LAB-006 Preview Lab runtime evidence design plus completed PM-UI-LAB-005 runtime-proven project IO, diff/apply, activation report, reload, and rollback closeout clear WR-098 for current-candidate implementation planning; evidence capture remains app-owned and ui_definition remains behavior-free.
 ```
 
 Suggested command after this contract validates:
 
 ```text
-task roadmap:promote -- --id WR-087 --state current_candidate --evidence "Accepted PM-UI-LAB-006 Preview Lab runtime evidence design plus completed PM-UI-LAB-005 runtime-proven project IO, diff/apply, activation report, reload, and rollback closeout clear WR-087 for current-candidate implementation planning; evidence capture remains app-owned and ui_definition remains behavior-free."
+task roadmap:promote -- --id WR-098 --state current_candidate --evidence "Accepted PM-UI-LAB-006 Preview Lab runtime evidence design plus completed PM-UI-LAB-005 runtime-proven project IO, diff/apply, activation report, reload, and rollback closeout clear WR-098 for current-candidate implementation planning; evidence capture remains app-owned and ui_definition remains behavior-free."
 ```
 
 Do not run product-code implementation before promotion and a subsequent
@@ -117,7 +117,7 @@ Forbidden shortcuts:
 - hiding failed scenario inputs, diagnostics, or artifact paths;
 - closing PM006 with only the PM002-PM005 narrow artifacts;
 - claiming PM007 public API ergonomics, usage docs, examples, final track
-  closeout, or no-gap certification under WR-087.
+  closeout, or no-gap certification under WR-098.
 
 ## Implementation Scope
 

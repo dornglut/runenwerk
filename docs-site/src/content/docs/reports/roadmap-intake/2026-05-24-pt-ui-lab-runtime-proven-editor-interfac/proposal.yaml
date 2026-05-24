@@ -12,7 +12,7 @@ open_questions:
 - Which existing WR items does this depend on?
 - Which exact write scopes and validation commands will bound implementation?
 item:
-  id: WR-083
+  id: WR-094
   title: UI Lab command catalog and surface registry source of truth
   diagram_title: UI Lab command catalog and registry
   alias: WR083
@@ -54,10 +54,10 @@ item:
   - task roadmap:validate
   - task roadmap:check
   - task docs:validate
-  next_evidence: Implement the current-candidate WR-083 command catalog and surface registry contract, then close with focused tests and launched-editor runtime evidence.
-  current_decision: WR-083 is current_candidate; accepted PM-UI-LAB-002 design and the implementation contract define the bounded source-of-truth cleanup, validation, stop conditions, and runtime evidence.
-  current_call: Current-candidate implementation contract written; product code must stay inside WR-083 write scopes and close with runtime evidence.
-  first_move: Re-read the accepted PM-UI-LAB-002 design and WR-083 implementation contract, then start the bounded command catalog and surface registry implementation inside the listed write scopes.
+  next_evidence: Implement the current-candidate WR-094 command catalog and surface registry contract, then close with focused tests and launched-editor runtime evidence.
+  current_decision: WR-094 is current_candidate; accepted PM-UI-LAB-002 design and the implementation contract define the bounded source-of-truth cleanup, validation, stop conditions, and runtime evidence.
+  current_call: Current-candidate implementation contract written; product code must stay inside WR-094 write scopes and close with runtime evidence.
+  first_move: Re-read the accepted PM-UI-LAB-002 design and WR-094 implementation contract, then start the bounded command catalog and surface registry implementation inside the listed write scopes.
   main_blocker: Implementation, focused tests, launched-editor runtime evidence, closeout, and production/roadmap completion updates remain.
   why_not_ready: Current candidate is ready for bounded implementation; not complete until runtime evidence and closeout pass.
   completion_quality: not_applicable
@@ -73,8 +73,8 @@ item:
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from editor_shell and app runtime owners.
 edges:
 - source: WR-004
-  target: WR-083
+  target: WR-094
   label: editor surface guards
 - source: WR-046
-  target: WR-083
+  target: WR-094
   label: UI designer doctrine

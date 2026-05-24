@@ -1,5 +1,5 @@
 ---
-title: WR-083 UI Lab Command Catalog And Surface Registry Contract
+title: WR-094 UI Lab Command Catalog And Surface Registry Contract
 description: Design-first implementation contract for PM-UI-LAB-002 command catalog and registry-owned surface metadata.
 status: active
 owner: editor
@@ -14,7 +14,7 @@ related:
   - ../../../workspace/roadmap-deferred.yaml
 ---
 
-# WR-083 UI Lab Command Catalog And Surface Registry Contract
+# WR-094 UI Lab Command Catalog And Surface Registry Contract
 
 ## Goal
 
@@ -40,7 +40,7 @@ Expected production outcome:
 
 - Production milestone: `PM-UI-LAB-002` in
   `docs-site/src/content/docs/workspace/production-tracks.yaml`.
-- Roadmap row: `WR-083` in the roadmap source set.
+- Roadmap row: `WR-094` in the roadmap source set.
 - Accepted design:
   `docs-site/src/content/docs/design/accepted/ui-lab-command-catalog-and-surface-registry-design.md`.
 - Productization design:
@@ -60,11 +60,11 @@ Expected production outcome:
 ## Readiness
 
 Initial action classification from `task production:plan` was `design_first`
-because `WR-083` entered the roadmap as `blocked_deferred` intake.
+because `WR-094` entered the roadmap as `blocked_deferred` intake.
 
 This contract is the design-first planning artifact that cleared the initial
 policy-deferred blocker. After the accepted design and this contract existed,
-`WR-083` was moved to `ready_next` with B2 metadata and then promoted to
+`WR-094` was moved to `ready_next` with B2 metadata and then promoted to
 `current_candidate`.
 
 Current action classification from `task production:plan` is
@@ -87,13 +87,13 @@ Product code may start only in a later action after:
   whitespace, and `task ai:goal` checks;
 - any current-candidate switch or promotion metadata repair named by the
   workflow is completed;
-- the implementation starts inside the exact WR-083 write scopes;
+- the implementation starts inside the exact WR-094 write scopes;
 - the implementation contract remains aligned with the accepted design and the
   current source state.
 
 ## Promotion History
 
-`WR-083` was promoted because the required design-first evidence was present and
+`WR-094` was promoted because the required design-first evidence was present and
 bounded:
 
 - the accepted PM-UI-LAB-002 design names the command catalog and surface
@@ -111,7 +111,7 @@ bounded:
 Promotion command used:
 
 ```text
-task roadmap:promote -- --id WR-083 --state current_candidate --evidence "Accepted PM-UI-LAB-002 command catalog and surface registry design plus WR-083 implementation contract clear the design-first blocker; production:plan reports WR-083 promotable."
+task roadmap:promote -- --id WR-094 --state current_candidate --evidence "Accepted PM-UI-LAB-002 command catalog and surface registry design plus WR-094 implementation contract clear the design-first blocker; production:plan reports WR-094 promotable."
 ```
 
 Post-promotion checks run:
@@ -125,7 +125,7 @@ task production:render
 task production:check
 task puml:validate
 task docs:validate
-task production:plan -- --milestone PM-UI-LAB-002 --roadmap WR-083
+task production:plan -- --milestone PM-UI-LAB-002 --roadmap WR-094
 task ai:goal -- --track PT-UI-LAB --scope non-deferred
 ```
 
@@ -143,8 +143,8 @@ Evidence supporting promotion from `ready_next` to `current_candidate`:
   `docs-site/src/content/docs/design/active/ui-lab-productization-design.md`;
 - PM-UI-LAB-001 closeout:
   `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-001-productization-governance/closeout.md`;
-- this decision-complete WR-083 contract;
-- production milestone `PM-UI-LAB-002` is active and links `WR-083`;
+- this decision-complete WR-094 contract;
+- production milestone `PM-UI-LAB-002` is active and links `WR-094`;
 - roadmap dependencies `WR-004` and `WR-046` are support-only context;
 - validation passed after metadata repair:
   `task roadmap:validate`, `task roadmap:render`,
@@ -155,7 +155,7 @@ Evidence supporting promotion from `ready_next` to `current_candidate`:
 Promotion evidence text to use:
 
 ```text
-Accepted PM-UI-LAB-002 command catalog and surface registry design plus WR-083 implementation contract clear the design-first blocker; production:plan reports WR-083 promotable.
+Accepted PM-UI-LAB-002 command catalog and surface registry design plus WR-094 implementation contract clear the design-first blocker; production:plan reports WR-094 promotable.
 ```
 
 ## Implementation Contract Decisions
@@ -410,7 +410,7 @@ Runtime evidence before PM-UI-LAB-002 closeout:
 
 Stop before product code if:
 
-- `WR-083` remains `blocked_deferred`;
+- `WR-094` remains `blocked_deferred`;
 - `task production:plan` does not classify the row as promotable or
   implementable;
 - implementation would require `ui_definition` to own editor command behavior;
@@ -436,7 +436,7 @@ as complete.
 
 ## Perfectionist Closeout Audit
 
-Do not claim `perfectionist_verified` for WR-083 or PM-UI-LAB-002. The
+Do not claim `perfectionist_verified` for WR-094 or PM-UI-LAB-002. The
 perfectionist/no-gap audit remains a later `PT-UI-LAB` follow-up after the
 Editor Lab product track is runtime-proven.
 

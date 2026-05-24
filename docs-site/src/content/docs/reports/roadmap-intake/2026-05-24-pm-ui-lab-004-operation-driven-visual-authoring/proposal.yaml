@@ -13,7 +13,7 @@ open_questions:
 - Which existing WR items does this depend on?
 - Which exact write scopes and validation commands will bound implementation?
 item:
-  id: WR-085
+  id: WR-096
   title: UI Lab operation-driven visual authoring core
   diagram_title: UI Lab visual authoring ops
   alias: WR085
@@ -35,8 +35,8 @@ item:
   dependencies:
   - WR-004
   - WR-046
-  - WR-083
-  - WR-084
+  - WR-094
+  - WR-095
   write_scopes:
   - domain/ui/ui_definition/src/visual_layout
   - domain/editor/editor_definition/src
@@ -69,9 +69,9 @@ item:
   - task production:check
   - task planning:validate
   next_evidence: Accepted PM-UI-LAB-004 operation-driven visual authoring design plus PM-003 runtime-proven shell closeout clear the design gate for an implementation contract.
-  current_decision: WR-085 is ready_next; accepted PM-UI-LAB-004 design defines the bounded operation-driven visual authoring slice and runtime evidence requirements.
-  current_call: Use WR-085 only for Editor Lab operation envelopes, deterministic diffs, validation diagnostics, app-owned edit history, undo/redo, and runtime proof. Do not include PM-005 project IO, PM-006 evidence matrix, PM-007 API/examples closeout, game-runtime UI projection, or no-gap audit work.
-  first_move: Run task production:plan -- --milestone PM-UI-LAB-004 --roadmap WR-085 and follow its implementation-contract next action before changing product code.
+  current_decision: WR-096 is ready_next; accepted PM-UI-LAB-004 design defines the bounded operation-driven visual authoring slice and runtime evidence requirements.
+  current_call: Use WR-096 only for Editor Lab operation envelopes, deterministic diffs, validation diagnostics, app-owned edit history, undo/redo, and runtime proof. Do not include PM-005 project IO, PM-006 evidence matrix, PM-007 API/examples closeout, game-runtime UI projection, or no-gap audit work.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-004 --roadmap WR-096 and follow its implementation-contract next action before changing product code.
   main_blocker: Awaiting production implementation contract and roadmap promotion from ready_next.
   why_not_ready: ''
   completion_quality: not_applicable
@@ -104,14 +104,14 @@ item:
   ownership_mode: Stream-aligned editor product work with complicated-subsystem support from ui_definition, editor_definition, and editor_shell owners.
 edges:
 - source: WR-004
-  target: WR-085
+  target: WR-096
   label: editor surface guards
 - source: WR-046
-  target: WR-085
+  target: WR-096
   label: UI designer doctrine
-- source: WR-083
-  target: WR-085
+- source: WR-094
+  target: WR-096
   label: command catalog and registry proof
-- source: WR-084
-  target: WR-085
+- source: WR-095
+  target: WR-096
   label: app-hosted shell proof

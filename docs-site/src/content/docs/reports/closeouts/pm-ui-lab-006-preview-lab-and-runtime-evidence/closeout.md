@@ -1,6 +1,6 @@
 ---
 title: PM-UI-LAB-006 Preview Lab And Runtime Evidence Closeout
-description: Runtime-proven closeout evidence for WR-087 Editor Lab preview scenarios, retained visual artifacts, diagnostics snapshots, accessibility checks, performance evidence, unsupported-check diagnostics, and degraded-provider proof.
+description: Runtime-proven closeout evidence for WR-098 Editor Lab preview scenarios, retained visual artifacts, diagnostics snapshots, accessibility checks, performance evidence, unsupported-check diagnostics, and degraded-provider proof.
 status: completed
 owner: editor
 layer: app/runtime-evidence
@@ -29,7 +29,7 @@ related_roadmaps:
 
 ## Scope
 
-`WR-087` completes the bounded `PM-UI-LAB-006` implementation slice: Editor Lab
+`WR-098` completes the bounded `PM-UI-LAB-006` implementation slice: Editor Lab
 now has an app-owned Preview Lab evidence harness with a typed scenario catalog,
 runtime evidence manifest, retained visual artifacts, diagnostics snapshots,
 accessibility snapshots, performance snapshots, unsupported-check diagnostics,
@@ -142,7 +142,7 @@ The artifact-writing test required escalated execution after sandboxed Cargo
 target-lock access was denied. It completed successfully after escalation.
 
 Final metadata validation must be run after writing this closeout, moving
-`WR-087` to completed archive state, and marking `PM-UI-LAB-006` completed:
+`WR-098` to completed archive state, and marking `PM-UI-LAB-006` completed:
 
 ```text
 cargo test -p runenwerk_editor editor_lab
@@ -179,7 +179,7 @@ Known quality gaps:
 ## Drift Check
 
 The phase completion drift check found the implementation aligned with the
-accepted PM-006 Preview Lab runtime evidence design and WR-087 contract:
+accepted PM-006 Preview Lab runtime evidence design and WR-098 contract:
 
 - App-owned Preview Lab evidence execution and artifact writing remain under
   `apps/runenwerk_editor`.

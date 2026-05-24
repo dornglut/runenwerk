@@ -1,5 +1,5 @@
 ---
-title: WR-086 UI Lab Project IO Diff Apply And Rollback Productization Contract
+title: WR-097 UI Lab Project IO Diff Apply And Rollback Productization Contract
 description: Promotion and implementation-readiness contract for PM-UI-LAB-005 app-owned Editor Lab project IO, diff/apply review, activation reports, failed activation preservation, and rollback.
 status: active
 owner: editor
@@ -16,7 +16,7 @@ related:
   - ../../../workspace/roadmap-items.yaml
 ---
 
-# WR-086 UI Lab Project IO Diff Apply And Rollback Productization Contract
+# WR-097 UI Lab Project IO Diff Apply And Rollback Productization Contract
 
 ## Goal
 
@@ -26,7 +26,7 @@ preflight, deterministic diff review, apply/reject, typed activation reports,
 failed activation preservation, rollback, and reload-last-applied behavior.
 
 This contract covers promotion readiness and the future bounded implementation
-slice only. It must not implement product code until WR-086 is promoted by the
+slice only. It must not implement product code until WR-097 is promoted by the
 roadmap workflow and `task ai:goal -- --track PT-UI-LAB --scope non-deferred`
 selects an implementation action.
 
@@ -34,7 +34,7 @@ selects an implementation action.
 
 - Production milestone: `PM-UI-LAB-005` in
   `docs-site/src/content/docs/workspace/production-tracks.yaml`.
-- Roadmap row: `WR-086` in
+- Roadmap row: `WR-097` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Accepted PM005 design:
   `docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md`.
@@ -60,31 +60,31 @@ Current implementation sources to inspect before product code changes:
 
 ## Promotion Readiness
 
-`task production:plan -- --milestone PM-UI-LAB-005 --roadmap WR-086` reports
-WR-086 as `write_promotion_contract`, with promotion preflight status
+`task production:plan -- --milestone PM-UI-LAB-005 --roadmap WR-097` reports
+WR-097 as `write_promotion_contract`, with promotion preflight status
 `promotable`.
 
 Promotion is honest because:
 
 - `PM-UI-LAB-004` is completed with runtime-proven operation-driven authoring
   closeout evidence.
-- `WR-085` is completed and archived as the operation-driven authoring
+- `WR-096` is completed and archived as the operation-driven authoring
   prerequisite.
 - `PM-UI-LAB-005` has an accepted persistence/project-IO/apply/rollback
   design.
-- `WR-086` has bounded write scopes and explicit non-goals.
+- `WR-097` has bounded write scopes and explicit non-goals.
 - No product code is required before promotion.
 
 Use this evidence string for promotion:
 
 ```text
-Accepted PM-UI-LAB-005 persistence/project-IO/apply/rollback design plus completed PM-004 runtime-proven operation authoring closeout clear WR-086 for current-candidate planning; WR-085 is completed prerequisite evidence and PM005 ownership remains app/editor-owned.
+Accepted PM-UI-LAB-005 persistence/project-IO/apply/rollback design plus completed PM-004 runtime-proven operation authoring closeout clear WR-097 for current-candidate planning; WR-096 is completed prerequisite evidence and PM005 ownership remains app/editor-owned.
 ```
 
 Suggested command after this contract validates:
 
 ```text
-task roadmap:promote -- --id WR-086 --state current_candidate --evidence "Accepted PM-UI-LAB-005 persistence/project-IO/apply/rollback design plus completed PM-004 runtime-proven operation authoring closeout clear WR-086 for current-candidate planning; WR-085 is completed prerequisite evidence and PM005 ownership remains app/editor-owned."
+task roadmap:promote -- --id WR-097 --state current_candidate --evidence "Accepted PM-UI-LAB-005 persistence/project-IO/apply/rollback design plus completed PM-004 runtime-proven operation authoring closeout clear WR-097 for current-candidate planning; WR-096 is completed prerequisite evidence and PM005 ownership remains app/editor-owned."
 ```
 
 Do not run product-code implementation before promotion and a subsequent
@@ -120,7 +120,7 @@ Forbidden shortcuts:
 - reporting activation through unstructured console strings only;
 - losing failed activation input or previous live state on activation failure;
 - claiming PM006 screenshot/accessibility/performance breadth or PM007 public
-  API/docs/examples closeout under WR-086;
+  API/docs/examples closeout under WR-097;
 - using a broad catch-all module such as `utils.rs` or `helpers.rs`.
 
 ## Implementation Scope
@@ -248,12 +248,12 @@ UI for PM005 acceptance.
    exists.
 
 If this scope cannot stay bounded without mixing PM006 evidence breadth or
-PM007 public API closeout into the implementation, stop and split WR-086 into
+PM007 public API closeout into the implementation, stop and split WR-097 into
 project-store and apply-review/rollback WR rows before product code continues.
 
 ## Runtime Evidence Contract
 
-WR-086 closeout must include app-hosted runtime evidence proving:
+WR-097 closeout must include app-hosted runtime evidence proving:
 
 - an Editor Lab package is saved from current drafts;
 - the saved package reloads into drafts without changing live state;
@@ -293,7 +293,7 @@ implementation naturally produces narrow equivalent artifacts.
 
 ## Validation
 
-Minimum validation before WR-086 closeout:
+Minimum validation before WR-097 closeout:
 
 ```text
 cargo fmt
@@ -338,28 +338,28 @@ Focused tests should prove:
 - Store PM005 runtime artifacts under that closeout directory, including
   package round-trip, diff/apply review, activation report, failure
   preservation, rollback, and reload-last-applied evidence.
-- Add the closeout path and artifact paths to WR-086 write scopes only when
+- Add the closeout path and artifact paths to WR-097 write scopes only when
   the files exist.
-- Move WR-086 to `docs-site/src/content/docs/workspace/roadmap-archive.yaml`
+- Move WR-097 to `docs-site/src/content/docs/workspace/roadmap-archive.yaml`
   and mark PM-UI-LAB-005 completed only after evidence supports
   `runtime_proven`.
 - Record PM006 and PM007 as remaining known gaps, not PM005 failures, if PM005
   closes its runtime contract.
 - Run roadmap, production, docs, planning, and PUML gates after evidence edits
-  and after moving WR-086 out of active roadmap items.
+  and after moving WR-097 out of active roadmap items.
 - Rerun `task ai:goal -- --track PT-UI-LAB --scope non-deferred` after
   closeout and follow the next milestone action instead of starting PM006 from
   memory.
 
 ## Perfectionist Closeout Audit
 
-WR-086 may close PM005 as `runtime_proven` if project IO, diff/apply, activation
+WR-097 may close PM005 as `runtime_proven` if project IO, diff/apply, activation
 reports, failed activation preservation, rollback, reload-last-applied, and
 runtime evidence are proven end to end. It must not claim
 `perfectionist_verified`; the final no-gap audit belongs to
 `PT-UI-LAB-PERFECTION` or an equivalent later track after PM-UI-LAB-007.
 
-Known quality gaps that must remain visible if WR-086 closes successfully:
+Known quality gaps that must remain visible if WR-097 closes successfully:
 
 - PM006 still owns screenshot matrices, visual diffing, accessibility,
   performance, and broad degraded-provider scenario evidence.

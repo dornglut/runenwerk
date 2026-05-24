@@ -302,7 +302,7 @@ task planning:validate
 ## WR Candidate
 
 The next roadmap row should be a bounded implementation slice, tentatively
-`WR-084: UI Lab app-hosted Editor Lab surface shell`.
+`WR-095: UI Lab app-hosted Editor Lab surface shell`.
 
 Primary write scopes:
 
@@ -321,11 +321,11 @@ Expected dependencies:
 
 - `WR-004` for ongoing UI/editor guard coverage.
 - `WR-046` for UI Designer doctrine and target-boundary ratification.
-- `WR-083` for completed command catalog and registry-owned surface metadata.
+- `WR-094` for completed command catalog and registry-owned surface metadata.
 
 The row should start as ready-next unless roadmap promotion policy selects it
 as current candidate. Product code still requires `task production:plan
--- --milestone PM-UI-LAB-003 --roadmap WR-084` and the implementation contract
+-- --milestone PM-UI-LAB-003 --roadmap WR-095` and the implementation contract
 it produces.
 
 ## Non-Goals

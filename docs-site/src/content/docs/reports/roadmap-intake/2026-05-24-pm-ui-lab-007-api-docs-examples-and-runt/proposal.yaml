@@ -12,7 +12,7 @@ open_questions:
 - Which existing WR items does this depend on?
 - Which exact write scopes and validation commands will bound implementation?
 item:
-  id: WR-088
+  id: WR-099
   title: UI Lab API docs examples and runtime-proven closeout
   diagram_title: UI Lab API docs closeout
   alias: WR088
@@ -32,7 +32,7 @@ item:
   rice: Editor Lab cannot close as a product until public APIs, usage docs, examples, final runtime evidence, and perfectionist-audit handoff are discoverable and validated.
   kano: Basic
   dependencies:
-  - WR-087
+  - WR-098
   write_scopes:
   - domain/ui/ui_definition
   - domain/editor/editor_definition
@@ -66,7 +66,7 @@ item:
   - task planning:validate
   - git diff --check
   next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md.
-  current_decision: Completed; WR-088 closes PM-UI-LAB-007 and PT-UI-LAB as runtime_proven with focused public APIs, usage docs, examples, API ergonomics review, evidence aggregation, and separate no-gap audit intake.
+  current_decision: Completed; WR-099 closes PM-UI-LAB-007 and PT-UI-LAB as runtime_proven with focused public APIs, usage docs, examples, API ergonomics review, evidence aggregation, and separate no-gap audit intake.
   current_call: Complete; preserve runtime_proven evidence and keep perfectionist verification in the separate PT-UI-LAB-PERFECTION no-gap audit intake.
   first_move: Completed; use the no-gap audit intake before claiming perfectionist_verified.
   main_blocker: Complete; remaining quality gaps are explicit later audit scope, not blockers for runtime_proven PT-UI-LAB closeout.
@@ -77,7 +77,7 @@ item:
   - Broad crate-level glob exports remain for compatibility; deeper API reshaping is deferred to a no-gap audit.
   - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
   - Module-structure perfectionist review, deeper UI ergonomics audit, native evidence platform decisions, accessibility and performance depth beyond retained evidence, and zero-known-gap certification remain separate audit scope.
-  - WR-088 does not claim perfectionist_verified completion.
+  - WR-099 does not claim perfectionist_verified completion.
   completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
   diagram_call:
   - public APIs
@@ -104,6 +104,6 @@ item:
   fitness_function_requirement: Focused public API tests, examples compile/run checks, docs validation, public API ergonomics review, PM001-PM006 evidence aggregation, final closeout validation, and separate perfectionist-audit intake.
   ownership_mode: Stream-aligned editor release work with enabling support from ui_definition and editor_definition owners.
 edges:
-- source: WR-087
-  target: WR-088
+- source: WR-098
+  target: WR-099
   label: preview/runtime evidence precedes API docs and final closeout
