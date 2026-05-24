@@ -14,6 +14,7 @@ related:
   - ./roadmap-decision-register.md
   - ./schemas/production-tracks.schema.json
   - ./diagrams/production-track-roadmap.puml
+  - ./diagrams/production-track-full-roadmap.puml
 ---
 
 # Production Track Index

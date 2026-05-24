@@ -59,6 +59,7 @@ class ProductionRenderTargets(StrictModel):
     production_index: str
     milestone_register: str
     track_roadmap: str
+    full_track_roadmap: str
 
 
 class ProductionDesignGate(StrictModel):

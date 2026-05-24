@@ -7,6 +7,7 @@ render:
   production_index: docs-site/src/content/docs/workspace/production-track-index.md
   milestone_register: docs-site/src/content/docs/workspace/production-milestone-register.md
   track_roadmap: docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  full_track_roadmap: docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
 tracks:
   - id: PT-SDF-OW
     title: SDF-first open-world playable vertical

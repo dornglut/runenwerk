@@ -32,6 +32,7 @@ Operational execution checklist:
 - [workspace/schemas/roadmap-item-source.schema.json](./schemas/roadmap-item-source.schema.json)
 - [workspace/schemas/batch-manifest.schema.json](./schemas/batch-manifest.schema.json)
 - [workspace/diagrams/production-track-roadmap.puml](./diagrams/production-track-roadmap.puml)
+- [workspace/diagrams/production-track-full-roadmap.puml](./diagrams/production-track-full-roadmap.puml)
 - [workspace/diagrams/codex-roadmap-orchestration-target.puml](./diagrams/codex-roadmap-orchestration-target.puml)
 - [workspace/diagrams/parallel-roadmap-batch-automation.puml](./diagrams/parallel-roadmap-batch-automation.puml)
 - [workspace/diagrams/design-intake-roadmap-automation.puml](./diagrams/design-intake-roadmap-automation.puml)
