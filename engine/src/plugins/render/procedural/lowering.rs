@@ -1,13 +1,37 @@
+use super::authoring::ProceduralDrawSource;
 use super::descriptors::{
     ProceduralPassDescriptor, ProceduralShader, ProceduralTargetDescriptor,
     ProceduralVisualDescriptor,
 };
 use super::validation::{ProceduralValidationError, validate_procedural_pass};
 use crate::plugins::render::RenderFlow;
+use crate::plugins::render::api::PassParamBinding;
+
+pub(crate) struct ProceduralPassLowering {
+    pub(crate) uniform_bindings: Vec<PassParamBinding>,
+    pub(crate) draw_source: ProceduralDrawSource,
+}
+
+impl Default for ProceduralPassLowering {
+    fn default() -> Self {
+        Self {
+            uniform_bindings: Vec::new(),
+            draw_source: ProceduralDrawSource::Direct,
+        }
+    }
+}
 
 pub fn build_procedural_pass(
     flow: RenderFlow,
     descriptor: ProceduralPassDescriptor,
+) -> Result<RenderFlow, ProceduralValidationError> {
+    lower_procedural_pass(flow, descriptor, ProceduralPassLowering::default())
+}
+
+pub(crate) fn lower_procedural_pass(
+    flow: RenderFlow,
+    descriptor: ProceduralPassDescriptor,
+    lowering: ProceduralPassLowering,
 ) -> Result<RenderFlow, ProceduralValidationError> {
     validate_procedural_pass(&descriptor)?;
 
@@ -45,7 +69,22 @@ pub fn build_procedural_pass(
     let target = target.expect("validated procedural pass has target");
     builder = apply_target(builder, target);
 
-    builder = builder.draw(visual.vertex_count(), instance_count);
+    for uniform_binding in lowering.uniform_bindings {
+        builder = builder.push_uniform_binding(uniform_binding);
+    }
+
+    builder = match lowering.draw_source {
+        ProceduralDrawSource::Direct => builder.draw(visual.vertex_count(), instance_count),
+        ProceduralDrawSource::Indirect {
+            args_buffer,
+            byte_offset,
+        } => builder.draw_indirect_resource(
+            args_buffer,
+            visual.vertex_count(),
+            instance_count,
+            byte_offset,
+        ),
+    };
     for dependency in dependencies {
         builder = builder.depends_on(dependency);
     }

@@ -1,33 +1,65 @@
 ---
 title: Roadmap Intake WR-075
 description: Roadmap intake proposal generated from a new idea.
-status: draft
+status: completed
 owner: workspace
 layer: workspace
 canonical: false
-last_reviewed: 2026-05-22
+last_reviewed: 2026-05-23
 ---
 
 # Roadmap Intake WR-075
 
 Idea: Renderer Ray Query Production Evidence
 Suggested title: Renderer Ray Query Production Evidence
-Initial planning state: `blocked_deferred`
+Planning state: `completed`
 
 ## Governance Notes
 
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance review confirms renderer reference docs may own the
+  production evidence packet while consuming public renderer DTO/example
+  evidence.
+- No ADR is required for docs/evidence hardening that does not change runtime
+  ownership, fallback authority, durable RT ABI, or hardware baseline
+  requirements.
 
-## Open Questions
+## Readiness
 
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Source design:
+  `docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md`.
+- Dependencies: completed `WR-073` ray-query capability evidence and completed
+  `WR-074` hybrid runtime proof evidence.
+- Implementation contract:
+  `docs-site/src/content/docs/reports/implementation-plans/wr-075-renderer-ray-query-production-evidence/plan.md`.
+- Closeout:
+  `docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md`.
+- WR-075 is complete at `runtime_proven` quality for optional ray-query
+  production evidence with mandatory fallback.
 
-## Apply Command
+## Scope
+
+WR-075 added renderer production evidence docs, a hardware/fallback matrix,
+diagnostic guidance, public API reference links, closeout metadata, and roadmap
+metadata. It does not add RT backend execution, make RT hardware mandatory, or
+move producer truth into renderer docs.
+
+## Validation
 
 ```text
-task roadmap:apply-intake -- --proposal <this-folder>/proposal.yaml
+cargo test -p engine render_ray_query
+cargo test -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+task docs:validate
+task roadmap:render
+task roadmap:validate
+task roadmap:check
+task production:render
+task production:validate
+task production:check
+task planning:validate
 ```
+
+## Completion
+
+The applied roadmap item is archived with completion evidence in
+`docs-site/src/content/docs/workspace/roadmap-archive.yaml`.

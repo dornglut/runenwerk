@@ -1,55 +1,106 @@
 version: 1
 idea: Renderer Upscaling Adapters And Ray Reconstruction Inputs
-source_path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- PM-RENDER-TEMPORAL-001 accepted the temporal reconstruction and dynamic resolution doctrine.
+- Architecture governance review for WR-071 confirms engine/src/plugins/render owns adapter diagnostics and ray reconstruction input inspection.
+- No ADR is required for typed renderer inspection DTOs and fail-closed diagnostics.
+- Stop for ADR if implementation introduces a durable cross-domain adapter ABI, mandatory vendor SDK, changed ray-query ownership, or vendor-baseline rendering.
+open_questions: []
 item:
   id: WR-071
   title: Renderer Upscaling Adapters And Ray Reconstruction Inputs
   diagram_title: Renderer Upscaling Adapters And Ray Reconstructi
   alias: WR071
-  lane: Discovery
+  lane: Render
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed bounded upscaling adapter and ray reconstruction input inspection
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
   effort: 8
-  confidence: 0.3
-  expected_score: 0.2
+  confidence: 0.5
+  expected_score: 0.4
   rice: N/A
-  kano: Unknown
-  dependencies: []
+  kano: Performance
+  dependencies:
+  - WR-070
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-upscaling-adapters-and-ray-reco
+  - docs-site/src/content/docs/reports/implementation-plans/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_temporal
+  - cargo test -p engine render_temporal_upscaling
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md.
+  current_decision: Completed. Renderer inspection now reports optional adapter capability, invocation eligibility, ray reconstruction input availability, native fallback visibility, and fail-closed diagnostics without moving producer truth into renderer code.
+  current_call: Use WR-071 as completed PM-RENDER-TEMPORAL-003 evidence before starting WR-072 temporal production evidence.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; runtime examples, benchmark/report artifacts, hardware profiles, production evidence, and final perfectionist verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Production examples, benchmark/report artifacts, hardware profiles, and runtime temporal production evidence remain WR-072 scope.
+  - WR-071 cannot claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - adapter/ray input proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Upscaling adapter implementation requires accepted reconstruction doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-071 requires completed PM-RENDER-TEMPORAL-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-071 depends on completed WR-070 temporal input, history, and dynamic-resolution contracts.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-071 implementation must follow the design-first upscaling adapter and ray reconstruction input contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-071 completion is proven by the bounded upscaling adapter and ray reconstruction input closeout.
   ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  adr_requirement: No ADR for renderer-owned inspection DTOs; ADR required for durable adapter ABI, mandatory vendor SDK, changed ray-query ownership, or vendor-baseline rendering.
+  fitness_function_requirement: Typed fail-closed tests for unsupported adapters, missing ray inputs, history mismatch, and visible native fallback.
+  ownership_mode: Complicated-subsystem renderer platform consuming stream-aligned producer evidence.
+edges:
+- source: WR-070
+  target: WR-071
+  label: temporal input contracts before adapter diagnostics

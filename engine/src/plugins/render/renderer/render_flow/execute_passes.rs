@@ -1,10 +1,12 @@
 use super::*;
-use crate::plugins::render::RenderPassId;
-use crate::plugins::render::graph::CompiledDrawBufferPlan;
+use crate::plugins::render::graph::{
+    CompiledDrawBufferPlan, CompiledDrawSource, CompiledResourceRef,
+};
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderPrimitiveTopology, RenderRasterState,
     RenderVertexFormat, RenderVertexStepMode,
 };
+use crate::plugins::render::{RenderPassId, RenderResourceId};
 
 impl Renderer {
     #[allow(clippy::too_many_arguments)]
@@ -689,17 +691,6 @@ impl Renderer {
             pass.set_index_buffer(index.buffer.slice(..), IndexFormat::Uint32);
         }
 
-        let indirect_buffer = match plan.draw_buffers.indirect_buffers.as_slice() {
-            [] => None,
-            [only] => Some(runtime_resources.resolve_storage_buffer_ref(plan.pass_id, only)?),
-            _ => {
-                bail!(
-                    "graphics pass '{}' declares multiple indirect_buffer(...) resources; runtime currently supports exactly one",
-                    plan.pass_id
-                );
-            }
-        };
-
         let draw = plan.draw.ok_or_else(|| {
             anyhow::anyhow!(
                 "graphics pass '{}' is missing draw parameters in execution plan",
@@ -707,12 +698,41 @@ impl Renderer {
             )
         })?;
 
+        let indirect_buffer = match draw.source {
+            CompiledDrawSource::Indirect {
+                args_buffer,
+                byte_offset,
+            } => {
+                let resource = plan
+                    .draw_buffers
+                    .indirect_buffers
+                    .iter()
+                    .find(|resource| compiled_resource_ref_matches_id(resource, args_buffer))
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "graphics pass '{}' indirect draw references args buffer '{:?}' that is not in the compiled indirect buffer set",
+                            plan.pass_id,
+                            args_buffer
+                        )
+                    })?;
+                Some((
+                    runtime_resources.resolve_storage_buffer_ref(plan.pass_id, resource)?,
+                    byte_offset,
+                ))
+            }
+            CompiledDrawSource::Direct => None,
+        };
+
         let vertex_range = draw.first_vertex..draw.first_vertex + draw.vertex_count;
         let instance_range = draw.first_instance..draw.first_instance + draw.instance_count;
 
         match (index_buffer.is_some(), indirect_buffer) {
-            (true, Some(indirect)) => pass.draw_indexed_indirect(indirect.buffer, 0),
-            (false, Some(indirect)) => pass.draw_indirect(indirect.buffer, 0),
+            (true, Some((indirect, byte_offset))) => {
+                pass.draw_indexed_indirect(indirect.buffer, byte_offset)
+            }
+            (false, Some((indirect, byte_offset))) => {
+                pass.draw_indirect(indirect.buffer, byte_offset)
+            }
             (true, None) => pass.draw_indexed(vertex_range, 0, instance_range),
             (false, None) => pass.draw(vertex_range, instance_range),
         }
@@ -1279,6 +1299,17 @@ fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {
         RenderVertexFormat::Sint32x2 => VertexFormat::Sint32x2,
         RenderVertexFormat::Sint32x3 => VertexFormat::Sint32x3,
         RenderVertexFormat::Sint32x4 => VertexFormat::Sint32x4,
+    }
+}
+
+fn compiled_resource_ref_matches_id(
+    resource: &CompiledResourceRef,
+    expected: RenderResourceId,
+) -> bool {
+    match resource {
+        CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => *id == expected,
+        CompiledResourceRef::TargetAlias(alias) => alias.resource_id == expected,
+        CompiledResourceRef::ImportedBuiltin(_) => false,
     }
 }
 

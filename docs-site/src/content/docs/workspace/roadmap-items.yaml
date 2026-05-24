@@ -184,7 +184,7 @@ items:
   planning_state: ready_next
   priority: P1
   value: 3
-  blocker: 2
+  blocker: 3
   tc: 2
   rr_oe: 3
   du: 2
@@ -641,6 +641,378 @@ items:
   fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add focused
     domain/UI fitness functions before code.
   ownership_mode: Enabling support owned by editor/UI maintainers.
+- id: WR-089
+  title: Renderer Procedural Population Hardening Doctrine And Track Activation
+  diagram_title: Renderer population hardening doctrine
+  alias: RENDERPOPHARDEN
+  lane: Render planning
+  dependency_level: L4
+  gate: Doctrine activation before hardening implementation
+  planning_state: current_candidate
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 2
+  confidence: 0.8
+  expected_score: 5.6
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-088
+  write_scopes:
+  - docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.md
+  validations:
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090 through
+    WR-093 implementation contracts, and a bounded-contract closeout for WR-089.
+  current_decision: Intake accepted as a doctrine-first hardening track. WR-089 must not absorb indirect draw, primitive dispatch,
+    graph catch-up, or unbounded population implementation.
+  current_call: Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090
+    through WR-093.
+  first_move: Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089 only
+    after planning metadata and contracts validate.
+  main_blocker: Doctrine activation and planning metadata must validate before implementation slices can begin.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - hardening doctrine
+  - split WR-090 to WR-093
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Hardening implementation must follow the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-089 must stay a bounded doctrine and track-activation contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR for doctrine activation while renderer remains the derived execution-data owner; ADR required before
+    moving product, gameplay, world, or streaming source truth into renderer contracts.
+  fitness_function_requirement: Production, roadmap, docs, and planning validators; later slices add focused render-flow,
+    GPU primitive, and catch-up runtime tests.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-090
+  title: Indirect Draw Contract Hardening
+  diagram_title: Indirect draw hardening
+  alias: RENDERPOPINDIRECT
+  lane: Render hardening
+  dependency_level: L4
+  gate: After hardening doctrine activation
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-089
+  write_scopes:
+  - engine/src/plugins/render/api/passes.rs
+  - engine/src/plugins/render/api/handles.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/graph/validation.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/src/plugins/render/gpu_primitives/draw_args.rs
+  - engine/tests/procedural_instance.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-090-indirect-draw-contract-hardening/plan.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Promote only after WR-089 closes. Implementation must prove typed indexed/non-indexed indirect draw validation,
+    byte-offset bounds, and removal or redesign of ignored indirect CPU offsets.
+  current_decision: Ready-next hardening slice after doctrine activation. Indirect draw validation is the blocker before generated
+    primitive indirect args can be runtime-proven.
+  current_call: Harden direct, indexed direct, indirect, and indexed indirect draw-source semantics without breaking direct
+    `.draw(...)` authoring.
+  first_move: After WR-089 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-002" --roadmap "WR-090".
+  main_blocker: Waiting on WR-089 doctrine activation closeout.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - typed indirect draw
+  - fail closed
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Indirect draw hardening must follow the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-090-indirect-draw-contract-hardening/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-090 implementation must follow the accepted indirect draw hardening contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR while the work keeps draw-source validation renderer-owned; ADR required before changing product
+    truth, fallback legality, or cross-crate renderer ABI ownership.
+  fitness_function_requirement: Render-flow graph validation tests for direct, indexed direct, indirect, indexed indirect,
+    wrong args type, misaligned offset, and out-of-bounds offset.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-091
+  title: Reusable GPU Primitive Shader Dispatch
+  diagram_title: GPU primitive shader dispatch
+  alias: RENDERPOPPRIMDISPATCH
+  lane: Render hardening
+  dependency_level: L4
+  gate: After indirect draw hardening
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.8
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-090
+  write_scopes:
+  - engine/src/plugins/render/gpu_primitives
+  - engine/src/plugins/render/api/flow.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/benches/render_flow_planning.rs
+  - assets/shaders
+  - docs-site/src/content/docs/reports/implementation-plans/wr-091-reusable-gpu-primitive-shader-dispatch/plan.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine gpu_primitives
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Promote only after WR-090 closes. Implementation must prove renderer-owned primitive kernels, hierarchical
+    multi-block prefix scan, typed diagnostics, and non-boids runtime execution.
+  current_decision: Ready-next primitive dispatch slice after indirect draw validation is fail-closed.
+  current_call: Convert primitive contracts from descriptor/planning-level evidence into reusable renderer-dispatched kernels.
+  first_move: After WR-090 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-003" --roadmap "WR-091".
+  main_blocker: Waiting on WR-090 indirect draw hardening closeout.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - renderer kernels
+  - hierarchical scan
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Primitive dispatch must follow the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-091-reusable-gpu-primitive-shader-dispatch/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-091 implementation must follow the accepted primitive dispatch contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR while primitives remain renderer-owned derived execution; ADR required before adding hidden CPU
+    fallback or moving product/world truth into primitive execution.
+  fitness_function_requirement: GPU primitive tests proving hierarchical prefix scan, counter reset, scatter/compaction, indirect
+    args generation, typed diagnostics, and non-boids runtime dispatch.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-092
+  title: Fixed Step Graph Catch Up Scheduling
+  diagram_title: Fixed step graph catch up
+  alias: RENDERPOPCATCHUP
+  lane: Render hardening
+  dependency_level: L4
+  gate: After primitive shader dispatch
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.6
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-091
+  write_scopes:
+  - engine/src/plugins/render/api/flow.rs
+  - engine/src/plugins/render/api/passes.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/graph/validation.rs
+  - engine/src/plugins/render/graph/prepared_validation.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/examples/boids_render_flow/rendering/state.rs
+  - engine/examples/boids_render_flow/rendering/evidence.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Promote only after WR-091 closes. Implementation must prove graph-level bounded repeated pass execution,
+    deterministic submitted substeps, and resource sequencing across substeps.
+  current_decision: Ready-next graph scheduling slice after primitive dispatch is runtime-proven.
+  current_call: Add fixed-step catch-up as render-flow graph scheduling, not boids-local timing logic.
+  first_move: After WR-091 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-004" --roadmap "WR-092".
+  main_blocker: Waiting on WR-091 primitive shader dispatch closeout.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - graph catch up
+  - bounded substeps
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Fixed-step catch-up must follow the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-092 implementation must follow the accepted graph catch-up scheduling contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR while scheduling remains renderer graph execution policy; ADR required before renderer takes gameplay
+    simulation source truth.
+  fitness_function_requirement: Render-flow tests proving deterministic 0..N substeps, max-substep diagnostics, dropped/deferred
+    time diagnostics, invalid repeat rejection, and ping-pong resource sequencing.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-093
+  title: Procedural Population Hardening Evidence Benchmarks Docs And Closeout
+  diagram_title: Population hardening closeout
+  alias: RENDERPOPHARDENCLOSE
+  lane: Render evidence
+  dependency_level: L4
+  gate: After graph catch-up scheduling
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 3
+  confidence: 0.8
+  expected_score: 3.7
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-092
+  write_scopes:
+  - engine/benches/render_flow_planning.rs
+  - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine render_flow
+  - cargo test -p engine gpu_primitives
+  - cargo test -p engine procedural
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Promote only after WR-092 closes. Close the hardening track only when runtime evidence proves indirect validation,
+    primitive shader dispatch, graph catch-up scheduling, benchmarks, and docs.
+  current_decision: Ready-next evidence and closeout slice for PT-RENDER-PROCEDURAL-POPULATION-HARDENING.
+  current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior.
+  first_move: After WR-092 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-005" --roadmap "WR-093".
+  main_blocker: Waiting on WR-092 graph catch-up scheduling closeout.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - runtime evidence
+  - close hardening track
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Hardening closeout must follow the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-093 implementation must follow the accepted evidence and closeout contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR for evidence and docs unless closeout changes source-truth ownership, dependency direction, fallback
+    legality, or renderer ABI semantics.
+  fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, boids evidence, benchmark, docs, production,
+    roadmap, and planning validation suite.
+  ownership_mode: Complicated-subsystem renderer owner.
 - id: WR-100
   title: UI Lab perfectionist governance and no-gap audit doctrine
   diagram_title: UI Lab perfectionist governance
@@ -879,6 +1251,51 @@ edges:
 - source: WR-058
   target: WR-059
   label: procedural API before boids rewrite
+- source: WR-058
+  target: WR-076
+  label: procedural visual API enables particle/VFX prepared contributions
+- source: WR-062
+  target: WR-076
+  label: scale visibility and indirect submission bound particle/VFX work
+- source: WR-070
+  target: WR-076
+  label: temporal inputs support particle/VFX reconstruction data
+- source: WR-060
+  target: WR-083
+  label: procedural evidence before population doctrine
+- source: WR-063
+  target: WR-083
+  label: scale evidence before population doctrine
+- source: WR-083
+  target: WR-084
+  label: doctrine before procedural builder extension
+- source: WR-084
+  target: WR-085
+  label: draw-source contract before GPU primitives
+- source: WR-085
+  target: WR-086
+  label: primitives before bounded population grid
+- source: WR-086
+  target: WR-087
+  label: grid support before boids production proof
+- source: WR-087
+  target: WR-088
+  label: boids proof before closeout evidence
+- source: WR-088
+  target: WR-089
+  label: population runtime proof before hardening doctrine
+- source: WR-089
+  target: WR-090
+  label: hardening doctrine before indirect draw validation
+- source: WR-090
+  target: WR-091
+  label: fail-closed indirect draw before primitive dispatch
+- source: WR-091
+  target: WR-092
+  label: primitive dispatch before graph catch-up
+- source: WR-092
+  target: WR-093
+  label: graph catch-up before hardening closeout
 - source: WR-004
   target: WR-094
   label: editor surface guards

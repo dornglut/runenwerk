@@ -10,6 +10,7 @@ use wgpu::{
 pub struct RendererPipelineCacheStats {
     pub hits: u64,
     pub misses: u64,
+    pub failures: u64,
 }
 
 #[derive(Debug, Default)]

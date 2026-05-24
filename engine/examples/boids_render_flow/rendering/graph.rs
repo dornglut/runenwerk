@@ -1,10 +1,14 @@
-use crate::rendering::{BoidAgent, BoidsRenderState, DEFAULT_BOID_COUNT};
+use crate::rendering::{
+    BoidAgent, BoidsRenderState, DEFAULT_BOID_COUNT, DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y,
+};
 use engine::plugins::render::{
+    BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
     ProceduralBufferBinding, ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderFlow,
-    RenderVertexBufferLayout, RenderVertexFormat,
+    RenderVertexBufferLayout, RenderVertexFormat, U32Counter, U32ScanElement,
 };
 
 pub(crate) fn build_render_flow() -> RenderFlow {
+    let grid_cell_count = (DEFAULT_GRID_CELLS_X * DEFAULT_GRID_CELLS_Y) as u64;
     let (flow, boid_instances) = RenderFlow::new("boids_render_flow")
         .with_state::<BoidsRenderState>()
         .with_surface_color()
@@ -13,28 +17,133 @@ pub(crate) fn build_render_flow() -> RenderFlow {
             "boids.instances",
             DEFAULT_BOID_COUNT as u64,
         );
+    let (flow, grid_cell_counts) =
+        flow.storage_array::<U32Counter>("boids.grid.cell_counts", grid_cell_count);
+    let (flow, grid_cell_offsets) =
+        flow.storage_array::<U32ScanElement>("boids.grid.cell_offsets", grid_cell_count);
+    let (flow, grid_scatter_cursors) =
+        flow.storage_array::<U32Counter>("boids.grid.scatter_cursors", grid_cell_count);
+    let (flow, grid_sorted_indices) = flow
+        .storage_array::<U32ScanElement>("boids.grid.sorted_indices", DEFAULT_BOID_COUNT as u64);
+    let grid_plan = BoundedUniformGrid2dBuildPlan::new(
+        "boids.grid",
+        BoundedUniformGrid2dConfig::new(
+            DEFAULT_GRID_CELLS_X,
+            DEFAULT_GRID_CELLS_Y,
+            DEFAULT_BOID_COUNT,
+        ),
+        grid_cell_counts.clone(),
+        grid_cell_offsets.clone(),
+        grid_scatter_cursors.clone(),
+        grid_sorted_indices.clone(),
+    )
+    .expect("boids bounded grid plan should validate");
+    let clear_counts = stage_label(&grid_plan, BoundedUniformGrid2dStage::ClearCounts).to_string();
+    let count_cells = stage_label(&grid_plan, BoundedUniformGrid2dStage::CountCells).to_string();
+    let scan_counts = stage_label(&grid_plan, BoundedUniformGrid2dStage::ScanCounts).to_string();
+    let reset_cursors =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::ResetCursors).to_string();
+    let scatter_indices =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::ScatterSortedIndices).to_string();
+    let simulate_neighbors =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::SimulateNeighbors).to_string();
+    let publish_draw = stage_label(&grid_plan, BoundedUniformGrid2dStage::PublishDraw).to_string();
 
     let instance_layout = boid_instance_layout();
     let instance_buffer =
         ProceduralBufferBinding::storage(boid_instances.a().clone(), instance_layout);
 
     let flow = flow
-        .compute_pass("boids.simulate")
+        .compute_pass("boids.seed_or_hold")
+        .shader_asset("assets/shaders/boids_compute.wgsl")
+        .uniform_from_state(BoidsRenderState::seed_params)
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
+        .finish()
+        .compute_pass(clear_counts.clone())
+        .shader_asset("assets/shaders/boids_compute.wgsl")
+        .uniform_from_state(BoidsRenderState::clear_counts_params)
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
+        .depends_on("boids.seed_or_hold")
+        .finish()
+        .compute_pass(count_cells.clone())
+        .shader_asset("assets/shaders/boids_compute.wgsl")
+        .uniform_from_state(BoidsRenderState::count_cells_params)
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
+        .depends_on(clear_counts.as_str())
+        .finish()
+        .compute_pass(scan_counts.clone())
+        .shader_asset("assets/shaders/boids_compute.wgsl")
+        .uniform_from_state(BoidsRenderState::scan_counts_params)
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .dispatch_from_state(BoidsRenderState::dispatch_scan_workgroups)
+        .depends_on(count_cells.as_str())
+        .finish()
+        .compute_pass(reset_cursors.clone())
+        .shader_asset("assets/shaders/boids_compute.wgsl")
+        .uniform_from_state(BoidsRenderState::reset_cursors_params)
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
+        .depends_on(scan_counts.as_str())
+        .finish()
+        .compute_pass(scatter_indices.clone())
+        .shader_asset("assets/shaders/boids_compute.wgsl")
+        .uniform_from_state(BoidsRenderState::scatter_indices_params)
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
+        .depends_on(reset_cursors.as_str())
+        .finish()
+        .compute_pass(simulate_neighbors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::compute_params)
         .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
+        .depends_on(scatter_indices.as_str())
         .finish()
-        .compute_pass("boids.publish_instances")
+        .compute_pass(publish_draw.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::publish_params)
         .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts)
+        .bind_storage(grid_cell_offsets)
+        .bind_storage(grid_scatter_cursors)
+        .bind_storage(grid_sorted_indices)
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
-        .depends_on("boids.simulate")
+        .depends_on(simulate_neighbors.as_str())
         .finish();
 
     let flow = flow
-        .procedural_pass(
+        .procedural_pass_builder(
             ProceduralPassDescriptor::local_sdf_2d_impostors(
                 "boids.draw",
                 instance_buffer,
@@ -45,9 +154,12 @@ pub(crate) fn build_render_flow() -> RenderFlow {
                 ProceduralTargetDescriptor::color("boids.color")
                     .clear_color([0.020, 0.028, 0.040, 1.0]),
             )
-            .depends_on("boids.publish_instances"),
+            .depends_on(publish_draw.as_str()),
         )
-        .expect("boids.draw procedural pass should be valid");
+        .expect("boids.draw procedural builder should be valid")
+        .uniform_from_state_with_surface(BoidsRenderState::draw_params)
+        .finish()
+        .expect("boids.draw procedural pass should lower");
 
     flow.present_pass("boids.present")
         .source("boids.color")
@@ -57,6 +169,14 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .expect("boids_render_flow should validate")
 }
 
+fn stage_label(plan: &BoundedUniformGrid2dBuildPlan, stage: BoundedUniformGrid2dStage) -> &str {
+    plan.stages
+        .iter()
+        .find(|candidate| candidate.stage == stage)
+        .map(|candidate| candidate.label.as_str())
+        .expect("bounded grid plan should include canonical stage")
+}
+
 fn boid_instance_layout() -> RenderVertexBufferLayout {
     RenderVertexBufferLayout::instance(
         0,
@@ -64,6 +184,7 @@ fn boid_instance_layout() -> RenderVertexBufferLayout {
     )
     .attribute(0, 0, RenderVertexFormat::Float32x2)
     .attribute(1, 8, RenderVertexFormat::Float32x2)
+    .attribute(2, 16, RenderVertexFormat::Float32x2)
 }
 
 #[cfg(test)]
@@ -96,6 +217,21 @@ mod tests {
             .expect("requested pass should exist")
     }
 
+    fn expected_pass_order() -> Vec<&'static str> {
+        vec![
+            "boids.seed_or_hold",
+            "boids.grid.clear_counts",
+            "boids.grid.count_cells",
+            "boids.grid.scan_counts",
+            "boids.grid.reset_cursors",
+            "boids.grid.scatter_sorted_indices",
+            "boids.grid.simulate_neighbors",
+            "boids.grid.publish_draw",
+            "boids.draw",
+            "boids.present",
+        ]
+    }
+
     #[test]
     fn flow_declares_expected_passes() {
         let flow = build_render_flow();
@@ -104,20 +240,19 @@ mod tests {
             .passes
             .passes
             .iter()
-            .map(|pass| pass.label.clone())
+            .map(|pass| pass.label.as_str())
             .collect::<Vec<_>>();
+        assert_eq!(pass_ids, expected_pass_order());
         assert_eq!(
-            pass_ids,
-            vec![
-                "boids.simulate",
-                "boids.publish_instances",
-                "boids.draw",
-                "boids.present",
-            ]
+            pass_kind(&flow, "boids.seed_or_hold"),
+            RenderPassKind::Compute
         );
-        assert_eq!(pass_kind(&flow, "boids.simulate"), RenderPassKind::Compute);
         assert_eq!(
-            pass_kind(&flow, "boids.publish_instances"),
+            pass_kind(&flow, "boids.grid.simulate_neighbors"),
+            RenderPassKind::Compute
+        );
+        assert_eq!(
+            pass_kind(&flow, "boids.grid.publish_draw"),
             RenderPassKind::Compute
         );
         assert_eq!(pass_kind(&flow, "boids.draw"), RenderPassKind::Graphics);
@@ -190,20 +325,12 @@ mod tests {
                     .passes
                     .iter()
                     .find(|pass| pass.id == id)
-                    .map(|pass| pass.label.clone())
+                    .map(|pass| pass.label.as_str())
                     .expect("ordered pass should exist")
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            order,
-            vec![
-                "boids.simulate",
-                "boids.publish_instances",
-                "boids.draw",
-                "boids.present",
-            ]
-        );
+        assert_eq!(order, expected_pass_order());
     }
 
     #[test]
@@ -218,21 +345,61 @@ mod tests {
             .project_uniforms(&frame_data, (1600, 900))
             .expect("uniform projection should succeed");
 
-        assert!(uniforms.pass(pass_id(&flow, "boids.simulate")).is_some());
         assert!(
             uniforms
-                .pass(pass_id(&flow, "boids.publish_instances"))
+                .pass(pass_id(&flow, "boids.seed_or_hold"))
                 .is_some()
         );
-        assert!(uniforms.pass(pass_id(&flow, "boids.draw")).is_none());
+        assert!(
+            uniforms
+                .pass(pass_id(&flow, "boids.grid.scan_counts"))
+                .is_some()
+        );
+        assert!(
+            uniforms
+                .pass(pass_id(&flow, "boids.grid.publish_draw"))
+                .is_some()
+        );
+        assert!(uniforms.pass(pass_id(&flow, "boids.draw")).is_some());
     }
 
     #[test]
-    fn compose_shader_uses_instance_inputs_without_storage_loop() {
+    fn compose_shader_uses_instance_inputs_and_surface_uniform_without_storage_loop() {
         let shader = include_str!("../../../../assets/shaders/boids_compose.wgsl");
         assert!(shader.contains("@location(0) instance_position"));
         assert!(shader.contains("@location(1) instance_velocity"));
+        assert!(shader.contains("@location(2) instance_visual_heading"));
+        assert!(shader.contains("var<uniform> draw_params"));
         assert!(!shader.contains("var<storage"));
         assert!(!shader.contains("for (var i"));
+    }
+
+    #[test]
+    fn compute_shader_uses_bounded_grid_neighbor_lookup() {
+        let shader = include_str!("../../../../assets/shaders/boids_compute.wgsl");
+        assert!(shader.contains("cell_counts"));
+        assert!(shader.contains("cell_offsets"));
+        assert!(shader.contains("sorted_indices"));
+        assert!(!shader.contains("i < boid_count"));
+    }
+
+    #[test]
+    fn boids_shaders_parse_as_wgsl() {
+        validate_wgsl(include_str!(
+            "../../../../assets/shaders/boids_compute.wgsl"
+        ));
+        validate_wgsl(include_str!(
+            "../../../../assets/shaders/boids_compose.wgsl"
+        ));
+    }
+
+    fn validate_wgsl(shader: &str) {
+        let module = naga::front::wgsl::parse_str(shader).expect("shader should parse as WGSL");
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .expect("shader should validate");
     }
 }

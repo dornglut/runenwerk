@@ -183,19 +183,64 @@ intentionally 2D-local only; product-owned SDF authority, 3D raymarching, sparse
 residency, freshness, fallback, and rebuild policy stay outside the renderer
 procedural API.
 
+Use `RenderFlow::procedural_pass_builder(...)` when procedural draw authoring
+needs per-pass uniforms, surface-aware uniforms, or typed indirect draw
+arguments. The builder still owns procedural lowering internally; it does not
+expose `GraphicsPassBuilder` as the procedural extension surface. The simple
+`RenderFlow::procedural_pass(...)` path remains the preferred direct draw path
+for static instance counts.
+
 The canonical boids example is the reference path for storage-backed procedural
 instance rendering. `engine/examples/boids_render_flow/rendering/graph.rs`
 keeps simulation in compute passes, publishes the current storage buffer into
-the instance buffer consumed by `RenderFlow::procedural_pass(...)`, draws local
-2D SDF impostors from `assets/shaders/boids_compose.wgsl`, and presents directly
-from the flow-owned color target. It intentionally does not keep a history copy
-or use a fullscreen fragment loop over all boids.
+the instance buffer consumed by `RenderFlow::procedural_pass_builder(...)`,
+binds surface-aware draw uniforms for aspect-correct local impostors, and
+presents directly from the flow-owned color target. It intentionally does not
+keep a history copy, use a fullscreen fragment loop over all boids, or keep a
+production O(n^2) neighbor loop. The compute path builds a bounded wrapping
+uniform grid before adjacent-cell simulation. The example reports its
+fixed-step simulation contract explicitly; multi-step catch-up is a later graph
+scheduling feature, not hidden in the example.
 
-For production evidence, run `cargo run -p engine --example boids_render_flow --
---evidence` to print the canonical boids pass-shape, timing-diagnostic, and
-benchmark contract. Pair that with `cargo bench -p engine --bench
-render_flow_planning`, which includes procedural-boids planning and preflight
-cases for the public procedural path.
+The bounded-grid population path is reusable renderer infrastructure. The
+canonical stage order is clear counts, count cells, scan counts, reset cursors,
+scatter sorted indices, neighbor simulation, and publish/draw. Cell buffers are
+sized by total cell count and sorted-index buffers are sized by total agent
+count. Fixed-capacity bucket overflow is not a valid hidden fallback; invalid
+capacity must remain a diagnostic.
+
+Use the GPU primitive contracts when a population flow needs reusable planning
+evidence for scan, reset, scatter/compaction, or indirect draw arguments.
+`GpuPrimitiveExecutionPlan` keeps those primitive steps inspectable before a
+population flow consumes them. Unsupported readback, timestamp, storage
+compaction, or indirect-submission capabilities should be reported as typed
+diagnostics rather than replaced by an unbounded CPU submission path.
+
+For production evidence, run:
+
+```text
+cargo run -p engine --example boids_render_flow -- --evidence
+```
+
+This prints the canonical boids pass shape, fixed-step contract, no-silent-grid
+overflow status, timing diagnostics, CPU preflight timing, resize pixel evidence
+for landscape/portrait/square surfaces, and the benchmark command.
+
+Run the benchmark command with:
+
+```text
+cargo bench -p engine --bench render_flow_planning
+```
+
+The benchmark suite includes `render_population/prefix_scan_plan_4096`,
+`render_population/scan_compaction_indirect_args_plan_4096`,
+`render_population/bounded_grid_build_plan_4096`,
+`render_population/boids_production_flow_planning`,
+`render_population/boids_production_preflight_cold`, and
+`render_population/boids_production_evidence_report`.
+
+Spatial hash and chunked unbounded populations are later milestones. They
+should not be treated as a fallback for the bounded-grid boids proof.
 
 ## Scale Working-Set Residency Evidence
 

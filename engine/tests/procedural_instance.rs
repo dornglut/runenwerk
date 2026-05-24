@@ -1,9 +1,10 @@
-use engine::plugins::render::{CompiledPassExecutionPlan, RenderFlow};
+use engine::plugins::render::{CompiledDrawSource, CompiledPassExecutionPlan, RenderFlow};
 use engine::plugins::render::{
-    GpuStorage, ProceduralBufferBinding, ProceduralPassDescriptor, ProceduralRenderPolicy,
-    ProceduralValidationError, RenderBackendCapabilityProfile, RenderBlendMode, RenderCullMode,
-    RenderDepthPolicy, RenderPassKind, RenderPrimitiveTopology, RenderVertexBufferLayout,
-    RenderVertexFormat, SURFACE_COLOR_RESOURCE_LABEL, compile_flow_plan_checked,
+    DrawIndirectArgs, GpuStorage, ProceduralBufferBinding, ProceduralPassDescriptor,
+    ProceduralRenderPolicy, ProceduralValidationError, RenderBackendCapabilityProfile,
+    RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderPassKind, RenderPrimitiveTopology,
+    RenderVertexBufferLayout, RenderVertexFormat, SURFACE_COLOR_RESOURCE_LABEL,
+    compile_flow_plan_checked,
 };
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -103,6 +104,48 @@ fn procedural_instance_mesh_sprite_descriptor_preserves_vertex_and_instance_buff
     assert_eq!(pass.vertex_buffer_layouts.len(), 1);
     assert_eq!(pass.instance_buffers.len(), 1);
     assert_eq!(pass.instance_buffer_layouts.len(), 1);
+}
+
+#[test]
+fn procedural_pass_builder_authors_indirect_draw_without_exposing_graphics_builder() {
+    let (flow, instances) = RenderFlow::new("procedural.builder.indirect")
+        .with_surface_color()
+        .storage_array::<Instance>("instances", 32);
+    let (flow, args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+
+    let flow = flow
+        .procedural_pass_builder(
+            ProceduralPassDescriptor::quad_sprites(
+                "draw.builder.indirect",
+                ProceduralBufferBinding::storage(instances, instance_layout(0)),
+                32,
+            )
+            .shader_asset("assets/shaders/procedural_builder_indirect.wgsl")
+            .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
+        )
+        .expect("valid descriptor should create a procedural builder")
+        .draw_indirect(args)
+        .finish()
+        .expect("procedural builder should lower to a render flow")
+        .validate()
+        .expect("procedural indirect draw should validate");
+
+    let plan = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+        .expect("procedural indirect draw should compile");
+    let draw = plan
+        .execution
+        .passes
+        .iter()
+        .find_map(|pass| match pass {
+            CompiledPassExecutionPlan::Graphics(pass) => pass.draw,
+            _ => None,
+        })
+        .expect("compiled graphics pass should expose draw source");
+
+    assert!(matches!(
+        draw.source,
+        CompiledDrawSource::Indirect { byte_offset: 0, .. }
+    ));
 }
 
 #[test]

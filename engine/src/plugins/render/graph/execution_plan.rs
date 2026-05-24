@@ -6,9 +6,9 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
-    RenderDrawDescriptor, RenderPassId, RenderPrimitiveTopology, RenderRasterState,
-    RenderResourceDescriptor, RenderResourceId, RenderShaderReference, RenderTargetAliasKind,
-    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderDrawDescriptor, RenderDrawSource, RenderPassId, RenderPrimitiveTopology,
+    RenderRasterState, RenderResourceDescriptor, RenderResourceId, RenderShaderReference,
+    RenderTargetAliasKind, RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeSet;
@@ -196,6 +196,16 @@ pub struct CompiledDrawPlan {
     pub instance_count: u32,
     pub first_vertex: u32,
     pub first_instance: u32,
+    pub source: CompiledDrawSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompiledDrawSource {
+    Direct,
+    Indirect {
+        args_buffer: RenderResourceId,
+        byte_offset: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -561,6 +571,16 @@ fn compile_draw_plan(draw: RenderDrawDescriptor) -> CompiledDrawPlan {
         instance_count: draw.instance_count,
         first_vertex: draw.first_vertex,
         first_instance: draw.first_instance,
+        source: match draw.source {
+            RenderDrawSource::Direct => CompiledDrawSource::Direct,
+            RenderDrawSource::Indirect {
+                args_buffer,
+                byte_offset,
+            } => CompiledDrawSource::Indirect {
+                args_buffer,
+                byte_offset,
+            },
+        },
     }
 }
 

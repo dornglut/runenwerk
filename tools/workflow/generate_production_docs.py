@@ -32,10 +32,12 @@ def render_outputs(planning: ProductionPlanningState) -> dict[Path, str]:
     production_index = REPO_ROOT / planning.render.production_index
     milestone_register = REPO_ROOT / planning.render.milestone_register
     track_roadmap = REPO_ROOT / planning.render.track_roadmap
+    full_track_roadmap = REPO_ROOT / planning.render.full_track_roadmap
     return {
         production_index: render_production_index(planning),
         milestone_register: render_milestone_register(planning),
         track_roadmap: render_track_diagram(planning),
+        full_track_roadmap: render_full_track_diagram(planning),
     }
 
 
@@ -57,6 +59,7 @@ def render_production_index(planning: ProductionPlanningState) -> str:
         "  - ./roadmap-decision-register.md",
         "  - ./schemas/production-tracks.schema.json",
         "  - ./diagrams/production-track-roadmap.puml",
+        "  - ./diagrams/production-track-full-roadmap.puml",
         "---",
         "",
         "# Production Track Index",
@@ -147,9 +150,113 @@ def render_milestone_register(planning: ProductionPlanningState) -> str:
 
 
 def render_track_diagram(planning: ProductionPlanningState) -> str:
+    lines = render_diagram_header(
+        planning,
+        "Actionable View",
+        [
+            "  <b>Production Tracks - Actionable View</b>",
+            "  Completed prerequisite milestones are collapsed per track.",
+            "  Full audit history lives in production-track-full-roadmap.puml.",
+            "  WR links remain the legal implementation graph.",
+        ],
+    )
+    all_milestones = {milestone.id: milestone for track in planning.tracks for milestone in track.milestones}
+    track_by_milestone = {
+        milestone.id: track for track in planning.tracks for milestone in track.milestones
+    }
+    actionable_milestone_ids = {
+        milestone.id for milestone in all_milestones.values() if milestone.state != "completed"
+    }
+    needed_completed_ids = {
+        dependency
+        for milestone_id in actionable_milestone_ids
+        for dependency in all_milestones[milestone_id].dependencies
+        if dependency in all_milestones and all_milestones[dependency].state == "completed"
+    }
+    visible_aliases: dict[str, str] = {}
+    hidden_completed_aliases: dict[str, str] = {}
+
+    for track in planning.tracks:
+        completed = [
+            milestone
+            for milestone in track.milestones
+            if milestone.state == "completed" and milestone.id in needed_completed_ids
+        ]
+        actionable = [milestone for milestone in track.milestones if milestone.state != "completed"]
+        if not completed and not actionable:
+            continue
+
+        lines.append(f'package "{track.id} {track.title}" {{')
+        if completed:
+            summary_alias = completed_summary_alias(track)
+            for milestone in completed:
+                hidden_completed_aliases[milestone.id] = summary_alias
+            lines.append(render_completed_summary_component(track, completed))
+            lines.append("")
+        for milestone in actionable:
+            visible_aliases[milestone.id] = component_alias(milestone.id)
+            lines.append(render_milestone_component(milestone))
+            lines.append("")
+        lines.append("}")
+        lines.append("")
+
+    rendered_edges: set[tuple[str, str]] = set()
+    for milestone in all_milestones.values():
+        target_alias = visible_aliases.get(milestone.id)
+        if target_alias is None:
+            continue
+        for dependency in milestone.dependencies:
+            source_alias = visible_aliases.get(dependency) or hidden_completed_aliases.get(dependency)
+            if source_alias is None:
+                continue
+            if source_alias == target_alias:
+                continue
+            edge = (source_alias, target_alias)
+            if edge in rendered_edges:
+                continue
+            rendered_edges.add(edge)
+            dependency_track = track_by_milestone.get(dependency)
+            label = "completed prerequisite" if dependency in hidden_completed_aliases else "production prerequisite"
+            if dependency_track is not None and dependency_track.id != track_by_milestone[milestone.id].id:
+                label = f"{dependency_track.id} {label}"
+            lines.append(f"{source_alias} -down-> {target_alias} : {label}")
+
+    lines.extend(["", "@enduml", ""])
+    return "\n".join(lines)
+
+
+def render_full_track_diagram(planning: ProductionPlanningState) -> str:
+    lines = render_diagram_header(
+        planning,
+        "Full Audit View",
+        [
+            "  <b>Production Tracks - Full Audit View</b>",
+            "  Milestones express coherent long-term outcomes.",
+            "  WR links remain the legal implementation graph.",
+            "  Designing milestones resolve architecture before implementation.",
+        ],
+    )
+    all_milestones = {milestone.id: milestone for track in planning.tracks for milestone in track.milestones}
+    for track in planning.tracks:
+        lines.append(f'package "{track.id} {track.title}" {{')
+        for milestone in track.milestones:
+            lines.append(render_milestone_component(milestone))
+            lines.append("")
+        lines.append("}")
+        lines.append("")
+    for milestone in all_milestones.values():
+        for dependency in milestone.dependencies:
+            lines.append(f"{component_alias(dependency)} -down-> {component_alias(milestone.id)} : production prerequisite")
+    lines.extend(["", "@enduml", ""])
+    return "\n".join(lines)
+
+
+def render_diagram_header(
+    planning: ProductionPlanningState, view_title: str, legend_lines: list[str]
+) -> list[str]:
     lines = [
         "@startuml",
-        f"title {planning.production.title}",
+        f"title {planning.production.title} - {view_title}",
         "",
         "top to bottom direction",
         "skinparam componentStyle rectangle",
@@ -174,26 +281,11 @@ def render_track_diagram(planning: ProductionPlanningState) -> str:
         "}",
         "",
         "legend right",
-        "  <b>Production Tracks</b>",
-        "  Milestones express coherent long-term outcomes.",
-        "  WR links remain the legal implementation graph.",
-        "  Designing milestones resolve architecture before implementation.",
+        *legend_lines,
         "endlegend",
         "",
     ]
-    all_milestones = {milestone.id: milestone for track in planning.tracks for milestone in track.milestones}
-    for track in planning.tracks:
-        lines.append(f'package "{track.id} {track.title}" {{')
-        for milestone in track.milestones:
-            lines.append(render_milestone_component(milestone))
-            lines.append("")
-        lines.append("}")
-        lines.append("")
-    for milestone in all_milestones.values():
-        for dependency in milestone.dependencies:
-            lines.append(f"{component_alias(dependency)} -down-> {component_alias(milestone.id)} : production prerequisite")
-    lines.extend(["", "@enduml", ""])
-    return "\n".join(lines)
+    return lines
 
 
 def render_milestone_component(milestone: ProductionMilestone) -> str:
@@ -205,6 +297,24 @@ def render_milestone_component(milestone: ProductionMilestone) -> str:
     ]
     label = "\\n".join(label_lines).replace('"', '\\"')
     return f'  component "{label}" as {component_alias(milestone.id)} <<{milestone.state}>>'
+
+
+def render_completed_summary_component(track: ProductionTrack, milestones: list[ProductionMilestone]) -> str:
+    quality_counts: dict[str, int] = {}
+    for milestone in milestones:
+        quality_counts[milestone.completion_quality] = quality_counts.get(milestone.completion_quality, 0) + 1
+    quality_summary = ", ".join(f"{quality}={count}" for quality, count in sorted(quality_counts.items()))
+    label_lines = [
+        f"{track.id} completed prerequisites",
+        f"milestones={len(milestones)}",
+        f"quality={quality_summary}",
+    ]
+    label = "\\n".join(label_lines).replace('"', '\\"')
+    return f'  component "{label}" as {completed_summary_alias(track)} <<completed>>'
+
+
+def completed_summary_alias(track: ProductionTrack) -> str:
+    return component_alias(f"{track.id}-COMPLETED")
 
 
 def format_design_gates(milestone: ProductionMilestone) -> str:

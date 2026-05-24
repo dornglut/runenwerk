@@ -9,25 +9,42 @@ use engine::plugins::render::graph::{
 use engine::plugins::render::inspect::{
     PassTimingSample, RenderDebugTimingsState, RenderGpuResidencyBudgetInspection,
     RenderGpuResidencyInspection, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
-    RenderPassTimingEvidence, RenderScaleProductionEvidenceRequest,
-    RenderScaleProductionHardwareProfile, RenderScaleVisibilityCandidate,
-    RenderScaleVisibilityCapabilities, RenderScaleVisibilityCapabilityStatus,
-    RenderSdfProductionEvidenceRequest, RenderSdfProductionHardwareProfile,
-    RenderSdfResidencyBudgetInspection, RenderSdfResidencyInspection,
-    RenderSdfRuntimeVisualEvidence, inspect_render_scale_production_evidence,
+    RenderMeshMaterialHandoffCounts, RenderMeshMaterialHandoffInspection,
+    RenderMeshMaterialProductionEvidenceRequest, RenderMeshMaterialProductionHardwareProfile,
+    RenderMeshMaterialRuntimeVisualEvidence, RenderPassTimingEvidence,
+    RenderPipelineFallbackCounts, RenderPipelineFallbackInspection,
+    RenderRayReconstructionInputEvidence, RenderRayReconstructionInputKind,
+    RenderScaleProductionEvidenceRequest, RenderScaleProductionHardwareProfile,
+    RenderScaleVisibilityCandidate, RenderScaleVisibilityCapabilities,
+    RenderScaleVisibilityCapabilityStatus, RenderSdfProductionEvidenceRequest,
+    RenderSdfProductionHardwareProfile, RenderSdfResidencyBudgetInspection,
+    RenderSdfResidencyInspection, RenderSdfRuntimeVisualEvidence, RenderTemporalHistoryEvidence,
+    RenderTemporalInputEvidence, RenderTemporalInputKind, RenderTemporalInspection,
+    RenderTemporalInspectionRequest, RenderTemporalJitterEvidence,
+    RenderTemporalProductionEvidenceRequest, RenderTemporalProductionHardwareProfile,
+    RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence,
+    RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
+    RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
+    RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
+    inspect_render_mesh_material_production_evidence, inspect_render_scale_production_evidence,
     inspect_render_scale_visibility, inspect_render_sdf_production_evidence,
+    inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
+    inspect_render_temporal_upscaling,
 };
 use engine::plugins::render::resource::{
     build_transient_alias_assignments, build_transient_windows, find_aliasable_transients,
 };
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation, PreparedFrameContext,
-    PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo,
-    PreparedViewFrame, ProceduralBufferBinding, ProceduralPassDescriptor,
-    ProceduralTargetDescriptor, RenderExecutionGraphPreparedReport, RenderFlow,
-    RenderPreparedFramePreflightCacheKey, RenderVertexBufferLayout, RenderVertexFormat,
-    compile_flow_plan, preflight_prepared_render_frame,
-    preflight_prepared_render_frame_runtime_guards, prepared_render_frame_preflight_cache_key,
+    BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
+    DrawIndirectArgs, GpuPrimitiveExecutionPlan, GpuPrimitiveStep, GpuStorage, GpuUniform,
+    IndirectDrawArgsGenerationDescriptor, PrefixScanMode, PreparedFlowInputs,
+    PreparedFlowInvocation, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
+    PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame, ProceduralBufferBinding,
+    ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderExecutionGraphPreparedReport,
+    RenderFlow, RenderPreparedFramePreflightCacheKey, RenderVertexBufferLayout, RenderVertexFormat,
+    U32Counter, U32PrefixScanDescriptor, U32ScanElement, U32ScatterDescriptor, compile_flow_plan,
+    preflight_prepared_render_frame, preflight_prepared_render_frame_runtime_guards,
+    prepared_render_frame_preflight_cache_key,
 };
 use engine::prelude::Resource;
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -41,6 +58,7 @@ struct BoidInstance {
 struct ProceduralBoidInstance {
     position: [f32; 2],
     velocity: [f32; 2],
+    visual_heading: [f32; 2],
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -54,6 +72,17 @@ struct ComposeParams {
     surface_size: [u32; 2],
     intensity: f32,
 }
+
+#[derive(Debug, Clone, Copy, GpuUniform)]
+struct ProceduralBoidsDrawParams {
+    surface: [f32; 4],
+    sprite: [f32; 4],
+}
+
+const BENCH_BOID_COUNT: u32 = 4096;
+const BENCH_GRID_CELLS_X: u32 = 64;
+const BENCH_GRID_CELLS_Y: u32 = 64;
+const BENCH_GRID_CELL_COUNT: u32 = BENCH_GRID_CELLS_X * BENCH_GRID_CELLS_Y;
 
 #[derive(Debug, Clone, Resource)]
 struct BenchState {
@@ -85,8 +114,29 @@ impl BenchState {
         }
     }
 
+    fn procedural_boids_draw_params(&self, surface: (u32, u32)) -> ProceduralBoidsDrawParams {
+        let width = surface.0.max(1) as f32;
+        let height = surface.1.max(1) as f32;
+        ProceduralBoidsDrawParams {
+            surface: [width, height, 1.0 / width, 1.0 / height],
+            sprite: [10.5, 0.72, 1.35, 0.0],
+        }
+    }
+
     fn dispatch_workgroups(&self) -> [u32; 3] {
         self.dispatch
+    }
+
+    fn dispatch_boids_workgroups(&self) -> [u32; 3] {
+        [BENCH_BOID_COUNT.div_ceil(64), 1, 1]
+    }
+
+    fn dispatch_grid_workgroups(&self) -> [u32; 3] {
+        [BENCH_GRID_CELL_COUNT.div_ceil(64), 1, 1]
+    }
+
+    fn dispatch_scan_workgroups(&self) -> [u32; 3] {
+        [1, 1, 1]
     }
 }
 
@@ -187,6 +237,256 @@ fn run_warm_cached_preflight(
     } else {
         run_cold_preflight(compiled, frame);
     }
+}
+
+fn run_prefix_scan_primitive_plan(element_count: u32) {
+    let (flow, input) = RenderFlow::new("bench.population.scan")
+        .storage_array::<U32ScanElement>("bench.population.scan.input", u64::from(element_count));
+    let (_flow, output) = flow
+        .storage_array::<U32ScanElement>("bench.population.scan.output", u64::from(element_count));
+    let scan = U32PrefixScanDescriptor::new(
+        "bench.population.scan",
+        input,
+        output,
+        element_count,
+        PrefixScanMode::Exclusive,
+    )
+    .expect("valid prefix scan descriptor");
+    let plan = GpuPrimitiveExecutionPlan::new(
+        "bench.population.scan.plan",
+        [GpuPrimitiveStep::from(scan)],
+    )
+    .expect("valid scan primitive plan");
+
+    black_box(plan.step_count());
+    black_box(plan.resource_accesses().len());
+}
+
+fn run_scan_compaction_indirect_args_plan(element_count: u32) {
+    let (flow, source_indices) = RenderFlow::new("bench.population.primitives")
+        .storage_array::<U32ScanElement>(
+            "bench.population.primitives.source_indices",
+            u64::from(element_count),
+        );
+    let (flow, prefix_offsets) = flow.storage_array::<U32ScanElement>(
+        "bench.population.primitives.prefix_offsets",
+        u64::from(element_count),
+    );
+    let (flow, output_indices) = flow.storage_array::<U32ScanElement>(
+        "bench.population.primitives.output_indices",
+        u64::from(element_count),
+    );
+    let (_flow, draw_args) =
+        flow.storage_array::<DrawIndirectArgs>("bench.population.primitives.draw_args", 1);
+
+    let scan = U32PrefixScanDescriptor::new(
+        "bench.population.primitives.scan",
+        source_indices.clone(),
+        prefix_offsets.clone(),
+        element_count,
+        PrefixScanMode::Exclusive,
+    )
+    .expect("valid scan descriptor");
+    let scatter = U32ScatterDescriptor::new(
+        "bench.population.primitives.scatter",
+        source_indices,
+        prefix_offsets,
+        output_indices,
+        element_count,
+        element_count,
+    )
+    .expect("valid scatter descriptor");
+    let args = IndirectDrawArgsGenerationDescriptor::draw(
+        "bench.population.primitives.draw_args",
+        draw_args,
+        0,
+        DrawIndirectArgs::new(6, element_count, 0, 0),
+    )
+    .expect("valid indirect draw args descriptor");
+    let plan = GpuPrimitiveExecutionPlan::new(
+        "bench.population.primitives.plan",
+        [
+            GpuPrimitiveStep::from(scan),
+            GpuPrimitiveStep::from(scatter),
+            GpuPrimitiveStep::from(args),
+        ],
+    )
+    .expect("valid primitive execution plan");
+
+    black_box(plan.step_count());
+    black_box(plan.resource_accesses().len());
+}
+
+fn run_bounded_grid_build_plan(agent_count: u32) {
+    let config =
+        BoundedUniformGrid2dConfig::new(BENCH_GRID_CELLS_X, BENCH_GRID_CELLS_Y, agent_count);
+    let cell_count = config
+        .checked_cell_count()
+        .expect("benchmark grid dimensions should validate");
+    let (flow, counts) = RenderFlow::new("bench.population.grid")
+        .storage_array::<U32Counter>("bench.population.grid.counts", u64::from(cell_count));
+    let (flow, offsets) = flow
+        .storage_array::<U32ScanElement>("bench.population.grid.offsets", u64::from(cell_count));
+    let (flow, cursors) =
+        flow.storage_array::<U32Counter>("bench.population.grid.cursors", u64::from(cell_count));
+    let (_flow, sorted) = flow
+        .storage_array::<U32ScanElement>("bench.population.grid.sorted", u64::from(agent_count));
+    let plan = BoundedUniformGrid2dBuildPlan::new(
+        "bench.population.grid",
+        config,
+        counts,
+        offsets,
+        cursors,
+        sorted,
+    )
+    .expect("valid grid build plan");
+
+    black_box(plan.config.cell_count());
+    black_box(plan.resources.sorted_index_capacity);
+    black_box(plan.primitive_plan.resource_accesses().len());
+    black_box(plan.stages.len());
+}
+
+fn run_boids_production_evidence_report(flow: &RenderFlow) {
+    let compiled = compile_flow_plan(flow).expect("procedural boids flow should compile");
+    let pass_count = compiled.execution.passes.len();
+    let grid_stage_count = compiled
+        .pass_order
+        .iter()
+        .filter(|pass| {
+            pass.pass_label()
+                .starts_with("bench.procedural_boids.grid.")
+        })
+        .count();
+    let local_instance_draw = compiled.execution.passes.iter().any(|pass| match pass {
+        CompiledPassExecutionPlan::Graphics(value) => {
+            !value.draw_buffers.instance_buffers.is_empty()
+                && value.draw.is_some_and(|draw| {
+                    draw.vertex_count == 6 && draw.instance_count == BENCH_BOID_COUNT
+                })
+        }
+        _ => false,
+    });
+    let max_aspect_error_px = [(1600, 900), (900, 1600), (1024, 1024)]
+        .into_iter()
+        .map(boids_resize_aspect_error_px)
+        .fold(0.0_f32, f32::max);
+    let evidence = format!(
+        "boids_population_bench_evidence flow={} passes={} grid_stages={} local_instance_draw={} no_silent_grid_overflow=true max_aspect_error_px={:.5} benchmark_command=cargo bench -p engine --bench render_flow_planning",
+        compiled.flow_label, pass_count, grid_stage_count, local_instance_draw, max_aspect_error_px,
+    );
+
+    black_box(evidence.len());
+}
+
+fn boids_resize_aspect_error_px(surface_size: (u32, u32)) -> f32 {
+    let width = surface_size.0.max(1) as f32;
+    let height = surface_size.1.max(1) as f32;
+    let radius_px = 10.5;
+    let sprite_width_px = radius_px * 0.72 * 2.0;
+    let sprite_height_px = radius_px * 1.35 * 2.0;
+    let clip_width = sprite_width_px * 2.0 / width;
+    let clip_height = sprite_height_px * 2.0 / height;
+    let reconstructed_width_px = clip_width * width * 0.5;
+    let reconstructed_height_px = clip_height * height * 0.5;
+
+    (reconstructed_width_px - sprite_width_px)
+        .abs()
+        .max((reconstructed_height_px - sprite_height_px).abs())
+}
+
+fn run_mesh_material_production_evidence() {
+    let material_handoff = RenderMeshMaterialHandoffInspection {
+        counts: RenderMeshMaterialHandoffCounts {
+            material_instance_count: 1,
+            texture_binding_count: 1,
+            material_binding_slot_count: 1,
+            model_mesh_selection_count: 1,
+            material_consuming_pass_count: 1,
+            pass_exposed_model_mesh_selection_count: 1,
+        },
+        scene_shader_identity: Some("shader.identity.scene".to_string()),
+        scene_shader_path: Some("generated/scene_material.wgsl".to_string()),
+        shader_artifact_id: Some("shader.artifact.scene".to_string()),
+        shader_cache_key: Some("shader.cache.scene".to_string()),
+        material_table_identity: Some("scene.material.table:v1".to_string()),
+        resource_layout_identity: Some("resource.layout:v1".to_string()),
+        diagnostics: Vec::new(),
+    };
+    let pipeline_fallback = RenderPipelineFallbackInspection {
+        counts: RenderPipelineFallbackCounts {
+            pass_count: 1,
+            pipeline_backed_pass_count: 1,
+            material_pass_count: 1,
+            fallback_pass_count: 0,
+            material_fallback_pass_count: 0,
+            shader_failure_event_count: 1,
+            prior_valid_shader_failure_count: 1,
+            pipeline_cache_hit_count: 2,
+            pipeline_cache_miss_count: 1,
+            pipeline_cache_failure_count: 0,
+        },
+        shader_reload_status: None,
+        passes: Vec::new(),
+        shader_failures: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let mut timings = RenderDebugTimingsState::default();
+    timings.observe_pass_timings(&[
+        PassTimingSample {
+            flow_id: "bench.mesh.material.production".to_string(),
+            pass_id: "mesh.material.prepare".to_string(),
+            pass_kind: "compute".to_string(),
+            millis: 0.12,
+            dispatch_workgroups: Some([1, 1, 1]),
+        },
+        PassTimingSample {
+            flow_id: "bench.mesh.material.production".to_string(),
+            pass_id: "mesh.material.draw".to_string(),
+            pass_kind: "graphics".to_string(),
+            millis: 0.31,
+            dispatch_workgroups: None,
+        },
+    ]);
+    timings.observe_gpu_timing_diagnostic(RenderGpuTimingDiagnostic::unsupported(
+        "criterion mesh/material production evidence uses portable unsupported timestamp diagnostics",
+    ));
+    let report =
+        inspect_render_mesh_material_production_evidence(RenderMeshMaterialProductionEvidenceRequest {
+            hardware_profile: RenderMeshMaterialProductionHardwareProfile {
+                profile_key: "bench-mesh-material-profile".to_string(),
+                adapter_name: Some("criterion".to_string()),
+                backend: Some("wgpu".to_string()),
+                timestamp_query: RenderGpuTimingCapability::Unsupported,
+            },
+            material_handoff,
+            pipeline_fallback,
+            timings,
+            visual_evidence: vec![RenderMeshMaterialRuntimeVisualEvidence {
+                view_label: "bench.mesh.material.summary".to_string(),
+                artifact_path:
+                    "engine/benchmark-artifacts/render-mesh-material-production-evidence/summary.txt"
+                        .to_string(),
+                material_table_identity: "scene.material.table:v1".to_string(),
+                scene_shader_identity: "shader.identity.scene".to_string(),
+                material_instance_count: 1,
+                rendered_pixel_count: 4096,
+                consumed_material_handoff: true,
+                consumed_pipeline_fallback: true,
+            }],
+            benchmark_commands: vec![
+                "cargo bench -p engine --bench render_flow_planning".to_string(),
+            ],
+            artifact_paths: vec![
+                "engine/benchmark-artifacts/render-mesh-material-production-evidence/summary.txt"
+                    .to_string(),
+                "docs-site/src/content/docs/reports/benchmarks/render/mesh-material-production-evidence.md"
+                    .to_string(),
+            ],
+        });
+    black_box(report.is_runtime_ready());
+    black_box(report.counts.material_instance_count);
+    black_box(report.timings.gpu_timing_diagnostic_count);
 }
 
 fn run_scale_production_evidence(candidate_count: usize) {
@@ -385,6 +685,194 @@ fn run_sdf_runtime_evidence(product_count: usize) {
     black_box(report.timings.cpu_total_pass_millis);
 }
 
+fn run_temporal_production_evidence() {
+    let temporal = temporal_inspection();
+    let upscaling = temporal_upscaling_inspection(temporal.clone());
+    let mut timings = RenderDebugTimingsState::default();
+    timings.observe_pass_timings(&[
+        PassTimingSample {
+            flow_id: "bench.temporal.production".to_string(),
+            pass_id: "temporal.reconstruct".to_string(),
+            pass_kind: "fullscreen".to_string(),
+            millis: 0.24,
+            dispatch_workgroups: None,
+        },
+        PassTimingSample {
+            flow_id: "bench.temporal.production".to_string(),
+            pass_id: "temporal.resolve".to_string(),
+            pass_kind: "fullscreen".to_string(),
+            millis: 0.18,
+            dispatch_workgroups: None,
+        },
+    ]);
+    timings.observe_gpu_timing_diagnostic(RenderGpuTimingDiagnostic::unsupported(
+        "criterion temporal production evidence uses portable unsupported timestamp diagnostics",
+    ));
+    let report =
+        inspect_render_temporal_production_evidence(RenderTemporalProductionEvidenceRequest {
+            hardware_profile: RenderTemporalProductionHardwareProfile {
+                profile_key: "bench-temporal-production-profile".to_string(),
+                adapter_name: Some("criterion".to_string()),
+                backend: Some("wgpu".to_string()),
+                timestamp_query: RenderGpuTimingCapability::Unsupported,
+            },
+            temporal,
+            upscaling,
+            timings,
+            visual_evidence: temporal_visual_evidence(),
+            benchmark_commands: vec![
+                "cargo bench -p engine --bench render_flow_planning".to_string(),
+            ],
+            artifact_paths: vec![
+                "engine/benchmark-artifacts/render-temporal-production-evidence/summary.txt"
+                    .to_string(),
+                "docs-site/src/content/docs/reports/benchmarks/render/temporal-production-evidence.md"
+                    .to_string(),
+            ],
+        });
+    black_box(report.is_runtime_ready());
+    black_box(report.counts.rendered_pixel_count);
+    black_box(report.timings.gpu_timing_diagnostic_count);
+}
+
+fn temporal_inspection() -> RenderTemporalInspection {
+    inspect_render_temporal_inputs(RenderTemporalInspectionRequest {
+        frame_index: 29,
+        reconstruction_mode: RenderTemporalReconstructionMode::Taau,
+        native_fallback_active: false,
+        resolution: RenderTemporalResolutionEvidence {
+            internal_size: [1280, 720],
+            output_size: [1920, 1080],
+            min_scale: 0.5,
+            max_scale: 1.0,
+            dynamic_resolution_enabled: true,
+        },
+        jitter: RenderTemporalJitterEvidence {
+            sequence_id: "halton-2-3:v1".to_string(),
+            phase_index: 7,
+            phase_count: 8,
+            offset: [0.25, 0.125],
+        },
+        history: RenderTemporalHistoryEvidence {
+            resource_id: "history.main.color".to_string(),
+            current_signature: "temporal.signature.current".to_string(),
+            previous_signature: Some("temporal.signature.current".to_string()),
+            age_frames: 8,
+            valid: true,
+            invalidation_reason: None,
+        },
+        inputs: vec![
+            temporal_input(RenderTemporalInputKind::MotionVectors, true, true),
+            temporal_input(RenderTemporalInputKind::Depth, true, true),
+            temporal_input(RenderTemporalInputKind::Exposure, true, true),
+            temporal_input(RenderTemporalInputKind::ReactiveMask, false, true),
+        ],
+    })
+}
+
+fn temporal_upscaling_inspection(
+    temporal: RenderTemporalInspection,
+) -> RenderTemporalUpscalingInspection {
+    inspect_render_temporal_upscaling(RenderTemporalUpscalingInspectionRequest {
+        temporal,
+        adapter: RenderTemporalUpscalingAdapterEvidence {
+            kind: RenderTemporalUpscalingAdapterKind::FsrStyle,
+            capability_state: RenderTemporalUpscalingCapabilityState::Supported,
+            required_capabilities: vec![
+                "temporal.history.valid".to_string(),
+                "dynamic_resolution".to_string(),
+                "ray_reconstruction.inputs".to_string(),
+            ],
+            unsupported_reason: None,
+            invocation_requested: true,
+        },
+        ray_inputs: vec![
+            ray_input(RenderRayReconstructionInputKind::MotionVectors, true, true),
+            ray_input(RenderRayReconstructionInputKind::Depth, true, true),
+            ray_input(RenderRayReconstructionInputKind::Exposure, true, true),
+            ray_input(RenderRayReconstructionInputKind::ReactiveMask, false, true),
+            ray_input(
+                RenderRayReconstructionInputKind::DisocclusionMask,
+                false,
+                false,
+            ),
+            ray_input(
+                RenderRayReconstructionInputKind::RaymarchDistance,
+                true,
+                true,
+            ),
+            ray_input(
+                RenderRayReconstructionInputKind::RayQueryHitDistance,
+                true,
+                true,
+            ),
+        ],
+        native_fallback_visible: false,
+        adapter_required_for_correctness: false,
+    })
+}
+
+fn temporal_visual_evidence() -> Vec<RenderTemporalRuntimeVisualEvidence> {
+    vec![
+        RenderTemporalRuntimeVisualEvidence {
+            view_label: "bench.temporal.taau".to_string(),
+            artifact_path:
+                "engine/benchmark-artifacts/render-temporal-production-evidence/taau.txt"
+                    .to_string(),
+            reconstruction_mode: RenderTemporalReconstructionMode::Taau,
+            internal_size: [1280, 720],
+            output_size: [1920, 1080],
+            rendered_pixel_count: 8192,
+            history_valid: true,
+            native_fallback_visible: false,
+            consumed_temporal_inputs: true,
+            consumed_temporal_upscaling: true,
+        },
+        RenderTemporalRuntimeVisualEvidence {
+            view_label: "bench.temporal.native_fallback".to_string(),
+            artifact_path:
+                "engine/benchmark-artifacts/render-temporal-production-evidence/fallback.txt"
+                    .to_string(),
+            reconstruction_mode: RenderTemporalReconstructionMode::Native,
+            internal_size: [1920, 1080],
+            output_size: [1920, 1080],
+            rendered_pixel_count: 4096,
+            history_valid: true,
+            native_fallback_visible: true,
+            consumed_temporal_inputs: true,
+            consumed_temporal_upscaling: true,
+        },
+    ]
+}
+
+fn temporal_input(
+    kind: RenderTemporalInputKind,
+    required: bool,
+    available: bool,
+) -> RenderTemporalInputEvidence {
+    RenderTemporalInputEvidence {
+        kind,
+        required,
+        available,
+        product_id: available.then(|| format!("temporal.product.{}", kind.as_str())),
+        generation: available.then_some(101),
+    }
+}
+
+fn ray_input(
+    kind: RenderRayReconstructionInputKind,
+    required: bool,
+    available: bool,
+) -> RenderRayReconstructionInputEvidence {
+    RenderRayReconstructionInputEvidence {
+        kind,
+        required,
+        available,
+        product_id: available.then(|| format!("ray.product.{}", kind.as_str())),
+        generation: available.then_some(202),
+    }
+}
+
 fn build_simple_fullscreen_flow() -> RenderFlow {
     RenderFlow::new("bench.fullscreen")
         .with_surface_color()
@@ -415,40 +903,147 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .with_color_target("bench.procedural_boids.color")
         .double_buffer_storage_array_with_handle::<ProceduralBoidInstance>(
             "bench.procedural_boids.instances",
-            4096,
+            u64::from(BENCH_BOID_COUNT),
         );
+    let (flow, grid_cell_counts) = flow.storage_array::<U32Counter>(
+        "bench.procedural_boids.grid.cell_counts",
+        u64::from(BENCH_GRID_CELL_COUNT),
+    );
+    let (flow, grid_cell_offsets) = flow.storage_array::<U32ScanElement>(
+        "bench.procedural_boids.grid.cell_offsets",
+        u64::from(BENCH_GRID_CELL_COUNT),
+    );
+    let (flow, grid_scatter_cursors) = flow.storage_array::<U32Counter>(
+        "bench.procedural_boids.grid.scatter_cursors",
+        u64::from(BENCH_GRID_CELL_COUNT),
+    );
+    let (flow, grid_sorted_indices) = flow.storage_array::<U32ScanElement>(
+        "bench.procedural_boids.grid.sorted_indices",
+        u64::from(BENCH_BOID_COUNT),
+    );
+    let grid_plan = BoundedUniformGrid2dBuildPlan::new(
+        "bench.procedural_boids.grid",
+        BoundedUniformGrid2dConfig::new(BENCH_GRID_CELLS_X, BENCH_GRID_CELLS_Y, BENCH_BOID_COUNT),
+        grid_cell_counts.clone(),
+        grid_cell_offsets.clone(),
+        grid_scatter_cursors.clone(),
+        grid_sorted_indices.clone(),
+    )
+    .expect("procedural boids grid plan should validate");
+    let clear_counts = stage_label(&grid_plan, BoundedUniformGrid2dStage::ClearCounts).to_string();
+    let count_cells = stage_label(&grid_plan, BoundedUniformGrid2dStage::CountCells).to_string();
+    let scan_counts = stage_label(&grid_plan, BoundedUniformGrid2dStage::ScanCounts).to_string();
+    let reset_cursors =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::ResetCursors).to_string();
+    let scatter_indices =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::ScatterSortedIndices).to_string();
+    let simulate_neighbors =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::SimulateNeighbors).to_string();
+    let publish_draw = stage_label(&grid_plan, BoundedUniformGrid2dStage::PublishDraw).to_string();
+
     let instance_buffer = ProceduralBufferBinding::storage(
         boid_instances.a().clone(),
         procedural_boid_instance_layout(),
     );
 
     let flow = flow
-        .compute_pass("bench.procedural_boids.simulate")
+        .compute_pass("bench.procedural_boids.seed_or_hold")
         .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
-        .dispatch_from_state(BenchState::dispatch_workgroups)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
-        .compute_pass("bench.procedural_boids.publish")
+        .compute_pass(clear_counts.clone())
         .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
-        .dispatch_from_state(BenchState::dispatch_workgroups)
-        .depends_on("bench.procedural_boids.simulate")
+        .dispatch_from_state(BenchState::dispatch_grid_workgroups)
+        .depends_on("bench.procedural_boids.seed_or_hold")
+        .finish()
+        .compute_pass(count_cells.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(clear_counts.as_str())
+        .finish()
+        .compute_pass(scan_counts.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_scan_workgroups)
+        .depends_on(count_cells.as_str())
+        .finish()
+        .compute_pass(reset_cursors.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_grid_workgroups)
+        .depends_on(scan_counts.as_str())
+        .finish()
+        .compute_pass(scatter_indices.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(reset_cursors.as_str())
+        .finish()
+        .compute_pass(simulate_neighbors.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(scatter_indices.as_str())
+        .finish()
+        .compute_pass(publish_draw.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts)
+        .bind_storage(grid_cell_offsets)
+        .bind_storage(grid_scatter_cursors)
+        .bind_storage(grid_sorted_indices)
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(simulate_neighbors.as_str())
         .finish();
 
     let flow = flow
-        .procedural_pass(
+        .procedural_pass_builder(
             ProceduralPassDescriptor::local_sdf_2d_impostors(
                 "bench.procedural_boids.draw",
                 instance_buffer,
-                4096,
+                BENCH_BOID_COUNT,
             )
             .shader_asset("assets/shaders/boids_compose.wgsl")
             .target(ProceduralTargetDescriptor::color(
                 "bench.procedural_boids.color",
             ))
-            .depends_on("bench.procedural_boids.publish"),
+            .depends_on(publish_draw.as_str()),
         )
-        .expect("procedural boids pass should be valid");
+        .expect("procedural boids builder should be valid")
+        .uniform_from_state_with_surface(BenchState::procedural_boids_draw_params)
+        .finish()
+        .expect("procedural boids pass should lower");
 
     flow.present_pass("bench.procedural_boids.present")
         .source("bench.procedural_boids.color")
@@ -462,6 +1057,15 @@ fn procedural_boid_instance_layout() -> RenderVertexBufferLayout {
     RenderVertexBufferLayout::instance(0, std::mem::size_of::<ProceduralBoidInstance>() as u64)
         .attribute(0, 0, RenderVertexFormat::Float32x2)
         .attribute(1, 8, RenderVertexFormat::Float32x2)
+        .attribute(2, 16, RenderVertexFormat::Float32x2)
+}
+
+fn stage_label(plan: &BoundedUniformGrid2dBuildPlan, stage: BoundedUniformGrid2dStage) -> &str {
+    plan.stages
+        .iter()
+        .find(|candidate| candidate.stage == stage)
+        .map(|candidate| candidate.label.as_str())
+        .expect("bounded grid plan should include canonical stage")
 }
 
 fn build_compositor_flow() -> RenderFlow {
@@ -570,20 +1174,34 @@ fn bench_render_flow_planning(c: &mut Criterion) {
         })
     });
 
+    c.bench_function("render_population/prefix_scan_plan_4096", |b| {
+        b.iter(|| run_prefix_scan_primitive_plan(black_box(4096)))
+    });
+    c.bench_function(
+        "render_population/scan_compaction_indirect_args_plan_4096",
+        |b| b.iter(|| run_scan_compaction_indirect_args_plan(black_box(4096))),
+    );
+    c.bench_function("render_population/bounded_grid_build_plan_4096", |b| {
+        b.iter(|| run_bounded_grid_build_plan(black_box(BENCH_BOID_COUNT)))
+    });
+
     let procedural_boids = build_procedural_boids_flow();
-    c.bench_function("render_flow/procedural_boids_production_shape", |b| {
+    c.bench_function("render_population/boids_production_flow_planning", |b| {
         b.iter(|| run_validation_and_planning(black_box(&procedural_boids)))
     });
     let compiled_procedural_boids =
         compile_flow_plan(&procedural_boids).expect("procedural boids flow should compile");
     let procedural_boids_frame = prepared_frame_for_flow(&compiled_procedural_boids);
-    c.bench_function("render_flow/procedural_boids_preflight_cold", |b| {
+    c.bench_function("render_population/boids_production_preflight_cold", |b| {
         b.iter(|| {
             run_cold_preflight(
                 black_box(&compiled_procedural_boids),
                 black_box(&procedural_boids_frame),
             )
         })
+    });
+    c.bench_function("render_population/boids_production_evidence_report", |b| {
+        b.iter(|| run_boids_production_evidence_report(black_box(&procedural_boids)))
     });
 
     let compositor = build_compositor_flow();
@@ -603,11 +1221,17 @@ fn bench_render_flow_planning(c: &mut Criterion) {
         })
     });
 
+    c.bench_function("render_mesh_material/production_evidence_report", |b| {
+        b.iter(run_mesh_material_production_evidence)
+    });
     c.bench_function("render_scale/production_evidence_report_4096", |b| {
         b.iter(|| run_scale_production_evidence(black_box(4096)))
     });
     c.bench_function("render_sdf/runtime_evidence_report_4096", |b| {
         b.iter(|| run_sdf_runtime_evidence(black_box(4096)))
+    });
+    c.bench_function("render_temporal/production_evidence_report", |b| {
+        b.iter(run_temporal_production_evidence)
     });
 }
 

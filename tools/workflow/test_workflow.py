@@ -188,6 +188,7 @@ def valid_production_state() -> dict:
             "production_index": "production-index.md",
             "milestone_register": "production-register.md",
             "track_roadmap": "production-roadmap.puml",
+            "full_track_roadmap": "production-roadmap-full.puml",
         },
         "tracks": [
             {
@@ -1133,13 +1134,13 @@ def test_batch_kickoff_defaults_to_current_candidates() -> None:
     ]
 
 
-def test_current_repository_next_batch_selects_wr032() -> None:
+def test_current_repository_next_batch_selects_wr089() -> None:
     roadmap = load_roadmap()
     selected = select_batch_candidates(roadmap)
     dependency_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml").read_text(encoding="utf-8")
     candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
 
-    assert [item.id for item in selected] == ["WR-032"]
+    assert [item.id for item in selected] == ["WR-089"]
     assert roadmap.by_id["WR-029"].planning_state == "ready_next"
     assert "state=completed" not in dependency_puml
     assert "state=completed" not in candidates_puml

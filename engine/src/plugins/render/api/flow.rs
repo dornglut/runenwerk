@@ -5,7 +5,8 @@ use crate::plugins::render::api::{
     project_uniform_bindings_for_pass,
 };
 use crate::plugins::render::procedural::{
-    ProceduralPassDescriptor, ProceduralValidationError, build_procedural_pass,
+    ProceduralPassBuilder, ProceduralPassDescriptor, ProceduralValidationError,
+    build_procedural_pass,
 };
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
@@ -144,7 +145,7 @@ impl RenderFlow {
         T: GpuParams + 'static,
     {
         let id = self.register_storage_array::<T>(label.into(), len);
-        (self, StorageArrayHandle::new(id))
+        (self, StorageArrayHandle::new(id, len))
     }
 
     pub fn double_buffer_storage_array<T>(mut self, label: impl Into<String>, len: u64) -> Self
@@ -167,8 +168,8 @@ impl RenderFlow {
         let (a_id, b_id) = self.register_double_buffer_storage_array::<T>(base_label.clone(), len);
         let handle = DoubleBufferHandle::new(
             base_label,
-            StorageArrayHandle::new(a_id),
-            StorageArrayHandle::new(b_id),
+            StorageArrayHandle::new(a_id, len),
+            StorageArrayHandle::new(b_id, len),
         );
         (self, handle)
     }
@@ -190,6 +191,13 @@ impl RenderFlow {
         descriptor: ProceduralPassDescriptor,
     ) -> Result<Self, ProceduralValidationError> {
         build_procedural_pass(self, descriptor)
+    }
+
+    pub fn procedural_pass_builder(
+        self,
+        descriptor: ProceduralPassDescriptor,
+    ) -> Result<ProceduralPassBuilder, ProceduralValidationError> {
+        ProceduralPassBuilder::new(self, descriptor)
     }
 
     pub fn copy_pass(self, label: impl Into<String>) -> CopyPassBuilder {
@@ -300,11 +308,7 @@ impl RenderFlow {
         self
     }
 
-    pub(crate) fn allocate_uniform_resource<U>(
-        &mut self,
-        _pass_id: RenderPassId,
-        pass_label: &str,
-    ) -> UniformHandle<U>
+    pub(crate) fn allocate_uniform_resource<U>(&mut self, pass_label: &str) -> UniformHandle<U>
     where
         U: GpuParams + 'static,
     {
@@ -543,9 +547,10 @@ impl RenderFlow {
 mod tests {
     use super::*;
     use crate::plugins::render::{
-        CompiledPassDescriptor, GpuStorage, GpuUniform, RenderFlowValidationIssue, RenderPassKind,
-        RenderTextureFormatPolicy, RenderTextureSizePolicy, RenderTextureTargetFormat,
-        RenderVertexBufferLayout, RenderVertexFormat, compile_flow_plan,
+        CompiledDrawSource, CompiledPassDescriptor, DrawIndirectArgs, GpuStorage, GpuUniform,
+        RenderFlowValidationIssue, RenderPassKind, RenderTextureFormatPolicy,
+        RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
+        RenderVertexFormat, compile_flow_plan,
     };
 
     #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -764,6 +769,77 @@ mod tests {
             .finish()
             .validate()
             .expect("graphics pass with instance buffer layout should validate");
+    }
+
+    #[test]
+    fn graphics_pass_explicit_indirect_draw_compiles_draw_source() {
+        let (flow, args) = RenderFlow::new("test.graphics.indirect")
+            .with_color_target("test.color")
+            .storage_array::<DrawIndirectArgs>("test.draw.args", 1);
+
+        let flow = flow
+            .graphics_pass("test.draw")
+            .write_color_target("test.color")
+            .draw_indirect(args, 3, 64)
+            .finish()
+            .validate()
+            .expect("graphics pass with explicit indirect draw should validate");
+
+        let plan = compile_flow_plan(&flow).expect("validated flow should compile");
+        let Some(crate::plugins::render::CompiledPassExecutionPlan::Graphics(pass)) =
+            plan.execution.passes.first()
+        else {
+            panic!("first execution pass should be graphics");
+        };
+        let draw = pass.draw.expect("draw should compile");
+        assert_eq!(draw.vertex_count, 3);
+        assert_eq!(draw.instance_count, 64);
+        assert!(matches!(
+            draw.source,
+            CompiledDrawSource::Indirect { byte_offset: 0, .. }
+        ));
+        assert_eq!(pass.draw_buffers.indirect_buffers.len(), 1);
+    }
+
+    #[test]
+    fn graphics_pass_rejects_unaligned_indirect_draw_offset() {
+        let (flow, args) = RenderFlow::new("test.graphics.indirect.unaligned")
+            .with_color_target("test.color")
+            .storage_array::<DrawIndirectArgs>("test.draw.args", 1);
+
+        let err = flow
+            .graphics_pass("test.draw")
+            .write_color_target("test.color")
+            .draw_indirect_with_offsets(args, 3, 64, 0, 0, 2)
+            .finish()
+            .validation_report()
+            .expect_err("unaligned indirect draw offset should be rejected");
+
+        assert!(err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::GraphicsPassInvalidIndirectDrawOffset { .. }
+        )));
+    }
+
+    #[test]
+    fn graphics_pass_rejects_indirect_buffer_sidecar_on_direct_draw() {
+        let (flow, args) = RenderFlow::new("test.graphics.indirect.sidecar")
+            .with_color_target("test.color")
+            .storage_array::<DrawIndirectArgs>("test.draw.args", 1);
+
+        let err = flow
+            .graphics_pass("test.draw")
+            .write_color_target("test.color")
+            .indirect_buffer(args)
+            .draw(3, 64)
+            .finish()
+            .validation_report()
+            .expect_err("direct draw with indirect buffer sidecar should be rejected");
+
+        assert!(err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::GraphicsPassIndirectBufferWithoutIndirectDraw { .. }
+        )));
     }
 
     #[test]

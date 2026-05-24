@@ -1,0 +1,65 @@
+version: 1
+idea: Renderer spatial hash and chunked unbounded procedural population design after bounded-grid procedural population evidence
+source_path: docs-site/src/content/docs/reports/closeouts/pt-render-procedural-population-runtime-proven/closeout.md
+owner: engine/src/plugins/render/procedural/population
+created_at: '2026-05-24'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-094
+  title: Renderer Spatial Hash And Chunked Unbounded Procedural Population Design
+  diagram_title: Renderer spatial hash unbounded populations
+  alias: WR094
+  lane: Discovery
+  dependency_level: L4
+  gate: Policy deferred pending intake approval
+  planning_state: blocked_deferred
+  priority: P3
+  value: 2
+  blocker: 5
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-088
+  write_scopes:
+  - docs-site/src/content/docs/design/active
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-spatial-hash-and-chunked-unboun/proposal.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-spatial-hash-and-chunked-unboun/proposal.md
+  validations:
+  - task docs:validate
+  - task roadmap:validate
+  - task planning:validate
+  next_evidence: Review separate unbounded-population ownership, collision policy, resident chunk windows, capacity diagnostics,
+    renderer residency interaction, and world/product boundaries before applying this intake.
+  current_decision: Separate intake only; do not fold spatial hash or chunked unbounded population work into PT-RENDER-PROCEDURAL-POPULATION-HARDENING.
+  current_call: Keep as separate deferred design work until bounded population hardening is planned and the unbounded ownership
+    model is accepted.
+  first_move: Draft an unbounded population design that names hash collision policy, resident chunk windows, capacity diagnostics,
+    renderer residency interaction, and world/product ownership boundaries.
+  main_blocker: Missing accepted roadmap/design evidence.
+  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - intake proposal
+  - await approval
+  decision_gates: []
+  ddd_owner: engine render procedural population support with world/product source truth outside renderer
+  adr_requirement: Accepted design or ADR required before implementation because unbounded populations affect world-coordinate
+    ownership, renderer residency interaction, and capacity policy.
+  fitness_function_requirement: Docs and planning validation until a separate unbounded population design defines runtime tests.
+  ownership_mode: Deferred design owned by renderer complicated-subsystem maintainers with product/world boundary review.
+edges: []

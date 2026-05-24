@@ -1,16 +1,16 @@
 ---
 title: Renderer Product Visual Producers Platform
-description: Active design for product-owned particles, VFX, vegetation, water, atmosphere, weather, decals, trails, and animation render producer integration.
-status: active
+description: Accepted design for product-owned particles, VFX, vegetation, water, atmosphere, weather, decals, trails, and animation render producer integration.
+status: accepted
 owner: engine
 layer: engine-runtime / product-render-integration
 canonical: true
-last_reviewed: 2026-05-22
+last_reviewed: 2026-05-23
 related_designs:
-  - ../accepted/field-product-contracts-diagnostics-and-residency-design.md
-  - ../accepted/sdf-first-field-world-platform-design.md
-  - ./editor-procedural-content-and-simulation-workflow-plan.md
-  - ../accepted/renderer-scale-residency-and-gpu-driven-visibility-design.md
+  - ./field-product-contracts-diagnostics-and-residency-design.md
+  - ./sdf-first-field-world-platform-design.md
+  - ../active/editor-procedural-content-and-simulation-workflow-plan.md
+  - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
 ---
 
 # Renderer Product Visual Producers Platform

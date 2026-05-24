@@ -12,9 +12,9 @@ related_designs:
   - ./renderer-scale-residency-and-gpu-driven-visibility-design.md
   - ./sdf-world-rendering-and-raymarch-acceleration-design.md
   - ./renderer-mesh-material-lighting-and-asset-handoff-design.md
-  - ../active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
-  - ../active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
-  - ../active/renderer-product-visual-producers-platform-design.md
+  - ./renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+  - ./renderer-hardware-ray-query-and-hybrid-tracing-design.md
+  - ./renderer-product-visual-producers-platform-design.md
   - ../active/renderer-production-audit-and-perfectionist-verification-design.md
 ---
 

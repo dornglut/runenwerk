@@ -110,6 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
+| WR-089 | Renderer Procedural Population Hardening Doctrine And Track Activation | P0 | V4 | B2 | 5.6 | Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090 through WR-093. | Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089 only after planning metadata and contracts validate. |
 | WR-100 | UI Lab perfectionist governance and no-gap audit doctrine | P2 | V3 | B3 | 1.0 | Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until follow-on WRs are accepted. | Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and evidence matrix closeout. |
 
 ## Support Only
@@ -127,12 +128,16 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | Main blocker |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B2 | 1.0 | Code work can continue after the WR-006 dependency, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
+| WR-008 | Native tablet input backend arbitration and diagnostics | P1 | V3 | B3 | 1.0 | Code work can continue after the WR-006 dependency, but product acceptance remains blocked. | Hardware validation is still required for Windows Ink, Wacom Wintab, and macOS Wacom devices. |
 | WR-022 | SDF Prefab V2 | P2 | V4 | B3 | 0.8 | Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable; prefab renderer handoff must consume the fully featured renderer roadmap instead of adding a parallel scene path. | Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted product ownership. |
 | WR-023 | ECS Parallel Execution | P2 | V3 | B2 | 0.5 | Design now, implement later after diagnostics and deterministic merge policy are accepted. | Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics, and serial equivalence tests. |
 | WR-024 | Editor Shell Polish | P0 | V4 | B1 | 4.0 | Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome, docking, and status overflow slices instead of defining local policy. | Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming those contracts or as explicitly bounded compatibility evidence. |
 | WR-029 | Model Mesh Material Binding | P1 | V4 | B3 | 1.1 | Ready-next only. Do not claim WR-029 complete until WR-030 produces visible source-backed model/mesh pixels through a material-consuming pass, WR-028 SDF non-regression proof is refreshed, and closeout evidence names the consuming renderer module. | WR-030 must prove visible model/mesh pixels from PreparedModelMeshMaterialSelection and the scene material table before WR-029 can close. |
 | WR-030 | Model Mesh Renderable Scene Contract | P0 | V4 | B2 | 1.0 | Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance and WR-028 SDF non-regression. | Needs visible Mesh Preview model/mesh pixels from the selected scene material table entry; descriptor/status rows and SDF pixels are not sufficient proof. |
+| WR-090 | Indirect Draw Contract Hardening | P0 | V4 | B2 | 2.7 | Harden direct, indexed direct, indirect, and indexed indirect draw-source semantics without breaking direct `.draw(...)` authoring. | Waiting on WR-089 doctrine activation closeout. |
+| WR-091 | Reusable GPU Primitive Shader Dispatch | P0 | V4 | B2 | 1.8 | Convert primitive contracts from descriptor/planning-level evidence into reusable renderer-dispatched kernels. | Waiting on WR-090 indirect draw hardening closeout. |
+| WR-092 | Fixed Step Graph Catch Up Scheduling | P0 | V4 | B2 | 2.6 | Add fixed-step catch-up as render-flow graph scheduling, not boids-local timing logic. | Waiting on WR-091 primitive shader dispatch closeout. |
+| WR-093 | Procedural Population Hardening Evidence Benchmarks Docs And Closeout | P0 | V4 | B2 | 3.7 | Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior. | Waiting on WR-092 graph catch-up scheduling closeout. |
 
 ## Archived And Deferred Registers
 

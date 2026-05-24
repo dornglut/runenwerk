@@ -5,10 +5,11 @@ use super::composition::{
 use super::features::{
     EditorPickingResultResource, PreparedCaveFeatureResource, PreparedDeformationFeatureResource,
     PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
-    PreparedProceduralWorldFeatureResource, PreparedUiFrameResource,
-    PreparedWindFieldFeatureResource, PreparedWorldFeatureResource, RenderFeatureRegistryResource,
-    UiFontAtlasResource, UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
-    prepare_ui_feature_resource_system, sync_render_feature_registry_system,
+    PreparedParticleVfxFeatureResource, PreparedProceduralWorldFeatureResource,
+    PreparedUiFrameResource, PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
+    RenderFeatureRegistryResource, UiFontAtlasResource, UiFrameSubmissionRegistryResource,
+    ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
+    register_particle_vfx_feature_collector, sync_render_feature_registry_system,
     world::{
         RenderSdfRaymarchAccelerationResource, RenderSdfResidencyBudgetResource,
         RenderSdfResidencyResource, RenderSdfResidencySourceResource, WorldLodPolicyResource,
@@ -17,7 +18,7 @@ use super::features::{
 };
 use super::frame::{
     PreparedRenderFrameRequestResource, PreparedRenderFrameResource,
-    PreparedRenderProductSelectionResource,
+    PreparedRenderProductSelectionResource, RenderFeatureContributionCollectorRegistryResource,
 };
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
@@ -63,8 +64,16 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedDetailFeatureResource>();
         app.init_resource::<PreparedProceduralWorldFeatureResource>();
         app.init_resource::<PreparedMaterialFeatureResource>();
+        app.init_resource::<PreparedParticleVfxFeatureResource>();
         app.init_resource::<PreparedDeformationFeatureResource>();
         app.init_resource::<PreparedWindFieldFeatureResource>();
+        app.init_resource::<RenderFeatureContributionCollectorRegistryResource>();
+        register_particle_vfx_feature_collector(
+            app.world_mut()
+                .resource_mut::<RenderFeatureContributionCollectorRegistryResource>()
+                .expect("render feature contribution collector registry should initialize"),
+        )
+        .expect("particle/VFX render feature collector should register");
         app.init_resource::<WorldRuntimeCacheResource>();
         app.init_resource::<RenderSdfResidencySourceResource>();
         app.init_resource::<RenderSdfResidencyResource>();

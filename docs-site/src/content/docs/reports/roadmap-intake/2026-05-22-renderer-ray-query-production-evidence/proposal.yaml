@@ -1,28 +1,25 @@
 version: 1
 idea: Renderer Ray Query Production Evidence
-source_path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
 owner: docs-site/src/content/docs/engine/reference/plugins/render
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance review for WR-075 confirms renderer reference docs may own the production evidence packet while consuming public renderer DTO/example evidence.
+- No ADR is required for docs/evidence hardening that does not change runtime ownership, fallback authority, durable RT ABI, or hardware baseline requirements.
 open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- None for design-first readiness; implementation must still be selected by the stack coordinator after roadmap application and promotion.
 item:
   id: WR-075
   title: Renderer Ray Query Production Evidence
   diagram_title: Renderer Ray Query Production Evidence
   alias: WR075
-  lane: Discovery
+  lane: Render
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed optional ray-query production evidence packet
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +28,79 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-073
+  - WR-074
   write_scopes:
   - docs-site/src/content/docs/engine/reference/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-ray-query-production-evidence
+  - docs-site/src/content/docs/reports/implementation-plans/wr-075-renderer-ray-query-production-evidence/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo test -p engine render_ray_query
+  - cargo test -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md.
+  current_decision: Completed. Renderer reference docs now record optional ray-query production evidence, capability and fallback matrices, acceleration-resource lineage expectations, diagnostics, validation commands, and explicit non-goals.
+  current_call: Use WR-075 as completed PM-RENDER-RT-004 evidence before moving to downstream renderer product visuals and perfectionist verification tracks.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; final cross-track no-gap verification remains downstream scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - WR-075 does not certify vendor hardware or require RT-capable hardware.
+  - WR-075 does not implement denoisers, shader tables, hardware RT execution, or backend-specific acceleration-resource builders.
+  - Final cross-track gap closure and perfectionist_verified status remain downstream PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - ray-query production evidence
+  - apply and promote before implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Ray-query production evidence must follow accepted optional RT doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-075 depends on completed ray-query capability and acceleration-resource inspection.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-075 depends on completed hybrid runtime proof and fallback evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-075-renderer-ray-query-production-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-075 implementation must follow the design-first ray-query production evidence contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-075 completion is proven by the optional ray-query production evidence closeout.
   ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  adr_requirement: No ADR for docs/evidence hardening consuming accepted doctrine and completed renderer evidence; ADR required for durable RT ABI, runtime ownership change, fallback authority change, or mandatory RT hardware baseline.
+  fitness_function_requirement: Ray-query guard tests, hybrid proof example build/run, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Enabling documentation/evidence for the complicated-subsystem renderer platform.
+edges:
+- source: WR-073
+  target: WR-075
+  label: ray-query capability evidence before production evidence
+- source: WR-074
+  target: WR-075
+  label: hybrid runtime proof before production evidence

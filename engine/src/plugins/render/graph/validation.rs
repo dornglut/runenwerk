@@ -1,7 +1,8 @@
 use crate::plugins::render::RenderResourceDescriptor;
 use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL};
 use crate::plugins::render::graph::{
-    RenderFlowGraph, RenderPassKind, RenderPassNode, validate_builtin_ui_pass_shape,
+    RenderDrawSource, RenderFlowGraph, RenderPassKind, RenderPassNode,
+    validate_builtin_ui_pass_shape,
 };
 use crate::plugins::render::resource::{
     ImportedBufferSemantic, ImportedTextureSemantic, RenderTextureDescriptor,
@@ -249,6 +250,27 @@ pub enum RenderFlowValidationIssue {
         "graphics pass '{pass_label}' declares {count} indirect buffers; runtime supports at most one"
     )]
     GraphicsPassTooManyIndirectBuffers { pass_label: String, count: usize },
+
+    #[error(
+        "graphics pass '{pass_label}' indirect draw references args buffer '{resource_id:?}' but that buffer was not declared as an indirect buffer"
+    )]
+    GraphicsPassIndirectDrawArgsBufferNotDeclared {
+        pass_label: String,
+        resource_id: RenderResourceId,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' declares {count} indirect buffers but uses a direct draw source"
+    )]
+    GraphicsPassIndirectBufferWithoutIndirectDraw { pass_label: String, count: usize },
+
+    #[error(
+        "graphics pass '{pass_label}' indirect draw declares byte offset {byte_offset}, expected a 4-byte aligned offset"
+    )]
+    GraphicsPassInvalidIndirectDrawOffset {
+        pass_label: String,
+        byte_offset: u64,
+    },
 
     #[error(
         "graphics pass '{pass_label}' declares vertex buffer slots that must be dense from 0; expected slot {expected}, found {found}"
@@ -744,6 +766,7 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                     },
                 );
             }
+            validate_graphics_draw_source(pass, issues);
         }
         RenderPassKind::Copy => {
             if pass.reads.len() != 1 || pass.writes.len() != 1 {
@@ -1154,6 +1177,49 @@ fn validate_pass_resource_usage(
                 );
             }
         }
+    }
+}
+
+fn validate_graphics_draw_source(
+    pass: &RenderPassNode,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    let Some(draw) = pass.draw else {
+        return;
+    };
+    if matches!(draw.source, RenderDrawSource::Direct) && !pass.indirect_buffers.is_empty() {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassIndirectBufferWithoutIndirectDraw {
+                pass_label: pass.label.clone(),
+                count: pass.indirect_buffers.len(),
+            },
+        );
+        return;
+    }
+    let RenderDrawSource::Indirect {
+        args_buffer,
+        byte_offset,
+    } = draw.source
+    else {
+        return;
+    };
+
+    if !pass.indirect_buffers.contains(&args_buffer) {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassIndirectDrawArgsBufferNotDeclared {
+                pass_label: pass.label.clone(),
+                resource_id: args_buffer,
+            },
+        );
+    }
+
+    if byte_offset % 4 != 0 {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassInvalidIndirectDrawOffset {
+                pass_label: pass.label.clone(),
+                byte_offset,
+            },
+        );
     }
 }
 

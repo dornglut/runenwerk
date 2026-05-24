@@ -20,7 +20,7 @@ Use this map to pick an entry point quickly.
   - `window_input_demo`
 - Explore the canonical RenderFlow v2 sample:
   - `game_of_life_sdf`
-- Explore boids-style compute simulation + graphics draw-buffer rendering:
+- Explore boids-style compute simulation + procedural population rendering:
   - `boids_render_flow`
 - Explore a 3D SDF raymarching flow with compute preparation and history copy:
   - `sdf_render_flow`
@@ -52,7 +52,7 @@ Use this map to pick an entry point quickly.
   - Run: `cargo run -p engine --example game_of_life_sdf`
 - `boids_render_flow`
   - Entry: `engine/examples/boids_render_flow/main.rs`
-  - Focus: boids compute simulation with storage ping-pong, public graphics instance-buffer binding, history copy, and explicit present.
+  - Focus: boids compute simulation with bounded uniform-grid neighbor lookup, storage ping-pong, procedural pass authoring, fixed-step evidence, aspect-correct impostors, and explicit present.
   - Shaders:
     - `assets/shaders/boids_compute.wgsl`
     - `assets/shaders/boids_compose.wgsl`

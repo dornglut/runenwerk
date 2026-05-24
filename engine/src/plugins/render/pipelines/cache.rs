@@ -1,7 +1,8 @@
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct PipelineCacheStats {
     pub hits: u64,
     pub misses: u64,
+    pub failures: u64,
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -26,9 +27,14 @@ mod tests {
     #[test]
     fn pipeline_cache_resource_tracks_only_canonical_stats() {
         let mut resource = PipelineCacheResource::default();
-        resource.observe_stats(PipelineCacheStats { hits: 3, misses: 1 });
+        resource.observe_stats(PipelineCacheStats {
+            hits: 3,
+            misses: 1,
+            failures: 0,
+        });
         let stats = resource.stats();
         assert_eq!(stats.hits, 3);
         assert_eq!(stats.misses, 1);
+        assert_eq!(stats.failures, 0);
     }
 }

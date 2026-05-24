@@ -1,28 +1,26 @@
 version: 1
 idea: Renderer Hybrid Ray SDF Raster Runtime Proof
-source_path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
 owner: engine/examples
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- PM-RENDER-RT-001 accepted the optional hardware ray-query and hybrid tracing doctrine.
+- WR-073 completed ray-query capability and derived acceleration-resource inspection.
+- Architecture governance review for WR-074 confirms engine/examples may own a finite hybrid proof consuming public renderer inspection APIs.
+- No ADR is required for an example-level proof; ADR is required before durable hybrid runtime ABI, ownership changes, or mandatory RT hardware.
+open_questions: []
 item:
   id: WR-074
   title: Renderer Hybrid Ray SDF Raster Runtime Proof
   diagram_title: Renderer Hybrid Ray SDF Raster Runtime Proof
   alias: WR074
-  lane: Discovery
+  lane: Render
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed bounded hybrid raster/SDF/temporal/ray-query runtime proof example
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +29,92 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-073
+  - WR-065
+  - WR-070
   write_scopes:
   - engine/examples
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/Cargo.toml
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-hybrid-ray-sdf-raster-runtime-p
+  - docs-site/src/content/docs/reports/implementation-plans/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - cargo test -p engine render_ray_query
+  - cargo test -p engine render_sdf_raymarch
+  - cargo test -p engine render_temporal
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md.
+  current_decision: Completed. The renderer now has a portable hybrid proof example that composes raster pass labels, SDF runtime evidence, temporal production evidence, optional ray-query inspection, visible non-RT fallback, and separated timing labels without moving source truth into renderer code.
+  current_call: Use WR-074 as completed PM-RENDER-RT-003 evidence before starting WR-075 ray-query production evidence.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; ray-query production evidence and final no-gap verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Ray-query production examples, hardware matrix, fallback artifacts, production diagnostics, and final RT runtime_proven evidence remain WR-075 scope.
+  - WR-074 does not claim hardware ray-query execution, denoising, shader-table support, runtime_proven, or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - hybrid runtime proof contract
+  - apply and promote before implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Hybrid runtime proof requires accepted optional RT doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 depends on completed ray-query capability and acceleration-resource inspection.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 depends on completed SDF raymarch acceleration evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 depends on completed temporal input/history evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-074 implementation must follow the design-first hybrid runtime proof contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 completion is proven by the bounded hybrid runtime proof closeout.
   ddd_owner: engine/examples
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  adr_requirement: No ADR for an example-level proof consuming public renderer inspection APIs; ADR required for durable hybrid runtime ABI, runtime ownership change, fallback authority change, or mandatory RT hardware baseline.
+  fitness_function_requirement: Example build/run, ray-query guard tests, SDF raymarch guard tests, temporal guard tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Enabling example evidence for the complicated-subsystem renderer platform.
+edges:
+- source: WR-073
+  target: WR-074
+  label: ray-query capability evidence before hybrid runtime proof
+- source: WR-065
+  target: WR-074
+  label: SDF raymarch acceleration before hybrid runtime proof
+- source: WR-070
+  target: WR-074
+  label: temporal inputs before hybrid runtime proof

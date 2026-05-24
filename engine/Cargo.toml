@@ -106,6 +106,18 @@ path = "examples/render_scale_evidence.rs"
 name = "render_sdf_runtime_evidence"
 path = "examples/render_sdf_runtime_evidence.rs"
 
+[[example]]
+name = "render_mesh_material_production_evidence"
+path = "examples/render_mesh_material_production_evidence.rs"
+
+[[example]]
+name = "render_temporal_production_evidence"
+path = "examples/render_temporal_production_evidence.rs"
+
+[[example]]
+name = "render_hybrid_ray_sdf_raster_runtime_proof"
+path = "examples/render_hybrid_ray_sdf_raster_runtime_proof.rs"
+
 [[bench]]
 name = "phase35_runtime"
 harness = false

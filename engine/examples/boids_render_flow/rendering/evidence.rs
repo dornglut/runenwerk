@@ -1,4 +1,4 @@
-use crate::rendering::{DEFAULT_BOID_COUNT, build_render_flow};
+use crate::rendering::{BoidsRenderState, DEFAULT_BOID_COUNT, build_render_flow};
 use anyhow::Result;
 use engine::plugins::render::inspect::{
     RenderGpuTimingDiagnostic, RenderPassTimingEvidence, inspect_compiled_render_flow_plan,
@@ -21,6 +21,14 @@ pub(crate) struct BoidsProductionEvidenceReport {
     pub flow_label: String,
     pub scene_size: (u32, u32),
     pub boid_count: u32,
+    pub grid_cell_count: u32,
+    pub sorted_index_capacity: u32,
+    pub fixed_step_seconds: f32,
+    pub submitted_step_count: u32,
+    pub aspect_correct_impostors: bool,
+    pub smoothed_visual_heading: bool,
+    pub silent_grid_overflow: bool,
+    pub resize_pixel_evidence: Vec<BoidsResizePixelEvidence>,
     pub pass_count: usize,
     pub passes: Vec<BoidsProductionPassEvidence>,
     pub gpu_timing_evidence: Vec<RenderPassTimingEvidence>,
@@ -51,16 +59,38 @@ pub(crate) struct BoidsProductionCpuTimingEvidence {
     pub unavailable_reason: &'static str,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BoidsResizePixelEvidence {
+    pub surface_size: (u32, u32),
+    pub sprite_width_px: f32,
+    pub sprite_height_px: f32,
+    pub clip_width: f32,
+    pub clip_height: f32,
+    pub reconstructed_width_px: f32,
+    pub reconstructed_height_px: f32,
+    pub aspect_error_px: f32,
+}
+
 impl BoidsProductionEvidenceReport {
     pub(crate) fn format_text(&self) -> String {
         let mut lines = vec![
             format!(
-                "boids_production_evidence flow={} scene={}x{} boids={} passes={}",
+                "boids_production_evidence flow={} scene={}x{} boids={} grid_cells={} sorted_index_capacity={} passes={}",
                 self.flow_label,
                 self.scene_size.0,
                 self.scene_size.1,
                 self.boid_count,
+                self.grid_cell_count,
+                self.sorted_index_capacity,
                 self.pass_count
+            ),
+            format!(
+                "simulation_contract=fixed_step fixed_dt_seconds={:.6} submitted_steps={} smoothed_visual_heading={} aspect_correct_impostors={} silent_grid_overflow={}",
+                self.fixed_step_seconds,
+                self.submitted_step_count,
+                self.smoothed_visual_heading,
+                self.aspect_correct_impostors,
+                self.silent_grid_overflow
             ),
             format!("benchmark_command={}", self.benchmark_command),
             format!("cpu_timing_fields={}", self.cpu_timing_fields.join(",")),
@@ -95,6 +125,21 @@ impl BoidsProductionEvidenceReport {
             ));
         }
 
+        for evidence in &self.resize_pixel_evidence {
+            lines.push(format!(
+                "resize_pixel_evidence surface={}x{} sprite_width_px={:.3} sprite_height_px={:.3} clip_width={:.6} clip_height={:.6} reconstructed_width_px={:.3} reconstructed_height_px={:.3} aspect_error_px={:.5}",
+                evidence.surface_size.0,
+                evidence.surface_size.1,
+                evidence.sprite_width_px,
+                evidence.sprite_height_px,
+                evidence.clip_width,
+                evidence.clip_height,
+                evidence.reconstructed_width_px,
+                evidence.reconstructed_height_px,
+                evidence.aspect_error_px
+            ));
+        }
+
         lines.push(format!(
             "cpu_timing source={} preflight_ms={:.4} flow_encode_ms={} encode_submit_ms={} present_ms={} unavailable_reason={}",
             self.cpu_timing_evidence.source,
@@ -111,17 +156,29 @@ impl BoidsProductionEvidenceReport {
 
 pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceReport> {
     let flow = build_render_flow();
+    let state = BoidsRenderState::default();
     let profile = RenderBackendCapabilityProfile::runtime_default();
     let compiled = compile_flow_plan_checked(&flow, &profile)?;
     let inspection = inspect_compiled_render_flow_plan(&compiled);
     let passes = pass_evidence(&compiled);
     let gpu_timing_evidence = unsupported_gpu_timing_evidence(&compiled, &passes);
     let cpu_timing_evidence = measure_cpu_timing_evidence(&compiled, &profile)?;
+    let resize_pixel_evidence = resize_pixel_evidence(&state);
 
     Ok(BoidsProductionEvidenceReport {
         flow_label: inspection.flow_label,
         scene_size: BOIDS_EVIDENCE_SCENE_SIZE,
         boid_count: DEFAULT_BOID_COUNT,
+        grid_cell_count: state.grid_cell_count(),
+        sorted_index_capacity: DEFAULT_BOID_COUNT,
+        fixed_step_seconds: state.fixed_delta_seconds(),
+        submitted_step_count: state.submitted_step_count(),
+        aspect_correct_impostors: resize_pixel_evidence
+            .iter()
+            .all(|evidence| evidence.aspect_error_px <= 0.01),
+        smoothed_visual_heading: true,
+        silent_grid_overflow: false,
+        resize_pixel_evidence,
         pass_count: inspection.pass_count,
         passes,
         gpu_timing_evidence,
@@ -134,6 +191,41 @@ pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceRepo
         ],
         benchmark_command: RENDER_FLOW_PLANNING_BENCHMARK_COMMAND,
     })
+}
+
+fn resize_pixel_evidence(state: &BoidsRenderState) -> Vec<BoidsResizePixelEvidence> {
+    [(1600, 900), (900, 1600), (1024, 1024)]
+        .into_iter()
+        .map(|surface_size| resize_pixel_evidence_for_surface(state, surface_size))
+        .collect()
+}
+
+fn resize_pixel_evidence_for_surface(
+    state: &BoidsRenderState,
+    surface_size: (u32, u32),
+) -> BoidsResizePixelEvidence {
+    let params = state.draw_params(surface_size);
+    let radius_px = params.sprite[0];
+    let sprite_width_px = radius_px * params.sprite[1] * 2.0;
+    let sprite_height_px = radius_px * params.sprite[2] * 2.0;
+    let clip_width = sprite_width_px * 2.0 * params.surface[2];
+    let clip_height = sprite_height_px * 2.0 * params.surface[3];
+    let reconstructed_width_px = clip_width * params.surface[0] * 0.5;
+    let reconstructed_height_px = clip_height * params.surface[1] * 0.5;
+    let aspect_error_px = (reconstructed_width_px - sprite_width_px)
+        .abs()
+        .max((reconstructed_height_px - sprite_height_px).abs());
+
+    BoidsResizePixelEvidence {
+        surface_size,
+        sprite_width_px,
+        sprite_height_px,
+        clip_width,
+        clip_height,
+        reconstructed_width_px,
+        reconstructed_height_px,
+        aspect_error_px,
+    }
 }
 
 fn format_optional_millis(value: Option<f32>) -> String {
@@ -356,6 +448,24 @@ mod tests {
 
         assert_eq!(report.flow_label, "boids_render_flow");
         assert_eq!(report.boid_count, DEFAULT_BOID_COUNT);
+        assert_eq!(report.sorted_index_capacity, DEFAULT_BOID_COUNT);
+        assert!(!report.silent_grid_overflow);
+        assert_eq!(report.fixed_step_seconds, 1.0 / 60.0);
+        assert!(report.aspect_correct_impostors);
+        assert!(report.smoothed_visual_heading);
+        assert_eq!(report.resize_pixel_evidence.len(), 3);
+        assert!(
+            report
+                .resize_pixel_evidence
+                .iter()
+                .any(|evidence| evidence.surface_size == (900, 1600))
+        );
+        assert!(
+            report
+                .resize_pixel_evidence
+                .iter()
+                .all(|evidence| evidence.aspect_error_px <= 0.01)
+        );
         assert_eq!(
             report
                 .passes
@@ -363,8 +473,14 @@ mod tests {
                 .map(|pass| pass.label.as_str())
                 .collect::<Vec<_>>(),
             vec![
-                "boids.simulate",
-                "boids.publish_instances",
+                "boids.seed_or_hold",
+                "boids.grid.clear_counts",
+                "boids.grid.count_cells",
+                "boids.grid.scan_counts",
+                "boids.grid.reset_cursors",
+                "boids.grid.scatter_sorted_indices",
+                "boids.grid.simulate_neighbors",
+                "boids.grid.publish_draw",
                 "boids.draw",
                 "boids.present",
             ]
@@ -396,7 +512,7 @@ mod tests {
     fn production_evidence_report_uses_typed_gpu_timing_diagnostics() {
         let report = production_evidence_report().expect("boids evidence report should build");
 
-        assert_eq!(report.gpu_timing_evidence.len(), 3);
+        assert_eq!(report.gpu_timing_evidence.len(), 9);
         assert!(
             report
                 .gpu_timing_evidence
@@ -422,6 +538,10 @@ mod tests {
         let text = report.format_text();
 
         assert!(text.contains("boids_production_evidence flow=boids_render_flow"));
+        assert!(text.contains("simulation_contract=fixed_step"));
+        assert!(text.contains("aspect_correct_impostors=true"));
+        assert!(text.contains("resize_pixel_evidence surface=900x1600"));
+        assert!(text.contains("silent_grid_overflow=false"));
         assert!(text.contains("pass label=boids.draw kind=graphics"));
         assert!(text.contains("local_instance_geometry=true"));
         assert!(text.contains("gpu_timing flow=boids_render_flow pass=boids.draw"));

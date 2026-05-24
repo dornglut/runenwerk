@@ -197,6 +197,10 @@
     "ProductionRenderTargets": {
       "additionalProperties": false,
       "properties": {
+        "full_track_roadmap": {
+          "title": "Full Track Roadmap",
+          "type": "string"
+        },
         "milestone_register": {
           "title": "Milestone Register",
           "type": "string"
@@ -213,7 +217,8 @@
       "required": [
         "production_index",
         "milestone_register",
-        "track_roadmap"
+        "track_roadmap",
+        "full_track_roadmap"
       ],
       "title": "ProductionRenderTargets",
       "type": "object"

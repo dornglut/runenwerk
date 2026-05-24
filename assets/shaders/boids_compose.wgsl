@@ -1,8 +1,16 @@
+struct DrawParams {
+    surface: vec4<f32>, // width, height, inv_width, inv_height
+    sprite: vec4<f32>, // radius_px, half_width, half_height, padding
+};
+
 struct VsOut {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) local_position: vec2<f32>,
     @location(1) local_velocity: vec2<f32>,
 };
+
+@group(0) @binding(0)
+var<uniform> draw_params: DrawParams;
 
 fn normalize_or_up(value: vec2<f32>) -> vec2<f32> {
     let len = length(value);
@@ -17,6 +25,7 @@ fn vs_main(
     @builtin(vertex_index) vertex_index: u32,
     @location(0) instance_position: vec2<f32>,
     @location(1) instance_velocity: vec2<f32>,
+    @location(2) instance_visual_heading: vec2<f32>,
 ) -> VsOut {
     let corners = array<vec2<f32>, 6>(
         vec2<f32>(-1.0, -1.0),
@@ -28,17 +37,23 @@ fn vs_main(
     );
 
     let local = corners[vertex_index];
-    let direction = normalize_or_up(instance_velocity);
+    let direction = normalize_or_up(instance_visual_heading);
     let right = vec2<f32>(direction.y, -direction.x);
-    let radius = 0.022;
-    let oriented_offset = (right * local.x * 0.72 + direction * local.y * 1.35) * radius;
-    let uv_position = instance_position + oriented_offset;
-    let clip_position = vec2<f32>(uv_position.x * 2.0 - 1.0, 1.0 - uv_position.y * 2.0);
+    let radius_px = draw_params.sprite.x;
+    let half_width = draw_params.sprite.y;
+    let half_height = draw_params.sprite.z;
+    let pixel_offset = (right * local.x * half_width + direction * local.y * half_height) * radius_px;
+    let center_clip = vec2<f32>(instance_position.x * 2.0 - 1.0, 1.0 - instance_position.y * 2.0);
+    let clip_offset = vec2<f32>(
+        pixel_offset.x * 2.0 * draw_params.surface.z,
+        -pixel_offset.y * 2.0 * draw_params.surface.w
+    );
+    let clip_position = center_clip + clip_offset;
 
     var out: VsOut;
     out.clip_position = vec4<f32>(clip_position, 0.0, 1.0);
     out.local_position = local;
-    out.local_velocity = direction;
+    out.local_velocity = normalize_or_up(instance_velocity);
     return out;
 }
 
