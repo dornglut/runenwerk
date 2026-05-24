@@ -2883,3 +2883,386 @@ tracks:
           - Concrete production examples, project IO, provider sessions, runtime replay, release tooling, and gameplay mutation remain target-adapter-owned future work.
           - PM-010 did not claim runtime_proven or perfectionist_verified evidence.
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md
+  - id: PT-UI-LAB
+    title: Runtime-Proven Editor Interface Lab Productization
+    state: completed
+    owner: editor
+    target_completion_quality: runtime_proven
+    strategic_goal: Turn completed UI Designer contracts into an app-hosted Editor Interface Lab with visual authoring, project IO, diff/apply, preview evidence, and public API ergonomics without moving domain semantics into UI definitions.
+    success_criteria:
+      - PT-UI-DESIGN remains completed design-contract input and is not reopened to justify runtime claims.
+      - Editor Lab V1 is app-hosted, usable through direct controls, and proves real editor runtime behavior with captured evidence.
+      - Commands, surface metadata, project IO, diagnostics, and activation reports have one typed source of truth at their owning boundaries.
+      - Generic UI definition logic remains behavior-free while editor-specific execution, project IO, and provider behavior stay in editor/app-owned modules.
+      - Runtime-proven closeout lists remaining gaps truthfully and defers perfectionist verification to a separate no-gap audit track.
+    milestones:
+      - id: PM-UI-LAB-001
+        title: Productization Governance And Code-Truth Reconciliation
+        kind: design
+        state: completed
+        goal: Establish the governed productization contract before implementation by reconciling completed UI design contracts with current editor runtime code and roadmap legality.
+        outcome: PT-UI-LAB has an active design, architecture-governance findings, disjoint WR candidate scopes, runtime evidence requirements, and explicit stop conditions for implementation.
+        dependencies:
+          - PM-UI-DESIGN-010
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: Productization must start from the active Editor Interface Lab design and code-truth reconciliation.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-001-productization-governance/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-001 requires completed governance, code-truth reconciliation, and WR candidate closeout evidence.
+        acceptance_criteria:
+          - Architecture governance names domain ownership, dependency direction, translation boundaries, ADR need, fitness functions, and the next legal action.
+          - Current code reality is reconciled against PT-UI-DESIGN contracts for self-authoring UI, command routing, surface registration, visual operations, persistence, diagnostics, and evidence.
+          - Roadmap-intake-ready WR candidates are listed with disjoint write scopes, validation gates, and runtime evidence requirements.
+          - No app-hosted product implementation starts from this milestone before roadmap review and implementation contracts exist.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-LAB-002 through PM-UI-LAB-007 remain separately governed and must not be inferred complete from this productization-governance closeout.
+          - No app-hosted Editor Lab product code, project IO, visual editing UI, runtime evidence harness, or public API examples were implemented in this milestone.
+          - Runtime_proven and perfectionist_verified claims remain unavailable until later milestones provide runtime closeout evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-001-productization-governance/closeout.md
+      - id: PM-UI-LAB-002
+        title: Registry And Command Source Of Truth
+        kind: implementation
+        state: completed
+        goal: Consolidate editor command affordances and surface metadata behind typed catalogs and registry-owned contracts.
+        outcome: Menu, toolbar, palette, keybinding, routing, command availability, disabled reasons, surface identity, capabilities, retention, and provider family projection derive from one owned source per boundary.
+        dependencies:
+          - PM-UI-LAB-001
+        roadmap_links:
+          - WR-094
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-command-catalog-and-surface-registry-design.md
+            required_status: accepted
+            reason: Command catalog and surface registry implementation must follow the accepted source-of-truth design.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: Command and registry cleanup must preserve the productization ownership map.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-002 requires completed command catalog, registry metadata, runtime proof artifact, and closeout evidence.
+        acceptance_criteria:
+          - EditorCommandCatalog owns normal command projection and replaces fragmented menu, toolbar, binding, and fallback command definitions.
+          - Tool surface metadata is registry-owned; legacy enum compatibility remains only at migration and persistence edges.
+          - Unavailable commands and unsupported surface actions fail closed with typed diagnostics instead of generic unavailable messages.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - The PM-002 runtime proof is a deterministic app-shell/runtime artifact for command and registry source-of-truth behavior, not a native window screenshot; visual screenshot matrices remain PM-UI-LAB-006.
+          - The app-hosted Editor Lab surface shell, visual authoring operations, project IO, diff/apply/rollback, preview evidence matrix, public API examples, and final no-gap audit remain PM-UI-LAB-003 through PM-UI-LAB-007 or later perfectionist-audit scope.
+          - PM-UI-LAB-002 does not claim perfectionist_verified completion.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md
+      - id: PM-UI-LAB-003
+        title: App-Hosted Editor Lab Surface Shell
+        kind: implementation
+        state: completed
+        goal: Productize the Editor Design workspace as a usable app-hosted lab surface.
+        outcome: Authors can inspect and edit UI/editor definitions through hierarchy, palette, canvas or preview, inspector, command diff, diagnostics, and preview console panels.
+        dependencies:
+          - PM-UI-LAB-002
+        roadmap_links:
+          - WR-095
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-app-hosted-editor-lab-surface-shell-design.md
+            required_status: accepted
+            reason: The app-hosted lab shell must follow the accepted direct-control surface shell design before implementation.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: The app-hosted lab shell must keep provider execution and definition logic in their owning boundaries.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-003 requires completed app-hosted Editor Lab shell runtime evidence and closeout.
+        acceptance_criteria:
+          - Normal Editor Lab workflows do not depend on debug-style self-authoring action lists.
+          - Provider behavior remains in apps/runenwerk_editor and reusable definition logic remains in domain/ui/ui_definition or domain/editor/editor_definition.
+          - Runtime evidence shows selection, inspection, editing, diagnostics, and degraded-provider behavior in the launched editor.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-LAB-003 proves the app-hosted shell and direct-control routing; operation history, deterministic visual operations, undo/redo, and reviewable operation diffs remain PM-UI-LAB-004.
+          - Project IO, package save/load/import/export, migration, complete diff/apply/reject/reload, failed activation preservation, and rollback remain PM-UI-LAB-005.
+          - Screenshot matrices, visual diffing, accessibility checks, performance evidence, and broader degraded-provider scenario coverage remain PM-UI-LAB-006.
+          - Public API ergonomics review, usage docs, examples, and final runtime-proven track closeout remain PM-UI-LAB-007.
+          - PM-UI-LAB-003 does not claim perfectionist_verified completion.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md
+      - id: PM-UI-LAB-004
+        title: Operation-Driven Visual Authoring
+        kind: implementation
+        state: completed
+        goal: Route visual editing through typed operations with deterministic diffs, selection, diagnostics, and history.
+        outcome: Canvas, hierarchy, and inspector edits round-trip through stable operations and produce deterministic retained previews.
+        dependencies:
+          - PM-UI-LAB-003
+        roadmap_links:
+          - WR-096
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+            required_status: accepted
+            reason: Operation-driven visual authoring must follow the accepted Editor Lab operation, diff, diagnostics, history, and undo/redo design.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: Visual authoring must use UI-definition operations only for generic UI layout and editor-owned commands for editor-specific truth.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-004 requires completed operation-driven visual authoring runtime evidence and closeout.
+        acceptance_criteria:
+          - Generic visual layout edits reuse the UI definition visual operation model.
+          - Editor workspace, theme, menu, binding, and surface edits stay in editor-owned contracts.
+          - Undo, redo, validation, diagnostics, and reviewable operation diffs are runtime proven through Editor Lab flows.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-LAB-004 proves operation routing, deterministic diffs, diagnostics, app-owned session history, undo/redo, and retained preview refresh. It does not prove persisted operation logs or project/package IO.
+          - Project IO, package save/load/import/export, migration, complete diff/apply/reject/reload, failed activation preservation, and rollback remain PM-UI-LAB-005.
+          - Screenshot matrices, visual diffing, accessibility checks, performance evidence, and broader degraded-provider scenario coverage remain PM-UI-LAB-006.
+          - Public API ergonomics review, usage docs, examples, and final runtime-proven track closeout remain PM-UI-LAB-007.
+          - PM-UI-LAB-004 does not claim perfectionist_verified completion.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md
+      - id: PM-UI-LAB-005
+        title: Persistence Project IO Diff Apply And Rollback
+        kind: implementation
+        state: completed
+        goal: Add app-owned Editor Lab project IO, user-facing diff review, activation reports, and rollback behavior.
+        outcome: Authored lab definition changes can be saved, loaded, imported, exported, migrated, reviewed, applied, rejected, and recovered after failed activation.
+        dependencies:
+          - PM-UI-LAB-004
+        roadmap_links:
+          - WR-097
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+            required_status: accepted
+            reason: Persistence, project IO, diff/apply, activation reports, failed activation preservation, and rollback must follow the accepted PM-UI-LAB-005 design before implementation.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: Project IO and activation must remain app/editor owned and consume definition reports without making UI definitions execute behavior.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-005 requires completed runtime evidence for package IO, apply review, activation reports, failed activation preservation, reload, and rollback.
+        acceptance_criteria:
+          - Project IO is owned by apps/runenwerk_editor or an editor-app boundary, not by generic UI definition crates.
+          - Diff/apply reports include source, migration, validation, activation, failure, and rollback details.
+          - Runtime evidence proves save, reload, diff, apply, reject, failed activation preservation, and rollback.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-LAB-005 proves package serialization, session reload, selected import/export, invalid package preservation, deterministic apply review, reject/apply decisions, activation reports, failed activation preservation, reload-last-applied, rollback, and provider-surface exposure.
+          - Screenshot matrices, visual diffing, accessibility checks, performance evidence, and broader scenario coverage remain PM-UI-LAB-006.
+          - Public API ergonomics review, usage docs, examples, and final runtime-proven track closeout remain PM-UI-LAB-007.
+          - PM-UI-LAB-005 does not claim perfectionist_verified completion.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+      - id: PM-UI-LAB-006
+        title: Preview Lab And Runtime Evidence
+        kind: hardening
+        state: completed
+        goal: Add preview scenarios and runtime evidence capture for Editor Lab success, warning, error, reload, apply, rollback, and degraded-provider states.
+        outcome: Editor Lab closeout can prove behavior with replayable scenarios, screenshots or equivalent visual artifacts, diagnostics snapshots, accessibility checks, and performance evidence.
+        dependencies:
+          - PM-UI-LAB-005
+        roadmap_links:
+          - WR-098
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md
+            required_status: accepted
+            reason: Preview Lab scenarios, visual/equivalent artifacts, diagnostics snapshots, accessibility, performance, degraded-provider, and runtime evidence rules must be accepted before implementation planning.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: Runtime evidence must be planned before claiming runtime_proven completion.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-006 requires completed runtime evidence for preview scenarios, retained visual or screenshot-equivalent artifacts, diagnostics snapshots, accessibility, performance, unsupported checks, and degraded-provider states.
+        acceptance_criteria:
+          - Scenario fixtures cover empty, loading, warning, error, denied, offline or degraded-provider, heavy, reload, apply, and rollback states.
+          - Captured evidence is stored near the owning closeout and is reproducible enough for drift checks.
+          - Accessibility and performance evidence are included where the current runtime supports them, with unsupported checks recorded as explicit gaps.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Native window screenshots, GPU visual diffing, native focus traversal, pixel contrast sampling, native screenshot timing, and GPU visual-diff timing remain explicit unsupported-check diagnostics in the PM006 evidence manifest.
+          - PM-UI-LAB-007 still owns public API ergonomics review, usage docs, examples, and final PT-UI-LAB runtime-proven closeout.
+          - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
+          - Perfectionist no-gap verification remains deferred to PT-UI-LAB-PERFECTION or equivalent later audit scope.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
+      - id: PM-UI-LAB-007
+        title: API Docs Examples And Runtime-Proven Closeout
+        kind: release
+        state: completed
+        goal: Close Editor Lab V1 with focused public APIs, usage docs, examples, validation, runtime evidence, and a truthful handoff to a later no-gap audit.
+        outcome: UI definition and editor definition users have discoverable normal workflows, the Editor Lab has runtime-proven closeout evidence, and perfectionist verification remains separate.
+        dependencies:
+          - PM-UI-LAB-006
+        roadmap_links:
+          - WR-099
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+            required_status: accepted
+            reason: API docs, examples, public API ergonomics review, final runtime-proven closeout, and no-gap audit handoff must be accepted before implementation planning.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+            required_status: active
+            reason: Closeout must follow the productization API, evidence, and audit-handoff rules.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-007 requires completed public API ergonomics review, usage docs, examples, final runtime-proven closeout, and no-gap audit intake.
+        acceptance_criteria:
+          - Focused public entry points, guides, and examples cover normal authoring, validation, preview, diff/apply, persistence, and diagnostics workflows.
+          - Public API ergonomics review is completed before runtime-proven closeout.
+          - PT-UI-LAB closes only with runtime_proven evidence and creates a separate perfectionist-audit intake instead of claiming no-gap completion.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Native window screenshots, GPU visual diffing, native focus traversal, pixel contrast sampling, native screenshot timing, and GPU visual-diff timing remain explicit unsupported-check diagnostics from PM006.
+          - Broad crate-level glob exports remain for compatibility; deeper API reshaping is deferred to a no-gap audit.
+          - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
+          - Module-structure perfectionist review, deeper UI ergonomics audit, native evidence platform decisions, accessibility and performance depth beyond retained evidence, and zero-known-gap certification remain separate PT-UI-LAB-PERFECTION audit scope.
+          - PM-UI-LAB-007 does not claim perfectionist_verified completion.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+  - id: PT-UI-LAB-PERFECTION
+    title: Editor Lab V1 Perfectionist No-Gap Certification
+    state: active
+    owner: editor
+    target_completion_quality: perfectionist_verified
+    strategic_goal: Certify the completed Editor Lab V1 productization with zero known quality gaps, runtime evidence, coherent public APIs, and clean ownership boundaries without expanding scope into game-runtime UI projection.
+    success_criteria:
+      - PT-UI-LAB remains completed runtime_proven input and is not reopened to justify perfectionist claims.
+      - Editor Lab V1 has native or explicitly platform-impossible runtime evidence for visual truth, focus, contrast, timing, diagnostics, degraded-provider behavior, reload, apply, rollback, and failure preservation.
+      - Editor command, surface, operation, persistence, diff/apply, and public API paths have one normal source of truth at their owning boundaries.
+      - Generic UI definition logic remains behavior-free; editor/game/app execution stays in editor-owned or app-owned domains.
+      - Public APIs, preludes, guides, examples, runtime artifacts, generated planning docs, and closeout reports agree.
+      - Final completion can claim perfectionist_verified only when known quality gaps are empty and phase drift-check evidence is complete.
+    milestones:
+      - id: PM-UI-LAB-PERF-001
+        title: Governance Audit Doctrine And Code Truth Matrix
+        kind: design
+        state: active
+        goal: Establish the governed no-gap certification contract, code-truth matrix, evidence matrix, hard blockers, and scoped follow-on WR candidates for Editor Lab V1.
+        outcome: The perfectionist track has an accepted audit doctrine, applied WR governance row, source-truth reconciliation, and disjoint future implementation scopes before app or domain code changes begin.
+        dependencies:
+          - PM-UI-LAB-007
+        roadmap_links:
+          - WR-100
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            required_status: active
+            reason: The first milestone is governed by the active Editor Lab V1 perfectionist audit design.
+        evidence_gates: []
+        acceptance_criteria:
+          - Architecture governance names DDD owner, dependency direction, translation boundaries, ADR need, fitness functions, and ownership mode.
+          - Current runtime code is reconciled against PT-UI-LAB closeout gaps for evidence, command catalog, surface registry, direct manipulation, persistence, diff/apply, API ergonomics, examples, and module structure.
+          - Follow-on WR candidates have disjoint write scopes, dependency order, validation gates, runtime evidence requirements, and stop conditions.
+          - No product implementation starts until a follow-on WR has accepted roadmap evidence and a production implementation contract.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - PM-UI-LAB-PERF-002 through PM-UI-LAB-PERF-006 remain unimplemented and must not be inferred complete from governance setup.
+          - Native evidence, source-of-truth closure, direct-manipulation UX closure, API ergonomics closure, and final no-gap audit remain future milestones.
+        completion_audit: ''
+      - id: PM-UI-LAB-PERF-002
+        title: Runtime Evidence Platform Closure
+        kind: hardening
+        state: designing
+        goal: Close the native runtime evidence gaps that PT-UI-LAB recorded as unsupported or weaker than no-gap certification requires.
+        outcome: Editor Lab V1 can capture or explicitly reject native screenshots, visual diffs, focus traversal, contrast sampling, timing, diagnostics snapshots, and retained artifacts with typed evidence results.
+        dependencies:
+          - PM-UI-LAB-PERF-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            required_status: accepted
+            reason: Runtime evidence closure must follow accepted no-gap evidence doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Unsupported evidence claims are replaced by native runtime artifacts or typed platform-impossible diagnostics.
+          - Evidence covers success, warning, error, reload, apply, rollback, degraded-provider, focus, contrast, and timing states.
+          - Artifact paths and reproduction steps are stable enough for phase drift checks.
+      - id: PM-UI-LAB-PERF-003
+        title: Command And Surface Source Of Truth Closure
+        kind: implementation
+        state: designing
+        goal: Close command catalog, keybinding, toolbar/menu, disabled-reason, surface registry, legacy enum, and module-structure drift.
+        outcome: Normal Editor Lab command and surface behavior derives from the owning catalog or registry, with legacy enum compatibility isolated to migration and persistence edges.
+        dependencies:
+          - PM-UI-LAB-PERF-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            required_status: accepted
+            reason: Source-of-truth closure must follow accepted audit doctrine and ownership boundaries.
+        evidence_gates: []
+        acceptance_criteria:
+          - Menu, toolbar, palette, keybinding, routing, enablement, labels, and disabled reasons derive from the EditorCommandCatalog.
+          - Surface identity, capabilities, retention, provider family, creation policy, and routing metadata derive from the ToolSurfaceDefinitionRegistry.
+          - Module structure follows subdomain ownership boundaries without catch-all files or hidden owner leakage.
+      - id: PM-UI-LAB-PERF-004
+        title: Direct Manipulation Editor Lab UX Closure
+        kind: implementation
+        state: designing
+        goal: Replace retained/debug-style authoring paths with a complete direct-manipulation Editor Lab workflow.
+        outcome: Authors can use hierarchy, palette, canvas, inspector, operation diff, diagnostics, preview console, undo, and redo without action-list or text-panel dependency for normal workflows.
+        dependencies:
+          - PM-UI-LAB-PERF-003
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            required_status: accepted
+            reason: UX closure must follow accepted direct-manipulation audit doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Canvas, hierarchy, palette, and inspector edits round-trip through typed EditorLabOperation paths.
+          - Selection, validation, diagnostics, operation history, undo, redo, and preview refresh are deterministic.
+          - Runtime evidence proves normal author workflows without debug-style action lists.
+      - id: PM-UI-LAB-PERF-005
+        title: Persistence Diff Apply API And Examples Ergonomics
+        kind: hardening
+        state: designing
+        goal: Close persistence, structural diff/apply, rollback review, public API, prelude, guide, and example ergonomics gaps.
+        outcome: Normal users can author, validate, preview, persist, diff, apply, recover, and learn Editor Lab workflows through focused APIs and realistic examples.
+        dependencies:
+          - PM-UI-LAB-PERF-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            required_status: accepted
+            reason: API and examples closure must follow accepted public ergonomics doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Diff/apply reports expose structural changes instead of coarse serialized document rows.
+          - Public preludes and workflow entry points are focused on normal usage while preserving compatibility paths deliberately.
+          - Examples compile, run where applicable, and demonstrate preferred public APIs without internal shortcuts.
+      - id: PM-UI-LAB-PERF-006
+        title: Final No Gap Certification Closeout
+        kind: release
+        state: designing
+        goal: Complete the final no-gap audit and claim perfectionist_verified only if code, docs, runtime artifacts, roadmap state, and production state agree.
+        outcome: Editor Lab V1 has completed perfectionist closeout evidence, empty known quality gaps, and truthful generated planning docs.
+        dependencies:
+          - PM-UI-LAB-PERF-005
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            required_status: accepted
+            reason: Final certification must follow accepted no-gap audit doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Final audit report links completed runtime artifacts, API review, examples, docs, roadmap, production, and drift-check evidence.
+          - Every prerequisite milestone is completed with runtime_proven or stronger evidence where implementation changed runtime behavior.
+          - completion_quality may be perfectionist_verified only when known_quality_gaps is empty.

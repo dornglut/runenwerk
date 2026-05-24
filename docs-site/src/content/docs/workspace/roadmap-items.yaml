@@ -1013,6 +1013,81 @@ items:
   fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, boids evidence, benchmark, docs, production,
     roadmap, and planning validation suite.
   ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-100
+  title: UI Lab perfectionist governance and no-gap audit doctrine
+  diagram_title: UI Lab perfectionist governance
+  alias: WR089
+  lane: Product planning
+  dependency_level: L4
+  gate: Current-candidate governance contract
+  planning_state: current_candidate
+  priority: P2
+  value: 3
+  blocker: 3
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-099
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pt-ui-lab-perfection-no-gap-audit
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task puml:validate
+  - task docs:validate
+  next_evidence: Complete PM-UI-LAB-PERF-001 with accepted audit doctrine, code-truth matrix, evidence matrix, hard blockers,
+    and disjoint follow-on WR candidates.
+  current_decision: WR-100 is the current governance/design candidate for PT-UI-LAB-PERFECTION; it may update planning docs
+    and audit doctrine only.
+  current_call: Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until
+    follow-on WRs are accepted.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and
+    evidence matrix closeout.
+  main_blocker: Follow-on implementation WR candidates, accepted audit closeout, and phase drift-check evidence remain.
+  why_not_ready: Ready for governance/design execution only; later implementation remains blocked until scoped WRs and production
+    contracts exist.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - governance contract
+  - no app code yet
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+    required_status: active
+    applies_to: discovery
+    reason: PT-UI-LAB-PERFECTION governance must be anchored by the active no-gap audit design.
+  ddd_owner: editor with domain/ui, domain/editor, and app-runtime evidence support
+  adr_requirement: No ADR for the governance/design setup; later WRs need an ADR or accepted design update if they change
+    durable ownership, dependency direction, source-of-truth authority, or cross-domain contracts.
+  fitness_function_requirement: Production, roadmap, planning, PUML, and docs validators for governance; later WRs must add
+    focused runtime evidence and code tests before implementation.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor shell,
+    and app runtime evidence owners.
 edges:
 - source: WR-002
   target: WR-001
@@ -1221,3 +1296,27 @@ edges:
 - source: WR-092
   target: WR-093
   label: graph catch-up before hardening closeout
+- source: WR-004
+  target: WR-094
+  label: editor surface guards
+- source: WR-046
+  target: WR-094
+  label: UI designer doctrine
+- source: WR-096
+  target: WR-097
+  label: operation-driven authoring precedes project IO/apply review
+- source: WR-097
+  target: WR-098
+  label: project IO/apply evidence precedes preview lab evidence matrix
+- source: WR-098
+  target: WR-099
+  label: preview/runtime evidence precedes API docs and final closeout
+- source: WR-004
+  target: WR-100
+  label: editor guardrails
+- source: WR-046
+  target: WR-100
+  label: UI doctrine
+- source: WR-099
+  target: WR-100
+  label: runtime-proven handoff

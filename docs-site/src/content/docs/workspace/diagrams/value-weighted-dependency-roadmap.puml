@@ -94,6 +94,8 @@ package "Level 4 - Active Discovery Context" {
 
   component "WR-093 Population hardening closeout\nstate=ready_next\nscore=3.7 gate=after graph catch-up scheduling\nV4 B2\ncall=runtime evidence\nclose hardening track" as RENDERPOPHARDENCLOSE <<V4>>
 
+  component "WR-100 UI Lab perfectionist governance\nstate=current_candidate\nscore=1.0 gate=current-candidate governance contract\nV3 B3\ncall=governance contract\nno app code yet" as WR089 <<V3>>
+
 }
 
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
@@ -103,5 +105,7 @@ RENDERPOPHARDEN -down-> RENDERPOPINDIRECT : hardening doctrine before indirect d
 RENDERPOPINDIRECT -down-> RENDERPOPPRIMDISPATCH : fail-closed indirect draw before primitive dispatch
 RENDERPOPPRIMDISPATCH -down-> RENDERPOPCATCHUP : primitive dispatch before graph catch-up
 RENDERPOPCATCHUP -down-> RENDERPOPHARDENCLOSE : graph catch-up before hardening closeout
+UIGUARDS -down-> WR089 : editor guardrails
+UIDESIGNDOC -down-> WR089 : UI doctrine
 
 @enduml

@@ -1,0 +1,17 @@
+(
+    scenario_id: "editor-lab.performance",
+    setup_micros: 6002,
+    retained_surface_micros: 1862,
+    artifact_count: 13,
+    artifact_bytes: 251863,
+    unsupported_checks: [
+        (
+            check: "native_screenshot_timing",
+            reason: "native screenshot capture is unavailable in this headless runtime test",
+        ),
+        (
+            check: "gpu_visual_diff_timing",
+            reason: "GPU visual diff timing is outside the retained UI evidence harness",
+        ),
+    ],
+)

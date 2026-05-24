@@ -1,0 +1,57 @@
+[
+    (
+        id: "editor-lab.activation.queued.runenwerk.editor.toolbar",
+        review_id: Some("editor-lab.apply-review.runenwerk.editor.toolbar"),
+        document_id: ("runenwerk.editor.toolbar"),
+        display_name: "toolbar.ron",
+        status: Queued,
+        summary: [
+            "queued editor definition activation",
+        ],
+        diagnostics: [],
+        previous_state_preserved: true,
+    ),
+    (
+        id: "editor-lab.activation.applied.runenwerk.editor.toolbar",
+        review_id: Some("editor-lab.apply-review.runenwerk.editor.toolbar"),
+        document_id: ("runenwerk.editor.toolbar"),
+        display_name: "toolbar.ron",
+        status: Applied,
+        summary: [
+            "activated UI template runenwerk.editor.toolbar",
+        ],
+        diagnostics: [],
+        previous_state_preserved: false,
+    ),
+    (
+        id: "editor-lab.activation.queued.runenwerk.editor.pm005.bindings.invalid",
+        review_id: None,
+        document_id: ("runenwerk.editor.pm005.bindings.invalid"),
+        display_name: "pm005_invalid_bindings.ron",
+        status: Queued,
+        summary: [
+            "queued editor definition activation",
+        ],
+        diagnostics: [],
+        previous_state_preserved: true,
+    ),
+    (
+        id: "editor-lab.activation.failed.runenwerk.editor.pm005.bindings.invalid",
+        review_id: None,
+        document_id: ("runenwerk.editor.pm005.bindings.invalid"),
+        display_name: "pm005_invalid_bindings.ron",
+        status: Failed,
+        summary: [
+            "editor bindings activation blocked",
+        ],
+        diagnostics: [
+            (
+                severity: Error,
+                code: "editor.definition.toolbar.template.unresolved",
+                message: "unresolved toolbar template \'runenwerk.editor.pm005.missing_toolbar\'",
+                path: None,
+            ),
+        ],
+        previous_state_preserved: true,
+    ),
+]

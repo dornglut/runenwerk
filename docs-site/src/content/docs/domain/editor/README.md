@@ -48,4 +48,5 @@ behavior, or app-specific persistence locations.
 
 ## Current Architecture Docs
 
+- [`editor-definition-usage.md`](./editor-definition-usage.md)
 - [`editor-definition/current-architecture.md`](./editor-definition/current-architecture.md)

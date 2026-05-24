@@ -141,6 +141,26 @@ package "PT-RENDER-PERFECTION Renderer Production Audit And Perfectionist Verifi
 
 }
 
+package "PT-UI-LAB Runtime-Proven Editor Interface Lab Productization" {
+  component "PT-UI-LAB completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_UI_LAB_COMPLETED <<completed>>
+
+}
+
+package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" {
+  component "PM-UI-LAB-PERF-001 Governance Audit Doctrine And Code Truth Matrix\nkind=design\nstate=active\nWR=WR-100" as PM_UI_LAB_PERF_001 <<active>>
+
+  component "PM-UI-LAB-PERF-002 Runtime Evidence Platform Closure\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_002 <<designing>>
+
+  component "PM-UI-LAB-PERF-003 Command And Surface Source Of Truth Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_003 <<designing>>
+
+  component "PM-UI-LAB-PERF-004 Direct Manipulation Editor Lab UX Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_004 <<designing>>
+
+  component "PM-UI-LAB-PERF-005 Persistence Diff Apply API And Examples Ergonomics\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_005 <<designing>>
+
+  component "PM-UI-LAB-PERF-006 Final No Gap Certification Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_006 <<designing>>
+
+}
+
 PT_SDF_OW_COMPLETED -down-> PM_SDF_OW_002 : completed prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_003 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_004 : production prerequisite
@@ -184,5 +204,11 @@ PM_RENDER_PRODUCT_VISUALS_004 -down-> PM_RENDER_PERFECTION_001 : PT-RENDER-PRODU
 PM_RENDER_PERFECTION_001 -down-> PM_RENDER_PERFECTION_002 : production prerequisite
 PM_RENDER_PERFECTION_002 -down-> PM_RENDER_PERFECTION_003 : production prerequisite
 PM_RENDER_PERFECTION_003 -down-> PM_RENDER_PERFECTION_004 : production prerequisite
+PT_UI_LAB_COMPLETED -down-> PM_UI_LAB_PERF_001 : PT-UI-LAB completed prerequisite
+PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_002 : production prerequisite
+PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_003 : production prerequisite
+PM_UI_LAB_PERF_003 -down-> PM_UI_LAB_PERF_004 : production prerequisite
+PM_UI_LAB_PERF_004 -down-> PM_UI_LAB_PERF_005 : production prerequisite
+PM_UI_LAB_PERF_005 -down-> PM_UI_LAB_PERF_006 : production prerequisite
 
 @enduml

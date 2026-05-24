@@ -1,0 +1,114 @@
+version: 1
+idea: PM-UI-LAB-005 Editor Lab project IO package persistence diff apply activation report rollback productization
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+owner: editor
+created_at: '2026-05-24'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Confirm whether PM005 ships as one full productization WR or is split after production:plan into package-store and apply-review slices.
+- Confirm exact closeout artifact paths in the implementation contract before product code changes.
+- Confirm whether reload-last-applied evidence can remain headless runtime evidence until PM006 screenshot/accessibility breadth.
+item:
+  id: WR-097
+  title: UI Lab project IO diff apply and rollback productization
+  diagram_title: UI Lab project IO apply rollback
+  alias: WR086
+  lane: Product workflow
+  dependency_level: L4
+  gate: PM005 runtime evidence completed
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 5
+  effort: 13
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Editor Lab cannot claim runtime-proven productization until project IO, apply review, activation reports, and rollback are real app flows.
+  kano: Basic
+  dependencies:
+  - WR-096
+  write_scopes:
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/editor_app
+  - apps/runenwerk_editor/src/runtime
+  - domain/editor/editor_definition/src
+  - docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+  - docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-086-ui-lab-project-io-diff-apply-and-rollback-productization/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pm-ui-lab-005-editor-lab-project-io-pack
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition persistence_activation
+  - cargo test -p editor_definition
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor editor_definition_activation
+  - cargo test -p runenwerk_editor pm_ui_lab_005
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: PM-UI-LAB-005 runtime evidence completed through app-owned project package save/reload, selected import/export, invalid package preservation, deterministic apply review, reject/apply, typed activation reports, failed activation preservation, reload-last-applied, rollback, and provider-surface proof.
+  current_decision: WR-097 completed PM-UI-LAB-005 as runtime_proven while keeping project IO, activation execution, failed activation preservation, and rollback app-owned.
+  current_call: Completed; continue with PM-UI-LAB-006 preview lab and runtime evidence only through the production goal workflow.
+  first_move: Run task ai:goal -- --track PT-UI-LAB --scope non-deferred and follow the next legal PM-UI-LAB-006 action.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-LAB-006 still owns screenshot matrices, visual diffing, accessibility checks, performance evidence, and broader success/warning/error/reload/apply/rollback scenario coverage.
+  - PM-UI-LAB-007 still owns public API ergonomics review, usage docs, examples, and final runtime-proven track closeout.
+  - Game-runtime UI projection execution remains out of Editor Lab V1 scope.
+  - Perfectionist verification remains a later PT-UI-LAB-PERFECTION or equivalent audit track.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+  diagram_call:
+  - project IO
+  - apply review
+  - rollback proof
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-UI-LAB-005 implementation must follow the accepted app-owned project IO, diff/apply, activation report, and rollback design.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-UI-LAB-005 must preserve the productization ownership map and defer PM006/PM007 scope.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-UI-LAB-005 consumes the completed operation-driven visual authoring runtime evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-086-ui-lab-project-io-diff-apply-and-rollback-productization/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-097 implementation must follow the decision-complete production implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-097 completion requires runtime-proven PM-UI-LAB-005 closeout evidence.
+  ddd_owner: editor app-owned Editor Lab project IO with editor_definition review contracts and ui_definition persistence-validation support
+  adr_requirement: No ADR required while project IO, activation execution, failed activation preservation, and rollback remain app-owned; add an ADR or accepted design update before moving those responsibilities into domain/ui or domain/editor.
+  fitness_function_requirement: Package save/load/import/export round trips, migration preflight diagnostics, deterministic diff/apply review, rejected apply preservation, activation success/failure reports, failed activation input preservation, rollback guards, reload-last-applied evidence, docs validation, roadmap validation, and production validation.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from ui_definition, editor_definition, editor_shell, and runtime owners.
+edges:
+- source: WR-096
+  target: WR-097
+  label: operation-driven authoring precedes project IO/apply review
