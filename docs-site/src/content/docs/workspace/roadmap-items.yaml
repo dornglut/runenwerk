@@ -672,6 +672,7 @@ items:
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.md
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.yaml
   - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.md
+  - docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
   validations:
   - task roadmap:render
   - task roadmap:validate
@@ -692,9 +693,17 @@ items:
     after planning metadata and contracts validate.
   main_blocker: Doctrine activation and planning metadata must validate before implementation slices can begin.
   why_not_ready: ''
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Indirect draw runtime hardening remains WR-090.
+  - Primitive shader dispatch remains WR-091.
+  - Graph catch-up scheduling remains WR-092.
+  - Procedural camera and view projection remains WR-101.
+  - Evidence, benchmarks, docs, and track closeout remain WR-093.
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
   diagram_call:
   - hardening doctrine
   - split WR-090 WR-091 WR-092 WR-101
