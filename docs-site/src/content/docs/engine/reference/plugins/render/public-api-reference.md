@@ -32,12 +32,17 @@ These are the APIs most users should start with.
   - `RenderVertexFormat`
   - `RenderVertexStepMode`
   - `RenderDrawDescriptor`
+  - `RenderDrawSource`
+  - `DrawIndirectArgs`
+  - `DrawIndexedIndirectArgs`
+  - `IndirectDrawArgsBuffer`
   - `RenderRasterState`
   - `RenderPrimitiveTopology`
   - `RenderBlendMode`
   - `RenderDepthPolicy`
   - `RenderCullMode`
 - procedural authoring:
+  - `ProceduralPassBuilder`
   - `ProceduralPassDescriptor`
   - `ProceduralVisualDescriptor`
   - `ProceduralBufferBinding`
@@ -78,6 +83,67 @@ Use these guides for the common path:
 - `render-flow-usage-guide.md`
 - `gpu-params-guide.md`
 - `usage-guide.md`
+
+## Procedural Population APIs
+
+These APIs are renderer-owned infrastructure for large bounded procedural
+populations. They describe derived GPU execution data, not gameplay truth or
+product ownership.
+
+- procedural pass authoring:
+  - `RenderFlow::procedural_pass`
+  - `RenderFlow::procedural_pass_builder`
+  - `ProceduralPassBuilder::uniform_from_state`
+  - `ProceduralPassBuilder::uniform_from_state_with_surface`
+  - `ProceduralPassBuilder::draw_indirect`
+  - `ProceduralPassBuilder::draw_indirect_with_offset`
+- direct and indirect draw sources:
+  - `GraphicsPassBuilder::draw`
+  - `GraphicsPassBuilder::draw_with_offsets`
+  - `GraphicsPassBuilder::draw_indirect`
+  - `GraphicsPassBuilder::draw_indirect_with_offsets`
+  - `RenderDrawSource`
+  - `DrawIndirectArgs`
+  - `DrawIndexedIndirectArgs`
+  - `IndirectDrawArgsBuffer`
+- GPU primitive contracts:
+  - `U32Counter`
+  - `U32ScanElement`
+  - `PrefixScanMode`
+  - `CounterResetDescriptor`
+  - `U32PrefixScanDescriptor`
+  - `U32ScatterDescriptor`
+  - `IndirectDrawArgsGenerationDescriptor`
+  - `GeneratedIndirectDrawArgs`
+  - `GpuPrimitiveExecutionPlan`
+  - `GpuPrimitiveStep`
+  - `GpuPrimitiveResourceAccess`
+- bounded population support:
+  - `BoundedUniformGrid2dConfig`
+  - `BoundedUniformGrid2dBuildPlan`
+  - `BoundedUniformGrid2dResources`
+  - `BoundedUniformGrid2dStage`
+  - `BoundedUniformGrid2dStagePlan`
+
+Contract:
+
+- `RenderFlow::procedural_pass(...)` remains the simple direct draw path for
+  procedural visuals with a fixed instance count.
+- `RenderFlow::procedural_pass_builder(...)` is the advanced path for
+  procedural-owned uniform and indirect draw authoring. It lowers internally and
+  does not expose `GraphicsPassBuilder` as the procedural extension surface.
+- `GraphicsPassBuilder::draw(...)` and `draw_with_offsets(...)` author direct
+  draw sources. `draw_indirect(...)` and `draw_indirect_with_offsets(...)`
+  author typed indirect draw sources with renderer-owned argument buffer
+  expectations.
+- GPU primitive descriptors validate labels, real storage-array lengths,
+  capacity, and aliasing. Invalid capacity is a diagnostic, not silent drift.
+- `BoundedUniformGrid2dBuildPlan` records the canonical clear counts, count
+  cells, scan counts, reset cursors, scatter sorted indices, neighbor
+  simulation, and publish/draw stage order. Cell resources are total-count-sized
+  and sorted-index resources are agent-count-sized.
+- Spatial hash and chunked unbounded population support are not part of this
+  bounded-grid API. They require a later accepted milestone.
 
 ## Frame Boundary APIs
 
@@ -254,8 +320,10 @@ Contract:
 - `validate_prepared_render_frame(...)` checks a prepared frame against compiled flows before backend encoding: target alias bindings, dynamic target descriptors, sampleability, dispatch preparation, uniform presence, feature gates, history signatures, and capability mismatches.
 - Pass-shape guards reject fullscreen-style generated graphics multiplied by instance count unless `GraphicsPassBuilder::allow_instanced_fullscreen(...)` records explicit bounded author intent. Diagnostics use `FullscreenInstancedWork`, `AmbiguousProceduralShape`, and `InvalidPassShapeIntent`.
 - `RenderFlow::procedural_pass(...)` builds normal graphics passes from renderer-owned procedural descriptors. Mesh sprites, quad sprites, and local 2D SDF impostors use typed storage-backed instance buffers and explicit render policy; the API derives renderer execution resources only and does not own product truth or residency policy.
-- `engine/examples/boids_render_flow` is the canonical procedural-consumer example: compute updates storage-backed boids, a publish pass makes the current buffer available as instance data, `boids.draw` is built with `ProceduralPassDescriptor::local_sdf_2d_impostors(...)`, and the compose shader shades one local impostor without a fullscreen fragment loop over the whole boid set.
-- `cargo run -p engine --example boids_render_flow -- --evidence` prints the canonical boids production-evidence report, including pass order, local instance geometry, typed GPU-timing diagnostic evidence, CPU timing fields, and the renderer benchmark command. `cargo bench -p engine --bench render_flow_planning` includes procedural-boids planning and preflight cases.
+- `RenderFlow::procedural_pass_builder(...)` is the advanced procedural authoring path for per-pass uniforms, surface-aware uniforms, and typed indirect draw arguments. It lowers internally to graphics and does not expose `GraphicsPassBuilder` as the public procedural extension surface.
+- `GraphicsPassBuilder::draw(...)` and `draw_with_offsets(...)` remain the direct draw paths. `draw_indirect(...)` and `draw_indirect_with_offsets(...)` author explicit indirect draw sources using typed renderer-owned argument buffers.
+- `engine/examples/boids_render_flow` is the canonical procedural-consumer example: compute updates storage-backed boids through a bounded wrapping uniform grid, a publish pass makes the current buffer available as instance data, `boids.draw` is built with `ProceduralPassDescriptor::local_sdf_2d_impostors(...)` through the procedural builder, and the compose shader shades one aspect-correct local impostor without a fullscreen fragment loop over the whole boid set.
+- `cargo run -p engine --example boids_render_flow -- --evidence` prints the canonical boids production-evidence report, including pass order, local instance geometry, fixed-step evidence, typed GPU-timing diagnostic evidence, CPU timing fields, and the renderer benchmark command. `cargo bench -p engine --bench render_flow_planning` includes procedural-boids planning and preflight cases.
 - Runtime submit uses cached strict prepared-frame preflight by default. Full structural preflight runs on cold cache, structural key changes, failures, or strict mode; cheap runtime guards still run each frame for flow/view/invocation existence, pass-shape hazards, dispatch validity, uniform presence, and history conflicts.
 - `RenderPreflightValidationConfigResource` can force strict full preflight every frame. `RUNENWERK_RENDER_STRICT_PREFLIGHT=1` is the local/test override.
 - The compiler/preflight diagnostics are render execution diagnostics. They do not own product truth, freshness, authority, fallback legality, rebuild policy, product dependency truth, or residency policy.

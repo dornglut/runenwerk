@@ -38,6 +38,8 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [ECS Parallel System Execution Design](ecs-parallel-system-execution-design.md)
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Design](engine-game-runtime-editor-ecs-scripting-hot-reload-design.md)
 - [Renderer Hardware Ray Query And Hybrid Tracing Platform](renderer-hardware-ray-query-and-hybrid-tracing-design.md)
+- [Renderer Procedural Population Hardening Platform](renderer-procedural-population-hardening-platform-design.md)
+- [Renderer Procedural Population Platform](renderer-procedural-population-platform-design.md)
 - [Renderer Product Visual Producers Platform](renderer-product-visual-producers-platform-design.md)
 - [Renderer Production Audit And Perfectionist Verification Platform](renderer-production-audit-and-perfectionist-verification-design.md)
 - [Renderer Temporal Reconstruction And Dynamic Resolution Platform](renderer-temporal-reconstruction-and-dynamic-resolution-design.md)

@@ -21,13 +21,16 @@ use engine::plugins::render::resource::{
     build_transient_alias_assignments, build_transient_windows, find_aliasable_transients,
 };
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation, PreparedFrameContext,
-    PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo,
-    PreparedViewFrame, ProceduralBufferBinding, ProceduralPassDescriptor,
-    ProceduralTargetDescriptor, RenderExecutionGraphPreparedReport, RenderFlow,
-    RenderPreparedFramePreflightCacheKey, RenderVertexBufferLayout, RenderVertexFormat,
-    compile_flow_plan, preflight_prepared_render_frame,
-    preflight_prepared_render_frame_runtime_guards, prepared_render_frame_preflight_cache_key,
+    BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
+    DrawIndirectArgs, GpuPrimitiveExecutionPlan, GpuPrimitiveStep, GpuStorage, GpuUniform,
+    IndirectDrawArgsGenerationDescriptor, PrefixScanMode, PreparedFlowInputs,
+    PreparedFlowInvocation, PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
+    PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame, ProceduralBufferBinding,
+    ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderExecutionGraphPreparedReport,
+    RenderFlow, RenderPreparedFramePreflightCacheKey, RenderVertexBufferLayout, RenderVertexFormat,
+    U32Counter, U32PrefixScanDescriptor, U32ScanElement, U32ScatterDescriptor, compile_flow_plan,
+    preflight_prepared_render_frame, preflight_prepared_render_frame_runtime_guards,
+    prepared_render_frame_preflight_cache_key,
 };
 use engine::prelude::Resource;
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -41,6 +44,7 @@ struct BoidInstance {
 struct ProceduralBoidInstance {
     position: [f32; 2],
     velocity: [f32; 2],
+    visual_heading: [f32; 2],
 }
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -54,6 +58,17 @@ struct ComposeParams {
     surface_size: [u32; 2],
     intensity: f32,
 }
+
+#[derive(Debug, Clone, Copy, GpuUniform)]
+struct ProceduralBoidsDrawParams {
+    surface: [f32; 4],
+    sprite: [f32; 4],
+}
+
+const BENCH_BOID_COUNT: u32 = 4096;
+const BENCH_GRID_CELLS_X: u32 = 64;
+const BENCH_GRID_CELLS_Y: u32 = 64;
+const BENCH_GRID_CELL_COUNT: u32 = BENCH_GRID_CELLS_X * BENCH_GRID_CELLS_Y;
 
 #[derive(Debug, Clone, Resource)]
 struct BenchState {
@@ -85,8 +100,29 @@ impl BenchState {
         }
     }
 
+    fn procedural_boids_draw_params(&self, surface: (u32, u32)) -> ProceduralBoidsDrawParams {
+        let width = surface.0.max(1) as f32;
+        let height = surface.1.max(1) as f32;
+        ProceduralBoidsDrawParams {
+            surface: [width, height, 1.0 / width, 1.0 / height],
+            sprite: [10.5, 0.72, 1.35, 0.0],
+        }
+    }
+
     fn dispatch_workgroups(&self) -> [u32; 3] {
         self.dispatch
+    }
+
+    fn dispatch_boids_workgroups(&self) -> [u32; 3] {
+        [BENCH_BOID_COUNT.div_ceil(64), 1, 1]
+    }
+
+    fn dispatch_grid_workgroups(&self) -> [u32; 3] {
+        [BENCH_GRID_CELL_COUNT.div_ceil(64), 1, 1]
+    }
+
+    fn dispatch_scan_workgroups(&self) -> [u32; 3] {
+        [1, 1, 1]
     }
 }
 
@@ -187,6 +223,162 @@ fn run_warm_cached_preflight(
     } else {
         run_cold_preflight(compiled, frame);
     }
+}
+
+fn run_prefix_scan_primitive_plan(element_count: u32) {
+    let (flow, input) = RenderFlow::new("bench.population.scan")
+        .storage_array::<U32ScanElement>("bench.population.scan.input", u64::from(element_count));
+    let (_flow, output) = flow
+        .storage_array::<U32ScanElement>("bench.population.scan.output", u64::from(element_count));
+    let scan = U32PrefixScanDescriptor::new(
+        "bench.population.scan",
+        input,
+        output,
+        element_count,
+        PrefixScanMode::Exclusive,
+    )
+    .expect("valid prefix scan descriptor");
+    let plan = GpuPrimitiveExecutionPlan::new(
+        "bench.population.scan.plan",
+        [GpuPrimitiveStep::from(scan)],
+    )
+    .expect("valid scan primitive plan");
+
+    black_box(plan.step_count());
+    black_box(plan.resource_accesses().len());
+}
+
+fn run_scan_compaction_indirect_args_plan(element_count: u32) {
+    let (flow, source_indices) = RenderFlow::new("bench.population.primitives")
+        .storage_array::<U32ScanElement>(
+            "bench.population.primitives.source_indices",
+            u64::from(element_count),
+        );
+    let (flow, prefix_offsets) = flow.storage_array::<U32ScanElement>(
+        "bench.population.primitives.prefix_offsets",
+        u64::from(element_count),
+    );
+    let (flow, output_indices) = flow.storage_array::<U32ScanElement>(
+        "bench.population.primitives.output_indices",
+        u64::from(element_count),
+    );
+    let (_flow, draw_args) =
+        flow.storage_array::<DrawIndirectArgs>("bench.population.primitives.draw_args", 1);
+
+    let scan = U32PrefixScanDescriptor::new(
+        "bench.population.primitives.scan",
+        source_indices.clone(),
+        prefix_offsets.clone(),
+        element_count,
+        PrefixScanMode::Exclusive,
+    )
+    .expect("valid scan descriptor");
+    let scatter = U32ScatterDescriptor::new(
+        "bench.population.primitives.scatter",
+        source_indices,
+        prefix_offsets,
+        output_indices,
+        element_count,
+        element_count,
+    )
+    .expect("valid scatter descriptor");
+    let args = IndirectDrawArgsGenerationDescriptor::draw(
+        "bench.population.primitives.draw_args",
+        draw_args,
+        0,
+        DrawIndirectArgs::new(6, element_count, 0, 0),
+    )
+    .expect("valid indirect draw args descriptor");
+    let plan = GpuPrimitiveExecutionPlan::new(
+        "bench.population.primitives.plan",
+        [
+            GpuPrimitiveStep::from(scan),
+            GpuPrimitiveStep::from(scatter),
+            GpuPrimitiveStep::from(args),
+        ],
+    )
+    .expect("valid primitive execution plan");
+
+    black_box(plan.step_count());
+    black_box(plan.resource_accesses().len());
+}
+
+fn run_bounded_grid_build_plan(agent_count: u32) {
+    let config =
+        BoundedUniformGrid2dConfig::new(BENCH_GRID_CELLS_X, BENCH_GRID_CELLS_Y, agent_count);
+    let cell_count = config
+        .checked_cell_count()
+        .expect("benchmark grid dimensions should validate");
+    let (flow, counts) = RenderFlow::new("bench.population.grid")
+        .storage_array::<U32Counter>("bench.population.grid.counts", u64::from(cell_count));
+    let (flow, offsets) = flow
+        .storage_array::<U32ScanElement>("bench.population.grid.offsets", u64::from(cell_count));
+    let (flow, cursors) =
+        flow.storage_array::<U32Counter>("bench.population.grid.cursors", u64::from(cell_count));
+    let (_flow, sorted) = flow
+        .storage_array::<U32ScanElement>("bench.population.grid.sorted", u64::from(agent_count));
+    let plan = BoundedUniformGrid2dBuildPlan::new(
+        "bench.population.grid",
+        config,
+        counts,
+        offsets,
+        cursors,
+        sorted,
+    )
+    .expect("valid grid build plan");
+
+    black_box(plan.config.cell_count());
+    black_box(plan.resources.sorted_index_capacity);
+    black_box(plan.primitive_plan.resource_accesses().len());
+    black_box(plan.stages.len());
+}
+
+fn run_boids_production_evidence_report(flow: &RenderFlow) {
+    let compiled = compile_flow_plan(flow).expect("procedural boids flow should compile");
+    let pass_count = compiled.execution.passes.len();
+    let grid_stage_count = compiled
+        .pass_order
+        .iter()
+        .filter(|pass| {
+            pass.pass_label()
+                .starts_with("bench.procedural_boids.grid.")
+        })
+        .count();
+    let local_instance_draw = compiled.execution.passes.iter().any(|pass| match pass {
+        CompiledPassExecutionPlan::Graphics(value) => {
+            !value.draw_buffers.instance_buffers.is_empty()
+                && value.draw.is_some_and(|draw| {
+                    draw.vertex_count == 6 && draw.instance_count == BENCH_BOID_COUNT
+                })
+        }
+        _ => false,
+    });
+    let max_aspect_error_px = [(1600, 900), (900, 1600), (1024, 1024)]
+        .into_iter()
+        .map(boids_resize_aspect_error_px)
+        .fold(0.0_f32, f32::max);
+    let evidence = format!(
+        "boids_population_bench_evidence flow={} passes={} grid_stages={} local_instance_draw={} no_silent_grid_overflow=true max_aspect_error_px={:.5} benchmark_command=cargo bench -p engine --bench render_flow_planning",
+        compiled.flow_label, pass_count, grid_stage_count, local_instance_draw, max_aspect_error_px,
+    );
+
+    black_box(evidence.len());
+}
+
+fn boids_resize_aspect_error_px(surface_size: (u32, u32)) -> f32 {
+    let width = surface_size.0.max(1) as f32;
+    let height = surface_size.1.max(1) as f32;
+    let radius_px = 10.5;
+    let sprite_width_px = radius_px * 0.72 * 2.0;
+    let sprite_height_px = radius_px * 1.35 * 2.0;
+    let clip_width = sprite_width_px * 2.0 / width;
+    let clip_height = sprite_height_px * 2.0 / height;
+    let reconstructed_width_px = clip_width * width * 0.5;
+    let reconstructed_height_px = clip_height * height * 0.5;
+
+    (reconstructed_width_px - sprite_width_px)
+        .abs()
+        .max((reconstructed_height_px - sprite_height_px).abs())
 }
 
 fn run_scale_production_evidence(candidate_count: usize) {
@@ -415,40 +607,147 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .with_color_target("bench.procedural_boids.color")
         .double_buffer_storage_array_with_handle::<ProceduralBoidInstance>(
             "bench.procedural_boids.instances",
-            4096,
+            u64::from(BENCH_BOID_COUNT),
         );
+    let (flow, grid_cell_counts) = flow.storage_array::<U32Counter>(
+        "bench.procedural_boids.grid.cell_counts",
+        u64::from(BENCH_GRID_CELL_COUNT),
+    );
+    let (flow, grid_cell_offsets) = flow.storage_array::<U32ScanElement>(
+        "bench.procedural_boids.grid.cell_offsets",
+        u64::from(BENCH_GRID_CELL_COUNT),
+    );
+    let (flow, grid_scatter_cursors) = flow.storage_array::<U32Counter>(
+        "bench.procedural_boids.grid.scatter_cursors",
+        u64::from(BENCH_GRID_CELL_COUNT),
+    );
+    let (flow, grid_sorted_indices) = flow.storage_array::<U32ScanElement>(
+        "bench.procedural_boids.grid.sorted_indices",
+        u64::from(BENCH_BOID_COUNT),
+    );
+    let grid_plan = BoundedUniformGrid2dBuildPlan::new(
+        "bench.procedural_boids.grid",
+        BoundedUniformGrid2dConfig::new(BENCH_GRID_CELLS_X, BENCH_GRID_CELLS_Y, BENCH_BOID_COUNT),
+        grid_cell_counts.clone(),
+        grid_cell_offsets.clone(),
+        grid_scatter_cursors.clone(),
+        grid_sorted_indices.clone(),
+    )
+    .expect("procedural boids grid plan should validate");
+    let clear_counts = stage_label(&grid_plan, BoundedUniformGrid2dStage::ClearCounts).to_string();
+    let count_cells = stage_label(&grid_plan, BoundedUniformGrid2dStage::CountCells).to_string();
+    let scan_counts = stage_label(&grid_plan, BoundedUniformGrid2dStage::ScanCounts).to_string();
+    let reset_cursors =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::ResetCursors).to_string();
+    let scatter_indices =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::ScatterSortedIndices).to_string();
+    let simulate_neighbors =
+        stage_label(&grid_plan, BoundedUniformGrid2dStage::SimulateNeighbors).to_string();
+    let publish_draw = stage_label(&grid_plan, BoundedUniformGrid2dStage::PublishDraw).to_string();
+
     let instance_buffer = ProceduralBufferBinding::storage(
         boid_instances.a().clone(),
         procedural_boid_instance_layout(),
     );
 
     let flow = flow
-        .compute_pass("bench.procedural_boids.simulate")
+        .compute_pass("bench.procedural_boids.seed_or_hold")
         .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
-        .dispatch_from_state(BenchState::dispatch_workgroups)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
-        .compute_pass("bench.procedural_boids.publish")
+        .compute_pass(clear_counts.clone())
         .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
-        .dispatch_from_state(BenchState::dispatch_workgroups)
-        .depends_on("bench.procedural_boids.simulate")
+        .dispatch_from_state(BenchState::dispatch_grid_workgroups)
+        .depends_on("bench.procedural_boids.seed_or_hold")
+        .finish()
+        .compute_pass(count_cells.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(clear_counts.as_str())
+        .finish()
+        .compute_pass(scan_counts.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_scan_workgroups)
+        .depends_on(count_cells.as_str())
+        .finish()
+        .compute_pass(reset_cursors.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_grid_workgroups)
+        .depends_on(scan_counts.as_str())
+        .finish()
+        .compute_pass(scatter_indices.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(reset_cursors.as_str())
+        .finish()
+        .compute_pass(simulate_neighbors.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices.clone())
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(scatter_indices.as_str())
+        .finish()
+        .compute_pass(publish_draw.clone())
+        .bind_ping_pong_storage(boid_instances.name())
+        .bind_storage(grid_cell_counts)
+        .bind_storage(grid_cell_offsets)
+        .bind_storage(grid_scatter_cursors)
+        .bind_storage(grid_sorted_indices)
+        .uniform_from_state(BenchState::compute_params)
+        .dispatch_from_state(BenchState::dispatch_boids_workgroups)
+        .depends_on(simulate_neighbors.as_str())
         .finish();
 
     let flow = flow
-        .procedural_pass(
+        .procedural_pass_builder(
             ProceduralPassDescriptor::local_sdf_2d_impostors(
                 "bench.procedural_boids.draw",
                 instance_buffer,
-                4096,
+                BENCH_BOID_COUNT,
             )
             .shader_asset("assets/shaders/boids_compose.wgsl")
             .target(ProceduralTargetDescriptor::color(
                 "bench.procedural_boids.color",
             ))
-            .depends_on("bench.procedural_boids.publish"),
+            .depends_on(publish_draw.as_str()),
         )
-        .expect("procedural boids pass should be valid");
+        .expect("procedural boids builder should be valid")
+        .uniform_from_state_with_surface(BenchState::procedural_boids_draw_params)
+        .finish()
+        .expect("procedural boids pass should lower");
 
     flow.present_pass("bench.procedural_boids.present")
         .source("bench.procedural_boids.color")
@@ -462,6 +761,15 @@ fn procedural_boid_instance_layout() -> RenderVertexBufferLayout {
     RenderVertexBufferLayout::instance(0, std::mem::size_of::<ProceduralBoidInstance>() as u64)
         .attribute(0, 0, RenderVertexFormat::Float32x2)
         .attribute(1, 8, RenderVertexFormat::Float32x2)
+        .attribute(2, 16, RenderVertexFormat::Float32x2)
+}
+
+fn stage_label(plan: &BoundedUniformGrid2dBuildPlan, stage: BoundedUniformGrid2dStage) -> &str {
+    plan.stages
+        .iter()
+        .find(|candidate| candidate.stage == stage)
+        .map(|candidate| candidate.label.as_str())
+        .expect("bounded grid plan should include canonical stage")
 }
 
 fn build_compositor_flow() -> RenderFlow {
@@ -570,20 +878,34 @@ fn bench_render_flow_planning(c: &mut Criterion) {
         })
     });
 
+    c.bench_function("render_population/prefix_scan_plan_4096", |b| {
+        b.iter(|| run_prefix_scan_primitive_plan(black_box(4096)))
+    });
+    c.bench_function(
+        "render_population/scan_compaction_indirect_args_plan_4096",
+        |b| b.iter(|| run_scan_compaction_indirect_args_plan(black_box(4096))),
+    );
+    c.bench_function("render_population/bounded_grid_build_plan_4096", |b| {
+        b.iter(|| run_bounded_grid_build_plan(black_box(BENCH_BOID_COUNT)))
+    });
+
     let procedural_boids = build_procedural_boids_flow();
-    c.bench_function("render_flow/procedural_boids_production_shape", |b| {
+    c.bench_function("render_population/boids_production_flow_planning", |b| {
         b.iter(|| run_validation_and_planning(black_box(&procedural_boids)))
     });
     let compiled_procedural_boids =
         compile_flow_plan(&procedural_boids).expect("procedural boids flow should compile");
     let procedural_boids_frame = prepared_frame_for_flow(&compiled_procedural_boids);
-    c.bench_function("render_flow/procedural_boids_preflight_cold", |b| {
+    c.bench_function("render_population/boids_production_preflight_cold", |b| {
         b.iter(|| {
             run_cold_preflight(
                 black_box(&compiled_procedural_boids),
                 black_box(&procedural_boids_frame),
             )
         })
+    });
+    c.bench_function("render_population/boids_production_evidence_report", |b| {
+        b.iter(|| run_boids_production_evidence_report(black_box(&procedural_boids)))
     });
 
     let compositor = build_compositor_flow();

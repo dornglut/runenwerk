@@ -83,8 +83,25 @@ package "Level 3 - Active Domain Tracks" {
 
 }
 
+package "Level 4 - Active Discovery Context" {
+  component "WR-089 Renderer population hardening doctrine\nstate=current_candidate\nscore=5.6 gate=doctrine activation before hardening implementation\nV4 B2\ncall=hardening doctrine\nsplit WR-090 to WR-093" as RENDERPOPHARDEN <<V4>>
+
+  component "WR-090 Indirect draw hardening\nstate=ready_next\nscore=2.7 gate=after hardening doctrine activation\nV4 B2\ncall=typed indirect draw\nfail closed" as RENDERPOPINDIRECT <<V4>>
+
+  component "WR-091 GPU primitive shader dispatch\nstate=ready_next\nscore=1.8 gate=after indirect draw hardening\nV4 B2\ncall=renderer kernels\nhierarchical scan" as RENDERPOPPRIMDISPATCH <<V4>>
+
+  component "WR-092 Fixed step graph catch up\nstate=ready_next\nscore=2.6 gate=after primitive shader dispatch\nV4 B2\ncall=graph catch up\nbounded substeps" as RENDERPOPCATCHUP <<V4>>
+
+  component "WR-093 Population hardening closeout\nstate=ready_next\nscore=3.7 gate=after graph catch-up scheduling\nV4 B2\ncall=runtime evidence\nclose hardening track" as RENDERPOPHARDENCLOSE <<V4>>
+
+}
+
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate
 UIGUARDS -down-> SHELLPOLISH : retained UI guardrails
 MESHRND -down-> MESHMAT : model mesh pixel proof prerequisite
+RENDERPOPHARDEN -down-> RENDERPOPINDIRECT : hardening doctrine before indirect draw validation
+RENDERPOPINDIRECT -down-> RENDERPOPPRIMDISPATCH : fail-closed indirect draw before primitive dispatch
+RENDERPOPPRIMDISPATCH -down-> RENDERPOPCATCHUP : primitive dispatch before graph catch-up
+RENDERPOPCATCHUP -down-> RENDERPOPHARDENCLOSE : graph catch-up before hardening closeout
 
 @enduml

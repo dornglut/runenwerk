@@ -4140,10 +4140,15 @@ items:
   - task production:check
   - task planning:validate
   next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md.
-  current_decision: Completed. Renderer inspection now reports prepared material instances, scene shader bundle identity, source-backed model/mesh selections, portable-limit diagnostics, material-consuming pass evidence, and count drift without moving material, asset, model, scene, product, or fallback truth into the renderer.
-  current_call: Use WR-067 as completed PM-RENDER-MESH-MATERIAL-002 evidence before starting WR-068 lighting pipeline cache and last-good fallback work.
-  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
-  main_blocker: Complete; lighting pipeline cache, last-good fallback, production evidence, and final perfectionist verification remain downstream scope.
+  current_decision: Completed. Renderer inspection now reports prepared material instances, scene shader bundle identity,
+    source-backed model/mesh selections, portable-limit diagnostics, material-consuming pass evidence, and count drift without
+    moving material, asset, model, scene, product, or fallback truth into the renderer.
+  current_call: Use WR-067 as completed PM-RENDER-MESH-MATERIAL-002 evidence before starting WR-068 lighting pipeline cache
+    and last-good fallback work.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; lighting pipeline cache, last-good fallback, production evidence, and final perfectionist verification
+    remain downstream scope.
   why_not_ready: ''
   completion_quality: bounded_contract
   known_quality_gaps:
@@ -4193,3 +4198,474 @@ items:
     provenance inspection tests, docs validation, roadmap validation, production validation, and planning validation.
   ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product
     producers.
+- id: WR-083
+  title: Renderer Procedural Population Doctrine And Track Activation
+  diagram_title: Renderer procedural population doctrine
+  alias: RENDERPOPDOCTRINE
+  lane: Render planning
+  dependency_level: L4
+  gate: Production track activation
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 2
+  confidence: 0.8
+  expected_score: 5.6
+  rice: N/A
+  kano: Neutral
+  dependencies:
+  - WR-060
+  - WR-063
+  write_scopes:
+  - docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+  - docs-site/src/content/docs/reports/closeouts/wr-083-renderer-procedural-population-doctrine-and-track-activation/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-083-renderer-procedural-population-doctrine-and-track-activation/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  next_evidence: 2026-05-24 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-083-renderer-procedural-population-doctrine-and-track-activation/closeout.md.
+    Active doctrine and production track activation for PT-RENDER-PROCEDURAL-POPULATION are complete; implementation remains
+    WR-084 through WR-088.
+  current_decision: WR-083 implementation-readiness contract accepted at docs-site/src/content/docs/reports/implementation-plans/wr-083-renderer-procedural-population-doctrine-and-track-activation/plan.md
+  current_call: Activate the follow-on renderer procedural population track without reopening completed GPU/procedural or
+    scale tracks.
+  first_move: Keep design, production-track, and roadmap state aligned before implementation slices proceed.
+  main_blocker: N/A; planning-only row.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Runtime primitive execution, bounded grid, boids proof, benchmarks, and docs remain WR-084 through WR-088.
+  - Final perfectionist verification remains PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-083-renderer-procedural-population-doctrine-and-track-activation/closeout.md
+  diagram_call:
+  - doctrine activation
+  - bounded WR split
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Procedural population implementation must follow the active track doctrine.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR unless draw-source, primitive, or population ownership crosses renderer/domain boundaries beyond
+    the active design.
+  fitness_function_requirement: Production, roadmap, docs, and planning validators.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-084
+  title: Procedural Builder And First Class Draw Sources
+  diagram_title: Procedural builder and draw sources
+  alias: RENDERPOPAPI
+  lane: Render implementation
+  dependency_level: L4
+  gate: Implementation after doctrine
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 3
+  confidence: 0.8
+  expected_score: 3.7
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-083
+  write_scopes:
+  - engine/src/plugins/render/procedural/authoring.rs
+  - engine/src/plugins/render/procedural/lowering.rs
+  - engine/src/plugins/render/procedural/mod.rs
+  - engine/src/plugins/render/api/flow.rs
+  - engine/src/plugins/render/api/passes.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/graph/validation.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/src/plugins/render/gpu_primitives/draw_args.rs
+  - engine/tests/procedural_instance.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-084-procedural-builder-and-first-class-draw-sources/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-084-procedural-builder-and-first-class-draw-sources/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine procedural
+  - cargo test -p engine render_flow
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-084-procedural-builder-and-first-class-draw-sources/closeout.md.
+  current_decision: Completed. Procedural-owned builder, explicit draw-source graph semantics, validation, execution-plan
+    compilation, and runtime encode behavior are implemented without exposing GraphicsPassBuilder through procedural authoring.
+  current_call: Use WR-084 as completed PM-RENDER-POP-002 evidence before starting reusable GPU primitive contracts in WR-085.
+  first_move: Run the phase completion drift check, then use task production:plan -- --milestone "PM-RENDER-POP-003" --roadmap
+    "WR-085".
+  main_blocker: Complete; reusable GPU primitive contracts, bounded grid, boids proof, evidence, benchmarks, and docs remain
+    later slices.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Reusable GPU primitive contracts and runtime execution remain WR-085.
+  - Bounded uniform-grid population support remains WR-086.
+  - Boids runtime proof remains WR-087.
+  - Evidence, benchmarks, docs, and track closeout remain WR-088.
+  - Final no-gap verification remains PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-084-procedural-builder-and-first-class-draw-sources/closeout.md
+  diagram_call:
+  - procedural authoring done
+  - typed draw sources
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Procedural builder and draw-source work followed the active track doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-084-procedural-builder-and-first-class-draw-sources/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-084 implementation followed the active procedural builder and draw-source contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required because the slice keeps draw-source semantics renderer-owned and does not move product
+    truth, fallback policy, residency authority, or domain state into renderer code.
+  fitness_function_requirement: Render-flow procedural tests, render-flow graph validation tests, docs validation, roadmap
+    validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-085
+  title: GPU Prefix Scan Compaction And Indirect Args Primitives
+  diagram_title: GPU primitive contracts
+  alias: RENDERPOPPRIMS
+  lane: Render implementation
+  dependency_level: L4
+  gate: Implementation after draw-source contract
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.2
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-084
+  write_scopes:
+  - engine/src/plugins/render/gpu_primitives
+  - engine/src/plugins/render/api/handles.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-085-gpu-prefix-scan-compaction-and-indirect-args-primitives/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-085-gpu-prefix-scan-compaction-and-indirect-args-primitives/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine gpu_primitives
+  - cargo test -p engine render_scale
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-085-gpu-prefix-scan-compaction-and-indirect-args-primitives/closeout.md.
+  current_decision: Completed. Renderer GPU primitive descriptors validate real storage lengths, reject capacity drift and
+    aliasing, expose typed indirect draw args generation, and provide explicit primitive execution-plan data.
+  current_call: Use WR-085 as completed PM-RENDER-POP-003 evidence before starting bounded uniform-grid population support
+    in WR-086.
+  first_move: Run the phase completion drift check, then use task production:plan -- --milestone "PM-RENDER-POP-004" --roadmap
+    "WR-086".
+  main_blocker: Complete at bounded_contract; reusable GPU shader dispatch, bounded grid, boids proof, evidence, benchmarks,
+    and docs remain later slices.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Reusable GPU primitive shader dispatch remains deferred; WR-085 provides descriptors, validation, and explicit primitive
+    execution planning.
+  - Bounded uniform-grid population support remains WR-086.
+  - Boids runtime proof remains WR-087.
+  - Evidence, benchmarks, docs, and track closeout remain WR-088.
+  - Final no-gap verification remains PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-085-gpu-prefix-scan-compaction-and-indirect-args-primitives/closeout.md
+  diagram_call:
+  - primitive contracts done
+  - execution plan explicit
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: GPU primitive work followed the active renderer infrastructure doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-085-gpu-prefix-scan-compaction-and-indirect-args-primitives/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-085 implementation followed the active primitive contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required because primitives remain renderer-owned descriptors and execution planning, without moving
+    product truth, fallback policy, or cross-domain APIs.
+  fitness_function_requirement: Primitive validation tests, render scale compatibility tests, docs validation, roadmap validation,
+    production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-086
+  title: Bounded Uniform Grid Procedural Population Support
+  diagram_title: Bounded uniform grid population
+  alias: RENDERPOPGRID
+  lane: Render implementation
+  dependency_level: L4
+  gate: Implementation after GPU primitives
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.5
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-085
+  write_scopes:
+  - engine/src/plugins/render/procedural/population
+  - docs-site/src/content/docs/reports/implementation-plans/wr-086-bounded-uniform-grid-procedural-population-support/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-086-bounded-uniform-grid-procedural-population-support/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine procedural
+  - cargo test -p engine render_flow
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-086-bounded-uniform-grid-procedural-population-support/closeout.md.
+  current_decision: Completed. Reusable bounded 2D wrapping grid support now records total-count capacities, wrapping neighbor
+    lookup, canonical stage order, and primitive-plan composition outside the boids example.
+  current_call: Use WR-086 as completed PM-RENDER-POP-004 evidence before starting boids runtime proof in WR-087.
+  first_move: Run the phase completion drift check, then use task production:plan -- --milestone "PM-RENDER-POP-005" --roadmap
+    "WR-087".
+  main_blocker: Complete at bounded_contract; boids runtime proof, visual evidence, benchmarks, docs, and final track closeout
+    remain later slices.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Boids runtime consumption and proof remain WR-087.
+  - Evidence, benchmarks, docs, and track closeout remain WR-088.
+  - Reusable GPU primitive shader dispatch remains deferred; WR-086 composes explicit primitive planning, not standalone primitive
+    dispatch.
+  - Spatial hash and chunked unbounded populations remain deferred.
+  - Final no-gap verification remains PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-086-bounded-uniform-grid-procedural-population-support/closeout.md
+  diagram_call:
+  - bounded grid done
+  - canonical stages
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Bounded-grid work followed the active total-count capacity doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-086-bounded-uniform-grid-procedural-population-support/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-086 implementation followed the active bounded-grid contract.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR required because bounded-grid support remains renderer-owned and spatial hash or unbounded chunking
+    semantics remain deferred.
+  fitness_function_requirement: Procedural population validation tests, render-flow compatibility tests, docs validation,
+    roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-087
+  title: Boids Render Flow Production Upgrade
+  diagram_title: Boids production upgrade
+  alias: RENDERPOPBOIDS
+  lane: Render implementation
+  dependency_level: L4
+  gate: Implementation after bounded grid support
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 3
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.5
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-086
+  write_scopes:
+  - engine/examples/boids_render_flow
+  - assets/shaders/boids_compute.wgsl
+  - assets/shaders/boids_compose.wgsl
+  - docs-site/src/content/docs/reports/implementation-plans/wr-087-boids-render-flow-production-upgrade/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-087-boids-render-flow-production-upgrade/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-087-boids-render-flow-production-upgrade/closeout.md.
+  current_decision: Completed. The boids render-flow example consumes bounded-grid population support, keeps fixed-step simulation
+    limits explicit, uses smoothed visual heading, avoids production O(n^2) neighbor traversal, and reports resize pixel evidence
+    for aspect-correct impostors.
+  current_call: Use WR-087 as completed PM-RENDER-POP-005 evidence before starting evidence, benchmark, docs, and final track
+    closeout in WR-088.
+  first_move: Run the phase completion drift check, then use task production:plan -- --milestone "PM-RENDER-POP-006" --roadmap
+    "WR-088".
+  main_blocker: Complete at runtime_proven for the boids proof; final evidence, benchmarks, docs, and track closeout remain
+    WR-088.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Evidence, benchmarks, docs, and final track closeout remain WR-088.
+  - Reusable GPU primitive shader dispatch remains deferred; boids proves the bounded runtime path with its example shader
+    pipeline.
+  - Final no-gap verification remains PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-087-boids-render-flow-production-upgrade/closeout.md
+  diagram_call:
+  - boids runtime proof
+  - resize pixel evidence
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Boids runtime proof followed the active reusable population platform doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-087-boids-render-flow-production-upgrade/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-087 implementation followed the active boids proof contract.
+  ddd_owner: engine render plugin examples
+  adr_requirement: No ADR required because the example consumes existing renderer-owned grid and graph contracts without changing
+    graph scheduling semantics.
+  fitness_function_requirement: Boids example tests, evidence command, docs validation, roadmap validation, production validation,
+    and planning validation.
+  ownership_mode: Stream-aligned renderer example with renderer platform support.
+- id: WR-088
+  title: Procedural Population Evidence Benchmarks Docs And Closeout
+  diagram_title: Procedural population evidence
+  alias: RENDERPOPEVIDENCE
+  lane: Render hardening
+  dependency_level: L4
+  gate: Hardening after boids proof
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 3
+  confidence: 0.8
+  expected_score: 3.7
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-087
+  write_scopes:
+  - engine/benches/render_flow_planning.rs
+  - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-088-procedural-population-evidence-benchmarks-docs-and-closeout/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-088-procedural-population-evidence-benchmarks-docs-and-closeout/closeout.md
+  - docs-site/src/content/docs/reports/closeouts/pt-render-procedural-population-runtime-proven/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-088-procedural-population-evidence-benchmarks-docs-and-closeout/closeout.md.
+  current_decision: Completed. Documentation, benchmarks, evidence, and closeouts now prove the bounded procedural population
+    chain at runtime_proven without claiming perfectionist verification.
+  current_call: Use WR-088 as completed PM-RENDER-POP-006 evidence and track closeout evidence for PT-RENDER-PROCEDURAL-POPULATION.
+  first_move: Keep deferred shader-dispatch, unbounded population, and multi-step scheduling work visible for future accepted
+    tracks.
+  main_blocker: Complete at runtime_proven; final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Reusable GPU primitive shader dispatch remains deferred beyond descriptor, validation, planning, benchmark, and boids-consumption
+    proof.
+  - Spatial hash and chunked unbounded procedural populations remain later milestones.
+  - Multi-step fixed-update catch-up remains future graph scheduling work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-088-procedural-population-evidence-benchmarks-docs-and-closeout/closeout.md
+  diagram_call:
+  - runtime proven closeout
+  - benchmarks docs evidence
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Evidence and docs followed the active procedural population doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-088-procedural-population-evidence-benchmarks-docs-and-closeout/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-088 implementation followed the active evidence and closeout contract.
+  ddd_owner: engine render plugin and docs
+  adr_requirement: No ADR required because the slice hardens evidence, docs, and benchmarks without changing dependency direction,
+    product truth, fallback policy, or graph scheduling semantics.
+  fitness_function_requirement: Benchmarks, boids tests/evidence, docs validation, roadmap validation, production validation,
+    and planning validation.
+  ownership_mode: Renderer hardening.

@@ -106,7 +106,7 @@ See [`examples/overview.md`](examples/overview.md) for the full map.
 - `runtime_minimal`: smallest headless runtime flow.
 - `window_input_demo`: windowed input loop + default plugins.
 - `game_of_life_sdf`: windowed public `RenderFlow` example on builtin compiled execution.
-- `boids_render_flow`: windowed boids compute, graphics, history copy, and present flow on the builtin compiled path.
+- `boids_render_flow`: windowed boids compute with bounded uniform-grid neighbor lookup, procedural draw, fixed-step evidence, aspect-correct impostors, and present flow on the builtin compiled path.
 - `sdf_render_flow`: windowed 3D SDF raymarch flow rendered through fullscreen compose and explicit present passes.
 - `procedural_sky_sdf_terrain`: windowed procedural sky + noise-shaped terrain SDF raymarch flow.
 

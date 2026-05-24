@@ -1,6 +1,6 @@
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
-use crate::plugins::render::{RenderPassId, RenderResourceId, ShaderHandle};
+use crate::plugins::render::{GpuParams, GpuStorage, RenderPassId, RenderResourceId, ShaderHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderPassKind {
@@ -175,11 +175,91 @@ impl RenderVertexBufferLayout {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RenderDrawSource {
+    Direct,
+    Indirect {
+        args_buffer: RenderResourceId,
+        byte_offset: u64,
+    },
+}
+
+impl RenderDrawSource {
+    pub const fn indirect(args_buffer: RenderResourceId, byte_offset: u64) -> Self {
+        Self::Indirect {
+            args_buffer,
+            byte_offset,
+        }
+    }
+}
+
+pub trait IndirectDrawArgsBuffer: GpuParams {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
+pub struct DrawIndirectArgs {
+    pub vertex_count: u32,
+    pub instance_count: u32,
+    pub first_vertex: u32,
+    pub first_instance: u32,
+}
+
+impl DrawIndirectArgs {
+    pub const BYTE_SIZE: u64 = 16;
+
+    pub const fn new(
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) -> Self {
+        Self {
+            vertex_count,
+            instance_count,
+            first_vertex,
+            first_instance,
+        }
+    }
+}
+
+impl IndirectDrawArgsBuffer for DrawIndirectArgs {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
+pub struct DrawIndexedIndirectArgs {
+    pub index_count: u32,
+    pub instance_count: u32,
+    pub first_index: u32,
+    pub base_vertex: i32,
+    pub first_instance: u32,
+}
+
+impl DrawIndexedIndirectArgs {
+    pub const BYTE_SIZE: u64 = 20;
+
+    pub const fn new(
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    ) -> Self {
+        Self {
+            index_count,
+            instance_count,
+            first_index,
+            base_vertex,
+            first_instance,
+        }
+    }
+}
+
+impl IndirectDrawArgsBuffer for DrawIndexedIndirectArgs {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderDrawDescriptor {
     pub vertex_count: u32,
     pub instance_count: u32,
     pub first_vertex: u32,
     pub first_instance: u32,
+    pub source: RenderDrawSource,
 }
 
 impl RenderDrawDescriptor {
@@ -189,6 +269,7 @@ impl RenderDrawDescriptor {
             instance_count,
             first_vertex: 0,
             first_instance: 0,
+            source: RenderDrawSource::Direct,
         }
     }
 
@@ -203,6 +284,45 @@ impl RenderDrawDescriptor {
             instance_count,
             first_vertex,
             first_instance,
+            source: RenderDrawSource::Direct,
+        }
+    }
+
+    pub const fn indirect(
+        vertex_count: u32,
+        instance_count: u32,
+        args_buffer: RenderResourceId,
+        byte_offset: u64,
+    ) -> Self {
+        Self {
+            vertex_count,
+            instance_count,
+            first_vertex: 0,
+            first_instance: 0,
+            source: RenderDrawSource::Indirect {
+                args_buffer,
+                byte_offset,
+            },
+        }
+    }
+
+    pub const fn indirect_with_offsets(
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+        args_buffer: RenderResourceId,
+        byte_offset: u64,
+    ) -> Self {
+        Self {
+            vertex_count,
+            instance_count,
+            first_vertex,
+            first_instance,
+            source: RenderDrawSource::Indirect {
+                args_buffer,
+                byte_offset,
+            },
         }
     }
 }
