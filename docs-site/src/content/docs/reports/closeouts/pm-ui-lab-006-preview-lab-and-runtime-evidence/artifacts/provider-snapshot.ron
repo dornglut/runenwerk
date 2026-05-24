@@ -1,0 +1,8 @@
+runenwerk.editor_design.definition_outliner title=Definition Outliner provider=Some(TypedId(6)) availability=Available artifact=Provider routes=17
+runenwerk.editor_design.ui_hierarchy title=UI Hierarchy provider=Some(TypedId(6)) availability=Available artifact=Provider routes=12
+runenwerk.editor_design.ui_canvas title=UI Canvas provider=Some(TypedId(6)) availability=Available artifact=Provider routes=0
+runenwerk.editor_design.dock_layout_preview title=Dock Layout Preview provider=Some(TypedId(6)) availability=Available artifact=Provider routes=8
+runenwerk.editor_design.style_inspector title=Style Inspector provider=Some(TypedId(6)) availability=Available artifact=Provider routes=4
+runenwerk.editor_design.bindings title=Bindings provider=Some(TypedId(6)) availability=Available artifact=Provider routes=6
+runenwerk.editor_design.definition_validation title=Definition Validation provider=Some(TypedId(6)) availability=Available artifact=Provider routes=6
+runenwerk.editor_design.command_diff title=Command Diff provider=Some(TypedId(6)) availability=Available artifact=Provider routes=6

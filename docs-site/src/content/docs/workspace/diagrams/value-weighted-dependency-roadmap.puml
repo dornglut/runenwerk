@@ -84,7 +84,7 @@ package "Level 3 - Active Domain Tracks" {
 }
 
 package "Level 4 - Active Discovery Context" {
-  component "WR-089 Renderer population hardening doctrine\nstate=current_candidate\nscore=5.6 gate=doctrine activation before hardening implementation\nV4 B2\ncall=hardening doctrine\nsplit WR-090 WR-091 WR-092 WR-094\nWR-093 closeout" as RENDERPOPHARDEN <<V4>>
+  component "WR-089 Renderer population hardening doctrine\nstate=current_candidate\nscore=5.6 gate=doctrine activation before hardening implementation\nV4 B2\ncall=hardening doctrine\nsplit WR-090 WR-091 WR-092 WR-101\nWR-093 closeout" as RENDERPOPHARDEN <<V4>>
 
   component "WR-090 Indirect draw hardening\nstate=ready_next\nscore=2.7 gate=after hardening doctrine activation\nV4 B2\ncall=typed indirect draw\nfail closed" as RENDERPOPINDIRECT <<V4>>
 
@@ -92,9 +92,11 @@ package "Level 4 - Active Discovery Context" {
 
   component "WR-092 Fixed step graph catch up\nstate=ready_next\nscore=2.6 gate=after primitive shader dispatch\nV4 B2\ncall=graph catch up\nbounded substeps\nfixed-time source\niteration uniforms" as RENDERPOPCATCHUP <<V4>>
 
-  component "WR-094 Procedural camera projection\nstate=ready_next\nscore=2.6 gate=after graph catch-up scheduling\nV4 B2\ncall=procedural camera\nfill viewport\nequal world scale" as RENDERPOPCAMERA <<V4>>
+  component "WR-101 Procedural camera projection\nstate=ready_next\nscore=2.6 gate=after graph catch-up scheduling\nV4 B2\ncall=procedural camera\nfill viewport\nequal world scale" as RENDERPOPCAMERA <<V4>>
 
   component "WR-093 Population hardening closeout\nstate=ready_next\nscore=3.7 gate=after procedural camera projection\nV4 B2\ncall=runtime evidence\nclose hardening track\ncamera proof" as RENDERPOPHARDENCLOSE <<V4>>
+
+  component "WR-100 UI Lab perfectionist governance\nstate=current_candidate\nscore=1.0 gate=current-candidate governance contract\nV3 B3\ncall=governance contract\nno app code yet" as WR089 <<V3>>
 
 }
 
@@ -106,5 +108,7 @@ RENDERPOPINDIRECT -down-> RENDERPOPPRIMDISPATCH : fail-closed indirect draw befo
 RENDERPOPPRIMDISPATCH -down-> RENDERPOPCATCHUP : primitive dispatch before graph catch-up
 RENDERPOPCATCHUP -down-> RENDERPOPCAMERA : graph catch-up before camera projection proof
 RENDERPOPCAMERA -down-> RENDERPOPHARDENCLOSE : camera projection proof before hardening closeout
+UIGUARDS -down-> WR089 : editor guardrails
+UIDESIGNDOC -down-> WR089 : UI doctrine
 
 @enduml

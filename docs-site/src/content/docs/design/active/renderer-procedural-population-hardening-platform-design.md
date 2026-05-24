@@ -199,7 +199,7 @@ The completed procedural population track left these explicit gaps:
 - `WR-091`: reusable GPU primitive shader dispatch.
 - `WR-092`: fixed-step graph catch-up scheduling plus redraw/input-rate
   invariance.
-- `WR-094`: procedural 2D camera and view projection contract.
+- `WR-101`: procedural 2D camera and view projection contract.
 - `WR-093`: evidence, benchmarks, docs, and runtime-proven closeout.
 
 `WR-089` is the activation slice only. It must not absorb product code from

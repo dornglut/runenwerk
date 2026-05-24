@@ -25,11 +25,7 @@ impl EditorSurfaceProvider for SceneOutlinerProvider {
         ) {
             return SurfaceProviderSupportMode::Unsupported;
         }
-        stable_key_or_legacy_kind_support(
-            request,
-            SCENE_OUTLINER_SURFACE_KEY,
-            ToolSurfaceKind::Outliner,
-        )
+        stable_key_support(request, SCENE_OUTLINER_SURFACE_KEY)
     }
 
     fn build_frame(

@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for FieldProductViewerProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            FIELD_PRODUCT_VIEWER_SURFACE_KEY,
-            ToolSurfaceKind::FieldProductViewer,
-        )
+        stable_key_support(request, FIELD_PRODUCT_VIEWER_SURFACE_KEY)
     }
 
     fn build_frame(

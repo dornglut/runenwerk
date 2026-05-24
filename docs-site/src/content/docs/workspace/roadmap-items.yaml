@@ -682,12 +682,12 @@ items:
   - task docs:validate
   - task planning:validate
   next_evidence: Complete doctrine and track activation with active hardening design, production track metadata, WR-090,
-    WR-091, WR-092, WR-094 implementation contracts, WR-093 closeout contract, the separate behavior-authoring intake,
+    WR-091, WR-092, WR-101 implementation contracts, WR-093 closeout contract, the separate behavior-authoring intake,
     and a bounded-contract closeout for WR-089.
   current_decision: Intake accepted as a doctrine-first hardening track. WR-089 must not absorb indirect draw, primitive dispatch,
     graph catch-up, procedural camera, behavior-authoring, or unbounded population implementation.
   current_call: Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090,
-    WR-091, WR-092, WR-094, with WR-093 reserved for closeout.
+    WR-091, WR-092, WR-101, with WR-093 reserved for closeout.
   first_move: Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089 only
     after planning metadata and contracts validate.
   main_blocker: Doctrine activation and planning metadata must validate before implementation slices can begin.
@@ -697,7 +697,7 @@ items:
   completion_audit: ''
   diagram_call:
   - hardening doctrine
-  - split WR-090 WR-091 WR-092 WR-094
+  - split WR-090 WR-091 WR-092 WR-101
   - WR-093 closeout
   decision_gates:
   - kind: design
@@ -953,7 +953,7 @@ items:
     time diagnostics, invalid repeat rejection, iteration-scoped uniform projection, ping-pong resource sequencing, and no
     input/redraw-rate simulation speedup in boids evidence.
   ownership_mode: Complicated-subsystem renderer owner.
-- id: WR-094
+- id: WR-101
   title: Procedural Camera And View Projection
   diagram_title: Procedural camera projection
   alias: RENDERPOPCAMERA
@@ -986,7 +986,7 @@ items:
   - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
   - docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md
   - docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-101-procedural-camera-and-view-projection/plan.md
   validations:
   - cargo fmt --all -- --check
   - cargo test -p engine procedural
@@ -1008,7 +1008,7 @@ items:
     from redraw/input cadence.
   current_call: Add reusable procedural camera projection and sprite sizing contracts; do not patch boids-only draw parameters
     or make PreparedViewFrame own camera truth.
-  first_move: After WR-092 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-005" --roadmap "WR-094".
+  first_move: After WR-092 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-005" --roadmap "WR-101".
   main_blocker: Waiting on WR-092 graph catch-up scheduling closeout.
   why_not_ready: ''
   completion_quality: not_applicable
@@ -1025,10 +1025,10 @@ items:
     applies_to: implementation
     reason: Procedural camera projection must follow the active renderer population hardening doctrine.
   - kind: design
-    path: docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-101-procedural-camera-and-view-projection/plan.md
     required_status: active
     applies_to: implementation
-    reason: WR-094 implementation must follow the accepted procedural camera projection contract.
+    reason: WR-101 implementation must follow the accepted procedural camera projection contract.
   ddd_owner: engine render plugin
   adr_requirement: No ADR while camera projection remains renderer-owned derived data and camera intent stays producer-owned;
     ADR required before moving camera source truth into renderer or PreparedViewFrame.
@@ -1056,7 +1056,7 @@ items:
   rice: N/A
   kano: Performance
   dependencies:
-  - WR-094
+  - WR-101
   write_scopes:
   - engine/benches/render_flow_planning.rs
   - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
@@ -1082,12 +1082,12 @@ items:
   - task production:validate
   - task production:check
   - task planning:validate
-  next_evidence: Promote only after WR-094 closes. Close the hardening track only when runtime evidence proves indirect validation,
+  next_evidence: Promote only after WR-101 closes. Close the hardening track only when runtime evidence proves indirect validation,
     primitive shader dispatch, graph catch-up scheduling, procedural camera projection, benchmarks, and docs.
   current_decision: Ready-next evidence and closeout slice for PT-RENDER-PROCEDURAL-POPULATION-HARDENING.
   current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and camera projection evidence.
-  first_move: After WR-094 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-006" --roadmap "WR-093".
-  main_blocker: Waiting on WR-094 procedural camera projection closeout.
+  first_move: After WR-101 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-006" --roadmap "WR-093".
+  main_blocker: Waiting on WR-101 procedural camera projection closeout.
   why_not_ready: ''
   completion_quality: not_applicable
   known_quality_gaps: []
@@ -1113,6 +1113,81 @@ items:
   fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, camera projection, boids evidence, benchmark,
     docs, production, roadmap, and planning validation suite.
   ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-100
+  title: UI Lab perfectionist governance and no-gap audit doctrine
+  diagram_title: UI Lab perfectionist governance
+  alias: WR089
+  lane: Product planning
+  dependency_level: L4
+  gate: Current-candidate governance contract
+  planning_state: current_candidate
+  priority: P2
+  value: 3
+  blocker: 3
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-099
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pt-ui-lab-perfection-no-gap-audit
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task puml:validate
+  - task docs:validate
+  next_evidence: Complete PM-UI-LAB-PERF-001 with accepted audit doctrine, code-truth matrix, evidence matrix, hard blockers,
+    and disjoint follow-on WR candidates.
+  current_decision: WR-100 is the current governance/design candidate for PT-UI-LAB-PERFECTION; it may update planning docs
+    and audit doctrine only.
+  current_call: Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until
+    follow-on WRs are accepted.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and
+    evidence matrix closeout.
+  main_blocker: Follow-on implementation WR candidates, accepted audit closeout, and phase drift-check evidence remain.
+  why_not_ready: Ready for governance/design execution only; later implementation remains blocked until scoped WRs and production
+    contracts exist.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - governance contract
+  - no app code yet
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+    required_status: active
+    applies_to: discovery
+    reason: PT-UI-LAB-PERFECTION governance must be anchored by the active no-gap audit design.
+  ddd_owner: editor with domain/ui, domain/editor, and app-runtime evidence support
+  adr_requirement: No ADR for the governance/design setup; later WRs need an ADR or accepted design update if they change
+    durable ownership, dependency direction, source-of-truth authority, or cross-domain contracts.
+  fitness_function_requirement: Production, roadmap, planning, PUML, and docs validators for governance; later WRs must add
+    focused runtime evidence and code tests before implementation.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor shell,
+    and app runtime evidence owners.
 edges:
 - source: WR-002
   target: WR-001
@@ -1319,8 +1394,32 @@ edges:
   target: WR-092
   label: primitive dispatch before graph catch-up
 - source: WR-092
-  target: WR-094
+  target: WR-101
   label: graph catch-up before camera projection proof
-- source: WR-094
+- source: WR-101
   target: WR-093
   label: camera projection proof before hardening closeout
+- source: WR-004
+  target: WR-094
+  label: editor surface guards
+- source: WR-046
+  target: WR-094
+  label: UI designer doctrine
+- source: WR-096
+  target: WR-097
+  label: operation-driven authoring precedes project IO/apply review
+- source: WR-097
+  target: WR-098
+  label: project IO/apply evidence precedes preview lab evidence matrix
+- source: WR-098
+  target: WR-099
+  label: preview/runtime evidence precedes API docs and final closeout
+- source: WR-004
+  target: WR-100
+  label: editor guardrails
+- source: WR-046
+  target: WR-100
+  label: UI doctrine
+- source: WR-099
+  target: WR-100
+  label: runtime-proven handoff

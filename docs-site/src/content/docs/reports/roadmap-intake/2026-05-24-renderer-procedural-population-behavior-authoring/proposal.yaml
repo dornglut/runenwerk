@@ -12,7 +12,7 @@ open_questions:
 - Which existing WR items does this depend on?
 - Which exact write scopes and validation commands will bound implementation?
 item:
-  id: WR-095
+  id: WR-102
   title: Procedural Population Behavior Authoring And Boids Dynamics
   diagram_title: Procedural population behavior
   alias: RENDERPOPBEHAVIOR
@@ -32,7 +32,7 @@ item:
   rice: N/A
   kano: Unknown
   dependencies:
-  - WR-094
+  - WR-101
   write_scopes: []
   validations: []
   next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.

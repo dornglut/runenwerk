@@ -417,12 +417,30 @@ pub fn tool_surface_display_metadata_from_registry_or_legacy(
 
 pub fn tool_surface_capabilities_from_registry_or_legacy(
     kind: ToolSurfaceKind,
-    _stable_key: Option<&ToolSurfaceStableKey>,
-    _registry: Option<&ToolSurfaceRegistry>,
+    stable_key: Option<&ToolSurfaceStableKey>,
+    registry: Option<&ToolSurfaceRegistry>,
 ) -> SurfaceCapabilitySet {
-    // ToolSurfaceDefinition intentionally does not carry capabilities yet.
-    // Until that contract is designed, capabilities remain enum-backed.
+    if let Some(definition) =
+        stable_key.and_then(|key| registry.and_then(|registry| registry.get(key)))
+    {
+        return definition.capabilities;
+    }
+
     tool_surface_capability_set(kind)
+}
+
+pub fn tool_surface_retention_class_from_registry_or_legacy(
+    kind: ToolSurfaceKind,
+    stable_key: Option<&ToolSurfaceStableKey>,
+    registry: Option<&ToolSurfaceRegistry>,
+) -> SessionRetentionClass {
+    if let Some(definition) =
+        stable_key.and_then(|key| registry.and_then(|registry| registry.get(key)))
+    {
+        return definition.session_retention;
+    }
+
+    tool_surface_session_retention_class(kind)
 }
 
 /// C6B legacy boundary helper for authored legacy definition keys.
@@ -857,8 +875,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_capability_adapter_preserves_legacy_capabilities_when_registry_capabilities_deferred()
-     {
+    fn registry_capability_adapter_uses_registry_capabilities_before_legacy() {
         let registry = material_lab_registry();
         let key = ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
 
@@ -868,9 +885,23 @@ mod tests {
             Some(registry.surfaces()),
         );
 
+        assert_eq!(adapted, registry.surfaces().get(&key).unwrap().capabilities);
+    }
+
+    #[test]
+    fn registry_retention_adapter_uses_registry_retention_before_legacy() {
+        let registry = material_lab_registry();
+        let key = ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
+
+        let adapted = tool_surface_retention_class_from_registry_or_legacy(
+            ToolSurfaceKind::MaterialGraphCanvas,
+            Some(&key),
+            Some(registry.surfaces()),
+        );
+
         assert_eq!(
             adapted,
-            tool_surface_capability_set(ToolSurfaceKind::MaterialGraphCanvas)
+            registry.surfaces().get(&key).unwrap().session_retention
         );
     }
 
@@ -985,6 +1016,11 @@ mod tests {
             provider_family,
             route,
             persistence: ToolSurfacePersistence::StableKey,
+            capabilities: ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+            session_retention: ui_surface::SessionRetentionClass::Restorable,
+            creation_policy: crate::ToolSurfaceCreationPolicy::SingletonPerWorkspace,
+            target_profile_compatibility: crate::ToolSurfaceTargetProfileCompatibility::AllProfiles,
+            legacy_compatibility_key: None,
         }
     }
 }

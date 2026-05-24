@@ -2,10 +2,10 @@
 //! Purpose: Map semantic UI interactions to shell commands.
 
 use crate::{
-    EntityTableSurfaceAction, InspectorSurfaceAction, MaterialSurfaceAction, OutlinerSurfaceAction,
-    RoutedShellAction, ShellCommand, ShellProjectionArtifacts, StructuralCommandTarget,
-    StructuralWidgetRoutingContext, SurfaceInteraction, SurfaceLocalAction, UiInteraction,
-    UiInteractionResults,
+    EditorDefinitionSurfaceAction, EntityTableSurfaceAction, InspectorSurfaceAction,
+    MaterialSurfaceAction, OutlinerSurfaceAction, RoutedShellAction, ShellCommand,
+    ShellProjectionArtifacts, StructuralCommandTarget, StructuralWidgetRoutingContext,
+    SurfaceInteraction, SurfaceLocalAction, UiInteraction, UiInteractionResults,
 };
 use ui_input::{Key, KeyState};
 
@@ -51,6 +51,11 @@ pub fn map_interactions_to_shell_commands(
                             EntityTableSurfaceAction::AppendSearchText { .. },
                         ) | SurfaceLocalAction::Inspector(
                             InspectorSurfaceAction::EditFieldText { .. },
+                        ) | SurfaceLocalAction::EditorDefinition(
+                            EditorDefinitionSurfaceAction::RenameSelected { .. }
+                                | EditorDefinitionSurfaceAction::SetUiNodeText { .. }
+                                | EditorDefinitionSurfaceAction::SetThemeColor { .. }
+                                | EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { .. },
                         ) | SurfaceLocalAction::Material(
                             MaterialSurfaceAction::SetNodeValue { .. }
                                 | MaterialSurfaceAction::PickTextureResource { .. }
@@ -571,6 +576,33 @@ fn surface_text_action(action: &SurfaceLocalAction, text: String) -> SurfaceLoca
                 text,
             })
         }
+        SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::RenameSelected {
+            ..
+        }) => SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::RenameSelected {
+            display_name: text,
+        }),
+        SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetUiNodeText {
+            node_id,
+            ..
+        }) => SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetUiNodeText {
+            node_id: node_id.clone(),
+            text,
+        }),
+        SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetThemeColor {
+            token,
+            ..
+        }) => SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetThemeColor {
+            token: token.clone(),
+            value: text,
+        }),
+        SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { tool_surface, .. },
+        ) => SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab {
+                label: text,
+                tool_surface: tool_surface.clone(),
+            },
+        ),
         SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodeValue {
             node_id, key, ..
         }) => SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodeValue {

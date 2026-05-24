@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_keys_or_legacy_kind_support(
-            request,
-            DIAGNOSTICS_SURFACE_KEYS,
-            is_m6_workspace_surface,
-        )
+        stable_keys_support(request, DIAGNOSTICS_SURFACE_KEYS)
     }
 
     fn build_frame(
@@ -93,6 +89,7 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
     }
 }
 
+#[cfg(test)]
 pub(super) fn is_m6_workspace_surface(kind: ToolSurfaceKind) -> bool {
     matches!(
         kind,

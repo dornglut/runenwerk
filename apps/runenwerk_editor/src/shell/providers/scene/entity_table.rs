@@ -25,11 +25,7 @@ impl EditorSurfaceProvider for SceneEntityTableProvider {
         ) {
             return SurfaceProviderSupportMode::Unsupported;
         }
-        stable_key_or_legacy_kind_support(
-            request,
-            SCENE_ENTITY_TABLE_SURFACE_KEY,
-            ToolSurfaceKind::EntityTable,
-        )
+        stable_key_support(request, SCENE_ENTITY_TABLE_SURFACE_KEY)
     }
 
     fn build_frame(

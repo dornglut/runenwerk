@@ -1694,10 +1694,15 @@ fn frame_action_for_formed_route(
         .route_actions_by_route_target
         .get(route.as_str())
         .cloned()
-        .or_else(|| toolbar_action_for_route_slot(route.as_str()))
+        .or_else(|| legacy_toolbar_action_for_route_slot(route.as_str()))
 }
 
-fn toolbar_action_for_route_slot(route: &str) -> Option<RoutedShellAction> {
+/// Compatibility fallback for old unit tests and imported definitions that do
+/// not yet carry app-supplied catalog route actions.
+///
+/// Normal runtime frames must supply command routes through
+/// `EditorShellFrameModel::route_actions_by_route_target`.
+fn legacy_toolbar_action_for_route_slot(route: &str) -> Option<RoutedShellAction> {
     match route {
         "editor.toolbar.menu.file" => Some(RoutedShellAction::ToggleToolbarMenu {
             menu: ToolbarMenuKind::File,

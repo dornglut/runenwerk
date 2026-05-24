@@ -20,6 +20,7 @@ use engine::plugins::render::{
 };
 use glam::{Vec3, vec3};
 use scene::{LocalTransform, Vec3Value};
+use ui_definition::UiDefinitionDiagnostic;
 use ui_math::UiVector;
 use ui_theme::ThemeTokens;
 
@@ -28,8 +29,9 @@ use crate::editor_runtime::{EditorPrimitive, EditorPrimitiveKind};
 use crate::material_lab::ensure_default_material_source_document;
 use crate::runtime::preview_process::PreviewProcessManager;
 use crate::shell::{
-    EditorDefinitionActivation, RunenwerkEditorShellState, activate_editor_definition_document,
-    is_known_editor_command_key, validate_editor_shortcuts,
+    EditorDefinitionActivation, EditorDefinitionActivationReport, EditorDefinitionActivationStatus,
+    RunenwerkEditorShellState, activate_editor_definition_document, is_known_editor_command_key,
+    validate_editor_shortcuts,
 };
 
 const SHELL_READABILITY_BUMP: f32 = 1.15;
@@ -109,7 +111,8 @@ impl EditorHostResource {
     pub fn apply_pending_editor_definition_activations(&mut self) -> usize {
         let pending = self.app.take_pending_editor_definition_activations();
         let mut activated = 0;
-        for document in pending {
+        for request in pending {
+            let document = request.document.clone();
             match activate_editor_definition_document(&document, &self.theme) {
                 Ok(EditorDefinitionActivation::ThemeChanged(theme)) => {
                     self.apply_theme(theme);
@@ -117,6 +120,15 @@ impl EditorHostResource {
                         "[editor-definition] activated live theme {}",
                         document.display_name
                     ));
+                    self.app.record_editor_definition_activation_report(
+                        EditorDefinitionActivationReport::from_request(
+                            &request,
+                            EditorDefinitionActivationStatus::Applied,
+                            vec![format!("activated live theme {}", document.display_name)],
+                            Vec::new(),
+                            false,
+                        ),
+                    );
                     activated += 1;
                 }
                 Ok(EditorDefinitionActivation::NoLiveActivation) => {
@@ -124,6 +136,15 @@ impl EditorHostResource {
                         "[editor-definition] no live activation for {}",
                         document.display_name
                     ));
+                    self.app.record_editor_definition_activation_report(
+                        EditorDefinitionActivationReport::from_request(
+                            &request,
+                            EditorDefinitionActivationStatus::NoLiveActivation,
+                            vec![format!("no live activation for {}", document.display_name)],
+                            Vec::new(),
+                            true,
+                        ),
+                    );
                 }
                 Ok(EditorDefinitionActivation::UiTemplateCatalogChanged {
                     template_id,
@@ -135,6 +156,15 @@ impl EditorHostResource {
                     self.app.append_console_line(format!(
                         "[editor-definition] activated UI template {template_id}"
                     ));
+                    self.app.record_editor_definition_activation_report(
+                        EditorDefinitionActivationReport::from_request(
+                            &request,
+                            EditorDefinitionActivationStatus::Applied,
+                            vec![format!("activated UI template {template_id}")],
+                            Vec::new(),
+                            false,
+                        ),
+                    );
                     activated += 1;
                 }
                 Ok(EditorDefinitionActivation::EditorBindingsCatalogChanged(bindings)) => {
@@ -147,15 +177,35 @@ impl EditorHostResource {
                             self.app.append_console_line(
                                 "[editor-definition] activated editor bindings".to_string(),
                             );
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Applied,
+                                    vec!["activated editor bindings".to_string()],
+                                    Vec::new(),
+                                    false,
+                                ),
+                            );
                             activated += 1;
                         }
                         Err(diagnostics) => {
-                            for diagnostic in diagnostics {
+                            for diagnostic in &diagnostics {
                                 self.app.append_console_line(format!(
                                     "[editor-definition] editor bindings activation blocked: {}",
                                     diagnostic.message
                                 ));
                             }
+                            self.app
+                                .preserve_failed_editor_definition_activation(request.clone());
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Failed,
+                                    vec!["editor bindings activation blocked".to_string()],
+                                    diagnostics,
+                                    true,
+                                ),
+                            );
                         }
                     }
                 }
@@ -166,6 +216,15 @@ impl EditorHostResource {
                     self.app.append_console_line(format!(
                         "[editor-definition] activated menu {menu_id}"
                     ));
+                    self.app.record_editor_definition_activation_report(
+                        EditorDefinitionActivationReport::from_request(
+                            &request,
+                            EditorDefinitionActivationStatus::Applied,
+                            vec![format!("activated menu {menu_id}")],
+                            Vec::new(),
+                            false,
+                        ),
+                    );
                     activated += 1;
                 }
                 Ok(EditorDefinitionActivation::ShortcutCatalogChanged {
@@ -181,15 +240,35 @@ impl EditorHostResource {
                             self.app.append_console_line(format!(
                                 "[editor-definition] activated shortcut set {shortcut_set_id}"
                             ));
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Applied,
+                                    vec![format!("activated shortcut set {shortcut_set_id}")],
+                                    Vec::new(),
+                                    false,
+                                ),
+                            );
                             activated += 1;
                         }
                         Err(diagnostics) => {
-                            for diagnostic in diagnostics {
+                            for diagnostic in &diagnostics {
                                 self.app.append_console_line(format!(
                                     "[editor-definition] shortcut activation blocked: {}",
                                     diagnostic.message
                                 ));
                             }
+                            self.app
+                                .preserve_failed_editor_definition_activation(request.clone());
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Failed,
+                                    vec!["shortcut activation blocked".to_string()],
+                                    diagnostics,
+                                    true,
+                                ),
+                            );
                         }
                     }
                 }
@@ -206,15 +285,37 @@ impl EditorHostResource {
                             self.app.append_console_line(format!(
                                 "[editor-definition] activated command binding set {command_binding_set_id}"
                             ));
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Applied,
+                                    vec![format!(
+                                        "activated command binding set {command_binding_set_id}"
+                                    )],
+                                    Vec::new(),
+                                    false,
+                                ),
+                            );
                             activated += 1;
                         }
                         Err(diagnostics) => {
-                            for diagnostic in diagnostics {
+                            for diagnostic in &diagnostics {
                                 self.app.append_console_line(format!(
                                     "[editor-definition] command binding activation blocked: {}",
                                     diagnostic.message
                                 ));
                             }
+                            self.app
+                                .preserve_failed_editor_definition_activation(request.clone());
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Failed,
+                                    vec!["command binding activation blocked".to_string()],
+                                    diagnostics,
+                                    true,
+                                ),
+                            );
                         }
                     }
                 }
@@ -232,6 +333,15 @@ impl EditorHostResource {
                             self.app.append_console_line(format!(
                                 "[editor-definition] activated panel registry {registry_id}"
                             ));
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Applied,
+                                    vec![format!("activated panel registry {registry_id}")],
+                                    Vec::new(),
+                                    false,
+                                ),
+                            );
                             activated += 1;
                         }
                         Err(diagnostic) => {
@@ -239,6 +349,17 @@ impl EditorHostResource {
                                 "[editor-definition] panel registry activation blocked: {}",
                                 diagnostic.message
                             ));
+                            self.app
+                                .preserve_failed_editor_definition_activation(request.clone());
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Failed,
+                                    vec!["panel registry activation blocked".to_string()],
+                                    vec![diagnostic],
+                                    true,
+                                ),
+                            );
                         }
                     }
                 }
@@ -256,6 +377,15 @@ impl EditorHostResource {
                             self.app.append_console_line(format!(
                                 "[editor-definition] activated tool-surface registry {registry_id}"
                             ));
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Applied,
+                                    vec![format!("activated tool-surface registry {registry_id}")],
+                                    Vec::new(),
+                                    false,
+                                ),
+                            );
                             activated += 1;
                         }
                         Err(diagnostic) => {
@@ -263,6 +393,17 @@ impl EditorHostResource {
                                 "[editor-definition] tool-surface registry activation blocked: {}",
                                 diagnostic.message
                             ));
+                            self.app
+                                .preserve_failed_editor_definition_activation(request.clone());
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Failed,
+                                    vec!["tool-surface registry activation blocked".to_string()],
+                                    vec![diagnostic],
+                                    true,
+                                ),
+                            );
                         }
                     }
                 }
@@ -285,22 +426,57 @@ impl EditorHostResource {
                             self.app.append_console_line(format!(
                                 "[editor-definition] activated live workspace layout {workspace_id}"
                             ));
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Applied,
+                                    vec![format!("activated live workspace layout {workspace_id}")],
+                                    Vec::new(),
+                                    false,
+                                ),
+                            );
                             activated += 1;
                         }
                         Err(error) => {
+                            let diagnostic = UiDefinitionDiagnostic::error(
+                                "editor.definition.activation.workspace_layout_blocked",
+                                format!("workspace layout activation blocked: {error:?}"),
+                            );
                             self.app.append_console_line(format!(
                                 "[editor-definition] workspace layout activation blocked: {error:?}"
                             ));
+                            self.app
+                                .preserve_failed_editor_definition_activation(request.clone());
+                            self.app.record_editor_definition_activation_report(
+                                EditorDefinitionActivationReport::from_request(
+                                    &request,
+                                    EditorDefinitionActivationStatus::Failed,
+                                    vec!["workspace layout activation blocked".to_string()],
+                                    vec![diagnostic],
+                                    true,
+                                ),
+                            );
                         }
                     }
                 }
                 Err(diagnostics) => {
-                    for diagnostic in diagnostics {
+                    for diagnostic in &diagnostics {
                         self.app.append_console_line(format!(
                             "[editor-definition] activation blocked: {}",
                             diagnostic.message
                         ));
                     }
+                    self.app
+                        .preserve_failed_editor_definition_activation(request.clone());
+                    self.app.record_editor_definition_activation_report(
+                        EditorDefinitionActivationReport::from_request(
+                            &request,
+                            EditorDefinitionActivationStatus::Failed,
+                            vec!["activation blocked by definition validation".to_string()],
+                            diagnostics,
+                            true,
+                        ),
+                    );
                 }
             }
         }

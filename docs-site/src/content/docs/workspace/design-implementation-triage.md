@@ -110,7 +110,8 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
-| WR-089 | Renderer Procedural Population Hardening Doctrine And Track Activation | P0 | V4 | B2 | 5.6 | Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090, WR-091, WR-092, WR-094, with WR-093 reserved for closeout. | Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089 only after planning metadata and contracts validate. |
+| WR-089 | Renderer Procedural Population Hardening Doctrine And Track Activation | P0 | V4 | B2 | 5.6 | Use WR-089 only to activate PT-RENDER-PROCEDURAL-POPULATION-HARDENING and split implementation into WR-090, WR-091, WR-092, WR-101, with WR-093 reserved for closeout. | Run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-001" --roadmap "WR-089", then close WR-089 only after planning metadata and contracts validate. |
+| WR-100 | UI Lab perfectionist governance and no-gap audit doctrine | P2 | V3 | B3 | 1.0 | Execute the PM-UI-LAB-PERF-001 governance/design contract, then stop before app or domain implementation until follow-on WRs are accepted. | Run task production:plan -- --milestone PM-UI-LAB-PERF-001 --roadmap WR-100, then finish the code-truth and evidence matrix closeout. |
 
 ## Support Only
 
@@ -136,8 +137,8 @@ Blocker weight:
 | WR-090 | Indirect Draw Contract Hardening | P0 | V4 | B2 | 2.7 | Harden direct, indexed direct, indirect, and indexed indirect draw-source semantics without breaking direct `.draw(...)` authoring. | Waiting on WR-089 doctrine activation closeout. |
 | WR-091 | Reusable GPU Primitive Shader Dispatch | P0 | V4 | B2 | 1.8 | Convert primitive contracts from descriptor/planning-level evidence into reusable renderer-dispatched kernels. | Waiting on WR-090 indirect draw hardening closeout. |
 | WR-092 | Fixed Step Graph Catch Up Scheduling | P0 | V4 | B2 | 2.6 | Add fixed-step catch-up as render-flow graph scheduling using FixedTimeConfig, FixedTimeState, and CatchupBudget; do not add boids-local timing logic. | Waiting on WR-091 primitive shader dispatch closeout. |
-| WR-094 | Procedural Camera And View Projection | P0 | V4 | B2 | 2.6 | Add reusable procedural camera projection and sprite sizing contracts; do not patch boids-only draw parameters or make PreparedViewFrame own camera truth. | Waiting on WR-092 graph catch-up scheduling closeout. |
-| WR-093 | Procedural Population Hardening Evidence Benchmarks Docs And Closeout | P0 | V4 | B2 | 3.7 | Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and camera projection evidence. | Waiting on WR-094 procedural camera projection closeout. |
+| WR-101 | Procedural Camera And View Projection | P0 | V4 | B2 | 2.6 | Add reusable procedural camera projection and sprite sizing contracts; do not patch boids-only draw parameters or make PreparedViewFrame own camera truth. | Waiting on WR-092 graph catch-up scheduling closeout. |
+| WR-093 | Procedural Population Hardening Evidence Benchmarks Docs And Closeout | P0 | V4 | B2 | 3.7 | Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior and camera projection evidence. | Waiting on WR-101 procedural camera projection closeout. |
 
 ## Archived And Deferred Registers
 

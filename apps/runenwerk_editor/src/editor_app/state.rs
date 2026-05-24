@@ -23,8 +23,9 @@ use crate::runtime::viewport::{
     EditorViewportRenderSelectionJournalEntry, EditorViewportRenderSelectionSummary,
 };
 use crate::shell::{
-    EditorSurfaceProviderRegistry, RunenwerkWorkbenchHost, RunenwerkWorkbenchHostError,
-    SurfaceSessionStore,
+    EditorDefinitionActivationReport, EditorDefinitionActivationStatus,
+    EditorSurfaceProviderRegistry, PendingEditorDefinitionActivation, RunenwerkWorkbenchHost,
+    RunenwerkWorkbenchHostError, SurfaceSessionStore,
 };
 use crate::texture_preview::TexturePreviewRuntime;
 
@@ -39,7 +40,9 @@ pub struct RunenwerkEditorApp {
     pub(crate) debug_logs_enabled: bool,
     pub(crate) surface_sessions: SurfaceSessionStore,
     pub(crate) workbench_host: Arc<RunenwerkWorkbenchHost>,
-    pub(crate) pending_editor_definition_activations: Vec<EditorDefinitionDocument>,
+    pub(crate) pending_editor_definition_activations: Vec<PendingEditorDefinitionActivation>,
+    pub(crate) editor_definition_activation_reports: Vec<EditorDefinitionActivationReport>,
+    pub(crate) failed_editor_definition_activations: Vec<PendingEditorDefinitionActivation>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
     pub(crate) material_lab_runtime: MaterialLabRuntime,
@@ -97,6 +100,8 @@ impl RunenwerkEditorApp {
             surface_sessions: SurfaceSessionStore::default(),
             workbench_host: Arc::new(workbench_host),
             pending_editor_definition_activations: Vec::new(),
+            editor_definition_activation_reports: Vec::new(),
+            failed_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
             material_lab_runtime: MaterialLabRuntime::default(),
@@ -227,15 +232,63 @@ impl RunenwerkEditorApp {
     }
 
     pub fn queue_editor_definition_activation(&mut self, document: EditorDefinitionDocument) {
-        self.pending_editor_definition_activations.push(document);
+        self.queue_editor_definition_activation_for_review(None, document);
     }
 
-    pub fn take_pending_editor_definition_activations(&mut self) -> Vec<EditorDefinitionDocument> {
+    pub fn queue_editor_definition_activation_for_review(
+        &mut self,
+        review_id: Option<String>,
+        document: EditorDefinitionDocument,
+    ) {
+        let request = PendingEditorDefinitionActivation::new(review_id, document);
+        self.record_editor_definition_activation_report(
+            EditorDefinitionActivationReport::from_request(
+                &request,
+                EditorDefinitionActivationStatus::Queued,
+                vec!["queued editor definition activation".to_string()],
+                Vec::new(),
+                true,
+            ),
+        );
+        self.pending_editor_definition_activations.push(request);
+    }
+
+    pub fn take_pending_editor_definition_activations(
+        &mut self,
+    ) -> Vec<PendingEditorDefinitionActivation> {
         std::mem::take(&mut self.pending_editor_definition_activations)
     }
 
     pub fn pending_editor_definition_activation_count(&self) -> usize {
         self.pending_editor_definition_activations.len()
+    }
+
+    pub fn record_editor_definition_activation_report(
+        &mut self,
+        report: EditorDefinitionActivationReport,
+    ) {
+        self.editor_definition_activation_reports.push(report);
+    }
+
+    pub fn preserve_failed_editor_definition_activation(
+        &mut self,
+        request: PendingEditorDefinitionActivation,
+    ) {
+        self.failed_editor_definition_activations.push(request);
+    }
+
+    pub fn editor_definition_activation_reports(&self) -> &[EditorDefinitionActivationReport] {
+        &self.editor_definition_activation_reports
+    }
+
+    pub fn last_editor_definition_activation_report(
+        &self,
+    ) -> Option<&EditorDefinitionActivationReport> {
+        self.editor_definition_activation_reports.last()
+    }
+
+    pub fn failed_editor_definition_activations(&self) -> &[PendingEditorDefinitionActivation] {
+        &self.failed_editor_definition_activations
     }
 
     pub fn asset_catalog_runtime(&self) -> &AssetCatalogRuntime {

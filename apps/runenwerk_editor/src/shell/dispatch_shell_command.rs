@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
 use editor_core::{DirtyDocumentClosePolicy, EditorMutationError};
+use editor_definition::{
+    EditorLabOperation, EditorLabOperationKind, EditorLabOperationReport, EditorLabOperationStatus,
+    EditorWorkspaceSplitAxisDefinition,
+};
 use editor_shell::{
     FloatingHostBounds, ShellCommand, TabDropDestination, TabStackPopupMenuKind,
     ToolbarCommandKind, WorkspaceMutation,
@@ -21,7 +25,8 @@ use crate::runtime::viewport::{
     ViewportPresentationStateResource, ViewportRenderStateCommandQueueResource,
 };
 use crate::shell::{
-    ROTATE_TOOL_ID, RunenwerkEditorShellState, SCALE_TOOL_ID, SELECT_TOOL_ID, TRANSLATE_TOOL_ID,
+    EditorCommandAvailabilityContext, ROTATE_TOOL_ID, RunenwerkEditorShellState, SCALE_TOOL_ID,
+    SELECT_TOOL_ID, TRANSLATE_TOOL_ID, editor_command_catalog,
 };
 
 const DEFAULT_EDITOR_SCENE_PATH: &str = "editor-scenes/default.scene.ron";
@@ -319,6 +324,109 @@ pub fn dispatch_shell_command_with_viewport_commands(
         } => {
             app.apply_texture_surface_action(action);
         }
+        ShellCommand::SaveEditorLabProjectPackage => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for Editor Lab project save",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .save_project_package_to_ron()
+            {
+                Ok(source) => app.append_console_line(format!(
+                    "[editor-definition] saved Editor Lab project package ({} bytes)",
+                    source.len()
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] project package save blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "Editor Lab project package save blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::ReloadEditorLabProjectPackage => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for Editor Lab project reload",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .reload_last_saved_project_package()
+            {
+                Ok(report) => app.append_console_line(format!(
+                    "[editor-definition] reloaded Editor Lab project package drafts={} applied={} last_applied={}",
+                    report.draft_count, report.applied_count, report.last_applied_count
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] project package reload blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "Editor Lab project package reload blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::BuildSelectedEditorDefinitionApplyReview => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition apply review",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .prepare_selected_apply_review()
+            {
+                Ok(review) => app.append_console_line(format!(
+                    "[editor-definition] apply review built for {} diffs={} diagnostics={}",
+                    review.display_name,
+                    review.diff_rows.len(),
+                    review.diagnostics.len()
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] apply review blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition apply review blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::RejectSelectedEditorDefinitionApplyReview => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition apply review reject",
+                    ))?;
+            match shell_state.self_authoring_mut().reject_last_apply_review() {
+                Ok(review) => app.append_console_line(format!(
+                    "[editor-definition] rejected apply review for {}",
+                    review.display_name
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] apply review reject blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition apply review reject blocked",
+                    ));
+                }
+            }
+        }
         ShellCommand::ApplySelectedEditorDefinition => {
             let shell_state =
                 shell_state
@@ -333,7 +441,11 @@ pub fn dispatch_shell_command_with_viewport_commands(
                         .applied_document(&preview.document_id)
                         .cloned()
                     {
-                        app.queue_editor_definition_activation(document);
+                        let review_id = shell_state
+                            .self_authoring()
+                            .last_apply_review()
+                            .map(|review| review.id.clone());
+                        app.queue_editor_definition_activation_for_review(review_id, document);
                     }
                     app.append_console_line(format!(
                         "[editor-definition] applied {}",
@@ -347,6 +459,32 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ));
                     return Err(EditorMutationError::runtime_rejected(
                         "editor definition apply blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::ReloadSelectedEditorDefinitionLastApplied => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition last-applied reload",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .reload_selected_from_last_applied()
+            {
+                Ok(document) => app.append_console_line(format!(
+                    "[editor-definition] reloaded last applied {}",
+                    document.display_name
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] reload last applied blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition reload last applied blocked",
                     ));
                 }
             }
@@ -372,6 +510,55 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ));
                     return Err(EditorMutationError::runtime_rejected(
                         "editor definition rollback blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::ApplyEditorLabOperation { operation } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor lab operation",
+                    ))?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
+        }
+        ShellCommand::UndoEditorLabOperation => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor lab undo",
+                    ))?;
+            match shell_state.self_authoring_mut().undo_editor_lab_operation() {
+                Ok(report) => append_editor_lab_restore_console_line(app, "undo", &report),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-lab-operation] undo blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor lab operation undo blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::RedoEditorLabOperation => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor lab redo",
+                    ))?;
+            match shell_state.self_authoring_mut().redo_editor_lab_operation() {
+                Ok(report) => append_editor_lab_restore_console_line(app, "redo", &report),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-lab-operation] redo blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor lab operation redo blocked",
                     ));
                 }
             }
@@ -715,23 +902,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for editor definition rename",
                     ))?;
-            match shell_state
-                .self_authoring_mut()
-                .rename_selected(display_name.clone())
-            {
-                Ok(()) => app.append_console_line(format!(
-                    "[editor-definition] renamed selected definition to {display_name}"
-                )),
-                Err(diagnostic) => {
-                    app.append_console_line(format!(
-                        "[editor-definition] rename blocked: {}",
-                        diagnostic.message
-                    ));
-                    return Err(EditorMutationError::runtime_rejected(
-                        "editor definition rename blocked",
-                    ));
-                }
-            }
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "rename",
+                EditorLabOperationKind::RenameDocument { display_name },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
         ShellCommand::DeleteSelectedEditorDefinition => {
             let shell_state =
@@ -807,23 +983,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for editor definition node edit",
                     ))?;
-            match shell_state
-                .self_authoring_mut()
-                .set_selected_ui_node_text(&node_id, text.clone())
-            {
-                Ok(()) => app.append_console_line(format!(
-                    "[editor-definition] set text on UI node {node_id}"
-                )),
-                Err(diagnostic) => {
-                    app.append_console_line(format!(
-                        "[editor-definition] text edit blocked: {}",
-                        diagnostic.message
-                    ));
-                    return Err(EditorMutationError::runtime_rejected(
-                        "editor definition text edit blocked",
-                    ));
-                }
-            }
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "ui_text",
+                EditorLabOperationKind::SetUiNodeText { node_id, text },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
         ShellCommand::SetSelectedEditorThemeColor { token, value } => {
             let shell_state =
@@ -832,23 +997,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for editor theme edit",
                     ))?;
-            match shell_state
-                .self_authoring_mut()
-                .set_selected_theme_color(&token, value.clone())
-            {
-                Ok(()) => app.append_console_line(format!(
-                    "[editor-definition] set theme color {token}={value}"
-                )),
-                Err(diagnostic) => {
-                    app.append_console_line(format!(
-                        "[editor-definition] theme edit blocked: {}",
-                        diagnostic.message
-                    ));
-                    return Err(EditorMutationError::runtime_rejected(
-                        "editor theme edit blocked",
-                    ));
-                }
-            }
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "theme_color",
+                EditorLabOperationKind::SetThemeColor { token, value },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
         ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
             label,
@@ -860,23 +1014,15 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for editor workspace layout edit",
                     ))?;
-            match shell_state
-                .self_authoring_mut()
-                .add_selected_workspace_layout_tab(label.clone(), tool_surface.clone())
-            {
-                Ok(tab_id) => app.append_console_line(format!(
-                    "[editor-definition] added workspace layout tab {tab_id}"
-                )),
-                Err(diagnostic) => {
-                    app.append_console_line(format!(
-                        "[editor-definition] workspace layout tab edit blocked: {}",
-                        diagnostic.message
-                    ));
-                    return Err(EditorMutationError::runtime_rejected(
-                        "editor workspace layout tab edit blocked",
-                    ));
-                }
-            }
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "workspace_tab",
+                EditorLabOperationKind::AddWorkspaceLayoutTab {
+                    label,
+                    tool_surface,
+                },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
         ShellCommand::SplitSelectedEditorWorkspaceLayoutRoot { axis } => {
             let shell_state =
@@ -886,8 +1032,8 @@ pub fn dispatch_shell_command_with_viewport_commands(
                         "missing shell state for editor workspace layout split",
                     ))?;
             let axis = match axis.as_str() {
-                "horizontal" => editor_definition::EditorWorkspaceSplitAxisDefinition::Horizontal,
-                "vertical" => editor_definition::EditorWorkspaceSplitAxisDefinition::Vertical,
+                "horizontal" => EditorWorkspaceSplitAxisDefinition::Horizontal,
+                "vertical" => EditorWorkspaceSplitAxisDefinition::Vertical,
                 _ => {
                     app.append_console_line(format!(
                         "[editor-definition] workspace split blocked: unsupported axis {axis}"
@@ -897,23 +1043,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ));
                 }
             };
-            match shell_state
-                .self_authoring_mut()
-                .split_selected_workspace_layout_root(axis)
-            {
-                Ok(()) => app.append_console_line(
-                    "[editor-definition] split workspace layout root".to_string(),
-                ),
-                Err(diagnostic) => {
-                    app.append_console_line(format!(
-                        "[editor-definition] workspace split blocked: {}",
-                        diagnostic.message
-                    ));
-                    return Err(EditorMutationError::runtime_rejected(
-                        "editor workspace layout split blocked",
-                    ));
-                }
-            }
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "workspace_split",
+                EditorLabOperationKind::SplitWorkspaceLayoutRoot { axis },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
         ShellCommand::CloseSelectedEditorWorkspaceLayoutLastTab => {
             let shell_state =
@@ -922,24 +1057,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     .ok_or(EditorMutationError::runtime_rejected(
                         "missing shell state for editor workspace layout close tab",
                     ))?;
-            match shell_state
-                .self_authoring_mut()
-                .close_selected_workspace_layout_last_tab()
-            {
-                Ok(tab) => app.append_console_line(format!(
-                    "[editor-definition] closed workspace layout tab {}",
-                    tab.id
-                )),
-                Err(diagnostic) => {
-                    app.append_console_line(format!(
-                        "[editor-definition] workspace close tab blocked: {}",
-                        diagnostic.message
-                    ));
-                    return Err(EditorMutationError::runtime_rejected(
-                        "editor workspace layout close tab blocked",
-                    ));
-                }
-            }
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "workspace_close_tab",
+                EditorLabOperationKind::CloseWorkspaceLayoutLastTab,
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
         ShellCommand::ApplySurfaceSessionMutation {
             target,
@@ -979,6 +1102,91 @@ pub fn dispatch_shell_command_with_viewport_commands(
     }
 
     Ok(())
+}
+
+fn selected_editor_lab_operation(
+    shell_state: &RunenwerkEditorShellState,
+    family: &str,
+    kind: EditorLabOperationKind,
+) -> Result<EditorLabOperation, EditorMutationError> {
+    let document_id = shell_state
+        .self_authoring()
+        .selected_document_id()
+        .cloned()
+        .ok_or(EditorMutationError::runtime_rejected(
+            "no editor definition document is selected for operation",
+        ))?;
+    Ok(EditorLabOperation {
+        id: shell_state.self_authoring().next_operation_id(family),
+        document_id,
+        target_profile: "editor.workbench".to_string(),
+        kind,
+        preview_only: false,
+        source: Some("shell.dispatch".to_string()),
+    })
+}
+
+fn dispatch_editor_lab_operation(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &mut RunenwerkEditorShellState,
+    operation: EditorLabOperation,
+) -> Result<(), EditorMutationError> {
+    let report = shell_state
+        .self_authoring_mut()
+        .apply_editor_lab_operation(operation)
+        .map_err(|diagnostic| {
+            app.append_console_line(format!(
+                "[editor-lab-operation] dispatch blocked: {}",
+                diagnostic.message
+            ));
+            EditorMutationError::runtime_rejected("editor lab operation dispatch blocked")
+        })?;
+    match report.status {
+        EditorLabOperationStatus::Accepted => {
+            let diff_count = report
+                .diff
+                .as_ref()
+                .map(|diff| diff.changes.len())
+                .unwrap_or(0);
+            app.append_console_line(format!(
+                "[editor-lab-operation] applied {} (diff changes: {diff_count})",
+                report.operation_id
+            ));
+            Ok(())
+        }
+        EditorLabOperationStatus::PreviewOnly => {
+            app.append_console_line(format!(
+                "[editor-lab-operation] previewed {}",
+                report.operation_id
+            ));
+            Ok(())
+        }
+        EditorLabOperationStatus::Rejected => {
+            let reason = report
+                .diagnostics
+                .first()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .unwrap_or("operation was rejected");
+            app.append_console_line(format!(
+                "[editor-lab-operation] rejected {}: {reason}",
+                report.operation_id
+            ));
+            Err(EditorMutationError::runtime_rejected(
+                "editor lab operation rejected",
+            ))
+        }
+    }
+}
+
+fn append_editor_lab_restore_console_line(
+    app: &mut RunenwerkEditorApp,
+    action: &str,
+    report: &EditorLabOperationReport,
+) {
+    app.append_console_line(format!(
+        "[editor-lab-operation] {action} {}",
+        report.operation_id
+    ));
 }
 
 fn shell_command_label(command: &ShellCommand) -> &'static str {
@@ -1028,9 +1236,23 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::DuplicateSelectedEditorDefinition => "DuplicateSelectedEditorDefinition",
         ShellCommand::RenameSelectedEditorDefinition { .. } => "RenameSelectedEditorDefinition",
         ShellCommand::DeleteSelectedEditorDefinition => "DeleteSelectedEditorDefinition",
+        ShellCommand::SaveEditorLabProjectPackage => "SaveEditorLabProjectPackage",
+        ShellCommand::ReloadEditorLabProjectPackage => "ReloadEditorLabProjectPackage",
         ShellCommand::ExportSelectedEditorDefinition => "ExportSelectedEditorDefinition",
+        ShellCommand::BuildSelectedEditorDefinitionApplyReview => {
+            "BuildSelectedEditorDefinitionApplyReview"
+        }
+        ShellCommand::RejectSelectedEditorDefinitionApplyReview => {
+            "RejectSelectedEditorDefinitionApplyReview"
+        }
         ShellCommand::ApplySelectedEditorDefinition => "ApplySelectedEditorDefinition",
         ShellCommand::RollbackSelectedEditorDefinition => "RollbackSelectedEditorDefinition",
+        ShellCommand::ReloadSelectedEditorDefinitionLastApplied => {
+            "ReloadSelectedEditorDefinitionLastApplied"
+        }
+        ShellCommand::ApplyEditorLabOperation { .. } => "ApplyEditorLabOperation",
+        ShellCommand::UndoEditorLabOperation => "UndoEditorLabOperation",
+        ShellCommand::RedoEditorLabOperation => "RedoEditorLabOperation",
         ShellCommand::SelectEditorDefinitionUiNode { .. } => "SelectEditorDefinitionUiNode",
         ShellCommand::SetSelectedEditorDefinitionUiNodeText { .. } => {
             "SetSelectedEditorDefinitionUiNodeText"
@@ -1267,10 +1489,35 @@ fn dispatch_toolbar_command(
         | ToolbarCommandKind::EditPreferences
         | ToolbarCommandKind::LoadCustomWorkspace
         | ToolbarCommandKind::AddWorkspace => {
-            app.append_console_line("[ui] command unavailable".to_string());
+            return Err(unavailable_toolbar_command(app, command));
         }
     }
     Ok(())
+}
+
+fn unavailable_toolbar_command(
+    app: &mut RunenwerkEditorApp,
+    command: ToolbarCommandKind,
+) -> EditorMutationError {
+    let availability = editor_command_catalog()
+        .descriptor_for_toolbar_command(command)
+        .map(|descriptor| {
+            descriptor.availability(EditorCommandAvailabilityContext {
+                can_undo: false,
+                can_redo: false,
+            })
+        });
+    let diagnostic_code = availability
+        .and_then(|availability| availability.diagnostic_code())
+        .unwrap_or("editor.command.unavailable.unknown");
+    let reason = availability
+        .and_then(|availability| availability.reason())
+        .unwrap_or("command is unavailable");
+
+    app.append_console_line(format!(
+        "[ui:{diagnostic_code}] command unavailable: {reason}"
+    ));
+    EditorMutationError::runtime_rejected(reason)
 }
 
 fn adjacent_workspace_profile(
@@ -1766,6 +2013,34 @@ mod tests {
                 .is_none(),
             "missing source failure must not synthesize Material Lab source state"
         );
+    }
+
+    #[test]
+    fn unavailable_toolbar_command_emits_catalog_diagnostic() {
+        let mut app = RunenwerkEditorApp::new();
+
+        let result = dispatch_shell_command(
+            &mut app,
+            None,
+            ShellCommand::RunToolbarCommand {
+                command: ToolbarCommandKind::SaveSceneAs,
+            },
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(result.is_err());
+        let line = app
+            .console_lines()
+            .last()
+            .expect("unavailable command should append a console diagnostic");
+        assert!(
+            line.text
+                .contains("[ui:editor.command.unavailable.save_as]")
+        );
+        assert!(line.text.contains("save as is not implemented yet"));
     }
 
     #[test]

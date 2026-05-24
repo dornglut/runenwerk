@@ -1,5 +1,5 @@
 ---
-title: WR-094 Procedural Camera And View Projection Implementation Contract
+title: WR-101 Procedural Camera And View Projection Implementation Contract
 description: Bounded implementation contract for reusable procedural 2D camera projection and aspect-correct population rendering.
 status: active
 owner: engine
@@ -14,11 +14,11 @@ related_roadmaps:
   - ../../../workspace/production-tracks.yaml
 ---
 
-# WR-094 Procedural Camera And View Projection Implementation Contract
+# WR-101 Procedural Camera And View Projection Implementation Contract
 
 ## Goal
 
-Implement `PM-RENDER-POP-HARDEN-005` / `WR-094` as reusable procedural 2D
+Implement `PM-RENDER-POP-HARDEN-005` / `WR-101` as reusable procedural 2D
 camera projection and sprite sizing support.
 
 The outcome is a renderer procedural contract that lets procedural population
@@ -40,7 +40,7 @@ after graph catch-up evidence so resize and redraw events cannot be mistaken for
 simulation timing correctness.
 
 Do not start this slice until `task production:plan -- --milestone
-"PM-RENDER-POP-HARDEN-005" --roadmap "WR-094"` confirms the milestone and row
+"PM-RENDER-POP-HARDEN-005" --roadmap "WR-101"` confirms the milestone and row
 are promotable.
 
 ## Implementation Scope
@@ -134,7 +134,7 @@ examples.
 
 Closeout must live under:
 
-`docs-site/src/content/docs/reports/closeouts/wr-094-procedural-camera-and-view-projection/closeout.md`
+`docs-site/src/content/docs/reports/closeouts/wr-101-procedural-camera-and-view-projection/closeout.md`
 
 Completion quality target: `runtime_proven` for procedural camera projection.
 

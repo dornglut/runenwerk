@@ -1,0 +1,117 @@
+version: 1
+idea: 'PM-UI-LAB-004 operation-driven visual authoring core for Editor Lab: typed EditorLabOperation facade, deterministic
+  diffs, diagnostics, app-owned edit history, undo/redo, and runtime proof without project IO or persistence'
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+owner: editor
+created_at: '2026-05-24'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-096
+  title: UI Lab operation-driven visual authoring core
+  diagram_title: UI Lab visual authoring ops
+  alias: WR085
+  lane: Product workflow
+  dependency_level: L4
+  gate: Ready after PM-004 accepted operation design
+  planning_state: ready_next
+  priority: P2
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.5
+  expected_score: 1.0
+  rice: Editor Lab operation-driven visual authoring after PM-003 app-hosted shell proof.
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-094
+  - WR-095
+  write_scopes:
+  - domain/ui/ui_definition/src/visual_layout
+  - domain/editor/editor_definition/src
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition
+  - domain/editor/editor_shell/src/commands/map_interactions.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-085-ui-lab-operation-driven-visual-authoring-core/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pm-ui-lab-004-operation-driven-visual-authoring
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p editor_definition operation
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p runenwerk_editor editor_lab_operation
+  - cargo test -p runenwerk_editor pm_ui_lab_004
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Accepted PM-UI-LAB-004 operation-driven visual authoring design plus PM-003 runtime-proven shell closeout clear the design gate for an implementation contract.
+  current_decision: WR-096 is ready_next; accepted PM-UI-LAB-004 design defines the bounded operation-driven visual authoring slice and runtime evidence requirements.
+  current_call: Use WR-096 only for Editor Lab operation envelopes, deterministic diffs, validation diagnostics, app-owned edit history, undo/redo, and runtime proof. Do not include PM-005 project IO, PM-006 evidence matrix, PM-007 API/examples closeout, game-runtime UI projection, or no-gap audit work.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-004 --roadmap WR-096 and follow its implementation-contract next action before changing product code.
+  main_blocker: Awaiting production implementation contract and roadmap promotion from ready_next.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - typed operations
+  - deterministic diffs
+  - undo redo
+  - runtime evidence required
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM-UI-LAB-004 implementation must follow the accepted operation-driven visual authoring design.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-lab-productization-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Operation-driven visual authoring must preserve the PT-UI-LAB ownership map and deferred milestone boundaries.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-UI-LAB-004 consumes the completed app-hosted Editor Lab shell and direct-control route evidence.
+  ddd_owner: editor app-owned Editor Lab operation dispatch with ui_definition and editor_definition operation support
+  adr_requirement: No ADR required while PM-004 preserves ui_definition behavior-free layout operations, editor-definition-owned edit contracts, app-owned operation history, and derived preview evidence; ADR or accepted design update required before introducing a global operation engine or moving app history/project IO into domain/ui.
+  fitness_function_requirement: UI visual layout operation reuse tests, editor-definition operation validation tests, app operation reducer/history tests, undo/redo retained-preview proof, deterministic diff tests, rejected-operation diagnostics, generated runtime proof artifact, docs validation, roadmap validation, and production validation.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from ui_definition, editor_definition, and editor_shell owners.
+edges:
+- source: WR-004
+  target: WR-096
+  label: editor surface guards
+- source: WR-046
+  target: WR-096
+  label: UI designer doctrine
+- source: WR-094
+  target: WR-096
+  label: command catalog and registry proof
+- source: WR-095
+  target: WR-096
+  label: app-hosted shell proof

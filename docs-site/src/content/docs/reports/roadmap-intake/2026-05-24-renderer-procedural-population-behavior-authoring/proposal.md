@@ -1,5 +1,5 @@
 ---
-title: Roadmap Intake WR-095
+title: Roadmap Intake WR-102
 description: Roadmap intake proposal generated from a new idea.
 status: draft
 owner: workspace
@@ -8,7 +8,7 @@ canonical: false
 last_reviewed: 2026-05-24
 ---
 
-# Roadmap Intake WR-095
+# Roadmap Intake WR-102
 
 Idea: Renderer procedural population behavior authoring and boids split merge dynamics after fixed-step and camera correctness
 Suggested title: Procedural Population Behavior Authoring And Boids Dynamics

@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            MATERIAL_INSPECTOR_SURFACE_KEY,
-            ToolSurfaceKind::MaterialInspector,
-        )
+        stable_key_support(request, MATERIAL_INSPECTOR_SURFACE_KEY)
     }
 
     fn build_frame(

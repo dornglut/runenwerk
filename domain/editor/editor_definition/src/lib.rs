@@ -7,12 +7,15 @@ pub mod command;
 pub mod document;
 pub mod form_editor_ui;
 pub mod menu;
+pub mod operation;
+pub mod prelude;
 pub mod registry;
 pub mod shortcut;
 pub mod surface;
 pub mod theme;
 pub mod toolbar;
 pub mod validate;
+pub mod workflow;
 pub mod workspace;
 
 pub use availability::*;
@@ -21,12 +24,14 @@ pub use command::*;
 pub use document::*;
 pub use form_editor_ui::*;
 pub use menu::*;
+pub use operation::*;
 pub use registry::*;
 pub use shortcut::*;
 pub use surface::*;
 pub use theme::*;
 pub use toolbar::*;
 pub use validate::*;
+pub use workflow::*;
 pub use workspace::*;
 
 #[cfg(test)]

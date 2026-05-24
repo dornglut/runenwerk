@@ -1,6 +1,8 @@
 //! File: domain/editor/editor_shell/src/tool_suite/definition.rs
 //! Purpose: App-neutral tool-suite surface declaration contracts.
 
+use ui_surface::{SessionRetentionClass, SurfaceCapabilitySet};
+
 use crate::PanelKind;
 
 use super::{
@@ -128,9 +130,18 @@ pub struct ToolSurfaceDefinition {
     pub provider_family: ProviderFamilyId,
     pub route: ToolSurfaceRoute,
     pub persistence: ToolSurfacePersistence,
+    pub capabilities: SurfaceCapabilitySet,
+    pub session_retention: SessionRetentionClass,
+    pub creation_policy: ToolSurfaceCreationPolicy,
+    pub target_profile_compatibility: ToolSurfaceTargetProfileCompatibility,
+    pub legacy_compatibility_key: Option<String>,
 }
 
 impl ToolSurfaceDefinition {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "surface registry metadata must be explicit at declaration sites"
+    )]
     pub fn new(
         surface_ref: SurfaceRef,
         label: impl Into<String>,
@@ -138,6 +149,9 @@ impl ToolSurfaceDefinition {
         panel_kind: PanelKind,
         provider_family: ProviderFamilyId,
         route: ToolSurfaceRoute,
+        capabilities: SurfaceCapabilitySet,
+        session_retention: SessionRetentionClass,
+        creation_policy: ToolSurfaceCreationPolicy,
     ) -> Self {
         Self {
             key: surface_ref.key().clone(),
@@ -147,7 +161,25 @@ impl ToolSurfaceDefinition {
             provider_family,
             route,
             persistence: ToolSurfacePersistence::StableKey,
+            capabilities,
+            session_retention,
+            creation_policy,
+            target_profile_compatibility: ToolSurfaceTargetProfileCompatibility::AllProfiles,
+            legacy_compatibility_key: None,
         }
+    }
+
+    pub fn with_target_profile_compatibility(
+        mut self,
+        compatibility: ToolSurfaceTargetProfileCompatibility,
+    ) -> Self {
+        self.target_profile_compatibility = compatibility;
+        self
+    }
+
+    pub fn with_legacy_compatibility_key(mut self, key: impl Into<String>) -> Self {
+        self.legacy_compatibility_key = Some(key.into());
+        self
     }
 }
 
@@ -168,4 +200,17 @@ pub enum ToolSurfaceRoute {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolSurfacePersistence {
     StableKey,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolSurfaceCreationPolicy {
+    SingletonPerWorkspace,
+    MultipleInstances,
+    HostProvidedOnly,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolSurfaceTargetProfileCompatibility {
+    AllProfiles,
+    Profiles(Vec<ProfileRef>),
 }

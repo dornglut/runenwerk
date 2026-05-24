@@ -123,7 +123,7 @@ Owned files and exact modules/functions:
 - Do not implement unbounded catch-up.
 - Do not implement spatial hash or chunked unbounded populations.
 - Do not change primitive dispatch semantics from WR-091.
-- Do not implement procedural camera projection; that is `WR-094`.
+- Do not implement procedural camera projection; that is `WR-101`.
 - Do not tune richer boids split/merge behavior; that is separate behavior
   authoring work.
 

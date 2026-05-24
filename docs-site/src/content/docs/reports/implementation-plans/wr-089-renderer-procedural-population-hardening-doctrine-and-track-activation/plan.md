@@ -25,7 +25,7 @@ track activation only.
 
 This slice creates the accepted planning surface for
 `PT-RENDER-PROCEDURAL-POPULATION-HARDENING` and splits implementation into
-`WR-090`, `WR-091`, `WR-092`, and `WR-094`, with `WR-093` reserved for
+`WR-090`, `WR-091`, `WR-092`, and `WR-101`, with `WR-093` reserved for
 evidence, benchmark, documentation, and track closeout. It must not change
 renderer product code.
 
@@ -74,7 +74,7 @@ Owned files and exact modules:
   `PT-RENDER-PROCEDURAL-POPULATION-HARDENING` and milestones
   `PM-RENDER-POP-HARDEN-001` through `PM-RENDER-POP-HARDEN-006`.
 - `docs-site/src/content/docs/workspace/roadmap-items.yaml`:
-  `WR-089` through `WR-094` and dependency edges.
+  `WR-089` through `WR-093`, `WR-101`, and dependency edges.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md`:
   this contract.
 - `docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.yaml`:
@@ -82,31 +82,31 @@ Owned files and exact modules:
 - `docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.md`:
   human-readable intake evidence.
 - `docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.yaml`:
-  separate behavior-authoring intake refined to `WR-095` so `WR-094` remains
-  available for the procedural camera slice.
+  separate behavior-authoring intake refined to `WR-102` after current `main`
+  reserved `WR-094` through `WR-100` for UI Lab work.
 - `docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.md`:
   human-readable behavior-authoring intake evidence.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md`:
   tightened contract requiring runtime fixed-time source reuse and
   iteration-scoped uniform projection.
-- `docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md`:
+- `docs-site/src/content/docs/reports/implementation-plans/wr-101-procedural-camera-and-view-projection/plan.md`:
   new procedural camera and view projection implementation contract.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/plan.md`:
-  closeout contract updated to depend on `WR-094` evidence.
+  closeout contract updated to depend on `WR-101` evidence.
 
 ## Acceptance Criteria
 
 - The hardening track exists in `production-tracks.yaml` with target
   completion quality `runtime_proven`.
 - `WR-089` is doctrine and activation only.
-- `WR-090`, `WR-091`, `WR-092`, and `WR-094` are bounded implementation
+- `WR-090`, `WR-091`, `WR-092`, and `WR-101` are bounded implementation
   slices with explicit ownership, non-goals, validation, and closeout
   expectations.
-- `WR-093` is the closeout slice and depends on `WR-094`.
+- `WR-093` is the closeout slice and depends on `WR-101`.
 - `WR-092` explicitly reuses `FixedTimeConfig`, `FixedTimeState`, and
   `CatchupBudget`, adds iteration-scoped uniform projection, and proves
   input/redraw-rate invariance.
-- `WR-094` owns reusable procedural camera projection and defines fill-viewport
+- `WR-101` owns reusable procedural camera projection and defines fill-viewport
   aspect correctness without moving camera truth into `PreparedViewFrame`.
 - Spatial hash and chunked unbounded populations are represented only by a
   separate intake proposal.
@@ -144,9 +144,9 @@ Known quality gaps must include:
 - indirect draw runtime hardening remains `WR-090`;
 - primitive shader dispatch remains `WR-091`;
 - graph catch-up scheduling remains `WR-092`;
-- procedural camera and view projection remains `WR-094`;
+- procedural camera and view projection remains `WR-101`;
 - evidence, benchmarks, docs, and track closeout remain `WR-093`;
-- behavior authoring and richer boids dynamics remain separate `WR-095`
+- behavior authoring and richer boids dynamics remain separate `WR-102`
   intake/design work;
 - final no-gap renderer verification remains `PT-RENDER-PERFECTION`.
 
@@ -170,7 +170,7 @@ failure mode is allowing boids to fake fixed time locally; WR-092 must consume
 the runtime fixed-time source and add graph-level repeated execution plus
 iteration-scoped uniform projection. The third failure mode is making camera
 projection a boids-only draw-parameter patch or storing camera truth in
-`PreparedViewFrame`; WR-094 keeps camera intent producer-owned and renderer
+`PreparedViewFrame`; WR-101 keeps camera intent producer-owned and renderer
 projection derived. Spatial hash/chunked unbounded populations and richer flock
 behavior add different ownership questions, so they stay as separate intake and
 design work.

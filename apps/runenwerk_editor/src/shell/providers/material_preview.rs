@@ -24,11 +24,7 @@ impl EditorSurfaceProvider for MaterialPreviewProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            MATERIAL_PREVIEW_SURFACE_KEY,
-            ToolSurfaceKind::MaterialPreview,
-        )
+        stable_key_support(request, MATERIAL_PREVIEW_SURFACE_KEY)
     }
 
     fn build_frame(

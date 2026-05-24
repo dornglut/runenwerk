@@ -5,12 +5,14 @@ use anyhow::{Context, Result};
 use editor_definition::{
     EditorCommandBindingDefinition, EditorCommandBindingSetDefinition, EditorDefinitionDocument,
     EditorDefinitionDocumentContent, EditorDefinitionDocumentKind, EditorDefinitionId,
-    EditorDefinitionLifecycleState, EditorMenuDefinition, EditorMenuItemDefinition,
-    EditorShortcutDefinition, EditorShortcutSetDefinition, EditorThemeDefinition,
-    EditorTypographyTokenDefinition, EditorWorkspaceHostDefinition,
+    EditorDefinitionLifecycleState, EditorLabOperation, EditorLabOperationKind,
+    EditorLabOperationReport, EditorLabOperationStatus, EditorMenuDefinition,
+    EditorMenuItemDefinition, EditorShortcutDefinition, EditorShortcutSetDefinition,
+    EditorThemeDefinition, EditorTypographyTokenDefinition, EditorWorkspaceHostDefinition,
     EditorWorkspaceLayoutDefinition, EditorWorkspacePanelTabDefinition,
     EditorWorkspaceProfileDefinition, EditorWorkspaceSplitAxisDefinition,
-    editor_definition_has_blocking_diagnostics, validate_editor_definition_document,
+    apply_editor_lab_operation, editor_definition_has_blocking_diagnostics,
+    validate_editor_definition_document,
 };
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,12 @@ use ui_definition::{
 };
 use ui_theme::ThemeTokens;
 
+use crate::shell::editor_lab_project::{
+    DefinitionApplyDiffRow, DefinitionApplyReview, DefinitionApplyReviewStatus,
+    EditorLabDocumentStore, EditorLabProjectImportReport, EditorLabProjectLoadReport,
+    EditorLabProjectPackage, EditorLabProjectStoreReport, EditorLabRollbackRecord,
+    EditorLabRollbackStatus, editor_lab_document_source,
+};
 use crate::shell::ui_definition_assets::{EDITOR_BINDINGS_SOURCE, EDITOR_UI_ASSET_SOURCES};
 
 pub const EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION: u32 = 1;
@@ -52,6 +60,31 @@ pub struct DefinitionApplyPreview {
     pub summary: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct EditorLabOperationHistoryEntry {
+    pub id: String,
+    pub label: String,
+    pub document_id: EditorDefinitionId,
+    pub before: EditorDefinitionDocument,
+    pub after: EditorDefinitionDocument,
+    pub report: EditorLabOperationReport,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EditorLabOperationHistorySnapshot {
+    pub undo_count: usize,
+    pub redo_count: usize,
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct EditorLabOperationHistory {
+    undo: Vec<EditorLabOperationHistoryEntry>,
+    redo: Vec<EditorLabOperationHistoryEntry>,
+    next_sequence: u64,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SelfAuthoringWorkspaceState {
     drafts: BTreeMap<EditorDefinitionId, EditorDefinitionDocument>,
@@ -59,6 +92,13 @@ pub struct SelfAuthoringWorkspaceState {
     selected_document_id: Option<EditorDefinitionId>,
     selected_ui_node_id: Option<String>,
     last_apply_preview: Option<DefinitionApplyPreview>,
+    last_apply_review: Option<DefinitionApplyReview>,
+    last_operation_report: Option<EditorLabOperationReport>,
+    operation_history: EditorLabOperationHistory,
+    document_store: EditorLabDocumentStore,
+    rollback_snapshots: BTreeMap<EditorDefinitionId, Option<EditorDefinitionDocument>>,
+    rollback_records: Vec<EditorLabRollbackRecord>,
+    last_applied_snapshots: BTreeMap<EditorDefinitionId, EditorDefinitionDocument>,
 }
 
 impl SelfAuthoringWorkspaceState {
@@ -107,6 +147,13 @@ impl SelfAuthoringWorkspaceState {
             selected_document_id,
             selected_ui_node_id,
             last_apply_preview: None,
+            last_apply_review: None,
+            last_operation_report: None,
+            operation_history: EditorLabOperationHistory::default(),
+            document_store: EditorLabDocumentStore::default(),
+            rollback_snapshots: BTreeMap::new(),
+            rollback_records: Vec::new(),
+            last_applied_snapshots: BTreeMap::new(),
         })
     }
 
@@ -126,6 +173,119 @@ impl SelfAuthoringWorkspaceState {
 
     pub fn selected_ui_node_id(&self) -> Option<&str> {
         self.selected_ui_node_id.as_deref()
+    }
+
+    pub fn next_operation_id(&self, family: &str) -> String {
+        let family = family.replace([' ', ':', '/'], "_");
+        format!(
+            "editor-lab.{family}.{:04}",
+            self.operation_history.next_sequence + 1
+        )
+    }
+
+    pub fn last_operation_report(&self) -> Option<&EditorLabOperationReport> {
+        self.last_operation_report.as_ref()
+    }
+
+    pub fn operation_history_snapshot(&self) -> EditorLabOperationHistorySnapshot {
+        EditorLabOperationHistorySnapshot {
+            undo_count: self.operation_history.undo.len(),
+            redo_count: self.operation_history.redo.len(),
+            can_undo: !self.operation_history.undo.is_empty(),
+            can_redo: !self.operation_history.redo.is_empty(),
+        }
+    }
+
+    pub fn apply_editor_lab_operation(
+        &mut self,
+        operation: EditorLabOperation,
+    ) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+        let before = self
+            .drafts
+            .get(&operation.document_id)
+            .cloned()
+            .ok_or_else(|| {
+                UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.operation.unresolved_document",
+                    format!(
+                        "definition document '{}' is not loaded",
+                        operation.document_id.as_str()
+                    ),
+                )
+            })?;
+        let report = apply_editor_lab_operation(&before, &operation);
+        self.last_operation_report = Some(report.clone());
+        self.operation_history.next_sequence += 1;
+        if report.status == EditorLabOperationStatus::Accepted {
+            let after = report.document.clone();
+            self.drafts
+                .insert(operation.document_id.clone(), after.clone());
+            self.selected_document_id = Some(operation.document_id.clone());
+            self.selected_ui_node_id = selected_ui_node_after_operation(&after, &operation)
+                .or_else(|| selected_ui_default_node_for_document(&after));
+            self.operation_history
+                .undo
+                .push(EditorLabOperationHistoryEntry {
+                    id: operation.id.clone(),
+                    label: editor_lab_operation_label(&operation),
+                    document_id: operation.document_id.clone(),
+                    before,
+                    after,
+                    report: report.clone(),
+                });
+            self.operation_history.redo.clear();
+        }
+        Ok(report)
+    }
+
+    pub fn undo_editor_lab_operation(
+        &mut self,
+    ) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+        let entry = self.operation_history.undo.pop().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.operation.undo_unavailable",
+                "no Editor Lab operation is available to undo",
+            )
+        })?;
+        let report = operation_history_restore_report(
+            format!("{}.undo", entry.id),
+            entry.document_id.clone(),
+            entry.before.clone(),
+        );
+        self.restore_operation_document(entry.document_id.clone(), entry.before.clone());
+        self.operation_history.redo.push(entry);
+        self.last_operation_report = Some(report.clone());
+        Ok(report)
+    }
+
+    pub fn redo_editor_lab_operation(
+        &mut self,
+    ) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+        let entry = self.operation_history.redo.pop().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.operation.redo_unavailable",
+                "no Editor Lab operation is available to redo",
+            )
+        })?;
+        let report = operation_history_restore_report(
+            format!("{}.redo", entry.id),
+            entry.document_id.clone(),
+            entry.after.clone(),
+        );
+        self.restore_operation_document(entry.document_id.clone(), entry.after.clone());
+        self.operation_history.undo.push(entry);
+        self.last_operation_report = Some(report.clone());
+        Ok(report)
+    }
+
+    fn restore_operation_document(
+        &mut self,
+        document_id: EditorDefinitionId,
+        document: EditorDefinitionDocument,
+    ) {
+        self.drafts.insert(document_id.clone(), document.clone());
+        self.selected_document_id = Some(document_id);
+        self.selected_ui_node_id = selected_ui_default_node_for_document(&document);
     }
 
     pub fn select_document(&mut self, document_id: EditorDefinitionId) -> bool {
@@ -247,6 +407,8 @@ impl SelfAuthoringWorkspaceState {
                 "selected definition document is not loaded",
             )
         })?;
+        self.rollback_snapshots.remove(&document_id);
+        self.last_applied_snapshots.remove(&document_id);
         self.selected_document_id = self.drafts.keys().next().cloned();
         self.selected_ui_node_id = self
             .selected_document_id
@@ -488,6 +650,116 @@ impl SelfAuthoringWorkspaceState {
         })
     }
 
+    pub fn export_project_package(&self) -> EditorLabProjectPackage {
+        EditorLabProjectPackage::current(
+            self.drafts.values().cloned(),
+            self.applied.values().cloned(),
+            self.last_applied_snapshots.values().cloned(),
+        )
+    }
+
+    pub fn save_project_package_to_ron(&mut self) -> Result<String, UiDefinitionDiagnostic> {
+        let package = self.export_project_package();
+        self.document_store.save_package_source(&package)
+    }
+
+    pub fn save_project_package_to_path(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<EditorLabProjectStoreReport, UiDefinitionDiagnostic> {
+        let package = self.export_project_package();
+        self.document_store.save_package_to_path(&package, path)
+    }
+
+    pub fn load_project_package_from_ron(
+        &mut self,
+        source: &str,
+    ) -> Result<EditorLabProjectLoadReport, UiDefinitionDiagnostic> {
+        let package = self.document_store.load_package_source(source)?;
+        self.load_project_package(package)
+    }
+
+    pub fn reload_last_saved_project_package(
+        &mut self,
+    ) -> Result<EditorLabProjectLoadReport, UiDefinitionDiagnostic> {
+        let source = self
+            .document_store
+            .last_saved_package_source()
+            .ok_or_else(|| {
+                UiDefinitionDiagnostic::error(
+                    "editor.lab.project.reload.no_saved_package",
+                    "no Editor Lab project package has been saved in this session",
+                )
+            })?
+            .to_string();
+        self.load_project_package_from_ron(&source)
+    }
+
+    pub fn last_saved_project_package_source(&self) -> Option<&str> {
+        self.document_store.last_saved_package_source()
+    }
+
+    pub fn last_loaded_project_package_source(&self) -> Option<&str> {
+        self.document_store.last_loaded_package_source()
+    }
+
+    pub fn last_invalid_project_package_source(&self) -> Option<&str> {
+        self.document_store.last_invalid_package_source()
+    }
+
+    pub fn last_invalid_project_package_diagnostics(&self) -> &[UiDefinitionDiagnostic] {
+        self.document_store.last_invalid_package_diagnostics()
+    }
+
+    pub fn import_selected_package_from_ron(
+        &mut self,
+        source: &str,
+    ) -> Result<EditorLabProjectImportReport, UiDefinitionDiagnostic> {
+        let package: EditorDefinitionExportPackage = ron::from_str(source).map_err(|error| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.import.parse_failed",
+                format!("failed to parse selected definition package: {error}"),
+            )
+        })?;
+        if package.package_version != EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.import.unsupported_version",
+                format!(
+                    "unsupported selected definition package version {}",
+                    package.package_version
+                ),
+            ));
+        }
+        if package.package_kind != EDITOR_DEFINITION_EXPORT_PACKAGE_KIND {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.import.unsupported_kind",
+                format!(
+                    "unsupported selected definition package kind '{}'",
+                    package.package_kind
+                ),
+            ));
+        }
+        let document = package.document;
+        let diagnostics = validate_editor_definition_document(&document);
+        if editor_definition_has_blocking_diagnostics(&diagnostics) {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.import.blocked",
+                "imported definition has blocking validation diagnostics",
+            ));
+        }
+        let replaced_existing = self
+            .drafts
+            .insert(document.id.clone(), document.clone())
+            .is_some();
+        self.selected_document_id = Some(document.id.clone());
+        self.selected_ui_node_id = selected_ui_default_node_id(&self.drafts, &document.id);
+        Ok(EditorLabProjectImportReport {
+            document_id: document.id,
+            display_name: document.display_name,
+            replaced_existing,
+        })
+    }
+
     pub fn export_selected_package(
         &self,
     ) -> Result<EditorDefinitionExportPackage, UiDefinitionDiagnostic> {
@@ -585,37 +857,98 @@ impl SelfAuthoringWorkspaceState {
         })
     }
 
+    pub fn build_definition_apply_review(&self) -> Option<DefinitionApplyReview> {
+        let document = self.selected_document()?;
+        let diagnostics = validate_editor_definition_document(document);
+        let status = if editor_definition_has_blocking_diagnostics(&diagnostics) {
+            DefinitionApplyReviewStatus::Blocked
+        } else {
+            DefinitionApplyReviewStatus::Pending
+        };
+        let mut proposed = document.clone();
+        proposed.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+        let applied_before = self.applied.get(&document.id).cloned();
+        Some(DefinitionApplyReview {
+            id: format!("editor-lab.apply-review.{}", document.id.as_str()),
+            document_id: document.id.clone(),
+            display_name: document.display_name.clone(),
+            status,
+            draft_snapshot: document.clone(),
+            applied_before: applied_before.clone(),
+            proposed_applied_snapshot: proposed.clone(),
+            diff_rows: definition_apply_diff_rows(applied_before.as_ref(), &proposed),
+            diagnostics,
+            rollback_target_available: self.rollback_snapshots.contains_key(&document.id)
+                || applied_before.is_some(),
+        })
+    }
+
+    pub fn prepare_selected_apply_review(
+        &mut self,
+    ) -> Result<DefinitionApplyReview, UiDefinitionDiagnostic> {
+        let review = self.build_definition_apply_review().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.apply_review.no_selection",
+                "no definition document is selected",
+            )
+        })?;
+        self.last_apply_review = Some(review.clone());
+        Ok(review)
+    }
+
     pub fn last_apply_preview(&self) -> Option<&DefinitionApplyPreview> {
         self.last_apply_preview.as_ref()
     }
 
+    pub fn last_apply_review(&self) -> Option<&DefinitionApplyReview> {
+        self.last_apply_review.as_ref()
+    }
+
+    pub fn reject_last_apply_review(
+        &mut self,
+    ) -> Result<DefinitionApplyReview, UiDefinitionDiagnostic> {
+        let review = self
+            .last_apply_review
+            .clone()
+            .or_else(|| self.build_definition_apply_review())
+            .ok_or_else(|| {
+                UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.apply_review.reject.no_review",
+                    "no definition apply review is available to reject",
+                )
+            })?
+            .with_status(DefinitionApplyReviewStatus::Rejected);
+        self.last_apply_review = Some(review.clone());
+        Ok(review)
+    }
+
     pub fn apply_selected(&mut self) -> Result<DefinitionApplyPreview, UiDefinitionDiagnostic> {
+        let review = self.prepare_selected_apply_review()?;
         let preview = self.build_apply_preview().ok_or_else(|| {
             UiDefinitionDiagnostic::error(
                 "editor.self_authoring.apply.no_selection",
                 "no definition document is selected",
             )
         })?;
-        if editor_definition_has_blocking_diagnostics(&preview.diagnostics) {
+        if review.status == DefinitionApplyReviewStatus::Blocked
+            || review.has_blocking_diagnostics()
+        {
             self.last_apply_preview = Some(preview.clone());
             return Err(UiDefinitionDiagnostic::error(
                 "editor.self_authoring.apply.blocked",
                 "definition has blocking validation diagnostics",
             ));
         }
-        let mut applied = self
-            .drafts
-            .get(&preview.document_id)
-            .cloned()
-            .ok_or_else(|| {
-                UiDefinitionDiagnostic::error(
-                    "editor.self_authoring.apply.unresolved",
-                    "selected definition document is not loaded",
-                )
-            })?;
-        applied.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+        let applied = review.proposed_applied_snapshot.clone();
+        self.rollback_snapshots.insert(
+            preview.document_id.clone(),
+            self.applied.get(&preview.document_id).cloned(),
+        );
+        self.last_applied_snapshots
+            .insert(preview.document_id.clone(), applied.clone());
         self.applied.insert(preview.document_id.clone(), applied);
         self.last_apply_preview = Some(preview.clone());
+        self.last_apply_review = Some(review.with_status(DefinitionApplyReviewStatus::Accepted));
         Ok(preview)
     }
 
@@ -628,14 +961,88 @@ impl SelfAuthoringWorkspaceState {
                 "no definition document is selected",
             )
         })?;
-        let mut rolled_back = self.applied.remove(&document_id).ok_or_else(|| {
+        let removed_document = self.applied.remove(&document_id).ok_or_else(|| {
             UiDefinitionDiagnostic::error(
                 "editor.self_authoring.rollback.no_applied_snapshot",
                 "selected definition has no applied snapshot",
             )
         })?;
+        let Some(rollback_snapshot) = self.rollback_snapshots.remove(&document_id) else {
+            self.applied
+                .insert(document_id.clone(), removed_document.clone());
+            let diagnostic = UiDefinitionDiagnostic::error(
+                "editor.self_authoring.rollback.no_recorded_snapshot",
+                "selected definition has no recorded rollback snapshot",
+            );
+            self.rollback_records.push(EditorLabRollbackRecord {
+                id: format!("editor-lab.rollback.unavailable.{}", document_id.as_str()),
+                document_id: document_id.clone(),
+                display_name: removed_document.display_name.clone(),
+                status: EditorLabRollbackStatus::Unavailable,
+                removed_document: None,
+                restored_document: None,
+                diagnostics: vec![diagnostic.clone()],
+            });
+            return Err(diagnostic);
+        };
+        if let Some(mut previous) = rollback_snapshot {
+            previous.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+            self.applied.insert(document_id.clone(), previous.clone());
+            self.rollback_records.push(EditorLabRollbackRecord {
+                id: format!("editor-lab.rollback.{}", document_id.as_str()),
+                document_id: document_id.clone(),
+                display_name: previous.display_name.clone(),
+                status: EditorLabRollbackStatus::RolledBack,
+                removed_document: Some(removed_document.clone()),
+                restored_document: Some(previous),
+                diagnostics: Vec::new(),
+            });
+        } else {
+            self.rollback_records.push(EditorLabRollbackRecord {
+                id: format!("editor-lab.rollback.{}", document_id.as_str()),
+                document_id: document_id.clone(),
+                display_name: removed_document.display_name.clone(),
+                status: EditorLabRollbackStatus::RolledBack,
+                removed_document: Some(removed_document.clone()),
+                restored_document: None,
+                diagnostics: Vec::new(),
+            });
+        }
+        let mut rolled_back = removed_document;
         rolled_back.lifecycle_state = EditorDefinitionLifecycleState::RolledBack;
         Ok(rolled_back)
+    }
+
+    pub fn reload_selected_from_last_applied(
+        &mut self,
+    ) -> Result<EditorDefinitionDocument, UiDefinitionDiagnostic> {
+        let document_id = self.selected_document_id.clone().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.reload_last_applied.no_selection",
+                "no definition document is selected",
+            )
+        })?;
+        let snapshot = self
+            .last_applied_snapshots
+            .get(&document_id)
+            .cloned()
+            .ok_or_else(|| {
+                UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.reload_last_applied.no_snapshot",
+                    "selected definition has no last applied snapshot",
+                )
+            })?;
+        self.drafts.insert(document_id.clone(), snapshot.clone());
+        self.applied.insert(document_id, snapshot.clone());
+        Ok(snapshot)
+    }
+
+    pub fn last_rollback_record(&self) -> Option<&EditorLabRollbackRecord> {
+        self.rollback_records.last()
+    }
+
+    pub fn rollback_records(&self) -> &[EditorLabRollbackRecord] {
+        &self.rollback_records
     }
 
     pub fn applied_document(&self, id: &EditorDefinitionId) -> Option<&EditorDefinitionDocument> {
@@ -645,6 +1052,93 @@ impl SelfAuthoringWorkspaceState {
     pub fn applied_count(&self) -> usize {
         self.applied.len()
     }
+
+    fn load_project_package(
+        &mut self,
+        package: EditorLabProjectPackage,
+    ) -> Result<EditorLabProjectLoadReport, UiDefinitionDiagnostic> {
+        package.validate()?;
+        self.drafts = package
+            .draft_documents
+            .into_iter()
+            .map(|document| (document.id.clone(), document))
+            .collect();
+        self.applied = package
+            .applied_documents
+            .into_iter()
+            .map(|document| (document.id.clone(), document))
+            .collect();
+        self.last_applied_snapshots = package
+            .last_applied_documents
+            .into_iter()
+            .map(|document| (document.id.clone(), document))
+            .collect();
+        let selected_missing = match self.selected_document_id.as_ref() {
+            Some(id) => !self.drafts.contains_key(id),
+            None => true,
+        };
+        if selected_missing {
+            self.selected_document_id = self.drafts.keys().next().cloned();
+        }
+        self.selected_ui_node_id = self
+            .selected_document_id
+            .as_ref()
+            .and_then(|id| selected_ui_default_node_id(&self.drafts, id));
+        self.last_apply_preview = None;
+        self.last_apply_review = None;
+        Ok(EditorLabProjectLoadReport {
+            draft_count: self.drafts.len(),
+            applied_count: self.applied.len(),
+            last_applied_count: self.last_applied_snapshots.len(),
+        })
+    }
+}
+
+fn definition_apply_diff_rows(
+    applied_before: Option<&EditorDefinitionDocument>,
+    proposed: &EditorDefinitionDocument,
+) -> Vec<DefinitionApplyDiffRow> {
+    let mut rows = Vec::new();
+    match applied_before {
+        Some(before) => {
+            if before.display_name != proposed.display_name {
+                rows.push(DefinitionApplyDiffRow {
+                    path: "document.display_name".to_string(),
+                    before: before.display_name.clone(),
+                    after: proposed.display_name.clone(),
+                });
+            }
+            if before.kind != proposed.kind {
+                rows.push(DefinitionApplyDiffRow {
+                    path: "document.kind".to_string(),
+                    before: format!("{:?}", before.kind),
+                    after: format!("{:?}", proposed.kind),
+                });
+            }
+            if before.lifecycle_state != proposed.lifecycle_state {
+                rows.push(DefinitionApplyDiffRow {
+                    path: "document.lifecycle_state".to_string(),
+                    before: format!("{:?}", before.lifecycle_state),
+                    after: format!("{:?}", proposed.lifecycle_state),
+                });
+            }
+            if before.content != proposed.content {
+                rows.push(DefinitionApplyDiffRow {
+                    path: "document.content".to_string(),
+                    before: editor_lab_document_source(before)
+                        .unwrap_or_else(|error| format!("<serialize failed: {}>", error.message)),
+                    after: editor_lab_document_source(proposed)
+                        .unwrap_or_else(|error| format!("<serialize failed: {}>", error.message)),
+                });
+            }
+        }
+        None => rows.push(DefinitionApplyDiffRow {
+            path: "document".to_string(),
+            before: "<not applied>".to_string(),
+            after: proposed.display_name.clone(),
+        }),
+    }
+    rows
 }
 
 fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
@@ -796,6 +1290,59 @@ fn selected_ui_default_node_for_document(document: &EditorDefinitionDocument) ->
     }
 }
 
+fn selected_ui_node_after_operation(
+    document: &EditorDefinitionDocument,
+    operation: &EditorLabOperation,
+) -> Option<String> {
+    match &operation.kind {
+        EditorLabOperationKind::SetUiNodeText { node_id, .. } => Some(node_id.clone()),
+        EditorLabOperationKind::UiVisualLayout(layout_operation) => {
+            Some(layout_operation.expected_node_id.as_str().to_string())
+        }
+        _ => selected_ui_default_node_for_document(document),
+    }
+}
+
+fn editor_lab_operation_label(operation: &EditorLabOperation) -> String {
+    match &operation.kind {
+        EditorLabOperationKind::UiVisualLayout(layout_operation) => {
+            format!("visual layout {:?}", layout_operation.kind)
+        }
+        EditorLabOperationKind::SetUiNodeText { node_id, .. } => {
+            format!("set UI node text {node_id}")
+        }
+        EditorLabOperationKind::RenameDocument { .. } => "rename definition".to_string(),
+        EditorLabOperationKind::SetThemeColor { token, .. } => {
+            format!("set theme color {token}")
+        }
+        EditorLabOperationKind::AddWorkspaceLayoutTab { label, .. } => {
+            format!("add workspace layout tab {label}")
+        }
+        EditorLabOperationKind::SplitWorkspaceLayoutRoot { axis } => {
+            format!("split workspace layout root {axis:?}")
+        }
+        EditorLabOperationKind::CloseWorkspaceLayoutLastTab => {
+            "close workspace layout tab".to_string()
+        }
+    }
+}
+
+fn operation_history_restore_report(
+    operation_id: String,
+    document_id: EditorDefinitionId,
+    document: EditorDefinitionDocument,
+) -> EditorLabOperationReport {
+    let diagnostics = validate_editor_definition_document(&document);
+    EditorLabOperationReport {
+        operation_id,
+        document_id,
+        status: EditorLabOperationStatus::Accepted,
+        document,
+        diff: None,
+        diagnostics,
+    }
+}
+
 fn first_text_editable_ui_node_id(node: &ui_definition::UiNodeDefinition) -> Option<String> {
     match node {
         ui_definition::UiNodeDefinition::Label { id, .. }
@@ -934,6 +1481,110 @@ mod tests {
     }
 
     #[test]
+    fn editor_lab_project_package_round_trips_and_preserves_invalid_input() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let selected = state
+            .selected_document_id()
+            .expect("selected document should exist")
+            .clone();
+
+        state
+            .apply_selected()
+            .expect("selected fixture should create an applied snapshot");
+        let saved = state
+            .save_project_package_to_ron()
+            .expect("project package should serialize");
+        assert!(saved.contains(crate::shell::EDITOR_LAB_PROJECT_PACKAGE_KIND));
+        assert!(state.last_saved_project_package_source().is_some());
+
+        let path = std::env::temp_dir().join("runenwerk-editor-lab-package-round-trip.ron");
+        let report = state
+            .save_project_package_to_path(&path)
+            .expect("project package should write to an app-owned store path");
+        assert!(report.source_bytes > 0);
+
+        let mut loaded =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let source = std::fs::read_to_string(path).expect("test package file should be readable");
+        let load_report = loaded
+            .load_project_package_from_ron(&source)
+            .expect("saved package should reload");
+        assert!(load_report.draft_count >= EDITOR_UI_ASSET_SOURCES.len());
+        assert_eq!(load_report.applied_count, 1);
+        assert_eq!(load_report.last_applied_count, 1);
+        assert!(loaded.applied_document(&selected).is_some());
+
+        let invalid = "not a valid Editor Lab project package";
+        assert!(loaded.load_project_package_from_ron(invalid).is_err());
+        assert_eq!(loaded.last_invalid_project_package_source(), Some(invalid));
+        assert_eq!(loaded.last_invalid_project_package_diagnostics().len(), 1);
+    }
+
+    #[test]
+    fn apply_review_reject_reload_and_rollback_are_snapshot_backed() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let selected = state
+            .selected_document_id()
+            .expect("selected document should exist")
+            .clone();
+        let selected_node = state
+            .selected_ui_node_id()
+            .expect("selected UI fixture should expose an editable node")
+            .to_string();
+
+        let review = state
+            .prepare_selected_apply_review()
+            .expect("selected fixture should build an apply review");
+        assert_eq!(review.status, DefinitionApplyReviewStatus::Pending);
+        assert!(!review.diff_rows.is_empty());
+        assert_eq!(state.applied_count(), 0);
+
+        let rejected = state
+            .reject_last_apply_review()
+            .expect("apply review should reject without mutating applied state");
+        assert_eq!(rejected.status, DefinitionApplyReviewStatus::Rejected);
+        assert_eq!(state.applied_count(), 0);
+
+        state
+            .apply_selected()
+            .expect("selected fixture should apply through a review");
+        assert_eq!(
+            state
+                .last_apply_review()
+                .expect("apply should record a review")
+                .status,
+            DefinitionApplyReviewStatus::Accepted
+        );
+        assert!(state.applied_document(&selected).is_some());
+
+        state
+            .set_selected_ui_node_text(&selected_node, "dirty draft after apply")
+            .expect("draft edit should remain possible after apply");
+        state
+            .reload_selected_from_last_applied()
+            .expect("last applied snapshot should reload into the draft");
+        let preview = state
+            .formed_selected_preview(&ThemeTokens::default())
+            .expect("reloaded applied snapshot should preview");
+        assert!(!format!("{:?}", preview.root).contains("dirty draft after apply"));
+
+        let rolled_back = state
+            .rollback_selected()
+            .expect("recorded rollback snapshot should restore previous applied state");
+        assert_eq!(rolled_back.id, selected);
+        assert_eq!(state.applied_count(), 0);
+        assert_eq!(
+            state
+                .last_rollback_record()
+                .expect("rollback should record a typed record")
+                .status,
+            EditorLabRollbackStatus::RolledBack
+        );
+    }
+
+    #[test]
     fn create_duplicate_rename_delete_import_and_export_are_explicit_document_flows() {
         let mut state =
             SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
@@ -962,6 +1613,11 @@ mod tests {
             EDITOR_DEFINITION_EXPORT_PACKAGE_KIND
         );
         assert_eq!(exported_package.document.display_name, "Renamed Copy");
+        let import_report = state
+            .import_selected_package_from_ron(&exported)
+            .expect("selected definition package should import explicitly");
+        assert!(import_report.replaced_existing);
+        assert_eq!(import_report.display_name, "Renamed Copy");
         let removed = state
             .delete_selected()
             .expect("unapplied duplicate should delete");

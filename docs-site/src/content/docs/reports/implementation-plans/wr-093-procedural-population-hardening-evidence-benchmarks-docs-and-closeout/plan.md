@@ -32,13 +32,13 @@ projection are all proven by runtime evidence and documented public contracts.
 - `docs-site/src/content/docs/reports/implementation-plans/wr-090-indirect-draw-contract-hardening/plan.md`
 - `docs-site/src/content/docs/reports/implementation-plans/wr-091-reusable-gpu-primitive-shader-dispatch/plan.md`
 - `docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md`
-- `docs-site/src/content/docs/reports/implementation-plans/wr-094-procedural-camera-and-view-projection/plan.md`
+- `docs-site/src/content/docs/reports/implementation-plans/wr-101-procedural-camera-and-view-projection/plan.md`
 - `docs-site/src/content/docs/workspace/production-tracks.yaml`
 - `docs-site/src/content/docs/workspace/roadmap-items.yaml`
 
 ## Readiness
 
-This slice depends on completed `WR-094`. It cannot close the track if any
+This slice depends on completed `WR-101`. It cannot close the track if any
 runtime proof remains descriptor-only, boids-only, camera-projection-only, or
 documentation-only.
 
@@ -64,7 +64,7 @@ Owned files and exact modules/functions:
   evidence dependency.
 - `docs-site/src/content/docs/reports/closeouts/wr-092-fixed-step-graph-catch-up-scheduling/closeout.md`:
   evidence dependency.
-- `docs-site/src/content/docs/reports/closeouts/wr-094-procedural-camera-and-view-projection/closeout.md`:
+- `docs-site/src/content/docs/reports/closeouts/wr-101-procedural-camera-and-view-projection/closeout.md`:
   evidence dependency.
 - `docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md`:
   slice closeout.

@@ -1,0 +1,16 @@
+(
+    scenario_id: "editor-lab.accessibility",
+    labelled_controls: 58,
+    disabled_reason_controls: 4,
+    focusable_routes: 58,
+    unsupported_checks: [
+        (
+            check: "native_focus_traversal",
+            reason: "headless retained UI test cannot drive native focus traversal",
+        ),
+        (
+            check: "pixel_contrast_sampling",
+            reason: "retained UI artifact has theme tokens but no native pixels",
+        ),
+    ],
+)

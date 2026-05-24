@@ -13,6 +13,7 @@ pub mod migration;
 pub mod node;
 pub mod normalize;
 pub mod persistence_activation;
+pub mod prelude;
 pub mod preview_fixture;
 pub mod production_readiness;
 pub mod slot;
@@ -22,6 +23,7 @@ pub mod validate;
 pub mod value;
 pub mod view_binding;
 pub mod visual_layout;
+pub mod workflow;
 
 pub use availability::*;
 pub use component_recipe::*;
@@ -44,6 +46,7 @@ pub use validate::*;
 pub use value::*;
 pub use view_binding::*;
 pub use visual_layout::*;
+pub use workflow::*;
 
 #[cfg(test)]
 mod fixture_tests {

@@ -2,6 +2,7 @@
 //! Purpose: Build editor shell UI trees from shell view models.
 
 pub mod build_console_panel;
+pub mod build_editor_lab_surface;
 pub mod build_editor_shell;
 pub mod build_entity_table_panel;
 pub mod build_inspector_panel;
@@ -15,6 +16,7 @@ pub mod surface_definition_context;
 pub mod toolbar_definition;
 
 pub use build_console_panel::build_console_panel;
+pub use build_editor_lab_surface::build_editor_lab_surface;
 pub use build_editor_shell::{
     ActiveTabDragVisualState, DockDropCandidate, DockDropCandidateState,
     DockDropInvalidTargetReason, DockDropScope, DockingInteractionVisualState,

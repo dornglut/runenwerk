@@ -3,8 +3,10 @@
 
 use editor_shell::{
     EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef, SurfaceRef,
-    ToolSuiteId, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey,
+    ToolSuiteId, ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole,
+    ToolSurfaceRoute, ToolSurfaceStableKey,
 };
+use ui_surface::{SessionRetentionClass, SurfaceCapabilitySet};
 
 pub fn material_lab_tool_suite() -> EditorToolSuite {
     let suite_id = ToolSuiteId::new("runenwerk.material_lab").unwrap();
@@ -61,6 +63,9 @@ fn material_lab_surface(
         panel_kind,
         provider_family,
         route,
+        SurfaceCapabilitySet::new(true, true, true, false),
+        SessionRetentionClass::Restorable,
+        ToolSurfaceCreationPolicy::SingletonPerWorkspace,
     )
 }
 

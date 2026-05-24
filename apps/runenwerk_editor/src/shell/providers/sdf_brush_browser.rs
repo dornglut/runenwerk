@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for SdfBrushBrowserProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            SDF_BRUSH_BROWSER_SURFACE_KEY,
-            ToolSurfaceKind::SdfBrushBrowser,
-        )
+        stable_key_support(request, SDF_BRUSH_BROWSER_SURFACE_KEY)
     }
 
     fn build_frame(
