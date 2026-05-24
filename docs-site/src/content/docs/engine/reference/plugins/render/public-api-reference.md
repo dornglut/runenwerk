@@ -187,6 +187,14 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedDrawBatch`
 - `PreparedMaterialFeatureContribution`
 - `PreparedMaterialInstanceInput`
+- `PreparedParticleVfxFeatureResource`
+- `PreparedParticleVfxFeatureContribution`
+- `PreparedParticleVfxBatch`
+- `PreparedParticleVfxVisualKind`
+- `PreparedParticleVfxSortingMode`
+- `PreparedParticleVfxTransparencyMode`
+- `PreparedParticleVfxTemporalInput`
+- `PreparedParticleVfxBatchState`
 - `PreparedDeformationFeatureContribution`
 - `PreparedDeformationStream`
 
@@ -224,6 +232,7 @@ Feature ordering and fallback policies are explicit and live in ECS metadata:
 - `StaticRegisteredFeaturePayload`
 - `PreparedDrawFeatureResource`
 - `PreparedMaterialFeatureResource`
+- `PreparedParticleVfxFeatureResource`
 - `PreparedDeformationFeatureResource`
 - `FeatureContributionStatus` (`Ready | Stale | Disabled | Missing`)
 - `FeatureFallbackPolicy` (`ReuseLastGood | EmptyContribution | SkipFeaturePasses | FailFrame`)
@@ -234,6 +243,7 @@ Built-in feature IDs:
 - `UI_RENDER_FEATURE_ID`
 - `WORLD_DRAW_RENDER_FEATURE_ID`
 - `MATERIAL_RENDER_FEATURE_ID`
+- `PARTICLE_VFX_RENDER_FEATURE_ID`
 - `DEFORMATION_RENDER_FEATURE_ID`
 
 Contribution collector contract:
@@ -243,6 +253,11 @@ Contribution collector contract:
 - registered payloads use typed payload kinds, validation, runtime signatures, and inspection hooks instead of feature-specific central enum variants.
 - the registered payload bridge coexists with current `PreparedFeaturePayload` variants during migration.
 - scene route contribution now flows through the collector registry as the low-risk compatibility migration path.
+- particle/VFX/trail/decal contributions use `PreparedParticleVfxFeatureResource`
+  plus the registered `particle.vfx.prepared` payload kind. Product domains
+  prepare batches, sorting/transparency intent, temporal input declarations,
+  residency requests, and fallback/unsupported/over-budget batch states; the
+  renderer only orders, inspects, and diagnoses the prepared contribution.
 - `PreparedFrameContributions::diagnostics()` exposes typed collector diagnostics for missing resources, duplicate collector registration, and invalid registered payloads.
 
 ## Graph and Execution Compilation APIs
@@ -428,6 +443,67 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `RenderMeshMaterialHandoffDiagnostic`
   - `RenderMeshMaterialHandoffDiagnosticSeverity`
   - `inspect_render_mesh_material_handoff`
+  - `RenderMeshMaterialProductionHardwareProfile`
+  - `RenderMeshMaterialProductionEvidenceRequest`
+  - `RenderMeshMaterialProductionEvidenceReport`
+  - `RenderMeshMaterialProductionEvidenceCounts`
+  - `RenderMeshMaterialProductionTimingEvidence`
+  - `RenderMeshMaterialRuntimeVisualEvidence`
+  - `RenderMeshMaterialProductionEvidenceDiagnostic`
+  - `RenderMeshMaterialProductionEvidenceSeverity`
+  - `inspect_render_mesh_material_production_evidence`
+  - `RenderTemporalInspectionRequest`
+  - `RenderTemporalInspection`
+  - `RenderTemporalResolutionEvidence`
+  - `RenderTemporalResolutionInspection`
+  - `RenderTemporalJitterEvidence`
+  - `RenderTemporalHistoryEvidence`
+  - `RenderTemporalInputEvidence`
+  - `RenderTemporalInputKind`
+  - `RenderTemporalInputCounts`
+  - `RenderTemporalReconstructionMode`
+  - `RenderTemporalDiagnostic`
+  - `RenderTemporalDiagnosticSeverity`
+  - `inspect_render_temporal_inputs`
+  - `RenderTemporalUpscalingInspectionRequest`
+  - `RenderTemporalUpscalingInspection`
+  - `RenderTemporalUpscalingAdapterEvidence`
+  - `RenderTemporalUpscalingAdapterKind`
+  - `RenderTemporalUpscalingCapabilityState`
+  - `RenderRayReconstructionInputEvidence`
+  - `RenderRayReconstructionInputKind`
+  - `RenderRayReconstructionInputCounts`
+  - `inspect_render_temporal_upscaling`
+  - `RenderTemporalProductionEvidenceRequest`
+  - `RenderTemporalProductionEvidenceReport`
+  - `RenderTemporalProductionHardwareProfile`
+  - `RenderTemporalProductionHardwareProfileInspection`
+  - `RenderTemporalProductionEvidenceCounts`
+  - `RenderTemporalProductionTimingEvidence`
+  - `RenderTemporalRuntimeVisualEvidence`
+  - `RenderTemporalProductionEvidenceDiagnostic`
+  - `RenderTemporalProductionEvidenceSeverity`
+  - `inspect_render_temporal_production_evidence`
+  - `RenderRayQueryCapabilityProfile`
+  - `RenderRayQueryCapabilityState`
+  - `RenderRayQueryAccelerationResourceEvidence`
+  - `RenderRayQueryAccelerationResourceKind`
+  - `RenderRayQueryAccelerationResourceStatus`
+  - `RenderRayQueryAccelerationSourceLineage`
+  - `RenderRayQueryAccelerationResourceCounts`
+  - `RenderRayQueryInspectionRequest`
+  - `RenderRayQueryInspection`
+  - `RenderRayQueryDiagnostic`
+  - `RenderRayQueryDiagnosticSeverity`
+  - `inspect_render_ray_query_capability`
+  - `RenderPipelineFallbackInspectionRequest`
+  - `RenderPipelineFallbackInspection`
+  - `RenderPipelineFallbackCounts`
+  - `RenderPipelineFallbackPassEvidence`
+  - `RenderShaderPriorValidFailureEvidence`
+  - `RenderPipelineFallbackDiagnostic`
+  - `RenderPipelineFallbackDiagnosticSeverity`
+  - `inspect_render_pipeline_fallback`
   - `RenderSdfResidencySourceResource`
   - `RenderSdfResidencySourceProduct`
   - `RenderSdfResidencyResource`
@@ -476,6 +552,8 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
   - `RenderFlowRegistryResource`
   - `ShaderRegistryResource`
   - `ShaderHandle`
+  - `ShaderRegistryEvent`
+  - `ShaderRegistryEventKind`
   - `ShaderReloadPollReport`
   - `ShaderReloadPollStatus`
 - runtime diagnostics policy:
@@ -550,6 +628,14 @@ Production readiness inspection contract:
 - `inspect_render_scale_production_evidence(...)` aggregates residency, visibility, timing, hardware profile, benchmark command, and artifact-path evidence for WR-063 production readiness. Missing hardware profiles, benchmark commands, artifact paths, timing evidence, or broken count invariants are fail-closed diagnostics.
 - `RenderScaleProductionEvidenceReport` keeps addressable, selected, resident, visible, compacted, submitted, indirect, CPU timing, GPU timing, and capability-profile evidence separate. It may report unsupported GPU timing or readback as explicit degraded diagnostics, but it must not collapse those states into success-shaped data.
 - `inspect_render_mesh_material_handoff(...)` aggregates prepared material instances, scene material shader bundle identity, model/mesh material selections, portable-limit checks, and pass material-binding evidence for WR-067 handoff readiness. Missing source-backed material instances, missing scene shader bundle identity, transient model/mesh region keys, broken pass-count invariants, and absent material-consuming pass evidence are fail-closed diagnostics. Material, asset, model, scene, and product truth remain outside renderer inspection.
+- `inspect_render_pipeline_fallback(...)` aggregates pass provenance, pipeline cache statistics, shader reload poll status, and shader failure events for WR-068 pipeline/fallback readiness. Missing pass provenance, missing or empty pipeline cache stats, missing pipeline stats keys, forbidden material shader fallback, missing generated shader revisions, missing material specialization fragments, and shader failures without prior-valid revision evidence are fail-closed diagnostics. Prior-valid shader reuse is reported as renderer execution evidence only; product freshness, fallback legality, material truth, scene truth, and rebuild policy remain outside renderer inspection.
+- `inspect_render_mesh_material_production_evidence(...)` aggregates WR-067 material handoff inspection, WR-068 pipeline/fallback inspection, runtime visual artifact references, timing evidence, benchmark commands, raw artifact paths, and human report paths for WR-069 runtime readiness. Missing visual artifacts, missing rendered pixels, missing benchmark or artifact paths, unconsumed material/pipeline inspections, material fallback passes, missing timing diagnostics, and source inspection errors are fail-closed diagnostics. Runtime proof remains renderer execution evidence; material, asset, model, scene, product, shader source, fallback legality, and rebuild policy remain source-owned.
+- `inspect_render_temporal_inputs(...)` reports WR-070 temporal input availability, dynamic internal/output resolution, jitter sequence and phase, history resource/signature validity, reconstruction mode, native fallback state, and fail-closed diagnostics. Missing required inputs, hidden dynamic resolution, invalid history signatures, invalid jitter evidence, TAAU without dynamic-resolution evidence, and temporal reconstruction with invalid history and no native fallback are explicit diagnostics. The report is renderer execution evidence only; camera, scene, product, exposure, material reactivity, SDF, ray-query, freshness, fallback legality, and authority truth remain producer-owned.
+- `inspect_render_temporal_upscaling(...)` reports WR-071 optional upscaling adapter capability, invocation eligibility, ray reconstruction input availability, native fallback visibility, and fail-closed diagnostics. Unsupported adapters and missing required ray reconstruction inputs are valid only when native fallback is visible; adapter-required rendering, hidden fallback, missing unsupported reasons, stale temporal inputs, and missing ray input product/generation evidence are diagnostics. The report is renderer execution evidence only; vendor SDKs, camera, scene, SDF, ray-query, material, exposure, product freshness, fallback legality, and authority truth remain outside renderer ownership.
+- `inspect_render_temporal_production_evidence(...)` aggregates WR-070 temporal input inspection, WR-071 adapter/ray input inspection, runtime visual evidence references, CPU/GPU timing evidence, hardware profile identity, benchmark commands, raw artifact paths, and human report paths for WR-072 runtime readiness. Missing visual evidence, missing benchmark or artifact paths, unconsumed temporal/upscaling inspections, fallback-only visual claims, invalid history visuals, missing timing diagnostics, and broken temporal/ray input invariants are fail-closed diagnostics. Runtime proof remains renderer execution evidence; docs, artifacts, benchmark summaries, camera, scene, product, SDF, ray-query, material, exposure, fallback legality, and authority truth remain outside renderer ownership.
+- `inspect_render_ray_query_capability(...)` reports WR-073 optional ray-query capability state, required capability labels, unsupported reasons, visible non-RT fallback, derived acceleration-resource lineage, build/update status, memory evidence, and backend-handle privacy diagnostics. Unsupported or disabled hardware can be valid when the reason and fallback are visible; hidden fallback, missing unsupported reasons, missing source lineage, stale resources without invalidation reasons, over-budget resources, and public backend-handle exposure fail closed. The report is renderer execution evidence only; scene, mesh, material, product, SDF, temporal, camera, exposure, fallback legality, and source truth remain producer-owned.
+- `cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof` builds the WR-074 portable hybrid proof that composes raster pass labels, SDF production evidence, temporal production evidence, supported and unsupported ray-query inspections, visible non-RT fallback evidence, and separated raster/SDF/temporal/ray-query/fallback timing labels. The example consumes public renderer inspection DTOs only; hardware RT execution, source truth, fallback legality, and the WR-075 hardware matrix remain outside this bounded contract.
+- [Renderer Ray Query Production Evidence](ray-query-production-evidence.md) records the WR-075 optional RT production evidence packet: capability matrix, fallback behavior, acceleration-resource lineage expectations, diagnostics, validation commands, and remaining non-goals.
 - `RenderSdfResidencyResource::derive_from_sources(...)` derives renderer-owned sparse SDF brick, page, and clipmap residency from prepared product selections plus domain-owned `SdfChunkPayload` sources. Missing payloads, stale products, generation mismatches, nonresident products, unsupported query policy, and absent residency requests fail closed with diagnostics.
 - `inspect_render_sdf_residency(...)` exposes SDF product, page-table, brick-atlas, clipmap-window, generation, byte, upload, invalidation, and budget-pressure evidence without exposing backend handles or moving SDF product truth into the renderer.
 - `RenderSdfResidencyBudgetResource` configures renderer execution limits for resident pages, resident bricks, resident bytes, upload bytes, and clipmap pages per window. Over-budget states are visible diagnostics; product fallback, query authority, collision truth, and rebuild policy remain product-owned.

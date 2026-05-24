@@ -163,6 +163,7 @@ pub(crate) fn frame_render_submit_system(
                 cache_resource.observe_stats(PipelineCacheStats {
                     hits: cache_stats.hits,
                     misses: cache_stats.misses,
+                    failures: cache_stats.failures,
                 });
             }
 

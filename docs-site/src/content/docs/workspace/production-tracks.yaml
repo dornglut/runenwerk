@@ -1857,7 +1857,7 @@ tracks:
         completion_audit: docs-site/src/content/docs/reports/closeouts/wr-066-sdf-world-runtime-evidence/closeout.md
   - id: PT-RENDER-MESH-MATERIAL
     title: Mesh Material Lighting Shader And Asset Handoff Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Connect mesh, material, lighting, shader, and asset handoff work to renderer execution without moving asset, material, model, or scene truth into the renderer.
@@ -1896,8 +1896,6 @@ tracks:
           - Shader fallback and pipeline cache policy are renderer diagnostics, not material truth.
         completion_quality: bounded_contract
         known_quality_gaps:
-          - Prepared mesh/material/shader handoff remains blocked until WR-067 is applied, promoted, implemented, validated, and closed.
-          - Lighting pipeline cache and last-good fallback behavior remain blocked until WR-068 is applied, promoted, implemented, validated, and closed.
           - Mesh/material production evidence remains blocked until WR-069 is applied, promoted, implemented, validated, and closed.
           - This design-only milestone does not claim runtime_proven or perfectionist_verified evidence.
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
@@ -1947,7 +1945,6 @@ tracks:
           - Renderer artifacts preserve asset and material lineage without owning source truth.
         completion_quality: bounded_contract
         known_quality_gaps:
-          - Lighting pipeline cache diagnostics and last-good shader fallback behavior remain WR-068 scope.
           - Runtime mesh/material production examples, benchmarks, visible runtime proof, and production evidence remain WR-069 scope.
           - PM-RENDER-MESH-MATERIAL-002 proves renderer handoff inspection and pass-consumption evidence; it does not claim runtime_proven or perfectionist_verified evidence.
           - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
@@ -1955,7 +1952,7 @@ tracks:
       - id: PM-RENDER-MESH-MATERIAL-003
         title: Lighting Pipeline Cache And Last Good Fallback
         kind: implementation
-        state: designing
+        state: completed
         goal: Add lighting inputs, pipeline specialization, cache diagnostics, and last-good shader fallback behavior.
         outcome: Shader and pipeline failures are diagnosable and prior valid visual products can remain available when owning policy allows fallback.
         dependencies:
@@ -1967,15 +1964,36 @@ tracks:
             path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
             required_status: accepted
             reason: Pipeline cache and shader fallback policy must follow accepted handoff boundaries.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+            required_status: completed
+            reason: Pipeline cache and fallback implementation requires completed doctrine acceptance evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+            required_status: completed
+            reason: Pipeline cache and fallback diagnostics consume completed renderer material handoff evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/plan.md
+            required_status: active
+            reason: WR-068 implementation must follow the design-first lighting, pipeline cache, and last-good fallback contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
+            required_status: completed
+            reason: PM-RENDER-MESH-MATERIAL-003 requires completed renderer lighting pipeline cache and fallback diagnostics closeout evidence.
         acceptance_criteria:
           - Lighting inputs and shader specialization are prepared renderer data.
           - Pipeline cache diagnostics expose misses, failures, and fallback state.
           - Last-good fallback does not invent product freshness or authority policy.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Runtime mesh/material production examples, benchmarks, visible runtime proof, and production evidence remain WR-069 scope.
+          - PM-RENDER-MESH-MATERIAL-003 proves renderer pipeline/fallback inspection and diagnostics; it does not claim runtime_proven or perfectionist_verified evidence.
+          - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
       - id: PM-RENDER-MESH-MATERIAL-004
         title: Mesh Material Production Evidence
         kind: hardening
-        state: designing
+        state: completed
         goal: Close mesh/material/lighting handoff with docs, examples, tests, benchmarks, and runtime evidence.
         outcome: Mesh/material renderer handoff can claim runtime_proven while known quality gaps stay visible.
         dependencies:
@@ -1988,14 +2006,40 @@ tracks:
             path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
             required_status: accepted
             reason: Production evidence must follow accepted mesh/material renderer doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+            required_status: completed
+            reason: Production evidence requires completed mesh/material handoff doctrine acceptance evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+            required_status: completed
+            reason: Production evidence consumes completed renderer material handoff inspection evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
+            required_status: completed
+            reason: Production evidence consumes completed renderer pipeline/fallback inspection evidence.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-069-renderer-mesh-material-production-evidence/plan.md
+            required_status: active
+            reason: WR-069 implementation must follow the design-first mesh/material production evidence contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-MESH-MATERIAL-004 requires completed renderer mesh/material production evidence closeout.
         acceptance_criteria:
           - Runtime examples prove mesh/material pixels, preview products, shader fallback, and inspection.
           - Docs align material, asset, scene, and renderer ownership boundaries.
           - Completion does not imply perfectionist_verified until cross-track audit passes.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - The canonical mesh/material evidence command is deterministic non-windowed closeout evidence and does not promise universal FPS or a finite swapchain frame.
+          - Timestamp-query evidence is capability-gated; the portable example records unsupported timestamp queries as typed diagnostics.
+          - Criterion reported local baseline movement in pre-existing render-flow benchmark cases; automated benchmark thresholds remain future hardening work.
+          - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
   - id: PT-RENDER-TEMPORAL
     title: Temporal Reconstruction Dynamic Resolution And Upscaling Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Build portable temporal reconstruction and dynamic resolution before optional FSR-style or vendor-specific upscaling adapters.
@@ -2008,27 +2052,35 @@ tracks:
       - id: PM-RENDER-TEMPORAL-001
         title: Temporal Reconstruction Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Accept the portable temporal reconstruction and dynamic resolution doctrine.
-        outcome: Active design records temporal inputs, history validity, upscaling adapter policy, and fallback requirements.
+        outcome: Accepted design records temporal inputs, history validity, upscaling adapter policy, fallback requirements, and optional adapter boundaries.
         dependencies:
           - PM-RENDER-PG-008
           - PM-RENDER-SCALE-001
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
-            required_status: active
-            reason: Temporal doctrine is anchored by the active temporal reconstruction design.
-        evidence_gates: []
+            path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            required_status: accepted
+            reason: Temporal doctrine is anchored by the accepted temporal reconstruction design.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-TEMPORAL-001 requires completed temporal doctrine acceptance closeout evidence.
         acceptance_criteria:
           - Temporal reconstruction starts with portable renderer contracts, not vendor lock-in.
           - Required inputs and fallback behavior are explicit.
           - Dynamic resolution and upscaling diagnostics are part of the design.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Runtime temporal production evidence is closed by PM-RENDER-TEMPORAL-004 / WR-072, not by this design-only milestone.
+          - This design-only milestone does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
       - id: PM-RENDER-TEMPORAL-002
         title: Temporal Inputs History And Dynamic Resolution
         kind: implementation
-        state: designing
+        state: completed
         goal: Add jitter, motion-vector/depth/exposure inputs, history invalidation, and dynamic internal resolution.
         outcome: Renderer inspection explains temporal input availability, history validity, reconstruction mode, and internal/output resolution.
         dependencies:
@@ -2038,18 +2090,30 @@ tracks:
           - WR-070
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
             required_status: accepted
             reason: Temporal input implementation requires accepted reconstruction doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/plan.md
+            required_status: active
+            reason: WR-070 implementation must follow the design-first temporal inputs, history, and dynamic resolution contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+            required_status: completed
+            reason: PM-RENDER-TEMPORAL-002 requires completed renderer temporal input, history, and dynamic resolution closeout evidence.
         acceptance_criteria:
           - History resources are scoped, signature-keyed, and invalidated on input mismatch.
           - Motion vectors, depth, exposure, and reactive-mask style inputs are diagnosable.
           - Dynamic internal resolution does not hide output quality or performance state.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Runtime temporal production examples, benchmark/report artifacts, hardware profiles, and production evidence are closed by PM-RENDER-TEMPORAL-004 / WR-072.
+          - PM-RENDER-TEMPORAL-002 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
       - id: PM-RENDER-TEMPORAL-003
         title: Upscaling Adapters And Ray Reconstruction Inputs
         kind: implementation
-        state: designing
+        state: completed
         goal: Add FSR-style optional adapter hooks and reconstruction inputs for raymarch or ray-query scenes.
         outcome: Upscaling adapters can run when capabilities and inputs exist, and fail closed with diagnostics when they do not.
         dependencies:
@@ -2058,18 +2122,30 @@ tracks:
           - WR-071
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
             required_status: accepted
             reason: Upscaling adapters must follow accepted portable temporal contracts.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/plan.md
+            required_status: active
+            reason: WR-071 implementation must follow the design-first upscaling adapter and ray reconstruction input contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+            required_status: completed
+            reason: PM-RENDER-TEMPORAL-003 requires completed upscaling adapter and ray reconstruction input closeout evidence.
         acceptance_criteria:
           - Vendor-specific adapter paths are optional and capability-gated.
           - Raymarch/ray-query reconstruction has explicit depth, velocity, and history inputs.
           - Unsupported or missing-input states fall back visibly to native rendering.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Runtime temporal production examples, benchmark/report artifacts, hardware profiles, and production evidence are closed by PM-RENDER-TEMPORAL-004 / WR-072.
+          - WR-071 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
       - id: PM-RENDER-TEMPORAL-004
         title: Temporal Production Evidence
         kind: hardening
-        state: designing
+        state: completed
         goal: Prove temporal reconstruction and dynamic resolution through examples, docs, benchmarks, and inspection.
         outcome: Temporal reconstruction can claim runtime_proven with quality, timing, fallback, and history evidence.
         dependencies:
@@ -2079,17 +2155,33 @@ tracks:
           - WR-072
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
             required_status: accepted
             reason: Temporal production evidence must follow accepted reconstruction doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-072-renderer-temporal-production-evidence/plan.md
+            required_status: active
+            reason: WR-072 implementation must follow the design-first temporal production evidence contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-072-renderer-temporal-production-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-TEMPORAL-004 requires completed renderer temporal production evidence closeout.
         acceptance_criteria:
           - Examples prove TAA/TAAU, dynamic resolution, fallback, and temporal diagnostics.
           - Runtime evidence reports timing, input availability, history validity, and quality state.
           - Vendor-specific claims are limited to adapters actually proven on supported hardware.
+          - Completion does not imply perfectionist_verified until cross-track audit passes.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - The canonical temporal evidence command is deterministic non-windowed closeout evidence and does not promise universal FPS or a finite swapchain frame.
+          - Timestamp-query evidence is capability-gated; the portable example records unsupported timestamp queries as typed diagnostics.
+          - Vendor upscaling adapters remain optional capability paths; WR-072 proves fallback-visible adapter and ray-input evidence, not real vendor SDK execution.
+          - Criterion reported local baseline movement in pre-existing render-flow benchmark cases; automated benchmark thresholds remain future hardening work.
+          - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-072-renderer-temporal-production-evidence/closeout.md
   - id: PT-RENDER-RT
     title: Hardware Ray Query And Hybrid Tracing Platform
-    state: active
+    state: completed
     owner: engine
     target_completion_quality: runtime_proven
     strategic_goal: Add optional capability-gated hardware ray-query and hybrid tracing paths without making RT hardware a baseline requirement.
@@ -2102,9 +2194,9 @@ tracks:
       - id: PM-RENDER-RT-001
         title: Hardware Ray Query Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Accept optional ray-query and hybrid tracing capability doctrine.
-        outcome: Active design records capability gating, fallback, and ownership boundaries for hardware ray-query work.
+        outcome: Accepted design records capability gating, fallback, and ownership boundaries for hardware ray-query work.
         dependencies:
           - PM-RENDER-PG-008
           - PM-RENDER-TEMPORAL-001
@@ -2112,18 +2204,28 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
-            required_status: active
-            reason: RT doctrine is anchored by the active hardware ray-query design.
-        evidence_gates: []
+            path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            required_status: accepted
+            reason: RT doctrine is anchored by the accepted hardware ray-query design.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-rt-001-hardware-ray-query-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-RT-001 requires completed hardware ray-query doctrine closeout evidence.
         acceptance_criteria:
           - Ray-query is optional and capability-gated.
           - Fallback paths are part of the doctrine, not a later patch.
           - Derived acceleration structures do not own scene, material, or SDF truth.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Ray-query capability detection and acceleration-resource inspection are closed by PM-RENDER-RT-002 / WR-073.
+          - Hybrid raster/SDF/ray-query runtime proof is closed by PM-RENDER-RT-003 / WR-074.
+          - Ray-query production evidence is closed by PM-RENDER-RT-004 / WR-075.
+          - This design-only milestone does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-rt-001-hardware-ray-query-doctrine/closeout.md
       - id: PM-RENDER-RT-002
         title: Ray Query Capability And Acceleration Resources
         kind: implementation
-        state: designing
+        state: completed
         goal: Add backend capability detection, unsupported diagnostics, and derived acceleration-resource inspection.
         outcome: Renderer can expose optional ray-query capability state and derived acceleration resources without leaking backend handles.
         dependencies:
@@ -2133,18 +2235,31 @@ tracks:
           - WR-073
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
             required_status: accepted
             reason: Ray-query implementation requires accepted capability doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-073-renderer-ray-query-capability-and-acceleration-resources/plan.md
+            required_status: active
+            reason: WR-073 implementation must follow the design-first ray-query capability and acceleration-resource contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+            required_status: completed
+            reason: PM-RENDER-RT-002 requires completed ray-query capability and acceleration-resource closeout evidence.
         acceptance_criteria:
           - Unsupported hardware or backend states are explicit diagnostics.
           - Acceleration resources are derived from prepared products and renderer handoff data.
           - Public DTOs expose evidence, not mutable backend handles.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Hybrid raster/SDF/ray-query runtime proof is closed by PM-RENDER-RT-003 / WR-074.
+          - Ray-query production examples, hardware matrix, fallback evidence, and production diagnostics are closed by PM-RENDER-RT-004 / WR-075.
+          - PM-RENDER-RT-002 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
       - id: PM-RENDER-RT-003
         title: Hybrid Ray SDF Raster Runtime Proof
         kind: implementation
-        state: designing
+        state: completed
         goal: Prove a hybrid path that composes raster, SDF raymarch, and optional ray-query work.
         outcome: Hybrid tracing can run when supported and produce equivalent or diagnosed fallback behavior when unsupported.
         dependencies:
@@ -2155,18 +2270,30 @@ tracks:
           - WR-074
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
             required_status: accepted
             reason: Hybrid runtime proof must follow accepted ray-query and fallback doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/plan.md
+            required_status: active
+            reason: WR-074 implementation must follow the design-first hybrid runtime proof contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+            required_status: completed
+            reason: PM-RENDER-RT-003 requires completed hybrid raster/SDF/temporal/ray-query runtime proof closeout evidence.
         acceptance_criteria:
           - Hybrid scenes have non-RT fallback evidence.
           - GPU timing distinguishes raster, SDF, ray-query, and reconstruction costs where supported.
           - Visual differences and unsupported paths are documented and inspectable.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Ray-query production examples, hardware matrix, fallback artifacts, production diagnostics, and final RT runtime_proven evidence are closed by PM-RENDER-RT-004 / WR-075.
+          - PM-RENDER-RT-003 does not claim hardware ray-query execution, denoising, shader-table support, or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
       - id: PM-RENDER-RT-004
         title: Ray Query Production Evidence
         kind: hardening
-        state: designing
+        state: completed
         goal: Close optional ray-query support with docs, examples, hardware matrix, fallback evidence, and diagnostics.
         outcome: RT support can claim runtime_proven only as an optional path with mandatory fallback.
         dependencies:
@@ -2176,14 +2303,26 @@ tracks:
           - WR-075
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
             required_status: accepted
             reason: RT production evidence must follow accepted optional capability doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-075-renderer-ray-query-production-evidence/plan.md
+            required_status: active
+            reason: WR-075 implementation must follow the design-first ray-query production evidence contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
+            required_status: completed
+            reason: PM-RENDER-RT-004 requires completed optional ray-query production evidence closeout evidence.
         acceptance_criteria:
           - Hardware matrix documents supported, unsupported, and fallback behavior.
           - Examples and docs do not imply RT hardware is required for baseline rendering.
           - Completion remains runtime_proven, not perfectionist_verified.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Final cross-track no-gap verification and perfectionist_verified status remain PT-RENDER-PERFECTION scope.
+          - PM-RENDER-RT-004 does not claim mandatory RT hardware, vendor certification, denoising quality, shader-table support, or backend-specific RT execution.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
   - id: PT-RENDER-PRODUCT-VISUALS
     title: Product Visual Producers Platform
     state: active
@@ -2199,7 +2338,7 @@ tracks:
       - id: PM-RENDER-PRODUCT-VISUALS-001
         title: Product Visual Producer Doctrine
         kind: design
-        state: active
+        state: completed
         goal: Accept the product visual producer ownership and renderer integration doctrine.
         outcome: Active design separates renderer execution APIs from particles, VFX, vegetation, water, atmosphere, weather, and animation product truth.
         dependencies:
@@ -2208,22 +2347,32 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
-            required_status: active
+            path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
+            required_status: accepted
             reason: Product visual producer doctrine is anchored by the active producer integration design.
           - kind: design
             path: docs-site/src/content/docs/design/accepted/field-product-contracts-diagnostics-and-residency-design.md
             required_status: accepted
             reason: Product visual producers must preserve accepted field product contracts.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-render-product-visuals-001-product-visual-producer-doctrine/closeout.md
+            required_status: completed
+            reason: PM-RENDER-PRODUCT-VISUALS-001 requires completed product visual producer doctrine closeout evidence.
         acceptance_criteria:
-          - Product domains own source truth and policy.
-          - Renderer owns prepared contribution execution, residency, timing, and diagnostics only.
-          - Producer families are sequenced behind their owning product contracts.
+          - Renderer execution APIs stay separate from product visual source truth.
+          - Product visual producer families retain domain-owned semantics and fallback legality.
+          - Downstream implementation rows consume this doctrine before product visual code.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Particle/VFX/trail/decal implementation remains PM-RENDER-PRODUCT-VISUALS-002 / WR-076 scope.
+          - Vegetation/water/atmosphere/weather field visual implementation remains PM-RENDER-PRODUCT-VISUALS-003 / WR-077 scope.
+          - Animation/deformation evidence remains PM-RENDER-PRODUCT-VISUALS-004 / WR-078 scope.
+          - This doctrine milestone does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-product-visuals-001-product-visual-producer-doctrine/closeout.md
       - id: PM-RENDER-PRODUCT-VISUALS-002
         title: Particles VFX Trails And Decals
         kind: implementation
-        state: designing
+        state: completed
         goal: Integrate particle, VFX, trail, decal, sorting, and transparency visual products with renderer execution.
         outcome: Particle-style product visuals can submit prepared contributions and residency requests through shared renderer APIs.
         dependencies:
@@ -2235,14 +2384,28 @@ tracks:
           - WR-076
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
             required_status: accepted
             reason: Particle/VFX integration requires accepted producer doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/plan.md
+            required_status: active
+            reason: WR-076 implementation must follow the design-first particle/VFX integration contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+            required_status: completed
+            reason: PM-RENDER-PRODUCT-VISUALS-002 requires completed particle/VFX producer contract closeout evidence.
         acceptance_criteria:
           - Particle/VFX truth stays in owning product domains.
           - Sorting, transparency, trails, decals, and temporal inputs are explicit and inspectable.
           - Renderer scale and timing diagnostics cover submitted visual work.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Vegetation, water, atmosphere, weather, and field visuals remain PM-RENDER-PRODUCT-VISUALS-003 / WR-077 scope.
+          - Animation/deformation and cross-family product visual evidence remain PM-RENDER-PRODUCT-VISUALS-004 / WR-078 scope.
+          - Runtime production examples, benchmark artifacts, hardware profiles, and final no-gap stack verification remain downstream product-visual and perfectionist-audit scope.
+          - PM-RENDER-PRODUCT-VISUALS-002 does not claim runtime_proven or perfectionist_verified evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
       - id: PM-RENDER-PRODUCT-VISUALS-003
         title: Vegetation Water Atmosphere Weather And Field Visuals
         kind: implementation
@@ -2258,7 +2421,7 @@ tracks:
           - WR-077
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
             required_status: accepted
             reason: World visual producer integration requires accepted producer doctrine.
         evidence_gates: []
@@ -2281,7 +2444,7 @@ tracks:
           - WR-078
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+            path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
             required_status: accepted
             reason: Product visual production evidence must follow accepted producer doctrine.
         evidence_gates: []

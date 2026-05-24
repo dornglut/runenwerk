@@ -1,28 +1,26 @@
 version: 1
 idea: Renderer Temporal Inputs History And Dynamic Resolution
-source_path: docs-site/src/content/docs/design/active/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
+- PM-RENDER-TEMPORAL-001 accepted the temporal reconstruction and dynamic resolution doctrine.
 - Run architecture governance review before implementation.
 - Confirm Clean Architecture dependency direction and DDD owner.
 - Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+open_questions: []
 item:
   id: WR-070
   title: Renderer Temporal Inputs History And Dynamic Resolution
   diagram_title: Renderer Temporal Inputs History And Dynamic Res
   alias: WR070
-  lane: Discovery
+  lane: Render implementation
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed bounded temporal input inspection
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +29,73 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-061
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-temporal-inputs-history-and-dyn
+  - docs-site/src/content/docs/reports/implementation-plans/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_temporal
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md.
+  current_decision: Completed. Renderer inspection now reports temporal input availability, history signature validity, jitter sequence/phase evidence, dynamic internal/output resolution separation, reconstruction mode, native fallback state, and fail-closed diagnostics without moving producer truth into renderer code.
+  current_call: Use WR-070 as completed PM-RENDER-TEMPORAL-002 evidence before starting WR-071 upscaling adapter and ray reconstruction input work.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; optional adapters, ray reconstruction inputs, production examples, benchmarks, and final perfectionist verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Optional upscaling adapters and ray reconstruction inputs remain WR-071 scope.
+  - Runtime temporal production examples, benchmark/report artifacts, hardware profiles, and production evidence remain WR-072 scope.
+  - WR-070 does not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - temporal input proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Temporal input implementation requires accepted reconstruction doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-070 requires completed PM-RENDER-TEMPORAL-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-070 consumes completed renderer working-set and dynamic-target residency budget evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-070 implementation must follow the design-first temporal inputs and dynamic resolution contract.
   ddd_owner: engine/src/plugins/render
   adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  fitness_function_requirement: Temporal input/history guards, dynamic-resolution inspection tests, render runtime inspection tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned camera, scene, product, material, SDF, ray-query, and exposure producers.
+edges:
+- source: WR-061
+  target: WR-070
+  label: dynamic target residency evidence before temporal history proof

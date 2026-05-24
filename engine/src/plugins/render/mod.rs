@@ -36,5 +36,6 @@ pub use residency::*;
 pub use resource::*;
 pub use runtime::*;
 pub use shader::{
-    ShaderHandle, ShaderRegistryResource, ShaderReloadPollReport, ShaderReloadPollStatus,
+    ShaderHandle, ShaderRegistryEvent, ShaderRegistryEventKind, ShaderRegistryResource,
+    ShaderReloadPollReport, ShaderReloadPollStatus,
 };

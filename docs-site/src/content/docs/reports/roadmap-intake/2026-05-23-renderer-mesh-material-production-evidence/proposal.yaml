@@ -1,0 +1,122 @@
+version: 1
+idea: Renderer Mesh Material Production Evidence
+source_path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
+owner: engine/src/plugins/render
+created_at: '2026-05-23'
+governance_notes:
+- Architecture governance reviewed PM-RENDER-MESH-MATERIAL-001 doctrine acceptance before mesh/material production evidence gates.
+- WR-069 must consume completed WR-067 material handoff inspection and WR-068 pipeline/fallback inspection evidence.
+- Record ADR only if implementation changes material, asset, model, scene, product, shader source, fallback, rebuild, or persisted ABI ownership.
+open_questions: []
+item:
+  id: WR-069
+  title: Renderer Mesh Material Production Evidence
+  diagram_title: Renderer Mesh Material Production Evidence
+  alias: WR069
+  lane: Render implementation
+  dependency_level: L4
+  gate: Completed runtime mesh material production evidence
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-067
+  - WR-068
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/examples
+  - engine/benches
+  - engine/benchmark-artifacts/render-mesh-material-production-evidence
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/benchmarks/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-23-renderer-mesh-material-production-evidence
+  - docs-site/src/content/docs/reports/implementation-plans/wr-069-renderer-mesh-material-production-evidence/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_mesh_material
+  - cargo test -p engine render_pipeline
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - cargo test -p engine --example render_mesh_material_production_evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime_proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md.
+  current_decision: Completed. Mesh/material production evidence now consumes WR-067 material handoff inspection and WR-068 pipeline/fallback inspection, records visible material pixel evidence, exposes fail-closed production diagnostics, and measures the evidence path in the canonical render-flow benchmark.
+  current_call: Use WR-069 as completed PM-RENDER-MESH-MATERIAL-004 evidence before continuing the renderer production stack.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; final no-gap perfectionist verification remains downstream scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - The canonical mesh/material evidence command is deterministic non-windowed closeout evidence and does not promise universal FPS or a finite swapchain frame.
+  - Timestamp-query evidence is capability-gated; the portable example records unsupported timestamp queries as typed diagnostics.
+  - Criterion reported local baseline movement in pre-existing render-flow benchmark cases; automated benchmark thresholds remain future hardening work.
+  - Final perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+  diagram_call:
+  - runtime proof
+  - mesh material closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Production evidence must follow the accepted renderer handoff doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 requires completed PM-RENDER-MESH-MATERIAL-001 doctrine acceptance evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 must consume completed renderer material handoff inspection evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 must consume completed renderer pipeline/fallback inspection evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-069-renderer-mesh-material-production-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-069 implementation must follow the design-first runtime production evidence contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 completion is proven by the runtime production evidence closeout.
+  ddd_owner: engine renderer runtime evidence, examples, benchmarks, pass provenance, inspection, and production reports
+  adr_requirement: No ADR required for consuming existing renderer-owned inspections and runtime evidence; ADR required if source truth, fallback authority, or persisted ABI moves into renderer code.
+  fitness_function_requirement: Runtime evidence example, material handoff guard tests, pipeline fallback guard tests, render runtime inspection tests, benchmark/report evidence, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product producers.
+edges:
+- source: WR-067
+  target: WR-069
+  label: material handoff evidence before production proof
+- source: WR-068
+  target: WR-069
+  label: pipeline fallback evidence before production proof

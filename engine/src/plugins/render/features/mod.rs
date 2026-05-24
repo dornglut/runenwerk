@@ -6,10 +6,12 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 pub mod caves;
 pub mod detail;
 pub mod editor_picking;
+pub mod particle_vfx;
 pub mod ui;
 pub mod world;
 
 pub use editor_picking::*;
+pub use particle_vfx::*;
 pub use ui::*;
 
 pub const SCENE_ROUTE_RENDER_FEATURE_LABEL: &str = "scene.route";
@@ -18,6 +20,7 @@ pub const CAVE_INTERIOR_RENDER_FEATURE_LABEL: &str = "cave.interior";
 pub const PROCEDURAL_WORLD_RENDER_FEATURE_LABEL: &str = "procedural.world";
 pub const DETAIL_RENDER_FEATURE_LABEL: &str = "detail";
 pub const MATERIAL_RENDER_FEATURE_LABEL: &str = "material";
+pub const PARTICLE_VFX_RENDER_FEATURE_LABEL: &str = "particle.vfx";
 pub const DEFORMATION_RENDER_FEATURE_LABEL: &str = "deformation";
 pub const WIND_FIELDS_RENDER_FEATURE_LABEL: &str = "wind.fields";
 pub const EDITOR_PICKING_RENDER_FEATURE_LABEL: &str = "editor.picking";
@@ -32,6 +35,7 @@ pub const DETAIL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(7);
 pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(8);
 pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(9);
 pub const WIND_FIELDS_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(10);
+pub const PARTICLE_VFX_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(11);
 
 const fn render_feature_id(raw: u64) -> RenderFeatureId {
     match RenderFeatureId::try_from_raw(raw) {
@@ -356,6 +360,7 @@ impl RenderFeatureRegistryResource {
                 .with_order_hint(20)
                 .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
+        self.upsert_descriptor(particle_vfx_render_feature_descriptor());
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
                 DEFORMATION_RENDER_FEATURE_ID,
@@ -514,6 +519,7 @@ mod tests {
                 "procedural.world".to_string(),
                 "detail".to_string(),
                 "material".to_string(),
+                "particle.vfx".to_string(),
                 "deformation".to_string(),
                 "wind.fields".to_string(),
             ]

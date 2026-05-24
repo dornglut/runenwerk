@@ -782,10 +782,10 @@ items:
     applies_to: implementation
     reason: WR-090 implementation must follow the accepted indirect draw hardening contract.
   ddd_owner: engine render plugin
-  adr_requirement: No ADR while the work keeps draw-source validation renderer-owned; ADR required before changing product truth,
-    fallback legality, or cross-crate renderer ABI ownership.
-  fitness_function_requirement: Render-flow graph validation tests for direct, indexed direct, indirect, indexed indirect, wrong
-    args type, misaligned offset, and out-of-bounds offset.
+  adr_requirement: No ADR while the work keeps draw-source validation renderer-owned; ADR required before changing product
+    truth, fallback legality, or cross-crate renderer ABI ownership.
+  fitness_function_requirement: Render-flow graph validation tests for direct, indexed direct, indirect, indexed indirect,
+    wrong args type, misaligned offset, and out-of-bounds offset.
   ownership_mode: Complicated-subsystem renderer owner.
 - id: WR-091
   title: Reusable GPU Primitive Shader Dispatch
@@ -856,8 +856,8 @@ items:
     applies_to: implementation
     reason: WR-091 implementation must follow the accepted primitive dispatch contract.
   ddd_owner: engine render plugin
-  adr_requirement: No ADR while primitives remain renderer-owned derived execution; ADR required before adding hidden CPU fallback
-    or moving product/world truth into primitive execution.
+  adr_requirement: No ADR while primitives remain renderer-owned derived execution; ADR required before adding hidden CPU
+    fallback or moving product/world truth into primitive execution.
   fitness_function_requirement: GPU primitive tests proving hierarchical prefix scan, counter reset, scatter/compaction, indirect
     args generation, typed diagnostics, and non-boids runtime dispatch.
   ownership_mode: Complicated-subsystem renderer owner.
@@ -983,8 +983,8 @@ items:
   - task production:validate
   - task production:check
   - task planning:validate
-  next_evidence: Promote only after WR-092 closes. Close the hardening track only when runtime evidence proves indirect
-    validation, primitive shader dispatch, graph catch-up scheduling, benchmarks, and docs.
+  next_evidence: Promote only after WR-092 closes. Close the hardening track only when runtime evidence proves indirect validation,
+    primitive shader dispatch, graph catch-up scheduling, benchmarks, and docs.
   current_decision: Ready-next evidence and closeout slice for PT-RENDER-PROCEDURAL-POPULATION-HARDENING.
   current_call: Close the hardening track at runtime_proven only after earlier slice closeouts prove runtime behavior.
   first_move: After WR-092 closeout, run task production:plan -- --milestone "PM-RENDER-POP-HARDEN-005" --roadmap "WR-093".
@@ -1176,6 +1176,15 @@ edges:
 - source: WR-058
   target: WR-059
   label: procedural API before boids rewrite
+- source: WR-058
+  target: WR-076
+  label: procedural visual API enables particle/VFX prepared contributions
+- source: WR-062
+  target: WR-076
+  label: scale visibility and indirect submission bound particle/VFX work
+- source: WR-070
+  target: WR-076
+  label: temporal inputs support particle/VFX reconstruction data
 - source: WR-060
   target: WR-083
   label: procedural evidence before population doctrine

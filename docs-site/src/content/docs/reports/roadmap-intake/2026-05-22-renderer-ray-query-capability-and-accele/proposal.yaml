@@ -1,28 +1,26 @@
 version: 1
 idea: Renderer Ray Query Capability And Acceleration Resources
-source_path: docs-site/src/content/docs/design/active/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
-open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- PM-RENDER-RT-001 accepted the optional hardware ray-query and hybrid tracing doctrine.
+- Architecture governance review for WR-073 confirms engine/src/plugins/render owns ray-query capability and derived acceleration-resource inspection.
+- No ADR is required for renderer-owned DTOs and fail-closed diagnostics.
+- Stop for ADR if implementation introduces a durable cross-domain acceleration-resource ABI, moves source truth or fallback authority into renderer code, or requires RT hardware for baseline correctness.
+open_questions: []
 item:
   id: WR-073
   title: Renderer Ray Query Capability And Acceleration Resources
   diagram_title: Renderer Ray Query Capability And Acceleration R
   alias: WR073
-  lane: Discovery
+  lane: Render
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed bounded ray-query capability and acceleration-resource inspection
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +29,78 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-061
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-ray-query-capability-and-accele
+  - docs-site/src/content/docs/reports/implementation-plans/wr-073-renderer-ray-query-capability-and-acceleration-resources/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_ray_query
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_resource_model
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md.
+  current_decision: Completed. Renderer inspection now reports optional ray-query capability state, unsupported diagnostics, visible non-RT fallback, derived acceleration-resource lineage, build/update status, memory evidence, stale invalidation, and backend-handle privacy without moving producer truth into renderer code.
+  current_call: Use WR-073 as completed PM-RENDER-RT-002 evidence before starting WR-074 hybrid runtime proof.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; hybrid runtime proof, production evidence, and final no-gap verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Hybrid raster/SDF/ray-query runtime proof remains WR-074 scope.
+  - Ray-query production examples, hardware matrix, benchmark/report artifacts, fallback evidence, and production diagnostics remain WR-075 scope.
+  - WR-073 does not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - ray query capability contract
+  - apply and promote before implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Ray-query capability implementation requires accepted optional RT doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-rt-001-hardware-ray-query-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-073 requires completed PM-RENDER-RT-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-073 depends on completed renderer working-set and residency budget evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-073-renderer-ray-query-capability-and-acceleration-resources/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-073 implementation must follow the design-first ray-query capability and acceleration-resource contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-073 completion is proven by the bounded ray-query capability and acceleration-resource closeout.
   ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  adr_requirement: No ADR for renderer-owned capability and acceleration-resource inspection DTOs; ADR required for durable cross-domain acceleration-resource ABI, runtime ownership change, fallback authority change, or mandatory RT hardware baseline.
+  fitness_function_requirement: Ray-query capability and acceleration-resource guard tests, render runtime/resource inspection tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform with enabling workspace documentation.
+edges:
+- source: WR-061
+  target: WR-073
+  label: residency lineage before derived acceleration-resource inspection

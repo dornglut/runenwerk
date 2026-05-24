@@ -155,6 +155,229 @@ items:
   adr_requirement: No new ADR for Phase 1-3 hardening unless authority ownership changes.
   fitness_function_requirement: Replication lifecycle tests and ECS authority diagnostics.
   ownership_mode: Stream-aligned net owner with ECS enabling support.
+- id: WR-009
+  title: Native multi-window editor presentation
+  diagram_title: Native multi-window editor
+  alias: WINDOW
+  lane: Productization
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P2
+  value: 3
+  blocker: 2
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Bounded PM-006 multi-surface presentation contract slice after product-surface hardening
+  kano: Performance
+  dependencies:
+  - WR-003
+  write_scopes:
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - apps/runenwerk_editor/src/runtime/viewport
+  - apps/runenwerk_editor/tests
+  - engine/src/runtime
+  - engine/src/app
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-009-native-multi-window-editor-presentation/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/render-final-architecture-migration.md
+  - docs-site/src/content/docs/engine/plugins/render/docs/roadmap.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p editor_shell multi_window
+  - cargo test -p engine window
+  - cargo test -p engine --test render_multi_surface
+  - cargo test -p runenwerk_editor window
+  - cargo test -p runenwerk_editor --test viewport_architecture_guards
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md.
+    PM-006 completed as a bounded multi-surface presentation contract with typed editor-window, native-window, render-surface,
+    prepared-frame, inspection, and submit-mismatch diagnostics; GPU/native two-swapchain proof remains a known bounded_contract
+    gap.
+  current_decision: WR-009 is completed as the bounded PM-RENDER-PG-006 multi-surface presentation implementation. The editor
+    app owns editor-window to native-window to render-surface bindings, engine runtime owns native-window records, and render
+    runtime owns render-surface identity and submit mismatch rejection.
+  current_call: Completed. Do not reopen WR-009 for render fragments, hot reload, final production-readiness inspection, capture/replay
+    policy, performance budgets, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-006 multi-surface presentation slice. PM-RENDER-PG-008 remains an incomplete follow-up
+    milestone.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Secondary native windows are created from engine-owned requests, but independent GPU presentation into two native swapchains
+    is not runtime-proven in this environment.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay policy, performance budgets, final examples, and final
+    inspection hardening.
+  - PM-006 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+  diagram_call:
+  - bounded multi-surface
+  - native/window/surface ids
+  - no product policy
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Multi-surface presentation must follow the accepted render product graph boundary.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Native multi-window implementation requires accepted window, input, UI frame, and swapchain ownership.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-009-native-multi-window-editor-presentation/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-RENDER-PG-006 implementation must follow the bounded WR-009 promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-006 requires completed bounded multi-surface presentation closeout evidence.
+  ddd_owner: apps/runenwerk_editor with engine runtime and render runtime collaboration
+  adr_requirement: No ADR required while this remains a bounded app/runtime/render contract and does not replace global platform/window
+    ownership policy.
+  fitness_function_requirement: Logical window tests, native window registry tests, window-scoped platform event tests, render-surface
+    registry tests, prepared-frame surface inspection tests, submit mismatch diagnostics, and workflow validation.
+  ownership_mode: Stream-aligned editor owner with platform/render collaboration.
+- id: WR-010
+  title: Render fragment and data-driven maturity R10
+  diagram_title: Render fragments R10
+  alias: FRAGMENTS
+  lane: Productization
+  dependency_level: L2
+  gate: Completed
+  planning_state: completed
+  priority: P2
+  value: 3
+  blocker: 2
+  tc: 2
+  rr_oe: 3
+  du: 3
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.7
+  rice: Bounded PM-007 render fragment contract slice after compiler and product-surface hardening
+  kano: Neutral
+  dependencies:
+  - WR-003
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - engine/examples
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/plugins/render
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-010-render-fragment-and-data-driven-maturity-r10/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  validations:
+  - cargo test -p engine --test render_flow_fragments
+  - cargo test -p engine --test render_flow_v2
+  - cargo test -p engine --test render_runtime_inspect
+  - cargo test -p engine --example render_fragment_compositor
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task ai:goal -- --track PT-RENDER-PG
+  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md.
+    PM-007 completed as a bounded render fragment contract with typed fragment packages, validation, merge provenance, last-good
+    reload state, inspection, and a normal RenderFlow compositor example.
+  current_decision: WR-010 is completed as the bounded PM-RENDER-PG-007 render fragment and hot reload implementation. Fragment
+    descriptors validate before merge, local labels are namespace-qualified, valid fragments compile through normal RenderFlow,
+    and invalid reloads preserve the last-good active package revision.
+  current_call: Completed. Do not reopen WR-010 for PM-008 production-readiness inspection, capture/replay policy, performance
+    budgets, project asset watching, editor catalog ownership, or renderer-owned product policy.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
+  main_blocker: Completed bounded PM-007 fragment slice. PM-RENDER-PG-008 remains the next dependency for production readiness.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Project asset watching, package catalog ownership, migration UI, and save/load workflow remain asset/editor-owned follow-up
+    work.
+  - The fragment compositor example proves normal RenderFlow compilation, not a host-backed GPU pixel proof.
+  - PM-RENDER-PG-008 still owns production readiness, capture/replay policy, performance budgets, broad examples, and final
+    inspection hardening.
+  - PM-007 did not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+  diagram_call:
+  - typed fragment contracts
+  - merge provenance
+  - last-good reload
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Render fragment execution must follow the accepted product/render execution boundary.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Fragment assets, validation, schema/versioning, merge, and hot reload require accepted fragment design.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-010-render-fragment-and-data-driven-maturity-r10/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-RENDER-PG-007 implementation must follow the bounded WR-010 promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM-007 requires completed bounded render fragment and hot reload closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: ADR only if data-driven fragments become a cross-domain contract, external package ABI, or source-of-truth
+    ownership shift.
+  fitness_function_requirement: Fragment validation, merge provenance, backend capability rejection, last-good reload, inspection,
+    example compile proof, and workflow validation.
+  ownership_mode: Complicated-subsystem render owner.
 - id: WR-012
   title: Neutral graph substrate boundary
   diagram_title: Neutral graph substrate
@@ -381,70 +604,6 @@ items:
   fitness_function_requirement: Deterministic import, descriptor round trip, failed import preservation, ratification, and
     diagnostics tests.
   ownership_mode: Enabling platform support for editor product workflows.
-- id: WR-026
-  title: Source-backed Asset Editor Adapters
-  diagram_title: Asset editor adapters
-  alias: ASSETADAPT
-  lane: Core support
-  dependency_level: L2
-  gate: After asset core contracts
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 3
-  rr_oe: 4
-  du: 4
-  effort: 5
-  confidence: 0.8
-  expected_score: 2.4
-  rice: Editor catalog workflow after domain asset identity stabilizes
-  kano: Basic
-  dependencies:
-  - WR-020
-  write_scopes:
-  - apps/runenwerk_editor/src/asset_pipeline
-  - apps/runenwerk_editor/src/editor_app/state.rs
-  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
-  - apps/runenwerk_editor/src/shell/providers
-  - domain/editor
-  - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
-  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
-  - docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-026-source-backed-asset-editor-adapters/plan.md
-  validations:
-  - cargo test -p runenwerk_editor asset
-  - cargo test -p runenwerk_editor catalog
-  - task docs:validate
-  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
-    after implementation and validation.
-  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
-    after implementation and validation.
-  current_call: Ready-next only after the WR-020 closeout; implement only through the accepted WR-026 contract with expanded
-    adapter, provider, shell dispatch, app state, and closeout write scopes. Adapter outputs feed later renderer consumers
-    but do not move asset truth into renderer code.
-  main_blocker: Explicit WR-026 execution direction and accepted implementation contract are now present; remaining gate is
-    roadmap promotion plus rendered and validated write-scope evidence before product code changes.
-  first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app
-    state; keep renderer-facing consumers aligned with engine/roadmaps/fully-featured-renderer-roadmap.md.
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Later material, prefab, external importer, cache-GC, and runtime hot-reload consumers still need product-specific evidence.
-  completion_audit: ''
-  diagram_call:
-  - editor adapter wiring
-  - prior-valid artifacts
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
-    required_status: active
-    applies_to: implementation
-    reason: Editor adapters must follow the active asset pipeline ownership design.
-  ddd_owner: apps/runenwerk_editor asset workflow adapting domain/asset contracts
-  adr_requirement: No ADR for adapter wiring; ADR required if editor app becomes asset semantic owner.
-  fitness_function_requirement: Catalog round trip, deterministic job orchestration, failed import preservation, and diagnostics
-    tests.
-  ownership_mode: Stream-aligned editor workflow over domain/asset platform contracts.
 - id: WR-021
   title: Material Lab and material preview products
   diagram_title: Material Lab
@@ -603,6 +762,70 @@ items:
     dock-drag/drop-zone precedence and invalid-target exclusion, radial/menu hit testing where applicable, viewport status
     dispatch rejection, viewport input arbitration, and screenshot or primitive-order visual/frame-order regressions.
   ownership_mode: Complicated-subsystem domain UI architecture with stream-aligned editor shell migration.
+- id: WR-026
+  title: Source-backed Asset Editor Adapters
+  diagram_title: Asset editor adapters
+  alias: ASSETADAPT
+  lane: Core support
+  dependency_level: L2
+  gate: After asset core contracts
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.4
+  rice: Editor catalog workflow after domain asset identity stabilizes
+  kano: Basic
+  dependencies:
+  - WR-020
+  write_scopes:
+  - apps/runenwerk_editor/src/asset_pipeline
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - domain/editor
+  - docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
+  - docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-026-source-backed-asset-editor-adapters/plan.md
+  validations:
+  - cargo test -p runenwerk_editor asset
+  - cargo test -p runenwerk_editor catalog
+  - task docs:validate
+  next_evidence: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+    after implementation and validation.
+  current_decision: 2026-05-16 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/wr-026-source-backed-asset-editor-adapters/closeout.md
+    after implementation and validation.
+  current_call: Ready-next only after the WR-020 closeout; implement only through the accepted WR-026 contract with expanded
+    adapter, provider, shell dispatch, app state, and closeout write scopes. Adapter outputs feed later renderer consumers
+    but do not move asset truth into renderer code.
+  main_blocker: Explicit WR-026 execution direction and accepted implementation contract are now present; remaining gate is
+    roadmap promotion plus rendered and validated write-scope evidence before product code changes.
+  first_move: Wire apps/runenwerk_editor asset_pipeline to domain/asset contracts without moving asset invariants into app
+    state; keep renderer-facing consumers aligned with engine/roadmaps/fully-featured-renderer-roadmap.md.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Later material, prefab, external importer, cache-GC, and runtime hot-reload consumers still need product-specific evidence.
+  completion_audit: ''
+  diagram_call:
+  - editor adapter wiring
+  - prior-valid artifacts
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Editor adapters must follow the active asset pipeline ownership design.
+  ddd_owner: apps/runenwerk_editor asset workflow adapting domain/asset contracts
+  adr_requirement: No ADR for adapter wiring; ADR required if editor app becomes asset semantic owner.
+  fitness_function_requirement: Catalog round trip, deterministic job orchestration, failed import preservation, and diagnostics
+    tests.
+  ownership_mode: Stream-aligned editor workflow over domain/asset platform contracts.
 - id: WR-027
   title: Completion Quality And Perfectionist Audit Gate
   diagram_title: Completion quality gate
@@ -1808,229 +2031,6 @@ items:
     UI rejection tests, upload-backed product-surface tests, field/debug status tests, drawing product-surface tests, prepared-frame
     inspection tests, and workflow validation.
   ownership_mode: Complicated-subsystem render owner enabling stream-aligned product, editor, and drawing producers.
-- id: WR-009
-  title: Native multi-window editor presentation
-  diagram_title: Native multi-window editor
-  alias: WINDOW
-  lane: Productization
-  dependency_level: L2
-  gate: Completed
-  planning_state: completed
-  priority: P2
-  value: 3
-  blocker: 2
-  tc: 2
-  rr_oe: 3
-  du: 3
-  effort: 8
-  confidence: 0.5
-  expected_score: 0.7
-  rice: Bounded PM-006 multi-surface presentation contract slice after product-surface hardening
-  kano: Performance
-  dependencies:
-  - WR-003
-  write_scopes:
-  - domain/editor/editor_shell/src/workspace
-  - domain/editor/editor_shell/src/commands
-  - domain/editor/editor_shell/src/composition
-  - apps/runenwerk_editor/src/shell
-  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
-  - apps/runenwerk_editor/src/runtime/viewport
-  - apps/runenwerk_editor/tests
-  - engine/src/runtime
-  - engine/src/app
-  - engine/src/plugins/render
-  - engine/tests
-  - docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-009-native-multi-window-editor-presentation/plan.md
-  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
-  - docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
-  - docs-site/src/content/docs/engine/reference/plugins/render
-  - docs-site/src/content/docs/engine/roadmaps/render-final-architecture-migration.md
-  - docs-site/src/content/docs/engine/plugins/render/docs/roadmap.md
-  - docs-site/src/content/docs/workspace/roadmap-items.yaml
-  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
-  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
-  - docs-site/src/content/docs/workspace/design-implementation-triage.md
-  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
-  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
-  - docs-site/src/content/docs/workspace/production-tracks.yaml
-  - docs-site/src/content/docs/workspace/production-track-index.md
-  - docs-site/src/content/docs/workspace/production-milestone-register.md
-  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
-  validations:
-  - cargo test -p editor_shell multi_window
-  - cargo test -p engine window
-  - cargo test -p engine --test render_multi_surface
-  - cargo test -p runenwerk_editor window
-  - cargo test -p runenwerk_editor --test viewport_architecture_guards
-  - task docs:validate
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task production:render
-  - task production:validate
-  - task production:check
-  - task planning:validate
-  - task ai:goal -- --track PT-RENDER-PG
-  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md.
-    PM-006 completed as a bounded multi-surface presentation contract with typed editor-window, native-window, render-surface,
-    prepared-frame, inspection, and submit-mismatch diagnostics; GPU/native two-swapchain proof remains a known bounded_contract
-    gap.
-  current_decision: WR-009 is completed as the bounded PM-RENDER-PG-006 multi-surface presentation implementation. The editor
-    app owns editor-window to native-window to render-surface bindings, engine runtime owns native-window records, and render
-    runtime owns render-surface identity and submit mismatch rejection.
-  current_call: Completed. Do not reopen WR-009 for render fragments, hot reload, final production-readiness inspection, capture/replay
-    policy, performance budgets, or renderer-owned product policy.
-  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
-  main_blocker: Completed bounded PM-006 multi-surface presentation slice. PM-RENDER-PG-008 remains an incomplete follow-up
-    milestone.
-  why_not_ready: ''
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Secondary native windows are created from engine-owned requests, but independent GPU presentation into two native swapchains
-    is not runtime-proven in this environment.
-  - PM-RENDER-PG-008 still owns production readiness, capture/replay policy, performance budgets, final examples, and final
-    inspection hardening.
-  - PM-006 did not claim runtime_proven or perfectionist_verified evidence.
-  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
-  diagram_call:
-  - bounded multi-surface
-  - native/window/surface ids
-  - no product policy
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Multi-surface presentation must follow the accepted render product graph boundary.
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Native multi-window implementation requires accepted window, input, UI frame, and swapchain ownership.
-  - kind: design
-    path: docs-site/src/content/docs/reports/implementation-plans/wr-009-native-multi-window-editor-presentation/plan.md
-    required_status: active
-    applies_to: implementation
-    reason: PM-RENDER-PG-006 implementation must follow the bounded WR-009 promotion and implementation-readiness contract.
-  - kind: doc
-    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md
-    required_status: completed
-    applies_to: implementation
-    reason: PM-006 requires completed bounded multi-surface presentation closeout evidence.
-  ddd_owner: apps/runenwerk_editor with engine runtime and render runtime collaboration
-  adr_requirement: No ADR required while this remains a bounded app/runtime/render contract and does not replace global platform/window
-    ownership policy.
-  fitness_function_requirement: Logical window tests, native window registry tests, window-scoped platform event tests, render-surface
-    registry tests, prepared-frame surface inspection tests, submit mismatch diagnostics, and workflow validation.
-  ownership_mode: Stream-aligned editor owner with platform/render collaboration.
-- id: WR-010
-  title: Render fragment and data-driven maturity R10
-  diagram_title: Render fragments R10
-  alias: FRAGMENTS
-  lane: Productization
-  dependency_level: L2
-  gate: Completed
-  planning_state: completed
-  priority: P2
-  value: 3
-  blocker: 2
-  tc: 2
-  rr_oe: 3
-  du: 3
-  effort: 8
-  confidence: 0.5
-  expected_score: 0.7
-  rice: Bounded PM-007 render fragment contract slice after compiler and product-surface hardening
-  kano: Neutral
-  dependencies:
-  - WR-003
-  write_scopes:
-  - engine/src/plugins/render
-  - engine/tests
-  - engine/examples
-  - docs-site/src/content/docs/engine/reference/plugins/render
-  - docs-site/src/content/docs/engine/plugins/render
-  - docs-site/src/content/docs/engine/roadmaps/fully-featured-renderer-roadmap.md
-  - docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-010-render-fragment-and-data-driven-maturity-r10/plan.md
-  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
-  - docs-site/src/content/docs/workspace/roadmap-items.yaml
-  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
-  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
-  - docs-site/src/content/docs/workspace/design-implementation-triage.md
-  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
-  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
-  - docs-site/src/content/docs/workspace/production-tracks.yaml
-  - docs-site/src/content/docs/workspace/production-track-index.md
-  - docs-site/src/content/docs/workspace/production-milestone-register.md
-  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
-  validations:
-  - cargo test -p engine --test render_flow_fragments
-  - cargo test -p engine --test render_flow_v2
-  - cargo test -p engine --test render_runtime_inspect
-  - cargo test -p engine --example render_fragment_compositor
-  - task docs:validate
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task production:render
-  - task production:validate
-  - task production:check
-  - task planning:validate
-  - task ai:goal -- --track PT-RENDER-PG
-  next_evidence: 2026-05-21 closeout evidence landed in docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md.
-    PM-007 completed as a bounded render fragment contract with typed fragment packages, validation, merge provenance, last-good
-    reload state, inspection, and a normal RenderFlow compositor example.
-  current_decision: WR-010 is completed as the bounded PM-RENDER-PG-007 render fragment and hot reload implementation. Fragment
-    descriptors validate before merge, local labels are namespace-qualified, valid fragments compile through normal RenderFlow,
-    and invalid reloads preserve the last-good active package revision.
-  current_call: Completed. Do not reopen WR-010 for PM-008 production-readiness inspection, capture/replay policy, performance
-    budgets, project asset watching, editor catalog ownership, or renderer-owned product policy.
-  first_move: Rerun task ai:goal -- --track PT-RENDER-PG and continue only with the next selected production milestone.
-  main_blocker: Completed bounded PM-007 fragment slice. PM-RENDER-PG-008 remains the next dependency for production readiness.
-  why_not_ready: ''
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Project asset watching, package catalog ownership, migration UI, and save/load workflow remain asset/editor-owned follow-up
-    work.
-  - The fragment compositor example proves normal RenderFlow compilation, not a host-backed GPU pixel proof.
-  - PM-RENDER-PG-008 still owns production readiness, capture/replay policy, performance budgets, broad examples, and final
-    inspection hardening.
-  - PM-007 did not claim runtime_proven or perfectionist_verified evidence.
-  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
-  diagram_call:
-  - typed fragment contracts
-  - merge provenance
-  - last-good reload
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-product-graph-platform-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Render fragment execution must follow the accepted product/render execution boundary.
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-fragment-data-driven-maturity-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Fragment assets, validation, schema/versioning, merge, and hot reload require accepted fragment design.
-  - kind: design
-    path: docs-site/src/content/docs/reports/implementation-plans/wr-010-render-fragment-and-data-driven-maturity-r10/plan.md
-    required_status: active
-    applies_to: implementation
-    reason: PM-RENDER-PG-007 implementation must follow the bounded WR-010 promotion and implementation-readiness contract.
-  - kind: doc
-    path: docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md
-    required_status: completed
-    applies_to: implementation
-    reason: PM-007 requires completed bounded render fragment and hot reload closeout evidence.
-  ddd_owner: engine render plugin
-  adr_requirement: ADR only if data-driven fragments become a cross-domain contract, external package ABI, or source-of-truth
-    ownership shift.
-  fitness_function_requirement: Fragment validation, merge provenance, backend capability rejection, last-good reload, inspection,
-    example compile proof, and workflow validation.
-  ownership_mode: Complicated-subsystem render owner.
 - id: WR-045
   title: PM-RENDER-PG-008 Production Readiness And Inspection
   diagram_title: PM-008 readiness
@@ -2257,6 +2257,85 @@ items:
   fitness_function_requirement: Stable-id preservation tests, deterministic textual diff tests, preview-only activation rejection
     tests, source-mapped diagnostic tests, target-profile compatibility tests, and workflow validation.
   ownership_mode: Complicated-subsystem UI definition owner enabling stream-aligned editor app consumption.
+- id: WR-048
+  title: Render Prepared-Frame Preflight Cache And Timing Repair
+  diagram_title: Render preflight cache and timings
+  alias: WR048
+  lane: Core support
+  dependency_level: L1
+  gate: Governed render regression repair
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: Repair render-flow runtime regression without weakening typed compiler/preflight contracts.
+  kano: Performance
+  dependencies:
+  - WR-043
+  - WR-045
+  write_scopes:
+  - engine/src/plugins/render/graph
+  - engine/src/plugins/render/renderer
+  - engine/src/plugins/render/runtime/frame_submit.rs
+  - engine/src/plugins/render/inspect
+  - engine/benches/render_flow_planning.rs
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/engine/benchmarks/render-flow-planning.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-prepared-frame-preflight-cache-an
+  - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
+  validations:
+  - cargo test -p engine render_dynamic_targets
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_cutoff_guard
+  - cargo test -p engine --example boids_render_flow
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
+  current_decision: Completed bounded render regression repair. Full preflight remains the correctness authority, and unchanged
+    prepared-frame structures reuse cached successful preflight reports in steady state after runtime guards pass.
+  current_call: Complete. Use WR-055 for the separate runtime pacing, shader reload throttle, and diagnostics tier repair.
+  first_move: Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional
+    per-frame render_packet execution.
+  main_blocker: Complete.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Benchmark coverage measures CPU preflight/cache overhead, not a full windowed GPU runtime frame-rate proof.
+  - Runtime stutter still needs the separate governed frame pacing, shader reload throttle, and diagnostics tier repair.
+  completion_audit: ''
+  diagram_call:
+  - cached preflight complete
+  - timing evidence exposed
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Prepared-frame preflight remains the typed render execution validation contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime timing and readiness evidence must stay read-only and renderer-scoped.
+  ddd_owner: engine render execution graph and renderer runtime
+  adr_requirement: No new ADR required because ownership and dependency direction remain unchanged; add ADR only if implementation
+    moves validation policy outside engine render or exposes backend handles.
+  fitness_function_requirement: Cache-hit/miss invalidation tests, strict-mode tests, timing/readiness inspection tests, boids
+    example test, and render-flow preflight/cache benchmark.
+  ownership_mode: Complicated-subsystem engine render owner with stream-aligned app/product producers consuming prepared-frame
+    contracts.
 - id: WR-049
   title: PM-UI-DESIGN-005 Theme Token Graph And Mode Resolution
   diagram_title: PM-UI-DESIGN-005 Theme Token Graph And Mode Resolution
@@ -2897,85 +2976,6 @@ items:
     artifact ownership violation diagnostics, preview-only production readiness rejection, and editor/workbench plus game-runtime
     examples.
   ownership_mode: Complicated-subsystem UI definition owner with stream-aligned editor and future game target consumption.
-- id: WR-048
-  title: Render Prepared-Frame Preflight Cache And Timing Repair
-  diagram_title: Render preflight cache and timings
-  alias: WR048
-  lane: Core support
-  dependency_level: L1
-  gate: Governed render regression repair
-  planning_state: completed
-  priority: P1
-  value: 4
-  blocker: 2
-  tc: 3
-  rr_oe: 4
-  du: 4
-  effort: 8
-  confidence: 0.8
-  expected_score: 1.5
-  rice: Repair render-flow runtime regression without weakening typed compiler/preflight contracts.
-  kano: Performance
-  dependencies:
-  - WR-043
-  - WR-045
-  write_scopes:
-  - engine/src/plugins/render/graph
-  - engine/src/plugins/render/renderer
-  - engine/src/plugins/render/runtime/frame_submit.rs
-  - engine/src/plugins/render/inspect
-  - engine/benches/render_flow_planning.rs
-  - engine/tests
-  - docs-site/src/content/docs/engine/reference/plugins/render
-  - docs-site/src/content/docs/engine/benchmarks/render-flow-planning.md
-  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-render-prepared-frame-preflight-cache-an
-  - docs-site/src/content/docs/reports/closeouts
-  - docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
-  validations:
-  - cargo test -p engine render_dynamic_targets
-  - cargo test -p engine render_runtime_inspect
-  - cargo test -p engine render_cutoff_guard
-  - cargo test -p engine --example boids_render_flow
-  - cargo bench -p engine --bench render_flow_planning
-  - task docs:validate
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task planning:validate
-  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-048-render-preflight-cache-and-timing-repair/closeout.md
-  current_decision: Completed bounded render regression repair. Full preflight remains the correctness authority, and unchanged
-    prepared-frame structures reuse cached successful preflight reports in steady state after runtime guards pass.
-  current_call: Complete. Use WR-055 for the separate runtime pacing, shader reload throttle, and diagnostics tier repair.
-  first_move: Introduce render-owned preflight cache keys and validation mode, then move full preflight out of unconditional
-    per-frame render_packet execution.
-  main_blocker: Complete.
-  why_not_ready: ''
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - Benchmark coverage measures CPU preflight/cache overhead, not a full windowed GPU runtime frame-rate proof.
-  - Runtime stutter still needs the separate governed frame pacing, shader reload throttle, and diagnostics tier repair.
-  completion_audit: ''
-  diagram_call:
-  - cached preflight complete
-  - timing evidence exposed
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-execution-graph-compiler-maturity-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Prepared-frame preflight remains the typed render execution validation contract.
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/render-production-readiness-and-inspection-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Runtime timing and readiness evidence must stay read-only and renderer-scoped.
-  ddd_owner: engine render execution graph and renderer runtime
-  adr_requirement: No new ADR required because ownership and dependency direction remain unchanged; add ADR only if implementation
-    moves validation policy outside engine render or exposes backend handles.
-  fitness_function_requirement: Cache-hit/miss invalidation tests, strict-mode tests, timing/readiness inspection tests, boids
-    example test, and render-flow preflight/cache benchmark.
-  ownership_mode: Complicated-subsystem engine render owner with stream-aligned app/product producers consuming prepared-frame
-    contracts.
 - id: WR-055
   title: Runtime Frame Pacing, Shader Reload Throttle, And Render Diagnostics Tiers
   diagram_title: Runtime pacing and steady-state render diagnostics
@@ -3463,72 +3463,6 @@ items:
   fitness_function_requirement: Benchmarks, runtime GPU evidence, inspection DTO tests, docs validation, roadmap validation,
     production validation, and planning validation.
   ownership_mode: Renderer production hardening and evidence closeout.
-- id: WR-082
-  title: Renderer GPU Evidence And Procedural Visuals Doctrine Acceptance
-  diagram_title: Renderer GPU Evidence And Procedural Visuals Doc
-  alias: WR082
-  lane: Render platform
-  dependency_level: L2
-  gate: Accepted renderer GPU evidence doctrine
-  planning_state: completed
-  priority: P2
-  value: 2
-  blocker: 2
-  tc: 1
-  rr_oe: 2
-  du: 1
-  effort: 8
-  confidence: 0.3
-  expected_score: 0.2
-  rice: Design-first doctrine acceptance before renderer GPU evidence implementation rows.
-  kano: Basic
-  dependencies: []
-  write_scopes:
-  - docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-082-renderer-gpu-evidence-and-procedural-visuals-doctrine-acceptance/plan.md
-  - docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md
-  validations:
-  - task docs:validate
-  - task production:render
-  - task production:validate
-  - task production:check
-  - task roadmap:render
-  - task roadmap:validate
-  - task roadmap:check
-  - task planning:validate
-  next_evidence: Completed design-only doctrine acceptance is recorded in docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md.
-  current_decision: Completed. The accepted doctrine at docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
-    defines renderer-owned GPU evidence and procedural visual boundaries before implementation rows start.
-  current_call: Use WR-082 as completed doctrine evidence only; do not treat it as implementation evidence for WR-056 through
-    WR-060.
-  first_move: Continue PM-RENDER-GPU-002 only after rerunning task ai:goal for PT-RENDER-GPU and following the selected WR
-    row.
-  main_blocker: Complete; runtime evidence remains in later bounded implementation rows.
-  why_not_ready: ''
-  completion_quality: bounded_contract
-  known_quality_gaps:
-  - GPU pass timing is not implemented until WR-056.
-  - Render-flow pass-shape guards are not implemented until WR-057.
-  - Hybrid procedural instance APIs are not implemented until WR-058.
-  - Canonical boids runtime proof is not implemented until WR-059.
-  - Runtime production evidence is not complete until WR-060.
-  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md
-  diagram_call:
-  - doctrine accepted
-  - implementation rows gated
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: The doctrine acceptance row closes only after the GPU evidence and procedural visuals design is accepted.
-  ddd_owner: engine render execution and renderer runtime evidence
-  adr_requirement: No ADR required because the doctrine preserves renderer execution ownership and product-domain truth boundaries;
-    add ADR only if future work changes dependency direction, product truth ownership, or persisted cross-domain ABI shape.
-  fitness_function_requirement: Later rows must add GPU timing diagnostics, render-flow pass-shape guard tests, procedural
-    instance API validation, boids runtime proof, and production evidence before runtime_proven is claimed.
-  ownership_mode: Complicated-subsystem engine render owner with stream-aligned product and editor producers consuming explicit
-    renderer execution contracts.
 - id: WR-061
   title: Renderer Scale Working Set Registry And Residency Budgets
   diagram_title: Renderer Scale Working Set Registry And Residenc
@@ -4198,6 +4132,982 @@ items:
     provenance inspection tests, docs validation, roadmap validation, production validation, and planning validation.
   ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product
     producers.
+- id: WR-068
+  title: Renderer Lighting Pipeline Cache And Last Good Fallback
+  diagram_title: Renderer Lighting Pipeline Cache And Last Good F
+  alias: WR068
+  lane: Render implementation
+  dependency_level: L4
+  gate: Ready after accepted pipeline cache and fallback contract
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-067
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-lighting-pipeline-cache-and-las
+  - docs-site/src/content/docs/reports/implementation-plans/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_pipeline
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - cargo test -p engine render_cutoff_guard
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md.
+  current_decision: Completed. Renderer inspection now reports pipeline cache hit/miss/failure diagnostics, shader reload
+    poll state, shader failure events, prior-valid shader revision evidence, pass fallback state, material shader exactness,
+    and material specialization evidence without moving fallback authority or source truth into the renderer.
+  current_call: Use WR-068 as completed PM-RENDER-MESH-MATERIAL-003 evidence before starting WR-069 mesh/material production
+    evidence.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; runtime mesh/material production examples, benchmarks, production evidence, and final perfectionist
+    verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Runtime mesh/material production examples, benchmarks, visible runtime proof, and production evidence remain WR-069 scope.
+  - WR-068 proves renderer pipeline/fallback inspection and diagnostics; it does not claim runtime_proven or perfectionist_verified.
+  - Final perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
+  diagram_call:
+  - pipeline fallback proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Pipeline cache and shader fallback implementation followed the accepted renderer handoff doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-068 consumed completed PM-RENDER-MESH-MATERIAL-001 doctrine acceptance evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Pipeline cache and last-good fallback diagnostics consumed completed renderer material handoff evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-068 implementation followed the lighting, pipeline cache, and last-good fallback contract.
+  ddd_owner: engine renderer shader registry, pipeline cache diagnostics, pass provenance, lighting input, fallback, and inspection
+    contracts
+  adr_requirement: No ADR required for hardening existing renderer-owned shader, pipeline, and fallback diagnostics; no source
+    truth, fallback authority, or persisted cross-domain ABI moved into renderer code.
+  fitness_function_requirement: Shader fallback guards, pipeline cache stats boundary guards, pass provenance fallback tests,
+    docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product
+    producers.
+- id: WR-069
+  title: Renderer Mesh Material Production Evidence
+  diagram_title: Renderer Mesh Material Production Evidence
+  alias: WR069
+  lane: Render implementation
+  dependency_level: L4
+  gate: Completed runtime mesh material production evidence
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-067
+  - WR-068
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/examples
+  - engine/benches
+  - engine/benchmark-artifacts/render-mesh-material-production-evidence
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/benchmarks/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-23-renderer-mesh-material-production-evidence
+  - docs-site/src/content/docs/reports/implementation-plans/wr-069-renderer-mesh-material-production-evidence/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_mesh_material
+  - cargo test -p engine render_pipeline
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - cargo test -p engine --example render_mesh_material_production_evidence
+  - cargo run -p engine --example render_mesh_material_production_evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime_proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md.
+  current_decision: Completed. Mesh/material production evidence now consumes WR-067 material handoff inspection and WR-068
+    pipeline/fallback inspection, records visible material pixel evidence, exposes fail-closed production diagnostics, and
+    measures the evidence path in the canonical render-flow benchmark.
+  current_call: Use WR-069 as completed PM-RENDER-MESH-MATERIAL-004 evidence before continuing the renderer production stack.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; final no-gap perfectionist verification remains downstream scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - The canonical mesh/material evidence command is deterministic non-windowed closeout evidence and does not promise universal
+    FPS or a finite swapchain frame.
+  - Timestamp-query evidence is capability-gated; the portable example records unsupported timestamp queries as typed diagnostics.
+  - Criterion reported local baseline movement in pre-existing render-flow benchmark cases; automated benchmark thresholds
+    remain future hardening work.
+  - Final perfectionist verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+  diagram_call:
+  - runtime proof
+  - mesh material closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-mesh-material-lighting-and-asset-handoff-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Production evidence followed the accepted renderer handoff doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 consumed completed PM-RENDER-MESH-MATERIAL-001 doctrine acceptance evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-067-renderer-mesh-material-shader-asset-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 consumed completed renderer material handoff inspection evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/closeouts/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 consumed completed renderer pipeline/fallback inspection evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-069-renderer-mesh-material-production-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-069 implementation followed the design-first runtime production evidence contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-069-renderer-mesh-material-production-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-069 completion is proven by the runtime production evidence closeout.
+  ddd_owner: engine renderer runtime evidence, examples, benchmarks, pass provenance, inspection, and production reports
+  adr_requirement: No ADR required because WR-069 consumed existing renderer-owned inspections and runtime evidence without
+    moving source truth, fallback authority, or persisted ABI into renderer code.
+  fitness_function_requirement: Runtime evidence example, material handoff guard tests, pipeline fallback guard tests, render
+    runtime inspection tests, benchmark/report evidence, docs validation, roadmap validation, production validation, and planning
+    validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned material, asset, model, scene, and product
+    producers.
+- id: WR-070
+  title: Renderer Temporal Inputs History And Dynamic Resolution
+  diagram_title: Renderer Temporal Inputs History And Dynamic Res
+  alias: WR070
+  lane: Render implementation
+  dependency_level: L4
+  gate: Completed bounded temporal input inspection
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-061
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-temporal-inputs-history-and-dyn
+  - docs-site/src/content/docs/reports/implementation-plans/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_temporal
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md.
+  current_decision: Completed. Renderer inspection now reports temporal input availability, history signature validity, jitter
+    sequence/phase evidence, dynamic internal/output resolution separation, reconstruction mode, native fallback state, and
+    fail-closed diagnostics without moving producer truth into renderer code.
+  current_call: Use WR-070 as completed PM-RENDER-TEMPORAL-002 evidence before starting WR-071 upscaling adapter and ray reconstruction
+    input work.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; optional adapters, ray reconstruction inputs, production examples, benchmarks, and final perfectionist
+    verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Optional upscaling adapters and ray reconstruction inputs remain WR-071 scope.
+  - Runtime temporal production examples, benchmark/report artifacts, hardware profiles, and production evidence remain WR-072
+    scope.
+  - WR-070 does not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+  diagram_call:
+  - temporal input proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Temporal input implementation followed accepted reconstruction doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-070 consumed completed PM-RENDER-TEMPORAL-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-070 consumed completed renderer working-set and dynamic-target residency budget evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-070 implementation followed the design-first temporal inputs and dynamic resolution contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-070 completion is proven by the bounded temporal input inspection closeout.
+  ddd_owner: engine renderer temporal input, history, dynamic-resolution, fallback, and inspection contracts
+  adr_requirement: No ADR required because WR-070 added renderer-owned diagnostics without moving camera, product, exposure,
+    fallback authority, or persisted temporal ABI into renderer code.
+  fitness_function_requirement: Temporal input/history guards, dynamic-resolution inspection tests, render runtime inspection
+    tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned camera, scene, product, material, SDF,
+    ray-query, and exposure producers.
+- id: WR-071
+  title: Renderer Upscaling Adapters And Ray Reconstruction Inputs
+  diagram_title: Renderer Upscaling Adapters And Ray Reconstructi
+  alias: WR071
+  lane: Render implementation
+  dependency_level: L4
+  gate: Completed bounded upscaling adapter and ray reconstruction input inspection
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.4
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-070
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-upscaling-adapters-and-ray-reco
+  - docs-site/src/content/docs/reports/implementation-plans/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_temporal
+  - cargo test -p engine render_temporal_upscaling
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_flow_fragments
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md.
+  current_decision: Completed. Renderer inspection now reports optional adapter capability, invocation eligibility, ray reconstruction
+    input availability, native fallback visibility, and fail-closed diagnostics without moving producer truth into renderer
+    code.
+  current_call: Use WR-071 as completed PM-RENDER-TEMPORAL-003 evidence before starting WR-072 temporal production evidence.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; runtime examples, benchmark/report artifacts, hardware profiles, production evidence, and final
+    perfectionist verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Runtime temporal production examples, benchmark/report artifacts, hardware profiles, and production evidence remain WR-072
+    scope.
+  - WR-071 does not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+  diagram_call:
+  - adapter/ray input proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Upscaling adapter implementation followed accepted reconstruction doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-071 consumed completed PM-RENDER-TEMPORAL-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-071 consumed completed WR-070 temporal input, history, and dynamic-resolution contracts.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-071 implementation followed the design-first upscaling adapter and ray reconstruction input contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-071 completion is proven by the bounded upscaling adapter and ray reconstruction input closeout.
+  ddd_owner: engine renderer temporal adapter, ray reconstruction input, fallback, and inspection contracts
+  adr_requirement: No ADR required because WR-071 added renderer-owned diagnostics without moving vendor SDK, SDF, ray-query,
+    camera, product, material, exposure, fallback authority, or durable adapter ABI into renderer code.
+  fitness_function_requirement: Temporal upscaling adapter guards, ray reconstruction input guards, temporal input/history
+    guards, render runtime inspection tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned camera, scene, product, material, SDF,
+    ray-query, and exposure producers.
+- id: WR-072
+  title: Renderer Temporal Production Evidence
+  diagram_title: Renderer Temporal Production Evidence
+  alias: WR072
+  lane: Render
+  dependency_level: L4
+  gate: Runtime temporal production evidence complete
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.5
+  expected_score: 0.4
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-071
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - engine/examples
+  - engine/benches
+  - engine/benchmark-artifacts
+  - engine/Cargo.toml
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/benchmarks/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-temporal-production-evidence
+  - docs-site/src/content/docs/reports/implementation-plans/wr-072-renderer-temporal-production-evidence/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-072-renderer-temporal-production-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_temporal
+  - cargo test -p engine render_temporal_upscaling
+  - cargo test -p engine render_temporal_production
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine --example render_temporal_production_evidence
+  - cargo run -p engine --example render_temporal_production_evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-072-renderer-temporal-production-evidence/closeout.md.
+  current_decision: Completed. Renderer temporal production evidence now consumes WR-070 temporal input/history evidence,
+    WR-071 upscaling/ray-input evidence, runtime visual references, timing diagnostics, benchmark commands, artifact paths,
+    and fail-closed production diagnostics.
+  current_call: Use WR-072 as completed PM-RENDER-TEMPORAL-004 evidence before continuing the renderer production stack.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; final no-gap perfectionist verification remains downstream scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - The canonical temporal evidence command is deterministic non-windowed closeout evidence and does not promise universal
+    FPS or a finite swapchain frame.
+  - Timestamp-query evidence is capability-gated; the portable example records unsupported timestamp queries as typed diagnostics.
+  - Vendor upscaling adapters remain optional capability paths; WR-072 proves fallback-visible adapter and ray-input evidence,
+    not real vendor SDK execution.
+  - Criterion reported local baseline movement in pre-existing render-flow benchmark cases; automated benchmark thresholds
+    remain future hardening work.
+  - Final no-gap verification remains blocked until PT-RENDER-PERFECTION audits the completed renderer production stack.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-072-renderer-temporal-production-evidence/closeout.md
+  diagram_call:
+  - temporal runtime proof
+  - runtime closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-temporal-reconstruction-and-dynamic-resolution-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Temporal production evidence requires accepted reconstruction doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-072 consumed completed PM-RENDER-TEMPORAL-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-072 consumed completed WR-070 temporal input, history, and dynamic-resolution evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-071-renderer-upscaling-adapters-and-ray-reconstruction-inputs/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-072 consumed completed WR-071 adapter and ray reconstruction input evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-072-renderer-temporal-production-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-072 implementation followed the design-first temporal production evidence contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-072-renderer-temporal-production-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-072 completion is proven by the runtime temporal production evidence closeout.
+  ddd_owner: engine renderer temporal production evidence, examples, benchmarks, artifacts, inspection, and public docs
+  adr_requirement: No ADR required because WR-072 consumed existing renderer-owned inspections and runtime evidence without
+    moving source truth, fallback authority, runtime ownership, vendor SDK requirements, hardware requirements, or persisted
+    ABI into renderer code.
+  fitness_function_requirement: Temporal production evidence guards, temporal input/upscaling guard tests, runtime inspection
+    tests, example build/run, benchmark/report evidence, docs validation, roadmap validation, production validation, and planning
+    validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned camera, scene, product, material, SDF,
+    ray-query, adapter, and exposure producers.
+- id: WR-073
+  title: Renderer Ray Query Capability And Acceleration Resources
+  diagram_title: Renderer Ray Query Capability And Acceleration R
+  alias: WR073
+  lane: Render
+  dependency_level: L4
+  gate: Completed bounded ray-query capability and acceleration-resource inspection
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-061
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-ray-query-capability-and-accele
+  - docs-site/src/content/docs/reports/implementation-plans/wr-073-renderer-ray-query-capability-and-acceleration-resources/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_ray_query
+  - cargo test -p engine render_runtime_inspect
+  - cargo test -p engine render_resource_model
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md.
+  current_decision: Completed. Renderer inspection now reports optional ray-query capability state, unsupported diagnostics,
+    visible non-RT fallback, derived acceleration-resource lineage, build/update status, memory evidence, stale invalidation,
+    and backend-handle privacy without moving producer truth into renderer code.
+  current_call: Use WR-073 as completed PM-RENDER-RT-002 evidence before starting WR-074 hybrid runtime proof.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; hybrid runtime proof, production evidence, and final no-gap verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Hybrid raster/SDF/ray-query runtime proof remains WR-074 scope.
+  - Ray-query production examples, hardware matrix, benchmark/report artifacts, fallback evidence, and production diagnostics
+    remain WR-075 scope.
+  - WR-073 does not claim runtime_proven or perfectionist_verified evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+  diagram_call:
+  - ray query capability proof
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Ray-query capability implementation followed accepted optional RT doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-rt-001-hardware-ray-query-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-073 consumed completed PM-RENDER-RT-001 doctrine acceptance evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-061-renderer-scale-working-set-registry-and-residency-budgets/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-073 consumed completed renderer working-set and residency budget evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-073-renderer-ray-query-capability-and-acceleration-resources/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-073 implementation followed the design-first ray-query capability and acceleration-resource contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-073 completion is proven by the bounded ray-query capability and acceleration-resource closeout.
+  ddd_owner: engine renderer ray-query capability, acceleration-resource lineage, fallback, and inspection contracts
+  adr_requirement: No ADR required because WR-073 added renderer-owned diagnostics without moving scene, mesh, material, product,
+    SDF, temporal, fallback authority, hardware baseline, or durable acceleration-resource ABI into renderer code.
+  fitness_function_requirement: Ray-query capability and acceleration-resource guard tests, render runtime/resource inspection
+    tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned scene, mesh, material, product, SDF, temporal,
+    camera, and exposure producers.
+- id: WR-074
+  title: Renderer Hybrid Ray SDF Raster Runtime Proof
+  diagram_title: Renderer Hybrid Ray SDF Raster Runtime Proof
+  alias: WR074
+  lane: Render
+  dependency_level: L4
+  gate: Completed bounded hybrid raster/SDF/temporal/ray-query runtime proof example
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-073
+  - WR-065
+  - WR-070
+  write_scopes:
+  - engine/examples
+  - engine/Cargo.toml
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-hybrid-ray-sdf-raster-runtime-p
+  - docs-site/src/content/docs/reports/implementation-plans/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - cargo test -p engine render_ray_query
+  - cargo test -p engine render_sdf_raymarch
+  - cargo test -p engine render_temporal
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md.
+  current_decision: Completed. The renderer now has a portable hybrid proof example that composes raster pass labels, SDF
+    runtime evidence, temporal production evidence, optional ray-query inspection, visible non-RT fallback, and separated
+    timing labels without moving source truth into renderer code.
+  current_call: Use WR-074 as completed PM-RENDER-RT-003 evidence before starting WR-075 ray-query production evidence.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; ray-query production evidence and final no-gap verification remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Ray-query production examples, hardware matrix, fallback artifacts, production diagnostics, and final RT runtime_proven
+    evidence remain WR-075 scope.
+  - WR-074 does not claim hardware ray-query execution, denoising, shader-table support, runtime_proven, or perfectionist_verified
+    evidence.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+  diagram_call:
+  - hybrid runtime proof example
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Hybrid runtime proof followed accepted optional RT doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 consumed completed ray-query capability and acceleration-resource inspection.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-065-sdf-raymarch-acceleration-and-candidate-lists/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 consumed completed SDF raymarch acceleration evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-070-renderer-temporal-inputs-history-and-dynamic-resolution/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 consumed completed temporal input/history evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-074 implementation followed the design-first hybrid runtime proof contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-074 completion is proven by the bounded hybrid runtime proof closeout.
+  ddd_owner: engine renderer hybrid proof example, public inspection DTO composition, fallback evidence, and timing labels
+  adr_requirement: No ADR required because WR-074 added an example-level proof without moving source truth, fallback authority,
+    runtime ownership, hardware requirements, or a durable hybrid runtime ABI into renderer code.
+  fitness_function_requirement: Hybrid proof example build/run, ray-query guard tests, SDF raymarch guard tests, temporal
+    guard tests, docs validation, roadmap validation, production validation, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform work with stream-aligned scene, mesh, material, product, SDF, temporal,
+    camera, exposure, and fallback-policy producers.
+- id: WR-075
+  title: Renderer Ray Query Production Evidence
+  diagram_title: Renderer Ray Query Production Evidence
+  alias: WR075
+  lane: Render
+  dependency_level: L4
+  gate: Completed optional ray-query production evidence packet
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-073
+  - WR-074
+  write_scopes:
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-ray-query-production-evidence
+  - docs-site/src/content/docs/reports/implementation-plans/wr-075-renderer-ray-query-production-evidence/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo test -p engine render_ray_query
+  - cargo test -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - cargo run -p engine --example render_hybrid_ray_sdf_raster_runtime_proof
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed runtime-proven closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md.
+  current_decision: Completed. Renderer reference docs now record optional ray-query production evidence, capability and fallback
+    matrices, acceleration-resource lineage expectations, diagnostics, validation commands, and explicit non-goals.
+  current_call: Use WR-075 as completed PM-RENDER-RT-004 evidence before moving to downstream renderer product visuals and
+    perfectionist verification tracks.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; final cross-track no-gap verification remains downstream scope.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - WR-075 does not certify vendor hardware or require RT-capable hardware.
+  - WR-075 does not implement denoisers, shader tables, hardware RT execution, or backend-specific acceleration-resource builders.
+  - Final cross-track gap closure and perfectionist_verified status remain downstream PT-RENDER-PERFECTION scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
+  diagram_call:
+  - ray-query production evidence
+  - runtime-proven closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Ray-query production evidence followed accepted optional RT doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-073-renderer-ray-query-capability-and-acceleration-resources/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-075 consumed completed ray-query capability and acceleration-resource inspection.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-074-renderer-hybrid-ray-sdf-raster-runtime-proof/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-075 consumed completed hybrid runtime proof and fallback evidence.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-075-renderer-ray-query-production-evidence/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-075 implementation followed the design-first ray-query production evidence contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-075-renderer-ray-query-production-evidence/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-075 completion is proven by the optional ray-query production evidence closeout.
+  ddd_owner: docs-site/src/content/docs/engine/reference/plugins/render
+  adr_requirement: No ADR required because WR-075 added docs/evidence hardening without moving source truth, fallback authority,
+    runtime ownership, hardware requirements, or a durable RT ABI into renderer code.
+  fitness_function_requirement: Ray-query guard tests, hybrid proof example build/run, docs validation, roadmap validation,
+    production validation, and planning validation.
+  ownership_mode: Enabling documentation/evidence for the complicated-subsystem renderer platform.
+- id: WR-076
+  title: Renderer Product Visuals Particles VFX Trails And Decals
+  diagram_title: Renderer Product Visuals Particles VFX Trails An
+  alias: WR076
+  lane: Renderer product visuals
+  dependency_level: L4
+  gate: Completed particle/VFX renderer producer contract
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-058
+  - WR-062
+  - WR-070
+  write_scopes:
+  - engine/src/plugins/render
+  - engine/tests
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-product-visuals-particles-vfx-t
+  - docs-site/src/content/docs/reports/implementation-plans/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_product_visual_particles
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md.
+  current_decision: Completed. Renderer feature contribution contracts now include typed prepared particle/VFX/trail/decal
+    payloads, sorting and transparency intent, temporal input declarations, residency requests, fallback/unsupported/over-budget
+    batch states, plugin registration, public docs, and focused tests.
+  current_call: Use WR-076 as completed PM-RENDER-PRODUCT-VISUALS-002 evidence before starting WR-077 or WR-078.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency
+    track.
+  main_blocker: Complete; world visual producers and final product visual evidence remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Vegetation, water, atmosphere, weather, and field visuals remain PM-RENDER-PRODUCT-VISUALS-003 / WR-077 scope.
+  - Animation/deformation and cross-family product visual evidence remain PM-RENDER-PRODUCT-VISUALS-004 / WR-078 scope.
+  - Runtime production examples, benchmark artifacts, hardware profiles, and final no-gap stack verification remain downstream
+    product-visual and perfectionist-audit scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+  diagram_call:
+  - particle VFX contracts
+  - bounded closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: WR-076 implementation followed accepted product visual producer doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-076 implementation followed the design-first particle/VFX contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-product-visuals-001-product-visual-producer-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-076 consumed completed product visual producer doctrine closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-076 completion is proven by the bounded particle/VFX producer contract closeout.
+  ddd_owner: engine/src/plugins/render particle/VFX feature contribution contract and prepared-frame inspection payloads
+  adr_requirement: No ADR required because WR-076 stayed inside accepted renderer execution contracts and did not move product
+    truth, fallback authority, or a durable cross-domain particle/VFX ABI into renderer code.
+  fitness_function_requirement: Focused render product visual particle tests plus docs, roadmap, production, and planning
+    validation.
+  ownership_mode: Complicated-subsystem renderer platform enabling stream-aligned product visual producers.
+- id: WR-082
+  title: Renderer GPU Evidence And Procedural Visuals Doctrine Acceptance
+  diagram_title: Renderer GPU Evidence And Procedural Visuals Doc
+  alias: WR082
+  lane: Render platform
+  dependency_level: L2
+  gate: Accepted renderer GPU evidence doctrine
+  planning_state: completed
+  priority: P2
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: Design-first doctrine acceptance before renderer GPU evidence implementation rows.
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-082-renderer-gpu-evidence-and-procedural-visuals-doctrine-acceptance/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md
+  validations:
+  - task docs:validate
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  next_evidence: Completed design-only doctrine acceptance is recorded in docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md.
+  current_decision: Completed. The accepted doctrine at docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+    defines renderer-owned GPU evidence and procedural visual boundaries before implementation rows start.
+  current_call: Use WR-082 as completed doctrine evidence only; do not treat it as implementation evidence for WR-056 through
+    WR-060.
+  first_move: Continue PM-RENDER-GPU-002 only after rerunning task ai:goal for PT-RENDER-GPU and following the selected WR
+    row.
+  main_blocker: Complete; runtime evidence remains in later bounded implementation rows.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - GPU pass timing is not implemented until WR-056.
+  - Render-flow pass-shape guards are not implemented until WR-057.
+  - Hybrid procedural instance APIs are not implemented until WR-058.
+  - Canonical boids runtime proof is not implemented until WR-059.
+  - Runtime production evidence is not complete until WR-060.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md
+  diagram_call:
+  - doctrine accepted
+  - implementation rows gated
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: The doctrine acceptance row closes only after the GPU evidence and procedural visuals design is accepted.
+  ddd_owner: engine render execution and renderer runtime evidence
+  adr_requirement: No ADR required because the doctrine preserves renderer execution ownership and product-domain truth boundaries;
+    add ADR only if future work changes dependency direction, product truth ownership, or persisted cross-domain ABI shape.
+  fitness_function_requirement: Later rows must add GPU timing diagnostics, render-flow pass-shape guard tests, procedural
+    instance API validation, boids runtime proof, and production evidence before runtime_proven is claimed.
+  ownership_mode: Complicated-subsystem engine render owner with stream-aligned product and editor producers consuming explicit
+    renderer execution contracts.
 - id: WR-083
   title: Renderer Procedural Population Doctrine And Track Activation
   diagram_title: Renderer procedural population doctrine

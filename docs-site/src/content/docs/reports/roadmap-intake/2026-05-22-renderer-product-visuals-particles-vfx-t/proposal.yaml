@@ -1,28 +1,27 @@
 version: 1
 idea: Renderer Product Visuals Particles VFX Trails And Decals
-source_path: docs-site/src/content/docs/design/active/renderer-product-visual-producers-platform-design.md
+source_path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
 owner: engine/src/plugins/render
 created_at: '2026-05-22'
 governance_notes:
-- Run architecture governance review before implementation.
-- Confirm Clean Architecture dependency direction and DDD owner.
-- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+- Architecture governance completed in the WR-076 implementation contract.
+- Clean Architecture dependency direction and DDD owner are recorded in the contract.
+- No ADR is required while implementation stays inside renderer execution contracts and does not move product truth.
 open_questions:
-- What accepted design, ADR, or closeout evidence justifies promotion?
-- Which existing WR items does this depend on?
-- Which exact write scopes and validation commands will bound implementation?
+- Promote only after stack selection confirms PM-RENDER-PRODUCT-VISUALS-002 is active.
+- Re-run production planning before current-candidate promotion.
 item:
   id: WR-076
   title: Renderer Product Visuals Particles VFX Trails And Decals
   diagram_title: Renderer Product Visuals Particles VFX Trails An
   alias: WR076
-  lane: Discovery
+  lane: Renderer product visuals
   dependency_level: L4
-  gate: Policy deferred pending intake approval
-  planning_state: blocked_deferred
+  gate: Completed particle/VFX renderer producer contract
+  planning_state: completed
   priority: P3
   value: 2
-  blocker: 5
+  blocker: 2
   tc: 1
   rr_oe: 2
   du: 1
@@ -31,25 +30,76 @@ item:
   expected_score: 0.2
   rice: N/A
   kano: Unknown
-  dependencies: []
+  dependencies:
+  - WR-058
+  - WR-062
+  - WR-070
   write_scopes:
   - engine/src/plugins/render
-  validations: []
-  next_evidence: Review intake proposal, ownership, dependency gates, and accepted design evidence.
-  current_decision: Intake proposal only; do not implement until applied and promoted by roadmap review.
-  current_call: Keep as roadmap intake until ownership, dependencies, and validation evidence are clear.
-  first_move: Run architecture governance review, then edit and apply this intake proposal if accepted.
-  main_blocker: Missing accepted roadmap/design evidence.
-  why_not_ready: New idea has not passed roadmap intake, architecture governance, and dependency review.
-  completion_quality: not_applicable
-  known_quality_gaps: []
-  completion_audit: ''
+  - engine/tests
+  - engine/examples
+  - docs-site/src/content/docs/engine/reference/plugins/render
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-22-renderer-product-visuals-particles-vfx-t
+  - docs-site/src/content/docs/reports/implementation-plans/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals
+  - docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+  validations:
+  - cargo fmt
+  - cargo test -p engine render_product_visual_particles
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: Completed bounded-contract closeout is recorded in docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md.
+  current_decision: Completed. Renderer feature contribution contracts now include typed prepared particle/VFX/trail/decal payloads, sorting and transparency intent, temporal input declarations, residency requests, fallback/unsupported/over-budget batch states, plugin registration, public docs, and focused tests.
+  current_call: Use WR-076 as completed PM-RENDER-PRODUCT-VISUALS-002 evidence before starting WR-077 or WR-078.
+  first_move: Rerun task ai:goal -- --track PT-RENDER-PERFECTION --stack and follow the next incomplete renderer dependency track.
+  main_blocker: Complete; world visual producers and final product visual evidence remain downstream scope.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Vegetation, water, atmosphere, weather, and field visuals remain PM-RENDER-PRODUCT-VISUALS-003 / WR-077 scope.
+  - Animation/deformation and cross-family product visual evidence remain PM-RENDER-PRODUCT-VISUALS-004 / WR-078 scope.
+  - Runtime production examples, benchmark artifacts, hardware profiles, and final no-gap stack verification remain downstream product-visual and perfectionist-audit scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
   diagram_call:
-  - intake proposal
-  - await approval
-  decision_gates: []
+  - particle VFX contracts
+  - prepared visual products
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/renderer-product-visual-producers-platform-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: WR-076 implementation must follow accepted product visual producer doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-076 implementation must follow the design-first particle/VFX contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-render-product-visuals-001-product-visual-producer-doctrine/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-076 consumes completed product visual producer doctrine closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-076-renderer-product-visuals-particles-vfx-trails-and-decals/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-076 completion is proven by the bounded particle/VFX producer contract closeout.
   ddd_owner: engine/src/plugins/render
-  adr_requirement: Assess during architecture governance review.
-  fitness_function_requirement: Define before promotion to current_candidate.
-  ownership_mode: TBD
-edges: []
+  adr_requirement: No ADR required unless implementation changes product truth ownership, durable cross-domain ABI, or fallback authority.
+  fitness_function_requirement: Focused render product visual particle tests plus docs, roadmap, production, and planning validation.
+  ownership_mode: Complicated-subsystem renderer platform enabling stream-aligned product visual producers.
+edges:
+- source: WR-058
+  target: WR-076
+  label: procedural visual API enables particle/VFX prepared contributions
+- source: WR-062
+  target: WR-076
+  label: scale visibility and indirect submission bound particle/VFX work
+- source: WR-070
+  target: WR-076
+  label: temporal inputs support particle/VFX reconstruction data

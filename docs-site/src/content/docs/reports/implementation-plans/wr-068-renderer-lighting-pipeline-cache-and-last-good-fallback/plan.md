@@ -25,10 +25,11 @@ shader/pipeline specialization, pipeline cache diagnostics, shader failure
 diagnostics, and last-good shader fallback behavior without moving product,
 material, asset, model, scene, or fallback authority into the renderer.
 
-This is a design-first contract. It clears the deferred intake questions and
-prepares WR-068 for roadmap application and promotion. It does not authorize
-product code changes until the stack coordinator selects WR-068 for
-implementation after roadmap gates are satisfied.
+This contract began as design-first planning to clear the deferred intake
+questions and prepare WR-068 for roadmap application and promotion. After
+promotion, it is the bounded implementation contract for the stack-selected
+WR-068 work. Product code changes remain limited to the write scopes and stop
+conditions below.
 
 ## Source Of Truth
 
@@ -57,12 +58,12 @@ implementation after roadmap gates are satisfied.
 ## Readiness
 
 `task production:plan -- --milestone PM-RENDER-MESH-MATERIAL-003 --roadmap WR-068`
-reported:
+now reports:
 
-- production milestone state: `designing`;
-- roadmap state: `blocked_deferred`;
-- roadmap blocker: `B5`;
-- next action: `design_first`;
+- production milestone state: `active`;
+- roadmap state: `current_candidate`;
+- roadmap blocker: `B2`;
+- next action: `write_implementation_contract`;
 - contract target:
   `docs-site/src/content/docs/reports/implementation-plans/wr-068-renderer-lighting-pipeline-cache-and-last-good-fallback/plan.md`.
 
@@ -80,9 +81,9 @@ Governance decision from PM-RENDER-MESH-MATERIAL-001 still applies:
 - Team Topologies ownership: complicated-subsystem renderer platform consuming
   stream-aligned product/material/asset/model producers.
 
-## Promotion Readiness
+## Promotion And Implementation Readiness
 
-WR-068 can become promotable only after the intake proposal records:
+WR-068 was promoted after the intake proposal recorded:
 
 - dependency on completed `WR-067`;
 - accepted renderer handoff doctrine gate;
@@ -94,8 +95,9 @@ WR-068 can become promotable only after the intake proposal records:
 - validation commands that prove shader failure diagnostics, fallback evidence,
   pipeline cache stats boundaries, and no submit-time fallback extraction.
 
-Promotion does not authorize code by itself. After promotion, rerun the stack
-and single-track coordinators and follow the selected implementation action.
+Implementation is authorized only when the stack and single-track coordinators
+select WR-068, `task production:plan` reports the row as `current_candidate`,
+and this contract remains accurate for the owning modules.
 
 ## Implementation Scope
 
@@ -156,6 +158,34 @@ WR-068 must provide or verify explicit typed evidence for:
   material scene bundle falls back to an asset shader;
 - fail-closed diagnostics when a material feature pass requires a generated
   scene shader but only fallback data is available.
+
+## Critical Review Decisions
+
+- Source truth remains with material, asset, model, scene, product, and shader
+  package owners. Renderer data added by WR-068 is only projection,
+  specialization identity, cache statistics, pass provenance, or prior-valid
+  runtime evidence.
+- The source-to-runtime chain is material/scene bundle -> resolved shader
+  material -> render-flow provenance -> pass provenance inspection -> renderer
+  diagnostics. WR-068 must fail closed if that chain stops at a descriptor,
+  status panel, fallback-only path, or unconsumed prepared contract.
+- Owners are `renderer/render_flow/provenance.rs` for pass evidence,
+  `inspect/pass_provenance.rs` and WR-068 inspection DTOs for public
+  diagnostics, `shader/registry.rs` and `shader/types.rs` for shader
+  load/reload event evidence, and `pipelines/cache.rs` for stats-only cache
+  reporting.
+- Typed contracts must replace ad hoc string evidence for fallback severity,
+  pipeline cache counts, shader prior-valid state, and material pass fallback
+  requirements.
+- A material pass that requires generated scene shader evidence must reject an
+  asset-shader fallback. Prior-valid reuse can be reported only as renderer
+  execution evidence; it cannot decide product freshness or fallback legality.
+- Guard tests must cover accepted fallback reporting, fail-closed generated
+  material fallback, missing pipeline statistics, shader reload failure
+  diagnostics, and the existing cutoff rule that keeps pipeline cache state
+  stats-only.
+- WR-068 closeout is `bounded_contract`; runtime visual proof, benchmarks, and
+  mesh/material production evidence remain WR-069 scope.
 
 ## Non Goals
 

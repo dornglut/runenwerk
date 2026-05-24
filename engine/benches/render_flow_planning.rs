@@ -9,13 +9,27 @@ use engine::plugins::render::graph::{
 use engine::plugins::render::inspect::{
     PassTimingSample, RenderDebugTimingsState, RenderGpuResidencyBudgetInspection,
     RenderGpuResidencyInspection, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
-    RenderPassTimingEvidence, RenderScaleProductionEvidenceRequest,
-    RenderScaleProductionHardwareProfile, RenderScaleVisibilityCandidate,
-    RenderScaleVisibilityCapabilities, RenderScaleVisibilityCapabilityStatus,
-    RenderSdfProductionEvidenceRequest, RenderSdfProductionHardwareProfile,
-    RenderSdfResidencyBudgetInspection, RenderSdfResidencyInspection,
-    RenderSdfRuntimeVisualEvidence, inspect_render_scale_production_evidence,
+    RenderMeshMaterialHandoffCounts, RenderMeshMaterialHandoffInspection,
+    RenderMeshMaterialProductionEvidenceRequest, RenderMeshMaterialProductionHardwareProfile,
+    RenderMeshMaterialRuntimeVisualEvidence, RenderPassTimingEvidence,
+    RenderPipelineFallbackCounts, RenderPipelineFallbackInspection,
+    RenderRayReconstructionInputEvidence, RenderRayReconstructionInputKind,
+    RenderScaleProductionEvidenceRequest, RenderScaleProductionHardwareProfile,
+    RenderScaleVisibilityCandidate, RenderScaleVisibilityCapabilities,
+    RenderScaleVisibilityCapabilityStatus, RenderSdfProductionEvidenceRequest,
+    RenderSdfProductionHardwareProfile, RenderSdfResidencyBudgetInspection,
+    RenderSdfResidencyInspection, RenderSdfRuntimeVisualEvidence, RenderTemporalHistoryEvidence,
+    RenderTemporalInputEvidence, RenderTemporalInputKind, RenderTemporalInspection,
+    RenderTemporalInspectionRequest, RenderTemporalJitterEvidence,
+    RenderTemporalProductionEvidenceRequest, RenderTemporalProductionHardwareProfile,
+    RenderTemporalReconstructionMode, RenderTemporalResolutionEvidence,
+    RenderTemporalRuntimeVisualEvidence, RenderTemporalUpscalingAdapterEvidence,
+    RenderTemporalUpscalingAdapterKind, RenderTemporalUpscalingCapabilityState,
+    RenderTemporalUpscalingInspection, RenderTemporalUpscalingInspectionRequest,
+    inspect_render_mesh_material_production_evidence, inspect_render_scale_production_evidence,
     inspect_render_scale_visibility, inspect_render_sdf_production_evidence,
+    inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
+    inspect_render_temporal_upscaling,
 };
 use engine::plugins::render::resource::{
     build_transient_alias_assignments, build_transient_windows, find_aliasable_transients,
@@ -381,6 +395,100 @@ fn boids_resize_aspect_error_px(surface_size: (u32, u32)) -> f32 {
         .max((reconstructed_height_px - sprite_height_px).abs())
 }
 
+fn run_mesh_material_production_evidence() {
+    let material_handoff = RenderMeshMaterialHandoffInspection {
+        counts: RenderMeshMaterialHandoffCounts {
+            material_instance_count: 1,
+            texture_binding_count: 1,
+            material_binding_slot_count: 1,
+            model_mesh_selection_count: 1,
+            material_consuming_pass_count: 1,
+            pass_exposed_model_mesh_selection_count: 1,
+        },
+        scene_shader_identity: Some("shader.identity.scene".to_string()),
+        scene_shader_path: Some("generated/scene_material.wgsl".to_string()),
+        shader_artifact_id: Some("shader.artifact.scene".to_string()),
+        shader_cache_key: Some("shader.cache.scene".to_string()),
+        material_table_identity: Some("scene.material.table:v1".to_string()),
+        resource_layout_identity: Some("resource.layout:v1".to_string()),
+        diagnostics: Vec::new(),
+    };
+    let pipeline_fallback = RenderPipelineFallbackInspection {
+        counts: RenderPipelineFallbackCounts {
+            pass_count: 1,
+            pipeline_backed_pass_count: 1,
+            material_pass_count: 1,
+            fallback_pass_count: 0,
+            material_fallback_pass_count: 0,
+            shader_failure_event_count: 1,
+            prior_valid_shader_failure_count: 1,
+            pipeline_cache_hit_count: 2,
+            pipeline_cache_miss_count: 1,
+            pipeline_cache_failure_count: 0,
+        },
+        shader_reload_status: None,
+        passes: Vec::new(),
+        shader_failures: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let mut timings = RenderDebugTimingsState::default();
+    timings.observe_pass_timings(&[
+        PassTimingSample {
+            flow_id: "bench.mesh.material.production".to_string(),
+            pass_id: "mesh.material.prepare".to_string(),
+            pass_kind: "compute".to_string(),
+            millis: 0.12,
+            dispatch_workgroups: Some([1, 1, 1]),
+        },
+        PassTimingSample {
+            flow_id: "bench.mesh.material.production".to_string(),
+            pass_id: "mesh.material.draw".to_string(),
+            pass_kind: "graphics".to_string(),
+            millis: 0.31,
+            dispatch_workgroups: None,
+        },
+    ]);
+    timings.observe_gpu_timing_diagnostic(RenderGpuTimingDiagnostic::unsupported(
+        "criterion mesh/material production evidence uses portable unsupported timestamp diagnostics",
+    ));
+    let report =
+        inspect_render_mesh_material_production_evidence(RenderMeshMaterialProductionEvidenceRequest {
+            hardware_profile: RenderMeshMaterialProductionHardwareProfile {
+                profile_key: "bench-mesh-material-profile".to_string(),
+                adapter_name: Some("criterion".to_string()),
+                backend: Some("wgpu".to_string()),
+                timestamp_query: RenderGpuTimingCapability::Unsupported,
+            },
+            material_handoff,
+            pipeline_fallback,
+            timings,
+            visual_evidence: vec![RenderMeshMaterialRuntimeVisualEvidence {
+                view_label: "bench.mesh.material.summary".to_string(),
+                artifact_path:
+                    "engine/benchmark-artifacts/render-mesh-material-production-evidence/summary.txt"
+                        .to_string(),
+                material_table_identity: "scene.material.table:v1".to_string(),
+                scene_shader_identity: "shader.identity.scene".to_string(),
+                material_instance_count: 1,
+                rendered_pixel_count: 4096,
+                consumed_material_handoff: true,
+                consumed_pipeline_fallback: true,
+            }],
+            benchmark_commands: vec![
+                "cargo bench -p engine --bench render_flow_planning".to_string(),
+            ],
+            artifact_paths: vec![
+                "engine/benchmark-artifacts/render-mesh-material-production-evidence/summary.txt"
+                    .to_string(),
+                "docs-site/src/content/docs/reports/benchmarks/render/mesh-material-production-evidence.md"
+                    .to_string(),
+            ],
+        });
+    black_box(report.is_runtime_ready());
+    black_box(report.counts.material_instance_count);
+    black_box(report.timings.gpu_timing_diagnostic_count);
+}
+
 fn run_scale_production_evidence(candidate_count: usize) {
     let residency = RenderGpuResidencyInspection {
         addressable_count: 1_000_000,
@@ -575,6 +683,194 @@ fn run_sdf_runtime_evidence(product_count: usize) {
     black_box(report.is_runtime_ready());
     black_box(report.counts.total_candidate_count);
     black_box(report.timings.cpu_total_pass_millis);
+}
+
+fn run_temporal_production_evidence() {
+    let temporal = temporal_inspection();
+    let upscaling = temporal_upscaling_inspection(temporal.clone());
+    let mut timings = RenderDebugTimingsState::default();
+    timings.observe_pass_timings(&[
+        PassTimingSample {
+            flow_id: "bench.temporal.production".to_string(),
+            pass_id: "temporal.reconstruct".to_string(),
+            pass_kind: "fullscreen".to_string(),
+            millis: 0.24,
+            dispatch_workgroups: None,
+        },
+        PassTimingSample {
+            flow_id: "bench.temporal.production".to_string(),
+            pass_id: "temporal.resolve".to_string(),
+            pass_kind: "fullscreen".to_string(),
+            millis: 0.18,
+            dispatch_workgroups: None,
+        },
+    ]);
+    timings.observe_gpu_timing_diagnostic(RenderGpuTimingDiagnostic::unsupported(
+        "criterion temporal production evidence uses portable unsupported timestamp diagnostics",
+    ));
+    let report =
+        inspect_render_temporal_production_evidence(RenderTemporalProductionEvidenceRequest {
+            hardware_profile: RenderTemporalProductionHardwareProfile {
+                profile_key: "bench-temporal-production-profile".to_string(),
+                adapter_name: Some("criterion".to_string()),
+                backend: Some("wgpu".to_string()),
+                timestamp_query: RenderGpuTimingCapability::Unsupported,
+            },
+            temporal,
+            upscaling,
+            timings,
+            visual_evidence: temporal_visual_evidence(),
+            benchmark_commands: vec![
+                "cargo bench -p engine --bench render_flow_planning".to_string(),
+            ],
+            artifact_paths: vec![
+                "engine/benchmark-artifacts/render-temporal-production-evidence/summary.txt"
+                    .to_string(),
+                "docs-site/src/content/docs/reports/benchmarks/render/temporal-production-evidence.md"
+                    .to_string(),
+            ],
+        });
+    black_box(report.is_runtime_ready());
+    black_box(report.counts.rendered_pixel_count);
+    black_box(report.timings.gpu_timing_diagnostic_count);
+}
+
+fn temporal_inspection() -> RenderTemporalInspection {
+    inspect_render_temporal_inputs(RenderTemporalInspectionRequest {
+        frame_index: 29,
+        reconstruction_mode: RenderTemporalReconstructionMode::Taau,
+        native_fallback_active: false,
+        resolution: RenderTemporalResolutionEvidence {
+            internal_size: [1280, 720],
+            output_size: [1920, 1080],
+            min_scale: 0.5,
+            max_scale: 1.0,
+            dynamic_resolution_enabled: true,
+        },
+        jitter: RenderTemporalJitterEvidence {
+            sequence_id: "halton-2-3:v1".to_string(),
+            phase_index: 7,
+            phase_count: 8,
+            offset: [0.25, 0.125],
+        },
+        history: RenderTemporalHistoryEvidence {
+            resource_id: "history.main.color".to_string(),
+            current_signature: "temporal.signature.current".to_string(),
+            previous_signature: Some("temporal.signature.current".to_string()),
+            age_frames: 8,
+            valid: true,
+            invalidation_reason: None,
+        },
+        inputs: vec![
+            temporal_input(RenderTemporalInputKind::MotionVectors, true, true),
+            temporal_input(RenderTemporalInputKind::Depth, true, true),
+            temporal_input(RenderTemporalInputKind::Exposure, true, true),
+            temporal_input(RenderTemporalInputKind::ReactiveMask, false, true),
+        ],
+    })
+}
+
+fn temporal_upscaling_inspection(
+    temporal: RenderTemporalInspection,
+) -> RenderTemporalUpscalingInspection {
+    inspect_render_temporal_upscaling(RenderTemporalUpscalingInspectionRequest {
+        temporal,
+        adapter: RenderTemporalUpscalingAdapterEvidence {
+            kind: RenderTemporalUpscalingAdapterKind::FsrStyle,
+            capability_state: RenderTemporalUpscalingCapabilityState::Supported,
+            required_capabilities: vec![
+                "temporal.history.valid".to_string(),
+                "dynamic_resolution".to_string(),
+                "ray_reconstruction.inputs".to_string(),
+            ],
+            unsupported_reason: None,
+            invocation_requested: true,
+        },
+        ray_inputs: vec![
+            ray_input(RenderRayReconstructionInputKind::MotionVectors, true, true),
+            ray_input(RenderRayReconstructionInputKind::Depth, true, true),
+            ray_input(RenderRayReconstructionInputKind::Exposure, true, true),
+            ray_input(RenderRayReconstructionInputKind::ReactiveMask, false, true),
+            ray_input(
+                RenderRayReconstructionInputKind::DisocclusionMask,
+                false,
+                false,
+            ),
+            ray_input(
+                RenderRayReconstructionInputKind::RaymarchDistance,
+                true,
+                true,
+            ),
+            ray_input(
+                RenderRayReconstructionInputKind::RayQueryHitDistance,
+                true,
+                true,
+            ),
+        ],
+        native_fallback_visible: false,
+        adapter_required_for_correctness: false,
+    })
+}
+
+fn temporal_visual_evidence() -> Vec<RenderTemporalRuntimeVisualEvidence> {
+    vec![
+        RenderTemporalRuntimeVisualEvidence {
+            view_label: "bench.temporal.taau".to_string(),
+            artifact_path:
+                "engine/benchmark-artifacts/render-temporal-production-evidence/taau.txt"
+                    .to_string(),
+            reconstruction_mode: RenderTemporalReconstructionMode::Taau,
+            internal_size: [1280, 720],
+            output_size: [1920, 1080],
+            rendered_pixel_count: 8192,
+            history_valid: true,
+            native_fallback_visible: false,
+            consumed_temporal_inputs: true,
+            consumed_temporal_upscaling: true,
+        },
+        RenderTemporalRuntimeVisualEvidence {
+            view_label: "bench.temporal.native_fallback".to_string(),
+            artifact_path:
+                "engine/benchmark-artifacts/render-temporal-production-evidence/fallback.txt"
+                    .to_string(),
+            reconstruction_mode: RenderTemporalReconstructionMode::Native,
+            internal_size: [1920, 1080],
+            output_size: [1920, 1080],
+            rendered_pixel_count: 4096,
+            history_valid: true,
+            native_fallback_visible: true,
+            consumed_temporal_inputs: true,
+            consumed_temporal_upscaling: true,
+        },
+    ]
+}
+
+fn temporal_input(
+    kind: RenderTemporalInputKind,
+    required: bool,
+    available: bool,
+) -> RenderTemporalInputEvidence {
+    RenderTemporalInputEvidence {
+        kind,
+        required,
+        available,
+        product_id: available.then(|| format!("temporal.product.{}", kind.as_str())),
+        generation: available.then_some(101),
+    }
+}
+
+fn ray_input(
+    kind: RenderRayReconstructionInputKind,
+    required: bool,
+    available: bool,
+) -> RenderRayReconstructionInputEvidence {
+    RenderRayReconstructionInputEvidence {
+        kind,
+        required,
+        available,
+        product_id: available.then(|| format!("ray.product.{}", kind.as_str())),
+        generation: available.then_some(202),
+    }
 }
 
 fn build_simple_fullscreen_flow() -> RenderFlow {
@@ -925,11 +1221,17 @@ fn bench_render_flow_planning(c: &mut Criterion) {
         })
     });
 
+    c.bench_function("render_mesh_material/production_evidence_report", |b| {
+        b.iter(run_mesh_material_production_evidence)
+    });
     c.bench_function("render_scale/production_evidence_report_4096", |b| {
         b.iter(|| run_scale_production_evidence(black_box(4096)))
     });
     c.bench_function("render_sdf/runtime_evidence_report_4096", |b| {
         b.iter(|| run_sdf_runtime_evidence(black_box(4096)))
+    });
+    c.bench_function("render_temporal/production_evidence_report", |b| {
+        b.iter(run_temporal_production_evidence)
     });
 }
 

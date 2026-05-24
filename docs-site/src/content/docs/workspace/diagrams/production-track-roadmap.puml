@@ -168,38 +168,38 @@ package "PT-RENDER-MESH-MATERIAL Mesh Material Lighting Shader And Asset Handoff
 
   component "PM-RENDER-MESH-MATERIAL-002 Mesh Material Shader Asset Handoff\nkind=implementation\nstate=completed\nWR=WR-067" as PM_RENDER_MESH_MATERIAL_002 <<completed>>
 
-  component "PM-RENDER-MESH-MATERIAL-003 Lighting Pipeline Cache And Last Good Fallback\nkind=implementation\nstate=designing\nWR=WR-068" as PM_RENDER_MESH_MATERIAL_003 <<designing>>
+  component "PM-RENDER-MESH-MATERIAL-003 Lighting Pipeline Cache And Last Good Fallback\nkind=implementation\nstate=completed\nWR=WR-068" as PM_RENDER_MESH_MATERIAL_003 <<completed>>
 
-  component "PM-RENDER-MESH-MATERIAL-004 Mesh Material Production Evidence\nkind=hardening\nstate=designing\nWR=WR-069" as PM_RENDER_MESH_MATERIAL_004 <<designing>>
+  component "PM-RENDER-MESH-MATERIAL-004 Mesh Material Production Evidence\nkind=hardening\nstate=completed\nWR=WR-069" as PM_RENDER_MESH_MATERIAL_004 <<completed>>
 
 }
 
 package "PT-RENDER-TEMPORAL Temporal Reconstruction Dynamic Resolution And Upscaling Platform" {
-  component "PM-RENDER-TEMPORAL-001 Temporal Reconstruction Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_TEMPORAL_001 <<active>>
+  component "PM-RENDER-TEMPORAL-001 Temporal Reconstruction Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_TEMPORAL_001 <<completed>>
 
-  component "PM-RENDER-TEMPORAL-002 Temporal Inputs History And Dynamic Resolution\nkind=implementation\nstate=designing\nWR=WR-070" as PM_RENDER_TEMPORAL_002 <<designing>>
+  component "PM-RENDER-TEMPORAL-002 Temporal Inputs History And Dynamic Resolution\nkind=implementation\nstate=completed\nWR=WR-070" as PM_RENDER_TEMPORAL_002 <<completed>>
 
-  component "PM-RENDER-TEMPORAL-003 Upscaling Adapters And Ray Reconstruction Inputs\nkind=implementation\nstate=designing\nWR=WR-071" as PM_RENDER_TEMPORAL_003 <<designing>>
+  component "PM-RENDER-TEMPORAL-003 Upscaling Adapters And Ray Reconstruction Inputs\nkind=implementation\nstate=completed\nWR=WR-071" as PM_RENDER_TEMPORAL_003 <<completed>>
 
-  component "PM-RENDER-TEMPORAL-004 Temporal Production Evidence\nkind=hardening\nstate=designing\nWR=WR-072" as PM_RENDER_TEMPORAL_004 <<designing>>
+  component "PM-RENDER-TEMPORAL-004 Temporal Production Evidence\nkind=hardening\nstate=completed\nWR=WR-072" as PM_RENDER_TEMPORAL_004 <<completed>>
 
 }
 
 package "PT-RENDER-RT Hardware Ray Query And Hybrid Tracing Platform" {
-  component "PM-RENDER-RT-001 Hardware Ray Query Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_RT_001 <<active>>
+  component "PM-RENDER-RT-001 Hardware Ray Query Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_RT_001 <<completed>>
 
-  component "PM-RENDER-RT-002 Ray Query Capability And Acceleration Resources\nkind=implementation\nstate=designing\nWR=WR-073" as PM_RENDER_RT_002 <<designing>>
+  component "PM-RENDER-RT-002 Ray Query Capability And Acceleration Resources\nkind=implementation\nstate=completed\nWR=WR-073" as PM_RENDER_RT_002 <<completed>>
 
-  component "PM-RENDER-RT-003 Hybrid Ray SDF Raster Runtime Proof\nkind=implementation\nstate=designing\nWR=WR-074" as PM_RENDER_RT_003 <<designing>>
+  component "PM-RENDER-RT-003 Hybrid Ray SDF Raster Runtime Proof\nkind=implementation\nstate=completed\nWR=WR-074" as PM_RENDER_RT_003 <<completed>>
 
-  component "PM-RENDER-RT-004 Ray Query Production Evidence\nkind=hardening\nstate=designing\nWR=WR-075" as PM_RENDER_RT_004 <<designing>>
+  component "PM-RENDER-RT-004 Ray Query Production Evidence\nkind=hardening\nstate=completed\nWR=WR-075" as PM_RENDER_RT_004 <<completed>>
 
 }
 
 package "PT-RENDER-PRODUCT-VISUALS Product Visual Producers Platform" {
-  component "PM-RENDER-PRODUCT-VISUALS-001 Product Visual Producer Doctrine\nkind=design\nstate=active\nWR=N/A" as PM_RENDER_PRODUCT_VISUALS_001 <<active>>
+  component "PM-RENDER-PRODUCT-VISUALS-001 Product Visual Producer Doctrine\nkind=design\nstate=completed\nWR=N/A" as PM_RENDER_PRODUCT_VISUALS_001 <<completed>>
 
-  component "PM-RENDER-PRODUCT-VISUALS-002 Particles VFX Trails And Decals\nkind=implementation\nstate=designing\nWR=WR-076" as PM_RENDER_PRODUCT_VISUALS_002 <<designing>>
+  component "PM-RENDER-PRODUCT-VISUALS-002 Particles VFX Trails And Decals\nkind=implementation\nstate=completed\nWR=WR-076" as PM_RENDER_PRODUCT_VISUALS_002 <<completed>>
 
   component "PM-RENDER-PRODUCT-VISUALS-003 Vegetation Water Atmosphere Weather And Field Visuals\nkind=implementation\nstate=designing\nWR=WR-077" as PM_RENDER_PRODUCT_VISUALS_003 <<designing>>
 
