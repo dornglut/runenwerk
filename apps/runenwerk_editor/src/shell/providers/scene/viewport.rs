@@ -25,11 +25,7 @@ impl EditorSurfaceProvider for SceneViewportProvider {
         ) {
             return SurfaceProviderSupportMode::Unsupported;
         }
-        stable_key_or_legacy_kind_support(
-            request,
-            SCENE_VIEWPORT_SURFACE_KEY,
-            ToolSurfaceKind::Viewport,
-        )
+        stable_key_support(request, SCENE_VIEWPORT_SURFACE_KEY)
     }
 
     fn build_frame(

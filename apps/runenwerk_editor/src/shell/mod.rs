@@ -1,8 +1,11 @@
 pub mod applied_editor_definition;
+pub mod command_catalog;
 pub mod command_resolution;
 pub mod controller;
 pub mod dispatch;
 pub mod dispatch_shell_command;
+pub mod editor_lab_evidence;
+pub mod editor_lab_project;
 pub mod providers;
 pub mod self_authoring;
 pub mod shortcut_resolution;
@@ -15,9 +18,12 @@ pub mod workbench_host;
 mod toolbar_adapter;
 
 pub use applied_editor_definition::*;
+pub use command_catalog::*;
 pub use command_resolution::*;
 pub use controller::*;
 pub use dispatch_shell_command::*;
+pub use editor_lab_evidence::*;
+pub use editor_lab_project::*;
 pub use providers::*;
 pub use self_authoring::*;
 pub use shortcut_resolution::*;

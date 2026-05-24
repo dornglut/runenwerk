@@ -7,9 +7,13 @@ use editor_shell::{
     ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID, ENTITY_TABLE_LIST_WIDGET_ID,
     ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID, ENTITY_TABLE_SEARCH_WIDGET_ID,
     ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID, EditorDefinitionSurfaceAction,
-    EditorDomainMutation, EditorShellFrameModel, EntityTableDomainMutation,
-    EntityTableRowViewModel, EntityTableSessionMutation, EntityTableSortKey,
-    EntityTableSurfaceAction, EntityTableViewModel, InspectorFieldControlKind,
+    EditorDomainMutation, EditorLabActionViewModel, EditorLabDefinitionHierarchyViewModel,
+    EditorLabDefinitionRowViewModel, EditorLabDegradedViewModel, EditorLabDiagnosticViewModel,
+    EditorLabDiagnosticsViewModel, EditorLabInspectorFieldViewModel, EditorLabInspectorViewModel,
+    EditorLabPaletteCategoryViewModel, EditorLabPaletteViewModel, EditorLabReviewViewModel,
+    EditorLabSurfaceViewModel, EditorLabTextFieldViewModel, EditorShellFrameModel,
+    EntityTableDomainMutation, EntityTableRowViewModel, EntityTableSessionMutation,
+    EntityTableSortKey, EntityTableSurfaceAction, EntityTableViewModel, InspectorFieldControlKind,
     InspectorFieldViewModel, InspectorObservationFrame, InspectorObservedField,
     InspectorObservedTarget, InspectorSessionMutation, InspectorSurfaceAction,
     InspectorTargetViewModel, InspectorViewModel, MaterialDiagnosticRowViewModel,
@@ -33,15 +37,16 @@ use editor_shell::{
     VIEWPORT_STATISTICS_TOGGLE_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
     ViewportDomainMutation, ViewportObservationFrame, ViewportProductChoiceViewModel,
     ViewportProductObservation, ViewportSessionMutation, ViewportSurfaceAction, ViewportViewModel,
-    WidgetId, WorkspaceProfileRegistry, build_console_panel, build_entity_table_panel,
-    build_inspector_panel, build_material_graph_surface, build_outliner_panel,
-    build_self_authoring_control_panel, build_viewport_panel, editor_domain_proposal,
-    entity_table_sort_button_widget_id, inspector_field_focus_widget_id, inspector_field_widget_id,
-    surface_session_proposal, surface_widget_id, tool_surface_capability_set,
-    tool_surface_definition_id, tool_surface_kind_for_stable_key,
-    viewport_debug_stage_button_widget_id, viewport_field_color_ramp_button_widget_id,
-    viewport_field_component_button_widget_id, viewport_field_debug_mode_button_widget_id,
-    viewport_product_button_widget_id, viewport_tool_radial_item_widget_id,
+    WidgetId, WorkspaceProfileRegistry, build_console_panel, build_editor_lab_surface,
+    build_entity_table_panel, build_inspector_panel, build_material_graph_surface,
+    build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
+    editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
+    inspector_field_widget_id, surface_session_proposal, surface_widget_id,
+    tool_surface_capabilities_from_registry_or_legacy, tool_surface_definition_id,
+    tool_surface_kind_for_stable_key, viewport_debug_stage_button_widget_id,
+    viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
+    viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
+    viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::{
     ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState,
@@ -198,10 +203,9 @@ pub trait EditorSurfaceProvider: Send + Sync {
     }
 }
 
-fn stable_key_or_legacy_kind_support(
+fn stable_key_support(
     request: &SurfaceProviderRequest,
     stable_key: &str,
-    _legacy_kind: ToolSurfaceKind,
 ) -> SurfaceProviderSupportMode {
     if request.matches_stable_key(stable_key) {
         SurfaceProviderSupportMode::StableKey
@@ -210,10 +214,9 @@ fn stable_key_or_legacy_kind_support(
     }
 }
 
-fn stable_keys_or_legacy_kind_support(
+fn stable_keys_support(
     request: &SurfaceProviderRequest,
     stable_keys: &[&str],
-    _legacy_kind_predicate: impl Fn(ToolSurfaceKind) -> bool,
 ) -> SurfaceProviderSupportMode {
     if request.matches_any_stable_key(stable_keys) {
         SurfaceProviderSupportMode::StableKey
@@ -807,7 +810,14 @@ pub fn mounted_surface_requests_with_registry(
                 .map(tool_surface_definition_id)
                 .unwrap_or(editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID);
             let capabilities = stable_key_kind
-                .map(tool_surface_capability_set)
+                .map(|kind| {
+                    tool_surface_capabilities_from_registry_or_legacy(
+                        kind,
+                        Some(&stable_surface_key),
+                        tool_surface_registry,
+                    )
+                })
+                .or_else(|| registered_surface.map(|definition| definition.capabilities))
                 .unwrap_or_default();
             Some(SurfaceProviderRequest {
                 workspace_profile_id: shell_state.active_workspace_profile_id(),

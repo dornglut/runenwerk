@@ -19,11 +19,7 @@ impl EditorSurfaceProvider for ConsoleProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            EDITOR_CONSOLE_SURFACE_KEY,
-            ToolSurfaceKind::Console,
-        )
+        stable_key_support(request, EDITOR_CONSOLE_SURFACE_KEY)
     }
 
     fn build_frame(

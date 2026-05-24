@@ -695,6 +695,11 @@ mod tests {
             provider_family,
             route,
             persistence: ToolSurfacePersistence::StableKey,
+            capabilities: ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+            session_retention: ui_surface::SessionRetentionClass::Restorable,
+            creation_policy: crate::ToolSurfaceCreationPolicy::SingletonPerWorkspace,
+            target_profile_compatibility: crate::ToolSurfaceTargetProfileCompatibility::AllProfiles,
+            legacy_compatibility_key: None,
         }
     }
 }

@@ -1,22 +1,5 @@
 use super::*;
 
-pub(super) fn is_self_authoring_surface(kind: ToolSurfaceKind) -> bool {
-    matches!(
-        kind,
-        ToolSurfaceKind::EditorDesignOutliner
-            | ToolSurfaceKind::UiHierarchy
-            | ToolSurfaceKind::UiCanvas
-            | ToolSurfaceKind::StyleInspector
-            | ToolSurfaceKind::Bindings
-            | ToolSurfaceKind::DockLayoutPreview
-            | ToolSurfaceKind::ThemeEditor
-            | ToolSurfaceKind::ShortcutEditor
-            | ToolSurfaceKind::MenuEditor
-            | ToolSurfaceKind::DefinitionValidation
-            | ToolSurfaceKind::CommandDiff
-    )
-}
-
 pub(super) struct SelfAuthoringProvider;
 
 impl EditorSurfaceProvider for SelfAuthoringProvider {
@@ -33,11 +16,7 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_keys_or_legacy_kind_support(
-            request,
-            EDITOR_DESIGN_SURFACE_KEYS,
-            is_self_authoring_surface,
-        )
+        stable_keys_support(request, EDITOR_DESIGN_SURFACE_KEYS)
     }
 
     fn build_frame(
@@ -69,18 +48,16 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
                 )
                 .map(|product| (product.root, SurfaceRouteTable::empty()))
                 .unwrap_or_else(|| {
-                    build_self_authoring_control_panel(
+                    build_editor_lab_surface(
                         context.theme,
                         request.tool_surface_instance_id,
-                        vec!["No retained preview available".to_string()],
-                        Vec::new(),
+                        &editor_lab_surface_view_model(context, surface_kind),
                     )
                 }),
-            _ => build_self_authoring_control_panel(
+            _ => build_editor_lab_surface(
                 context.theme,
                 request.tool_surface_instance_id,
-                self_authoring_lines(context, surface_kind),
-                self_authoring_actions(context, surface_kind),
+                &editor_lab_surface_view_model(context, surface_kind),
             ),
         };
 
@@ -110,15 +87,36 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
             SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::DeleteSelected) => {
                 ShellCommand::DeleteSelectedEditorDefinition
             }
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SaveProjectPackage,
+            ) => ShellCommand::SaveEditorLabProjectPackage,
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::ReloadProjectPackage,
+            ) => ShellCommand::ReloadEditorLabProjectPackage,
             SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ExportSelected) => {
                 ShellCommand::ExportSelectedEditorDefinition
             }
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::BuildApplyReview,
+            ) => ShellCommand::BuildSelectedEditorDefinitionApplyReview,
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::RejectApplyReview,
+            ) => ShellCommand::RejectSelectedEditorDefinitionApplyReview,
             SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected) => {
                 ShellCommand::ApplySelectedEditorDefinition
             }
             SurfaceLocalAction::EditorDefinition(
                 EditorDefinitionSurfaceAction::RollbackSelected,
             ) => ShellCommand::RollbackSelectedEditorDefinition,
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::ReloadLastApplied,
+            ) => ShellCommand::ReloadSelectedEditorDefinitionLastApplied,
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::UndoOperation) => {
+                ShellCommand::UndoEditorLabOperation
+            }
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::RedoOperation) => {
+                ShellCommand::RedoEditorLabOperation
+            }
             SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SelectUiNode {
                 node_id,
             }) => ShellCommand::SelectEditorDefinitionUiNode { node_id },
@@ -166,339 +164,732 @@ fn self_authoring_title(kind: ToolSurfaceKind) -> &'static str {
     }
 }
 
-fn self_authoring_lines(
+fn editor_lab_surface_view_model(
     context: &SurfaceProviderBuildContext<'_>,
     kind: ToolSurfaceKind,
-) -> Vec<String> {
-    let state = context.shell_state.self_authoring();
-    match kind {
-        ToolSurfaceKind::EditorDesignOutliner => state
-            .draft_documents()
-            .map(|document| {
-                let marker = if Some(&document.id) == state.selected_document_id() {
-                    "*"
-                } else {
-                    " "
-                };
-                format!("{marker} {} [{:?}]", document.display_name, document.kind)
-            })
-            .collect(),
-        ToolSurfaceKind::UiHierarchy => state
-            .selected_document()
-            .map(|document| match &document.content {
-                editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
-                    ui_node_hierarchy_lines(&template.root, 0, state.selected_ui_node_id())
-                }
-                _ => vec!["Selected definition is not a UI template".to_string()],
-            })
-            .unwrap_or_else(|| vec!["No definition selected".to_string()]),
-        ToolSurfaceKind::StyleInspector => vec![
-            "Theme tokens are editor-owned definition data".to_string(),
-            "Retained preview uses the active ThemeTokens until a theme document is applied"
-                .to_string(),
-        ],
-        ToolSurfaceKind::Bindings => state
-            .selected_document()
-            .map(|document| match &document.content {
-                editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
-                    vec![
-                        format!("template: {}", template.id),
-                        format!("local templates: {}", template.templates.len()),
-                        format!("menus: {}", template.menus.len()),
-                    ]
-                }
-                editor_definition::EditorDefinitionDocumentContent::EditorBindings(bindings) => {
-                    vec![
-                        format!("toolbar: {}", bindings.toolbar.template),
-                        format!("surface templates: {}", bindings.surface_templates.len()),
-                    ]
-                }
-                _ => vec!["Selected editor definition has no UI slots".to_string()],
-            })
-            .unwrap_or_else(|| vec!["No definition selected".to_string()]),
-        ToolSurfaceKind::DockLayoutPreview => {
-            if let Some(document) = state.selected_document()
-                && let editor_definition::EditorDefinitionDocumentContent::WorkspaceLayout(layout) =
-                    &document.content
-            {
-                return vec![
-                    format!("layout: {}", layout.label),
-                    format!("root: {}", workspace_host_summary(&layout.root)),
-                    format!("floating hosts: {}", layout.floating_hosts.len()),
-                ];
-            }
-            let workspace = context.shell_state.workspace_state();
-            vec![
-                "Select an authored workspace layout to edit".to_string(),
-                format!("active hosts: {}", workspace.hosts().count()),
-                format!("active tab stacks: {}", workspace.tab_stacks().count()),
-                format!("active panels: {}", workspace.panels().count()),
-                format!(
-                    "active tool surfaces: {}",
-                    workspace.tool_surfaces().count()
-                ),
-            ]
-        }
-        ToolSurfaceKind::ThemeEditor => vec![
-            "Theme documents validate in editor_definition".to_string(),
-            "Apply keeps runtime state unchanged until explicit shell command".to_string(),
-        ],
-        ToolSurfaceKind::ShortcutEditor => vec![
-            "Shortcut documents report duplicate chord diagnostics".to_string(),
-            "Platform override execution remains app-owned".to_string(),
-        ],
-        ToolSurfaceKind::MenuEditor => vec![
-            "Menu documents own labels, hierarchy, availability refs, and command refs".to_string(),
-            "Command execution remains outside editor_definition".to_string(),
-        ],
-        ToolSurfaceKind::DefinitionValidation => {
-            let diagnostics = state.selected_diagnostics();
-            if diagnostics.is_empty() {
-                return vec!["No blocking definition diagnostics".to_string()];
-            }
-            diagnostics
-                .into_iter()
-                .map(|diagnostic| {
-                    format!(
-                        "{:?} {}: {}",
-                        diagnostic.severity, diagnostic.code, diagnostic.message
-                    )
-                })
-                .collect()
-        }
-        ToolSurfaceKind::CommandDiff => state
-            .build_apply_preview()
-            .map(|preview| preview.summary)
-            .unwrap_or_else(|| vec!["No definition selected".to_string()]),
-        _ => vec!["Unsupported self-authoring surface".to_string()],
-    }
-}
-
-fn self_authoring_actions(
-    context: &SurfaceProviderBuildContext<'_>,
-    kind: ToolSurfaceKind,
-) -> Vec<(String, SurfaceLocalAction)> {
-    let state = context.shell_state.self_authoring();
+) -> EditorLabSurfaceViewModel {
     match kind {
         ToolSurfaceKind::EditorDesignOutliner => {
-            let mut actions = state
-                .draft_documents()
-                .map(|document| {
-                    (
-                        format!("Select {}", document.display_name),
-                        SurfaceLocalAction::EditorDefinition(
-                            EditorDefinitionSurfaceAction::SelectDocument {
-                                document_id: document.id.as_str().to_string(),
-                            },
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>();
-            actions.extend([
-                (
-                    "Duplicate".to_string(),
-                    SurfaceLocalAction::EditorDefinition(
-                        EditorDefinitionSurfaceAction::DuplicateSelected,
-                    ),
-                ),
-                (
-                    "Delete".to_string(),
-                    SurfaceLocalAction::EditorDefinition(
-                        EditorDefinitionSurfaceAction::DeleteSelected,
-                    ),
-                ),
-                (
-                    "Export".to_string(),
-                    SurfaceLocalAction::EditorDefinition(
-                        EditorDefinitionSurfaceAction::ExportSelected,
-                    ),
-                ),
-            ]);
-            actions
+            EditorLabSurfaceViewModel::DefinitionHierarchy(definition_hierarchy_view_model(context))
         }
-        ToolSurfaceKind::UiHierarchy => selected_ui_node_actions(state),
-        ToolSurfaceKind::StyleInspector => vec![(
-            "Rename Draft".to_string(),
-            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::RenameSelected {
-                display_name: "Retained draft".to_string(),
-            }),
-        )],
-        ToolSurfaceKind::ThemeEditor => vec![
-            (
-                "Select Theme".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::SelectDocument {
-                        document_id: "runenwerk.editor.theme.default".to_string(),
-                    },
-                ),
-            ),
-            (
-                "Set Accent".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::SetThemeColor {
-                        token: "accent".to_string(),
-                        value: "#5f8cff".to_string(),
-                    },
-                ),
-            ),
-        ],
-        ToolSurfaceKind::DefinitionValidation | ToolSurfaceKind::CommandDiff => vec![
-            (
-                "Apply".to_string(),
-                SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected),
-            ),
-            (
-                "Rollback".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::RollbackSelected,
-                ),
-            ),
-        ],
-        ToolSurfaceKind::DockLayoutPreview => vec![
-            (
-                "Select Layout".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::SelectDocument {
-                        document_id: "runenwerk.editor.layout.editor_design".to_string(),
-                    },
-                ),
-            ),
-            (
-                "Add Tab".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab {
-                        label: "Authored Tab".to_string(),
-                        tool_surface: "definition_validation".to_string(),
-                    },
-                ),
-            ),
-            (
-                "Split Root".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::SplitWorkspaceLayoutRoot {
-                        axis: "horizontal".to_string(),
-                    },
-                ),
-            ),
-            (
-                "Close Last Tab".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::CloseWorkspaceLayoutLastTab,
-                ),
-            ),
-            (
-                "Apply".to_string(),
-                SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected),
-            ),
-            (
-                "Rollback".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::RollbackSelected,
-                ),
-            ),
-        ],
-        ToolSurfaceKind::Bindings
-        | ToolSurfaceKind::ShortcutEditor
-        | ToolSurfaceKind::MenuEditor => vec![
-            (
-                "Duplicate".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::DuplicateSelected,
-                ),
-            ),
-            (
-                "Apply".to_string(),
-                SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected),
-            ),
-            (
-                "Rollback".to_string(),
-                SurfaceLocalAction::EditorDefinition(
-                    EditorDefinitionSurfaceAction::RollbackSelected,
-                ),
-            ),
-        ],
-        _ => Vec::new(),
+        ToolSurfaceKind::UiHierarchy => {
+            EditorLabSurfaceViewModel::Inspector(ui_hierarchy_view_model(context))
+        }
+        ToolSurfaceKind::UiCanvas => {
+            EditorLabSurfaceViewModel::Degraded(canvas_degraded_view_model(context))
+        }
+        ToolSurfaceKind::StyleInspector => {
+            EditorLabSurfaceViewModel::Inspector(style_inspector_view_model(context))
+        }
+        ToolSurfaceKind::Bindings => {
+            EditorLabSurfaceViewModel::Review(bindings_review_view_model(context))
+        }
+        ToolSurfaceKind::DockLayoutPreview => {
+            EditorLabSurfaceViewModel::Palette(dock_layout_palette_view_model(context))
+        }
+        ToolSurfaceKind::ThemeEditor => {
+            EditorLabSurfaceViewModel::Inspector(theme_editor_view_model(context))
+        }
+        ToolSurfaceKind::ShortcutEditor => {
+            EditorLabSurfaceViewModel::Review(shortcut_review_view_model(context))
+        }
+        ToolSurfaceKind::MenuEditor => {
+            EditorLabSurfaceViewModel::Review(menu_review_view_model(context))
+        }
+        ToolSurfaceKind::DefinitionValidation => {
+            EditorLabSurfaceViewModel::Diagnostics(diagnostics_view_model(context))
+        }
+        ToolSurfaceKind::CommandDiff => {
+            EditorLabSurfaceViewModel::Review(command_review_view_model(context))
+        }
+        _ => EditorLabSurfaceViewModel::Degraded(EditorLabDegradedViewModel {
+            title: "Unsupported Editor Lab Surface".to_string(),
+            reason: format!("surface kind {kind:?} is not part of the Editor Lab shell"),
+            details: Vec::new(),
+            diagnostics: Vec::new(),
+            recovery_actions: Vec::new(),
+        }),
     }
 }
 
-fn selected_ui_node_actions(
-    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
-) -> Vec<(String, SurfaceLocalAction)> {
-    let Some(document) = state.selected_document() else {
-        return Vec::new();
-    };
-    let editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) =
-        &document.content
-    else {
-        return Vec::new();
-    };
-    let mut actions = ui_node_selection_actions(&template.root);
-    if let Some(node_id) = state.selected_ui_node_id() {
-        actions.push((
-            "Set Text".to_string(),
-            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetUiNodeText {
-                node_id: node_id.to_string(),
-                text: "Edited in self-authoring".to_string(),
+fn definition_hierarchy_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabDefinitionHierarchyViewModel {
+    let state = context.shell_state.self_authoring();
+    let rows = state
+        .draft_documents()
+        .map(|document| EditorLabDefinitionRowViewModel {
+            document_id: document.id.as_str().to_string(),
+            label: document.display_name.clone(),
+            kind: format!("{:?}", document.kind),
+            lifecycle: format!("{:?}", document.lifecycle_state),
+            selected: Some(&document.id) == state.selected_document_id(),
+            source_path: Some(document.display_name.clone()),
+            diagnostic_count: state.diagnostics_for_document(&document.id).len(),
+            select_action: EditorDefinitionSurfaceAction::SelectDocument {
+                document_id: document.id.as_str().to_string(),
+            },
+        })
+        .collect();
+
+    EditorLabDefinitionHierarchyViewModel {
+        title: "Definition Hierarchy".to_string(),
+        selected_document: selected_document_label(state),
+        rows,
+        actions: selected_document_actions(state),
+    }
+}
+
+fn ui_hierarchy_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabInspectorViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut fields = Vec::new();
+    let mut actions = Vec::new();
+    let mut diagnostics = selected_diagnostics_view_models(state);
+
+    if let Some(document) = state.selected_document() {
+        fields.push(field("Document", document.display_name.clone()));
+        match &document.content {
+            editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
+                fields.push(field("Template", template.id.as_str().to_string()));
+                fields.push(field("Root", template.root.id().as_str().to_string()));
+                fields.push(field(
+                    "Selected Node",
+                    state.selected_ui_node_id().unwrap_or("none").to_string(),
+                ));
+                actions = ui_node_selection_actions(&template.root, state.selected_ui_node_id());
+                if let Some(node_id) = state.selected_ui_node_id()
+                    && let Some(text) = ui_node_authored_text(&template.root, node_id)
+                {
+                    fields.push(EditorLabInspectorFieldViewModel {
+                        label: "Node text".to_string(),
+                        value: text.clone(),
+                        text_field: Some(EditorLabTextFieldViewModel::new(
+                            "Edit selected node text",
+                            text,
+                            "Text",
+                            EditorDefinitionSurfaceAction::SetUiNodeText {
+                                node_id: node_id.to_string(),
+                                text: String::new(),
+                            },
+                        )),
+                    });
+                }
+            }
+            _ => diagnostics.push(EditorLabDiagnosticViewModel {
+                severity: "Warning".to_string(),
+                code: "editor.lab.ui_hierarchy.not_ui_template".to_string(),
+                message: "selected definition is not a UI template".to_string(),
+                path: None,
             }),
+        }
+    }
+
+    EditorLabInspectorViewModel {
+        title: "UI Hierarchy".to_string(),
+        selected_document: selected_document_label(state),
+        fields,
+        actions,
+        diagnostics,
+    }
+}
+
+fn canvas_degraded_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabDegradedViewModel {
+    let state = context.shell_state.self_authoring();
+    EditorLabDegradedViewModel {
+        title: "UI Canvas".to_string(),
+        reason: "Selected definition cannot form a retained UI preview".to_string(),
+        details: selected_document_label(state)
+            .into_iter()
+            .chain(["Select a UI layout document from the hierarchy to preview it.".to_string()])
+            .collect(),
+        diagnostics: selected_diagnostics_view_models(state),
+        recovery_actions: select_ui_layout_actions(state),
+    }
+}
+
+fn style_inspector_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabInspectorViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut fields = Vec::new();
+    if let Some(document) = state.selected_document() {
+        fields.push(field("Document id", document.id.as_str().to_string()));
+        fields.push(field("Kind", format!("{:?}", document.kind)));
+        fields.push(field(
+            "Lifecycle",
+            format!("{:?}", document.lifecycle_state),
+        ));
+        fields.push(EditorLabInspectorFieldViewModel {
+            label: "Display name".to_string(),
+            value: document.display_name.clone(),
+            text_field: Some(EditorLabTextFieldViewModel::new(
+                "Rename selected definition",
+                document.display_name.clone(),
+                "Display name",
+                EditorDefinitionSurfaceAction::RenameSelected {
+                    display_name: document.display_name.clone(),
+                },
+            )),
+        });
+    }
+    EditorLabInspectorViewModel {
+        title: "Style Inspector".to_string(),
+        selected_document: selected_document_label(state),
+        fields,
+        actions: selected_document_actions(state),
+        diagnostics: selected_diagnostics_view_models(state),
+    }
+}
+
+fn bindings_review_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabReviewViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut summary = Vec::new();
+    if let Some(document) = state.selected_document() {
+        match &document.content {
+            editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
+                summary.push(format!("template: {}", template.id.as_str()));
+                summary.push(format!("local templates: {}", template.templates.len()));
+                summary.push(format!("menus: {}", template.menus.len()));
+            }
+            editor_definition::EditorDefinitionDocumentContent::EditorBindings(bindings) => {
+                summary.push(format!("toolbar template: {}", bindings.toolbar.template));
+                summary.push(format!(
+                    "surface templates: {}",
+                    bindings.surface_templates.len()
+                ));
+            }
+            _ => summary.push("selected definition has no UI binding slots".to_string()),
+        }
+    }
+    review_view_model("Bindings", state, summary)
+}
+
+fn dock_layout_palette_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabPaletteViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut diagnostics = selected_diagnostics_view_models(state);
+    let mut layout_actions = select_workspace_layout_actions(state);
+
+    if let Some(document) = state.selected_document()
+        && let editor_definition::EditorDefinitionDocumentContent::WorkspaceLayout(layout) =
+            &document.content
+    {
+        let next_label = next_workspace_tab_label(layout);
+        layout_actions.extend([
+            EditorLabActionViewModel::enabled(
+                format!("Add {next_label}"),
+                EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab {
+                    label: next_label,
+                    tool_surface: "definition_validation".to_string(),
+                },
+            ),
+            EditorLabActionViewModel::enabled(
+                "Split root horizontally",
+                EditorDefinitionSurfaceAction::SplitWorkspaceLayoutRoot {
+                    axis: "horizontal".to_string(),
+                },
+            ),
+            EditorLabActionViewModel::enabled(
+                "Close last tab",
+                EditorDefinitionSurfaceAction::CloseWorkspaceLayoutLastTab,
+            ),
+        ]);
+    } else {
+        diagnostics.push(EditorLabDiagnosticViewModel {
+            severity: "Warning".to_string(),
+            code: "editor.lab.workspace_layout.not_selected".to_string(),
+            message: "select an authored workspace layout to edit layout controls".to_string(),
+            path: None,
+        });
+    }
+
+    EditorLabPaletteViewModel {
+        title: "Dock Layout Preview".to_string(),
+        categories: vec![
+            EditorLabPaletteCategoryViewModel {
+                label: "Workspace layout documents".to_string(),
+                items: select_workspace_layout_actions(state),
+            },
+            EditorLabPaletteCategoryViewModel {
+                label: "Layout controls".to_string(),
+                items: layout_actions,
+            },
+            EditorLabPaletteCategoryViewModel {
+                label: "Review".to_string(),
+                items: apply_review_actions(state),
+            },
+        ],
+        diagnostics,
+    }
+}
+
+fn theme_editor_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabInspectorViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut fields = Vec::new();
+    let mut actions = select_theme_actions(state);
+    if let Some(document) = state.selected_document()
+        && let editor_definition::EditorDefinitionDocumentContent::Theme(theme) = &document.content
+    {
+        fields.push(field("Theme", theme.label.clone()));
+        for (token, value) in &theme.colors {
+            fields.push(EditorLabInspectorFieldViewModel {
+                label: format!("Color {token}"),
+                value: value.clone(),
+                text_field: Some(EditorLabTextFieldViewModel::new(
+                    format!("Set {token}"),
+                    value.clone(),
+                    "#rrggbb",
+                    EditorDefinitionSurfaceAction::SetThemeColor {
+                        token: token.clone(),
+                        value: value.clone(),
+                    },
+                )),
+            });
+        }
+        actions.extend(apply_review_actions(state));
+    }
+    EditorLabInspectorViewModel {
+        title: "Theme Editor".to_string(),
+        selected_document: selected_document_label(state),
+        fields,
+        actions,
+        diagnostics: selected_diagnostics_view_models(state),
+    }
+}
+
+fn shortcut_review_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabReviewViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut summary = Vec::new();
+    if let Some(document) = state.selected_document()
+        && let editor_definition::EditorDefinitionDocumentContent::Shortcuts(shortcuts) =
+            &document.content
+    {
+        summary.push(format!("shortcut set: {}", shortcuts.label));
+        summary.push(format!("shortcuts: {}", shortcuts.shortcuts.len()));
+        for shortcut in &shortcuts.shortcuts {
+            summary.push(format!("{} -> {}", shortcut.chord, shortcut.command));
+        }
+    } else {
+        summary.push("select a shortcut definition to inspect shortcut routes".to_string());
+    }
+    review_view_model("Shortcut Editor", state, summary)
+}
+
+fn menu_review_view_model(context: &SurfaceProviderBuildContext<'_>) -> EditorLabReviewViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut summary = Vec::new();
+    if let Some(document) = state.selected_document()
+        && let editor_definition::EditorDefinitionDocumentContent::Menu(menu) = &document.content
+    {
+        summary.push(format!("menu: {}", menu.label));
+        summary.push(format!("items: {}", menu.items.len()));
+        for item in &menu.items {
+            summary.push(format!("{} command={:?}", item.label, item.command));
+        }
+    } else {
+        summary.push("select a menu definition to inspect menu command routes".to_string());
+    }
+    review_view_model("Menu Editor", state, summary)
+}
+
+fn diagnostics_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabDiagnosticsViewModel {
+    let state = context.shell_state.self_authoring();
+    EditorLabDiagnosticsViewModel {
+        title: "Definition Validation".to_string(),
+        selected_document: selected_document_label(state),
+        diagnostics: selected_diagnostics_view_models(state),
+        actions: apply_review_actions(state),
+    }
+}
+
+fn command_review_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> EditorLabReviewViewModel {
+    let state = context.shell_state.self_authoring();
+    let mut summary = state
+        .build_apply_preview()
+        .map(|preview| preview.summary)
+        .unwrap_or_else(|| vec!["No definition selected".to_string()]);
+    summary.push("Preview Console".to_string());
+    for line in context.app.console_lines().iter().rev().take(6).rev() {
+        summary.push(format!("[{:?}] {}", line.kind, line.text));
+    }
+    if let Some(last_apply) = state.last_apply_preview() {
+        summary.push(format!("last apply preview: {}", last_apply.display_name));
+    }
+    if let Some(source) = state.last_saved_project_package_source() {
+        summary.push(format!("project package saved: {} bytes", source.len()));
+    }
+    if let Some(source) = state.last_loaded_project_package_source() {
+        summary.push(format!("project package loaded: {} bytes", source.len()));
+    }
+    if let Some(source) = state.last_invalid_project_package_source() {
+        summary.push(format!(
+            "invalid project package preserved: {} bytes",
+            source.len()
         ));
     }
+    if let Some(review) = state.last_apply_review() {
+        summary.push(format!(
+            "apply review: {} {:?} diffs={} diagnostics={}",
+            review.display_name,
+            review.status,
+            review.diff_rows.len(),
+            review.diagnostics.len()
+        ));
+        for row in review.diff_rows.iter().take(3) {
+            summary.push(format!(
+                "apply diff: {} {:?} -> {:?}",
+                row.path, row.before, row.after
+            ));
+        }
+    }
+    if let Some(report) = context.app.last_editor_definition_activation_report() {
+        summary.push(format!(
+            "activation report: {} {:?} preserved={}",
+            report.display_name, report.status, report.previous_state_preserved
+        ));
+        for diagnostic in report.diagnostics.iter().take(3) {
+            summary.push(format!(
+                "activation diagnostic: {:?} {} {}",
+                diagnostic.severity, diagnostic.code, diagnostic.message
+            ));
+        }
+    }
+    if let Some(record) = state.last_rollback_record() {
+        summary.push(format!(
+            "rollback: {} {:?}",
+            record.display_name, record.status
+        ));
+    }
+    let history = state.operation_history_snapshot();
+    summary.push(format!(
+        "Operation History: undo={} redo={}",
+        history.undo_count, history.redo_count
+    ));
+    if let Some(report) = state.last_operation_report() {
+        summary.push(format!(
+            "last operation: {} {:?}",
+            report.operation_id, report.status
+        ));
+        if let Some(diff) = &report.diff {
+            for change in diff.changes.iter().take(4) {
+                summary.push(format!(
+                    "diff: {:?} {} {:?} -> {:?}",
+                    change.family, change.path, change.before, change.after
+                ));
+            }
+        }
+        for diagnostic in report.diagnostics.iter().take(3) {
+            summary.push(format!(
+                "diagnostic: {:?} {} {}",
+                diagnostic.severity, diagnostic.code, diagnostic.message
+            ));
+        }
+    }
+    review_view_model("Command Diff and Preview Console", state, summary)
+}
+
+fn review_view_model(
+    title: impl Into<String>,
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+    summary_lines: Vec<String>,
+) -> EditorLabReviewViewModel {
+    let mut actions = operation_history_actions(state);
+    actions.extend(apply_review_actions(state));
+    EditorLabReviewViewModel {
+        title: title.into(),
+        selected_document: selected_document_label(state),
+        summary_lines,
+        actions,
+        diagnostics: selected_diagnostics_view_models(state),
+    }
+}
+
+fn selected_document_actions(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabActionViewModel> {
+    let has_selection = state.selected_document().is_some();
+    [
+        EditorLabActionViewModel::enabled(
+            "Duplicate selected definition",
+            EditorDefinitionSurfaceAction::DuplicateSelected,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Delete selected draft",
+            EditorDefinitionSurfaceAction::DeleteSelected,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Export selected definition",
+            EditorDefinitionSurfaceAction::ExportSelected,
+        ),
+    ]
+    .into_iter()
+    .map(|action| {
+        if has_selection {
+            action
+        } else {
+            action.disabled("no definition document is selected")
+        }
+    })
+    .collect()
+}
+
+fn apply_review_actions(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabActionViewModel> {
+    let has_selection = state.selected_document().is_some();
+    let mut actions = Vec::new();
+    actions.push(EditorLabActionViewModel::enabled(
+        "Save project package",
+        EditorDefinitionSurfaceAction::SaveProjectPackage,
+    ));
+    actions.push(
+        EditorLabActionViewModel::enabled(
+            "Reload project package",
+            EditorDefinitionSurfaceAction::ReloadProjectPackage,
+        )
+        .disabled_if(
+            state.last_saved_project_package_source().is_none(),
+            "no Editor Lab project package has been saved in this session",
+        ),
+    );
+    for action in [
+        EditorLabActionViewModel::enabled(
+            "Build apply review",
+            EditorDefinitionSurfaceAction::BuildApplyReview,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Reject apply review",
+            EditorDefinitionSurfaceAction::RejectApplyReview,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Apply selected definition",
+            EditorDefinitionSurfaceAction::ApplySelected,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Rollback selected definition",
+            EditorDefinitionSurfaceAction::RollbackSelected,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Reload last applied",
+            EditorDefinitionSurfaceAction::ReloadLastApplied,
+        ),
+    ] {
+        actions.push(if has_selection {
+            action
+        } else {
+            action.disabled("no definition document is selected")
+        });
+    }
     actions
+}
+
+fn operation_history_actions(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabActionViewModel> {
+    let history = state.operation_history_snapshot();
+    [
+        (
+            EditorLabActionViewModel::enabled(
+                "Undo Editor Lab operation",
+                EditorDefinitionSurfaceAction::UndoOperation,
+            ),
+            history.can_undo,
+            "no accepted Editor Lab operation is available to undo",
+        ),
+        (
+            EditorLabActionViewModel::enabled(
+                "Redo Editor Lab operation",
+                EditorDefinitionSurfaceAction::RedoOperation,
+            ),
+            history.can_redo,
+            "no undone Editor Lab operation is available to redo",
+        ),
+    ]
+    .into_iter()
+    .map(|(action, enabled, reason)| {
+        if enabled {
+            action
+        } else {
+            action.disabled(reason)
+        }
+    })
+    .collect()
+}
+
+fn select_ui_layout_actions(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabActionViewModel> {
+    state
+        .draft_documents()
+        .filter(|document| {
+            matches!(
+                &document.content,
+                editor_definition::EditorDefinitionDocumentContent::UiTemplate(_)
+            )
+        })
+        .map(|document| {
+            EditorLabActionViewModel::enabled(
+                format!("Open preview for {}", document.display_name),
+                EditorDefinitionSurfaceAction::SelectDocument {
+                    document_id: document.id.as_str().to_string(),
+                },
+            )
+            .selected(Some(&document.id) == state.selected_document_id())
+        })
+        .collect()
+}
+
+fn select_workspace_layout_actions(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabActionViewModel> {
+    state
+        .draft_documents()
+        .filter(|document| {
+            matches!(
+                &document.content,
+                editor_definition::EditorDefinitionDocumentContent::WorkspaceLayout(_)
+            )
+        })
+        .map(|document| {
+            EditorLabActionViewModel::enabled(
+                format!("Select layout {}", document.display_name),
+                EditorDefinitionSurfaceAction::SelectDocument {
+                    document_id: document.id.as_str().to_string(),
+                },
+            )
+            .selected(Some(&document.id) == state.selected_document_id())
+        })
+        .collect()
+}
+
+fn select_theme_actions(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabActionViewModel> {
+    state
+        .draft_documents()
+        .filter(|document| {
+            matches!(
+                &document.content,
+                editor_definition::EditorDefinitionDocumentContent::Theme(_)
+            )
+        })
+        .map(|document| {
+            EditorLabActionViewModel::enabled(
+                format!("Select theme {}", document.display_name),
+                EditorDefinitionSurfaceAction::SelectDocument {
+                    document_id: document.id.as_str().to_string(),
+                },
+            )
+            .selected(Some(&document.id) == state.selected_document_id())
+        })
+        .collect()
 }
 
 fn ui_node_selection_actions(
     node: &ui_definition::UiNodeDefinition,
-) -> Vec<(String, SurfaceLocalAction)> {
-    let mut actions = vec![(
-        format!("Select {}", node.id()),
-        SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SelectUiNode {
-            node_id: node.id().as_str().to_string(),
-        }),
-    )];
+    selected_node_id: Option<&str>,
+) -> Vec<EditorLabActionViewModel> {
+    let selected = selected_node_id == Some(node.id().as_str());
+    let mut actions = vec![
+        EditorLabActionViewModel::enabled(
+            format!("Select UI node {}", node.id().as_str()),
+            EditorDefinitionSurfaceAction::SelectUiNode {
+                node_id: node.id().as_str().to_string(),
+            },
+        )
+        .selected(selected),
+    ];
     for child in node.children() {
-        actions.extend(ui_node_selection_actions(child));
+        actions.extend(ui_node_selection_actions(child, selected_node_id));
     }
     actions
 }
 
-fn ui_node_hierarchy_lines(
-    node: &ui_definition::UiNodeDefinition,
-    depth: usize,
-    selected_node_id: Option<&str>,
-) -> Vec<String> {
-    let marker = if selected_node_id == Some(node.id().as_str()) {
-        "* "
-    } else {
-        "  "
-    };
-    let mut lines = vec![format!(
-        "{}{}{}",
-        "  ".repeat(depth),
-        marker,
-        node.id().as_str()
-    )];
-    for child in node.children() {
-        lines.extend(ui_node_hierarchy_lines(child, depth + 1, selected_node_id));
-    }
-    lines
+fn selected_diagnostics_view_models(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabDiagnosticViewModel> {
+    state
+        .selected_diagnostics()
+        .into_iter()
+        .map(|diagnostic| EditorLabDiagnosticViewModel {
+            severity: format!("{:?}", diagnostic.severity),
+            code: diagnostic.code,
+            message: diagnostic.message,
+            path: diagnostic.path.map(|path| format!("{path:?}")),
+        })
+        .collect()
 }
 
-fn workspace_host_summary(host: &editor_definition::EditorWorkspaceHostDefinition) -> String {
+fn selected_document_label(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Option<String> {
+    state
+        .selected_document()
+        .map(|document| format!("{} ({})", document.display_name, document.id.as_str()))
+}
+
+fn field(label: impl Into<String>, value: impl Into<String>) -> EditorLabInspectorFieldViewModel {
+    EditorLabInspectorFieldViewModel {
+        label: label.into(),
+        value: value.into(),
+        text_field: None,
+    }
+}
+
+fn next_workspace_tab_label(layout: &editor_definition::EditorWorkspaceLayoutDefinition) -> String {
+    format!(
+        "{} Review {}",
+        layout.label,
+        first_tab_stack_len(&layout.root).unwrap_or(0) + 1
+    )
+}
+
+fn first_tab_stack_len(host: &editor_definition::EditorWorkspaceHostDefinition) -> Option<usize> {
     match host {
-        editor_definition::EditorWorkspaceHostDefinition::TabStack { tabs, .. } => {
-            format!("tab_stack tabs={}", tabs.len())
+        editor_definition::EditorWorkspaceHostDefinition::TabStack { tabs, .. } => Some(tabs.len()),
+        editor_definition::EditorWorkspaceHostDefinition::Split { first, second, .. } => {
+            first_tab_stack_len(first).or_else(|| first_tab_stack_len(second))
         }
-        editor_definition::EditorWorkspaceHostDefinition::Split {
-            axis,
-            fraction,
-            first,
-            second,
-            ..
-        } => format!(
-            "split {:?} {:.2} [{} | {}]",
-            axis,
-            fraction,
-            workspace_host_summary(first),
-            workspace_host_summary(second)
-        ),
+    }
+}
+
+fn ui_node_authored_text(node: &ui_definition::UiNodeDefinition, node_id: &str) -> Option<String> {
+    if node.id().as_str() == node_id {
+        return match node {
+            ui_definition::UiNodeDefinition::Label { label, .. }
+            | ui_definition::UiNodeDefinition::Button { label, .. }
+            | ui_definition::UiNodeDefinition::Toggle { label, .. } => {
+                Some(ui_value_binding_text(label))
+            }
+            ui_definition::UiNodeDefinition::TextInput { value, .. } => {
+                Some(ui_value_binding_text(value))
+            }
+            _ => None,
+        };
+    }
+    node.children()
+        .iter()
+        .find_map(|child| ui_node_authored_text(child, node_id))
+}
+
+fn ui_value_binding_text(binding: &ui_definition::UiValueBinding) -> String {
+    match binding {
+        ui_definition::UiValueBinding::Static(value) => value.as_text(),
+        ui_definition::UiValueBinding::Slot(slot) => format!("slot:{slot:?}"),
     }
 }

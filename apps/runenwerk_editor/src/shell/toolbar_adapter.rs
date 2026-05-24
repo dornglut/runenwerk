@@ -13,6 +13,8 @@ use editor_shell::{
 };
 use ui_definition::{UiAvailabilityBinding, UiAvailabilityId, UiRouteSlotId};
 
+use crate::shell::{EditorCommandAvailabilityContext, editor_command_catalog};
+
 pub const SELECT_TOOL_ID: ToolId = ToolId(1);
 pub const TRANSLATE_TOOL_ID: ToolId = ToolId(2);
 pub const ROTATE_TOOL_ID: ToolId = ToolId(3);
@@ -177,28 +179,95 @@ fn toolbar_menu_items(
 ) -> Vec<ToolbarObservedButton> {
     match active_toolbar_menu {
         Some(ToolbarMenuKind::File) => vec![
-            menu_item(2_100, "file_save", "Save", true),
-            menu_item(2_101, "file_save_as", "Save As", false),
-            menu_item(2_102, "file_open", "Open", true),
-            menu_item(2_103, "file_open_recent", "Open Recent", false),
+            catalog_menu_item(
+                2_100,
+                "file_save",
+                "editor.toolbar.file.save",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
+                2_101,
+                "file_save_as",
+                "editor.toolbar.file.save_as",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
+                2_102,
+                "file_open",
+                "editor.toolbar.file.open",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
+                2_103,
+                "file_open_recent",
+                "editor.toolbar.file.open_recent",
+                can_undo,
+                can_redo,
+            ),
         ],
         Some(ToolbarMenuKind::Edit) => vec![
-            menu_item(2_200, "edit_undo", "Undo", can_undo),
-            menu_item(2_201, "edit_redo", "Redo", can_redo),
-            menu_item(2_202, "edit_preferences", "Preferences", false),
+            catalog_menu_item(
+                2_200,
+                "edit_undo",
+                "editor.toolbar.edit.undo",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
+                2_201,
+                "edit_redo",
+                "editor.toolbar.edit.redo",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
+                2_202,
+                "edit_preferences",
+                "editor.toolbar.edit.preferences",
+                can_undo,
+                can_redo,
+            ),
         ],
         Some(ToolbarMenuKind::Window) => vec![
-            menu_item(2_300, "window_new_window", "New Window", false),
-            menu_item(2_301, "window_next_workspace", "Next Workspace", true),
-            menu_item(
+            catalog_menu_item(
+                2_300,
+                "window_new_window",
+                "editor.toolbar.window.new_window",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
+                2_301,
+                "window_next_workspace",
+                "editor.toolbar.window.next_workspace",
+                can_undo,
+                can_redo,
+            ),
+            catalog_menu_item(
                 2_302,
                 "window_previous_workspace",
-                "Previous Workspace",
-                true,
+                "editor.toolbar.window.previous_workspace",
+                can_undo,
+                can_redo,
             ),
-            menu_item(2_303, "window_save_workspace", "Save Workspace", true),
+            catalog_menu_item(
+                2_303,
+                "window_save_workspace",
+                "editor.toolbar.window.save_workspace",
+                can_undo,
+                can_redo,
+            ),
             menu_item(2_307, "window_load_custom_label", "Load: Custom", false),
-            menu_item(2_308, "window_load_custom", "No Custom Workspaces", false),
+            catalog_menu_item(
+                2_308,
+                "window_load_custom",
+                "editor.toolbar.window.load_custom_workspace",
+                can_undo,
+                can_redo,
+            ),
         ],
         Some(ToolbarMenuKind::Workspace) => toolbar_workspace_button_definitions()
             .iter()
@@ -230,6 +299,27 @@ fn menu_item(
         label: label.to_string(),
         is_active: false,
         enabled,
+    }
+}
+
+fn catalog_menu_item(
+    id: u64,
+    stable_name: &'static str,
+    route: &'static str,
+    can_undo: bool,
+    can_redo: bool,
+) -> ToolbarObservedButton {
+    let descriptor = editor_command_catalog()
+        .descriptor_for_key(route)
+        .expect("compiled-in toolbar route should have a command descriptor");
+    let availability =
+        descriptor.availability(EditorCommandAvailabilityContext { can_undo, can_redo });
+    ToolbarObservedButton {
+        id: ToolId(id),
+        stable_name,
+        label: descriptor.label.to_string(),
+        is_active: false,
+        enabled: availability.is_enabled(),
     }
 }
 

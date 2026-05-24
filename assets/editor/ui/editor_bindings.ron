@@ -35,7 +35,7 @@
       (menu_id: "edit", item_id: "edit_undo", label: "Undo", route: AuthoredId("editor.toolbar.edit.undo"), availability: Some(Ref(AuthoredId("editor.undo.available")))),
       (menu_id: "edit", item_id: "edit_redo", label: "Redo", route: AuthoredId("editor.toolbar.edit.redo"), availability: Some(Ref(AuthoredId("editor.redo.available")))),
       (menu_id: "edit", item_id: "edit_preferences", label: "Preferences", route: AuthoredId("editor.toolbar.edit.preferences"), availability: Some(Static(Disabled(reason: "preferences are not implemented yet")))),
-      (menu_id: "window", item_id: "window_new_window", label: "New Window", route: AuthoredId("editor.toolbar.window.new_window"), availability: Some(Static(Disabled(reason: "multiple windows are not implemented yet")))),
+      (menu_id: "window", item_id: "window_new_window", label: "New Window", route: AuthoredId("editor.toolbar.window.new_window"), availability: None),
       (menu_id: "window", item_id: "window_next_workspace", label: "Next Workspace", route: AuthoredId("editor.toolbar.window.next_workspace"), availability: None),
       (menu_id: "window", item_id: "window_previous_workspace", label: "Previous Workspace", route: AuthoredId("editor.toolbar.window.previous_workspace"), availability: None),
       (menu_id: "window", item_id: "window_save_workspace", label: "Save Workspace", route: AuthoredId("editor.toolbar.window.save_workspace"), availability: None),

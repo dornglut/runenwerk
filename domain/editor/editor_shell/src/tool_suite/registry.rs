@@ -13,6 +13,7 @@ use super::{
     ToolSurfaceStableKey,
 };
 use crate::SurfaceProviderId;
+use ui_surface::SurfaceCapability;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolSuiteRegistry {
@@ -71,6 +72,22 @@ impl ToolSuiteRegistry {
                 .collect::<Vec<_>>();
 
             for surface in &suite.surfaces {
+                if surface.label.trim().is_empty() {
+                    return Err(ToolSuiteRegistryError::EmptyToolSurfaceLabel {
+                        suite_id: suite.suite_id.clone(),
+                        surface_key: surface.key.clone(),
+                    });
+                }
+
+                if !surface.capabilities.allows(SurfaceCapability::Observe) {
+                    return Err(
+                        ToolSuiteRegistryError::MissingToolSurfaceObserveCapability {
+                            suite_id: suite.suite_id.clone(),
+                            surface_key: surface.key.clone(),
+                        },
+                    );
+                }
+
                 if !declared_provider_families.contains(&surface.provider_family) {
                     return Err(ToolSuiteRegistryError::InvalidProviderFamilyReference {
                         suite_id: suite.suite_id.clone(),
@@ -244,6 +261,14 @@ pub enum ToolSuiteRegistryError {
         surface_key: ToolSurfaceStableKey,
         provider_family_id: ProviderFamilyId,
     },
+    EmptyToolSurfaceLabel {
+        suite_id: ToolSuiteId,
+        surface_key: ToolSurfaceStableKey,
+    },
+    MissingToolSurfaceObserveCapability {
+        suite_id: ToolSuiteId,
+        surface_key: ToolSurfaceStableKey,
+    },
     UnknownCapabilityDeclarationSuite {
         suite_id: ToolSuiteId,
     },
@@ -297,6 +322,20 @@ impl fmt::Display for ToolSuiteRegistryError {
             } => write!(
                 f,
                 "surface `{surface_key}` in suite `{suite_id}` references undeclared provider family `{provider_family_id}`"
+            ),
+            Self::EmptyToolSurfaceLabel {
+                suite_id,
+                surface_key,
+            } => write!(
+                f,
+                "surface `{surface_key}` in suite `{suite_id}` has an empty label"
+            ),
+            Self::MissingToolSurfaceObserveCapability {
+                suite_id,
+                surface_key,
+            } => write!(
+                f,
+                "surface `{surface_key}` in suite `{suite_id}` does not declare observe capability"
             ),
             Self::UnknownCapabilityDeclarationSuite { suite_id } => write!(
                 f,
@@ -683,7 +722,7 @@ mod tests {
     use super::*;
     use crate::{
         ProductCapabilityNeed, ProviderFamilyDefinition, SuiteRef, SurfaceProviderId,
-        ToolServiceNeed, ToolSurfaceRole, ToolSurfaceRoute,
+        ToolServiceNeed, ToolSurfaceCreationPolicy, ToolSurfaceRole, ToolSurfaceRoute,
     };
 
     #[test]
@@ -749,6 +788,34 @@ mod tests {
         assert!(matches!(
             error,
             ToolSuiteRegistryError::InvalidProviderFamilyReference { .. }
+        ));
+    }
+
+    #[test]
+    fn empty_surface_label_is_rejected() {
+        let mut suite = suite("runenwerk.material_lab", ["graph_canvas"]);
+        suite.surfaces[0].label = " ".to_string();
+
+        let error =
+            ToolSuiteRegistry::new(vec![suite]).expect_err("empty surface label should reject");
+
+        assert!(matches!(
+            error,
+            ToolSuiteRegistryError::EmptyToolSurfaceLabel { .. }
+        ));
+    }
+
+    #[test]
+    fn surface_without_observe_capability_is_rejected() {
+        let mut suite = suite("runenwerk.material_lab", ["graph_canvas"]);
+        suite.surfaces[0].capabilities = ui_surface::SurfaceCapabilitySet::default();
+
+        let error = ToolSuiteRegistry::new(vec![suite])
+            .expect_err("surfaces without observe capability should reject");
+
+        assert!(matches!(
+            error,
+            ToolSuiteRegistryError::MissingToolSurfaceObserveCapability { .. }
         ));
     }
 
@@ -1203,6 +1270,9 @@ mod tests {
             crate::PanelKind::GraphCanvas,
             ProviderFamilyId::new(provider_family_id).unwrap(),
             ToolSurfaceRoute::ProviderOwnedLocal,
+            ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+            ui_surface::SessionRetentionClass::Restorable,
+            ToolSurfaceCreationPolicy::SingletonPerWorkspace,
         )
     }
 

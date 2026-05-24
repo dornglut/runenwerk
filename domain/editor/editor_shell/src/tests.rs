@@ -13,10 +13,10 @@ use crate::{
     AssetBrowserViewModel, AssetSurfaceAction, DockDropCandidate, DockDropCandidateState,
     DockDropInvalidTargetReason, DockDropScope, DockingInteractionVisualState,
     DockingPreviewDropTarget, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
-    ENTITY_TABLE_SEARCH_WIDGET_ID, EditorShellFrameModel, EntityTableComponentFilter,
-    EntityTableHierarchyFilter, EntityTableSurfaceAction, ImportInspectorViewModel,
-    InspectorSurfaceAction, MaterialGraphCanvasViewModel, MaterialGraphEditorViewModel,
-    MaterialGraphSourceRowViewModel, MaterialGraphToolbarViewModel,
+    ENTITY_TABLE_SEARCH_WIDGET_ID, EditorDefinitionSurfaceAction, EditorShellFrameModel,
+    EntityTableComponentFilter, EntityTableHierarchyFilter, EntityTableSurfaceAction,
+    ImportInspectorViewModel, InspectorSurfaceAction, MaterialGraphCanvasViewModel,
+    MaterialGraphEditorViewModel, MaterialGraphSourceRowViewModel, MaterialGraphToolbarViewModel,
     MaterialModelMeshPreviewViewModel, MaterialNodePaletteViewModel, MaterialNodePickerViewModel,
     MaterialPreviewStatusViewModel, MaterialPreviewViewModel, MaterialSurfaceAction,
     MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel, OutlinerSurfaceAction,
@@ -1791,6 +1791,34 @@ fn material_graph_inspector_text_input_maps_to_source_backed_edit() {
                 node_id: graph::NodeId::new(3),
                 key: "roughness".to_string(),
                 value: "0.25".to_string(),
+            },
+        )]
+    );
+}
+
+#[test]
+fn editor_lab_text_input_maps_to_typed_editor_definition_actions() {
+    let actions = mapped_surface_actions_for_route(
+        PanelKind::Outliner,
+        WidgetId(50_106),
+        SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SetUiNodeText {
+            node_id: "toolbar-title".to_string(),
+            text: String::new(),
+        }),
+        vec![UiInteraction::TextInput {
+            target: WidgetId(50_106),
+            event: TextInputEvent {
+                text: "Tools".to_string(),
+            },
+        }],
+    );
+
+    assert_eq!(
+        actions,
+        vec![SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetUiNodeText {
+                node_id: "toolbar-title".to_string(),
+                text: "Tools".to_string(),
             },
         )]
     );

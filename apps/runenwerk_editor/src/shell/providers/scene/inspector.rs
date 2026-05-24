@@ -25,11 +25,7 @@ impl EditorSurfaceProvider for SceneInspectorProvider {
         ) {
             return SurfaceProviderSupportMode::Unsupported;
         }
-        stable_key_or_legacy_kind_support(
-            request,
-            SCENE_INSPECTOR_SURFACE_KEY,
-            ToolSurfaceKind::Inspector,
-        )
+        stable_key_support(request, SCENE_INSPECTOR_SURFACE_KEY)
     }
 
     fn build_frame(

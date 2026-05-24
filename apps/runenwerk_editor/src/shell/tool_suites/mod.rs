@@ -3,10 +3,13 @@
 
 use editor_shell::{
     EditorToolSuite, PanelKind, ProviderFamilyDefinition, ProviderFamilyId, SuiteRef, SurfaceRef,
-    ToolSuiteId, ToolSurfaceDefinition, ToolSurfaceKind, ToolSurfaceRole, ToolSurfaceRoute,
-    ToolSurfaceStableKey, editor_surface_definitions, panel_kind_for_tool_surface_kind,
-    stable_key_for_tool_surface_kind, tool_surface_definition_id,
+    ToolSuiteId, ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceKind,
+    ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey, editor_surface_definitions,
+    panel_kind_for_tool_surface_kind, stable_key_for_tool_surface_kind,
+    tool_surface_capability_set, tool_surface_definition_id, tool_surface_kind_definition_key,
+    tool_surface_session_retention_class,
 };
+use ui_surface::{SessionRetentionClass, SurfaceCapabilitySet};
 
 pub mod asset_tool_suite;
 pub mod core_tool_suite;
@@ -121,7 +124,11 @@ fn tool_surface_definition(
         panel_kind_for_tool_surface_kind(surface.kind),
         provider_family,
         surface.route,
+        tool_surface_capability_set(surface.kind),
+        tool_surface_session_retention_class(surface.kind),
+        ToolSurfaceCreationPolicy::SingletonPerWorkspace,
     )
+    .with_legacy_compatibility_key(tool_surface_kind_definition_key(surface.kind))
 }
 
 pub(crate) fn stable_tool_surface_definition(
@@ -142,7 +149,23 @@ pub(crate) fn stable_tool_surface_definition(
         panel_kind,
         provider_family,
         route,
+        stable_surface_capabilities(panel_kind),
+        SessionRetentionClass::Restorable,
+        ToolSurfaceCreationPolicy::SingletonPerWorkspace,
     )
+}
+
+fn stable_surface_capabilities(panel_kind: PanelKind) -> SurfaceCapabilitySet {
+    match panel_kind {
+        PanelKind::Placeholder => SurfaceCapabilitySet::new(true, false, false, false),
+        PanelKind::Console
+        | PanelKind::Diagnostics
+        | PanelKind::RuntimeDebug
+        | PanelKind::GameplayCompilerDiagnostics
+        | PanelKind::PhysicsDebug
+        | PanelKind::SimulationDiagnostics => SurfaceCapabilitySet::new(true, true, false, false),
+        _ => SurfaceCapabilitySet::new(true, true, true, false),
+    }
 }
 
 fn surface_label(kind: ToolSurfaceKind) -> &'static str {

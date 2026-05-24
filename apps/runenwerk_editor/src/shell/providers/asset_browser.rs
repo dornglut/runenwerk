@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for AssetBrowserProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            ASSET_BROWSER_SURFACE_KEY,
-            ToolSurfaceKind::AssetBrowser,
-        )
+        stable_key_support(request, ASSET_BROWSER_SURFACE_KEY)
     }
 
     fn build_frame(

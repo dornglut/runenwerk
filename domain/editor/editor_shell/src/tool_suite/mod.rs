@@ -10,8 +10,9 @@ pub mod registry;
 pub use capability::{HostCapabilityPolicy, HostCapabilityRequirements};
 pub use definition::{
     EditorToolSuite, ProductCapabilityNeed, ProviderFamilyDefinition, ToolServiceNeed,
-    ToolSuiteCapabilityDeclaration, ToolSuiteProfileDefinition, ToolSurfaceDefinition,
-    ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
+    ToolSuiteCapabilityDeclaration, ToolSuiteProfileDefinition, ToolSurfaceCreationPolicy,
+    ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
+    ToolSurfaceTargetProfileCompatibility,
 };
 pub use identity::{
     CommandCapabilityKey, ProductCapabilityKey, ProfileRef, ProviderFamilyId,

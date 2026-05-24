@@ -9,7 +9,7 @@ use editor_shell::{
     ProviderFamilyDefinition, ProviderFamilyId, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, TabStackId,
     ToolSuiteId, ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfaceInstanceId,
     ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey, UiNodeKind,
-    VIEWPORT_SURFACE_DEFINITION_ID, WidgetId,
+    VIEWPORT_SURFACE_DEFINITION_ID, WidgetId, tool_surface_capability_set,
 };
 use graph::{CyclePolicy, GraphDefinition, GraphId, NodeDefinition, NodeId};
 use texture::{
@@ -456,6 +456,12 @@ fn scene_viewport_tool_suite_registry() -> ToolSuiteRegistry {
             provider_family: provider_family_id,
             route: ToolSurfaceRoute::ProviderOwnedLocal,
             persistence: ToolSurfacePersistence::StableKey,
+            capabilities: ui_surface::SurfaceCapabilitySet::new(true, false, false, false),
+            session_retention: ui_surface::SessionRetentionClass::Restorable,
+            creation_policy: editor_shell::ToolSurfaceCreationPolicy::SingletonPerWorkspace,
+            target_profile_compatibility:
+                editor_shell::ToolSurfaceTargetProfileCompatibility::AllProfiles,
+            legacy_compatibility_key: None,
         }],
     }])
     .expect("scene viewport fixture should be valid")
@@ -478,6 +484,12 @@ fn tool_suite_registry_for_provider_family(provider_family_id: &str) -> ToolSuit
             provider_family: provider_family_id,
             route: ToolSurfaceRoute::ProviderOwnedLocal,
             persistence: ToolSurfacePersistence::StableKey,
+            capabilities: ui_surface::SurfaceCapabilitySet::new(true, true, true, false),
+            session_retention: ui_surface::SessionRetentionClass::Restorable,
+            creation_policy: editor_shell::ToolSurfaceCreationPolicy::SingletonPerWorkspace,
+            target_profile_compatibility:
+                editor_shell::ToolSurfaceTargetProfileCompatibility::AllProfiles,
+            legacy_compatibility_key: None,
         }],
     }])
     .expect("provider family fixture should be valid")
@@ -537,6 +549,15 @@ fn frame_has_product_surface(frame: &ResolvedSurfaceFrame) -> bool {
         matches!(node.kind, UiNodeKind::ProductSurface(_)) || node.children.iter().any(walk)
     }
     walk(&frame.artifact.root)
+}
+
+fn frame_has_editor_definition_route(frame: &ResolvedSurfaceFrame) -> bool {
+    frame.routes.iter().any(|(_, route)| {
+        matches!(
+            route.action(),
+            Some(SurfaceLocalAction::EditorDefinition(_))
+        )
+    })
 }
 
 fn frame_graph_canvas_model(
@@ -707,6 +728,10 @@ fn mounted_surface_request_enrichment_adds_provider_family_and_route_when_regist
     assert_eq!(
         viewport_request.surface_route,
         Some(ToolSurfaceRoute::ProviderOwnedLocal)
+    );
+    assert_eq!(
+        viewport_request.capabilities,
+        ui_surface::SurfaceCapabilitySet::new(true, false, false, false)
     );
 }
 
@@ -1744,6 +1769,65 @@ fn self_authoring_provider_resolves_definition_validation_without_scene_document
     assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
     assert_eq!(frame.title, "Definition Validation");
     assert!(!frame.routes.is_empty());
+}
+
+#[test]
+fn editor_lab_provider_builds_typed_direct_control_surfaces() {
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let app = RunenwerkEditorApp::new();
+    let shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+
+    for surface_kind in [
+        ToolSurfaceKind::EditorDesignOutliner,
+        ToolSurfaceKind::UiHierarchy,
+        ToolSurfaceKind::StyleInspector,
+        ToolSurfaceKind::DockLayoutPreview,
+        ToolSurfaceKind::DefinitionValidation,
+        ToolSurfaceKind::CommandDiff,
+    ] {
+        let frame = registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &self_authoring_request(surface_kind),
+            &SurfaceSessionState::default(),
+        );
+        let text = provider_frame_text(&frame);
+
+        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+        assert!(text.contains("Editor Lab"), "{surface_kind:?} text: {text}");
+        assert!(
+            frame_has_editor_definition_route(&frame),
+            "{surface_kind:?} should expose direct EditorDefinition routes"
+        );
+        assert!(!text.contains("Edited in self-authoring"));
+        assert!(!text.contains("Retained draft"));
+        assert!(!text.contains("Authored Tab"));
+    }
+}
+
+#[test]
+fn editor_lab_canvas_degraded_state_is_typed_and_recoverable() {
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+    assert!(
+        shell_state
+            .self_authoring_mut()
+            .select_document_by_str("runenwerk.editor.theme.default")
+    );
+
+    let frame = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &self_authoring_request(ToolSurfaceKind::UiCanvas),
+        &SurfaceSessionState::default(),
+    );
+    let text = provider_frame_text(&frame);
+
+    assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+    assert!(text.contains("Editor Lab"));
+    assert!(text.contains("Selected definition cannot form a retained UI preview"));
+    assert!(frame_has_editor_definition_route(&frame));
 }
 
 #[test]

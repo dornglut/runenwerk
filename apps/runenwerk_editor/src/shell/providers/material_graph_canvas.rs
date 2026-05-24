@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            MATERIAL_GRAPH_CANVAS_SURFACE_KEY,
-            ToolSurfaceKind::MaterialGraphCanvas,
-        )
+        stable_key_support(request, MATERIAL_GRAPH_CANVAS_SURFACE_KEY)
     }
 
     fn build_frame(

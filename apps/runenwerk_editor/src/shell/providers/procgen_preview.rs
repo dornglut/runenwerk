@@ -16,11 +16,7 @@ impl EditorSurfaceProvider for ProcgenPreviewProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_key_or_legacy_kind_support(
-            request,
-            PROCGEN_PREVIEW_SURFACE_KEY,
-            ToolSurfaceKind::ProcgenPreview,
-        )
+        stable_key_support(request, PROCGEN_PREVIEW_SURFACE_KEY)
     }
 
     fn build_frame(
