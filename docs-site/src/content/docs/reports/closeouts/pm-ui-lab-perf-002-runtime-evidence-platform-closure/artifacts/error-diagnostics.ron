@@ -1,0 +1,6 @@
+((
+    severity: Error,
+    code: "editor.lab.project.package.parse_failed",
+    message: "failed to parse Editor Lab project package: 1:4: Expected struct `EditorLabProjectPackage` but found `not`",
+    path: None,
+))

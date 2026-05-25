@@ -32,7 +32,6 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Editor UI Popup Adornment Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
 - [UI Designer And Interface Lab Platform](ui-designer-interface-lab-platform-design.md)
-- [UI Lab Perfectionist Audit Design](ui-lab-perfectionist-audit-design.md)
 - [UI Lab Productization Design](ui-lab-productization-design.md)
 
 ### Engine Runtime
@@ -82,4 +81,5 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
 - [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
 - [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
+- [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)

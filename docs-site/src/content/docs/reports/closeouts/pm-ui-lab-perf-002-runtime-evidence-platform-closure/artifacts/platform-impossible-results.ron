@@ -1,0 +1,128 @@
+[
+    (
+        capability: NativeScreenshotCapture,
+        status: PlatformImpossible,
+        probe: (
+            capability: NativeScreenshotCapture,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "headless cargo test environment exposes retained UI artifacts but no native window screenshot API",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "headless cargo test environment exposes retained UI artifacts but no native window screenshot API",
+    ),
+    (
+        capability: GpuVisualDiff,
+        status: PlatformImpossible,
+        probe: (
+            capability: GpuVisualDiff,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "headless retained UI harness has no GPU readback or before-after pixel diff backend",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "headless retained UI harness has no GPU readback or before-after pixel diff backend",
+    ),
+    (
+        capability: NativeFocusTraversal,
+        status: PlatformImpossible,
+        probe: (
+            capability: NativeFocusTraversal,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "headless retained UI test can inspect routes and disabled reasons but cannot drive native focus traversal",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "headless retained UI test can inspect routes and disabled reasons but cannot drive native focus traversal",
+    ),
+    (
+        capability: PixelContrastSampling,
+        status: PlatformImpossible,
+        probe: (
+            capability: PixelContrastSampling,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "retained UI artifact exposes theme tokens but no native pixel buffer for contrast sampling",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "retained UI artifact exposes theme tokens but no native pixel buffer for contrast sampling",
+    ),
+    (
+        capability: NativeScreenshotTiming,
+        status: PlatformImpossible,
+        probe: (
+            capability: NativeScreenshotTiming,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "native screenshot capture is unavailable in this headless runtime test, so native screenshot timing has no source",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "native screenshot capture is unavailable in this headless runtime test, so native screenshot timing has no source",
+    ),
+    (
+        capability: GpuVisualDiffTiming,
+        status: PlatformImpossible,
+        probe: (
+            capability: GpuVisualDiffTiming,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "GPU visual diff timing is unavailable because the retained UI evidence harness has no GPU diff backend",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "GPU visual diff timing is unavailable because the retained UI evidence harness has no GPU diff backend",
+    ),
+]

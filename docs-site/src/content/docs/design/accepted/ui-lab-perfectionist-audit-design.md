@@ -1,7 +1,7 @@
 ---
 title: UI Lab Perfectionist Audit Design
-description: Active design for Editor Lab V1 no-gap certification after PT-UI-LAB runtime-proven closeout.
-status: active
+description: Accepted design for Editor Lab V1 no-gap certification after PT-UI-LAB runtime-proven closeout.
+status: accepted
 owner: editor
 layer: domain/app
 canonical: true
@@ -14,20 +14,22 @@ related_adrs:
   - ../../adr/accepted/0010-graph-substrate-canvas-boundary.md
   - ../../adr/accepted/0012-capability-workbench-clean-break.md
 related_designs:
-  - ./ui-lab-productization-design.md
-  - ./ui-designer-interface-lab-platform-design.md
-  - ./editor-tool-suite-registry-and-workbench-host-design.md
-  - ./editor-ui-workspace-tool-surface-architecture.md
-  - ../accepted/ui-lab-command-catalog-and-surface-registry-design.md
-  - ../accepted/ui-lab-app-hosted-editor-lab-surface-shell-design.md
-  - ../accepted/ui-lab-operation-driven-visual-authoring-design.md
-  - ../accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
-  - ../accepted/ui-lab-preview-lab-runtime-evidence-design.md
-  - ../accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+  - ../active/ui-lab-productization-design.md
+  - ../active/ui-designer-interface-lab-platform-design.md
+  - ../active/editor-tool-suite-registry-and-workbench-host-design.md
+  - ../active/editor-ui-workspace-tool-surface-architecture.md
+  - ./ui-lab-command-catalog-and-surface-registry-design.md
+  - ./ui-lab-app-hosted-editor-lab-surface-shell-design.md
+  - ./ui-lab-operation-driven-visual-authoring-design.md
+  - ./ui-lab-persistence-project-io-diff-apply-rollback-design.md
+  - ./ui-lab-preview-lab-runtime-evidence-design.md
+  - ./ui-lab-api-docs-examples-runtime-closeout-design.md
 related_roadmaps:
   - ../../workspace/production-tracks.yaml
   - ../../workspace/roadmap-items.yaml
   - ../../reports/roadmap-intake/2026-05-24-pt-ui-lab-perfection-no-gap-audit/proposal.yaml
+related_reports:
+  - ../../reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md
 ---
 
 # UI Lab Perfectionist Audit Design
@@ -42,6 +44,17 @@ separate future production track.
 The track may claim `perfectionist_verified` only after runtime evidence,
 public APIs, examples, docs, generated planning state, and code truth agree
 with no known quality gaps.
+
+## WR-100 Governance Contract
+
+The detailed `PM-UI-LAB-PERF-001` execution contract is
+`docs-site/src/content/docs/reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md`.
+
+That contract owns the current code-truth reconciliation, evidence matrix, hard
+blockers, and disjoint follow-on WR candidate matrix for this audit track.
+This accepted design remains the doctrine source; the WR-100 contract is the
+bounded governance work package for clearing the first milestone before any
+product implementation starts.
 
 ## Architecture Governance
 

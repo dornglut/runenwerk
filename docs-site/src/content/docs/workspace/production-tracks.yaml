@@ -2757,6 +2757,138 @@ tracks:
           - Final audit report is completed and linked as completion evidence.
           - All prerequisite renderer tracks are completed with runtime_proven or stronger evidence.
           - completion_quality may be perfectionist_verified only with no known quality gaps.
+  - id: PT-VIEWPORT-PROJECTION
+    title: Viewport Camera And Projection Contract Platform
+    state: active
+    owner: workspace
+    target_completion_quality: runtime_proven
+    strategic_goal: Establish durable camera, projection, viewport presentation, and surface-fit contracts across renderer, editor viewport, app adapter, examples, and UI embedding without moving source truth into the wrong owner.
+    success_criteria:
+      - Producer and editor viewport contexts own camera intent while renderer code owns only derived projection and presentation data.
+      - PreparedViewFrame remains camera-free and continues to carry view identity, target size, history identity, and render preparation data only.
+      - UI primitives remain camera-free and embed typed product or viewport surfaces rather than owning projection semantics.
+      - Editor viewport CPU picking and GPU projection behavior have one accepted contract and drift-guard evidence.
+      - Examples and docs prove aspect, surface-fit, and product-surface behavior without boids-only or editor-only shortcuts.
+    milestones:
+      - id: PM-VIEWPORT-PROJECTION-001
+        title: Contract Governance And Design Split
+        kind: design
+        state: active
+        goal: Apply the viewport projection governance row, anchor the active platform design, decide ADR need, and split the work into bounded follow-on WR candidates before implementation.
+        outcome: The viewport projection platform has an active design, deferred WR row, production track, boundary decisions, and explicit follow-on implementation slices without changing engine, editor, UI, shader, or example runtime behavior.
+        dependencies:
+          - PM-RENDER-POP-HARDEN-005
+        roadmap_links:
+          - WR-106
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+            required_status: active
+            reason: Governance must be anchored by the active viewport camera and projection contract platform design.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/workspace-viewport-expression-upgrade-design.md
+            required_status: active
+            reason: Viewport presentation must preserve the active expression product and panel-owned surface doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/implemented/render-product-surface-foundation-bundle-design.md
+            required_status: implemented
+            reason: Product-surface ownership and dynamic target embedding are the implemented foundation for viewport surfaces.
+        evidence_gates: []
+        acceptance_criteria:
+          - WR-106 is applied as blocked_deferred and depends on completed WR-101 procedural camera evidence.
+          - ADR triage states when camera truth, PreparedViewFrame, UI projection, or cross-domain ABI changes require an ADR.
+          - Follow-on renderer, editor viewport, example/evidence, and closeout WR candidates have disjoint write scopes and validation gates before promotion.
+          - WR-102 richer boid behavior and WR-104 game runtime UI remain explicitly outside this platform.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Renderer, editor viewport, example, and closeout implementation rows remain unimplemented and must not be inferred complete from governance setup.
+          - The active design is not yet an accepted implementation contract.
+        completion_audit: ''
+      - id: PM-VIEWPORT-PROJECTION-002
+        title: Renderer Surface Fit And Procedural Projection Contracts
+        kind: implementation
+        state: designing
+        goal: Define and implement renderer-owned derived surface-fit and procedural projection contracts without moving camera intent into renderer source truth.
+        outcome: Renderer examples and APIs use typed projection and presentation helpers for aspect and surface-fit behavior while preserving producer-owned camera intent.
+        dependencies:
+          - PM-VIEWPORT-PROJECTION-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+            required_status: accepted
+            reason: Renderer projection implementation must follow an accepted cross-boundary ownership contract.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+            required_status: active
+            reason: Renderer procedural projection must preserve WR-101 camera evidence and producer-owned camera intent.
+        evidence_gates: []
+        acceptance_criteria:
+          - Landscape, portrait, square, and extreme aspect projection tests pass.
+          - Surface-fit policy is separated from camera source truth where the accepted design requires it.
+          - PreparedViewFrame remains camera-free.
+      - id: PM-VIEWPORT-PROJECTION-003
+        title: Editor Viewport Camera And Projection Hardening
+        kind: implementation
+        state: designing
+        goal: Define and implement the editor-owned viewport camera/projection contract, including perspective and orthographic handling, picking, and GPU uniform derivation.
+        outcome: Editor viewport camera semantics, CPU picking, and GPU projection use an accepted editor-owned contract with drift-guard tests.
+        dependencies:
+          - PM-VIEWPORT-PROJECTION-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+            required_status: accepted
+            reason: Editor viewport implementation must follow the accepted cross-boundary camera and projection contract.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-rendered-world-and-multi-entity-viewport-design.md
+            required_status: active
+            reason: Editor rendered-world products and picking must preserve the active editor viewport scene-product contract.
+        evidence_gates: []
+        acceptance_criteria:
+          - The dormant orthographic projection gap is either implemented end to end or explicitly removed/deferred by accepted design.
+          - CPU picking and GPU projection derivation have focused drift-guard tests.
+          - Renderer and UI layers do not gain editor-specific camera semantics.
+      - id: PM-VIEWPORT-PROJECTION-004
+        title: Examples And Product Surface Evidence
+        kind: hardening
+        state: designing
+        goal: Migrate examples and product-surface proofs to the accepted projection and surface-fit contracts with replayable evidence.
+        outcome: Boids, Game of Life, SDF-style examples, and product-surface embedding evidence demonstrate the preferred contracts without example-local projection shortcuts.
+        dependencies:
+          - PM-VIEWPORT-PROJECTION-002
+          - PM-VIEWPORT-PROJECTION-003
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+            required_status: accepted
+            reason: Evidence migration must follow the accepted platform contract and exclusions.
+        evidence_gates: []
+        acceptance_criteria:
+          - Example evidence covers aspect, surface-fit, camera-free UI embedding, and target-local viewport behavior.
+          - Boid behavior changes remain outside this track unless routed through the behavior-authoring intake.
+          - Game runtime UI and world-space attachment UI remain outside this track.
+      - id: PM-VIEWPORT-PROJECTION-005
+        title: Runtime Proven Closeout And Perfection Handoff
+        kind: release
+        state: designing
+        goal: Close the viewport projection platform at runtime_proven quality and route renderer-only no-gap inputs to PT-RENDER-PERFECTION.
+        outcome: The platform has closeout evidence, known quality gaps are explicit, and renderer perfection inputs are handed off without claiming game UI or boid behavior completion.
+        dependencies:
+          - PM-VIEWPORT-PROJECTION-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+            required_status: accepted
+            reason: Closeout must follow the accepted platform contract and runtime evidence requirements.
+        evidence_gates: []
+        acceptance_criteria:
+          - Closeout links completed renderer, editor viewport, examples, docs, roadmap, production, and validation evidence.
+          - Known gaps are either closed or routed to explicit future tracks before runtime_proven completion.
+          - Perfectionist verification remains a later audit claim, not an implicit result of this runtime-proven track.
   - id: PT-UI-DESIGN
     title: UI Designer And Interface Lab Platform
     state: completed
@@ -3354,7 +3486,7 @@ tracks:
       - id: PM-UI-LAB-PERF-001
         title: Governance Audit Doctrine And Code Truth Matrix
         kind: design
-        state: active
+        state: completed
         goal: Establish the governed no-gap certification contract, code-truth matrix, evidence matrix, hard blockers, and scoped follow-on WR candidates for Editor Lab V1.
         outcome: The perfectionist track has an accepted audit doctrine, applied WR governance row, source-truth reconciliation, and disjoint future implementation scopes before app or domain code changes begin.
         dependencies:
@@ -3363,39 +3495,61 @@ tracks:
           - WR-100
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
-            required_status: active
-            reason: The first milestone is governed by the active Editor Lab V1 perfectionist audit design.
-        evidence_gates: []
+            path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+            required_status: accepted
+            reason: The first milestone is governed by the accepted Editor Lab V1 perfectionist audit design.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-PERF-001 requires completed governance closeout evidence before dependent milestones can proceed.
         acceptance_criteria:
           - Architecture governance names DDD owner, dependency direction, translation boundaries, ADR need, fitness functions, and ownership mode.
           - Current runtime code is reconciled against PT-UI-LAB closeout gaps for evidence, command catalog, surface registry, direct manipulation, persistence, diff/apply, API ergonomics, examples, and module structure.
           - Follow-on WR candidates have disjoint write scopes, dependency order, validation gates, runtime evidence requirements, and stop conditions.
           - No product implementation starts until a follow-on WR has accepted roadmap evidence and a production implementation contract.
-        completion_quality: not_applicable
+        completion_quality: bounded_contract
         known_quality_gaps:
           - PM-UI-LAB-PERF-002 through PM-UI-LAB-PERF-006 remain unimplemented and must not be inferred complete from governance setup.
           - Native evidence, source-of-truth closure, direct-manipulation UX closure, API ergonomics closure, and final no-gap audit remain future milestones.
-        completion_audit: ''
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
       - id: PM-UI-LAB-PERF-002
         title: Runtime Evidence Platform Closure
         kind: hardening
-        state: designing
+        state: completed
         goal: Close the native runtime evidence gaps that PT-UI-LAB recorded as unsupported or weaker than no-gap certification requires.
         outcome: Editor Lab V1 can capture or explicitly reject native screenshots, visual diffs, focus traversal, contrast sampling, timing, diagnostics snapshots, and retained artifacts with typed evidence results.
         dependencies:
           - PM-UI-LAB-PERF-001
-        roadmap_links: []
+        roadmap_links:
+          - WR-105
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: Runtime evidence closure must follow accepted no-gap evidence doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-runtime-evidence-platform-closure-design.md
+            required_status: accepted
+            reason: Runtime evidence implementation must follow the accepted PM002 evidence-platform closure design.
+          - kind: design
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-105-ui-lab-runtime-evidence-platform-closure/plan.md
+            required_status: active
+            reason: PM-UI-LAB-PERF-002 implementation must follow the bounded WR-105 current-candidate contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-PERF-002 requires completed runtime evidence platform closeout evidence.
         acceptance_criteria:
           - Unsupported evidence claims are replaced by native runtime artifacts or typed platform-impossible diagnostics.
           - Evidence covers success, warning, error, reload, apply, rollback, degraded-provider, focus, contrast, and timing states.
           - Artifact paths and reproduction steps are stable enough for phase drift checks.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-LAB-PERF-003 still owns command and surface source-of-truth closure.
+          - PM-UI-LAB-PERF-004 still owns direct-manipulation Editor Lab UX closure.
+          - PM-UI-LAB-PERF-005 still owns persistence, diff/apply, public API, and example ergonomics closure.
+          - PM-UI-LAB-PERF-006 still owns final no-gap certification and any perfectionist_verified claim.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
       - id: PM-UI-LAB-PERF-003
         title: Command And Surface Source Of Truth Closure
         kind: implementation
@@ -3407,7 +3561,7 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: Source-of-truth closure must follow accepted audit doctrine and ownership boundaries.
         evidence_gates: []
@@ -3426,7 +3580,7 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: UX closure must follow accepted direct-manipulation audit doctrine.
         evidence_gates: []
@@ -3445,7 +3599,7 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: API and examples closure must follow accepted public ergonomics doctrine.
         evidence_gates: []
@@ -3464,7 +3618,7 @@ tracks:
         roadmap_links: []
         design_gates:
           - kind: design
-            path: docs-site/src/content/docs/design/active/ui-lab-perfectionist-audit-design.md
+            path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: Final certification must follow accepted no-gap audit doctrine.
         evidence_gates: []

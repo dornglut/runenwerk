@@ -1,0 +1,1055 @@
+(
+    package_version: 1,
+    package_kind: "runenwerk.editor.lab.project",
+    draft_documents: [
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.bindings"),
+            display_name: "editor_bindings.ron",
+            kind: EditorBindings,
+            lifecycle_state: Draft,
+            content: EditorBindings((
+                toolbar: (
+                    template: ("runenwerk.editor.toolbar"),
+                    workspace_catalog: Some((
+                        collection_slot: ("editor.workspace_profiles"),
+                        active_selection_slot: ("editor.workspace.active"),
+                        entries: [
+                            (
+                                id: "scene",
+                                label: "Scene",
+                                route: ("editor.workspace.scene.activate"),
+                            ),
+                            (
+                                id: "modelling",
+                                label: "Modelling",
+                                route: ("editor.workspace.modelling.activate"),
+                            ),
+                            (
+                                id: "editor_design",
+                                label: "Editor Design",
+                                route: ("editor.workspace.editor_design.activate"),
+                            ),
+                            (
+                                id: "materials",
+                                label: "Materials",
+                                route: ("editor.workspace.materials.activate"),
+                            ),
+                        ],
+                    )),
+                    routes: [
+                        (
+                            route: ("editor.toolbar.menu.file"),
+                            ui_route_slot: ("editor.toolbar.menu.file"),
+                        ),
+                        (
+                            route: ("editor.toolbar.menu.edit"),
+                            ui_route_slot: ("editor.toolbar.menu.edit"),
+                        ),
+                        (
+                            route: ("editor.toolbar.menu.window"),
+                            ui_route_slot: ("editor.toolbar.menu.window"),
+                        ),
+                    ],
+                    availability: [
+                        (
+                            availability: ("editor.workspace.create.available"),
+                            descriptor: StaticDisabled(
+                                reason: "workspace authoring is M3.6 scope",
+                            ),
+                        ),
+                        (
+                            availability: ("editor.undo.available"),
+                            descriptor: CanUndo,
+                        ),
+                        (
+                            availability: ("editor.redo.available"),
+                            descriptor: CanRedo,
+                        ),
+                    ],
+                    menus: [
+                        (
+                            menu_id: "file",
+                            menu_slot: ("editor.toolbar.active_menu"),
+                        ),
+                        (
+                            menu_id: "edit",
+                            menu_slot: ("editor.toolbar.active_menu"),
+                        ),
+                        (
+                            menu_id: "window",
+                            menu_slot: ("editor.toolbar.active_menu"),
+                        ),
+                        (
+                            menu_id: "workspace",
+                            menu_slot: ("editor.toolbar.active_menu"),
+                        ),
+                    ],
+                    menu_items: [
+                        (
+                            menu_id: "file",
+                            item_id: "file_save",
+                            label: "Save",
+                            route: ("editor.toolbar.file.save"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "file",
+                            item_id: "file_save_as",
+                            label: "Save As",
+                            route: ("editor.toolbar.file.save_as"),
+                            availability: Some(Static(Disabled(
+                                reason: "save as is not implemented yet",
+                            ))),
+                        ),
+                        (
+                            menu_id: "file",
+                            item_id: "file_open",
+                            label: "Open",
+                            route: ("editor.toolbar.file.open"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "file",
+                            item_id: "file_open_recent",
+                            label: "Open Recent",
+                            route: ("editor.toolbar.file.open_recent"),
+                            availability: Some(Static(Disabled(
+                                reason: "recent files are not implemented yet",
+                            ))),
+                        ),
+                        (
+                            menu_id: "edit",
+                            item_id: "edit_undo",
+                            label: "Undo",
+                            route: ("editor.toolbar.edit.undo"),
+                            availability: Some(Ref(("editor.undo.available"))),
+                        ),
+                        (
+                            menu_id: "edit",
+                            item_id: "edit_redo",
+                            label: "Redo",
+                            route: ("editor.toolbar.edit.redo"),
+                            availability: Some(Ref(("editor.redo.available"))),
+                        ),
+                        (
+                            menu_id: "edit",
+                            item_id: "edit_preferences",
+                            label: "Preferences",
+                            route: ("editor.toolbar.edit.preferences"),
+                            availability: Some(Static(Disabled(
+                                reason: "preferences are not implemented yet",
+                            ))),
+                        ),
+                        (
+                            menu_id: "window",
+                            item_id: "window_new_window",
+                            label: "New Window",
+                            route: ("editor.toolbar.window.new_window"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "window",
+                            item_id: "window_next_workspace",
+                            label: "Next Workspace",
+                            route: ("editor.toolbar.window.next_workspace"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "window",
+                            item_id: "window_previous_workspace",
+                            label: "Previous Workspace",
+                            route: ("editor.toolbar.window.previous_workspace"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "window",
+                            item_id: "window_save_workspace",
+                            label: "Save Workspace",
+                            route: ("editor.toolbar.window.save_workspace"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "window",
+                            item_id: "window_load_custom",
+                            label: "No Custom Workspaces",
+                            route: ("editor.toolbar.window.load_custom_workspace"),
+                            availability: Some(Static(Disabled(
+                                reason: "custom workspaces are not implemented yet",
+                            ))),
+                        ),
+                        (
+                            menu_id: "workspace",
+                            item_id: "workspace_menu_scene",
+                            label: "Scene",
+                            route: ("editor.workspace.scene.activate"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "workspace",
+                            item_id: "workspace_menu_modelling",
+                            label: "Modelling",
+                            route: ("editor.workspace.modelling.activate"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "workspace",
+                            item_id: "workspace_menu_editor_design",
+                            label: "Editor Design",
+                            route: ("editor.workspace.editor_design.activate"),
+                            availability: None,
+                        ),
+                        (
+                            menu_id: "workspace",
+                            item_id: "workspace_menu_materials",
+                            label: "Materials",
+                            route: ("editor.workspace.materials.activate"),
+                            availability: None,
+                        ),
+                    ],
+                ),
+                shell_chrome_template: ("runenwerk.editor.shell_chrome"),
+                surface_templates: [
+                    (
+                        kind: Inspector,
+                        template: ("runenwerk.editor.surface.inspector"),
+                        provider_slots: [
+                            "inspector.title",
+                            "inspector.fields",
+                        ],
+                    ),
+                    (
+                        kind: Outliner,
+                        template: ("runenwerk.editor.surface.outliner"),
+                        provider_slots: [
+                            "outliner.rows",
+                        ],
+                    ),
+                    (
+                        kind: EntityTable,
+                        template: ("runenwerk.editor.surface.entity_table"),
+                        provider_slots: [
+                            "entity_table.rows",
+                        ],
+                    ),
+                    (
+                        kind: Console,
+                        template: ("runenwerk.editor.surface.console"),
+                        provider_slots: [
+                            "console.entries",
+                        ],
+                    ),
+                    (
+                        kind: Viewport,
+                        template: ("runenwerk.editor.surface.viewport"),
+                        provider_slots: [
+                            "viewport.products",
+                            "viewport.expression_product",
+                        ],
+                    ),
+                ],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.commands.default"),
+            display_name: "default_command_bindings.ron",
+            kind: CommandBinding,
+            lifecycle_state: Draft,
+            content: CommandBindings((
+                id: "runenwerk.editor.commands.default",
+                label: "Default Command Bindings",
+                bindings: [
+                    (
+                        id: "apply_selected_definition",
+                        command: "editor.definition.apply_selected",
+                        route_target: "self-authoring.apply-selected",
+                        capability_requirements: [
+                            "ratify",
+                        ],
+                        undoable: true,
+                    ),
+                ],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.layout.editor_design"),
+            display_name: "editor_design_layout.ron",
+            kind: WorkspaceDefinition,
+            lifecycle_state: Draft,
+            content: WorkspaceLayout((
+                id: "runenwerk.editor.layout.editor_design",
+                label: "Editor Design Layout",
+                root: TabStack(
+                    id: "editor-design-main",
+                    tabs: [
+                        (
+                            id: "definition-outliner",
+                            label: "Definitions",
+                            tool_surface: "editor_design_outliner",
+                        ),
+                        (
+                            id: "ui-canvas",
+                            label: "Canvas",
+                            tool_surface: "ui_canvas",
+                        ),
+                    ],
+                    active_tab: Some("definition-outliner"),
+                ),
+                floating_hosts: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.menu.default"),
+            display_name: "default_menu.ron",
+            kind: Menu,
+            lifecycle_state: Draft,
+            content: Menu((
+                id: "runenwerk.editor.menu.default",
+                label: "Runenwerk",
+                items: [
+                    (
+                        id: "apply_definition",
+                        label: "Apply Definition",
+                        command: Some("editor.definition.apply_selected"),
+                        children: [],
+                        availability: Some("editor-design.definition-selected"),
+                    ),
+                ],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.shell_chrome"),
+            display_name: "shell_chrome.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.shell_chrome"),
+                root: Scroll(
+                    id: ("root"),
+                    axis: Horizontal,
+                    input: (
+                        horizontal: WheelAndMiddleDrag,
+                        vertical: WheelOnly,
+                    ),
+                    ownership: (
+                        boundary: ConsumeAtBoundary,
+                    ),
+                    children: [
+                        Row(
+                            id: ("tab_stack_chrome"),
+                            children: [
+                                Repeat(
+                                    id: ("tabs"),
+                                    items: (
+                                        id: ("shell.tabs"),
+                                    ),
+                                    template: ("runenwerk.editor.shell_chrome.tab"),
+                                    axis: Some(Horizontal),
+                                ),
+                                Button(
+                                    id: ("new_tab"),
+                                    label: Static(Text("+")),
+                                    route: Some((
+                                        id: ("shell.tab.create"),
+                                    )),
+                                    availability: None,
+                                    selected: None,
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                templates: [
+                    (
+                        id: ("runenwerk.editor.shell_chrome.tab"),
+                        root: Row(
+                            id: ("tab_item"),
+                            children: [
+                                Button(
+                                    id: ("tab"),
+                                    label: Slot(("tab.label")),
+                                    route: Some((
+                                        id: ("shell.tab.activate"),
+                                    )),
+                                    availability: None,
+                                    selected: Some(Slot(("tab.active"))),
+                                ),
+                                Button(
+                                    id: ("close"),
+                                    label: Static(Text("x")),
+                                    route: Some((
+                                        id: ("shell.tab.close"),
+                                    )),
+                                    availability: None,
+                                    selected: None,
+                                ),
+                            ],
+                        ),
+                        templates: [],
+                        menus: [],
+                    ),
+                ],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.shortcuts.default"),
+            display_name: "default_shortcuts.ron",
+            kind: Shortcut,
+            lifecycle_state: Draft,
+            content: Shortcuts((
+                id: "runenwerk.editor.shortcuts.default",
+                label: "Default Shortcuts",
+                shortcuts: [
+                    (
+                        id: "save_scene",
+                        command: "editor.scene.save",
+                        chord: "Cmd+S",
+                        context: Some("scene"),
+                    ),
+                    (
+                        id: "apply_definition",
+                        command: "editor.definition.apply_selected",
+                        chord: "Cmd+Shift+A",
+                        context: Some("editor-design"),
+                    ),
+                ],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.surface.console"),
+            display_name: "surfaces/console.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.surface.console"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Column(
+                            id: ("body"),
+                            children: [
+                                Scroll(
+                                    id: ("scroll"),
+                                    axis: Both,
+                                    input: (
+                                        horizontal: MiddleDragOnly,
+                                        vertical: WheelOnly,
+                                    ),
+                                    ownership: (
+                                        boundary: ConsumeAtBoundary,
+                                    ),
+                                    children: [
+                                        Repeat(
+                                            id: ("entries"),
+                                            items: (
+                                                id: ("console.entries"),
+                                            ),
+                                            template: ("runenwerk.editor.surface.console.entry"),
+                                            axis: Some(Vertical),
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [
+                    (
+                        id: ("runenwerk.editor.surface.console.entry"),
+                        root: Label(
+                            id: ("entry"),
+                            label: Slot(("console.entry.label")),
+                            availability: None,
+                        ),
+                        templates: [],
+                        menus: [],
+                    ),
+                ],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.surface.entity_table"),
+            display_name: "surfaces/entity_table.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.surface.entity_table"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Column(
+                            id: ("body"),
+                            children: [
+                                Label(
+                                    id: ("title"),
+                                    label: Static(Text("Entity Table")),
+                                    availability: None,
+                                ),
+                                Scroll(
+                                    id: ("controls_scroll"),
+                                    axis: Horizontal,
+                                    input: (
+                                        horizontal: WheelAndMiddleDrag,
+                                        vertical: WheelOnly,
+                                    ),
+                                    ownership: (
+                                        boundary: ConsumeAtBoundary,
+                                    ),
+                                    children: [
+                                        Row(
+                                            id: ("controls"),
+                                            children: [
+                                                TextInput(
+                                                    id: ("search"),
+                                                    value: Slot(("entity_table.search")),
+                                                    placeholder: Some("Search"),
+                                                    route: Some((
+                                                        id: ("entity_table.search.edit"),
+                                                    )),
+                                                    availability: None,
+                                                ),
+                                                Button(
+                                                    id: ("clear_search"),
+                                                    label: Static(Text("Clear")),
+                                                    route: Some((
+                                                        id: ("entity_table.search.clear"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: None,
+                                                ),
+                                                Toggle(
+                                                    id: ("selected_only"),
+                                                    label: Static(Text("Selected only")),
+                                                    checked: Slot(("entity_table.selected_only")),
+                                                    route: Some((
+                                                        id: ("entity_table.selected_only"),
+                                                    )),
+                                                    availability: None,
+                                                ),
+                                                Toggle(
+                                                    id: ("roots_only"),
+                                                    label: Static(Text("Root entities")),
+                                                    checked: Slot(("entity_table.roots_only")),
+                                                    route: Some((
+                                                        id: ("entity_table.roots_only"),
+                                                    )),
+                                                    availability: None,
+                                                ),
+                                                Select(
+                                                    id: ("component_filter"),
+                                                    items: (
+                                                        id: ("entity_table.component_filters"),
+                                                    ),
+                                                    selected: Some((
+                                                        id: ("entity_table.component_filter.selected"),
+                                                    )),
+                                                    route: Some((
+                                                        id: ("entity_table.component_filter"),
+                                                    )),
+                                                    availability: None,
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                                Scroll(
+                                    id: ("header_scroll"),
+                                    axis: Horizontal,
+                                    input: (
+                                        horizontal: WheelAndMiddleDrag,
+                                        vertical: WheelOnly,
+                                    ),
+                                    ownership: (
+                                        boundary: ConsumeAtBoundary,
+                                    ),
+                                    children: [
+                                        Row(
+                                            id: ("header_row"),
+                                            children: [
+                                                Button(
+                                                    id: ("sort_id"),
+                                                    label: Slot(("entity_table.sort.id.label")),
+                                                    route: Some((
+                                                        id: ("entity_table.sort.id"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("entity_table.sort.id.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("sort_name"),
+                                                    label: Slot(("entity_table.sort.name.label")),
+                                                    route: Some((
+                                                        id: ("entity_table.sort.name"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("entity_table.sort.name.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("sort_parent"),
+                                                    label: Slot(("entity_table.sort.parent.label")),
+                                                    route: Some((
+                                                        id: ("entity_table.sort.parent"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("entity_table.sort.parent.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("sort_components"),
+                                                    label: Slot(("entity_table.sort.components.label")),
+                                                    route: Some((
+                                                        id: ("entity_table.sort.components"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("entity_table.sort.components.active"))),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                                Scroll(
+                                    id: ("table_scroll"),
+                                    axis: Vertical,
+                                    input: (
+                                        horizontal: WheelAndMiddleDrag,
+                                        vertical: WheelOnly,
+                                    ),
+                                    ownership: (
+                                        boundary: ConsumeAtBoundary,
+                                    ),
+                                    children: [
+                                        Scroll(
+                                            id: ("table_scroll_x"),
+                                            axis: Horizontal,
+                                            input: (
+                                                horizontal: WheelAndMiddleDrag,
+                                                vertical: WheelOnly,
+                                            ),
+                                            ownership: (
+                                                boundary: ConsumeAtBoundary,
+                                            ),
+                                            children: [
+                                                Table(
+                                                    id: ("table"),
+                                                    rows: (
+                                                        id: ("entity_table.rows"),
+                                                    ),
+                                                    columns: [
+                                                        (
+                                                            label: "Id",
+                                                            width: 52.0,
+                                                            value: Slot(("entity_table.row.id")),
+                                                        ),
+                                                        (
+                                                            label: "Name",
+                                                            width: 128.0,
+                                                            value: Slot(("entity_table.row.name")),
+                                                        ),
+                                                        (
+                                                            label: "Parent",
+                                                            width: 112.0,
+                                                            value: Slot(("entity_table.row.parent")),
+                                                        ),
+                                                        (
+                                                            label: "Components",
+                                                            width: 88.0,
+                                                            value: Slot(("entity_table.row.components")),
+                                                        ),
+                                                    ],
+                                                    route: Some((
+                                                        id: ("entity_table.select"),
+                                                    )),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.surface.inspector"),
+            display_name: "surfaces/inspector.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.surface.inspector"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Column(
+                            id: ("body"),
+                            children: [
+                                Label(
+                                    id: ("title"),
+                                    label: Static(Text("Inspector")),
+                                    availability: None,
+                                ),
+                                Scroll(
+                                    id: ("scroll"),
+                                    axis: Vertical,
+                                    input: (
+                                        horizontal: WheelAndMiddleDrag,
+                                        vertical: WheelOnly,
+                                    ),
+                                    ownership: (
+                                        boundary: ConsumeAtBoundary,
+                                    ),
+                                    children: [
+                                        Column(
+                                            id: ("list"),
+                                            children: [
+                                                Label(
+                                                    id: ("target"),
+                                                    label: Slot(("inspector.target")),
+                                                    availability: None,
+                                                ),
+                                                Repeat(
+                                                    id: ("fields"),
+                                                    items: (
+                                                        id: ("inspector.fields"),
+                                                    ),
+                                                    template: ("runenwerk.editor.surface.inspector.field_row"),
+                                                    axis: None,
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [
+                    (
+                        id: ("runenwerk.editor.surface.inspector.field_row"),
+                        root: Row(
+                            id: ("field_row"),
+                            children: [
+                                Button(
+                                    id: ("name"),
+                                    label: Slot(("field.label")),
+                                    route: Some((
+                                        id: ("inspector.field.focus"),
+                                    )),
+                                    availability: Some(Ref(("inspector.field.editable"))),
+                                    selected: Some(Slot(("field.focused"))),
+                                ),
+                                Toggle(
+                                    id: ("value_bool"),
+                                    label: Slot(("field.display_value")),
+                                    checked: Slot(("field.bool_value")),
+                                    route: Some((
+                                        id: ("inspector.field.bool"),
+                                    )),
+                                    availability: Some(Ref(("field.control.bool"))),
+                                ),
+                                NumericInput(
+                                    id: ("value_number"),
+                                    value: Slot(("field.number_value")),
+                                    route: Some((
+                                        id: ("inspector.field.number"),
+                                    )),
+                                    availability: Some(Ref(("field.control.number"))),
+                                ),
+                                TextInput(
+                                    id: ("value_text"),
+                                    value: Slot(("field.display_value")),
+                                    placeholder: Some(""),
+                                    route: Some((
+                                        id: ("inspector.field.edit"),
+                                    )),
+                                    availability: Some(Ref(("field.control.text"))),
+                                ),
+                                Select(
+                                    id: ("value_enum"),
+                                    items: (
+                                        id: ("inspector.field.enum_options"),
+                                    ),
+                                    selected: Some((
+                                        id: ("inspector.field.enum_selected"),
+                                    )),
+                                    route: Some((
+                                        id: ("inspector.field.enum"),
+                                    )),
+                                    availability: Some(Ref(("field.control.enum"))),
+                                ),
+                                Label(
+                                    id: ("value_readonly"),
+                                    label: Slot(("field.display_value")),
+                                    availability: Some(Ref(("field.control.readonly"))),
+                                ),
+                            ],
+                        ),
+                        templates: [],
+                        menus: [],
+                    ),
+                ],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.surface.outliner"),
+            display_name: "surfaces/outliner.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.surface.outliner"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Column(
+                            id: ("body"),
+                            children: [
+                                Label(
+                                    id: ("title"),
+                                    label: Static(Text("Outliner")),
+                                    availability: None,
+                                ),
+                                Scroll(
+                                    id: ("scroll"),
+                                    axis: Vertical,
+                                    input: (
+                                        horizontal: WheelAndMiddleDrag,
+                                        vertical: WheelOnly,
+                                    ),
+                                    ownership: (
+                                        boundary: ConsumeAtBoundary,
+                                    ),
+                                    children: [
+                                        Tree(
+                                            id: ("tree"),
+                                            rows: (
+                                                id: ("outliner.rows"),
+                                            ),
+                                            route: Some((
+                                                id: ("outliner.select"),
+                                            )),
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.surface.viewport"),
+            display_name: "surfaces/viewport.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.surface.viewport"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Column(
+                            id: ("body"),
+                            children: [
+                                Panel(
+                                    id: ("canvas"),
+                                    children: [
+                                        Column(
+                                            id: ("canvas_content"),
+                                            children: [
+                                                EmbedSlot(
+                                                    id: ("viewport_canvas"),
+                                                    slot: (
+                                                        id: ("viewport.expression_product"),
+                                                    ),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                    availability: None,
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.theme.default"),
+            display_name: "default_theme.ron",
+            kind: Theme,
+            lifecycle_state: Draft,
+            content: Theme((
+                id: "runenwerk.editor.theme.default",
+                label: "Runenwerk Default",
+                colors: {
+                    "accent": "#5f8cff",
+                    "background": "#000000",
+                    "border": "#1c1c1e",
+                    "surface": "#050506",
+                },
+                spacing: {
+                    "panel_gap": 4.0,
+                },
+                typography: {
+                    "body": (
+                        font_family: "inter",
+                        size: 13.0,
+                        weight: 400,
+                    ),
+                },
+                radius: {
+                    "control": 0.0,
+                },
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.toolbar"),
+            display_name: "toolbar.ron",
+            kind: UiLayout,
+            lifecycle_state: Draft,
+            content: UiTemplate((
+                id: ("runenwerk.editor.toolbar"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Scroll(
+                            id: ("scroll"),
+                            axis: Horizontal,
+                            input: (
+                                horizontal: WheelAndMiddleDrag,
+                                vertical: WheelOnly,
+                            ),
+                            ownership: (
+                                boundary: ConsumeAtBoundary,
+                            ),
+                            children: [
+                                Column(
+                                    id: ("rows"),
+                                    children: [
+                                        Row(
+                                            id: ("top_row"),
+                                            children: [
+                                                Button(
+                                                    id: ("menu_file"),
+                                                    label: Static(Text("File")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.file"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.file.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("menu_edit"),
+                                                    label: Static(Text("Edit")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.edit"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.edit.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("menu_window"),
+                                                    label: Static(Text("Window")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.window"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.window.active"))),
+                                                ),
+                                                Separator(
+                                                    id: ("separator"),
+                                                    axis: Some(Vertical),
+                                                    length: Some(14.0),
+                                                    thickness: Some(1.0),
+                                                ),
+                                                Button(
+                                                    id: ("workspace_scene"),
+                                                    label: Static(Text("Scene")),
+                                                    route: Some((
+                                                        id: ("editor.workspace.scene.activate"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.workspace.scene.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("workspace_modelling"),
+                                                    label: Static(Text("Modelling")),
+                                                    route: Some((
+                                                        id: ("editor.workspace.modelling.activate"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.workspace.modelling.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("workspace_plus"),
+                                                    label: Static(Text("+")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.workspace"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.workspace.active"))),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [],
+                menus: [],
+            )),
+        ),
+        (
+            schema_version: 1,
+            id: ("runenwerk.editor.workspace.editor_design"),
+            display_name: "editor_design_workspace.ron",
+            kind: WorkspaceDefinition,
+            lifecycle_state: Draft,
+            content: WorkspaceProfile((
+                id: "runenwerk.editor.workspace.editor_design",
+                label: "Editor Design",
+                default_modes: [
+                    "editor-design",
+                ],
+                document_kind_filters: [
+                    "UiLayout",
+                    "WorkspaceDefinition",
+                    "Theme",
+                    "Shortcut",
+                    "Menu",
+                    "CommandBinding",
+                ],
+                default_layout: "runenwerk.editor.layout.editor_design",
+            )),
+        ),
+    ],
+    applied_documents: [],
+    last_applied_documents: [],
+)

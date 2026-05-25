@@ -1,0 +1,296 @@
+[
+    (
+        capability: RetainedVisualTruth,
+        status: Captured,
+        probe: (
+            capability: RetainedVisualTruth,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "retained UI frame model was captured from the app-owned shell provider path",
+        ),
+        artifacts: [
+            (
+                kind: RetainedUiDebug,
+                path: "artifacts/success-retained-surface-debug.txt",
+                bytes: 58508,
+                description: "Retained Editor Lab hierarchy and command surface.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "retained visual truth captured through the Editor Lab runtime path",
+    ),
+    (
+        capability: NativeScreenshotCapture,
+        status: PlatformImpossible,
+        probe: (
+            capability: NativeScreenshotCapture,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "headless cargo test environment exposes retained UI artifacts but no native window screenshot API",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "headless cargo test environment exposes retained UI artifacts but no native window screenshot API",
+    ),
+    (
+        capability: GpuVisualDiff,
+        status: PlatformImpossible,
+        probe: (
+            capability: GpuVisualDiff,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "headless retained UI harness has no GPU readback or before-after pixel diff backend",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "headless retained UI harness has no GPU readback or before-after pixel diff backend",
+    ),
+    (
+        capability: DiagnosticsSnapshot,
+        status: Captured,
+        probe: (
+            capability: DiagnosticsSnapshot,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "invalid project package input produced typed diagnostics through the shell state",
+        ),
+        artifacts: [
+            (
+                kind: DiagnosticsSnapshot,
+                path: "artifacts/error-diagnostics.ron",
+                bytes: 223,
+                description: "Typed diagnostics for invalid Editor Lab project package input.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "diagnostics snapshot captured for invalid package input",
+    ),
+    (
+        capability: FailurePreservation,
+        status: Captured,
+        probe: (
+            capability: FailurePreservation,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "invalid project package source was retained after typed diagnostic failure",
+        ),
+        artifacts: [
+            (
+                kind: DiagnosticsSnapshot,
+                path: "artifacts/error-diagnostics.ron",
+                bytes: 223,
+                description: "Typed diagnostics for invalid Editor Lab project package input.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "failure preservation captured by retaining invalid package source and diagnostics",
+    ),
+    (
+        capability: ReloadWithoutActivation,
+        status: Captured,
+        probe: (
+            capability: ReloadWithoutActivation,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "save/reload completed while pending live activation count stayed zero",
+        ),
+        artifacts: [
+            (
+                kind: ProjectPackage,
+                path: "artifacts/project-package.ron",
+                bytes: 51649,
+                description: "Saved Editor Lab project package used by reload scenario.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "reload evidence captured without live activation",
+    ),
+    (
+        capability: ApplyActivation,
+        status: Captured,
+        probe: (
+            capability: ApplyActivation,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "apply review queued and activated through the runtime resource",
+        ),
+        artifacts: [
+            (
+                kind: ActivationReport,
+                path: "artifacts/activation-reports.ron",
+                bytes: 876,
+                description: "Queued and applied activation reports.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "apply activation evidence captured from typed activation reports",
+    ),
+    (
+        capability: RollbackRecovery,
+        status: Captured,
+        probe: (
+            capability: RollbackRecovery,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "rollback command produced typed snapshot-backed rollback records",
+        ),
+        artifacts: [
+            (
+                kind: RollbackReport,
+                path: "artifacts/rollback-reports.ron",
+                bytes: 6311,
+                description: "Typed rollback records.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "rollback recovery evidence captured from typed rollback reports",
+    ),
+    (
+        capability: DegradedProviderSurface,
+        status: Captured,
+        probe: (
+            capability: DegradedProviderSurface,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "non-previewable selection rendered a typed degraded provider surface",
+        ),
+        artifacts: [
+            (
+                kind: RetainedUiDebug,
+                path: "artifacts/degraded-provider-retained-surface-debug.txt",
+                bytes: 15377,
+                description: "Typed degraded canvas surface for non-previewable selection.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "degraded provider evidence captured from the app-hosted canvas surface",
+    ),
+    (
+        capability: NativeFocusTraversal,
+        status: PlatformImpossible,
+        probe: (
+            capability: NativeFocusTraversal,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "headless retained UI test can inspect routes and disabled reasons but cannot drive native focus traversal",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "headless retained UI test can inspect routes and disabled reasons but cannot drive native focus traversal",
+    ),
+    (
+        capability: PixelContrastSampling,
+        status: PlatformImpossible,
+        probe: (
+            capability: PixelContrastSampling,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "retained UI artifact exposes theme tokens but no native pixel buffer for contrast sampling",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "retained UI artifact exposes theme tokens but no native pixel buffer for contrast sampling",
+    ),
+    (
+        capability: RuntimeTimingCapture,
+        status: Captured,
+        probe: (
+            capability: RuntimeTimingCapture,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: Supported,
+            reason: "app-owned runtime harness records setup and retained surface timing",
+        ),
+        artifacts: [
+            (
+                kind: TimingReport,
+                path: "artifacts/timing-report.ron",
+                bytes: 192,
+                description: "Timing snapshot for setup, retained surface formation, and artifact output.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "runtime timing evidence captured from the PM002 evidence test",
+    ),
+    (
+        capability: NativeScreenshotTiming,
+        status: PlatformImpossible,
+        probe: (
+            capability: NativeScreenshotTiming,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "native screenshot capture is unavailable in this headless runtime test, so native screenshot timing has no source",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "native screenshot capture is unavailable in this headless runtime test, so native screenshot timing has no source",
+    ),
+    (
+        capability: GpuVisualDiffTiming,
+        status: PlatformImpossible,
+        probe: (
+            capability: GpuVisualDiffTiming,
+            backend: "headless-retained-ui-test",
+            environment: "cargo test app-owned Editor Lab shell harness",
+            support_status: PlatformImpossible,
+            reason: "GPU visual diff timing is unavailable because the retained UI evidence harness has no GPU diff backend",
+        ),
+        artifacts: [
+            (
+                kind: PlatformImpossibleReport,
+                path: "artifacts/platform-impossible-results.ron",
+                bytes: 38,
+                description: "Typed platform-impossible capability results with probe metadata.",
+            ),
+        ],
+        reproduction_command: "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture",
+        diagnostic: "GPU visual diff timing is unavailable because the retained UI evidence harness has no GPU diff backend",
+    ),
+]

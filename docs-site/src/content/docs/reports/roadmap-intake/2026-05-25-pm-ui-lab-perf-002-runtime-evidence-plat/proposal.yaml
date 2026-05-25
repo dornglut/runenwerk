@@ -1,0 +1,114 @@
+version: 1
+idea: PM-UI-LAB-PERF-002 Runtime Evidence Platform Closure
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-runtime-evidence-platform-closure-design.md
+owner: editor
+created_at: '2026-05-25'
+governance_notes:
+- Architecture governance keeps evidence execution, capability probes, native capture, focus/contrast/timing inspection,
+  and artifact writing in apps/runenwerk_editor.
+- domain/ui/ui_definition remains behavior-free and must not own provider sessions, screenshots, accessibility tooling,
+  timing, or artifact storage.
+- domain/editor/editor_shell remains the retained composition and view-model owner, not the evidence runtime owner.
+- No ADR is required while PM002 preserves app-owned evidence execution; add an ADR or accepted design update before moving
+  no-gap evidence capabilities into a reusable cross-domain platform crate.
+open_questions:
+- Which no-gap capabilities can be natively captured in the current runtime backend, and which must be recorded as typed
+  platform-impossible results after a probe?
+- Should the implementation extend the PM006 manifest version or introduce a PM002 no-gap manifest beside it?
+item:
+  id: WR-105
+  title: UI Lab runtime evidence platform closure
+  diagram_title: UI Lab runtime evidence closure
+  alias: UILABPERFEVIDENCE
+  lane: Editor evidence
+  dependency_level: L4
+  gate: After WR-100 no-gap doctrine
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 3
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.1
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-100
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/design/accepted/ui-lab-runtime-evidence-platform-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-105-ui-lab-runtime-evidence-platform-closure/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-002-runtime-evidence-plat
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_002
+  - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: Implement PM-UI-LAB-PERF-002 with typed no-gap evidence capabilities, capability probes, captured or
+    platform-impossible results, manifest validation, and PM002 runtime artifacts.
+  current_decision: Ready for promotion planning only; use task production:plan before implementation and preserve app-owned
+    evidence execution.
+  current_call: Prepare a bounded PM002 implementation contract that closes native-or-typed-impossible evidence gaps without
+    starting command/surface, UX, API, or final certification work.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-002 --roadmap WR-105 and write the promotion or
+    implementation-readiness contract it reports.
+  main_blocker: Awaiting promotion to current_candidate and a decision-complete implementation contract.
+  why_not_ready: Ready for promotion planning; not implementation until roadmap promotion and production contract gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - runtime evidence closure
+  - native or platform-impossible
+  - app-owned probes
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PM002 consumes the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-runtime-evidence-platform-closure-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PM002 implementation must follow the accepted runtime evidence platform closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PM002 depends on completed no-gap governance closeout evidence.
+  ddd_owner: editor app-owned runtime evidence with editor_shell and ui_definition support boundaries
+  adr_requirement: No ADR for app-owned evidence closure; ADR or design update required before cross-domain evidence platform
+    ownership changes.
+  fitness_function_requirement: Evidence manifest tests rejecting descriptor-only proof, requiring captured/platform-impossible
+    per-capability results, and preserving app-owned artifact generation.
+  ownership_mode: Stream-aligned editor evidence work with complicated-subsystem support from app runtime/windowing and shell
+    owners.
+edges:
+- source: WR-100
+  target: WR-105
+  label: no-gap doctrine

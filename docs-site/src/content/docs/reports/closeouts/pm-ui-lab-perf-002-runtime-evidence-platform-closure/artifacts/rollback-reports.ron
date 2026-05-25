@@ -1,0 +1,111 @@
+[
+    (
+        id: "editor-lab.rollback.runenwerk.editor.toolbar",
+        document_id: ("runenwerk.editor.toolbar"),
+        display_name: "toolbar.ron",
+        status: RolledBack,
+        removed_document: Some((
+            schema_version: 1,
+            id: ("runenwerk.editor.toolbar"),
+            display_name: "toolbar.ron",
+            kind: UiLayout,
+            lifecycle_state: Applied,
+            content: UiTemplate((
+                id: ("runenwerk.editor.toolbar"),
+                root: Panel(
+                    id: ("root"),
+                    children: [
+                        Scroll(
+                            id: ("scroll"),
+                            axis: Horizontal,
+                            input: (
+                                horizontal: WheelAndMiddleDrag,
+                                vertical: WheelOnly,
+                            ),
+                            ownership: (
+                                boundary: ConsumeAtBoundary,
+                            ),
+                            children: [
+                                Column(
+                                    id: ("rows"),
+                                    children: [
+                                        Row(
+                                            id: ("top_row"),
+                                            children: [
+                                                Button(
+                                                    id: ("menu_file"),
+                                                    label: Static(Text("File")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.file"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.file.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("menu_edit"),
+                                                    label: Static(Text("Edit")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.edit"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.edit.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("menu_window"),
+                                                    label: Static(Text("Window")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.window"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.window.active"))),
+                                                ),
+                                                Separator(
+                                                    id: ("separator"),
+                                                    axis: Some(Vertical),
+                                                    length: Some(14.0),
+                                                    thickness: Some(1.0),
+                                                ),
+                                                Button(
+                                                    id: ("workspace_scene"),
+                                                    label: Static(Text("Scene")),
+                                                    route: Some((
+                                                        id: ("editor.workspace.scene.activate"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.workspace.scene.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("workspace_modelling"),
+                                                    label: Static(Text("Modelling")),
+                                                    route: Some((
+                                                        id: ("editor.workspace.modelling.activate"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.workspace.modelling.active"))),
+                                                ),
+                                                Button(
+                                                    id: ("workspace_plus"),
+                                                    label: Static(Text("+")),
+                                                    route: Some((
+                                                        id: ("editor.toolbar.menu.workspace"),
+                                                    )),
+                                                    availability: None,
+                                                    selected: Some(Slot(("editor.toolbar.menu.workspace.active"))),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                    availability: None,
+                ),
+                templates: [],
+                menus: [],
+            )),
+        )),
+        restored_document: None,
+        diagnostics: [],
+    ),
+]

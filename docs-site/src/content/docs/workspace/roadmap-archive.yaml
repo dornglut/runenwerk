@@ -6511,8 +6511,8 @@ items:
   - task planning:validate
   next_evidence: docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
   current_decision: Completed at bounded_contract as a doctrine-only hardening track activation slice.
-  current_call: Archive WR-089 as completed PM-RENDER-POP-HARDEN-001 evidence; implementation remains split into WR-090,
-    WR-091, WR-092, WR-101, and WR-093.
+  current_call: Archive WR-089 as completed PM-RENDER-POP-HARDEN-001 evidence; implementation remains split into WR-090, WR-091,
+    WR-092, WR-101, and WR-093.
   first_move: Verify WR-089 closeout evidence before promoting WR-090.
   main_blocker: Completed.
   why_not_ready: ''
@@ -6824,6 +6824,205 @@ items:
   fitness_function_requirement: Render-flow tests and boids evidence proving deterministic 0..N submitted substeps, bounded
     max-substep clamping, invalid repeat rejection, iteration-scoped uniform projection, and no boids-local timing loop.
   ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-100
+  title: UI Lab perfectionist governance and no-gap audit doctrine
+  diagram_title: UI Lab perfectionist governance
+  alias: WR089
+  lane: Product planning
+  dependency_level: L4
+  gate: Current-candidate governance contract
+  planning_state: completed
+  priority: P2
+  value: 3
+  blocker: 3
+  tc: 2
+  rr_oe: 3
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-099
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pt-ui-lab-perfection-no-gap-audit
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task puml:validate
+  - task docs:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+  current_decision: Completed as bounded governance evidence for PT-UI-LAB-PERFECTION audit doctrine, code-truth matrix, evidence
+    matrix, hard blockers, and disjoint follow-on WR candidates.
+  current_call: Archive WR-100 as completed PM-UI-LAB-PERF-001 evidence.
+  first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION before selecting the next milestone action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-UI-LAB-PERF-002 through PM-UI-LAB-PERF-006 remain unimplemented and must not be inferred complete from governance setup.
+  - Native evidence, source-of-truth closure, direct-manipulation UX closure, API ergonomics closure, and final no-gap audit
+    remain future milestones.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+  diagram_call:
+  - governance contract
+  - accepted doctrine
+  - no app code yet
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PT-UI-LAB-PERFECTION governance is anchored by the accepted no-gap audit design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-100 completion followed the active design-first governance contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PM-UI-LAB-PERF-001 completion requires completed governance closeout evidence.
+  ddd_owner: editor with domain/ui, domain/editor, and app-runtime evidence support
+  adr_requirement: No ADR for the governance/design setup; later WRs need an ADR or accepted design update if they change
+    durable ownership, dependency direction, source-of-truth authority, or cross-domain contracts.
+  fitness_function_requirement: Production, roadmap, planning, PUML, and docs validators for governance; later WRs must add
+    focused runtime evidence and code tests before implementation.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor shell,
+    and app runtime evidence owners.
+- id: WR-105
+  title: UI Lab runtime evidence platform closure
+  diagram_title: UI Lab runtime evidence closure
+  alias: UILABPERFEVIDENCE
+  lane: Editor evidence
+  dependency_level: L4
+  gate: After WR-100 no-gap doctrine
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 3
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.1
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-100
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/design/accepted/ui-lab-runtime-evidence-platform-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-105-ui-lab-runtime-evidence-platform-closure/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-002-runtime-evidence-plat
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_002
+  - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure
+    -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+  current_decision: Completed at runtime_proven for typed captured-or-platform-impossible Editor Lab runtime evidence results,
+    app-owned capability probes, PM002 no-gap manifest validation, and generated runtime artifact evidence.
+  current_call: Archive WR-105 as completed PM-UI-LAB-PERF-002 evidence.
+  first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION before selecting the next milestone action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-LAB-PERF-003 still owns command and surface source-of-truth closure.
+  - PM-UI-LAB-PERF-004 still owns direct-manipulation Editor Lab UX closure.
+  - PM-UI-LAB-PERF-005 still owns persistence, diff/apply, public API, and example ergonomics closure.
+  - PM-UI-LAB-PERF-006 still owns final no-gap certification and any perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+  diagram_call:
+  - runtime evidence closure
+  - typed platform-impossible
+  - app-owned probes
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM002 consumes the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-runtime-evidence-platform-closure-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM002 implementation followed the accepted runtime evidence platform closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-105-ui-lab-runtime-evidence-platform-closure/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-105 implementation followed the active current-candidate implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM002 depended on completed no-gap governance closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-105 completion requires completed runtime evidence platform closeout evidence.
+  ddd_owner: editor app-owned runtime evidence with editor_shell and ui_definition support boundaries
+  adr_requirement: No ADR because screenshot, focus, contrast, timing, provider sessions, platform probes, and artifact
+    writing remain app-owned; ADR or accepted design update is required before moving evidence ownership into a reusable
+    cross-domain platform.
+  fitness_function_requirement: Evidence manifest tests reject descriptor-only proof, reject platform-impossible results
+    without typed probe metadata, require captured/platform-impossible per-capability results, and preserve app-owned artifact
+    generation.
+  ownership_mode: Stream-aligned editor evidence work with complicated-subsystem support from app runtime/windowing and shell
+    owners.
 - id: WR-101
   title: Procedural Camera And View Projection
   diagram_title: Procedural camera projection
@@ -6910,8 +7109,7 @@ items:
   adr_requirement: No ADR because camera projection remains renderer-owned derived data and camera intent stays producer-owned;
     ADR required before moving camera source truth into renderer or PreparedViewFrame.
   fitness_function_requirement: Procedural camera and boids evidence tests proving landscape, portrait, square, and extreme
-    aspect projection, equal projected world x/y scale, no viewport-owned simulation truth, and no boids-only projection
-    shortcut.
+    aspect projection, equal projected world x/y scale, no viewport-owned simulation truth, and no boids-only projection shortcut.
   ownership_mode: Complicated-subsystem renderer owner.
 - id: WR-093
   title: Procedural Population Hardening Evidence Benchmarks Docs And Closeout
@@ -6962,9 +7160,9 @@ items:
   - task production:check
   - task planning:validate
   next_evidence: docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
-  current_decision: Completed at runtime_proven for procedural population hardening evidence, benchmark coverage, public
-    docs, and track closeout across indirect validation, GPU primitive dispatch, fixed-step graph scheduling, and
-    procedural camera projection.
+  current_decision: Completed at runtime_proven for procedural population hardening evidence, benchmark coverage, public docs,
+    and track closeout across indirect validation, GPU primitive dispatch, fixed-step graph scheduling, and procedural camera
+    projection.
   current_call: Archive WR-093 as completed PM-RENDER-POP-HARDEN-006 and track closeout evidence.
   first_move: Use the WR-093 closeout and PT closeout before marking the hardening track completed.
   main_blocker: Completed.
@@ -6973,8 +7171,8 @@ items:
   known_quality_gaps:
   - Spatial hash and chunked unbounded populations remain separate intake/design work.
   - Behavior authoring and richer boids dynamics remain separate deferred intake work.
-  - Local Criterion regressions in several generic render-flow and temporal baselines should be re-profiled if repeated,
-    but the WR-093 procedural population and evidence benchmark cases were stable or improved.
+  - Local Criterion regressions in several generic render-flow and temporal baselines should be re-profiled if repeated, but
+    the WR-093 procedural population and evidence benchmark cases were stable or improved.
   - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
   completion_audit: docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
   diagram_call:
@@ -7000,6 +7198,6 @@ items:
   ddd_owner: engine render plugin
   adr_requirement: No ADR because closeout did not change source-truth ownership, dependency direction, fallback legality,
     or renderer ABI semantics.
-  fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, camera projection, boids evidence,
-    benchmark, docs, production, roadmap, and planning validation suite.
+  fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, camera projection, boids evidence, benchmark,
+    docs, production, roadmap, and planning validation suite.
   ownership_mode: Complicated-subsystem renderer owner.

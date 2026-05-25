@@ -1,0 +1,20 @@
+[
+    (
+        severity: Warning,
+        code: "editor.lab.evidence.warning.visible",
+        message: "PM002 warning scenario is visible through the app-owned preview console",
+        path: None,
+    ),
+    (
+        severity: Error,
+        code: "editor.lab.project.package.parse_failed",
+        message: "failed to parse Editor Lab project package: 1:4: Expected struct `EditorLabProjectPackage` but found `not`",
+        path: None,
+    ),
+    (
+        severity: Warning,
+        code: "editor.lab.evidence.degraded_provider",
+        message: "non-previewable selection rendered a typed degraded Editor Lab surface",
+        path: None,
+    ),
+]

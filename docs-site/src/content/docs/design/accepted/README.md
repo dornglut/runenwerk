@@ -38,6 +38,8 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [UI Lab Persistence Project IO Diff Apply Rollback Design](ui-lab-persistence-project-io-diff-apply-rollback-design.md)
 - [UI Lab Preview Lab Runtime Evidence Design](ui-lab-preview-lab-runtime-evidence-design.md)
 - [UI Lab API Docs Examples Runtime Closeout Design](ui-lab-api-docs-examples-runtime-closeout-design.md)
+- [UI Lab Perfectionist Audit Design](ui-lab-perfectionist-audit-design.md)
+- [UI Lab Runtime Evidence Platform Closure Design](ui-lab-runtime-evidence-platform-closure-design.md)
 
 ### Workspace / Cross-Domain
 

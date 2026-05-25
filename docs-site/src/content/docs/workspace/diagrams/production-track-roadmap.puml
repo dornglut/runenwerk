@@ -83,6 +83,11 @@ package "PT-RENDER-SCALE Renderer Scale Residency And GPU Driven Visibility Plat
 
 }
 
+package "PT-RENDER-PROCEDURAL-POPULATION-HARDENING Renderer Procedural Population Hardening Platform" {
+  component "PT-RENDER-PROCEDURAL-POPULATION-HARDENING completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_RENDER_PROCEDURAL_POPULATION_HARDENING_COMPLETED <<completed>>
+
+}
+
 package "PT-RENDER-SDF Sparse SDF World Rendering And Raymarch Acceleration Platform" {
   component "PT-RENDER-SDF completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_RENDER_SDF_COMPLETED <<completed>>
 
@@ -130,20 +135,26 @@ package "PT-RENDER-PERFECTION Renderer Production Audit And Perfectionist Verifi
 
 }
 
+package "PT-VIEWPORT-PROJECTION Viewport Camera And Projection Contract Platform" {
+  component "PM-VIEWPORT-PROJECTION-001 Contract Governance And Design Split\nkind=design\nstate=active\nWR=WR-106" as PM_VIEWPORT_PROJECTION_001 <<active>>
+
+  component "PM-VIEWPORT-PROJECTION-002 Renderer Surface Fit And Procedural Projection Contracts\nkind=implementation\nstate=designing\nWR=N/A" as PM_VIEWPORT_PROJECTION_002 <<designing>>
+
+  component "PM-VIEWPORT-PROJECTION-003 Editor Viewport Camera And Projection Hardening\nkind=implementation\nstate=designing\nWR=N/A" as PM_VIEWPORT_PROJECTION_003 <<designing>>
+
+  component "PM-VIEWPORT-PROJECTION-004 Examples And Product Surface Evidence\nkind=hardening\nstate=designing\nWR=N/A" as PM_VIEWPORT_PROJECTION_004 <<designing>>
+
+  component "PM-VIEWPORT-PROJECTION-005 Runtime Proven Closeout And Perfection Handoff\nkind=release\nstate=designing\nWR=N/A" as PM_VIEWPORT_PROJECTION_005 <<designing>>
+
+}
+
 package "PT-UI-DESIGN UI Designer And Interface Lab Platform" {
   component "PT-UI-DESIGN completed prerequisites\nmilestones=1\nquality=bounded_contract=1" as PT_UI_DESIGN_COMPLETED <<completed>>
 
 }
 
-package "PT-UI-LAB Runtime-Proven Editor Interface Lab Productization" {
-  component "PT-UI-LAB completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_UI_LAB_COMPLETED <<completed>>
-
-}
-
 package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" {
-  component "PM-UI-LAB-PERF-001 Governance Audit Doctrine And Code Truth Matrix\nkind=design\nstate=active\nWR=WR-100" as PM_UI_LAB_PERF_001 <<active>>
-
-  component "PM-UI-LAB-PERF-002 Runtime Evidence Platform Closure\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_002 <<designing>>
+  component "PT-UI-LAB-PERFECTION completed prerequisites\nmilestones=1\nquality=bounded_contract=1" as PT_UI_LAB_PERFECTION_COMPLETED <<completed>>
 
   component "PM-UI-LAB-PERF-003 Command And Surface Source Of Truth Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_003 <<designing>>
 
@@ -209,9 +220,13 @@ PT_RENDER_PRODUCT_VISUALS_COMPLETED -down-> PM_RENDER_PERFECTION_001 : PT-RENDER
 PM_RENDER_PERFECTION_001 -down-> PM_RENDER_PERFECTION_002 : production prerequisite
 PM_RENDER_PERFECTION_002 -down-> PM_RENDER_PERFECTION_003 : production prerequisite
 PM_RENDER_PERFECTION_003 -down-> PM_RENDER_PERFECTION_004 : production prerequisite
-PT_UI_LAB_COMPLETED -down-> PM_UI_LAB_PERF_001 : PT-UI-LAB completed prerequisite
-PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_002 : production prerequisite
-PM_UI_LAB_PERF_001 -down-> PM_UI_LAB_PERF_003 : production prerequisite
+PT_RENDER_PROCEDURAL_POPULATION_HARDENING_COMPLETED -down-> PM_VIEWPORT_PROJECTION_001 : PT-RENDER-PROCEDURAL-POPULATION-HARDENING completed prerequisite
+PM_VIEWPORT_PROJECTION_001 -down-> PM_VIEWPORT_PROJECTION_002 : production prerequisite
+PM_VIEWPORT_PROJECTION_001 -down-> PM_VIEWPORT_PROJECTION_003 : production prerequisite
+PM_VIEWPORT_PROJECTION_002 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
+PM_VIEWPORT_PROJECTION_003 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
+PM_VIEWPORT_PROJECTION_004 -down-> PM_VIEWPORT_PROJECTION_005 : production prerequisite
+PT_UI_LAB_PERFECTION_COMPLETED -down-> PM_UI_LAB_PERF_003 : completed prerequisite
 PM_UI_LAB_PERF_003 -down-> PM_UI_LAB_PERF_004 : production prerequisite
 PM_UI_LAB_PERF_004 -down-> PM_UI_LAB_PERF_005 : production prerequisite
 PM_UI_LAB_PERF_005 -down-> PM_UI_LAB_PERF_006 : production prerequisite
