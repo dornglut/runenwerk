@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-22
+last_reviewed: 2026-05-25
 ---
 
 # Render Flow Usage Guide
@@ -190,17 +190,26 @@ expose `GraphicsPassBuilder` as the procedural extension surface. The simple
 `RenderFlow::procedural_pass(...)` path remains the preferred direct draw path
 for static instance counts.
 
+Use `ProceduralCamera2d` for reusable 2D procedural projection instead of
+putting viewport math directly in an example shader. The producer or example
+owns camera intent, usually with
+`ProceduralCamera2dAspectPolicy::FillViewport { fixed_axis: Vertical }` for
+population examples. Renderer procedural code derives
+`ProceduralCamera2dUniform` from camera intent and surface size, and
+`ProceduralSpriteSizing` converts world-unit or pixel-intent sprite sizes into
+the uniform consumed by the draw shader. `PreparedViewFrame` remains target,
+view, and history metadata; it does not own camera truth.
+
 The canonical boids example is the reference path for storage-backed procedural
 instance rendering. `engine/examples/boids_render_flow/rendering/graph.rs`
 keeps simulation in compute passes, publishes the current storage buffer into
 the instance buffer consumed by `RenderFlow::procedural_pass_builder(...)`,
-binds surface-aware draw uniforms for aspect-correct local impostors, and
+binds procedural camera draw uniforms for aspect-correct local impostors, and
 presents directly from the flow-owned color target. It intentionally does not
 keep a history copy, use a fullscreen fragment loop over all boids, or keep a
 production O(n^2) neighbor loop. The compute path builds a bounded wrapping
-uniform grid before adjacent-cell simulation. The example reports its
-fixed-step simulation contract explicitly; multi-step catch-up is a later graph
-scheduling feature, not hidden in the example.
+uniform grid before adjacent-cell simulation. The example reports its graph
+fixed-step simulation contract and camera projection evidence explicitly.
 
 The bounded-grid population path is reusable renderer infrastructure. The
 canonical stage order is clear counts, count cells, scan counts, reset cursors,

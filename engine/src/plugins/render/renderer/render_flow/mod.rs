@@ -1,14 +1,16 @@
 use super::*;
 use crate::plugins::render::RenderResourceDescriptor;
-use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL};
+use crate::plugins::render::api::{
+    RenderFixedStepIterationUniform, SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL,
+};
 use crate::plugins::render::backend::ensure_compiled_pass_is_supported;
 use crate::plugins::render::frame::{PreparedFlowInputs, PreparedRenderFrame};
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledComputeExecutionPlan,
-    CompiledCopyExecutionPlan, CompiledPassBindings, CompiledPassExecutionPlan,
-    CompiledPresentExecutionPlan, CompiledRasterExecutionPlan, CompiledRenderFlowPlan,
-    CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan, RenderBackendCapabilityProfile,
-    RenderShaderReference, preflight_prepared_render_frame,
+    CompiledCopyExecutionPlan, CompiledFixedStepRegion, CompiledPassBindings,
+    CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledRasterExecutionPlan,
+    CompiledRenderFlowPlan, CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan,
+    RenderBackendCapabilityProfile, RenderShaderReference, preflight_prepared_render_frame,
 };
 use crate::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,

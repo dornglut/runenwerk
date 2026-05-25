@@ -39,6 +39,18 @@ This slice depends on completed `WR-089`. It must not start until
 reports either `write_promotion_contract` or `write_implementation_contract`,
 and any required promotion has passed.
 
+Current promotion evidence:
+
+- `docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md`
+  completes the doctrine and track-activation dependency at
+  `bounded_contract`.
+- `task production:plan -- --milestone "PM-RENDER-POP-HARDEN-002" --roadmap "WR-090"`
+  reports `Next action: write_promotion_contract` and promotion preflight
+  status `promotable`.
+
+Promotion to `current_candidate` is legal only after this contract remains
+decision-complete and roadmap, production, docs, and planning validation pass.
+
 ## Implementation Scope
 
 Owned files and exact modules/functions:
@@ -80,6 +92,28 @@ Owned files and exact modules/functions:
 - Validation must know the typed argument element size before submission.
 - CPU-side vertex, base-vertex, or instance offsets must not be accepted on
   indirect APIs unless they are stored inside the indirect argument buffer.
+
+## Implementation Steps
+
+1. Promote `WR-090` to `current_candidate` only after this contract and the
+   `WR-089` closeout evidence validate.
+2. Inspect the existing draw-source API and graph compilation path before
+   editing `engine/src/plugins/render/api/passes.rs`,
+   `engine/src/plugins/render/graph/pass_graph.rs`,
+   `engine/src/plugins/render/graph/execution_plan.rs`, and
+   `engine/src/plugins/render/renderer/render_flow/execute_passes.rs`.
+3. Split direct, indexed direct, indirect, and indexed indirect draw-source
+   semantics into typed graph and execution-plan contracts.
+4. Carry typed indirect argument element size and byte length metadata far
+   enough for graph validation to reject wrong argument type, missing
+   declaration, misaligned byte offset, and out-of-bounds byte offset before
+   WGPU submission.
+5. Remove or redesign any indirect public API that accepts CPU-side offsets
+   that WGPU indirect submission cannot consume.
+6. Add focused render-flow/procedural tests for valid and invalid direct,
+   indexed direct, indirect, and indexed indirect draw-source paths.
+7. Update public docs only if the implementation changes public authoring
+   behavior or discoverable renderer APIs.
 
 ## Acceptance Criteria
 
@@ -128,6 +162,23 @@ Validation:
 - `task production:check`
 - `task docs:validate`
 - `task planning:validate`
+
+## Perfectionist Closeout Audit
+
+`WR-090` should close as `bounded_contract`. The slice proves fail-closed
+indirect draw validation and typed submission semantics, but it does not prove
+the complete hardening track. It must not claim `runtime_proven` for the track
+or `perfectionist_verified`.
+
+The closeout audit must keep these gaps visible:
+
+- reusable primitive shader dispatch remains `WR-091`;
+- graph catch-up scheduling remains `WR-092`;
+- procedural camera and view projection remains `WR-101`;
+- evidence, benchmarks, docs, and track closeout remain `WR-093`;
+- spatial hash, chunked unbounded populations, and richer behavior authoring
+  remain separate intake/design work;
+- final no-gap renderer verification remains `PT-RENDER-PERFECTION`.
 
 ## Critical Review
 

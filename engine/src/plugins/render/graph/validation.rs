@@ -1,7 +1,7 @@
 use crate::plugins::render::RenderResourceDescriptor;
 use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL};
 use crate::plugins::render::graph::{
-    RenderDrawSource, RenderFlowGraph, RenderPassKind, RenderPassNode,
+    RenderDrawSource, RenderFlowGraph, RenderIndirectDrawArgsKind, RenderPassKind, RenderPassNode,
     validate_builtin_ui_pass_shape,
 };
 use crate::plugins::render::resource::{
@@ -129,6 +129,27 @@ pub enum RenderFlowValidationIssue {
 
     #[error("pass dependency cycle detected: {cycle_labels}")]
     PassDependencyCycleDetected { cycle_labels: String },
+
+    #[error("fixed-step region '{region_label}' must declare max_substeps greater than zero")]
+    FixedStepRegionInvalidMaxSubsteps { region_label: String },
+
+    #[error("fixed-step region '{region_label}' has inconsistent descriptors across member passes")]
+    FixedStepRegionInconsistentDescriptor { region_label: String },
+
+    #[error("fixed-step region '{region_label}' cannot include {pass_kind} pass '{pass_label}'")]
+    FixedStepRegionUnsupportedPassKind {
+        region_label: String,
+        pass_label: String,
+        pass_kind: &'static str,
+    },
+
+    #[error(
+        "fixed-step region '{region_label}' pass order is interleaved by non-region pass '{pass_label}'"
+    )]
+    FixedStepRegionPassesNotContiguous {
+        region_label: String,
+        pass_label: String,
+    },
 
     #[error(
         "compute pass '{pass_label}' must declare explicit dispatch(...) or dispatch_from_state(...)"
@@ -270,6 +291,35 @@ pub enum RenderFlowValidationIssue {
     GraphicsPassInvalidIndirectDrawOffset {
         pass_label: String,
         byte_offset: u64,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' indirect draw uses {args_kind}, expected {expected_args_kind} for the declared index-buffer state"
+    )]
+    GraphicsPassIndirectDrawArgsKindMismatch {
+        pass_label: String,
+        args_kind: &'static str,
+        expected_args_kind: &'static str,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' indirect draw byte offset {byte_offset} with element size {args_element_size} exceeds args buffer size {args_buffer_byte_size} ({args_element_count} elements)"
+    )]
+    GraphicsPassIndirectDrawOffsetOutOfBounds {
+        pass_label: String,
+        byte_offset: u64,
+        args_element_size: u64,
+        args_element_count: u64,
+        args_buffer_byte_size: u64,
+    },
+
+    #[error(
+        "graphics pass '{pass_label}' indirect draw declares CPU-side offsets first_vertex={first_vertex}, first_instance={first_instance}; indirect offsets must be encoded in the args buffer"
+    )]
+    GraphicsPassIndirectDrawUsesCpuOffsets {
+        pass_label: String,
+        first_vertex: u32,
+        first_instance: u32,
     },
 
     #[error(
@@ -556,6 +606,15 @@ pub fn validate_flow_graph(
             }
         }
 
+        for uniform_id in &pass.fixed_step_iteration_uniforms {
+            if !graph.resources.has_uniform_buffer(uniform_id) {
+                issues.push(RenderFlowValidationIssue::MissingUniformBuffer {
+                    pass_label: pass.label.clone(),
+                    uniform_id: *uniform_id,
+                });
+            }
+        }
+
         if let Some(dispatch) = &pass.compute_dispatch
             && let crate::plugins::render::api::ComputeDispatchDescriptor::State(binding) = dispatch
             && !graph.resources.has_state_resource(binding.state_type_id())
@@ -586,6 +645,7 @@ pub fn validate_flow_graph(
     }
 
     let pass_order = topological_sort(&graph.passes.passes, &mut issues);
+    validate_fixed_step_regions(&graph.passes.passes, &pass_order, &mut issues);
 
     if present_passes.len() == 1 {
         let present_pass = present_passes[0];
@@ -1198,6 +1258,9 @@ fn validate_graphics_draw_source(
     }
     let RenderDrawSource::Indirect {
         args_buffer,
+        args_kind,
+        args_element_count,
+        args_element_size,
         byte_offset,
     } = draw.source
     else {
@@ -1213,6 +1276,21 @@ fn validate_graphics_draw_source(
         );
     }
 
+    let expected_args_kind = if pass.index_buffers.is_empty() {
+        RenderIndirectDrawArgsKind::Draw
+    } else {
+        RenderIndirectDrawArgsKind::DrawIndexed
+    };
+    if args_kind != expected_args_kind {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassIndirectDrawArgsKindMismatch {
+                pass_label: pass.label.clone(),
+                args_kind: args_kind.label(),
+                expected_args_kind: expected_args_kind.label(),
+            },
+        );
+    }
+
     if byte_offset % 4 != 0 {
         issues.push(
             RenderFlowValidationIssue::GraphicsPassInvalidIndirectDrawOffset {
@@ -1220,6 +1298,128 @@ fn validate_graphics_draw_source(
                 byte_offset,
             },
         );
+    }
+
+    let args_buffer_byte_size = args_element_count.saturating_mul(args_element_size);
+    let Some(required_end) = byte_offset.checked_add(args_element_size) else {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassIndirectDrawOffsetOutOfBounds {
+                pass_label: pass.label.clone(),
+                byte_offset,
+                args_element_size,
+                args_element_count,
+                args_buffer_byte_size,
+            },
+        );
+        return;
+    };
+    if required_end > args_buffer_byte_size {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassIndirectDrawOffsetOutOfBounds {
+                pass_label: pass.label.clone(),
+                byte_offset,
+                args_element_size,
+                args_element_count,
+                args_buffer_byte_size,
+            },
+        );
+    }
+
+    if draw.first_vertex != 0 || draw.first_instance != 0 {
+        issues.push(
+            RenderFlowValidationIssue::GraphicsPassIndirectDrawUsesCpuOffsets {
+                pass_label: pass.label.clone(),
+                first_vertex: draw.first_vertex,
+                first_instance: draw.first_instance,
+            },
+        );
+    }
+}
+
+fn validate_fixed_step_regions(
+    passes: &[RenderPassNode],
+    pass_order: &[RenderPassId],
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    #[derive(Clone)]
+    struct RegionShape {
+        label: String,
+        max_substeps: u32,
+        iteration_uniform: RenderResourceId,
+        pass_ids: BTreeSet<RenderPassId>,
+    }
+
+    let mut regions =
+        BTreeMap::<crate::plugins::render::RenderFixedStepRegionId, RegionShape>::new();
+    let pass_lookup = passes
+        .iter()
+        .map(|pass| (pass.id, pass))
+        .collect::<BTreeMap<_, _>>();
+
+    for pass in passes {
+        let Some(region) = pass.fixed_step_region.as_ref() else {
+            continue;
+        };
+        if region.max_substeps == 0 {
+            issues.push(
+                RenderFlowValidationIssue::FixedStepRegionInvalidMaxSubsteps {
+                    region_label: region.region_label.clone(),
+                },
+            );
+        }
+        if matches!(pass.kind, RenderPassKind::Copy | RenderPassKind::Present) {
+            issues.push(
+                RenderFlowValidationIssue::FixedStepRegionUnsupportedPassKind {
+                    region_label: region.region_label.clone(),
+                    pass_label: pass.label.clone(),
+                    pass_kind: render_pass_kind_name(pass.kind),
+                },
+            );
+        }
+
+        let entry = regions
+            .entry(region.region_id)
+            .or_insert_with(|| RegionShape {
+                label: region.region_label.clone(),
+                max_substeps: region.max_substeps,
+                iteration_uniform: region.iteration_uniform,
+                pass_ids: BTreeSet::new(),
+            });
+        if entry.label != region.region_label
+            || entry.max_substeps != region.max_substeps
+            || entry.iteration_uniform != region.iteration_uniform
+        {
+            issues.push(
+                RenderFlowValidationIssue::FixedStepRegionInconsistentDescriptor {
+                    region_label: region.region_label.clone(),
+                },
+            );
+        }
+        entry.pass_ids.insert(pass.id);
+    }
+
+    for region in regions.values() {
+        let positions = pass_order
+            .iter()
+            .enumerate()
+            .filter_map(|(index, pass_id)| region.pass_ids.contains(pass_id).then_some(index))
+            .collect::<Vec<_>>();
+        let (Some(first), Some(last)) = (positions.first(), positions.last()) else {
+            continue;
+        };
+        for pass_id in &pass_order[*first..=*last] {
+            if region.pass_ids.contains(pass_id) {
+                continue;
+            }
+            if let Some(pass) = pass_lookup.get(pass_id) {
+                issues.push(
+                    RenderFlowValidationIssue::FixedStepRegionPassesNotContiguous {
+                        region_label: region.label.clone(),
+                        pass_label: pass.label.clone(),
+                    },
+                );
+            }
+        }
     }
 }
 
@@ -1606,4 +1806,5 @@ fn pass_resource_refs(
         .chain(pass.instance_buffers.iter())
         .chain(pass.indirect_buffers.iter())
         .chain(pass.depth_target.iter())
+        .chain(pass.fixed_step_iteration_uniforms.iter())
 }

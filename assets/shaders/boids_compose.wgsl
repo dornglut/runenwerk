@@ -1,6 +1,8 @@
 struct DrawParams {
-    surface: vec4<f32>, // width, height, inv_width, inv_height
-    sprite: vec4<f32>, // radius_px, half_width, half_height, padding
+    world_to_clip: vec4<f32>, // scale_x, scale_y, offset_x, offset_y
+    viewport: vec4<f32>, // width, height, inv_width, inv_height
+    visible_world: vec4<f32>, // center_x, center_y, width, height
+    sprite: vec4<f32>, // half_width_world, half_height_world, sizing_mode, padding
 };
 
 struct VsOut {
@@ -39,14 +41,13 @@ fn vs_main(
     let local = corners[vertex_index];
     let direction = normalize_or_up(instance_visual_heading);
     let right = vec2<f32>(direction.y, -direction.x);
-    let radius_px = draw_params.sprite.x;
-    let half_width = draw_params.sprite.y;
-    let half_height = draw_params.sprite.z;
-    let pixel_offset = (right * local.x * half_width + direction * local.y * half_height) * radius_px;
-    let center_clip = vec2<f32>(instance_position.x * 2.0 - 1.0, 1.0 - instance_position.y * 2.0);
+    let half_width_world = draw_params.sprite.x;
+    let half_height_world = draw_params.sprite.y;
+    let world_offset = right * local.x * half_width_world + direction * local.y * half_height_world;
+    let center_clip = instance_position * draw_params.world_to_clip.xy + draw_params.world_to_clip.zw;
     let clip_offset = vec2<f32>(
-        pixel_offset.x * 2.0 * draw_params.surface.z,
-        -pixel_offset.y * 2.0 * draw_params.surface.w
+        world_offset.x * draw_params.world_to_clip.x,
+        world_offset.y * draw_params.world_to_clip.y
     );
     let clip_position = center_clip + clip_offset;
 

@@ -2,7 +2,7 @@ use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryReso
 use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
-use crate::runtime::{ResMut, WorldMut};
+use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState, ResMut, WorldMut};
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
@@ -675,6 +675,7 @@ fn build_prepared_flow_inputs(
                 projected_uniform_bytes.insert(key, bytes);
             }
         }
+        project_fixed_step_region_uniforms(flow, extracted_state, &mut projected_uniform_bytes)?;
 
         let mut projected_dispatch_workgroups = BTreeMap::<RenderPassId, [u32; 3]>::new();
         for pass in &flow.pass_order {
@@ -705,6 +706,66 @@ fn build_prepared_flow_inputs(
     }
 
     Ok(outputs)
+}
+
+fn project_fixed_step_region_uniforms(
+    flow: &CompiledRenderFlowPlan,
+    extracted_state: &ExtractedRenderStateMap<'_>,
+    projected_uniform_bytes: &mut BTreeMap<RenderResourceId, Vec<u8>>,
+) -> anyhow::Result<()> {
+    if flow.execution.fixed_step_regions.is_empty() {
+        return Ok(());
+    }
+
+    let fixed_config = extracted_state
+        .get(&TypeId::of::<FixedTimeConfig>())
+        .and_then(|value| value.downcast_ref::<FixedTimeConfig>())
+        .copied()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "flow '{:?}' fixed-step region requires missing ecs state '{}'",
+                flow.flow_id,
+                std::any::type_name::<FixedTimeConfig>()
+            )
+        })?;
+    let fixed_state = extracted_state
+        .get(&TypeId::of::<FixedTimeState>())
+        .and_then(|value| value.downcast_ref::<FixedTimeState>())
+        .copied()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "flow '{:?}' fixed-step region requires missing ecs state '{}'",
+                flow.flow_id,
+                std::any::type_name::<FixedTimeState>()
+            )
+        })?;
+    let catchup_budget = extracted_state
+        .get(&TypeId::of::<CatchupBudget>())
+        .and_then(|value| value.downcast_ref::<CatchupBudget>())
+        .copied()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "flow '{:?}' fixed-step region requires missing ecs state '{}'",
+                flow.flow_id,
+                std::any::type_name::<CatchupBudget>()
+            )
+        })?;
+
+    for region in &flow.execution.fixed_step_regions {
+        let submitted_substeps =
+            fixed_state.bounded_render_substeps(catchup_budget, region.max_substeps);
+        let uniform = RenderFixedStepIterationUniform::new(
+            0,
+            submitted_substeps,
+            region.max_substeps,
+            fixed_state.saturated_frames,
+            fixed_config.step_seconds,
+            fixed_state.accumulator_seconds,
+        );
+        projected_uniform_bytes.insert(region.iteration_uniform, uniform.to_uniform_bytes());
+    }
+
+    Ok(())
 }
 
 fn project_dispatch_for_pass(

@@ -38,6 +38,19 @@ draw argument generation.
 This slice depends on completed `WR-090`. Indirect args generation must not be
 runtime-proven before indirect draw validation is typed and fail-closed.
 
+Current promotion evidence:
+
+- `docs-site/src/content/docs/reports/closeouts/wr-090-indirect-draw-contract-hardening/closeout.md`
+  completes typed indexed/non-indexed indirect draw validation, byte-offset
+  bounds, and fail-closed CPU-side indirect offset rejection at
+  `bounded_contract`.
+- `task production:plan -- --milestone "PM-RENDER-POP-HARDEN-003" --roadmap "WR-091"`
+  reports `Next action: write_promotion_contract` and promotion preflight
+  status `promotable`.
+
+Promotion to `current_candidate` is legal only after this contract remains
+decision-complete and roadmap, production, docs, and planning validation pass.
+
 ## Implementation Scope
 
 Owned files and exact modules/functions:
@@ -82,6 +95,29 @@ Owned files and exact modules/functions:
   fallback is not a runtime-proven path.
 - Capacity validation must use real `StorageArrayHandle<T>` lengths and typed
   element sizes.
+
+## Implementation Steps
+
+1. Promote `WR-091` to `current_candidate` only after this contract and the
+   `WR-090` closeout evidence validate.
+2. Inspect the existing `engine/src/plugins/render/gpu_primitives` descriptors,
+   `engine/src/plugins/render/api/flow.rs`, render-flow compute-pass authoring,
+   execution-plan compilation, and `execute_passes.rs` compute dispatch path
+   before adding kernels.
+3. Add renderer-owned WGSL kernels and dispatch descriptors for counter reset,
+   u32 prefix scan, scatter/compaction, and indirect args generation through
+   normal render-flow compute passes.
+4. Implement hierarchical u32 prefix scan as block scan, block-sum scan, and
+   block-offset propagation. Single-workgroup scan may only be one case inside
+   that plan.
+5. Carry typed diagnostics for unsupported capability, invalid capacity,
+   aliasing, and invariant mismatch; do not hide runtime proof behind CPU
+   fallback.
+6. Add focused `gpu_primitives`, `render_flow`, and `procedural` tests that
+   prove non-boids primitive dispatch, multi-block scan planning/execution, and
+   generated indirect args compatibility with the WR-090 draw contract.
+7. Add `engine/benches/render_flow_planning.rs` coverage for primitive planning
+   and execution overhead where deterministic local evidence is available.
 
 ## Acceptance Criteria
 
@@ -134,6 +170,23 @@ Validation:
 - `task production:check`
 - `task docs:validate`
 - `task planning:validate`
+
+## Perfectionist Closeout Audit
+
+`WR-091` may close at `runtime_proven` for reusable primitive dispatch only if
+renderer-owned kernels execute through normal render-flow compute passes and
+the hierarchical prefix scan proof is not descriptor-only or boids-only. It
+must not claim the full hardening track is `runtime_proven` and must not claim
+`perfectionist_verified`.
+
+The closeout audit must keep these gaps visible:
+
+- graph catch-up scheduling remains `WR-092`;
+- procedural camera and view projection remains `WR-101`;
+- evidence, benchmarks, docs, and track closeout remain `WR-093`;
+- spatial hash, chunked unbounded populations, and richer behavior authoring
+  remain separate intake/design work;
+- final no-gap renderer verification remains `PT-RENDER-PERFECTION`.
 
 ## Critical Review
 

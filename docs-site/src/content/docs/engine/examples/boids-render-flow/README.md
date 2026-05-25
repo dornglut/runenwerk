@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-24
+last_reviewed: 2026-05-25
 ---
 
 # Boids Render Flow Example
@@ -19,9 +19,11 @@ What it demonstrates:
 - ping-pong storage simulation (`boids.instances`) on a compute pass.
 - procedural-owned draw authoring through `RenderFlow::procedural_pass_builder(...)`.
 - bounded uniform-grid neighbor lookup instead of a production O(n^2) all-boids loop.
-- surface-aware draw uniforms so local impostors keep their aspect ratio on resize.
+- reusable procedural camera projection through `ProceduralCamera2d`,
+  `ProceduralCamera2dUniform`, and `ProceduralSpriteSizing`.
 - smoothed visual heading stored separately from simulation velocity.
-- fixed-step simulation evidence; multi-step catch-up is not hidden in this example.
+- graph-level fixed-step catch-up evidence; multi-step catch-up is owned by the
+  render-flow graph, not hidden in this example.
 - flow-owned color target and explicit terminal present pass.
 - pure builtin compiled runtime path (no custom executor hooks).
 - production evidence for no silent grid overflow, bounded submitted work,
@@ -45,9 +47,16 @@ scatter cursors, and sorted indices are explicit flow resources; dense cells
 must not silently overflow or drop neighbors. Spatial hash and chunked
 unbounded populations are intentionally out of scope for this example.
 
-The simulation submits one fixed step per rendered frame. The frame delta is
-kept as evidence input, not a hidden catch-up scheduler. Multi-step catch-up
-requires a later graph scheduling feature.
+The simulation region is declared as `boids.fixed_step` and derives submitted
+substeps from runtime fixed-time resources. The frame delta is kept as evidence
+input, not a hidden example-local scheduler.
+
+The draw pass uses a producer-owned `ProceduralCamera2d` with
+`FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the
+projection uniform from camera intent and target size; `PreparedViewFrame` does
+not own camera truth. The boids shader projects world positions through
+`ProceduralCamera2dUniform`, so landscape, portrait, square, and extreme aspect
+surfaces keep equal projected world x/y scale.
 
 Run:
 
@@ -63,8 +72,9 @@ cargo run -p engine --example boids_render_flow -- --evidence
 
 The evidence output includes the canonical pass order, fixed-step contract,
 grid capacity counters, unsupported GPU timing diagnostics, CPU preflight
-timing, benchmark command, and resize pixel evidence for landscape, portrait,
-and square surfaces.
+timing, benchmark command, camera projection evidence for landscape, portrait,
+square, and extreme aspect surfaces, and resize pixel evidence proving sprite
+aspect reconstruction.
 
 Benchmarks:
 

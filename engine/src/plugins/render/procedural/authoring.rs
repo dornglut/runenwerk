@@ -4,7 +4,9 @@ use super::validation::{ProceduralValidationError, validate_procedural_pass};
 use crate::plugins::render::api::{
     PassParamBinding, RenderFlow, StorageArrayHandle, UniformHandle,
 };
-use crate::plugins::render::{GpuParams, IndirectDrawArgsBuffer, RenderResourceId};
+use crate::plugins::render::{
+    GpuParams, IndirectDrawArgsBuffer, RenderIndirectDrawArgsKind, RenderResourceId,
+};
 
 #[derive(Debug)]
 pub struct ProceduralPassBuilder {
@@ -19,6 +21,9 @@ pub(crate) enum ProceduralDrawSource {
     Direct,
     Indirect {
         args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
         byte_offset: u64,
     },
 }
@@ -111,6 +116,9 @@ impl ProceduralPassBuilder {
     ) -> Self {
         self.draw_source = ProceduralDrawSource::Indirect {
             args_buffer: *args_buffer.id(),
+            args_kind: T::ARGS_KIND,
+            args_element_count: args_buffer.len(),
+            args_element_size: T::BYTE_SIZE,
             byte_offset,
         };
         self

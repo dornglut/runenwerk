@@ -36,6 +36,29 @@ pub enum RenderShaderReference {
     RegistryHandle(ShaderHandle),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenderShaderConstant {
+    pub name: String,
+    pub value: i64,
+}
+
+impl RenderShaderConstant {
+    pub fn new(name: impl Into<String>, value: i64) -> Self {
+        Self {
+            name: name.into(),
+            value,
+        }
+    }
+
+    pub fn u32(name: impl Into<String>, value: u32) -> Self {
+        Self::new(name, i64::from(value))
+    }
+
+    pub fn i32(name: impl Into<String>, value: i32) -> Self {
+        Self::new(name, i64::from(value))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderVertexStepMode {
     Vertex,
@@ -179,20 +202,71 @@ pub enum RenderDrawSource {
     Direct,
     Indirect {
         args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
         byte_offset: u64,
     },
 }
 
 impl RenderDrawSource {
-    pub const fn indirect(args_buffer: RenderResourceId, byte_offset: u64) -> Self {
+    pub const fn indirect(
+        args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
+        byte_offset: u64,
+    ) -> Self {
         Self::Indirect {
             args_buffer,
+            args_kind,
+            args_element_count,
+            args_element_size,
             byte_offset,
         }
     }
 }
 
-pub trait IndirectDrawArgsBuffer: GpuParams {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RenderIndirectDrawArgsKind {
+    Draw,
+    DrawIndexed,
+}
+
+impl RenderIndirectDrawArgsKind {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Draw => "DrawIndirectArgs",
+            Self::DrawIndexed => "DrawIndexedIndirectArgs",
+        }
+    }
+}
+
+pub trait IndirectDrawArgsBuffer: GpuParams {
+    const ARGS_KIND: RenderIndirectDrawArgsKind;
+    const BYTE_SIZE: u64;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RenderFixedStepRegionId(u64);
+
+impl RenderFixedStepRegionId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenderFixedStepRegionMembership {
+    pub region_id: RenderFixedStepRegionId,
+    pub region_label: String,
+    pub max_substeps: u32,
+    pub iteration_uniform: RenderResourceId,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
 pub struct DrawIndirectArgs {
@@ -220,7 +294,10 @@ impl DrawIndirectArgs {
     }
 }
 
-impl IndirectDrawArgsBuffer for DrawIndirectArgs {}
+impl IndirectDrawArgsBuffer for DrawIndirectArgs {
+    const ARGS_KIND: RenderIndirectDrawArgsKind = RenderIndirectDrawArgsKind::Draw;
+    const BYTE_SIZE: u64 = Self::BYTE_SIZE;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
 pub struct DrawIndexedIndirectArgs {
@@ -251,7 +328,10 @@ impl DrawIndexedIndirectArgs {
     }
 }
 
-impl IndirectDrawArgsBuffer for DrawIndexedIndirectArgs {}
+impl IndirectDrawArgsBuffer for DrawIndexedIndirectArgs {
+    const ARGS_KIND: RenderIndirectDrawArgsKind = RenderIndirectDrawArgsKind::DrawIndexed;
+    const BYTE_SIZE: u64 = Self::BYTE_SIZE;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderDrawDescriptor {
@@ -292,6 +372,9 @@ impl RenderDrawDescriptor {
         vertex_count: u32,
         instance_count: u32,
         args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
         byte_offset: u64,
     ) -> Self {
         Self {
@@ -301,6 +384,9 @@ impl RenderDrawDescriptor {
             first_instance: 0,
             source: RenderDrawSource::Indirect {
                 args_buffer,
+                args_kind,
+                args_element_count,
+                args_element_size,
                 byte_offset,
             },
         }
@@ -312,6 +398,9 @@ impl RenderDrawDescriptor {
         first_vertex: u32,
         first_instance: u32,
         args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
         byte_offset: u64,
     ) -> Self {
         Self {
@@ -321,6 +410,9 @@ impl RenderDrawDescriptor {
             first_instance,
             source: RenderDrawSource::Indirect {
                 args_buffer,
+                args_kind,
+                args_element_count,
+                args_element_size,
                 byte_offset,
             },
         }
@@ -336,6 +428,7 @@ pub struct RenderPassNode {
     pub feature_id: Option<RenderFeatureId>,
     pub shape_intent: RenderPassShapeIntent,
     pub shader: Option<RenderShaderReference>,
+    pub shader_constants: Vec<RenderShaderConstant>,
     pub reads: Vec<RenderResourceId>,
     pub writes: Vec<RenderResourceId>,
     pub depends_on: Vec<RenderPassId>,
@@ -354,6 +447,8 @@ pub struct RenderPassNode {
     pub raster_state: RenderRasterState,
     pub draw: Option<RenderDrawDescriptor>,
     pub uniform_bindings: Vec<PassParamBinding>,
+    pub fixed_step_region: Option<RenderFixedStepRegionMembership>,
+    pub fixed_step_iteration_uniforms: Vec<RenderResourceId>,
 }
 
 impl RenderPassNode {
@@ -370,6 +465,7 @@ impl RenderPassNode {
             feature_id: None,
             shape_intent: RenderPassShapeIntent::Default,
             shader: None,
+            shader_constants: Vec::new(),
             reads: Vec::new(),
             writes: Vec::new(),
             depends_on: Vec::new(),
@@ -388,6 +484,8 @@ impl RenderPassNode {
             raster_state: RenderRasterState::default(),
             draw: None,
             uniform_bindings: Vec::new(),
+            fixed_step_region: None,
+            fixed_step_iteration_uniforms: Vec::new(),
         }
     }
 }

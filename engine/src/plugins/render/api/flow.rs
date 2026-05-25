@@ -1,8 +1,8 @@
 use crate::plugins::render::api::{
     BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, DoubleBufferHandle,
     FullscreenPassBuilder, GraphicsPassBuilder, ParamProjectionError, PassUniformProjection,
-    PresentPassBuilder, ProjectedUniformSet, StorageArrayHandle, UniformHandle,
-    project_uniform_bindings_for_pass,
+    PresentPassBuilder, ProjectedUniformSet, RenderFixedStepIterationUniform, StorageArrayHandle,
+    UniformHandle, project_uniform_bindings_for_pass,
 };
 use crate::plugins::render::procedural::{
     ProceduralPassBuilder, ProceduralPassDescriptor, ProceduralValidationError,
@@ -10,11 +10,14 @@ use crate::plugins::render::procedural::{
 };
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
-    FlowValidationReport, GpuParams, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
-    RenderPassId, RenderPassIdSequence, RenderPassNode, RenderResourceDescriptor, RenderResourceId,
-    RenderResourceIdSequence, RenderTargetAliasKind, RenderTextureTargetFormat,
-    validate_flow_graph,
+    FlowValidationReport, GpuParams, GpuPrimitiveDispatchPlan, GpuPrimitiveDispatchResource,
+    GpuPrimitiveExecutionPlan, GpuPrimitiveTemporaryStorageKind, GpuPrimitiveValidationError,
+    RenderFixedStepRegionId, RenderFixedStepRegionMembership, RenderFlowGraph, RenderFlowId,
+    RenderFlowValidationError, RenderPassId, RenderPassIdSequence, RenderPassKind, RenderPassNode,
+    RenderResourceDescriptor, RenderResourceId, RenderResourceIdSequence, RenderShaderReference,
+    RenderTargetAliasKind, RenderTextureTargetFormat, U32ScanElement, validate_flow_graph,
 };
+use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -37,6 +40,7 @@ pub struct RenderFlow {
     ping_pong_storage: BTreeMap<String, PingPongStorageRegistration>,
     next_pass_id: RenderPassIdSequence,
     next_resource_id: RenderResourceIdSequence,
+    next_fixed_step_region_id: u64,
 }
 
 impl RenderFlow {
@@ -52,6 +56,7 @@ impl RenderFlow {
             ping_pong_storage: BTreeMap::new(),
             next_pass_id: RenderPassIdSequence::default(),
             next_resource_id: RenderResourceIdSequence::default(),
+            next_fixed_step_region_id: 1,
         }
     }
 
@@ -198,6 +203,79 @@ impl RenderFlow {
         descriptor: ProceduralPassDescriptor,
     ) -> Result<ProceduralPassBuilder, ProceduralValidationError> {
         ProceduralPassBuilder::new(self, descriptor)
+    }
+
+    pub fn gpu_primitive_plan(
+        self,
+        plan: &GpuPrimitiveExecutionPlan,
+    ) -> Result<Self, GpuPrimitiveValidationError> {
+        let dispatch_plan = plan.dispatch_plan()?;
+        Ok(self.append_gpu_primitive_dispatch_plan(dispatch_plan))
+    }
+
+    pub fn fixed_step_region<I, S>(
+        mut self,
+        label: impl Into<String>,
+        max_substeps: u32,
+        pass_labels: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let label = label.into();
+        assert!(
+            max_substeps > 0,
+            "fixed-step region '{}' must allow at least one substep",
+            label
+        );
+        self.graph.resources.add_state_resource::<FixedTimeConfig>();
+        self.graph.resources.add_state_resource::<FixedTimeState>();
+        self.graph.resources.add_state_resource::<CatchupBudget>();
+
+        let iteration_uniform = self.register_uniform_buffer::<RenderFixedStepIterationUniform>(
+            format!("{label}.fixed_step_iteration"),
+        );
+        let region_id = RenderFixedStepRegionId::new(self.next_fixed_step_region_id);
+        self.next_fixed_step_region_id = self.next_fixed_step_region_id.saturating_add(1);
+        let membership = RenderFixedStepRegionMembership {
+            region_id,
+            region_label: label.clone(),
+            max_substeps,
+            iteration_uniform,
+        };
+        let pass_ids = pass_labels
+            .into_iter()
+            .map(|pass_label| {
+                let pass_label = pass_label.as_ref();
+                self.resolve_pass_id(pass_label).unwrap_or_else(|| {
+                    panic!(
+                        "pass label '{}' is not registered in flow '{}'",
+                        pass_label,
+                        self.label()
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            !pass_ids.is_empty(),
+            "fixed-step region '{}' must include at least one pass",
+            label
+        );
+
+        for pass_id in pass_ids {
+            let pass = self
+                .graph
+                .passes
+                .passes
+                .iter_mut()
+                .find(|pass| pass.id == pass_id)
+                .expect("resolved pass should exist in flow graph");
+            pass.fixed_step_region = Some(membership.clone());
+            push_unique_resource_id(&mut pass.fixed_step_iteration_uniforms, iteration_uniform);
+        }
+
+        self
     }
 
     pub fn copy_pass(self, label: impl Into<String>) -> CopyPassBuilder {
@@ -541,6 +619,68 @@ impl RenderFlow {
             self.graph.add_resource(descriptor);
         }
     }
+
+    fn append_gpu_primitive_dispatch_plan(mut self, plan: GpuPrimitiveDispatchPlan) -> Self {
+        let mut temporary_resources = BTreeMap::<String, RenderResourceId>::new();
+        for temporary in plan.temporary_storage {
+            let id = match temporary.kind {
+                GpuPrimitiveTemporaryStorageKind::U32ScanElement => self
+                    .register_storage_array::<U32ScanElement>(
+                        temporary.label.clone(),
+                        temporary.element_count,
+                    ),
+            };
+            temporary_resources.insert(temporary.label, id);
+        }
+
+        for stage in plan.stages {
+            let (pass_id, pass_label) = self.allocate_pass(stage.label);
+            let mut pass = RenderPassNode::new(pass_id, pass_label, RenderPassKind::Compute);
+            pass.shader = Some(RenderShaderReference::AssetPath(
+                stage.shader_asset.to_string(),
+            ));
+            pass.shader_constants = stage.constants;
+            pass.compute_dispatch =
+                Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(stage.dispatch));
+            for read in stage.reads {
+                let resource_id =
+                    resolve_gpu_primitive_dispatch_resource(read, &temporary_resources);
+                push_unique_resource_id(&mut pass.reads, resource_id);
+            }
+            for write in stage.writes {
+                let resource_id =
+                    resolve_gpu_primitive_dispatch_resource(write, &temporary_resources);
+                push_unique_resource_id(&mut pass.writes, resource_id);
+            }
+            for dependency_label in stage.depends_on {
+                let dependency = self
+                    .resolve_pass_id(dependency_label.as_str())
+                    .expect("gpu primitive dispatch stage dependency should already be allocated");
+                push_unique_resource_id(&mut pass.depends_on, dependency);
+            }
+            self = self.push_pass(pass);
+        }
+
+        self
+    }
+}
+
+fn resolve_gpu_primitive_dispatch_resource(
+    resource: GpuPrimitiveDispatchResource,
+    temporary_resources: &BTreeMap<String, RenderResourceId>,
+) -> RenderResourceId {
+    match resource {
+        GpuPrimitiveDispatchResource::Existing(resource_id) => resource_id,
+        GpuPrimitiveDispatchResource::Temporary(label) => *temporary_resources
+            .get(label.as_str())
+            .expect("gpu primitive temporary resource should be registered before pass lowering"),
+    }
+}
+
+fn push_unique_resource_id<T: PartialEq + Copy>(resources: &mut Vec<T>, resource: T) {
+    if !resources.contains(&resource) {
+        resources.push(resource);
+    }
 }
 
 #[cfg(test)]
@@ -548,9 +688,8 @@ mod tests {
     use super::*;
     use crate::plugins::render::{
         CompiledDrawSource, CompiledPassDescriptor, DrawIndirectArgs, GpuStorage, GpuUniform,
-        RenderFlowValidationIssue, RenderPassKind, RenderTextureFormatPolicy,
-        RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
-        RenderVertexFormat, compile_flow_plan,
+        RenderFlowValidationIssue, RenderTextureFormatPolicy, RenderTextureSizePolicy,
+        RenderTextureTargetFormat, RenderVertexBufferLayout, RenderVertexFormat, compile_flow_plan,
     };
 
     #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -637,6 +776,79 @@ mod tests {
                 CompiledPassDescriptor::Present(_),
             ]
         ));
+    }
+
+    #[test]
+    fn fixed_step_region_compiles_graph_owned_repeat_metadata() {
+        let (flow, cells) = RenderFlow::new("test.fixed")
+            .with_state::<TestState>()
+            .storage_array::<TestCell>("test.cells", 4);
+        let flow = flow
+            .compute_pass("test.step.a")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells.clone())
+            .dispatch_from_state(TestState::dispatch)
+            .finish()
+            .compute_pass("test.step.b")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells)
+            .dispatch_from_state(TestState::dispatch)
+            .depends_on("test.step.a")
+            .finish()
+            .fixed_step_region("test.simulation", 4, ["test.step.a", "test.step.b"])
+            .validate()
+            .expect("fixed-step region should validate");
+
+        let plan = compile_flow_plan(&flow).expect("fixed-step flow should compile");
+        assert_eq!(plan.execution.fixed_step_regions.len(), 1);
+        let region = &plan.execution.fixed_step_regions[0];
+        assert_eq!(region.region_label, "test.simulation");
+        assert_eq!(region.max_substeps, 4);
+        assert_eq!(region.pass_ids.len(), 2);
+
+        for pass in &plan.execution.passes {
+            let crate::plugins::render::CompiledPassExecutionPlan::Compute(pass) = pass else {
+                panic!("test flow should only compile compute passes");
+            };
+            assert!(
+                pass.bindings
+                    .uniform_order
+                    .contains(&region.iteration_uniform)
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_step_region_rejects_interleaved_pass_order() {
+        let (flow, cells) = RenderFlow::new("test.fixed.interleaved")
+            .with_state::<TestState>()
+            .storage_array::<TestCell>("test.cells", 4);
+        let err = flow
+            .compute_pass("test.step.a")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells.clone())
+            .dispatch_from_state(TestState::dispatch)
+            .finish()
+            .compute_pass("test.outside")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells.clone())
+            .dispatch_from_state(TestState::dispatch)
+            .depends_on("test.step.a")
+            .finish()
+            .compute_pass("test.step.b")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells)
+            .dispatch_from_state(TestState::dispatch)
+            .depends_on("test.outside")
+            .finish()
+            .fixed_step_region("test.simulation", 4, ["test.step.a", "test.step.b"])
+            .validation_report()
+            .expect_err("interleaved repeat region must be rejected");
+
+        assert!(err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::FixedStepRegionPassesNotContiguous { .. }
+        )));
     }
 
     #[test]

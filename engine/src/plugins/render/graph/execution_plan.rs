@@ -6,11 +6,13 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
-    RenderDrawDescriptor, RenderDrawSource, RenderPassId, RenderPrimitiveTopology,
-    RenderRasterState, RenderResourceDescriptor, RenderResourceId, RenderShaderReference,
-    RenderTargetAliasKind, RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderDrawDescriptor, RenderDrawSource, RenderFixedStepRegionId, RenderIndirectDrawArgsKind,
+    RenderPassId, RenderPrimitiveTopology, RenderRasterState, RenderResourceDescriptor,
+    RenderResourceId, RenderShaderConstant, RenderShaderReference, RenderTargetAliasKind,
+    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 
@@ -18,12 +20,22 @@ use std::hash::{Hash, Hasher};
 pub struct CompiledFlowExecutionPlan {
     pub required_state_types: Vec<CompiledStateRequirement>,
     pub passes: Vec<CompiledPassExecutionPlan>,
+    pub fixed_step_regions: Vec<CompiledFixedStepRegion>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompiledStateRequirement {
     pub type_id: TypeId,
     pub type_name: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompiledFixedStepRegion {
+    pub region_id: RenderFixedStepRegionId,
+    pub region_label: String,
+    pub max_substeps: u32,
+    pub iteration_uniform: RenderResourceId,
+    pub pass_ids: Vec<RenderPassId>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +54,7 @@ pub struct CompiledComputeExecutionPlan {
     pub order_index: usize,
     pub feature_id: Option<RenderFeatureId>,
     pub shader: Option<RenderShaderReference>,
+    pub shader_constants: Vec<RenderShaderConstant>,
     pub view_mask: CompiledViewMask,
     pub bindings: CompiledPassBindings,
     pub dispatch: Option<CompiledDispatchPlan>,
@@ -204,6 +217,9 @@ pub enum CompiledDrawSource {
     Direct,
     Indirect {
         args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
         byte_offset: u64,
     },
 }
@@ -280,11 +296,35 @@ pub fn compile_execution_plan(
         .iter()
         .map(|pass| compile_pass_execution(pass, resources))
         .collect();
+    let fixed_step_regions = compile_fixed_step_regions(pass_order);
 
     CompiledFlowExecutionPlan {
         required_state_types,
         passes,
+        fixed_step_regions,
     }
+}
+
+fn compile_fixed_step_regions(
+    pass_order: &[CompiledPassDescriptor],
+) -> Vec<CompiledFixedStepRegion> {
+    let mut regions = BTreeMap::<RenderFixedStepRegionId, CompiledFixedStepRegion>::new();
+    for pass in pass_order {
+        let Some(region) = pass.node().fixed_step_region.as_ref() else {
+            continue;
+        };
+        let entry = regions
+            .entry(region.region_id)
+            .or_insert_with(|| CompiledFixedStepRegion {
+                region_id: region.region_id,
+                region_label: region.region_label.clone(),
+                max_substeps: region.max_substeps,
+                iteration_uniform: region.iteration_uniform,
+                pass_ids: Vec::new(),
+            });
+        entry.pass_ids.push(pass.pass_id());
+    }
+    regions.into_values().collect()
 }
 
 fn compile_pass_execution(
@@ -304,6 +344,7 @@ fn compile_pass_execution(
                 order_index,
                 feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
+                shader_constants: node.shader_constants.clone(),
                 view_mask: compile_view_mask(node),
                 bindings,
                 dispatch: compile_dispatch_plan(node),
@@ -450,6 +491,17 @@ fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> Co
         });
     }
 
+    for resource in &node.fixed_step_iteration_uniforms {
+        bind_group
+            .entries
+            .push(CompiledBindingEntry::UniformBuffer {
+                resource: *resource,
+            });
+        if seen_uniforms.insert(*resource) {
+            uniform_order.push(*resource);
+        }
+    }
+
     CompiledPassBindings {
         bind_group,
         uniform_order,
@@ -575,9 +627,15 @@ fn compile_draw_plan(draw: RenderDrawDescriptor) -> CompiledDrawPlan {
             RenderDrawSource::Direct => CompiledDrawSource::Direct,
             RenderDrawSource::Indirect {
                 args_buffer,
+                args_kind,
+                args_element_count,
+                args_element_size,
                 byte_offset,
             } => CompiledDrawSource::Indirect {
                 args_buffer,
+                args_kind,
+                args_element_count,
+                args_element_size,
                 byte_offset,
             },
         },

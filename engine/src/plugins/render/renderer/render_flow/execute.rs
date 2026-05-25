@@ -133,7 +133,22 @@ impl Renderer {
                             runtime_resources,
                         )?;
 
-                        for pass in &flow.execution.passes {
+                        let scheduled_passes =
+                            schedule_invocation_passes(flow, &invocation.inputs)?;
+                        for scheduled_pass in scheduled_passes {
+                            if let Some(iteration) = scheduled_pass.fixed_step_iteration {
+                                self.upload_fixed_step_iteration_uniform(
+                                    device,
+                                    queue,
+                                    invocation.invocation_id.0.as_str(),
+                                    runtime_resources,
+                                    iteration.region,
+                                    iteration
+                                        .schedule
+                                        .with_substep_index(iteration.substep_index),
+                                )?;
+                            }
+                            let pass = scheduled_pass.pass;
                             if !self.pass_targets_active_view(
                                 pass,
                                 view.view_id.as_str(),
@@ -433,6 +448,35 @@ impl Renderer {
             queue.write_buffer(&runtime_buffer.buffer, 0, bytes);
         }
 
+        Ok(())
+    }
+
+    fn upload_fixed_step_iteration_uniform(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        invocation_id: &str,
+        runtime_resources: &mut FlowRuntimeResources,
+        region: &CompiledFixedStepRegion,
+        uniform: RenderFixedStepIterationUniform,
+    ) -> Result<()> {
+        let bytes = uniform.to_uniform_bytes();
+        let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
+            device,
+            invocation_id,
+            region.iteration_uniform,
+            bytes.len() as u64,
+        )?;
+        if bytes.len() as u64 > runtime_buffer.size {
+            bail!(
+                "fixed-step iteration uniform upload for region '{}' in invocation '{}' writes {} bytes but runtime buffer size is {}",
+                region.region_label,
+                invocation_id,
+                bytes.len(),
+                runtime_buffer.size
+            );
+        }
+        queue.write_buffer(&runtime_buffer.buffer, 0, &bytes);
         Ok(())
     }
 
@@ -816,19 +860,143 @@ fn gpu_timing_pass_capacity(
     compiled_flows
         .iter()
         .map(|flow| {
-            let invocation_count = prepared_frame
+            prepared_frame
                 .flow_invocations_for_flow(flow.flow_id)
-                .count()
-                .max(1);
-            let timestamped_pass_count = flow
-                .execution
-                .passes
-                .iter()
-                .filter(|pass| pass_supports_gpu_timestamp_writes(pass))
-                .count();
-            invocation_count.saturating_mul(timestamped_pass_count)
+                .map(|invocation| {
+                    scheduled_timestamped_pass_count(flow, &invocation.inputs).unwrap_or_else(
+                        || {
+                            flow.execution
+                                .passes
+                                .iter()
+                                .filter(|pass| pass_supports_gpu_timestamp_writes(pass))
+                                .count()
+                        },
+                    )
+                })
+                .sum::<usize>()
         })
         .sum()
+}
+
+#[derive(Clone, Copy)]
+struct ScheduledFixedStepIteration<'a> {
+    region: &'a CompiledFixedStepRegion,
+    schedule: RenderFixedStepIterationUniform,
+    substep_index: u32,
+}
+
+#[derive(Clone, Copy)]
+struct ScheduledCompiledPass<'a> {
+    pass: &'a CompiledPassExecutionPlan,
+    fixed_step_iteration: Option<ScheduledFixedStepIteration<'a>>,
+}
+
+fn schedule_invocation_passes<'a>(
+    flow: &'a CompiledRenderFlowPlan,
+    flow_inputs: &PreparedFlowInputs,
+) -> Result<Vec<ScheduledCompiledPass<'a>>> {
+    let mut scheduled = Vec::<ScheduledCompiledPass<'a>>::new();
+    let mut consumed_region_passes = BTreeSet::<RenderPassId>::new();
+
+    for pass in &flow.execution.passes {
+        let pass_id = execution_pass_id(pass);
+        if consumed_region_passes.contains(&pass_id) {
+            continue;
+        }
+
+        if let Some(region) = fixed_step_region_starting_at(flow, pass_id) {
+            let schedule = fixed_step_schedule_for_region(region, flow_inputs)?;
+            for substep_index in 0..schedule.submitted_substeps {
+                for region_pass_id in &region.pass_ids {
+                    let region_pass =
+                        compiled_pass_by_id(flow, *region_pass_id).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "fixed-step region '{}' references missing compiled pass '{}'",
+                                region.region_label,
+                                region_pass_id
+                            )
+                        })?;
+                    scheduled.push(ScheduledCompiledPass {
+                        pass: region_pass,
+                        fixed_step_iteration: Some(ScheduledFixedStepIteration {
+                            region,
+                            schedule,
+                            substep_index,
+                        }),
+                    });
+                }
+            }
+            consumed_region_passes.extend(region.pass_ids.iter().copied());
+        } else {
+            scheduled.push(ScheduledCompiledPass {
+                pass,
+                fixed_step_iteration: None,
+            });
+        }
+    }
+
+    Ok(scheduled)
+}
+
+fn scheduled_timestamped_pass_count(
+    flow: &CompiledRenderFlowPlan,
+    flow_inputs: &PreparedFlowInputs,
+) -> Option<usize> {
+    schedule_invocation_passes(flow, flow_inputs)
+        .ok()
+        .map(|passes| {
+            passes
+                .iter()
+                .filter(|scheduled| pass_supports_gpu_timestamp_writes(scheduled.pass))
+                .count()
+        })
+}
+
+fn fixed_step_region_starting_at(
+    flow: &CompiledRenderFlowPlan,
+    pass_id: RenderPassId,
+) -> Option<&CompiledFixedStepRegion> {
+    flow.execution
+        .fixed_step_regions
+        .iter()
+        .find(|region| region.pass_ids.first().copied() == Some(pass_id))
+}
+
+fn fixed_step_schedule_for_region(
+    region: &CompiledFixedStepRegion,
+    flow_inputs: &PreparedFlowInputs,
+) -> Result<RenderFixedStepIterationUniform> {
+    let bytes = flow_inputs
+        .projected_uniform_bytes
+        .get(&region.iteration_uniform)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "fixed-step region '{}' is missing prepared iteration uniform '{}'",
+                region.region_label,
+                region.iteration_uniform
+            )
+        })?;
+    let mut schedule =
+        RenderFixedStepIterationUniform::from_uniform_bytes(bytes).ok_or_else(|| {
+            anyhow::anyhow!(
+                "fixed-step region '{}' prepared iteration uniform '{}' has invalid byte shape",
+                region.region_label,
+                region.iteration_uniform
+            )
+        })?;
+    schedule.submitted_substeps = schedule.submitted_substeps.min(region.max_substeps);
+    schedule.max_substeps = region.max_substeps;
+    Ok(schedule)
+}
+
+fn compiled_pass_by_id(
+    flow: &CompiledRenderFlowPlan,
+    pass_id: RenderPassId,
+) -> Option<&CompiledPassExecutionPlan> {
+    flow.execution
+        .passes
+        .iter()
+        .find(|pass| execution_pass_id(pass) == pass_id)
 }
 
 fn pass_supports_gpu_timestamp_writes(pass: &CompiledPassExecutionPlan) -> bool {
@@ -873,4 +1041,132 @@ fn gpu_timing_diagnostic_evidence_for_pass(
         pass_kind,
         diagnostic,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::render::{GpuStorage, GpuUniform, RenderFlow, compile_flow_plan};
+
+    #[derive(Debug, Clone, Copy, GpuStorage)]
+    struct TestCell {
+        value: u32,
+    }
+
+    #[derive(Debug, Clone, Copy, GpuUniform)]
+    struct TestParams {
+        value: u32,
+    }
+
+    #[derive(Debug, Clone, ecs::Resource)]
+    struct TestState;
+
+    impl TestState {
+        fn params(&self) -> TestParams {
+            TestParams { value: 1 }
+        }
+
+        fn dispatch(&self) -> [u32; 3] {
+            [1, 1, 1]
+        }
+    }
+
+    fn fixed_step_test_plan() -> CompiledRenderFlowPlan {
+        let (flow, cells) = RenderFlow::new("fixed.step.schedule")
+            .with_state::<TestState>()
+            .storage_array::<TestCell>("cells", 4);
+        let flow = flow
+            .compute_pass("step.a")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells.clone())
+            .dispatch_from_state(TestState::dispatch)
+            .finish()
+            .compute_pass("step.b")
+            .uniform_from_state(TestState::params)
+            .bind_storage(cells)
+            .dispatch_from_state(TestState::dispatch)
+            .depends_on("step.a")
+            .finish()
+            .fixed_step_region("simulation", 4, ["step.a", "step.b"])
+            .validate()
+            .expect("fixed-step test flow should validate");
+        compile_flow_plan(&flow).expect("fixed-step test flow should compile")
+    }
+
+    fn inputs_for_substeps(
+        plan: &CompiledRenderFlowPlan,
+        submitted_substeps: u32,
+    ) -> PreparedFlowInputs {
+        let mut inputs = PreparedFlowInputs::default();
+        for pass in &plan.execution.passes {
+            if let CompiledPassExecutionPlan::Compute(pass) = pass {
+                inputs
+                    .projected_dispatch_workgroups
+                    .insert(pass.pass_id, [1, 1, 1]);
+                for uniform_id in &pass.bindings.uniform_order {
+                    inputs
+                        .projected_uniform_bytes
+                        .entry(*uniform_id)
+                        .or_insert_with(|| vec![0; 16]);
+                }
+            }
+        }
+        let region = plan
+            .execution
+            .fixed_step_regions
+            .first()
+            .expect("test plan should compile fixed-step region");
+        inputs.projected_uniform_bytes.insert(
+            region.iteration_uniform,
+            RenderFixedStepIterationUniform::new(
+                0,
+                submitted_substeps,
+                region.max_substeps,
+                0,
+                1.0 / 60.0,
+                0.0,
+            )
+            .to_uniform_bytes(),
+        );
+        inputs
+    }
+
+    fn scheduled_pass_ids(
+        plan: &CompiledRenderFlowPlan,
+        submitted_substeps: u32,
+    ) -> Vec<RenderPassId> {
+        let inputs = inputs_for_substeps(plan, submitted_substeps);
+        schedule_invocation_passes(plan, &inputs)
+            .expect("fixed-step schedule should expand")
+            .into_iter()
+            .map(|scheduled| execution_pass_id(scheduled.pass))
+            .collect()
+    }
+
+    #[test]
+    fn fixed_step_scheduler_expands_zero_one_and_many_substeps() {
+        let plan = fixed_step_test_plan();
+        let region = &plan.execution.fixed_step_regions[0];
+
+        assert!(scheduled_pass_ids(&plan, 0).is_empty());
+        assert_eq!(scheduled_pass_ids(&plan, 1), region.pass_ids);
+
+        let many = scheduled_pass_ids(&plan, 3);
+        assert_eq!(many.len(), region.pass_ids.len() * 3);
+        assert_eq!(&many[0..2], region.pass_ids.as_slice());
+        assert_eq!(&many[2..4], region.pass_ids.as_slice());
+        assert_eq!(&many[4..6], region.pass_ids.as_slice());
+    }
+
+    #[test]
+    fn fixed_step_scheduler_clamps_to_region_max_substeps() {
+        let plan = fixed_step_test_plan();
+        let region = &plan.execution.fixed_step_regions[0];
+        let scheduled = scheduled_pass_ids(&plan, 99);
+
+        assert_eq!(
+            scheduled.len(),
+            region.pass_ids.len() * region.max_substeps as usize
+        );
+    }
 }

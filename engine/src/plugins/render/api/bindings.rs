@@ -1,6 +1,7 @@
 use crate::plugins::render::graph::{RenderPassNode, ResourceGraph};
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
-use crate::plugins::render::{GpuParams, RenderPassId, RenderResourceId};
+use crate::plugins::render::{GpuParams, GpuUniform, RenderPassId, RenderResourceId};
+use bytemuck::{Pod, Zeroable};
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
@@ -13,6 +14,93 @@ pub struct ProjectedUniformBuffer {
     pub params_type_name: &'static str,
     pub bytes: Vec<u8>,
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
+pub struct RenderFixedStepIterationUniformRaw {
+    pub substep_index: u32,
+    pub submitted_substeps: u32,
+    pub max_substeps: u32,
+    pub saturated_frames_low: u32,
+    pub fixed_dt_seconds: f32,
+    pub accumulator_seconds: f32,
+    pub reserved0: f32,
+    pub reserved1: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RenderFixedStepIterationUniform {
+    pub substep_index: u32,
+    pub submitted_substeps: u32,
+    pub max_substeps: u32,
+    pub saturated_frames_low: u32,
+    pub fixed_dt_seconds: f32,
+    pub accumulator_seconds: f32,
+}
+
+impl RenderFixedStepIterationUniform {
+    pub const fn new(
+        substep_index: u32,
+        submitted_substeps: u32,
+        max_substeps: u32,
+        saturated_frames: u64,
+        fixed_dt_seconds: f32,
+        accumulator_seconds: f32,
+    ) -> Self {
+        Self {
+            substep_index,
+            submitted_substeps,
+            max_substeps,
+            saturated_frames_low: saturated_frames as u32,
+            fixed_dt_seconds,
+            accumulator_seconds,
+        }
+    }
+
+    pub fn with_substep_index(self, substep_index: u32) -> Self {
+        Self {
+            substep_index,
+            ..self
+        }
+    }
+
+    pub fn to_uniform_bytes(self) -> Vec<u8> {
+        let raw = self.to_gpu();
+        bytemuck::bytes_of(&raw).to_vec()
+    }
+
+    pub fn from_uniform_bytes(bytes: &[u8]) -> Option<Self> {
+        bytemuck::try_from_bytes::<RenderFixedStepIterationUniformRaw>(bytes)
+            .ok()
+            .map(|raw| Self {
+                substep_index: raw.substep_index,
+                submitted_substeps: raw.submitted_substeps,
+                max_substeps: raw.max_substeps,
+                saturated_frames_low: raw.saturated_frames_low,
+                fixed_dt_seconds: raw.fixed_dt_seconds,
+                accumulator_seconds: raw.accumulator_seconds,
+            })
+    }
+}
+
+impl GpuParams for RenderFixedStepIterationUniform {
+    type Raw = RenderFixedStepIterationUniformRaw;
+
+    fn to_gpu(&self) -> Self::Raw {
+        Self::Raw {
+            substep_index: self.substep_index,
+            submitted_substeps: self.submitted_substeps,
+            max_substeps: self.max_substeps,
+            saturated_frames_low: self.saturated_frames_low,
+            fixed_dt_seconds: self.fixed_dt_seconds,
+            accumulator_seconds: self.accumulator_seconds,
+            reserved0: 0.0,
+            reserved1: 0.0,
+        }
+    }
+}
+
+impl GpuUniform for RenderFixedStepIterationUniform {}
 
 #[derive(Debug, Clone)]
 pub struct PassUniformProjection {

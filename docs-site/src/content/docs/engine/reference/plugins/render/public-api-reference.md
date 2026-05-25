@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-22
+last_reviewed: 2026-05-25
 ---
 
 # Render Public API Reference
@@ -50,6 +50,12 @@ These are the APIs most users should start with.
   - `ProceduralRenderPolicy`
   - `ProceduralTargetDescriptor`
   - `ProceduralSdf2dImpostorDescriptor`
+  - `ProceduralCamera2d`
+  - `ProceduralCamera2dAspectPolicy`
+  - `ProceduralCamera2dFixedAxis`
+  - `ProceduralCamera2dUniform`
+  - `ProceduralSpriteSizing`
+  - `ProceduralCamera2dError`
   - `ProceduralValidationError`
 - handles and IDs:
   - `PassHandle`
@@ -355,9 +361,10 @@ Contract:
 - Pass-shape guards reject fullscreen-style generated graphics multiplied by instance count unless `GraphicsPassBuilder::allow_instanced_fullscreen(...)` records explicit bounded author intent. Diagnostics use `FullscreenInstancedWork`, `AmbiguousProceduralShape`, and `InvalidPassShapeIntent`.
 - `RenderFlow::procedural_pass(...)` builds normal graphics passes from renderer-owned procedural descriptors. Mesh sprites, quad sprites, and local 2D SDF impostors use typed storage-backed instance buffers and explicit render policy; the API derives renderer execution resources only and does not own product truth or residency policy.
 - `RenderFlow::procedural_pass_builder(...)` is the advanced procedural authoring path for per-pass uniforms, surface-aware uniforms, and typed indirect draw arguments. It lowers internally to graphics and does not expose `GraphicsPassBuilder` as the public procedural extension surface.
+- `ProceduralCamera2d`, `ProceduralCamera2dAspectPolicy`, `ProceduralCamera2dUniform`, and `ProceduralSpriteSizing` define reusable renderer procedural projection contracts. Producers own camera intent; renderer procedural code derives world-to-clip projection and sprite uniform data from that intent and the target surface size. `PreparedViewFrame` remains render target/view/history metadata and does not own camera truth.
 - `GraphicsPassBuilder::draw(...)` and `draw_with_offsets(...)` remain the direct draw paths. `draw_indirect(...)` and `draw_indirect_with_offsets(...)` author explicit indirect draw sources using typed renderer-owned argument buffers.
-- `engine/examples/boids_render_flow` is the canonical procedural-consumer example: compute updates storage-backed boids through a bounded wrapping uniform grid, a publish pass makes the current buffer available as instance data, `boids.draw` is built with `ProceduralPassDescriptor::local_sdf_2d_impostors(...)` through the procedural builder, and the compose shader shades one aspect-correct local impostor without a fullscreen fragment loop over the whole boid set.
-- `cargo run -p engine --example boids_render_flow -- --evidence` prints the canonical boids production-evidence report, including pass order, local instance geometry, fixed-step evidence, typed GPU-timing diagnostic evidence, CPU timing fields, and the renderer benchmark command. `cargo bench -p engine --bench render_flow_planning` includes procedural-boids planning and preflight cases.
+- `engine/examples/boids_render_flow` is the canonical procedural-consumer example: compute updates storage-backed boids through a bounded wrapping uniform grid, a publish pass makes the current buffer available as instance data, `boids.draw` is built with `ProceduralPassDescriptor::local_sdf_2d_impostors(...)` through the procedural builder, and the compose shader projects world positions through `ProceduralCamera2dUniform` without a fullscreen fragment loop over the whole boid set.
+- `cargo run -p engine --example boids_render_flow -- --evidence` prints the canonical boids production-evidence report, including pass order, local instance geometry, graph fixed-step evidence, procedural camera projection evidence, typed GPU-timing diagnostic evidence, CPU timing fields, and the renderer benchmark command. `cargo bench -p engine --bench render_flow_planning` includes procedural-boids planning and preflight cases.
 - Runtime submit uses cached strict prepared-frame preflight by default. Full structural preflight runs on cold cache, structural key changes, failures, or strict mode; cheap runtime guards still run each frame for flow/view/invocation existence, pass-shape hazards, dispatch validity, uniform presence, and history conflicts.
 - `RenderPreflightValidationConfigResource` can force strict full preflight every frame. `RUNENWERK_RENDER_STRICT_PREFLIGHT=1` is the local/test override.
 - The compiler/preflight diagnostics are render execution diagnostics. They do not own product truth, freshness, authority, fallback legality, rebuild policy, product dependency truth, or residency policy.

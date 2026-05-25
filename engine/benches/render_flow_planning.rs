@@ -242,7 +242,7 @@ fn run_warm_cached_preflight(
 fn run_prefix_scan_primitive_plan(element_count: u32) {
     let (flow, input) = RenderFlow::new("bench.population.scan")
         .storage_array::<U32ScanElement>("bench.population.scan.input", u64::from(element_count));
-    let (_flow, output) = flow
+    let (flow, output) = flow
         .storage_array::<U32ScanElement>("bench.population.scan.output", u64::from(element_count));
     let scan = U32PrefixScanDescriptor::new(
         "bench.population.scan",
@@ -260,6 +260,18 @@ fn run_prefix_scan_primitive_plan(element_count: u32) {
 
     black_box(plan.step_count());
     black_box(plan.resource_accesses().len());
+    let dispatch = plan
+        .dispatch_plan()
+        .expect("valid scan primitive dispatch plan");
+    black_box(dispatch.stage_count());
+    black_box(dispatch.temporary_storage_count());
+    let flow = flow
+        .gpu_primitive_plan(&plan)
+        .expect("valid primitive dispatch should append to flow")
+        .validate()
+        .expect("primitive dispatch flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("primitive dispatch flow should compile");
+    black_box(compiled.execution.passes.len());
 }
 
 fn run_scan_compaction_indirect_args_plan(element_count: u32) {
@@ -276,7 +288,7 @@ fn run_scan_compaction_indirect_args_plan(element_count: u32) {
         "bench.population.primitives.output_indices",
         u64::from(element_count),
     );
-    let (_flow, draw_args) =
+    let (flow, draw_args) =
         flow.storage_array::<DrawIndirectArgs>("bench.population.primitives.draw_args", 1);
 
     let scan = U32PrefixScanDescriptor::new(
@@ -315,6 +327,16 @@ fn run_scan_compaction_indirect_args_plan(element_count: u32) {
 
     black_box(plan.step_count());
     black_box(plan.resource_accesses().len());
+    let dispatch = plan.dispatch_plan().expect("valid primitive dispatch plan");
+    black_box(dispatch.stage_count());
+    black_box(dispatch.temporary_storage_count());
+    let flow = flow
+        .gpu_primitive_plan(&plan)
+        .expect("valid primitive dispatch should append to flow")
+        .validate()
+        .expect("primitive dispatch flow should validate");
+    let compiled = compile_flow_plan(&flow).expect("primitive dispatch flow should compile");
+    black_box(compiled.execution.passes.len());
 }
 
 fn run_bounded_grid_build_plan(agent_count: u32) {

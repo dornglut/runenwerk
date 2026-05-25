@@ -6468,3 +6468,538 @@ items:
   fitness_function_requirement: Product visual evidence tests/examples plus particle, world visual, runtime inspect, docs,
     roadmap, production, and planning validation.
   ownership_mode: Complicated-subsystem renderer platform enabling stream-aligned product visual evidence.
+- id: WR-089
+  title: Renderer Procedural Population Hardening Doctrine And Track Activation
+  diagram_title: Renderer population hardening doctrine
+  alias: RENDERPOPHARDEN
+  lane: Render planning
+  dependency_level: L4
+  gate: Doctrine activation before hardening implementation
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 2
+  confidence: 0.8
+  expected_score: 5.6
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-088
+  write_scopes:
+  - docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-hardening/proposal.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-renderer-procedural-population-behavior-authoring/proposal.md
+  - docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
+  validations:
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
+  current_decision: Completed at bounded_contract as a doctrine-only hardening track activation slice.
+  current_call: Archive WR-089 as completed PM-RENDER-POP-HARDEN-001 evidence; implementation remains split into WR-090,
+    WR-091, WR-092, WR-101, and WR-093.
+  first_move: Verify WR-089 closeout evidence before promoting WR-090.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Indirect draw runtime hardening remains WR-090.
+  - Primitive shader dispatch remains WR-091.
+  - Graph catch-up scheduling remains WR-092.
+  - Procedural camera and view projection remains WR-101.
+  - Evidence, benchmarks, docs, and track closeout remain WR-093.
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
+  diagram_call:
+  - hardening doctrine
+  - split WR-090 WR-091 WR-092 WR-101
+  - WR-093 closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Hardening implementation followed the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-089 followed the bounded doctrine and track-activation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-089-renderer-procedural-population-hardening-doctrine-and-track-activation/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-089 completion requires completed doctrine activation closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR for doctrine activation while renderer remains the derived execution-data owner; ADR required before
+    moving product, gameplay, world, or streaming source truth into renderer contracts.
+  fitness_function_requirement: Production, roadmap, docs, and planning validators; later slices add focused render-flow,
+    GPU primitive, catch-up runtime, and procedural camera projection tests.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-090
+  title: Indirect Draw Contract Hardening
+  diagram_title: Indirect draw hardening
+  alias: RENDERPOPINDIRECT
+  lane: Render hardening
+  dependency_level: L4
+  gate: After hardening doctrine activation
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-089
+  write_scopes:
+  - engine/src/plugins/render/api/passes.rs
+  - engine/src/plugins/render/api/handles.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/graph/validation.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/src/plugins/render/gpu_primitives/draw_args.rs
+  - engine/tests/procedural_instance.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-090-indirect-draw-contract-hardening/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-090-indirect-draw-contract-hardening/closeout.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-090-indirect-draw-contract-hardening/closeout.md
+  current_decision: Completed at bounded_contract with typed indexed/non-indexed indirect draw validation, byte-offset bounds,
+    and fail-closed CPU-side indirect offset rejection.
+  current_call: Archive WR-090 as completed PM-RENDER-POP-HARDEN-002 evidence.
+  first_move: Verify WR-090 closeout evidence before promoting WR-091.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Reusable primitive shader dispatch remains WR-091.
+  - Graph catch-up scheduling remains WR-092.
+  - Procedural camera and view projection remains WR-101.
+  - Evidence, benchmarks, docs, and track closeout remain WR-093.
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-090-indirect-draw-contract-hardening/closeout.md
+  diagram_call:
+  - typed indirect draw
+  - fail closed
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Indirect draw hardening followed the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-090-indirect-draw-contract-hardening/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-090 implementation followed the accepted indirect draw hardening contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-090-indirect-draw-contract-hardening/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-090 completion requires completed indirect draw hardening closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR while the work keeps draw-source validation renderer-owned; ADR required before changing product
+    truth, fallback legality, or cross-crate renderer ABI ownership.
+  fitness_function_requirement: Render-flow graph validation tests for direct, indexed direct, indirect, indexed indirect,
+    wrong args type, misaligned offset, and out-of-bounds offset.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-091
+  title: Reusable GPU Primitive Shader Dispatch
+  diagram_title: GPU primitive shader dispatch
+  alias: RENDERPOPPRIMDISPATCH
+  lane: Render hardening
+  dependency_level: L4
+  gate: After indirect draw hardening
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.8
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-090
+  write_scopes:
+  - engine/src/plugins/render/gpu_primitives
+  - engine/src/plugins/render/api/flow.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/benches/render_flow_planning.rs
+  - assets/shaders
+  - docs-site/src/content/docs/reports/implementation-plans/wr-091-reusable-gpu-primitive-shader-dispatch/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-091-reusable-gpu-primitive-shader-dispatch/closeout.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine gpu_primitives
+  - cargo test -p engine render_flow
+  - cargo test -p engine procedural
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-091-reusable-gpu-primitive-shader-dispatch/closeout.md
+  current_decision: Completed at runtime_proven for reusable renderer-owned primitive dispatch, hierarchical prefix scan lowering,
+    scatter/compaction, and indirect draw args generation through normal render-flow compute passes.
+  current_call: Archive WR-091 as completed PM-RENDER-POP-HARDEN-003 evidence.
+  first_move: Verify WR-091 closeout evidence before promoting WR-092.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Graph catch-up scheduling remains WR-092.
+  - Procedural camera and view projection remains WR-101.
+  - Evidence, public docs, benchmark reporting, and track closeout remain WR-093.
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-091-reusable-gpu-primitive-shader-dispatch/closeout.md
+  diagram_call:
+  - renderer kernels
+  - hierarchical scan
+  - runtime proof
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Primitive dispatch followed the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-091-reusable-gpu-primitive-shader-dispatch/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-091 implementation followed the accepted primitive dispatch contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-091-reusable-gpu-primitive-shader-dispatch/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-091 completion requires completed primitive dispatch closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR while primitives remain renderer-owned derived execution; ADR required before adding hidden CPU
+    fallback or moving product/world truth into primitive execution.
+  fitness_function_requirement: GPU primitive tests proving hierarchical prefix scan, counter reset, scatter/compaction, indirect
+    args generation, typed diagnostics, WGSL parsing, and non-boids runtime dispatch.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-092
+  title: Fixed Step Graph Catch Up Scheduling
+  diagram_title: Fixed step graph catch up
+  alias: RENDERPOPCATCHUP
+  lane: Render hardening
+  dependency_level: L4
+  gate: After primitive shader dispatch
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.6
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-091
+  write_scopes:
+  - engine/src/runtime/fixed_time.rs
+  - engine/src/plugins/render/api/flow.rs
+  - engine/src/plugins/render/api/passes.rs
+  - engine/src/plugins/render/api/bindings.rs
+  - engine/src/plugins/render/graph/pass_graph.rs
+  - engine/src/plugins/render/graph/execution_plan.rs
+  - engine/src/plugins/render/graph/validation.rs
+  - engine/src/plugins/render/graph/prepared_validation.rs
+  - engine/src/plugins/render/runtime/frame_prepare.rs
+  - engine/src/plugins/render/renderer/render_flow/execute.rs
+  - engine/src/plugins/render/renderer/render_flow/execute_passes.rs
+  - engine/src/plugins/render/renderer/render_flow/runtime_resources.rs
+  - engine/src/plugins/render/renderer/render_flow/runtime_resources/realize.rs
+  - engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs
+  - engine/examples/boids_render_flow/rendering/state.rs
+  - engine/examples/boids_render_flow/rendering/evidence.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-092-fixed-step-graph-catch-up-scheduling/closeout.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine render_flow
+  - cargo test -p engine fixed_step_region
+  - cargo test -p engine fixed_step_scheduler
+  - cargo test -p engine procedural
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-092-fixed-step-graph-catch-up-scheduling/closeout.md
+  current_decision: Completed at runtime_proven for renderer graph-owned fixed-step repeated pass scheduling, runtime fixed-time
+    source consumption, iteration uniform projection, and boids graph-submitted substep evidence.
+  current_call: Archive WR-092 as completed PM-RENDER-POP-HARDEN-004 evidence.
+  first_move: Verify WR-092 closeout evidence before promoting WR-101.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Procedural camera and view projection remains WR-101.
+  - Evidence, public docs, benchmark reporting, and track closeout remain WR-093.
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-092-fixed-step-graph-catch-up-scheduling/closeout.md
+  diagram_call:
+  - graph catch up
+  - bounded substeps
+  - fixed-time source
+  - iteration uniforms
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Fixed-step catch-up followed the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-092-fixed-step-graph-catch-up-scheduling/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-092 implementation followed the accepted graph catch-up scheduling contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-092-fixed-step-graph-catch-up-scheduling/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-092 completion requires completed fixed-step graph catch-up scheduling closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR because scheduling remains renderer graph execution policy and timing source truth stays in runtime
+    fixed-time resources; ADR required before renderer takes gameplay simulation source truth.
+  fitness_function_requirement: Render-flow tests and boids evidence proving deterministic 0..N submitted substeps, bounded
+    max-substep clamping, invalid repeat rejection, iteration-scoped uniform projection, and no boids-local timing loop.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-101
+  title: Procedural Camera And View Projection
+  diagram_title: Procedural camera projection
+  alias: RENDERPOPCAMERA
+  lane: Render hardening
+  dependency_level: L4
+  gate: After graph catch-up scheduling
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.6
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-092
+  write_scopes:
+  - engine/src/plugins/render/procedural
+  - engine/src/plugins/render/api/flow.rs
+  - engine/examples/boids_render_flow/rendering/state.rs
+  - engine/examples/boids_render_flow/rendering/graph.rs
+  - engine/examples/boids_render_flow/rendering/evidence.rs
+  - assets/shaders/boids_compute.wgsl
+  - assets/shaders/boids_compose.wgsl
+  - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-101-procedural-camera-and-view-projection/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-101-procedural-camera-and-view-projection/closeout.md
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine procedural
+  - cargo test -p engine render_flow
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-101-procedural-camera-and-view-projection/closeout.md
+  current_decision: Completed at runtime_proven for reusable renderer procedural camera projection, producer-owned camera
+    intent, fill-viewport aspect correctness, equal projected world x/y scale, and boids camera projection evidence.
+  current_call: Archive WR-101 as completed PM-RENDER-POP-HARDEN-005 evidence.
+  first_move: Verify WR-101 closeout evidence before promoting WR-093.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Evidence, public docs, benchmark reporting, and track closeout remain WR-093.
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-101-procedural-camera-and-view-projection/closeout.md
+  diagram_call:
+  - procedural camera
+  - fill viewport
+  - equal world scale
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Procedural camera projection followed the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-101-procedural-camera-and-view-projection/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-101 implementation followed the accepted procedural camera projection contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-101-procedural-camera-and-view-projection/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-101 completion requires completed procedural camera projection closeout evidence.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR because camera projection remains renderer-owned derived data and camera intent stays producer-owned;
+    ADR required before moving camera source truth into renderer or PreparedViewFrame.
+  fitness_function_requirement: Procedural camera and boids evidence tests proving landscape, portrait, square, and extreme
+    aspect projection, equal projected world x/y scale, no viewport-owned simulation truth, and no boids-only projection
+    shortcut.
+  ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-093
+  title: Procedural Population Hardening Evidence Benchmarks Docs And Closeout
+  diagram_title: Population hardening closeout
+  alias: RENDERPOPHARDENCLOSE
+  lane: Render evidence
+  dependency_level: L4
+  gate: After procedural camera projection
+  planning_state: completed
+  priority: P0
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 3
+  confidence: 0.8
+  expected_score: 3.7
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-101
+  write_scopes:
+  - engine/benches/render_flow_planning.rs
+  - docs-site/src/content/docs/engine/examples/boids-render-flow/README.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md
+  - docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/plan.md
+  - docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
+  - docs-site/src/content/docs/reports/closeouts/pt-render-procedural-population-hardening-runtime-proven/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - cargo fmt --all -- --check
+  - cargo test -p engine render_flow
+  - cargo test -p engine gpu_primitives
+  - cargo test -p engine procedural
+  - cargo test -p engine --example boids_render_flow
+  - cargo run -p engine --example boids_render_flow -- --evidence
+  - cargo bench -p engine --bench render_flow_planning
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  next_evidence: docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
+  current_decision: Completed at runtime_proven for procedural population hardening evidence, benchmark coverage, public
+    docs, and track closeout across indirect validation, GPU primitive dispatch, fixed-step graph scheduling, and
+    procedural camera projection.
+  current_call: Archive WR-093 as completed PM-RENDER-POP-HARDEN-006 and track closeout evidence.
+  first_move: Use the WR-093 closeout and PT closeout before marking the hardening track completed.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Spatial hash and chunked unbounded populations remain separate intake/design work.
+  - Behavior authoring and richer boids dynamics remain separate deferred intake work.
+  - Local Criterion regressions in several generic render-flow and temporal baselines should be re-profiled if repeated,
+    but the WR-093 procedural population and evidence benchmark cases were stable or improved.
+  - Final no-gap renderer verification remains PT-RENDER-PERFECTION.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
+  diagram_call:
+  - runtime evidence
+  - close hardening track
+  - camera proof
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/renderer-procedural-population-hardening-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Hardening closeout followed the active renderer population hardening doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-093 implementation followed the accepted evidence and closeout contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/wr-093-procedural-population-hardening-evidence-benchmarks-docs-and-closeout/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-093 completion requires completed evidence, benchmark, docs, and closeout proof.
+  ddd_owner: engine render plugin
+  adr_requirement: No ADR because closeout did not change source-truth ownership, dependency direction, fallback legality,
+    or renderer ABI semantics.
+  fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, camera projection, boids evidence,
+    benchmark, docs, production, roadmap, and planning validation suite.
+  ownership_mode: Complicated-subsystem renderer owner.

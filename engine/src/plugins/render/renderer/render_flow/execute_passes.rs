@@ -3,8 +3,9 @@ use crate::plugins::render::graph::{
     CompiledDrawBufferPlan, CompiledDrawSource, CompiledResourceRef,
 };
 use crate::plugins::render::{
-    RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderPrimitiveTopology, RenderRasterState,
-    RenderVertexFormat, RenderVertexStepMode,
+    RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderIndirectDrawArgsKind,
+    RenderPrimitiveTopology, RenderRasterState, RenderShaderConstant, RenderVertexFormat,
+    RenderVertexStepMode,
 };
 use crate::plugins::render::{RenderPassId, RenderResourceId};
 
@@ -148,6 +149,15 @@ impl Renderer {
             DEFAULT_COMPUTE_SHADER,
             "builtin:compute",
         );
+        let shader_constant_values = pass
+            .shader_constants
+            .iter()
+            .map(|constant| (constant.name.as_str(), constant.value as f64))
+            .collect::<Vec<_>>();
+        let shader_pipeline_identity = shader_pipeline_identity_with_constants(
+            shader.pipeline_identity.as_str(),
+            &pass.shader_constants,
+        );
         let dispatch = flow_inputs
             .projected_dispatch_workgroups
             .get(&pass.pass_id)
@@ -177,7 +187,7 @@ impl Renderer {
             pass.pass_id,
             FlowPassKind::Compute,
             pass.feature_id,
-            shader.pipeline_identity.as_str(),
+            shader_pipeline_identity.as_str(),
             shader.revision,
             &pass.bindings,
             ShaderStages::COMPUTE,
@@ -218,7 +228,10 @@ impl Renderer {
                         layout: pipeline_layout.as_ref(),
                         module: &shader_module,
                         entry_point: Some("cs_main"),
-                        compilation_options: PipelineCompilationOptions::default(),
+                        compilation_options: PipelineCompilationOptions {
+                            constants: shader_constant_values.as_slice(),
+                            ..PipelineCompilationOptions::default()
+                        },
                         cache: None,
                     })
                 });
@@ -701,7 +714,9 @@ impl Renderer {
         let indirect_buffer = match draw.source {
             CompiledDrawSource::Indirect {
                 args_buffer,
+                args_kind,
                 byte_offset,
+                ..
             } => {
                 let resource = plan
                     .draw_buffers
@@ -717,6 +732,7 @@ impl Renderer {
                     })?;
                 Some((
                     runtime_resources.resolve_storage_buffer_ref(plan.pass_id, resource)?,
+                    args_kind,
                     byte_offset,
                 ))
             }
@@ -727,11 +743,23 @@ impl Renderer {
         let instance_range = draw.first_instance..draw.first_instance + draw.instance_count;
 
         match (index_buffer.is_some(), indirect_buffer) {
-            (true, Some((indirect, byte_offset))) => {
+            (true, Some((indirect, RenderIndirectDrawArgsKind::DrawIndexed, byte_offset))) => {
                 pass.draw_indexed_indirect(indirect.buffer, byte_offset)
             }
-            (false, Some((indirect, byte_offset))) => {
+            (false, Some((indirect, RenderIndirectDrawArgsKind::Draw, byte_offset))) => {
                 pass.draw_indirect(indirect.buffer, byte_offset)
+            }
+            (true, Some((_indirect, RenderIndirectDrawArgsKind::Draw, _byte_offset))) => {
+                bail!(
+                    "graphics pass '{}' indexed indirect draw uses non-indexed indirect args",
+                    plan.pass_id
+                );
+            }
+            (false, Some((_indirect, RenderIndirectDrawArgsKind::DrawIndexed, _byte_offset))) => {
+                bail!(
+                    "graphics pass '{}' non-indexed indirect draw uses indexed indirect args",
+                    plan.pass_id
+                );
             }
             (true, None) => pass.draw_indexed(vertex_range, 0, instance_range),
             (false, None) => pass.draw(vertex_range, instance_range),
@@ -1283,6 +1311,27 @@ fn render_vertex_step_mode_to_wgpu(value: RenderVertexStepMode) -> VertexStepMod
         RenderVertexStepMode::Vertex => VertexStepMode::Vertex,
         RenderVertexStepMode::Instance => VertexStepMode::Instance,
     }
+}
+
+fn shader_pipeline_identity_with_constants(
+    base: &str,
+    constants: &[RenderShaderConstant],
+) -> String {
+    if constants.is_empty() {
+        return base.to_string();
+    }
+
+    let mut ordered = constants
+        .iter()
+        .map(|constant| (constant.name.as_str(), constant.value))
+        .collect::<Vec<_>>();
+    ordered.sort_by(|left, right| left.0.cmp(right.0));
+    let signature = ordered
+        .into_iter()
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{base}|constants:{signature}")
 }
 
 fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {

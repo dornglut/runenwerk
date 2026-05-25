@@ -83,26 +83,6 @@ package "PT-RENDER-SCALE Renderer Scale Residency And GPU Driven Visibility Plat
 
 }
 
-package "PT-RENDER-PROCEDURAL-POPULATION Renderer Procedural Population Platform" {
-  component "PT-RENDER-PROCEDURAL-POPULATION completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_RENDER_PROCEDURAL_POPULATION_COMPLETED <<completed>>
-
-}
-
-package "PT-RENDER-PROCEDURAL-POPULATION-HARDENING Renderer Procedural Population Hardening Platform" {
-  component "PM-RENDER-POP-HARDEN-001 Hardening Doctrine And Track Activation\nkind=design\nstate=active\nWR=WR-089" as PM_RENDER_POP_HARDEN_001 <<active>>
-
-  component "PM-RENDER-POP-HARDEN-002 Indirect Draw Contract Hardening\nkind=hardening\nstate=ready_next\nWR=WR-090" as PM_RENDER_POP_HARDEN_002 <<ready_next>>
-
-  component "PM-RENDER-POP-HARDEN-003 Reusable GPU Primitive Shader Dispatch\nkind=hardening\nstate=ready_next\nWR=WR-091" as PM_RENDER_POP_HARDEN_003 <<ready_next>>
-
-  component "PM-RENDER-POP-HARDEN-004 Fixed Step Graph Catch Up Scheduling\nkind=hardening\nstate=ready_next\nWR=WR-092" as PM_RENDER_POP_HARDEN_004 <<ready_next>>
-
-  component "PM-RENDER-POP-HARDEN-005 Procedural Camera And View Projection\nkind=hardening\nstate=ready_next\nWR=WR-101" as PM_RENDER_POP_HARDEN_005 <<ready_next>>
-
-  component "PM-RENDER-POP-HARDEN-006 Hardening Evidence Benchmarks Docs And Closeout\nkind=hardening\nstate=ready_next\nWR=WR-093" as PM_RENDER_POP_HARDEN_006 <<ready_next>>
-
-}
-
 package "PT-RENDER-SDF Sparse SDF World Rendering And Raymarch Acceleration Platform" {
   component "PT-RENDER-SDF completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_RENDER_SDF_COMPLETED <<completed>>
 
@@ -214,12 +194,6 @@ PM_ECS_FABRIC_003 -down-> PM_ECS_FABRIC_005 : production prerequisite
 PM_ECS_FABRIC_004 -down-> PM_ECS_FABRIC_005 : production prerequisite
 PM_ECS_FABRIC_005 -down-> PM_ECS_FABRIC_006 : production prerequisite
 PT_WB_CAP_COMPLETED -down-> PM_WB_CAP_005 : completed prerequisite
-PT_RENDER_PROCEDURAL_POPULATION_COMPLETED -down-> PM_RENDER_POP_HARDEN_001 : PT-RENDER-PROCEDURAL-POPULATION completed prerequisite
-PM_RENDER_POP_HARDEN_001 -down-> PM_RENDER_POP_HARDEN_002 : production prerequisite
-PM_RENDER_POP_HARDEN_002 -down-> PM_RENDER_POP_HARDEN_003 : production prerequisite
-PM_RENDER_POP_HARDEN_003 -down-> PM_RENDER_POP_HARDEN_004 : production prerequisite
-PM_RENDER_POP_HARDEN_004 -down-> PM_RENDER_POP_HARDEN_005 : production prerequisite
-PM_RENDER_POP_HARDEN_005 -down-> PM_RENDER_POP_HARDEN_006 : production prerequisite
 PT_RENDER_SDF_COMPLETED -down-> PM_RENDER_SDF_RUNTIME_001 : PT-RENDER-SDF completed prerequisite
 PM_RENDER_SDF_RUNTIME_001 -down-> PM_RENDER_SDF_RUNTIME_002 : production prerequisite
 PT_RENDER_SDF_COMPLETED -down-> PM_RENDER_SDF_RUNTIME_002 : PT-RENDER-SDF completed prerequisite

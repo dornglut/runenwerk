@@ -6,8 +6,9 @@ use engine::plugins::render::inspect::{
 use engine::plugins::render::{
     CompiledPassExecutionPlan, CompiledRenderFlowPlan, PreparedFlowInputs, PreparedFlowInvocation,
     PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot,
-    PreparedSurfaceInfo, PreparedViewFrame, RenderBackendCapabilityProfile, RenderPassId,
-    compile_flow_plan_checked, preflight_prepared_render_frame,
+    PreparedSurfaceInfo, PreparedViewFrame, RenderBackendCapabilityProfile,
+    RenderFixedStepIterationUniform, RenderPassId, compile_flow_plan_checked,
+    preflight_prepared_render_frame,
 };
 use std::time::Instant;
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -25,6 +26,8 @@ pub(crate) struct BoidsProductionEvidenceReport {
     pub sorted_index_capacity: u32,
     pub fixed_step_seconds: f32,
     pub submitted_step_count: u32,
+    pub graph_fixed_step_regions: Vec<BoidsGraphFixedStepEvidence>,
+    pub camera_projection_evidence: Vec<BoidsCameraProjectionEvidence>,
     pub aspect_correct_impostors: bool,
     pub smoothed_visual_heading: bool,
     pub silent_grid_overflow: bool,
@@ -47,6 +50,26 @@ pub(crate) struct BoidsProductionPassEvidence {
     pub local_instance_geometry: bool,
     pub vertex_count: Option<u32>,
     pub instance_count: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BoidsGraphFixedStepEvidence {
+    pub label: String,
+    pub max_substeps: u32,
+    pub submitted_substeps: u32,
+    pub pass_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BoidsCameraProjectionEvidence {
+    pub surface_size: (u32, u32),
+    pub visible_world_width: f32,
+    pub visible_world_height: f32,
+    pub pixels_per_world_x: f32,
+    pub pixels_per_world_y: f32,
+    pub world_scale_error: f32,
+    pub fill_viewport_aspect_error: f32,
+    pub center_clip_error: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -85,9 +108,10 @@ impl BoidsProductionEvidenceReport {
                 self.pass_count
             ),
             format!(
-                "simulation_contract=fixed_step fixed_dt_seconds={:.6} submitted_steps={} smoothed_visual_heading={} aspect_correct_impostors={} silent_grid_overflow={}",
+                "simulation_contract=fixed_step fixed_dt_seconds={:.6} submitted_steps={} graph_regions={} smoothed_visual_heading={} aspect_correct_impostors={} silent_grid_overflow={}",
                 self.fixed_step_seconds,
                 self.submitted_step_count,
+                self.graph_fixed_step_regions.len(),
                 self.smoothed_visual_heading,
                 self.aspect_correct_impostors,
                 self.silent_grid_overflow
@@ -111,6 +135,28 @@ impl BoidsProductionEvidenceReport {
                 pass.instance_count
                     .map(|value| value.to_string())
                     .unwrap_or_else(|| "n/a".to_string())
+            ));
+        }
+
+        for region in &self.graph_fixed_step_regions {
+            lines.push(format!(
+                "graph_fixed_step_region label={} max_substeps={} submitted_substeps={} pass_count={}",
+                region.label, region.max_substeps, region.submitted_substeps, region.pass_count
+            ));
+        }
+
+        for evidence in &self.camera_projection_evidence {
+            lines.push(format!(
+                "camera_projection_evidence surface={}x{} visible_world_width={:.6} visible_world_height={:.6} pixels_per_world_x={:.3} pixels_per_world_y={:.3} world_scale_error={:.6} fill_viewport_aspect_error={:.6} center_clip_error={:.6}",
+                evidence.surface_size.0,
+                evidence.surface_size.1,
+                evidence.visible_world_width,
+                evidence.visible_world_height,
+                evidence.pixels_per_world_x,
+                evidence.pixels_per_world_y,
+                evidence.world_scale_error,
+                evidence.fill_viewport_aspect_error,
+                evidence.center_clip_error
             ));
         }
 
@@ -161,9 +207,14 @@ pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceRepo
     let compiled = compile_flow_plan_checked(&flow, &profile)?;
     let inspection = inspect_compiled_render_flow_plan(&compiled);
     let passes = pass_evidence(&compiled);
+    let graph_fixed_step_regions = fixed_step_region_evidence(&compiled);
     let gpu_timing_evidence = unsupported_gpu_timing_evidence(&compiled, &passes);
     let cpu_timing_evidence = measure_cpu_timing_evidence(&compiled, &profile)?;
+    let camera_projection_evidence = camera_projection_evidence(&state);
     let resize_pixel_evidence = resize_pixel_evidence(&state);
+    let camera_projection_is_valid = camera_projection_evidence
+        .iter()
+        .all(|evidence| evidence.world_scale_error <= 0.001);
 
     Ok(BoidsProductionEvidenceReport {
         flow_label: inspection.flow_label,
@@ -172,10 +223,16 @@ pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceRepo
         grid_cell_count: state.grid_cell_count(),
         sorted_index_capacity: DEFAULT_BOID_COUNT,
         fixed_step_seconds: state.fixed_delta_seconds(),
-        submitted_step_count: state.submitted_step_count(),
+        submitted_step_count: graph_fixed_step_regions
+            .first()
+            .map(|region| region.submitted_substeps)
+            .unwrap_or_else(|| state.submitted_step_count()),
+        graph_fixed_step_regions,
+        camera_projection_evidence,
         aspect_correct_impostors: resize_pixel_evidence
             .iter()
-            .all(|evidence| evidence.aspect_error_px <= 0.01),
+            .all(|evidence| evidence.aspect_error_px <= 0.01)
+            && camera_projection_is_valid,
         smoothed_visual_heading: true,
         silent_grid_overflow: false,
         resize_pixel_evidence,
@@ -194,10 +251,45 @@ pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceRepo
 }
 
 fn resize_pixel_evidence(state: &BoidsRenderState) -> Vec<BoidsResizePixelEvidence> {
-    [(1600, 900), (900, 1600), (1024, 1024)]
+    projection_evidence_surfaces()
         .into_iter()
         .map(|surface_size| resize_pixel_evidence_for_surface(state, surface_size))
         .collect()
+}
+
+fn camera_projection_evidence(state: &BoidsRenderState) -> Vec<BoidsCameraProjectionEvidence> {
+    projection_evidence_surfaces()
+        .into_iter()
+        .map(|surface_size| camera_projection_evidence_for_surface(state, surface_size))
+        .collect()
+}
+
+fn projection_evidence_surfaces() -> [(u32, u32); 4] {
+    [(1600, 900), (900, 1600), (1024, 1024), (3200, 360)]
+}
+
+fn camera_projection_evidence_for_surface(
+    state: &BoidsRenderState,
+    surface_size: (u32, u32),
+) -> BoidsCameraProjectionEvidence {
+    let params = state.draw_params(surface_size);
+    let pixels_per_world_x = params.viewport[0] / params.visible_world[2];
+    let pixels_per_world_y = params.viewport[1] / params.visible_world[3];
+    let surface_aspect = params.viewport[0] / params.viewport[1];
+    let visible_world_aspect = params.visible_world[2] / params.visible_world[3];
+    let center_clip_x = params.visible_world[0] * params.world_to_clip[0] + params.world_to_clip[2];
+    let center_clip_y = params.visible_world[1] * params.world_to_clip[1] + params.world_to_clip[3];
+
+    BoidsCameraProjectionEvidence {
+        surface_size,
+        visible_world_width: params.visible_world[2],
+        visible_world_height: params.visible_world[3],
+        pixels_per_world_x,
+        pixels_per_world_y,
+        world_scale_error: (pixels_per_world_x - pixels_per_world_y).abs(),
+        fill_viewport_aspect_error: (visible_world_aspect - surface_aspect).abs(),
+        center_clip_error: center_clip_x.abs().max(center_clip_y.abs()),
+    }
 }
 
 fn resize_pixel_evidence_for_surface(
@@ -205,13 +297,14 @@ fn resize_pixel_evidence_for_surface(
     surface_size: (u32, u32),
 ) -> BoidsResizePixelEvidence {
     let params = state.draw_params(surface_size);
-    let radius_px = params.sprite[0];
-    let sprite_width_px = radius_px * params.sprite[1] * 2.0;
-    let sprite_height_px = radius_px * params.sprite[2] * 2.0;
-    let clip_width = sprite_width_px * 2.0 * params.surface[2];
-    let clip_height = sprite_height_px * 2.0 * params.surface[3];
-    let reconstructed_width_px = clip_width * params.surface[0] * 0.5;
-    let reconstructed_height_px = clip_height * params.surface[1] * 0.5;
+    let sprite_width_world = params.sprite[0] * 2.0;
+    let sprite_height_world = params.sprite[1] * 2.0;
+    let sprite_width_px = sprite_width_world * params.viewport[0] / params.visible_world[2];
+    let sprite_height_px = sprite_height_world * params.viewport[1] / params.visible_world[3];
+    let clip_width = sprite_width_world * params.world_to_clip[0].abs();
+    let clip_height = sprite_height_world * params.world_to_clip[1].abs();
+    let reconstructed_width_px = clip_width * params.viewport[0] * 0.5;
+    let reconstructed_height_px = clip_height * params.viewport[1] * 0.5;
     let aspect_error_px = (reconstructed_width_px - sprite_width_px)
         .abs()
         .max((reconstructed_height_px - sprite_height_px).abs());
@@ -306,7 +399,30 @@ fn prepared_inputs_for_flow(compiled: &CompiledRenderFlowPlan) -> PreparedFlowIn
             | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {}
         }
     }
+    for region in &compiled.execution.fixed_step_regions {
+        let uniform =
+            RenderFixedStepIterationUniform::new(0, 2, region.max_substeps, 0, 1.0 / 60.0, 0.0);
+        inputs
+            .projected_uniform_bytes
+            .insert(region.iteration_uniform, uniform.to_uniform_bytes());
+    }
     inputs
+}
+
+fn fixed_step_region_evidence(
+    compiled: &CompiledRenderFlowPlan,
+) -> Vec<BoidsGraphFixedStepEvidence> {
+    compiled
+        .execution
+        .fixed_step_regions
+        .iter()
+        .map(|region| BoidsGraphFixedStepEvidence {
+            label: region.region_label.clone(),
+            max_substeps: region.max_substeps,
+            submitted_substeps: 2,
+            pass_count: region.pass_ids.len(),
+        })
+        .collect()
 }
 
 fn pass_evidence(compiled: &CompiledRenderFlowPlan) -> Vec<BoidsProductionPassEvidence> {
@@ -451,9 +567,20 @@ mod tests {
         assert_eq!(report.sorted_index_capacity, DEFAULT_BOID_COUNT);
         assert!(!report.silent_grid_overflow);
         assert_eq!(report.fixed_step_seconds, 1.0 / 60.0);
+        assert_eq!(report.submitted_step_count, 2);
+        assert_eq!(
+            report.graph_fixed_step_regions,
+            vec![BoidsGraphFixedStepEvidence {
+                label: "boids.fixed_step".to_string(),
+                max_substeps: 4,
+                submitted_substeps: 2,
+                pass_count: 8,
+            }]
+        );
         assert!(report.aspect_correct_impostors);
         assert!(report.smoothed_visual_heading);
-        assert_eq!(report.resize_pixel_evidence.len(), 3);
+        assert_eq!(report.resize_pixel_evidence.len(), 4);
+        assert_eq!(report.camera_projection_evidence.len(), 4);
         assert!(
             report
                 .resize_pixel_evidence
@@ -466,6 +593,17 @@ mod tests {
                 .iter()
                 .all(|evidence| evidence.aspect_error_px <= 0.01)
         );
+        assert!(
+            report
+                .camera_projection_evidence
+                .iter()
+                .any(|evidence| evidence.surface_size == (3200, 360))
+        );
+        assert!(report.camera_projection_evidence.iter().all(|evidence| {
+            evidence.world_scale_error <= 0.001
+                && evidence.fill_viewport_aspect_error <= 0.0001
+                && evidence.center_clip_error <= 0.0001
+        }));
         assert_eq!(
             report
                 .passes
@@ -539,6 +677,8 @@ mod tests {
 
         assert!(text.contains("boids_production_evidence flow=boids_render_flow"));
         assert!(text.contains("simulation_contract=fixed_step"));
+        assert!(text.contains("graph_fixed_step_region label=boids.fixed_step"));
+        assert!(text.contains("camera_projection_evidence surface=3200x360"));
         assert!(text.contains("aspect_correct_impostors=true"));
         assert!(text.contains("resize_pixel_evidence surface=900x1600"));
         assert!(text.contains("silent_grid_overflow=false"));

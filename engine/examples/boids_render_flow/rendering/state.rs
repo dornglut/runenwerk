@@ -1,9 +1,14 @@
-use engine::plugins::render::{GpuStorage, GpuUniform};
+use engine::plugins::render::{
+    GpuStorage, GpuUniform, ProceduralCamera2d, ProceduralCamera2dError, ProceduralSpriteSizing,
+};
 
 pub(crate) const DEFAULT_BOID_COUNT: u32 = 384;
 pub(crate) const DEFAULT_SIMULATION_FPS: f32 = 60.0;
 pub(crate) const DEFAULT_GRID_CELLS_X: u32 = 10;
 pub(crate) const DEFAULT_GRID_CELLS_Y: u32 = 10;
+pub(crate) const DEFAULT_WORLD_CENTER: [f32; 2] = [0.5, 0.5];
+pub(crate) const DEFAULT_VISIBLE_WORLD_HEIGHT: f32 = 1.0;
+pub(crate) const DEFAULT_SPRITE_HALF_EXTENTS_WORLD: [f32; 2] = [0.0084, 0.01575];
 
 const MODE_SEED: u32 = 0;
 const MODE_CLEAR_COUNTS: u32 = 1;
@@ -32,7 +37,9 @@ pub(crate) struct BoidsComputeParams {
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
 pub(crate) struct BoidsDrawParams {
-    pub surface: [f32; 4],
+    pub world_to_clip: [f32; 4],
+    pub viewport: [f32; 4],
+    pub visible_world: [f32; 4],
     pub sprite: [f32; 4],
 }
 
@@ -45,6 +52,8 @@ pub(crate) struct BoidsRenderState {
     fixed_delta_seconds: f32,
     last_frame_delta_seconds: f32,
     grid_cells: [u32; 2],
+    camera: ProceduralCamera2d,
+    sprite_sizing: ProceduralSpriteSizing,
 }
 
 impl Default for BoidsRenderState {
@@ -58,6 +67,14 @@ impl Default for BoidsRenderState {
             fixed_delta_seconds,
             last_frame_delta_seconds: fixed_delta_seconds,
             grid_cells: [DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y],
+            camera: ProceduralCamera2d::fill_viewport_vertical(
+                DEFAULT_WORLD_CENTER,
+                DEFAULT_VISIBLE_WORLD_HEIGHT,
+            ),
+            sprite_sizing: ProceduralSpriteSizing::world_units(
+                DEFAULT_SPRITE_HALF_EXTENTS_WORLD[0],
+                DEFAULT_SPRITE_HALF_EXTENTS_WORLD[1],
+            ),
         }
     }
 }
@@ -132,22 +149,22 @@ impl BoidsRenderState {
     }
 
     pub(crate) fn draw_params(&self, surface_size: (u32, u32)) -> BoidsDrawParams {
-        let surface_width = surface_size.0.max(1) as f32;
-        let surface_height = surface_size.1.max(1) as f32;
-        BoidsDrawParams {
-            surface: [
-                surface_width,
-                surface_height,
-                1.0 / surface_width,
-                1.0 / surface_height,
-            ],
-            sprite: [
-                10.5, // body radius in screen pixels
-                0.72, // half-width multiplier
-                1.35, // half-height multiplier
-                0.0,
-            ],
-        }
+        self.try_draw_params(surface_size)
+            .expect("boids draw params require a non-zero prepared surface")
+    }
+
+    pub(crate) fn try_draw_params(
+        &self,
+        surface_size: (u32, u32),
+    ) -> Result<BoidsDrawParams, ProceduralCamera2dError> {
+        let camera = self.camera.uniform_for_surface(surface_size)?;
+        let sprite = self.sprite_sizing.to_uniform_sprite(camera)?;
+        Ok(BoidsDrawParams {
+            world_to_clip: camera.world_to_clip,
+            viewport: camera.viewport,
+            visible_world: camera.visible_world,
+            sprite,
+        })
     }
 
     pub(crate) fn dispatch_workgroups(&self) -> [u32; 3] {
@@ -231,9 +248,30 @@ mod tests {
         let state = BoidsRenderState::default();
         let params = state.draw_params((1600, 900));
 
-        assert_eq!(params.surface[0], 1600.0);
-        assert_eq!(params.surface[1], 900.0);
+        assert_eq!(params.viewport[0], 1600.0);
+        assert_eq!(params.viewport[1], 900.0);
+        assert_eq!(params.visible_world[3], super::DEFAULT_VISIBLE_WORLD_HEIGHT);
         assert!(params.sprite[0] > 0.0);
+    }
+
+    #[test]
+    fn draw_params_project_equal_world_scale_across_surface_aspects() {
+        let state = BoidsRenderState::default();
+        for surface_size in [(1600, 900), (900, 1600), (1024, 1024), (3200, 360)] {
+            let params = state.draw_params(surface_size);
+            let pixels_per_world_x = params.viewport[0] / params.visible_world[2];
+            let pixels_per_world_y = params.viewport[1] / params.visible_world[3];
+            assert!(
+                (pixels_per_world_x - pixels_per_world_y).abs() <= 0.001,
+                "surface {surface_size:?} should preserve equal x/y world scale"
+            );
+        }
+    }
+
+    #[test]
+    fn draw_params_reject_empty_surface_instead_of_silent_fallback() {
+        let state = BoidsRenderState::default();
+        assert!(state.try_draw_params((0, 900)).is_err());
     }
 
     #[test]

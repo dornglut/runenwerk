@@ -142,6 +142,21 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .depends_on(simulate_neighbors.as_str())
         .finish();
 
+    let flow = flow.fixed_step_region(
+        "boids.fixed_step",
+        4,
+        [
+            "boids.seed_or_hold",
+            clear_counts.as_str(),
+            count_cells.as_str(),
+            scan_counts.as_str(),
+            reset_cursors.as_str(),
+            scatter_indices.as_str(),
+            simulate_neighbors.as_str(),
+            publish_draw.as_str(),
+        ],
+    );
+
     let flow = flow
         .procedural_pass_builder(
             ProceduralPassDescriptor::local_sdf_2d_impostors(
@@ -370,6 +385,8 @@ mod tests {
         assert!(shader.contains("@location(1) instance_velocity"));
         assert!(shader.contains("@location(2) instance_visual_heading"));
         assert!(shader.contains("var<uniform> draw_params"));
+        assert!(shader.contains("world_to_clip"));
+        assert!(shader.contains("visible_world"));
         assert!(!shader.contains("var<storage"));
         assert!(!shader.contains("for (var i"));
     }

@@ -77,9 +77,15 @@ pub(crate) fn lower_procedural_pass(
         ProceduralDrawSource::Direct => builder.draw(visual.vertex_count(), instance_count),
         ProceduralDrawSource::Indirect {
             args_buffer,
+            args_kind,
+            args_element_count,
+            args_element_size,
             byte_offset,
         } => builder.draw_indirect_resource(
             args_buffer,
+            args_kind,
+            args_element_count,
+            args_element_size,
             visual.vertex_count(),
             instance_count,
             byte_offset,

@@ -36,3 +36,11 @@ pub struct FixedTimeState {
     pub steps_ran_last_frame: u32,
     pub saturated_frames: u64,
 }
+
+impl FixedTimeState {
+    pub fn bounded_render_substeps(self, budget: CatchupBudget, region_max_substeps: u32) -> u32 {
+        self.steps_ran_last_frame
+            .min(budget.max_steps_per_frame)
+            .min(region_max_substeps)
+    }
+}

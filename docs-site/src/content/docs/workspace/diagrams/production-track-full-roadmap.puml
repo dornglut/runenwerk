@@ -140,17 +140,17 @@ package "PT-RENDER-PROCEDURAL-POPULATION Renderer Procedural Population Platform
 }
 
 package "PT-RENDER-PROCEDURAL-POPULATION-HARDENING Renderer Procedural Population Hardening Platform" {
-  component "PM-RENDER-POP-HARDEN-001 Hardening Doctrine And Track Activation\nkind=design\nstate=active\nWR=WR-089" as PM_RENDER_POP_HARDEN_001 <<active>>
+  component "PM-RENDER-POP-HARDEN-001 Hardening Doctrine And Track Activation\nkind=design\nstate=completed\nWR=WR-089" as PM_RENDER_POP_HARDEN_001 <<completed>>
 
-  component "PM-RENDER-POP-HARDEN-002 Indirect Draw Contract Hardening\nkind=hardening\nstate=ready_next\nWR=WR-090" as PM_RENDER_POP_HARDEN_002 <<ready_next>>
+  component "PM-RENDER-POP-HARDEN-002 Indirect Draw Contract Hardening\nkind=hardening\nstate=completed\nWR=WR-090" as PM_RENDER_POP_HARDEN_002 <<completed>>
 
-  component "PM-RENDER-POP-HARDEN-003 Reusable GPU Primitive Shader Dispatch\nkind=hardening\nstate=ready_next\nWR=WR-091" as PM_RENDER_POP_HARDEN_003 <<ready_next>>
+  component "PM-RENDER-POP-HARDEN-003 Reusable GPU Primitive Shader Dispatch\nkind=hardening\nstate=completed\nWR=WR-091" as PM_RENDER_POP_HARDEN_003 <<completed>>
 
-  component "PM-RENDER-POP-HARDEN-004 Fixed Step Graph Catch Up Scheduling\nkind=hardening\nstate=ready_next\nWR=WR-092" as PM_RENDER_POP_HARDEN_004 <<ready_next>>
+  component "PM-RENDER-POP-HARDEN-004 Fixed Step Graph Catch Up Scheduling\nkind=hardening\nstate=completed\nWR=WR-092" as PM_RENDER_POP_HARDEN_004 <<completed>>
 
-  component "PM-RENDER-POP-HARDEN-005 Procedural Camera And View Projection\nkind=hardening\nstate=ready_next\nWR=WR-101" as PM_RENDER_POP_HARDEN_005 <<ready_next>>
+  component "PM-RENDER-POP-HARDEN-005 Procedural Camera And View Projection\nkind=hardening\nstate=completed\nWR=WR-101" as PM_RENDER_POP_HARDEN_005 <<completed>>
 
-  component "PM-RENDER-POP-HARDEN-006 Hardening Evidence Benchmarks Docs And Closeout\nkind=hardening\nstate=ready_next\nWR=WR-093" as PM_RENDER_POP_HARDEN_006 <<ready_next>>
+  component "PM-RENDER-POP-HARDEN-006 Hardening Evidence Benchmarks Docs And Closeout\nkind=hardening\nstate=completed\nWR=WR-093" as PM_RENDER_POP_HARDEN_006 <<completed>>
 
 }
 
