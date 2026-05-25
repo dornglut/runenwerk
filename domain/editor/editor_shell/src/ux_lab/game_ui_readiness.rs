@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/game_ui_readiness.rs
-//! Purpose: Editor Story Lab evidence for future game-runtime UI compatibility seams.
+//! File: domain/editor/editor_shell/src/ux_lab/game_ui_readiness.rs
+//! Purpose: Editor UX Lab evidence for future game-runtime UI compatibility seams.
 
 use std::collections::BTreeSet;
 

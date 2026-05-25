@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/surface_wave.rs
-//! Purpose: Registered editor surface readiness evidence for the Editor UX Story Lab.
+//! File: domain/editor/editor_shell/src/ux_lab/surface_wave.rs
+//! Purpose: Registered editor surface readiness evidence for the Editor UX Lab.
 
 use crate::ToolSurfaceReadiness;
 use ui_surface::{SurfaceDefinition, SurfaceDefinitionId};

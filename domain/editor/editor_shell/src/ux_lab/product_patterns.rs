@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/product_patterns.rs
-//! Purpose: Editor UX Story Lab product-pattern evidence contracts.
+//! File: domain/editor/editor_shell/src/ux_lab/product_patterns.rs
+//! Purpose: Editor UX Lab product-pattern evidence contracts.
 
 use crate::{
     NumericInputConfig, TableColumn, TableRow, TreeRow, UiNode, UiNodeKind, VisibleWidgetState,
@@ -11,7 +11,7 @@ use ui_render_data::ProductSurfaceTextureBindingSource;
 use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
-pub const SHELL_PRODUCT_PATTERNS_STORY_ID: &str = "editor.shell.product_patterns.certified";
+pub const SHELL_PRODUCT_PATTERNS_SCENARIO_ID: &str = "editor.shell.product_patterns.certified";
 pub const SHELL_PRODUCT_PATTERNS_TARGET_PROFILE: &str = "editor.shell.patterns";
 
 pub const SHELL_PATTERNS_ROOT_WIDGET_ID: WidgetId = WidgetId(80_000);

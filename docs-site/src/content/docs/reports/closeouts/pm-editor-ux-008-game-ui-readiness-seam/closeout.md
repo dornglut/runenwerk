@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/active/game-runtime-ui-projection-and-hud-platform-design.md
 related_reports:
   - ../../implementation-plans/wr-118-game-ui-readiness-seam/plan.md
@@ -18,6 +18,8 @@ related_roadmaps:
 ---
 
 # PM-EDITOR-UX-008 Game UI Readiness Seam Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 

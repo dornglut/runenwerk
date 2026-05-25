@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../../design/active/editor-asset-pipeline-and-content-workflow-design.md
@@ -24,6 +24,8 @@ related_roadmaps:
 ---
 
 # PM-EDITOR-UX-005 Graph Canvas And Node Editor Productization Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 

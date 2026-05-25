@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
   - ../../../design/active/editor-asset-pipeline-and-content-workflow-design.md
@@ -61,7 +61,7 @@ Expected production outcome:
 - Roadmap row: `WR-115` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Active tool-suite/workbench doctrine:
   `docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md`.
 - Active procedural/SDF graph workflow doctrine:

@@ -1,5 +1,5 @@
-//! File: domain/ui/ui_widgets/src/story.rs
-//! Purpose: Generic primitive widget story adapters.
+//! File: domain/ui/ui_widgets/src/scenario.rs
+//! Purpose: Generic primitive widget scenario adapters.
 
 use crate::{
     NumericInputConfig, TableColumn, TableRow, TreeRow, UiNode, VisibleWidgetScanRequirement,
@@ -10,7 +10,7 @@ use ui_text::TextStyle;
 use ui_theme::ThemeTokens;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PrimitiveWidgetStoryKind {
+pub enum PrimitiveWidgetScenarioKind {
     Button,
     TextInput,
     Toggle,
@@ -22,19 +22,19 @@ pub enum PrimitiveWidgetStoryKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PrimitiveWidgetStory {
+pub struct PrimitiveWidgetScenario {
     pub id: &'static str,
     pub label: &'static str,
-    pub kind: PrimitiveWidgetStoryKind,
+    pub kind: PrimitiveWidgetScenarioKind,
     pub root: UiNode,
     pub scan_requirement: VisibleWidgetScanRequirement,
 }
 
-impl PrimitiveWidgetStory {
+impl PrimitiveWidgetScenario {
     fn new(
         id: &'static str,
         label: &'static str,
-        kind: PrimitiveWidgetStoryKind,
+        kind: PrimitiveWidgetScenarioKind,
         root: UiNode,
     ) -> Self {
         Self {
@@ -50,21 +50,21 @@ impl PrimitiveWidgetStory {
     }
 }
 
-pub fn primitive_widget_stories() -> Vec<PrimitiveWidgetStory> {
+pub fn primitive_widget_scenarios() -> Vec<PrimitiveWidgetScenario> {
     let style = TextStyle::default();
     let theme = ThemeTokens::default();
 
     vec![
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.button.default",
             "Button / Default",
-            PrimitiveWidgetStoryKind::Button,
+            PrimitiveWidgetScenarioKind::Button,
             button(WidgetId(10_001), "Apply", style.clone(), theme.clone()),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.text_input.default",
             "Text Input / Default",
-            PrimitiveWidgetStoryKind::TextInput,
+            PrimitiveWidgetScenarioKind::TextInput,
             text_input(
                 WidgetId(10_002),
                 "Player",
@@ -73,16 +73,16 @@ pub fn primitive_widget_stories() -> Vec<PrimitiveWidgetStory> {
                 theme.clone(),
             ),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.toggle.checked",
             "Toggle / Checked",
-            PrimitiveWidgetStoryKind::Toggle,
+            PrimitiveWidgetScenarioKind::Toggle,
             toggle(WidgetId(10_003), "Snap", true, style.clone(), theme.clone()),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.numeric_input.default",
             "Numeric Input / Default",
-            PrimitiveWidgetStoryKind::NumericInput,
+            PrimitiveWidgetScenarioKind::NumericInput,
             numeric_input(
                 WidgetId(10_004),
                 NumericInputConfig::new(1.0, 0.1, Some(0.0), Some(2.0), 2),
@@ -90,10 +90,10 @@ pub fn primitive_widget_stories() -> Vec<PrimitiveWidgetStory> {
                 theme.clone(),
             ),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.tabs.default",
             "Tabs / Default",
-            PrimitiveWidgetStoryKind::Tabs,
+            PrimitiveWidgetScenarioKind::Tabs,
             tabs(
                 WidgetId(10_005),
                 ["Layout", "Theme"],
@@ -102,10 +102,10 @@ pub fn primitive_widget_stories() -> Vec<PrimitiveWidgetStory> {
                 theme.clone(),
             ),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.select.default",
             "Select / Default",
-            PrimitiveWidgetStoryKind::Select,
+            PrimitiveWidgetScenarioKind::Select,
             select(
                 WidgetId(10_006),
                 ["Scene", "Material"],
@@ -115,10 +115,10 @@ pub fn primitive_widget_stories() -> Vec<PrimitiveWidgetStory> {
                 theme.clone(),
             ),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.table.default",
             "Table / Default",
-            PrimitiveWidgetStoryKind::Table,
+            PrimitiveWidgetScenarioKind::Table,
             table(
                 WidgetId(10_007),
                 [
@@ -131,10 +131,10 @@ pub fn primitive_widget_stories() -> Vec<PrimitiveWidgetStory> {
                 theme.clone(),
             ),
         ),
-        PrimitiveWidgetStory::new(
+        PrimitiveWidgetScenario::new(
             "ui.primitive.tree.default",
             "Tree / Default",
-            PrimitiveWidgetStoryKind::Tree,
+            PrimitiveWidgetScenarioKind::Tree,
             tree(
                 WidgetId(10_008),
                 [
@@ -153,17 +153,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn primitive_widget_stories_have_executable_roots() {
-        let stories = primitive_widget_stories();
+    fn primitive_widget_scenarios_have_executable_roots() {
+        let scenarios = primitive_widget_scenarios();
 
-        assert_eq!(stories.len(), 8);
-        assert!(stories.iter().all(|story| !story.id.trim().is_empty()));
-        assert!(stories.iter().all(|story| !story.label.trim().is_empty()));
-        assert!(stories.iter().all(|story| story.root.id.0 >= 10_001));
+        assert_eq!(scenarios.len(), 8);
         assert!(
-            stories
+            scenarios
                 .iter()
-                .all(|story| story.scan_requirement.require_layout_bounds)
+                .all(|scenario| !scenario.id.trim().is_empty())
+        );
+        assert!(
+            scenarios
+                .iter()
+                .all(|scenario| !scenario.label.trim().is_empty())
+        );
+        assert!(
+            scenarios
+                .iter()
+                .all(|scenario| scenario.root.id.0 >= 10_001)
+        );
+        assert!(
+            scenarios
+                .iter()
+                .all(|scenario| scenario.scan_requirement.require_layout_bounds)
         );
     }
 }

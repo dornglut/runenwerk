@@ -1,4 +1,4 @@
-//! Editor UX Story Lab evidence manifest validation.
+//! Editor UX Lab evidence manifest validation.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -6,14 +6,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::shell::{EditorLabEvidenceArtifact, EditorLabEvidenceArtifactKind};
 use editor_shell::{
     EditorUxDesignSystemEvidence, EditorUxGraphCanvasEvidence, EditorUxProductPatternEvidence,
-    EditorUxRegisteredSurfaceEvidence, EditorUxStoryCatalog, EditorUxStoryKind,
+    EditorUxRegisteredSurfaceEvidence, EditorUxScenarioCatalog, EditorUxScenarioKind,
     EditorUxWorkbenchEvidence, ToolSurfaceReadiness,
 };
 use ui_definition::UiDefinitionDiagnostic;
 
-use super::editor_ux_story_catalog;
+use super::editor_ux_scenario_catalog;
 
-pub const EDITOR_UX_EVIDENCE_MANIFEST_VERSION: u32 = 1;
+pub const EDITOR_UX_EVIDENCE_MANIFEST_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EditorUxEvidenceRunStatus {
@@ -23,7 +23,7 @@ pub enum EditorUxEvidenceRunStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditorUxEvidenceRun {
-    pub story_id: String,
+    pub scenario_id: String,
     pub status: EditorUxEvidenceRunStatus,
     pub visible_widget_count: usize,
     pub scan_issues: Vec<String>,
@@ -49,7 +49,7 @@ pub struct EditorUxDesignSystemEvidenceRun {
 }
 
 impl EditorUxDesignSystemEvidenceRun {
-    pub fn from_story_evidence(evidence: &EditorUxDesignSystemEvidence) -> Self {
+    pub fn from_scenario_evidence(evidence: &EditorUxDesignSystemEvidence) -> Self {
         Self {
             target_profile: evidence.target_profile.as_str().to_string(),
             recipe_id: evidence.recipe_id.as_str().to_string(),
@@ -78,7 +78,7 @@ pub struct EditorUxGraphCanvasEvidenceRun {
 }
 
 impl EditorUxGraphCanvasEvidenceRun {
-    pub fn from_story_evidence(evidence: &EditorUxGraphCanvasEvidence) -> Self {
+    pub fn from_scenario_evidence(evidence: &EditorUxGraphCanvasEvidence) -> Self {
         Self {
             target_profile: evidence.target_profile.to_string(),
             graph_family: evidence.graph_family.to_string(),
@@ -117,7 +117,7 @@ pub struct EditorUxProductPatternEvidenceRun {
 }
 
 impl EditorUxProductPatternEvidenceRun {
-    pub fn from_story_evidence(evidence: &EditorUxProductPatternEvidence) -> Self {
+    pub fn from_scenario_evidence(evidence: &EditorUxProductPatternEvidence) -> Self {
         Self {
             target_profile: evidence.target_profile.to_string(),
             pattern_kinds: evidence
@@ -165,7 +165,7 @@ pub struct EditorUxRegisteredSurfaceEvidenceRun {
 }
 
 impl EditorUxRegisteredSurfaceEvidenceRun {
-    pub fn from_story_evidence(evidence: &EditorUxRegisteredSurfaceEvidence) -> Self {
+    pub fn from_scenario_evidence(evidence: &EditorUxRegisteredSurfaceEvidence) -> Self {
         Self {
             target_profile: evidence.target_profile.to_string(),
             surface_definition_id: evidence.surface_definition_id.raw(),
@@ -208,7 +208,7 @@ pub struct EditorUxWorkbenchEvidenceRun {
 }
 
 impl EditorUxWorkbenchEvidenceRun {
-    pub fn from_story_evidence(evidence: &EditorUxWorkbenchEvidence) -> Self {
+    pub fn from_scenario_evidence(evidence: &EditorUxWorkbenchEvidence) -> Self {
         Self {
             target_profile: evidence.target_profile.to_string(),
             pane_kinds: evidence
@@ -233,12 +233,12 @@ impl EditorUxWorkbenchEvidenceRun {
 
 impl EditorUxEvidenceRun {
     pub fn passed(
-        story_id: impl Into<String>,
+        scenario_id: impl Into<String>,
         visible_widget_count: usize,
         artifacts: Vec<EditorLabEvidenceArtifact>,
     ) -> Self {
         Self {
-            story_id: story_id.into(),
+            scenario_id: scenario_id.into(),
             status: EditorUxEvidenceRunStatus::Passed,
             visible_widget_count,
             scan_issues: Vec::new(),
@@ -252,13 +252,13 @@ impl EditorUxEvidenceRun {
     }
 
     pub fn failed(
-        story_id: impl Into<String>,
+        scenario_id: impl Into<String>,
         visible_widget_count: usize,
         scan_issues: Vec<String>,
         artifacts: Vec<EditorLabEvidenceArtifact>,
     ) -> Self {
         Self {
-            story_id: story_id.into(),
+            scenario_id: scenario_id.into(),
             status: EditorUxEvidenceRunStatus::Failed,
             visible_widget_count,
             scan_issues,
@@ -310,28 +310,31 @@ impl EditorUxEvidenceRun {
 pub struct EditorUxEvidenceManifest {
     pub manifest_version: u32,
     pub generated_by: String,
-    pub required_story_ids: Vec<String>,
+    pub required_scenario_ids: Vec<String>,
     pub runs: Vec<EditorUxEvidenceRun>,
 }
 
 impl EditorUxEvidenceManifest {
     pub fn current(
         generated_by: impl Into<String>,
-        catalog: &EditorUxStoryCatalog,
+        catalog: &EditorUxScenarioCatalog,
         runs: Vec<EditorUxEvidenceRun>,
     ) -> Self {
         Self {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: generated_by.into(),
-            required_story_ids: catalog
-                .stories()
-                .map(|story| story.id.as_str().to_string())
+            required_scenario_ids: catalog
+                .scenarios()
+                .map(|scenario| scenario.id.as_str().to_string())
                 .collect(),
             runs,
         }
     }
 
-    pub fn validate(&self, catalog: &EditorUxStoryCatalog) -> Result<(), UiDefinitionDiagnostic> {
+    pub fn validate(
+        &self,
+        catalog: &EditorUxScenarioCatalog,
+    ) -> Result<(), UiDefinitionDiagnostic> {
         if self.manifest_version != EDITOR_UX_EVIDENCE_MANIFEST_VERSION {
             return Err(UiDefinitionDiagnostic::error(
                 "editor.ux.evidence.manifest.unsupported_version",
@@ -342,49 +345,51 @@ impl EditorUxEvidenceManifest {
             ));
         }
 
-        let stories_by_id = catalog
-            .stories()
-            .map(|story| (story.id.as_str(), story))
+        let scenarios_by_id = catalog
+            .scenarios()
+            .map(|scenario| (scenario.id.as_str(), scenario))
             .collect::<BTreeMap<_, _>>();
         let required = self
-            .required_story_ids
+            .required_scenario_ids
             .iter()
             .map(String::as_str)
             .collect::<BTreeSet<_>>();
-        let expected = stories_by_id.keys().copied().collect::<BTreeSet<_>>();
+        let expected = scenarios_by_id.keys().copied().collect::<BTreeSet<_>>();
         if required != expected {
             return Err(UiDefinitionDiagnostic::error(
-                "editor.ux.evidence.manifest.story_catalog_mismatch",
-                "manifest required story IDs do not match the Editor UX story catalog",
+                "editor.ux.evidence.manifest.scenario_catalog_mismatch",
+                "manifest required scenario IDs do not match the Editor UX scenario catalog",
             ));
         }
 
         let mut seen = BTreeSet::new();
         for run in &self.runs {
-            let story = stories_by_id.get(run.story_id.as_str()).ok_or_else(|| {
-                UiDefinitionDiagnostic::error(
-                    "editor.ux.evidence.manifest.unknown_story",
-                    format!(
-                        "evidence run '{}' is not part of the story catalog",
-                        run.story_id
-                    ),
-                )
-            })?;
-            if !seen.insert(run.story_id.as_str()) {
+            let scenario = scenarios_by_id
+                .get(run.scenario_id.as_str())
+                .ok_or_else(|| {
+                    UiDefinitionDiagnostic::error(
+                        "editor.ux.evidence.manifest.unknown_scenario",
+                        format!(
+                            "evidence run '{}' is not part of the scenario catalog",
+                            run.scenario_id
+                        ),
+                    )
+                })?;
+            if !seen.insert(run.scenario_id.as_str()) {
                 return Err(UiDefinitionDiagnostic::error(
-                    "editor.ux.evidence.manifest.duplicate_story",
+                    "editor.ux.evidence.manifest.duplicate_scenario",
                     format!(
-                        "evidence story '{}' was recorded more than once",
-                        run.story_id
+                        "evidence scenario '{}' was recorded more than once",
+                        run.scenario_id
                     ),
                 ));
             }
             if run.status == EditorUxEvidenceRunStatus::Failed || !run.scan_issues.is_empty() {
                 return Err(UiDefinitionDiagnostic::error(
-                    "editor.ux.evidence.manifest.failed_story",
+                    "editor.ux.evidence.manifest.failed_scenario",
                     format!(
-                        "evidence story '{}' has visible-widget scan failures",
-                        run.story_id
+                        "evidence scenario '{}' has visible-widget scan failures",
+                        run.scenario_id
                     ),
                 ));
             }
@@ -392,8 +397,8 @@ impl EditorUxEvidenceManifest {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.empty_retained_ui",
                     format!(
-                        "evidence story '{}' produced no visible widgets",
-                        run.story_id
+                        "evidence scenario '{}' produced no visible widgets",
+                        run.scenario_id
                     ),
                 ));
             }
@@ -404,10 +409,13 @@ impl EditorUxEvidenceManifest {
             {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.missing_retained_ui_artifact",
-                    format!("evidence story '{}' lacks retained UI proof", run.story_id),
+                    format!(
+                        "evidence scenario '{}' lacks retained UI proof",
+                        run.scenario_id
+                    ),
                 ));
             }
-            if story.readiness == ToolSurfaceReadiness::Product
+            if scenario.readiness == ToolSurfaceReadiness::Product
                 && !run.artifacts.iter().any(|artifact| {
                     matches!(
                         artifact.kind,
@@ -419,81 +427,84 @@ impl EditorUxEvidenceManifest {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.missing_native_or_platform_report",
                     format!(
-                        "product story '{}' lacks native screenshot or platform-impossible proof",
-                        run.story_id
+                        "product scenario '{}' lacks native screenshot or platform-impossible proof",
+                        run.scenario_id
                     ),
                 ));
             }
-            if let Some(expected) = &story.design_system_evidence {
+            if let Some(expected) = &scenario.design_system_evidence {
                 validate_design_system_evidence(run, expected)?;
             } else if !run.design_system_evidence.is_empty() {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.unexpected_design_system_evidence",
                     format!(
-                        "evidence story '{}' reports design-system evidence but the story has no migrated contract",
-                        run.story_id
+                        "evidence scenario '{}' reports design-system evidence but the scenario has no migrated contract",
+                        run.scenario_id
                     ),
                 ));
             }
-            if let Some(expected) = &story.graph_canvas_evidence {
+            if let Some(expected) = &scenario.graph_canvas_evidence {
                 validate_graph_canvas_evidence(run, expected)?;
             } else if !run.graph_canvas_evidence.is_empty() {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.unexpected_graph_canvas_evidence",
                     format!(
-                        "evidence story '{}' reports graph canvas evidence but the story has no graph product contract",
-                        run.story_id
+                        "evidence scenario '{}' reports graph canvas evidence but the scenario has no graph product contract",
+                        run.scenario_id
                     ),
                 ));
             }
-            if let Some(expected) = &story.product_pattern_evidence {
+            if let Some(expected) = &scenario.product_pattern_evidence {
                 validate_product_pattern_evidence(run, expected)?;
             } else if !run.product_pattern_evidence.is_empty() {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.unexpected_product_pattern_evidence",
                     format!(
-                        "evidence story '{}' reports product pattern evidence but the story has no product pattern contract",
-                        run.story_id
+                        "evidence scenario '{}' reports product pattern evidence but the scenario has no product pattern contract",
+                        run.scenario_id
                     ),
                 ));
             }
-            if let Some(expected) = &story.registered_surface_evidence {
+            if let Some(expected) = &scenario.registered_surface_evidence {
                 validate_registered_surface_evidence(run, expected)?;
-            } else if matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_)) {
+            } else if matches!(scenario.kind, EditorUxScenarioKind::RegisteredSurface(_)) {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.missing_registered_surface_contract",
                     format!(
-                        "registered surface story '{}' has no surface evidence contract",
-                        run.story_id
+                        "registered surface scenario '{}' has no surface evidence contract",
+                        run.scenario_id
                     ),
                 ));
             } else if !run.registered_surface_evidence.is_empty() {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.unexpected_registered_surface_evidence",
                     format!(
-                        "evidence story '{}' reports registered-surface evidence but the story has no registered surface contract",
-                        run.story_id
+                        "evidence scenario '{}' reports registered-surface evidence but the scenario has no registered surface contract",
+                        run.scenario_id
                     ),
                 ));
             }
-            if let Some(expected) = &story.workbench_evidence {
+            if let Some(expected) = &scenario.workbench_evidence {
                 validate_workbench_evidence(run, expected)?;
             } else if !run.workbench_evidence.is_empty() {
                 return Err(UiDefinitionDiagnostic::error(
                     "editor.ux.evidence.manifest.unexpected_workbench_evidence",
                     format!(
-                        "evidence story '{}' reports workbench evidence but the story has no standalone workbench contract",
-                        run.story_id
+                        "evidence scenario '{}' reports workbench evidence but the scenario has no standalone workbench contract",
+                        run.scenario_id
                     ),
                 ));
             }
         }
 
-        for story_id in &self.required_story_ids {
-            if !seen.contains(story_id.as_str()) {
+        for scenario_id in &self.required_scenario_ids {
+            if !seen.contains(scenario_id.as_str()) {
                 return Err(UiDefinitionDiagnostic::error(
-                    "editor.ux.evidence.manifest.missing_story",
-                    format!("required evidence story '{}' was not recorded", story_id),
+                    "editor.ux.evidence.manifest.missing_scenario",
+                    format!(
+                        "required evidence scenario '{}' was not recorded",
+                        scenario_id
+                    ),
                 ));
             }
         }
@@ -522,8 +533,8 @@ fn validate_graph_canvas_evidence(
             return Err(UiDefinitionDiagnostic::error(
                 "editor.ux.evidence.manifest.missing_graph_canvas_artifact",
                 format!(
-                    "graph canvas story '{}' lacks required {:?} artifact",
-                    run.story_id, artifact_kind
+                    "graph canvas scenario '{}' lacks required {:?} artifact",
+                    run.scenario_id, artifact_kind
                 ),
             ));
         }
@@ -536,8 +547,8 @@ fn validate_graph_canvas_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.missing_graph_canvas_evidence",
             format!(
-                "graph canvas story '{}' lacks typed graph evidence",
-                run.story_id
+                "graph canvas scenario '{}' lacks typed graph evidence",
+                run.scenario_id
             ),
         ));
     };
@@ -591,8 +602,8 @@ fn validate_graph_canvas_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.incomplete_graph_canvas_evidence",
             format!(
-                "graph canvas story '{}' has incomplete interaction/route/readiness/native evidence",
-                run.story_id
+                "graph canvas scenario '{}' has incomplete interaction/route/readiness/native evidence",
+                run.scenario_id
             ),
         ));
     }
@@ -620,8 +631,8 @@ fn validate_product_pattern_evidence(
             return Err(UiDefinitionDiagnostic::error(
                 "editor.ux.evidence.manifest.missing_product_pattern_artifact",
                 format!(
-                    "product pattern story '{}' lacks required {:?} artifact",
-                    run.story_id, artifact_kind
+                    "product pattern scenario '{}' lacks required {:?} artifact",
+                    run.scenario_id, artifact_kind
                 ),
             ));
         }
@@ -635,8 +646,8 @@ fn validate_product_pattern_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.missing_product_pattern_evidence",
             format!(
-                "product pattern story '{}' lacks typed product pattern evidence",
-                run.story_id
+                "product pattern scenario '{}' lacks typed product pattern evidence",
+                run.scenario_id
             ),
         ));
     };
@@ -701,8 +712,8 @@ fn validate_product_pattern_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.incomplete_product_pattern_evidence",
             format!(
-                "product pattern story '{}' has incomplete pattern/state/interaction/route/native evidence",
-                run.story_id
+                "product pattern scenario '{}' has incomplete pattern/state/interaction/route/native evidence",
+                run.scenario_id
             ),
         ));
     }
@@ -724,8 +735,8 @@ fn validate_registered_surface_evidence(
             return Err(UiDefinitionDiagnostic::error(
                 "editor.ux.evidence.manifest.missing_registered_surface_artifact",
                 format!(
-                    "registered surface story '{}' lacks required {} artifact",
-                    run.story_id, artifact_kind
+                    "registered surface scenario '{}' lacks required {} artifact",
+                    run.scenario_id, artifact_kind
                 ),
             ));
         }
@@ -739,8 +750,8 @@ fn validate_registered_surface_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.missing_registered_surface_evidence",
             format!(
-                "registered surface story '{}' lacks typed registered-surface evidence",
-                run.story_id
+                "registered surface scenario '{}' lacks typed registered-surface evidence",
+                run.scenario_id
             ),
         ));
     };
@@ -753,8 +764,8 @@ fn validate_registered_surface_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.registered_surface_identity_mismatch",
             format!(
-                "registered surface story '{}' has mismatched identity/readiness evidence",
-                run.story_id
+                "registered surface scenario '{}' has mismatched identity/readiness evidence",
+                run.scenario_id
             ),
         ));
     }
@@ -808,8 +819,8 @@ fn validate_registered_surface_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.incomplete_registered_surface_evidence",
             format!(
-                "registered surface story '{}' has incomplete artifact/state/route/provider evidence",
-                run.story_id
+                "registered surface scenario '{}' has incomplete artifact/state/route/provider evidence",
+                run.scenario_id
             ),
         ));
     }
@@ -837,8 +848,8 @@ fn validate_workbench_evidence(
             return Err(UiDefinitionDiagnostic::error(
                 "editor.ux.evidence.manifest.missing_workbench_artifact",
                 format!(
-                    "standalone workbench story '{}' lacks required {:?} artifact",
-                    run.story_id, artifact_kind
+                    "standalone workbench scenario '{}' lacks required {:?} artifact",
+                    run.scenario_id, artifact_kind
                 ),
             ));
         }
@@ -852,8 +863,8 @@ fn validate_workbench_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.missing_workbench_evidence",
             format!(
-                "standalone workbench story '{}' lacks typed workbench evidence",
-                run.story_id
+                "standalone workbench scenario '{}' lacks typed workbench evidence",
+                run.scenario_id
             ),
         ));
     };
@@ -893,8 +904,8 @@ fn validate_workbench_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.incomplete_workbench_evidence",
             format!(
-                "standalone workbench story '{}' has incomplete pane/route/readiness evidence",
-                run.story_id
+                "standalone workbench scenario '{}' has incomplete pane/route/readiness evidence",
+                run.scenario_id
             ),
         ));
     }
@@ -923,8 +934,8 @@ fn validate_design_system_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.missing_design_system_artifact",
             format!(
-                "migrated story '{}' lacks design-system evidence artifact",
-                run.story_id
+                "migrated scenario '{}' lacks design-system evidence artifact",
+                run.scenario_id
             ),
         ));
     }
@@ -947,8 +958,8 @@ fn validate_design_system_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.missing_design_system_evidence",
             format!(
-                "migrated story '{}' lacks token/recipe/state evidence",
-                run.story_id
+                "migrated scenario '{}' lacks token/recipe/state evidence",
+                run.scenario_id
             ),
         ));
     };
@@ -969,8 +980,8 @@ fn validate_design_system_evidence(
         return Err(UiDefinitionDiagnostic::error(
             "editor.ux.evidence.manifest.incomplete_design_system_evidence",
             format!(
-                "migrated story '{}' has incomplete token/recipe/state evidence",
-                run.story_id
+                "migrated scenario '{}' has incomplete token/recipe/state evidence",
+                run.scenario_id
             ),
         ));
     }
@@ -981,7 +992,7 @@ fn validate_design_system_evidence(
 pub fn validate_editor_ux_manifest(
     manifest: &EditorUxEvidenceManifest,
 ) -> Result<(), UiDefinitionDiagnostic> {
-    let catalog = editor_ux_story_catalog();
+    let catalog = editor_ux_scenario_catalog();
     manifest.validate(&catalog)
 }
 
@@ -990,18 +1001,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn manifest_rejects_product_story_without_native_or_platform_report() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| story.readiness == ToolSurfaceReadiness::Product)
-            .expect("product story should exist");
+    fn manifest_rejects_product_scenario_without_native_or_platform_report() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| scenario.readiness == ToolSurfaceReadiness::Product)
+            .expect("product scenario should exist");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![EditorLabEvidenceArtifact::new(
                 EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                "artifacts/story.txt",
+                "artifacts/scenario.txt",
                 64,
                 "retained UI",
             )],
@@ -1009,15 +1020,15 @@ mod tests {
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("product story should require native or platform-impossible proof");
+            .validate(&single_scenario_catalog)
+            .expect_err("product scenario should require native or platform-impossible proof");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_native_or_platform_report"
@@ -1025,19 +1036,19 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_migrated_story_without_design_system_report() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| story.design_system_evidence.is_some())
-            .expect("migrated story should exist");
+    fn manifest_rejects_migrated_scenario_without_design_system_report() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| scenario.design_system_evidence.is_some())
+            .expect("migrated scenario should exist");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![
                 EditorLabEvidenceArtifact::new(
                     EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                    "artifacts/story.txt",
+                    "artifacts/scenario.txt",
                     64,
                     "retained UI",
                 ),
@@ -1052,15 +1063,15 @@ mod tests {
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("migrated story should require design-system evidence");
+            .validate(&single_scenario_catalog)
+            .expect_err("migrated scenario should require design-system evidence");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_design_system_artifact"
@@ -1068,19 +1079,19 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_workbench_story_without_workbench_report() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| story.workbench_evidence.is_some())
-            .expect("workbench story should exist");
+    fn manifest_rejects_workbench_scenario_without_workbench_report() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| scenario.workbench_evidence.is_some())
+            .expect("workbench scenario should exist");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![
                 EditorLabEvidenceArtifact::new(
                     EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                    "artifacts/story.txt",
+                    "artifacts/scenario.txt",
                     64,
                     "retained UI",
                 ),
@@ -1095,15 +1106,15 @@ mod tests {
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("workbench story should require workbench evidence artifacts");
+            .validate(&single_scenario_catalog)
+            .expect_err("workbench scenario should require workbench evidence artifacts");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_workbench_artifact"
@@ -1111,19 +1122,19 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_graph_story_without_graph_canvas_report() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| story.graph_canvas_evidence.is_some())
-            .expect("graph canvas story should exist");
+    fn manifest_rejects_graph_scenario_without_graph_canvas_report() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| scenario.graph_canvas_evidence.is_some())
+            .expect("graph canvas scenario should exist");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![
                 EditorLabEvidenceArtifact::new(
                     EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                    "artifacts/story.txt",
+                    "artifacts/scenario.txt",
                     64,
                     "retained UI",
                 ),
@@ -1138,15 +1149,15 @@ mod tests {
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("graph canvas story should require graph evidence artifacts");
+            .validate(&single_scenario_catalog)
+            .expect_err("graph canvas scenario should require graph evidence artifacts");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_graph_canvas_artifact"
@@ -1154,19 +1165,19 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_product_pattern_story_without_pattern_report() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| story.product_pattern_evidence.is_some())
-            .expect("product pattern story should exist");
+    fn manifest_rejects_product_pattern_scenario_without_pattern_report() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| scenario.product_pattern_evidence.is_some())
+            .expect("product pattern scenario should exist");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![
                 EditorLabEvidenceArtifact::new(
                     EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                    "artifacts/story.txt",
+                    "artifacts/scenario.txt",
                     64,
                     "retained UI",
                 ),
@@ -1181,15 +1192,15 @@ mod tests {
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("product pattern story should require pattern evidence artifacts");
+            .validate(&single_scenario_catalog)
+            .expect_err("product pattern scenario should require pattern evidence artifacts");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_product_pattern_artifact"
@@ -1197,22 +1208,22 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_registered_surface_story_without_surface_evidence() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| {
-                matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_))
-                    && story.readiness == ToolSurfaceReadiness::HiddenUntilProductized
+    fn manifest_rejects_registered_surface_scenario_without_surface_evidence() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| {
+                matches!(scenario.kind, EditorUxScenarioKind::RegisteredSurface(_))
+                    && scenario.readiness == ToolSurfaceReadiness::HiddenUntilProductized
             })
-            .expect("hidden registered surface story should exist");
+            .expect("hidden registered surface scenario should exist");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![
                 EditorLabEvidenceArtifact::new(
                     EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                    "artifacts/story.txt",
+                    "artifacts/scenario.txt",
                     64,
                     "retained UI",
                 ),
@@ -1233,15 +1244,15 @@ mod tests {
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("registered surface story should require typed surface evidence");
+            .validate(&single_scenario_catalog)
+            .expect_err("registered surface scenario should require typed surface evidence");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_registered_surface_evidence"
@@ -1249,27 +1260,27 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_registered_surface_story_without_surface_report() {
-        let catalog = editor_ux_story_catalog();
-        let story = catalog
-            .stories()
-            .find(|story| {
-                matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_))
-                    && story.readiness == ToolSurfaceReadiness::Product
-                    && story.graph_canvas_evidence.is_none()
+    fn manifest_rejects_registered_surface_scenario_without_surface_report() {
+        let catalog = editor_ux_scenario_catalog();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| {
+                matches!(scenario.kind, EditorUxScenarioKind::RegisteredSurface(_))
+                    && scenario.readiness == ToolSurfaceReadiness::Product
+                    && scenario.graph_canvas_evidence.is_none()
             })
-            .expect("product registered surface story should exist");
-        let surface_evidence = story
+            .expect("product registered surface scenario should exist");
+        let surface_evidence = scenario
             .registered_surface_evidence
             .as_ref()
-            .expect("registered surface story should have evidence");
+            .expect("registered surface scenario should have evidence");
         let run = EditorUxEvidenceRun::passed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             1,
             vec![
                 EditorLabEvidenceArtifact::new(
                     EditorLabEvidenceArtifactKind::RetainedUiDebug,
-                    "artifacts/story.txt",
+                    "artifacts/scenario.txt",
                     64,
                     "retained UI",
                 ),
@@ -1306,20 +1317,20 @@ mod tests {
             ],
         )
         .with_registered_surface_evidence(
-            EditorUxRegisteredSurfaceEvidenceRun::from_story_evidence(surface_evidence),
+            EditorUxRegisteredSurfaceEvidenceRun::from_scenario_evidence(surface_evidence),
         );
         let manifest = EditorUxEvidenceManifest {
             manifest_version: EDITOR_UX_EVIDENCE_MANIFEST_VERSION,
             generated_by: "test".to_string(),
-            required_story_ids: vec![story.id.as_str().to_string()],
+            required_scenario_ids: vec![scenario.id.as_str().to_string()],
             runs: vec![run],
         };
-        let single_story_catalog = EditorUxStoryCatalog::new(vec![story.clone()])
-            .expect("single story catalog should validate construction");
+        let single_scenario_catalog = EditorUxScenarioCatalog::new(vec![scenario.clone()])
+            .expect("single scenario catalog should validate construction");
 
         let error = manifest
-            .validate(&single_story_catalog)
-            .expect_err("registered surface story should require surface readiness artifact");
+            .validate(&single_scenario_catalog)
+            .expect_err("registered surface scenario should require surface readiness artifact");
         assert_eq!(
             error.code,
             "editor.ux.evidence.manifest.missing_registered_surface_artifact"

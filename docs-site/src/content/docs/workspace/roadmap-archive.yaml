@@ -7524,7 +7524,7 @@ items:
   - WR-054
   - WR-110
   write_scopes:
-  - docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - docs-site/src/content/docs/design/active/README.md
   - docs-site/src/content/docs/reports/implementation-plans/wr-111-editor-product-ux-governance-and-track-activation/plan.md
   - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
@@ -7579,7 +7579,7 @@ items:
   - no product code
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: discovery
     reason: Governance is anchored by the active editor product UX Story Lab and game-UI-ready foundations design.
@@ -7632,7 +7632,7 @@ items:
   - domain/ui
   - domain/editor
   - apps/runenwerk_editor
-  - docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - docs-site/src/content/docs/reports/implementation-plans/wr-112-native-editor-ux-story-lab-and-evidence-harness/plan.md
   - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
   - docs-site/src/content/docs/workspace/production-tracks.yaml
@@ -7685,7 +7685,7 @@ items:
   - widget gates
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: discovery
     reason: Story Lab work follows the active editor product UX doctrine.
@@ -7878,7 +7878,7 @@ items:
   - inspector
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: implementation
     reason: Workbench implementation followed the editor UX Story Lab and native evidence doctrine.
@@ -8152,7 +8152,7 @@ items:
   - hide or certify
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: implementation
     reason: Graph UX followed the active Story Lab and surface readiness doctrine.
@@ -8241,7 +8241,7 @@ items:
   - shell patterns
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: implementation
     reason: Shell polish followed the active Story Lab and surface readiness doctrine.
@@ -8330,7 +8330,7 @@ items:
   - all visible surfaces
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: implementation
     reason: All-surface wave followed the active Story Lab and hide-or-certify doctrine.
@@ -8415,7 +8415,7 @@ items:
   - no editor shell coupling
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: implementation
     reason: Game UI readiness seam followed the active editor UX ownership separation doctrine.
@@ -8500,7 +8500,7 @@ items:
   - final audit
   decision_gates:
   - kind: design
-    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    path: docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
     required_status: active
     applies_to: discovery
     reason: Final certification must follow active editor product UX no-gap doctrine.

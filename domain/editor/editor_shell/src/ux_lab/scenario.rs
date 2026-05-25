@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/story.rs
-//! Purpose: Editor UX story identity, args, and interaction contracts.
+//! File: domain/editor/editor_shell/src/ux_lab/scenario.rs
+//! Purpose: Editor UX scenario identity, args, and interaction contracts.
 
 use crate::{
     EditorUxDensity, EditorUxDesignSystemEvidence, EditorUxGraphCanvasEvidence,
@@ -8,12 +8,12 @@ use crate::{
     UiNode, VisibleWidgetScanRequirement, WidgetId,
 };
 use ui_surface::SurfaceDefinitionId;
-use ui_widgets::PrimitiveWidgetStoryKind;
+use ui_widgets::PrimitiveWidgetScenarioKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct EditorUxStoryId(String);
+pub struct EditorUxScenarioId(String);
 
-impl EditorUxStoryId {
+impl EditorUxScenarioId {
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
@@ -24,21 +24,21 @@ impl EditorUxStoryId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EditorUxStoryKind {
-    PrimitiveWidget(PrimitiveWidgetStoryKind),
+pub enum EditorUxScenarioKind {
+    PrimitiveWidget(PrimitiveWidgetScenarioKind),
     ProductPattern,
     RegisteredSurface(SurfaceDefinitionId),
     HostScenario,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EditorUxStoryArgs {
+pub struct EditorUxScenarioArgs {
     pub density: EditorUxDensity,
     pub viewport_class: EditorUxViewportClass,
     pub input_modality: EditorUxInputModality,
 }
 
-impl Default for EditorUxStoryArgs {
+impl Default for EditorUxScenarioArgs {
     fn default() -> Self {
         Self {
             density: EditorUxDensity::Comfortable,
@@ -49,18 +49,18 @@ impl Default for EditorUxStoryArgs {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditorUxStoryInteraction {
+pub struct EditorUxScenarioInteraction {
     pub id: &'static str,
     pub label: &'static str,
-    pub kind: EditorUxStoryInteractionKind,
+    pub kind: EditorUxScenarioInteractionKind,
     pub target_widget_id: Option<WidgetId>,
 }
 
-impl EditorUxStoryInteraction {
+impl EditorUxScenarioInteraction {
     pub fn new(
         id: &'static str,
         label: &'static str,
-        kind: EditorUxStoryInteractionKind,
+        kind: EditorUxScenarioInteractionKind,
         target_widget_id: Option<WidgetId>,
     ) -> Self {
         Self {
@@ -73,7 +73,7 @@ impl EditorUxStoryInteraction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EditorUxStoryInteractionKind {
+pub enum EditorUxScenarioInteractionKind {
     PointerActivate,
     KeyboardActivate,
     TextEntry,
@@ -82,11 +82,11 @@ pub enum EditorUxStoryInteractionKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EditorUxStory {
-    pub id: EditorUxStoryId,
+pub struct EditorUxScenario {
+    pub id: EditorUxScenarioId,
     pub label: String,
-    pub kind: EditorUxStoryKind,
-    pub args: EditorUxStoryArgs,
+    pub kind: EditorUxScenarioKind,
+    pub args: EditorUxScenarioArgs,
     pub readiness: ToolSurfaceReadiness,
     pub scenario_matrix: EditorUxScenarioMatrix,
     pub design_system_evidence: Option<EditorUxDesignSystemEvidence>,
@@ -94,16 +94,16 @@ pub struct EditorUxStory {
     pub product_pattern_evidence: Option<EditorUxProductPatternEvidence>,
     pub registered_surface_evidence: Option<EditorUxRegisteredSurfaceEvidence>,
     pub workbench_evidence: Option<EditorUxWorkbenchEvidence>,
-    pub interactions: Vec<EditorUxStoryInteraction>,
+    pub interactions: Vec<EditorUxScenarioInteraction>,
     pub root: UiNode,
     pub scan_requirement: VisibleWidgetScanRequirement,
 }
 
-impl EditorUxStory {
+impl EditorUxScenario {
     pub fn new(
-        id: EditorUxStoryId,
+        id: EditorUxScenarioId,
         label: impl Into<String>,
-        kind: EditorUxStoryKind,
+        kind: EditorUxScenarioKind,
         readiness: ToolSurfaceReadiness,
         scenario_matrix: EditorUxScenarioMatrix,
         root: UiNode,
@@ -113,7 +113,7 @@ impl EditorUxStory {
             id,
             label: label.into(),
             kind,
-            args: EditorUxStoryArgs::default(),
+            args: EditorUxScenarioArgs::default(),
             readiness,
             scenario_matrix,
             design_system_evidence: None,
@@ -129,7 +129,7 @@ impl EditorUxStory {
 
     pub fn with_interactions(
         mut self,
-        interactions: impl IntoIterator<Item = EditorUxStoryInteraction>,
+        interactions: impl IntoIterator<Item = EditorUxScenarioInteraction>,
     ) -> Self {
         self.interactions = interactions.into_iter().collect();
         self

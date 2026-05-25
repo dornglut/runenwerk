@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
   - ../../../design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
   - ../../../design/accepted/ui-designer-target-projection-profiles-design.md
@@ -59,7 +59,7 @@ Expected production outcome:
 - Roadmap row: `WR-113` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Accepted token design:
   `docs-site/src/content/docs/design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md`.
 - Accepted recipe design:

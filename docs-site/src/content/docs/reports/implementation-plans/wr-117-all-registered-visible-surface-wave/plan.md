@@ -7,7 +7,7 @@ layer: domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
 related_reports:
   - ../wr-114-standalone-ui-designer-workbench/plan.md
   - ../wr-115-graph-canvas-and-node-editor-productization/plan.md
@@ -58,7 +58,7 @@ Expected production outcome for the later implementation slice:
   `docs-site/src/content/docs/workspace/roadmap-items.yaml` after this design
   action is accepted.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Completed standalone UI Designer prerequisite:
   `docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md`.
 - Completed graph canvas prerequisite:

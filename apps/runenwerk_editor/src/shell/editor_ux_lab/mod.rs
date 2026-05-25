@@ -1,4 +1,4 @@
-//! App-owned Editor UX Story Lab runner and evidence contracts.
+//! App-owned Editor UX Lab runner and evidence contracts.
 
 pub mod fixtures;
 pub mod manifest;

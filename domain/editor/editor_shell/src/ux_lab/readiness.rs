@@ -1,4 +1,4 @@
-//! File: domain/editor/editor_shell/src/story_lab/readiness.rs
+//! File: domain/editor/editor_shell/src/ux_lab/readiness.rs
 //! Purpose: Editor tool-surface product readiness classification.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/accepted/ui-designer-production-readiness-and-evidence-design.md
   - ../../../design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
 related_reports:
@@ -51,7 +51,7 @@ Expected production outcome:
 - Roadmap row: `WR-112` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Active design:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Completed governance input:
   `docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md`.
 - Existing runtime-neutral UI readiness input:

@@ -1,6 +1,6 @@
 ---
-title: Editor Product UX Story Lab And Game UI Ready Foundations
-description: Active governance design for PT-EDITOR-UX, native editor UX Story Lab, all-surface certification, and future game-runtime UI compatibility.
+title: Editor Product UX Lab And Game UI Ready Foundations
+description: Active governance design for PT-EDITOR-UX, native editor UX Lab, all-surface certification, and future game-runtime UI compatibility.
 status: active
 owner: editor
 layer: domain/ui-definition / domain/editor / app
@@ -24,7 +24,7 @@ related_roadmaps:
   - ../../workspace/roadmap-items.yaml
 ---
 
-# Editor Product UX Story Lab And Game UI Ready Foundations
+# Editor Product UX Lab And Game UI Ready Foundations
 
 ## Decision
 
@@ -32,7 +32,7 @@ related_roadmaps:
 `PT-UI-LAB`, and it does not implement game-runtime UI from
 `PT-GAME-RUNTIME-UI`. It consumes completed UI Designer, UI Lab perfection, and
 Workbench capability evidence, then adds the missing product-wide editor UX
-layer: native story coverage, all-surface certification, widget gates, graph
+layer: native scenario coverage, all-surface certification, widget gates, graph
 canvas productization, standalone UI Designer workbench proof, and final
 local-native no-gap certification.
 
@@ -58,7 +58,7 @@ Architecture governance accepts this split:
 - `domain/editor/editor_shell` owns editor workbench product patterns, surface
   readiness, provider routing, shell/panel/palette/inspector/diagnostic
   adapters, and editor-only source-truth closure.
-- `apps/runenwerk_editor` owns native Story Lab execution, provider fixtures,
+- `apps/runenwerk_editor` owns native UX Lab execution, provider fixtures,
   workbench presets, screenshot and artifact capture, accessibility/performance
   runners, app command execution, and final certification artifacts.
 
@@ -74,20 +74,25 @@ capture into `domain/ui`, changing dependency direction, introducing a
 game-runtime UI owner crate, or making projection/evidence artifacts
 authoritative state.
 
-## Story Lab Contract
+## UX Lab Contract
 
-The native Editor UX Story Lab is the product proof system. It is inspired by
-Storybook stories, args/controls, interaction tests, visual tests, and
+The native Editor UX Lab is the product proof system. It is inspired by
+scenario catalogs, args/controls, interaction tests, visual checks, and
 accessibility checks, but it is a native Runenwerk contract rather than a web
 dependency.
 
+The user-facing product area is **UX Lab**. Its durable areas are **Designer**,
+**Scenarios**, and **Evidence**. Code and current planning documents use
+scenario vocabulary so the product area cannot be confused with external web UI
+workshop tooling.
+
 The first implementation slice must introduce or ratify typed contracts for:
 
-- `EditorUxStoryCatalog`;
-- `EditorUxStoryId`;
-- `EditorUxStoryKind`;
-- `EditorUxStoryArgs`;
-- `EditorUxStoryInteraction`;
+- `EditorUxScenarioCatalog`;
+- `EditorUxScenarioId`;
+- `EditorUxScenarioKind`;
+- `EditorUxScenarioArgs`;
+- `EditorUxScenarioInteraction`;
 - `EditorUxScenarioMatrix`;
 - `EditorUxEvidenceManifest`;
 - `ToolSurfaceReadiness`.
@@ -111,7 +116,7 @@ Certification is tiered:
    interaction coverage.
 2. Product widget patterns: editor-specific inspectors, palettes, diagnostics,
    tables, trees, tabs, status/toolbars, split/dock chrome, graph nodes, sockets,
-   and overlays have reusable story coverage.
+   and overlays have reusable scenario coverage.
 3. Registered visible surfaces: every registered user-facing editor surface and
    explicit diagnostic/fallback surface is either certified, diagnostic,
    fallback-only, or hidden.
@@ -119,8 +124,8 @@ Certification is tiered:
    degraded providers, native captures, and dense/overflow data states are
    proven in app-hosted scenarios.
 
-The visible-widget scan is a hard gate. Every widget in every certified story
-or scenario must report layout bounds, label/accessibility metadata where
+The visible-widget scan is a hard gate. Every widget in every certified scenario
+must report layout bounds, label/accessibility metadata where
 interactive, focus reachability where focusable, overflow behavior, and state
 coverage.
 
@@ -141,7 +146,7 @@ Required evidence families:
 - focus traversal reports;
 - accessibility reports;
 - contrast and text-overflow reports;
-- story interaction reports;
+- scenario interaction reports;
 - provider and diagnostics snapshots;
 - performance/timing reports;
 - scenario/evidence manifests with freshness policy.
@@ -153,7 +158,7 @@ Required evidence families:
 - all registered visible user-facing editor surfaces;
 - explicit fallback and diagnostic surfaces;
 - primitive widgets and product widget patterns used by certified surfaces;
-- native Story Lab story/scenario coverage;
+- native UX Lab scenario coverage;
 - standalone UI Designer workbench and real canvas workflow;
 - graph canvas/node editor productization;
 - shell, inspector, palette, preview, diagnostics, table/tree/tab, toolbar,
@@ -175,7 +180,7 @@ Required evidence families:
 `PM-EDITOR-UX-001` is governance only. It activates the track, records the
 source-truth and evidence doctrine, and creates follow-on WR candidates.
 
-`PM-EDITOR-UX-002` builds the native Editor UX Story Lab and evidence harness.
+`PM-EDITOR-UX-002` builds the native Editor UX Lab and evidence harness.
 This must land before design-system migration so later polish has executable
 proof.
 
@@ -215,7 +220,7 @@ Current repo truth at track activation:
   labels, buttons, inputs, tabs, selects, tables, trees, product surfaces, graph
   canvases, viewport embeds, scroll, stack, and split layouts.
 - `domain/ui/ui_widgets/src` exposes reusable constructors for retained widgets
-  but does not yet provide a product-wide native story catalog.
+  but does not yet provide a product-wide native scenario catalog.
 - `apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs` already models
   evidence kinds such as retained UI debug artifacts, native screenshots, visual
   diffs, focus traversal, contrast, timing, provider snapshots, diagnostics,
@@ -237,12 +242,12 @@ Final certification has hard zero budgets for:
 - unlabeled interactive widgets;
 - unreachable focus targets;
 - route collisions;
-- stale story artifacts;
+- stale scenario artifacts;
 - visible misleading placeholders;
 - generic normal-flow action panels;
 - missing native screenshots where local native capture is available.
 
-Story matrices must cover empty, small, dense, overflow, selected, disabled,
+Scenario matrices must cover empty, small, dense, overflow, selected, disabled,
 readonly, loading, warning, error, degraded, long localized text, keyboard
 focus, mouse, gamepad-like navigation where supported, high contrast, reduced
 motion, small/large viewport, and native capture.
@@ -256,7 +261,7 @@ Stop before implementation if:
 - generic UI contracts start depending on editor shell or app state;
 - future game-runtime UI contracts import editor shell vocabulary;
 - visible placeholder product surfaces remain normal workflow surfaces;
-- Story Lab proof is descriptor-only, retained-only, or screenshot-free for a
+- UX Lab proof is descriptor-only, retained-only, or screenshot-free for a
   claim that needs local-native evidence;
-- a milestone cannot name its exact story matrix, evidence artifacts, and hard
+- a milestone cannot name its exact scenario matrix, evidence artifacts, and hard
   gates before product code starts.

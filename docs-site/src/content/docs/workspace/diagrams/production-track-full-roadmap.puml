@@ -299,10 +299,10 @@ package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" 
 
 }
 
-package "PT-EDITOR-UX Editor Product UX Native Story Lab And Surface Perfection" {
+package "PT-EDITOR-UX Editor Product UX Lab And Surface Perfection" {
   component "PM-EDITOR-UX-001 Governance Truth Audit And Track Activation\nkind=design\nstate=completed\nWR=WR-111" as PM_EDITOR_UX_001 <<completed>>
 
-  component "PM-EDITOR-UX-002 Native Editor UX Story Lab And Evidence Harness\nkind=implementation\nstate=completed\nWR=WR-112" as PM_EDITOR_UX_002 <<completed>>
+  component "PM-EDITOR-UX-002 Native Editor UX Lab Scenarios And Evidence Harness\nkind=implementation\nstate=completed\nWR=WR-112" as PM_EDITOR_UX_002 <<completed>>
 
   component "PM-EDITOR-UX-003 Layered Editor Design System Migration\nkind=implementation\nstate=completed\nWR=WR-113" as PM_EDITOR_UX_003 <<completed>>
 

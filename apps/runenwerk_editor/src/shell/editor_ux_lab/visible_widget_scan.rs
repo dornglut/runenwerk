@@ -1,26 +1,26 @@
-//! App adapter from Editor UX stories to backend-neutral visible-widget scans.
+//! App adapter from Editor UX scenarios to backend-neutral visible-widget scans.
 
 use editor_shell::{
-    ComputedLayout, ComputedLayoutMap, EditorUxStory, UiNode, VisibleWidgetKind, VisibleWidgetScan,
-    VisibleWidgetScanEvidence, VisibleWidgetState, scan_visible_widgets,
+    ComputedLayout, ComputedLayoutMap, EditorUxScenario, UiNode, VisibleWidgetKind,
+    VisibleWidgetScan, VisibleWidgetScanEvidence, VisibleWidgetState, scan_visible_widgets,
 };
 use ui_math::{UiRect, UiSize};
 
-pub fn scan_editor_ux_story(story: &EditorUxStory) -> VisibleWidgetScan {
-    let mut evidence = VisibleWidgetScanEvidence::new(layouts_for_tree(&story.root));
+pub fn scan_editor_ux_scenario(scenario: &EditorUxScenario) -> VisibleWidgetScan {
+    let mut evidence = VisibleWidgetScanEvidence::new(layouts_for_tree(&scenario.root));
     let relaxed_requirement = editor_shell::VisibleWidgetScanRequirement {
         require_layout_bounds: false,
         require_accessible_labels: false,
         require_focus_reachability: false,
         require_overflow_policy: false,
-        required_states: story
+        required_states: scenario
             .scenario_matrix
             .required_widget_states
             .iter()
             .copied()
             .collect(),
     };
-    let preliminary = scan_visible_widgets(&story.root, &evidence, &relaxed_requirement);
+    let preliminary = scan_visible_widgets(&scenario.root, &evidence, &relaxed_requirement);
 
     for record in preliminary.records {
         if record.interactive {
@@ -28,7 +28,7 @@ pub fn scan_editor_ux_story(story: &EditorUxStory) -> VisibleWidgetScan {
                 .mark_focus_target(record.widget_id)
                 .mark_state_coverage(
                     record.widget_id,
-                    story
+                    scenario
                         .scenario_matrix
                         .required_widget_states
                         .iter()
@@ -49,13 +49,13 @@ pub fn scan_editor_ux_story(story: &EditorUxStory) -> VisibleWidgetScan {
         }
     }
 
-    for interaction in &story.interactions {
+    for interaction in &scenario.interactions {
         if let Some(widget_id) = interaction.target_widget_id {
             evidence = evidence.mark_focus_target(widget_id);
         }
     }
 
-    scan_visible_widgets(&story.root, &evidence, &story.scan_requirement)
+    scan_visible_widgets(&scenario.root, &evidence, &scenario.scan_requirement)
 }
 
 fn layouts_for_tree(root: &UiNode) -> ComputedLayoutMap {
@@ -80,18 +80,18 @@ fn collect_layouts(node: &UiNode, depth: usize, layouts: &mut ComputedLayoutMap)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::EditorUxStoryCatalog;
+    use editor_shell::EditorUxScenarioCatalog;
 
     #[test]
     fn app_visible_widget_adapter_produces_passing_scans_for_default_catalog() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
 
-        for story in catalog.stories() {
-            let scan = scan_editor_ux_story(story);
+        for scenario in catalog.scenarios() {
+            let scan = scan_editor_ux_scenario(scenario);
             assert!(
                 scan.passed(),
-                "story {} failed scan: {:?}",
-                story.id.as_str(),
+                "scenario {} failed scan: {:?}",
+                scenario.id.as_str(),
                 scan.issues
             );
         }

@@ -1,20 +1,20 @@
-//! File: domain/editor/editor_shell/src/story_lab/catalog.rs
-//! Purpose: Editor UX Story Lab catalog registration and validation.
+//! File: domain/editor/editor_shell/src/ux_lab/catalog.rs
+//! Purpose: Editor UX Lab catalog registration and validation.
 
 use std::collections::BTreeMap;
 
 use crate::{
-    EditorLabSurfaceViewModel, EditorUxInputModality, EditorUxScenarioMatrix, EditorUxStory,
-    EditorUxStoryId, EditorUxStoryInteraction, EditorUxStoryInteractionKind, EditorUxStoryKind,
-    EditorUxViewportClass, MATERIAL_GRAPH_CANVAS_STORY_ID,
+    EditorLabSurfaceViewModel, EditorUxInputModality, EditorUxScenario, EditorUxScenarioId,
+    EditorUxScenarioInteraction, EditorUxScenarioInteractionKind, EditorUxScenarioKind,
+    EditorUxScenarioMatrix, EditorUxViewportClass, MATERIAL_GRAPH_CANVAS_SCENARIO_ID,
     MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID, MATERIAL_GRAPH_CANVAS_WIDGET_ID,
     SHELL_PATTERNS_DOCK_SPLIT_WIDGET_ID, SHELL_PATTERNS_INSPECTOR_TEXT_WIDGET_ID,
     SHELL_PATTERNS_PALETTE_ITEM_WIDGET_ID, SHELL_PATTERNS_PREVIEW_WIDGET_ID,
-    SHELL_PATTERNS_TABLE_WIDGET_ID, SHELL_PATTERNS_TREE_WIDGET_ID, SHELL_PRODUCT_PATTERNS_STORY_ID,
-    ToolSurfaceInstanceId, ToolSurfaceReadiness, UI_DESIGNER_WORKBENCH_STORY_ID,
-    VisibleWidgetScanRequirement, VisibleWidgetState, WidgetId, build_editor_lab_surface,
-    build_material_graph_surface, button, editor_surface_definitions, label,
-    material_graph_canvas_evidence, material_graph_canvas_fixture_view_model,
+    SHELL_PATTERNS_TABLE_WIDGET_ID, SHELL_PATTERNS_TREE_WIDGET_ID,
+    SHELL_PRODUCT_PATTERNS_SCENARIO_ID, ToolSurfaceInstanceId, ToolSurfaceReadiness,
+    UI_DESIGNER_WORKBENCH_SCENARIO_ID, VisibleWidgetScanRequirement, VisibleWidgetState, WidgetId,
+    build_editor_lab_surface, build_material_graph_surface, button, editor_surface_definitions,
+    label, material_graph_canvas_evidence, material_graph_canvas_fixture_view_model,
     material_graph_canvas_required_states, panel, primary_button_design_system_evidence,
     registered_surface_evidence, shell_product_pattern_evidence,
     shell_product_pattern_fixture_root, shell_product_pattern_required_states, surface_widget_id,
@@ -24,64 +24,71 @@ use crate::{
 use ui_surface::SurfaceDefinition;
 use ui_text::TextStyle;
 use ui_theme::ThemeTokens;
-use ui_widgets::{PrimitiveWidgetStoryKind, primitive_widget_stories};
+use ui_widgets::{PrimitiveWidgetScenarioKind, primitive_widget_scenarios};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EditorUxStoryCatalog {
-    stories_by_id: BTreeMap<EditorUxStoryId, EditorUxStory>,
+pub struct EditorUxScenarioCatalog {
+    scenarios_by_id: BTreeMap<EditorUxScenarioId, EditorUxScenario>,
 }
 
-impl EditorUxStoryCatalog {
+impl EditorUxScenarioCatalog {
     pub fn new(
-        stories: impl IntoIterator<Item = EditorUxStory>,
-    ) -> Result<Self, EditorUxStoryCatalogError> {
-        let mut stories_by_id = BTreeMap::new();
-        for story in stories {
-            if story.id.as_str().trim().is_empty() {
-                return Err(EditorUxStoryCatalogError::EmptyStoryId);
+        scenarios: impl IntoIterator<Item = EditorUxScenario>,
+    ) -> Result<Self, EditorUxScenarioCatalogError> {
+        let mut scenarios_by_id = BTreeMap::new();
+        for scenario in scenarios {
+            if scenario.id.as_str().trim().is_empty() {
+                return Err(EditorUxScenarioCatalogError::EmptyScenarioId);
             }
-            if story.label.trim().is_empty() {
-                return Err(EditorUxStoryCatalogError::EmptyStoryLabel { story_id: story.id });
+            if scenario.label.trim().is_empty() {
+                return Err(EditorUxScenarioCatalogError::EmptyScenarioLabel {
+                    scenario_id: scenario.id,
+                });
             }
-            if story.scenario_matrix.is_empty() {
-                return Err(EditorUxStoryCatalogError::EmptyScenarioMatrix { story_id: story.id });
+            if scenario.scenario_matrix.is_empty() {
+                return Err(EditorUxScenarioCatalogError::EmptyScenarioMatrix {
+                    scenario_id: scenario.id,
+                });
             }
-            if stories_by_id.insert(story.id.clone(), story).is_some() {
-                return Err(EditorUxStoryCatalogError::DuplicateStoryId);
+            if scenarios_by_id
+                .insert(scenario.id.clone(), scenario)
+                .is_some()
+            {
+                return Err(EditorUxScenarioCatalogError::DuplicateScenarioId);
             }
         }
-        Ok(Self { stories_by_id })
+        Ok(Self { scenarios_by_id })
     }
 
     pub fn default_editor_ux() -> Self {
-        Self::new(default_editor_ux_stories())
-            .expect("default editor UX story catalog should be valid")
+        Self::new(default_editor_ux_scenarios())
+            .expect("default editor UX scenario catalog should be valid")
     }
 
-    pub fn get(&self, story_id: &EditorUxStoryId) -> Option<&EditorUxStory> {
-        self.stories_by_id.get(story_id)
+    pub fn get(&self, scenario_id: &EditorUxScenarioId) -> Option<&EditorUxScenario> {
+        self.scenarios_by_id.get(scenario_id)
     }
 
-    pub fn stories(&self) -> impl Iterator<Item = &EditorUxStory> {
-        self.stories_by_id.values()
+    pub fn scenarios(&self) -> impl Iterator<Item = &EditorUxScenario> {
+        self.scenarios_by_id.values()
     }
 
     pub fn len(&self) -> usize {
-        self.stories_by_id.len()
+        self.scenarios_by_id.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.stories_by_id.is_empty()
+        self.scenarios_by_id.is_empty()
     }
 
-    pub fn validate(&self) -> Result<(), EditorUxStoryCatalogError> {
+    pub fn validate(&self) -> Result<(), EditorUxScenarioCatalogError> {
         if self.is_empty() {
-            return Err(EditorUxStoryCatalogError::EmptyCatalog);
+            return Err(EditorUxScenarioCatalogError::EmptyCatalog);
         }
-        for story in self.stories() {
-            if story.interactions.is_empty() {
-                return Err(EditorUxStoryCatalogError::MissingInteractions {
-                    story_id: story.id.clone(),
+        for scenario in self.scenarios() {
+            if scenario.interactions.is_empty() {
+                return Err(EditorUxScenarioCatalogError::MissingInteractions {
+                    scenario_id: scenario.id.clone(),
                 });
             }
         }
@@ -90,24 +97,24 @@ impl EditorUxStoryCatalog {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EditorUxStoryCatalogError {
+pub enum EditorUxScenarioCatalogError {
     EmptyCatalog,
-    EmptyStoryId,
-    EmptyStoryLabel { story_id: EditorUxStoryId },
-    EmptyScenarioMatrix { story_id: EditorUxStoryId },
-    DuplicateStoryId,
-    MissingInteractions { story_id: EditorUxStoryId },
+    EmptyScenarioId,
+    EmptyScenarioLabel { scenario_id: EditorUxScenarioId },
+    EmptyScenarioMatrix { scenario_id: EditorUxScenarioId },
+    DuplicateScenarioId,
+    MissingInteractions { scenario_id: EditorUxScenarioId },
 }
 
-pub fn default_editor_ux_stories() -> Vec<EditorUxStory> {
-    let mut stories = primitive_widget_stories()
+pub fn default_editor_ux_scenarios() -> Vec<EditorUxScenario> {
+    let mut scenarios = primitive_widget_scenarios()
         .into_iter()
         .map(|primitive| {
             let root_id = primitive.root.id;
-            let mut story = EditorUxStory::new(
-                EditorUxStoryId::new(primitive.id),
+            let mut scenario = EditorUxScenario::new(
+                EditorUxScenarioId::new(primitive.id),
                 primitive.label,
-                EditorUxStoryKind::PrimitiveWidget(primitive.kind),
+                EditorUxScenarioKind::PrimitiveWidget(primitive.kind),
                 ToolSurfaceReadiness::Product,
                 EditorUxScenarioMatrix::baseline(
                     primitive.scan_requirement.required_states.iter().copied(),
@@ -116,35 +123,40 @@ pub fn default_editor_ux_stories() -> Vec<EditorUxStory> {
                 primitive.scan_requirement,
             )
             .with_interactions([
-                EditorUxStoryInteraction::new(
+                EditorUxScenarioInteraction::new(
                     "focus",
                     "Focus",
-                    EditorUxStoryInteractionKind::FocusTraversal,
+                    EditorUxScenarioInteractionKind::FocusTraversal,
                     Some(root_id),
                 ),
-                EditorUxStoryInteraction::new(
+                EditorUxScenarioInteraction::new(
                     "activate",
                     "Activate",
-                    EditorUxStoryInteractionKind::PointerActivate,
+                    EditorUxScenarioInteractionKind::PointerActivate,
                     Some(root_id),
                 ),
             ]);
-            if primitive.kind == PrimitiveWidgetStoryKind::Button {
-                story = story.with_design_system_evidence(primary_button_design_system_evidence());
+            if primitive.kind == PrimitiveWidgetScenarioKind::Button {
+                scenario =
+                    scenario.with_design_system_evidence(primary_button_design_system_evidence());
             }
-            story
+            scenario
         })
         .collect::<Vec<_>>();
 
-    stories.extend(editor_surface_definitions().into_iter().map(surface_story));
-    stories.push(ui_designer_workbench_story());
-    stories.push(material_graph_canvas_story());
-    stories.push(shell_product_patterns_story());
-    stories.push(host_scenario_story());
-    stories
+    scenarios.extend(
+        editor_surface_definitions()
+            .into_iter()
+            .map(surface_scenario),
+    );
+    scenarios.push(ui_designer_workbench_scenario());
+    scenarios.push(material_graph_canvas_scenario());
+    scenarios.push(shell_product_patterns_scenario());
+    scenarios.push(host_scenario_scenario());
+    scenarios
 }
 
-fn shell_product_patterns_story() -> EditorUxStory {
+fn shell_product_patterns_scenario() -> EditorUxScenario {
     let mut scenario_matrix =
         EditorUxScenarioMatrix::baseline(shell_product_pattern_required_states());
     scenario_matrix.viewport_classes = vec![
@@ -165,57 +177,57 @@ fn shell_product_patterns_story() -> EditorUxStory {
         "long text overflow policy available",
     ];
 
-    EditorUxStory::new(
-        EditorUxStoryId::new(SHELL_PRODUCT_PATTERNS_STORY_ID),
+    EditorUxScenario::new(
+        EditorUxScenarioId::new(SHELL_PRODUCT_PATTERNS_SCENARIO_ID),
         "Shell Product Patterns",
-        EditorUxStoryKind::ProductPattern,
+        EditorUxScenarioKind::ProductPattern,
         ToolSurfaceReadiness::Product,
         scenario_matrix,
         shell_product_pattern_fixture_root(),
         VisibleWidgetScanRequirement::strict_interactive(shell_product_pattern_required_states()),
     )
     .with_interactions([
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "focus-inspector",
             "Focus Inspector",
-            EditorUxStoryInteractionKind::FocusTraversal,
+            EditorUxScenarioInteractionKind::FocusTraversal,
             Some(SHELL_PATTERNS_INSPECTOR_TEXT_WIDGET_ID),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "select-palette-item",
             "Select Palette Item",
-            EditorUxStoryInteractionKind::PointerActivate,
+            EditorUxScenarioInteractionKind::PointerActivate,
             Some(SHELL_PATTERNS_PALETTE_ITEM_WIDGET_ID),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "select-table-row",
             "Select Table Row",
-            EditorUxStoryInteractionKind::PointerActivate,
+            EditorUxScenarioInteractionKind::PointerActivate,
             Some(SHELL_PATTERNS_TABLE_WIDGET_ID),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "select-tree-row",
             "Select Tree Row",
-            EditorUxStoryInteractionKind::KeyboardActivate,
+            EditorUxScenarioInteractionKind::KeyboardActivate,
             Some(SHELL_PATTERNS_TREE_WIDGET_ID),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "focus-preview",
             "Focus Preview",
-            EditorUxStoryInteractionKind::ScenarioCapture,
+            EditorUxScenarioInteractionKind::ScenarioCapture,
             Some(SHELL_PATTERNS_PREVIEW_WIDGET_ID),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "capture-dock-split",
             "Capture Dock Split",
-            EditorUxStoryInteractionKind::ScenarioCapture,
+            EditorUxScenarioInteractionKind::ScenarioCapture,
             Some(SHELL_PATTERNS_DOCK_SPLIT_WIDGET_ID),
         ),
     ])
     .with_product_pattern_evidence(shell_product_pattern_evidence())
 }
 
-fn material_graph_canvas_story() -> EditorUxStory {
+fn material_graph_canvas_scenario() -> EditorUxScenario {
     let surface_id = ToolSurfaceInstanceId::try_from_raw(45)
         .expect("material graph canvas fixture surface id should be non-zero");
     let view_model = material_graph_canvas_fixture_view_model();
@@ -248,41 +260,41 @@ fn material_graph_canvas_story() -> EditorUxStory {
         "unfinished graph families hidden until productized",
     ];
 
-    EditorUxStory::new(
-        EditorUxStoryId::new(MATERIAL_GRAPH_CANVAS_STORY_ID),
+    EditorUxScenario::new(
+        EditorUxScenarioId::new(MATERIAL_GRAPH_CANVAS_SCENARIO_ID),
         "Material Graph Canvas Product",
-        EditorUxStoryKind::RegisteredSurface(MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID),
+        EditorUxScenarioKind::RegisteredSurface(MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID),
         ToolSurfaceReadiness::Product,
         scenario_matrix,
         root,
         VisibleWidgetScanRequirement::strict_interactive(material_graph_canvas_required_states()),
     )
     .with_interactions([
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "select-node",
             "Select Node",
-            EditorUxStoryInteractionKind::PointerActivate,
+            EditorUxScenarioInteractionKind::PointerActivate,
             Some(surface_widget_id(
                 surface_id,
                 MATERIAL_GRAPH_CANVAS_WIDGET_ID,
             )),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "edit-node-value",
             "Edit Node Value",
-            EditorUxStoryInteractionKind::TextEntry,
+            EditorUxScenarioInteractionKind::TextEntry,
             Some(surface_widget_id(surface_id, WidgetId(43_010))),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "navigate-diagnostic",
             "Navigate Diagnostic",
-            EditorUxStoryInteractionKind::PointerActivate,
+            EditorUxScenarioInteractionKind::PointerActivate,
             Some(surface_widget_id(surface_id, WidgetId(45_010))),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "capture-graph",
             "Capture Graph",
-            EditorUxStoryInteractionKind::ScenarioCapture,
+            EditorUxScenarioInteractionKind::ScenarioCapture,
             routes.iter().next().map(|(widget_id, _)| *widget_id),
         ),
     ])
@@ -293,7 +305,7 @@ fn material_graph_canvas_story() -> EditorUxStory {
     ))
 }
 
-fn ui_designer_workbench_story() -> EditorUxStory {
+fn ui_designer_workbench_scenario() -> EditorUxScenario {
     let surface_id = ToolSurfaceInstanceId::try_from_raw(44)
         .expect("UI Designer workbench fixture surface id should be non-zero");
     let view_model = ui_designer_workbench_fixture_view_model();
@@ -317,39 +329,39 @@ fn ui_designer_workbench_story() -> EditorUxStory {
         EditorUxInputModality::Keyboard,
     ];
 
-    EditorUxStory::new(
-        EditorUxStoryId::new(UI_DESIGNER_WORKBENCH_STORY_ID),
+    EditorUxScenario::new(
+        EditorUxScenarioId::new(UI_DESIGNER_WORKBENCH_SCENARIO_ID),
         "Standalone UI Designer Workbench",
-        EditorUxStoryKind::HostScenario,
+        EditorUxScenarioKind::HostScenario,
         ToolSurfaceReadiness::Product,
         scenario_matrix,
         root,
         VisibleWidgetScanRequirement::strict_interactive(ui_designer_workbench_required_states()),
     )
     .with_interactions([
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "select-canvas-node",
             "Select Canvas Node",
-            EditorUxStoryInteractionKind::PointerActivate,
+            EditorUxScenarioInteractionKind::PointerActivate,
             Some(surface_widget_id(surface_id, WidgetId(70_006))),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "edit-inspector-property",
             "Edit Inspector Property",
-            EditorUxStoryInteractionKind::TextEntry,
+            EditorUxScenarioInteractionKind::TextEntry,
             Some(surface_widget_id(surface_id, WidgetId(70_011))),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "capture-workbench",
             "Capture Workbench",
-            EditorUxStoryInteractionKind::ScenarioCapture,
+            EditorUxScenarioInteractionKind::ScenarioCapture,
             routes.iter().next().map(|(widget_id, _)| *widget_id),
         ),
     ])
     .with_workbench_evidence(ui_designer_workbench_evidence())
 }
 
-fn surface_story(definition: SurfaceDefinition) -> EditorUxStory {
+fn surface_scenario(definition: SurfaceDefinition) -> EditorUxScenario {
     let readiness = tool_surface_readiness_for_definition_id(definition.id);
     let root_id = WidgetId(20_000 + definition.id.raw() * 10);
     let action_id = WidgetId(root_id.0 + 1);
@@ -387,19 +399,19 @@ fn surface_story(definition: SurfaceDefinition) -> EditorUxStory {
         requirement.required_states.clear();
     }
 
-    EditorUxStory::new(
-        EditorUxStoryId::new(format!("editor.surface.{}", definition.semantic_key)),
+    EditorUxScenario::new(
+        EditorUxScenarioId::new(format!("editor.surface.{}", definition.semantic_key)),
         definition.display_name,
-        EditorUxStoryKind::RegisteredSurface(definition.id),
+        EditorUxScenarioKind::RegisteredSurface(definition.id),
         readiness,
         EditorUxScenarioMatrix::baseline(requirement.required_states.iter().copied()),
         root,
         requirement,
     )
-    .with_interactions([EditorUxStoryInteraction::new(
+    .with_interactions([EditorUxScenarioInteraction::new(
         "capture",
         "Capture Surface",
-        EditorUxStoryInteractionKind::ScenarioCapture,
+        EditorUxScenarioInteractionKind::ScenarioCapture,
         readiness.visible_in_product().then_some(action_id),
     )])
     .with_registered_surface_evidence(registered_surface_evidence(definition, readiness))
@@ -412,15 +424,15 @@ fn surface_definition_by_id(definition_id: ui_surface::SurfaceDefinitionId) -> S
         .expect("registered surface definition should exist")
 }
 
-fn host_scenario_story() -> EditorUxStory {
+fn host_scenario_scenario() -> EditorUxScenario {
     let style = TextStyle::default();
     let theme = ThemeTokens::default();
     let root_id = WidgetId(30_000);
     let action_id = WidgetId(30_001);
-    EditorUxStory::new(
-        EditorUxStoryId::new("editor.host.workspace.default"),
+    EditorUxScenario::new(
+        EditorUxScenarioId::new("editor.host.workspace.default"),
         "Editor Workspace Host / Default",
-        EditorUxStoryKind::HostScenario,
+        EditorUxScenarioKind::HostScenario,
         ToolSurfaceReadiness::Product,
         EditorUxScenarioMatrix::baseline([
             VisibleWidgetState::Default,
@@ -437,16 +449,16 @@ fn host_scenario_story() -> EditorUxStory {
         ]),
     )
     .with_interactions([
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "focus-workspace",
             "Focus Workspace",
-            EditorUxStoryInteractionKind::FocusTraversal,
+            EditorUxScenarioInteractionKind::FocusTraversal,
             Some(action_id),
         ),
-        EditorUxStoryInteraction::new(
+        EditorUxScenarioInteraction::new(
             "capture-host",
             "Capture Host",
-            EditorUxStoryInteractionKind::ScenarioCapture,
+            EditorUxScenarioInteractionKind::ScenarioCapture,
             Some(root_id),
         ),
     ])
@@ -458,52 +470,53 @@ mod tests {
 
     #[test]
     fn default_catalog_covers_primitives_surfaces_and_host_scenarios() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
 
         catalog.validate().expect("default catalog should validate");
         assert!(
             catalog
-                .stories()
-                .any(|story| matches!(story.kind, EditorUxStoryKind::PrimitiveWidget(_)))
+                .scenarios()
+                .any(|scenario| matches!(scenario.kind, EditorUxScenarioKind::PrimitiveWidget(_)))
+        );
+        assert!(
+            catalog.scenarios().any(|scenario| matches!(
+                scenario.kind,
+                EditorUxScenarioKind::RegisteredSurface(_)
+            ))
         );
         assert!(
             catalog
-                .stories()
-                .any(|story| matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_)))
-        );
-        assert!(
-            catalog
-                .stories()
-                .any(|story| story.kind == EditorUxStoryKind::HostScenario)
+                .scenarios()
+                .any(|scenario| scenario.kind == EditorUxScenarioKind::HostScenario)
         );
     }
 
     #[test]
     fn registered_surfaces_have_readiness_classification() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
 
-        assert!(catalog.stories().any(|story| {
-            matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_))
-                && story.readiness == ToolSurfaceReadiness::Product
+        assert!(catalog.scenarios().any(|scenario| {
+            matches!(scenario.kind, EditorUxScenarioKind::RegisteredSurface(_))
+                && scenario.readiness == ToolSurfaceReadiness::Product
         }));
-        assert!(catalog.stories().any(|story| {
-            matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_))
-                && story.readiness == ToolSurfaceReadiness::HiddenUntilProductized
+        assert!(catalog.scenarios().any(|scenario| {
+            matches!(scenario.kind, EditorUxScenarioKind::RegisteredSurface(_))
+                && scenario.readiness == ToolSurfaceReadiness::HiddenUntilProductized
         }));
     }
 
     #[test]
-    fn registered_surface_stories_name_pm007_evidence_contract() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let surface_stories = catalog
-            .stories()
-            .filter(|story| matches!(story.kind, EditorUxStoryKind::RegisteredSurface(_)))
+    fn registered_surface_scenarios_name_pm007_evidence_contract() {
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let surface_scenarios = catalog
+            .scenarios()
+            .filter(|scenario| matches!(scenario.kind, EditorUxScenarioKind::RegisteredSurface(_)))
             .collect::<Vec<_>>();
 
-        let covered_definition_ids = surface_stories
+        let covered_definition_ids = surface_scenarios
             .iter()
-            .filter_map(|story| {
-                story
+            .filter_map(|scenario| {
+                scenario
                     .registered_surface_evidence
                     .as_ref()
                     .map(|evidence| evidence.surface_definition_id)
@@ -514,22 +527,22 @@ mod tests {
             covered_definition_ids.len(),
             editor_surface_definitions().len()
         );
-        assert!(surface_stories.iter().all(|story| {
-            story
+        assert!(surface_scenarios.iter().all(|scenario| {
+            scenario
                 .registered_surface_evidence
                 .as_ref()
                 .is_some_and(|evidence| evidence.semantic_key.starts_with("editor.tool_surface."))
         }));
-        assert!(surface_stories.iter().any(|story| {
-            story.readiness == ToolSurfaceReadiness::HiddenUntilProductized
-                && story
+        assert!(surface_scenarios.iter().any(|scenario| {
+            scenario.readiness == ToolSurfaceReadiness::HiddenUntilProductized
+                && scenario
                     .registered_surface_evidence
                     .as_ref()
                     .is_some_and(|evidence| !evidence.visible_in_product)
         }));
-        assert!(surface_stories.iter().any(|story| {
-            story.readiness == ToolSurfaceReadiness::Product
-                && story
+        assert!(surface_scenarios.iter().any(|scenario| {
+            scenario.readiness == ToolSurfaceReadiness::Product
+                && scenario
                     .registered_surface_evidence
                     .as_ref()
                     .is_some_and(|evidence| {
@@ -541,21 +554,21 @@ mod tests {
     }
 
     #[test]
-    fn migrated_button_story_names_design_system_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let story = catalog
-            .stories()
-            .find(|story| {
+    fn migrated_button_scenario_names_design_system_evidence() {
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let scenario = catalog
+            .scenarios()
+            .find(|scenario| {
                 matches!(
-                    story.kind,
-                    EditorUxStoryKind::PrimitiveWidget(PrimitiveWidgetStoryKind::Button)
+                    scenario.kind,
+                    EditorUxScenarioKind::PrimitiveWidget(PrimitiveWidgetScenarioKind::Button)
                 )
             })
-            .expect("button story should be registered");
-        let evidence = story
+            .expect("button scenario should be registered");
+        let evidence = scenario
             .design_system_evidence
             .as_ref()
-            .expect("button story should carry design-system evidence");
+            .expect("button scenario should carry design-system evidence");
 
         assert_eq!(evidence.recipe_id.as_str(), "editor.pattern.primary_button");
         assert!(
@@ -565,7 +578,7 @@ mod tests {
                 .any(|id| id.as_str() == "color.accent")
         );
         assert!(
-            story
+            scenario
                 .scenario_matrix
                 .design_system_state_variants
                 .iter()
@@ -574,22 +587,22 @@ mod tests {
     }
 
     #[test]
-    fn standalone_ui_designer_workbench_story_names_native_evidence_contract() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let story = catalog
-            .get(&EditorUxStoryId::new(UI_DESIGNER_WORKBENCH_STORY_ID))
-            .expect("standalone UI Designer workbench story should be registered");
-        let evidence = story
+    fn standalone_ui_designer_workbench_scenario_names_native_evidence_contract() {
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let scenario = catalog
+            .get(&EditorUxScenarioId::new(UI_DESIGNER_WORKBENCH_SCENARIO_ID))
+            .expect("standalone UI Designer workbench scenario should be registered");
+        let evidence = scenario
             .workbench_evidence
             .as_ref()
-            .expect("workbench story should require native workbench evidence");
+            .expect("workbench scenario should require native workbench evidence");
 
-        assert_eq!(story.readiness, ToolSurfaceReadiness::Product);
+        assert_eq!(scenario.readiness, ToolSurfaceReadiness::Product);
         assert!(evidence.pane_kinds.contains(&"canvas"));
         assert!(evidence.route_kinds.contains(&"set_ui_node_text"));
         assert!(evidence.legacy_self_authoring_bypass);
         assert!(
-            story
+            scenario
                 .scenario_matrix
                 .required_widget_states
                 .contains(&VisibleWidgetState::Overflow)
@@ -597,17 +610,17 @@ mod tests {
     }
 
     #[test]
-    fn material_graph_canvas_story_names_product_evidence_contract() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let story = catalog
-            .get(&EditorUxStoryId::new(MATERIAL_GRAPH_CANVAS_STORY_ID))
-            .expect("material graph canvas story should be registered");
-        let evidence = story
+    fn material_graph_canvas_scenario_names_product_evidence_contract() {
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let scenario = catalog
+            .get(&EditorUxScenarioId::new(MATERIAL_GRAPH_CANVAS_SCENARIO_ID))
+            .expect("material graph canvas scenario should be registered");
+        let evidence = scenario
             .graph_canvas_evidence
             .as_ref()
-            .expect("material graph story should require graph canvas evidence");
+            .expect("material graph scenario should require graph canvas evidence");
 
-        assert_eq!(story.readiness, ToolSurfaceReadiness::Product);
+        assert_eq!(scenario.readiness, ToolSurfaceReadiness::Product);
         assert!(evidence.interaction_kinds.contains(&"drag_node_commit"));
         assert!(
             evidence
@@ -620,7 +633,7 @@ mod tests {
                 .contains(&"sdf_graph_canvas=hidden_until_productized")
         );
         assert!(
-            story
+            scenario
                 .scenario_matrix
                 .required_widget_states
                 .contains(&VisibleWidgetState::Selected)
@@ -628,17 +641,17 @@ mod tests {
     }
 
     #[test]
-    fn shell_product_patterns_story_names_pm006_evidence_contract() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let story = catalog
-            .get(&EditorUxStoryId::new(SHELL_PRODUCT_PATTERNS_STORY_ID))
-            .expect("shell product pattern story should be registered");
-        let evidence = story
+    fn shell_product_patterns_scenario_names_pm006_evidence_contract() {
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let scenario = catalog
+            .get(&EditorUxScenarioId::new(SHELL_PRODUCT_PATTERNS_SCENARIO_ID))
+            .expect("shell product pattern scenario should be registered");
+        let evidence = scenario
             .product_pattern_evidence
             .as_ref()
-            .expect("shell pattern story should require product-pattern evidence");
+            .expect("shell pattern scenario should require product-pattern evidence");
 
-        assert_eq!(story.readiness, ToolSurfaceReadiness::Product);
+        assert_eq!(scenario.readiness, ToolSurfaceReadiness::Product);
         assert!(evidence.pattern_kinds.contains(&"inspector"));
         assert!(evidence.pattern_kinds.contains(&"dock"));
         assert!(evidence.state_kinds.contains(&"degraded"));
@@ -648,7 +661,7 @@ mod tests {
                 .contains(&"product_pattern_report")
         );
         assert!(
-            story
+            scenario
                 .scenario_matrix
                 .required_widget_states
                 .contains(&VisibleWidgetState::Overflow)

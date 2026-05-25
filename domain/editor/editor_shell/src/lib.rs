@@ -7,10 +7,10 @@ pub mod expression;
 pub mod ids;
 pub mod observation;
 pub mod runtime;
-pub mod story_lab;
 pub mod surface_provider;
 pub mod surfaces;
 pub mod tool_suite;
+pub mod ux_lab;
 pub mod view_models;
 pub mod workspace;
 
@@ -23,7 +23,6 @@ pub use expression::*;
 pub use ids::*;
 pub use observation::*;
 pub use runtime::*;
-pub use story_lab::*;
 pub use surface_provider::*;
 pub use surfaces::{
     AssetBrowserRowViewModel, AssetBrowserViewModel, AssetDetailViewModel, AssetSurfaceAction,
@@ -80,6 +79,7 @@ pub use tool_suite::{
     stable_key_for_persisted_tool_surface_kind_v2, stable_key_for_tool_surface_kind,
     tool_surface_kind_for_stable_key,
 };
+pub use ux_lab::*;
 pub use view_models::*;
 pub use workspace::{
     ANIMATION_GRAPH_CANVAS_SURFACE_DEFINITION_ID, ANIMATION_WORKSPACE_PROFILE_ID,

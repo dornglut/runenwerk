@@ -1,80 +1,80 @@
-//! Editor UX Story Lab app-owned runner.
+//! Editor UX Lab app-owned runner.
 
 use crate::shell::{EditorLabEvidenceArtifact, EditorLabEvidenceArtifactKind};
-use editor_shell::{EditorUxStory, EditorUxStoryCatalog, ToolSurfaceReadiness};
+use editor_shell::{EditorUxScenario, EditorUxScenarioCatalog, ToolSurfaceReadiness};
 
 use super::{
     EditorUxDesignSystemEvidenceRun, EditorUxEvidenceManifest, EditorUxEvidenceRun,
     EditorUxGraphCanvasEvidenceRun, EditorUxProductPatternEvidenceRun,
-    EditorUxRegisteredSurfaceEvidenceRun, EditorUxWorkbenchEvidenceRun, scan_editor_ux_story,
+    EditorUxRegisteredSurfaceEvidenceRun, EditorUxWorkbenchEvidenceRun, scan_editor_ux_scenario,
 };
 
-pub struct EditorUxStoryLabRunner {
-    catalog: EditorUxStoryCatalog,
+pub struct EditorUxLabRunner {
+    catalog: EditorUxScenarioCatalog,
 }
 
-impl EditorUxStoryLabRunner {
-    pub fn new(catalog: EditorUxStoryCatalog) -> Self {
+impl EditorUxLabRunner {
+    pub fn new(catalog: EditorUxScenarioCatalog) -> Self {
         Self { catalog }
     }
 
     pub fn default_catalog() -> Self {
-        Self::new(EditorUxStoryCatalog::default_editor_ux())
+        Self::new(EditorUxScenarioCatalog::default_editor_ux())
     }
 
     pub fn run_manifest(&self) -> EditorUxEvidenceManifest {
-        let runs = self.catalog.stories().map(run_story).collect::<Vec<_>>();
-        EditorUxEvidenceManifest::current(
-            "runenwerk_editor::editor_ux_story_lab",
-            &self.catalog,
-            runs,
-        )
+        let runs = self
+            .catalog
+            .scenarios()
+            .map(run_scenario)
+            .collect::<Vec<_>>();
+        EditorUxEvidenceManifest::current("runenwerk_editor::editor_ux_lab", &self.catalog, runs)
     }
 }
 
-fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
-    let scan = scan_editor_ux_story(story);
+fn run_scenario(scenario: &EditorUxScenario) -> EditorUxEvidenceRun {
+    let scan = scan_editor_ux_scenario(scenario);
     let mut artifacts = vec![EditorLabEvidenceArtifact::new(
         EditorLabEvidenceArtifactKind::RetainedUiDebug,
         format!(
             "artifacts/editor-ux/{}-retained-ui.txt",
-            artifact_slug(story.id.as_str())
+            artifact_slug(scenario.id.as_str())
         ),
         scan.records.len().max(1) * 64,
         "retained UI tree and visible-widget scan output",
     )];
 
-    if story.readiness == ToolSurfaceReadiness::Product {
+    if scenario.readiness == ToolSurfaceReadiness::Product {
         artifacts.push(EditorLabEvidenceArtifact::new(
             EditorLabEvidenceArtifactKind::PlatformImpossibleReport,
             format!(
                 "artifacts/editor-ux/{}-native-capture-platform.ron",
-                artifact_slug(story.id.as_str())
+                artifact_slug(scenario.id.as_str())
             ),
             128,
             "typed platform-impossible report for local native capture when screenshots are unavailable",
         ));
     }
 
-    if story.design_system_evidence.is_some() {
+    if scenario.design_system_evidence.is_some() {
         artifacts.push(EditorLabEvidenceArtifact::new(
             EditorLabEvidenceArtifactKind::DesignSystemReport,
             format!(
                 "artifacts/editor-ux/{}-design-system.ron",
-                artifact_slug(story.id.as_str())
+                artifact_slug(scenario.id.as_str())
             ),
             192,
             "token, recipe, and state matrix design-system evidence",
         ));
     }
 
-    if story.graph_canvas_evidence.is_some() {
+    if scenario.graph_canvas_evidence.is_some() {
         artifacts.extend([
             EditorLabEvidenceArtifact::new(
                 EditorLabEvidenceArtifactKind::GraphCanvasReport,
                 format!(
                     "artifacts/editor-ux/{}-graph-canvas.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 320,
                 "graph canvas interaction, route, readiness, and native evidence report",
@@ -83,7 +83,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::FocusTraversalReport,
                 format!(
                     "artifacts/editor-ux/{}-graph-focus-traversal.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "graph canvas keyboard focus traversal report",
@@ -92,7 +92,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::AccessibilityReport,
                 format!(
                     "artifacts/editor-ux/{}-graph-accessibility.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 160,
                 "graph canvas accessibility report",
@@ -101,7 +101,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::DiagnosticsSnapshot,
                 format!(
                     "artifacts/editor-ux/{}-graph-diagnostics.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "graph canvas diagnostics and degraded-provider snapshot",
@@ -110,7 +110,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::TimingReport,
                 format!(
                     "artifacts/editor-ux/{}-graph-timing.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "graph canvas retained/native timing report",
@@ -118,13 +118,13 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
         ]);
     }
 
-    if story.product_pattern_evidence.is_some() {
+    if scenario.product_pattern_evidence.is_some() {
         artifacts.extend([
             EditorLabEvidenceArtifact::new(
                 EditorLabEvidenceArtifactKind::ProductPatternReport,
                 format!(
                     "artifacts/editor-ux/{}-product-patterns.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 320,
                 "shell product pattern state, interaction, route, and native evidence report",
@@ -133,7 +133,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::FocusTraversalReport,
                 format!(
                     "artifacts/editor-ux/{}-patterns-focus-traversal.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "shell product pattern keyboard focus traversal report",
@@ -142,7 +142,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::AccessibilityReport,
                 format!(
                     "artifacts/editor-ux/{}-patterns-accessibility.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 160,
                 "shell product pattern accessibility report",
@@ -151,7 +151,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::DiagnosticsSnapshot,
                 format!(
                     "artifacts/editor-ux/{}-patterns-diagnostics.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "shell product pattern diagnostics and degraded-state snapshot",
@@ -160,7 +160,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::TimingReport,
                 format!(
                     "artifacts/editor-ux/{}-patterns-timing.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "shell product pattern retained/native timing report",
@@ -168,24 +168,24 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
         ]);
     }
 
-    if let Some(evidence) = &story.registered_surface_evidence {
+    if let Some(evidence) = &scenario.registered_surface_evidence {
         for artifact_kind in registered_surface_artifact_kinds(evidence) {
             push_artifact_if_missing(
                 &mut artifacts,
                 artifact_kind,
-                story.id.as_str(),
+                scenario.id.as_str(),
                 "registered surface readiness, route, provider, and native evidence report",
             );
         }
     }
 
-    if story.workbench_evidence.is_some() {
+    if scenario.workbench_evidence.is_some() {
         artifacts.extend([
             EditorLabEvidenceArtifact::new(
                 EditorLabEvidenceArtifactKind::WorkbenchReport,
                 format!(
                     "artifacts/editor-ux/{}-workbench.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 256,
                 "standalone UI Designer workbench pane, route, and readiness evidence",
@@ -194,7 +194,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::FocusTraversalReport,
                 format!(
                     "artifacts/editor-ux/{}-focus-traversal.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "workbench keyboard focus traversal report",
@@ -203,7 +203,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::AccessibilityReport,
                 format!(
                     "artifacts/editor-ux/{}-accessibility.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 160,
                 "workbench accessibility report",
@@ -212,7 +212,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::DiagnosticsSnapshot,
                 format!(
                     "artifacts/editor-ux/{}-diagnostics.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "workbench diagnostics snapshot",
@@ -221,7 +221,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
                 EditorLabEvidenceArtifactKind::TimingReport,
                 format!(
                     "artifacts/editor-ux/{}-timing.ron",
-                    artifact_slug(story.id.as_str())
+                    artifact_slug(scenario.id.as_str())
                 ),
                 128,
                 "workbench retained/native timing report",
@@ -229,29 +229,30 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
         ]);
     }
 
-    let design_system_evidence = story
+    let design_system_evidence = scenario
         .design_system_evidence
         .as_ref()
-        .map(EditorUxDesignSystemEvidenceRun::from_story_evidence);
-    let graph_canvas_evidence = story
+        .map(EditorUxDesignSystemEvidenceRun::from_scenario_evidence);
+    let graph_canvas_evidence = scenario
         .graph_canvas_evidence
         .as_ref()
-        .map(EditorUxGraphCanvasEvidenceRun::from_story_evidence);
-    let product_pattern_evidence = story
+        .map(EditorUxGraphCanvasEvidenceRun::from_scenario_evidence);
+    let product_pattern_evidence = scenario
         .product_pattern_evidence
         .as_ref()
-        .map(EditorUxProductPatternEvidenceRun::from_story_evidence);
-    let registered_surface_evidence = story
+        .map(EditorUxProductPatternEvidenceRun::from_scenario_evidence);
+    let registered_surface_evidence = scenario
         .registered_surface_evidence
         .as_ref()
-        .map(EditorUxRegisteredSurfaceEvidenceRun::from_story_evidence);
-    let workbench_evidence = story
+        .map(EditorUxRegisteredSurfaceEvidenceRun::from_scenario_evidence);
+    let workbench_evidence = scenario
         .workbench_evidence
         .as_ref()
-        .map(EditorUxWorkbenchEvidenceRun::from_story_evidence);
+        .map(EditorUxWorkbenchEvidenceRun::from_scenario_evidence);
 
     if scan.passed() {
-        let mut run = EditorUxEvidenceRun::passed(story.id.as_str(), scan.records.len(), artifacts);
+        let mut run =
+            EditorUxEvidenceRun::passed(scenario.id.as_str(), scan.records.len(), artifacts);
         if let Some(evidence) = design_system_evidence {
             run = run.with_design_system_evidence(evidence);
         }
@@ -270,7 +271,7 @@ fn run_story(story: &EditorUxStory) -> EditorUxEvidenceRun {
         run
     } else {
         let mut run = EditorUxEvidenceRun::failed(
-            story.id.as_str(),
+            scenario.id.as_str(),
             scan.records.len(),
             scan.issues
                 .iter()
@@ -324,7 +325,7 @@ fn artifact_kind_from_name(name: &str) -> Option<EditorLabEvidenceArtifactKind> 
 fn push_artifact_if_missing(
     artifacts: &mut Vec<EditorLabEvidenceArtifact>,
     kind: EditorLabEvidenceArtifactKind,
-    story_id: &str,
+    scenario_id: &str,
     description: &str,
 ) {
     if artifacts.iter().any(|artifact| artifact.kind == kind) {
@@ -334,7 +335,7 @@ fn push_artifact_if_missing(
         kind,
         format!(
             "artifacts/editor-ux/{}-{}.ron",
-            artifact_slug(story_id),
+            artifact_slug(scenario_id),
             artifact_suffix(kind)
         ),
         160,
@@ -356,8 +357,8 @@ fn artifact_suffix(kind: EditorLabEvidenceArtifactKind) -> &'static str {
     }
 }
 
-fn artifact_slug(story_id: &str) -> String {
-    story_id
+fn artifact_slug(scenario_id: &str) -> String {
+    scenario_id
         .chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
         .collect()
@@ -369,21 +370,21 @@ mod tests {
     use std::fmt::Write as _;
 
     #[test]
-    fn story_lab_runner_generates_valid_manifest_for_default_catalog() {
-        let runner = EditorUxStoryLabRunner::default_catalog();
+    fn ux_lab_runner_generates_valid_manifest_for_default_catalog() {
+        let runner = EditorUxLabRunner::default_catalog();
 
         let manifest = runner.run_manifest();
 
         manifest
-            .validate(&EditorUxStoryCatalog::default_editor_ux())
+            .validate(&EditorUxScenarioCatalog::default_editor_ux())
             .expect("default runner manifest should validate");
         assert!(!manifest.runs.is_empty());
     }
 
     #[test]
-    fn pm_editor_ux_002_editor_ux_story_lab_manifest_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let runner = EditorUxStoryLabRunner::new(catalog.clone());
+    fn pm_editor_ux_002_editor_ux_lab_manifest_evidence() {
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let runner = EditorUxLabRunner::new(catalog.clone());
 
         let manifest = runner.run_manifest();
 
@@ -413,7 +414,7 @@ mod tests {
             .expect("PM-EDITOR-UX-002 manifest artifact should be writable");
 
             let mut runtime_proof = String::new();
-            writeln!(runtime_proof, "- story_count: {}", manifest.runs.len()).unwrap();
+            writeln!(runtime_proof, "- scenario_count: {}", manifest.runs.len()).unwrap();
             writeln!(
                 runtime_proof,
                 "- visible_widget_count: {}",
@@ -428,7 +429,7 @@ mod tests {
             writeln!(runtime_proof, "- app_owned_manifest_validation: true").unwrap();
             writeln!(
                 runtime_proof,
-                "- native_capture_fallback: typed platform-impossible reports for product stories without local screenshots"
+                "- native_capture_fallback: typed platform-impossible reports for product scenarios without local screenshots"
             )
             .unwrap();
             std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)
@@ -438,8 +439,8 @@ mod tests {
 
     #[test]
     fn pm_editor_ux_003_editor_design_system_manifest_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let runner = EditorUxStoryLabRunner::new(catalog.clone());
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let runner = EditorUxLabRunner::new(catalog.clone());
 
         let manifest = runner.run_manifest();
 
@@ -481,7 +482,7 @@ mod tests {
             let mut runtime_proof = String::new();
             writeln!(
                 runtime_proof,
-                "- migrated_story_count: {}",
+                "- migrated_scenario_count: {}",
                 migrated_runs.len()
             )
             .unwrap();
@@ -511,7 +512,7 @@ mod tests {
             writeln!(runtime_proof, "- app_owned_manifest_validation: true").unwrap();
             writeln!(
                 runtime_proof,
-                "- native_capture_fallback: typed platform-impossible reports for product stories without local screenshots"
+                "- native_capture_fallback: typed platform-impossible reports for product scenarios without local screenshots"
             )
             .unwrap();
             std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)
@@ -521,8 +522,8 @@ mod tests {
 
     #[test]
     fn pm_editor_ux_004_standalone_ui_designer_workbench_manifest_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let runner = EditorUxStoryLabRunner::new(catalog.clone());
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let runner = EditorUxLabRunner::new(catalog.clone());
 
         let manifest = runner.run_manifest();
 
@@ -586,7 +587,7 @@ mod tests {
             let mut runtime_proof = String::new();
             writeln!(
                 runtime_proof,
-                "- workbench_story_count: {}",
+                "- workbench_scenario_count: {}",
                 workbench_runs.len()
             )
             .unwrap();
@@ -616,7 +617,7 @@ mod tests {
             writeln!(runtime_proof, "- app_owned_manifest_validation: true").unwrap();
             writeln!(
                 runtime_proof,
-                "- native_capture_fallback: typed platform-impossible report for the standalone workbench story when local screenshots are unavailable"
+                "- native_capture_fallback: typed platform-impossible report for the standalone workbench scenario when local screenshots are unavailable"
             )
             .unwrap();
             std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)
@@ -626,8 +627,8 @@ mod tests {
 
     #[test]
     fn pm_editor_ux_005_material_graph_canvas_manifest_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let runner = EditorUxStoryLabRunner::new(catalog.clone());
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let runner = EditorUxLabRunner::new(catalog.clone());
 
         let manifest = runner.run_manifest();
 
@@ -694,7 +695,12 @@ mod tests {
             .expect("PM-EDITOR-UX-005 manifest artifact should be writable");
 
             let mut runtime_proof = String::new();
-            writeln!(runtime_proof, "- graph_story_count: {}", graph_runs.len()).unwrap();
+            writeln!(
+                runtime_proof,
+                "- graph_scenario_count: {}",
+                graph_runs.len()
+            )
+            .unwrap();
             writeln!(
                 runtime_proof,
                 "- graph_artifact_kinds: {}",
@@ -727,7 +733,7 @@ mod tests {
             writeln!(runtime_proof, "- app_owned_manifest_validation: true").unwrap();
             writeln!(
                 runtime_proof,
-                "- native_capture_fallback: typed platform-impossible report for the material graph canvas story when local screenshots are unavailable"
+                "- native_capture_fallback: typed platform-impossible report for the material graph canvas scenario when local screenshots are unavailable"
             )
             .unwrap();
             std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)
@@ -737,8 +743,8 @@ mod tests {
 
     #[test]
     fn pm_editor_ux_006_shell_product_patterns_manifest_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let runner = EditorUxStoryLabRunner::new(catalog.clone());
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let runner = EditorUxLabRunner::new(catalog.clone());
 
         let manifest = runner.run_manifest();
 
@@ -819,7 +825,7 @@ mod tests {
             let mut runtime_proof = String::new();
             writeln!(
                 runtime_proof,
-                "- product_pattern_story_count: {}",
+                "- product_pattern_scenario_count: {}",
                 pattern_runs.len()
             )
             .unwrap();
@@ -855,7 +861,7 @@ mod tests {
             writeln!(runtime_proof, "- app_owned_manifest_validation: true").unwrap();
             writeln!(
                 runtime_proof,
-                "- native_capture_fallback: typed platform-impossible report for the shell product pattern story when local screenshots are unavailable"
+                "- native_capture_fallback: typed platform-impossible report for the shell product pattern scenario when local screenshots are unavailable"
             )
             .unwrap();
             std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)
@@ -865,8 +871,8 @@ mod tests {
 
     #[test]
     fn pm_editor_ux_007_registered_surface_wave_manifest_evidence() {
-        let catalog = EditorUxStoryCatalog::default_editor_ux();
-        let runner = EditorUxStoryLabRunner::new(catalog.clone());
+        let catalog = EditorUxScenarioCatalog::default_editor_ux();
+        let runner = EditorUxLabRunner::new(catalog.clone());
 
         let manifest = runner.run_manifest();
 
@@ -959,7 +965,7 @@ mod tests {
             let mut runtime_proof = String::new();
             writeln!(
                 runtime_proof,
-                "- registered_surface_story_count: {}",
+                "- registered_surface_scenario_count: {}",
                 surface_runs.len()
             )
             .unwrap();
@@ -987,7 +993,7 @@ mod tests {
             writeln!(runtime_proof, "- app_owned_manifest_validation: true").unwrap();
             writeln!(
                 runtime_proof,
-                "- native_capture_fallback: typed platform-impossible reports for product registered-surface stories when local screenshots are unavailable"
+                "- native_capture_fallback: typed platform-impossible reports for product registered-surface scenarios when local screenshots are unavailable"
             )
             .unwrap();
             std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)

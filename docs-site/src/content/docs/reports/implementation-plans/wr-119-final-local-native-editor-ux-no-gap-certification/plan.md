@@ -7,7 +7,7 @@ layer: app / domain/editor / domain/ui / workspace
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
 related_reports:
   - ../../closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
   - ../../closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md
@@ -57,7 +57,7 @@ Expected production outcome for the later final slice:
   `docs-site/src/content/docs/workspace/roadmap-items.yaml` after this design
   action is accepted.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Completed prerequisite closeouts:
   - `docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md`;
   - `docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md`;

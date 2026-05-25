@@ -7,13 +7,15 @@ layer: workspace/domain/app
 canonical: false
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-archive.yaml
 ---
 
 # PM-EDITOR-UX-001 Governance Truth Audit And Track Activation Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 
@@ -30,7 +32,7 @@ benchmarks changed in this slice.
 ## Changed Artifacts
 
 - Added active design:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Added implementation contract:
   `docs-site/src/content/docs/reports/implementation-plans/wr-111-editor-product-ux-governance-and-track-activation/plan.md`.
 - Added `PT-EDITOR-UX` and milestone sequence in

@@ -7,7 +7,7 @@ layer: domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/active/ui-designer-interface-lab-platform-design.md
   - ../../../design/accepted/ui-designer-canonical-ir-and-composition-design.md
   - ../../../design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
@@ -62,7 +62,7 @@ Expected production outcome:
 - Roadmap row: `WR-114` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Active UI Designer platform doctrine:
   `docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md`.
 - Accepted Canonical UI IR design:

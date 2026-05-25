@@ -7,7 +7,7 @@ layer: domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
 related_reports:
   - ../../implementation-plans/wr-117-all-registered-visible-surface-wave/plan.md
   - ../pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
@@ -21,6 +21,8 @@ related_roadmaps:
 ---
 
 # PM-EDITOR-UX-007 All Registered Visible Surface Wave Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 

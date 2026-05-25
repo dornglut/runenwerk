@@ -7,7 +7,7 @@ layer: domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
 related_reports:
   - ../wr-113-layered-editor-design-system-migration/plan.md
   - ../wr-114-standalone-ui-designer-workbench/plan.md
@@ -55,7 +55,7 @@ Expected production outcome for the later implementation slice:
 - Roadmap row: `WR-116` in
   `docs-site/src/content/docs/workspace/roadmap-items.yaml`.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Completed design-system prerequisite:
   `docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md`.
 - Completed standalone UI Designer prerequisite:

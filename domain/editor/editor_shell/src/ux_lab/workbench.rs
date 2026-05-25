@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/workbench.rs
-//! Purpose: UI Designer workbench Story Lab contracts and fixture evidence.
+//! File: domain/editor/editor_shell/src/ux_lab/workbench.rs
+//! Purpose: UI Designer workbench UX Lab contracts and fixture evidence.
 
 use crate::{
     EditorDefinitionSurfaceAction, EditorLabActionViewModel, EditorLabDiagnosticViewModel,
@@ -8,7 +8,7 @@ use crate::{
     UiDesignerWorkbenchViewModel, VisibleWidgetState,
 };
 
-pub const UI_DESIGNER_WORKBENCH_STORY_ID: &str = "editor.ui_designer.workbench.standalone";
+pub const UI_DESIGNER_WORKBENCH_SCENARIO_ID: &str = "editor.ui_designer.workbench.standalone";
 pub const UI_DESIGNER_WORKBENCH_TARGET_PROFILE: &str = "editor.workbench";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +46,7 @@ pub fn ui_designer_workbench_evidence() -> EditorUxWorkbenchEvidence {
         readiness_checks: vec![
             "typed_pane_chain",
             "operation_intent_roundtrip",
-            "story_lab_native_evidence",
+            "ux_lab_native_evidence",
             "legacy_self_authoring_bypass",
         ],
         legacy_self_authoring_bypass: true,
@@ -199,7 +199,7 @@ pub fn ui_designer_workbench_fixture_view_model() -> UiDesignerWorkbenchViewMode
             "selection, text edit, apply, undo, and redo use typed EditorDefinition routes",
         ),
         UiDesignerWorkbenchReadinessViewModel::new(
-            "story_lab_native_evidence",
+            "ux_lab_native_evidence",
             UiDesignerWorkbenchReadinessStatus::Passed,
             "manifest requires retained UI, focus, accessibility, timing, and native proof",
         ),

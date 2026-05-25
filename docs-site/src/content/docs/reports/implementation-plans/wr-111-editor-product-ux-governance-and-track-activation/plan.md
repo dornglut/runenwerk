@@ -7,7 +7,7 @@ layer: workspace/domain/app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/accepted/ui-lab-perfectionist-audit-design.md
   - ../../../design/active/ui-designer-interface-lab-platform-design.md
   - ../../../design/active/game-runtime-ui-projection-and-hud-platform-design.md
@@ -84,7 +84,7 @@ editor shell, and app evidence owners.
   `docs-site/src/content/docs/workspace/roadmap-archive.yaml`, and
   `docs-site/src/content/docs/workspace/roadmap-deferred.yaml`.
 - Active design:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Completed upstream UI Lab perfection input:
   `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md`.
 - UI Designer target-profile and readiness input:

@@ -7,7 +7,7 @@ layer: app / domain/editor / domain/ui / workspace
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
 related_reports:
   - ../../implementation-plans/wr-119-final-local-native-editor-ux-no-gap-certification/plan.md
   - ../pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
@@ -23,6 +23,8 @@ related_roadmaps:
 ---
 
 # PM-EDITOR-UX-009 Final Local Native No Gap Certification Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 

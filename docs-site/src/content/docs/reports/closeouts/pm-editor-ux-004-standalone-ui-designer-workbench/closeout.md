@@ -7,7 +7,7 @@ layer: domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/active/ui-designer-interface-lab-platform-design.md
   - ../../../design/accepted/ui-designer-canonical-ir-and-composition-design.md
   - ../../../design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
@@ -24,6 +24,8 @@ related_roadmaps:
 ---
 
 # PM-EDITOR-UX-004 Standalone UI Designer Workbench Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 

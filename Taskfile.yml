@@ -152,6 +152,33 @@ tasks:
     cmds:
       - uv run python tools/docs/validate_docs.py
 
+  app:material-lab:
+    desc: Run the standalone Material Lab app.
+    cmds:
+      - cargo run -p runenwerk_editor --bin runenwerk_material_lab
+
+  ux:lab:test:
+    desc: Run focused UX Lab Rust contract tests.
+    cmds:
+      - cargo test -p ui_widgets scenario
+      - cargo test -p editor_shell ux_lab
+      - cargo test -p runenwerk_editor editor_ux
+
+  ux:lab:evidence:
+    desc: Refresh PM-EDITOR-UX 002-007 UX Lab evidence manifests.
+    cmds:
+      - RUNENWERK_WRITE_PM_EDITOR_UX_002_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_002 -- --nocapture
+      - RUNENWERK_WRITE_PM_EDITOR_UX_003_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_003 -- --nocapture
+      - RUNENWERK_WRITE_PM_EDITOR_UX_004_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_004 -- --nocapture
+      - RUNENWERK_WRITE_PM_EDITOR_UX_005_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_005 -- --nocapture
+      - RUNENWERK_WRITE_PM_EDITOR_UX_006_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_006 -- --nocapture
+      - RUNENWERK_WRITE_PM_EDITOR_UX_007_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_007 -- --nocapture
+
+  ux:lab:terminology:
+    desc: Check UX Lab/scenario terminology in current code and planning docs.
+    cmds:
+      - uv run python tools/workflow/ux_lab_terminology.py
+
   puml:validate:
     desc: Validate every PlantUML diagram in the repository.
     cmds:

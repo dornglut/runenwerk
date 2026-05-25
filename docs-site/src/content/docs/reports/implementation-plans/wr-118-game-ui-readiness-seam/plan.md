@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/active/game-runtime-ui-projection-and-hud-platform-design.md
 related_reports:
   - ../wr-117-all-registered-visible-surface-wave/plan.md
@@ -54,7 +54,7 @@ Expected production outcome for the later implementation slice:
   `docs-site/src/content/docs/workspace/roadmap-items.yaml` after this design
   action is accepted.
 - Active editor UX doctrine:
-  `docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md`.
+  `docs-site/src/content/docs/design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md`.
 - Active game-runtime UI doctrine:
   `docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md`.
 - Completed all-surface prerequisite:

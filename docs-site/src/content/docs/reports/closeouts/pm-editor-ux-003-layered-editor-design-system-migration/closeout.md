@@ -7,7 +7,7 @@ layer: domain/ui / domain/editor / app
 canonical: true
 last_reviewed: 2026-05-25
 related_designs:
-  - ../../../design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - ../../../design/active/editor-product-ux-lab-and-game-ui-ready-foundations-design.md
   - ../../../design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
   - ../../../design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
 related_reports:
@@ -21,6 +21,8 @@ related_roadmaps:
 ---
 
 # PM-EDITOR-UX-003 Layered Editor Design System Migration Closeout
+
+> Terminology note: Current name: UX Lab Scenarios; historical name: Story Lab.
 
 ## Summary
 

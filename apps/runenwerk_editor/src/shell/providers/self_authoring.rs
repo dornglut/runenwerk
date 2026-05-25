@@ -350,7 +350,7 @@ fn scenario_matrix_pane() -> UiDesignerWorkbenchPaneViewModel {
 fn readiness_pane() -> UiDesignerWorkbenchPaneViewModel {
     UiDesignerWorkbenchPaneViewModel::new(UiDesignerWorkbenchPaneKind::Readiness, "Readiness")
         .with_summary_lines([
-            "surface readiness: product for standalone workbench story".to_string(),
+            "surface readiness: product for standalone workbench scenario".to_string(),
             "visible-widget scan: required".to_string(),
             "native proof: screenshot or platform-impossible report".to_string(),
         ])
@@ -396,9 +396,9 @@ fn workbench_readiness(
             "normal edits use EditorDefinition route actions and EditorLabOperation reducers",
         ),
         UiDesignerWorkbenchReadinessViewModel::new(
-            "story_lab_native_evidence",
+            "ux_lab_native_evidence",
             UiDesignerWorkbenchReadinessStatus::Passed,
-            "PM-EDITOR-UX-004 Story Lab manifest requires workbench, accessibility, focus, timing, and native proof",
+            "PM-EDITOR-UX-004 UX Lab manifest requires workbench, accessibility, focus, timing, and native proof",
         ),
         UiDesignerWorkbenchReadinessViewModel::new(
             "legacy_self_authoring_bypass",

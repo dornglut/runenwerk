@@ -28,7 +28,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Editor Rendered World And Multi Entity Viewport Design](editor-rendered-world-and-multi-entity-viewport-design.md)
 - [Editor Shell Menu And Tab Chrome Polish Design](editor-shell-menu-and-tab-chrome-polish-design.md)
 - [Editor Tool Suite Registry And Workbench Host Design](editor-tool-suite-registry-and-workbench-host-design.md)
-- [Editor Product UX Story Lab And Game UI Ready Foundations](editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md)
+- [Editor Product UX Lab And Game UI Ready Foundations](editor-product-ux-lab-and-game-ui-ready-foundations-design.md)
 - [Editor UI Runtime V2 And Interaction Formation Design](editor-ui-runtime-v2-and-interaction-formation-design.md)
 - [Editor UI Popup Adornment Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)

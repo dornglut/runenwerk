@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/graph_canvas.rs
-//! Purpose: Editor UX Story Lab graph canvas product evidence contracts.
+//! File: domain/editor/editor_shell/src/ux_lab/graph_canvas.rs
+//! Purpose: Editor UX Lab graph canvas product evidence contracts.
 
 use crate::{
     MaterialGraphCanvasViewModel, MaterialGraphEdgeViewModel, MaterialGraphEditorViewModel,
@@ -12,7 +12,7 @@ use crate::{
     MaterialUndoRedoViewModel, VisibleWidgetState,
 };
 
-pub const MATERIAL_GRAPH_CANVAS_STORY_ID: &str = "editor.graph.material.canvas.product";
+pub const MATERIAL_GRAPH_CANVAS_SCENARIO_ID: &str = "editor.graph.material.canvas.product";
 pub const MATERIAL_GRAPH_CANVAS_TARGET_PROFILE: &str = "editor.graph.material";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

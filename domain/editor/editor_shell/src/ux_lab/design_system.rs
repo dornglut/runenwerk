@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/design_system.rs
-//! Purpose: Editor Story Lab design-system token and recipe evidence contracts.
+//! File: domain/editor/editor_shell/src/ux_lab/design_system.rs
+//! Purpose: Editor UX Lab design-system token and recipe evidence contracts.
 
 use std::collections::BTreeSet;
 

@@ -1,5 +1,5 @@
-//! File: domain/editor/editor_shell/src/story_lab/scenario.rs
-//! Purpose: Editor UX Story Lab scenario matrix contracts.
+//! File: domain/editor/editor_shell/src/ux_lab/scenario_matrix.rs
+//! Purpose: Editor UX Lab scenario matrix contracts.
 
 use std::collections::BTreeSet;
 
