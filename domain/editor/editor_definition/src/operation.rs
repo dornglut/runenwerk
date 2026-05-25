@@ -29,7 +29,7 @@ pub struct EditorLabOperation {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum EditorLabOperationKind {
-    UiVisualLayout(UiVisualLayoutOperation),
+    UiVisualLayout(Box<UiVisualLayoutOperation>),
     SetUiNodeText {
         node_id: String,
         text: String,
@@ -710,7 +710,7 @@ mod tests {
             id: "layout.axis".to_string(),
             document_id: document.id.clone(),
             target_profile: "editor.workbench".to_string(),
-            kind: EditorLabOperationKind::UiVisualLayout(UiVisualLayoutOperation {
+            kind: EditorLabOperationKind::UiVisualLayout(Box::new(UiVisualLayoutOperation {
                 id: "axis.stack".into(),
                 source_document: UiTemplateId::from("test.template"),
                 target_path: AuthoredUiNodePath("root/stack".to_string()),
@@ -721,7 +721,7 @@ mod tests {
                 },
                 source_location: None,
                 preview_only: false,
-            }),
+            })),
             preview_only: false,
             source: None,
         };

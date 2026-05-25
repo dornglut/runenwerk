@@ -3,7 +3,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ui_definition::UiDefinitionDiagnostic;
-use ui_theme::{ThemeTokens, UiColor};
+use ui_theme::{
+    ThemeTokenDeclaration, ThemeTokenFamily, ThemeTokenGraph, ThemeTokenId, ThemeTokenLayer,
+    ThemeTokenResolveRequest, ThemeTokenSourceId, ThemeTokenSourcePath, ThemeTokenValue,
+    ThemeTokens, UiColor, resolve_theme_tokens,
+};
+
+pub const EDITOR_THEME_TARGET_PROFILE: &str = "editor.workbench";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EditorThemeDefinition {
@@ -53,121 +59,135 @@ pub fn form_theme_tokens(
     definition: &EditorThemeDefinition,
     base: &ThemeTokens,
 ) -> Result<ThemeTokens, EditorThemeFormationError> {
-    let mut formed = base.clone();
+    let graph = editor_theme_token_graph(definition)?;
+    let report = resolve_theme_tokens(
+        &graph,
+        &ThemeTokenResolveRequest::activate(EDITOR_THEME_TARGET_PROFILE),
+    );
+    if report.has_errors() {
+        return Err(EditorThemeFormationError::new(
+            report
+                .diagnostics
+                .into_iter()
+                .map(|diagnostic| {
+                    UiDefinitionDiagnostic::error(diagnostic.code, diagnostic.message)
+                })
+                .collect(),
+        ));
+    }
+
+    Ok(report.apply_to_theme_tokens(base))
+}
+
+pub fn editor_theme_token_graph(
+    definition: &EditorThemeDefinition,
+) -> Result<ThemeTokenGraph, EditorThemeFormationError> {
+    let source = ThemeTokenSourceId::new(definition.id.clone());
+    let target_profile = ThemeTokenSourceId::new(EDITOR_THEME_TARGET_PROFILE);
+    let mut declarations = Vec::new();
     let mut diagnostics = Vec::new();
 
     for (token, value) in &definition.colors {
-        match apply_color_token(&mut formed, token, value) {
-            Ok(()) => {}
+        match color_token_declaration(definition, token, value, &source, &target_profile) {
+            Ok(declaration) => declarations.push(declaration),
             Err(diagnostic) => diagnostics.push(diagnostic),
         }
     }
     for (token, value) in &definition.spacing {
-        match apply_spacing_token(&mut formed, token, *value) {
-            Ok(()) => {}
+        match number_token_declaration(
+            definition,
+            token,
+            *value,
+            ThemeTokenFamily::Spacing,
+            canonical_spacing_token_id,
+            &source,
+            &target_profile,
+        ) {
+            Ok(declaration) => declarations.push(declaration),
             Err(diagnostic) => diagnostics.push(diagnostic),
         }
     }
     for (token, value) in &definition.radius {
-        match apply_radius_token(&mut formed, token, *value) {
-            Ok(()) => {}
+        match number_token_declaration(
+            definition,
+            token,
+            *value,
+            ThemeTokenFamily::Radius,
+            canonical_radius_token_id,
+            &source,
+            &target_profile,
+        ) {
+            Ok(declaration) => declarations.push(declaration),
             Err(diagnostic) => diagnostics.push(diagnostic),
         }
     }
     for (token, value) in &definition.typography {
-        match apply_typography_token(&mut formed, token, value) {
-            Ok(()) => {}
+        match typography_token_declaration(definition, token, value, &source, &target_profile) {
+            Ok(declaration) => declarations.push(declaration),
             Err(diagnostic) => diagnostics.push(diagnostic),
         }
     }
 
     if diagnostics.is_empty() {
-        Ok(formed)
+        Ok(ThemeTokenGraph::new(declarations))
     } else {
         Err(EditorThemeFormationError::new(diagnostics))
     }
 }
 
-fn apply_color_token(
-    theme: &mut ThemeTokens,
+fn color_token_declaration(
+    definition: &EditorThemeDefinition,
     token: &str,
     value: &str,
-) -> Result<(), UiDefinitionDiagnostic> {
+    source: &ThemeTokenSourceId,
+    target_profile: &ThemeTokenSourceId,
+) -> Result<ThemeTokenDeclaration, UiDefinitionDiagnostic> {
     let color = parse_hex_color(token, value)?;
-    match token {
-        "background" => theme.background = color,
-        "background_panel" | "surface" => theme.background_panel = color,
-        "foreground" => theme.foreground = color,
-        "foreground_muted" => theme.foreground_muted = color,
-        "accent" => theme.accent = color,
-        "border" => theme.border = color,
-        _ => {
-            return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.theme.color.unknown_token",
-                format!("unknown theme color token '{token}'"),
-            ));
-        }
-    }
-    Ok(())
+    let id = canonical_color_token_id(token)?;
+    Ok(token_declaration(
+        definition,
+        token,
+        id,
+        ThemeTokenFamily::Color,
+        ThemeTokenValue::Color(color),
+        source,
+        target_profile,
+    ))
 }
 
-fn apply_spacing_token(
-    theme: &mut ThemeTokens,
+fn number_token_declaration(
+    definition: &EditorThemeDefinition,
     token: &str,
     value: f32,
-) -> Result<(), UiDefinitionDiagnostic> {
+    family: ThemeTokenFamily,
+    token_id: fn(&str) -> Result<ThemeTokenId, UiDefinitionDiagnostic>,
+    source: &ThemeTokenSourceId,
+    target_profile: &ThemeTokenSourceId,
+) -> Result<ThemeTokenDeclaration, UiDefinitionDiagnostic> {
     guard_non_negative_finite(
-        "editor.definition.theme.spacing.invalid_value",
-        "spacing",
+        invalid_value_code(family),
+        family_name(family),
         token,
         value,
     )?;
-    match token {
-        "xs" => theme.spacing.xs = value,
-        "sm" | "panel_gap" => theme.spacing.sm = value,
-        "md" => theme.spacing.md = value,
-        "lg" => theme.spacing.lg = value,
-        "xl" => theme.spacing.xl = value,
-        _ => {
-            return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.theme.spacing.unknown_token",
-                format!("unknown theme spacing token '{token}'"),
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn apply_radius_token(
-    theme: &mut ThemeTokens,
-    token: &str,
-    value: f32,
-) -> Result<(), UiDefinitionDiagnostic> {
-    guard_non_negative_finite(
-        "editor.definition.theme.radius.invalid_value",
-        "radius",
+    Ok(token_declaration(
+        definition,
         token,
-        value,
-    )?;
-    match token {
-        "sm" | "control" => theme.radius.sm = value,
-        "md" => theme.radius.md = value,
-        "lg" => theme.radius.lg = value,
-        _ => {
-            return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.theme.radius.unknown_token",
-                format!("unknown theme radius token '{token}'"),
-            ));
-        }
-    }
-    Ok(())
+        token_id(token)?,
+        family,
+        ThemeTokenValue::Number(value),
+        source,
+        target_profile,
+    ))
 }
 
-fn apply_typography_token(
-    theme: &mut ThemeTokens,
+fn typography_token_declaration(
+    definition: &EditorThemeDefinition,
     token: &str,
     value: &EditorTypographyTokenDefinition,
-) -> Result<(), UiDefinitionDiagnostic> {
+    source: &ThemeTokenSourceId,
+    target_profile: &ThemeTokenSourceId,
+) -> Result<ThemeTokenDeclaration, UiDefinitionDiagnostic> {
     if !value.size.is_finite() || value.size <= 0.0 {
         return Err(UiDefinitionDiagnostic::error(
             "editor.definition.theme.typography.invalid_size",
@@ -177,19 +197,108 @@ fn apply_typography_token(
             ),
         ));
     }
+    Ok(token_declaration(
+        definition,
+        token,
+        canonical_typography_token_id(token)?,
+        ThemeTokenFamily::Typography,
+        ThemeTokenValue::Number(value.size),
+        source,
+        target_profile,
+    ))
+}
+
+fn token_declaration(
+    definition: &EditorThemeDefinition,
+    source_token: &str,
+    id: ThemeTokenId,
+    family: ThemeTokenFamily,
+    value: ThemeTokenValue,
+    source: &ThemeTokenSourceId,
+    target_profile: &ThemeTokenSourceId,
+) -> ThemeTokenDeclaration {
+    ThemeTokenDeclaration::value(id, family, ThemeTokenLayer::Theme, value, source.clone())
+        .for_target_profiles([target_profile.clone()])
+        .with_source_path(ThemeTokenSourcePath::new(format!(
+            "editor_definition.theme.{}.{}",
+            definition.id, source_token
+        )))
+}
+
+fn canonical_color_token_id(token: &str) -> Result<ThemeTokenId, UiDefinitionDiagnostic> {
     match token {
-        "body" => theme.typography.body = value.size,
-        "body_small" => theme.typography.body_small = value.size,
-        "heading" => theme.typography.heading = value.size,
-        "monospace" => theme.typography.monospace = value.size,
-        _ => {
-            return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.theme.typography.unknown_token",
-                format!("unknown theme typography token '{token}'"),
-            ));
-        }
+        "background" => Ok(ThemeTokenId::new("color.background")),
+        "background_panel" | "surface" => Ok(ThemeTokenId::new("color.background_panel")),
+        "foreground" => Ok(ThemeTokenId::new("color.foreground")),
+        "foreground_muted" => Ok(ThemeTokenId::new("color.foreground_muted")),
+        "accent" => Ok(ThemeTokenId::new("color.accent")),
+        "border" => Ok(ThemeTokenId::new("color.border")),
+        _ => Err(UiDefinitionDiagnostic::error(
+            "editor.definition.theme.color.unknown_token",
+            format!("unknown theme color token '{token}'"),
+        )),
     }
-    Ok(())
+}
+
+fn canonical_spacing_token_id(token: &str) -> Result<ThemeTokenId, UiDefinitionDiagnostic> {
+    match token {
+        "xs" => Ok(ThemeTokenId::new("spacing.xs")),
+        "sm" | "panel_gap" => Ok(ThemeTokenId::new("spacing.sm")),
+        "md" => Ok(ThemeTokenId::new("spacing.md")),
+        "lg" => Ok(ThemeTokenId::new("spacing.lg")),
+        "xl" => Ok(ThemeTokenId::new("spacing.xl")),
+        _ => Err(UiDefinitionDiagnostic::error(
+            "editor.definition.theme.spacing.unknown_token",
+            format!("unknown theme spacing token '{token}'"),
+        )),
+    }
+}
+
+fn canonical_radius_token_id(token: &str) -> Result<ThemeTokenId, UiDefinitionDiagnostic> {
+    match token {
+        "sm" | "control" => Ok(ThemeTokenId::new("radius.sm")),
+        "md" => Ok(ThemeTokenId::new("radius.md")),
+        "lg" => Ok(ThemeTokenId::new("radius.lg")),
+        _ => Err(UiDefinitionDiagnostic::error(
+            "editor.definition.theme.radius.unknown_token",
+            format!("unknown theme radius token '{token}'"),
+        )),
+    }
+}
+
+fn canonical_typography_token_id(token: &str) -> Result<ThemeTokenId, UiDefinitionDiagnostic> {
+    match token {
+        "body" => Ok(ThemeTokenId::new("typography.body")),
+        "body_small" => Ok(ThemeTokenId::new("typography.body_small")),
+        "heading" => Ok(ThemeTokenId::new("typography.heading")),
+        "monospace" => Ok(ThemeTokenId::new("typography.monospace")),
+        _ => Err(UiDefinitionDiagnostic::error(
+            "editor.definition.theme.typography.unknown_token",
+            format!("unknown theme typography token '{token}'"),
+        )),
+    }
+}
+
+fn invalid_value_code(family: ThemeTokenFamily) -> &'static str {
+    match family {
+        ThemeTokenFamily::Spacing => "editor.definition.theme.spacing.invalid_value",
+        ThemeTokenFamily::Radius => "editor.definition.theme.radius.invalid_value",
+        _ => "editor.definition.theme.token.invalid_value",
+    }
+}
+
+fn family_name(family: ThemeTokenFamily) -> &'static str {
+    match family {
+        ThemeTokenFamily::Spacing => "spacing",
+        ThemeTokenFamily::Radius => "radius",
+        ThemeTokenFamily::Typography => "typography",
+        ThemeTokenFamily::Color => "color",
+        ThemeTokenFamily::Opacity => "opacity",
+        ThemeTokenFamily::Elevation => "elevation",
+        ThemeTokenFamily::BorderWidth => "border_width",
+        ThemeTokenFamily::Duration => "duration",
+        ThemeTokenFamily::Easing => "easing",
+    }
 }
 
 fn guard_non_negative_finite(
@@ -269,6 +378,49 @@ mod tests {
         assert_eq!(formed.spacing.sm, 10.0);
         assert_eq!(formed.radius.sm, 6.0);
         assert_eq!(formed.background, base.background);
+    }
+
+    #[test]
+    fn theme_definition_exposes_generic_token_graph_provenance() {
+        let definition = EditorThemeDefinition {
+            id: "test.theme".to_string(),
+            label: "Test Theme".to_string(),
+            colors: BTreeMap::from([("accent".to_string(), "#3366ff".to_string())]),
+            spacing: BTreeMap::from([("panel_gap".to_string(), 10.0)]),
+            typography: BTreeMap::from([(
+                "body".to_string(),
+                EditorTypographyTokenDefinition {
+                    font_family: "Inter".to_string(),
+                    size: 13.0,
+                    weight: 400,
+                },
+            )]),
+            radius: BTreeMap::from([("control".to_string(), 6.0)]),
+        };
+
+        let graph = editor_theme_token_graph(&definition).expect("token graph should form");
+        let report = resolve_theme_tokens(
+            &graph,
+            &ThemeTokenResolveRequest::activate(EDITOR_THEME_TARGET_PROFILE),
+        );
+
+        assert!(!report.has_errors(), "{:?}", report.diagnostics);
+        let accent = report
+            .tokens
+            .get(&ThemeTokenId::new("color.accent"))
+            .expect("accent token should resolve");
+        assert_eq!(accent.winning_source.as_str(), "test.theme");
+        assert_eq!(
+            accent.value,
+            ThemeTokenValue::Color(UiColor::new(0.2, 0.4, 1.0, 1.0))
+        );
+        assert!(report.tokens.contains_key(&ThemeTokenId::new("spacing.sm")));
+        assert!(report.tokens.contains_key(&ThemeTokenId::new("radius.sm")));
+        assert!(
+            report
+                .tokens
+                .contains_key(&ThemeTokenId::new("typography.body"))
+        );
     }
 
     #[test]

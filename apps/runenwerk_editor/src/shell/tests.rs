@@ -1169,18 +1169,20 @@ fn pm_ui_lab_004_runtime_evidence_reports_operation_driven_visual_authoring() {
             .next_operation_id("visual_layout"),
         document_id: stack_document_id,
         target_profile: "editor.workbench".to_string(),
-        kind: EditorLabOperationKind::UiVisualLayout(ui_definition::UiVisualLayoutOperation {
-            id: "pm004.axis.stack".into(),
-            source_document: "pm004.stack.template".into(),
-            target_path: ui_definition::AuthoredUiNodePath("root/stack".to_string()),
-            expected_node_id: "stack".into(),
-            target_profile: "editor.workbench".into(),
-            kind: ui_definition::UiVisualLayoutEditKind::ChangeStackAxis {
-                axis: ui_definition::UiAxisDefinition::Horizontal,
+        kind: EditorLabOperationKind::UiVisualLayout(Box::new(
+            ui_definition::UiVisualLayoutOperation {
+                id: "pm004.axis.stack".into(),
+                source_document: "pm004.stack.template".into(),
+                target_path: ui_definition::AuthoredUiNodePath("root/stack".to_string()),
+                expected_node_id: "stack".into(),
+                target_profile: "editor.workbench".into(),
+                kind: ui_definition::UiVisualLayoutEditKind::ChangeStackAxis {
+                    axis: ui_definition::UiAxisDefinition::Horizontal,
+                },
+                source_location: None,
+                preview_only: false,
             },
-            source_location: None,
-            preview_only: false,
-        }),
+        )),
         preview_only: false,
         source: Some("pm004.runtime-evidence".to_string()),
     };
@@ -2727,7 +2729,7 @@ fn pm_ui_lab_perf_002_runtime_evidence_platform_closure() {
         Some(invalid_package_source)
     );
     let error_diagnostics = ron::ser::to_string_pretty(
-        &[invalid_package_error.clone()],
+        std::slice::from_ref(&invalid_package_error),
         ron::ser::PrettyConfig::new(),
     )
     .expect("diagnostics should serialize");
@@ -3416,7 +3418,7 @@ fn pm_ui_lab_006_runtime_evidence_reports_preview_lab() {
         Some(invalid_package_source)
     );
     let error_diagnostics = ron::ser::to_string_pretty(
-        &[invalid_package_error.clone()],
+        std::slice::from_ref(&invalid_package_error),
         ron::ser::PrettyConfig::new(),
     )
     .expect("diagnostics should serialize");

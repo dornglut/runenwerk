@@ -4,8 +4,8 @@ use super::descriptors::{
     ProceduralVisualDescriptor,
 };
 use super::validation::{ProceduralValidationError, validate_procedural_pass};
-use crate::plugins::render::RenderFlow;
 use crate::plugins::render::api::PassParamBinding;
+use crate::plugins::render::{RenderFlow, RenderIndirectDrawResource};
 
 pub(crate) struct ProceduralPassLowering {
     pub(crate) uniform_bindings: Vec<PassParamBinding>,
@@ -82,13 +82,15 @@ pub(crate) fn lower_procedural_pass(
             args_element_size,
             byte_offset,
         } => builder.draw_indirect_resource(
-            args_buffer,
-            args_kind,
-            args_element_count,
-            args_element_size,
+            RenderIndirectDrawResource::new(
+                args_buffer,
+                args_kind,
+                args_element_count,
+                args_element_size,
+                byte_offset,
+            ),
             visual.vertex_count(),
             instance_count,
-            byte_offset,
         ),
     };
     for dependency in dependencies {

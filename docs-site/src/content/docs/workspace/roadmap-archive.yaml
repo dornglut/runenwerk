@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap Archive
-  last_reviewed: '2026-05-20'
+  last_reviewed: '2026-05-25'
   owner: workspace
 items:
 - id: WR-001
@@ -7436,7 +7436,8 @@ items:
   - cargo test -p runenwerk_editor editor_definition_activation
   - cargo run -p ui_definition --example ui_definition_workflow
   - cargo run -p editor_definition --example editor_definition_workflow
-  - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture
+  - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure
+    -- --nocapture
   - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_005_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_005 -- --nocapture
   - task docs:validate
   - task puml:validate
@@ -7449,9 +7450,9 @@ items:
   - task planning:validate
   - git diff --check
   next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
-  current_decision: Completed at perfectionist_verified for final no-gap certification evidence, verified PM001-PM005
-    closeouts, runtime artifacts, API/docs/examples agreement, source-truth ownership, roadmap and production state, phase
-    drift-check evidence, and empty known quality gaps.
+  current_decision: Completed at perfectionist_verified for final no-gap certification evidence, verified PM001-PM005 closeouts,
+    runtime artifacts, API/docs/examples agreement, source-truth ownership, roadmap and production state, phase drift-check
+    evidence, and empty known quality gaps.
   current_call: Archive WR-110 as completed PM-UI-LAB-PERF-006 evidence.
   first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION to verify track completion.
   main_blocker: Completed.
@@ -7601,11 +7602,308 @@ items:
     evidence, and workspace planning metadata ownership
   adr_requirement: No ADR for governance setup. Require an ADR or accepted design update before moving source-truth authority,
     changing dependency direction, adding game-runtime UI owner crates, or making native evidence artifacts domain truth.
-  fitness_function_requirement: Governance validators for docs, roadmap, production, planning, PUML, and whitespace now.
-    Follow-on WRs must add focused Story Lab, widget scan, surface readiness, native screenshot, accessibility, interaction,
-    graph canvas, UI Designer, game-runtime compatibility, and final no-gap tests before product closeout.
+  fitness_function_requirement: Governance validators for docs, roadmap, production, planning, PUML, and whitespace now. Follow-on
+    WRs must add focused Story Lab, widget scan, surface readiness, native screenshot, accessibility, interaction, graph canvas,
+    UI Designer, game-runtime compatibility, and final no-gap tests before product closeout.
   ownership_mode: Stream-aligned editor product UX work with complicated-subsystem support from UI definition, UI runtime,
     graph editor, editor shell, and app evidence owners.
+- id: WR-112
+  title: Native Editor UX Story Lab And Evidence Harness
+  diagram_title: Native Editor UX Story Lab
+  alias: EDITORUXSTORY
+  lane: Editor quality
+  dependency_level: L4
+  gate: After editor UX governance
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-111
+  write_scopes:
+  - domain/ui
+  - domain/editor
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-112-native-editor-ux-story-lab-and-evidence-harness/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-002 --roadmap WR-112
+  - cargo fmt --all
+  - cargo test -p ui_tree visible_widget
+  - cargo test -p ui_widgets story
+  - cargo test -p ui_definition
+  - cargo test -p editor_shell story_lab
+  - cargo test -p editor_shell surface_readiness
+  - cargo test -p editor_shell
+  - cargo test -p runenwerk_editor editor_ux
+  - RUNENWERK_WRITE_PM_EDITOR_UX_002_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_002 -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
+  current_decision: Completed as runtime-proven native Editor UX Story Lab evidence harness with generic visible-widget scan,
+    primitive widget stories, editor-owned story catalog, surface readiness policy, app-owned runner, and validated manifest
+    artifacts.
+  current_call: Archive WR-112 as completed PM-EDITOR-UX-002 evidence. Use WR-113 before design-system migration and do not
+    infer later editor UX polish milestones complete from the Story Lab harness alone.
+  first_move: Run task production:plan -- --milestone PM-EDITOR-UX-003 --roadmap WR-113 before starting layered editor design
+    system migration.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-003 layered editor design system migration remains future work.
+  - PM-EDITOR-UX-004 standalone UI Designer workbench remains future work.
+  - PM-EDITOR-UX-005 graph canvas and node editor productization remains future work.
+  - PM-EDITOR-UX-006 shell and product pattern polish remains future work.
+  - PM-EDITOR-UX-007 all registered visible surface migration remains future work.
+  - PM-EDITOR-UX-008 game UI readiness seam remains future work.
+  - PM-EDITOR-UX-009 final local-native no-gap certification remains future work.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
+  diagram_call:
+  - story catalog
+  - native evidence
+  - widget gates
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: discovery
+    reason: Story Lab work follows the active editor product UX doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-112-native-editor-ux-story-lab-and-evidence-harness/plan.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-112 implementation followed the accepted native Story Lab implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: WR-112 completion requires completed native Story Lab closeout evidence.
+  ddd_owner: editor UX Story Lab with domain/ui contracts, domain/editor adapters, and apps/runenwerk_editor native evidence
+  adr_requirement: No ADR was required because native evidence remains app-owned and generic UI contracts remain editor/app
+    independent. Require ADR or accepted design update before moving native evidence ownership into domain/ui or changing
+    source-truth authority.
+  fitness_function_requirement: Story catalog, scenario matrix, widget scan, screenshot/platform-impossible manifest, accessibility,
+    interaction, stale artifact, and route/focus tests before implementation closeout.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI substrate and app evidence
+    owners.
+- id: WR-113
+  title: Layered Editor Design System Migration
+  diagram_title: Editor design system
+  alias: EDITORUXDS
+  lane: Editor quality
+  dependency_level: L4
+  gate: After native Story Lab
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.7
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-112
+  write_scopes:
+  - domain/ui
+  - domain/editor
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-113-layered-editor-design-system-migration/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-003 --roadmap WR-113
+  - cargo fmt --all
+  - cargo test -p ui_theme
+  - cargo test -p ui_definition
+  - cargo test -p editor_definition
+  - cargo test -p editor_shell
+  - cargo test -p runenwerk_editor editor_ux -- --nocapture
+  - RUNENWERK_WRITE_PM_EDITOR_UX_003_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_003 -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md
+  current_decision: Completed as runtime-proven layered editor design-system migration evidence with editor theme token graph
+    provenance, primary-button recipe/state metadata, Story Lab design-system evidence, and app-owned manifest artifacts.
+  current_call: Archive WR-113 as completed PM-EDITOR-UX-003 evidence. Use WR-114 before standalone UI Designer workbench
+    implementation and do not infer later editor UX polish milestones complete from the primary-button design-system path.
+  first_move: Run task production:plan -- --milestone PM-EDITOR-UX-004 --roadmap WR-114 before starting standalone UI Designer
+    workbench design or implementation work.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-004 standalone UI Designer workbench remains future work.
+  - PM-EDITOR-UX-005 graph canvas and node editor productization remains future work.
+  - PM-EDITOR-UX-006 shell and product pattern polish remains future work beyond the primary-button design-system path.
+  - PM-EDITOR-UX-007 all registered visible surface migration remains future work.
+  - PM-EDITOR-UX-008 game UI readiness seam remains future work.
+  - PM-EDITOR-UX-009 final local-native no-gap certification remains future work.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md
+  diagram_call:
+  - tokens
+  - recipes
+  - patterns
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Styling migration followed accepted token graph doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Recipe migration followed accepted component/widget/surface recipe doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-113-layered-editor-design-system-migration/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-113 implementation followed the accepted layered editor design-system migration contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-113 completion requires completed layered editor design-system migration closeout evidence.
+  ddd_owner: domain/ui for generic design-system contracts and domain/editor for editor product adapters
+  adr_requirement: No ADR was required because generic token and recipe truth stayed in domain/ui, editor product adapters
+    stayed in domain/editor, and native evidence stayed app-owned. Require ADR or accepted design update before changing dependency
+    direction or making future game-runtime UI depend on editor shell vocabulary.
+  fitness_function_requirement: Token provenance, recipe/state expansion, Story Lab design-system metadata, app manifest evidence,
+    accessibility, layout, and regression tests before implementation closeout.
+  ownership_mode: Complicated-subsystem UI platform support for stream-aligned editor product migration.
+- id: WR-114
+  title: Standalone UI Designer Workbench
+  diagram_title: UI Designer workbench
+  alias: EDITORUXDESIGNER
+  lane: Editor quality
+  dependency_level: L4
+  gate: After layered design system migration
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-113
+  write_scopes:
+  - domain/editor
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-114-standalone-ui-designer-workbench/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-004 --roadmap WR-114
+  - cargo fmt --all
+  - cargo test -p editor_shell ui_designer -- --nocapture
+  - cargo test -p runenwerk_editor ui_designer -- --nocapture
+  - cargo test -p editor_shell story_lab -- --nocapture
+  - cargo test -p editor_shell -- --nocapture
+  - cargo test -p runenwerk_editor editor_ux -- --nocapture
+  - RUNENWERK_WRITE_PM_EDITOR_UX_004_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_004 -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+  current_decision: Completed as runtime-proven standalone UI Designer workbench evidence with editor-owned workbench pane/route/readiness
+    contracts, UI canvas stable-key workbench composition, Story Lab scenario coverage, and app-owned manifest artifacts.
+  current_call: Archive WR-114 as completed PM-EDITOR-UX-004 evidence. Use WR-115 before graph canvas and node editor productization
+    and do not infer shell-wide polish, all-surface migration, game UI readiness, or final no-gap certification from this
+    workbench slice.
+  first_move: Run task production:plan -- --milestone PM-EDITOR-UX-005 --roadmap WR-115 before starting graph canvas or node
+    editor productization design work.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-005 graph canvas and node editor productization remains future work.
+  - PM-EDITOR-UX-006 shell and product pattern polish remains future work beyond the standalone workbench slice.
+  - PM-EDITOR-UX-007 all registered visible surface migration remains future work.
+  - PM-EDITOR-UX-008 game UI readiness seam remains future work.
+  - PM-EDITOR-UX-009 final local-native no-gap certification remains future work.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+  diagram_call:
+  - canvas
+  - hierarchy
+  - inspector
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Workbench implementation followed the editor UX Story Lab and native evidence doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Workbench implementation preserved UI Designer source-truth boundaries.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-114-standalone-ui-designer-workbench/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-114 implementation followed the accepted standalone UI Designer workbench contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-114 completion requires completed standalone UI Designer workbench closeout evidence.
+  ddd_owner: domain/editor editor shell and definition owners with apps/runenwerk_editor product host evidence
+  adr_requirement: No ADR was required because generic UI Designer truth stayed outside the app, editor workbench product
+    contracts stayed in domain/editor, and native evidence stayed app-owned. Require ADR or accepted design update before
+    changing dependency direction or making future game-runtime UI depend on editor shell vocabulary.
+  fitness_function_requirement: Canvas, hierarchy, inspector, property, scenario, readiness, keyboard/focus, native evidence,
+    and legacy self-authoring bypass tests before implementation closeout.
+  ownership_mode: Stream-aligned editor workbench product work with UI definition support.
 - id: WR-101
   title: Procedural Camera And View Projection
   diagram_title: Procedural camera projection
@@ -7784,3 +8082,443 @@ items:
   fitness_function_requirement: Full focused render-flow, GPU primitive, procedural, camera projection, boids evidence, benchmark,
     docs, production, roadmap, and planning validation suite.
   ownership_mode: Complicated-subsystem renderer owner.
+- id: WR-115
+  title: Graph Canvas And Node Editor Productization
+  diagram_title: Graph canvas UX
+  alias: EDITORUXGRAPH
+  lane: Editor quality
+  dependency_level: L4
+  gate: After Story Lab and design-system layers
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 4
+  du: 4
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.1
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-112
+  - WR-113
+  write_scopes:
+  - domain/ui/ui_graph_editor
+  - domain/editor
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-115-graph-canvas-and-node-editor-productization/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-005 --roadmap WR-115
+  - cargo fmt --all
+  - cargo test -p ui_graph_editor -- --nocapture
+  - cargo test -p editor_shell graph -- --nocapture
+  - cargo test -p runenwerk_editor graph -- --nocapture
+  - cargo test -p runenwerk_editor editor_ux -- --nocapture
+  - cargo test -p editor_shell story_lab -- --nocapture
+  - RUNENWERK_WRITE_PM_EDITOR_UX_005_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_005 -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md
+  current_decision: Completed at runtime_proven for Material Graph Canvas Story Lab product evidence, app-owned graph manifest
+    validation, provider-owned graph routes, and hide-until-productized readiness for unfinished graph families.
+  current_call: Archive WR-115 as completed PM-EDITOR-UX-005 evidence. Use WR-116 before shell and product pattern polish.
+  first_move: Verify WR-115 closeout evidence before promoting WR-116.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-006 still owns shell and product pattern polish beyond the graph canvas product slice.
+  - PM-EDITOR-UX-007 still owns all registered visible surface migration.
+  - PM-EDITOR-UX-008 still owns game UI readiness seam proof.
+  - PM-EDITOR-UX-009 still owns final local-native no-gap certification and any perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md
+  diagram_call:
+  - graph canvas
+  - node editor
+  - hide or certify
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Graph UX followed the active Story Lab and surface readiness doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-115-graph-canvas-and-node-editor-productization/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-115 implementation followed the graph canvas and node editor productization contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-115 completion requires completed graph canvas productization closeout evidence.
+  ddd_owner: ui_graph_editor substrate with editor shell adapters and app-hosted provider evidence
+  adr_requirement: No ADR because generic graph interaction stayed in ui_graph_editor, editor product semantics stayed in
+    editor_shell, and app-owned evidence stayed in runenwerk_editor; ADR required before changing dependency direction or
+    moving graph family semantics into the generic graph substrate.
+  fitness_function_requirement: Graph interaction, route, keyboard, diagnostics, provider degradation, hide-or-certify readiness,
+    native evidence manifest, docs, production, roadmap, and planning validation suite.
+  ownership_mode: Complicated-subsystem graph substrate support for editor product owners.
+- id: WR-116
+  title: Shell And Product Pattern Polish
+  diagram_title: Editor shell polish
+  alias: EDITORUXSHELL
+  lane: Editor quality
+  dependency_level: L4
+  gate: After Designer and graph productization
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.1
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-113
+  - WR-114
+  - WR-115
+  write_scopes:
+  - domain/editor
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-116-shell-and-product-pattern-polish/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-006 --roadmap WR-116
+  - cargo fmt --all
+  - cargo test -p editor_shell story_lab -- --nocapture
+  - cargo test -p runenwerk_editor editor_ux -- --nocapture
+  - cargo test -p editor_shell shell -- --nocapture
+  - RUNENWERK_WRITE_PM_EDITOR_UX_006_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_006 -- --nocapture
+  - cargo test -p runenwerk_editor shell -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md
+  current_decision: Completed at runtime_proven for shell product pattern Story Lab evidence, app-owned product-pattern manifest
+    validation, and live UI Designer Workbench acceptance phrase repair.
+  current_call: Archive WR-116 as completed PM-EDITOR-UX-006 evidence. Use WR-117 before all registered visible surface migration.
+  first_move: Verify WR-116 closeout evidence before promoting WR-117.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-007 still owns all registered visible surface migration.
+  - PM-EDITOR-UX-008 still owns game UI readiness seam proof.
+  - PM-EDITOR-UX-009 still owns final local-native no-gap certification and any perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md
+  diagram_call:
+  - inspector
+  - palette
+  - shell patterns
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Shell polish followed the active Story Lab and surface readiness doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-116-shell-and-product-pattern-polish/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-116 implementation followed the accepted shell and product pattern polish contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-116 completion requires completed shell product-pattern closeout evidence.
+  ddd_owner: editor_shell product patterns with apps/runenwerk_editor native host evidence
+  adr_requirement: No ADR because reusable pattern truth stayed in editor_shell, native evidence stayed app-owned, and domain/ui
+    dependency direction did not change; ADR required before changing source-truth authority or coupling game UI to editor
+    shell.
+  fitness_function_requirement: Pattern state, focus, keyboard, diagnostics, overflow, route, accessibility, native evidence,
+    roadmap, production, planning, and PUML validation suite.
+  ownership_mode: Stream-aligned editor shell product work with app-host evidence support.
+- id: WR-117
+  title: All Registered Visible Surface Wave
+  diagram_title: All editor surfaces
+  alias: EDITORUXSURFACES
+  lane: Editor quality
+  dependency_level: L4
+  gate: After product patterns
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-114
+  - WR-115
+  - WR-116
+  write_scopes:
+  - domain/editor
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-117-all-registered-visible-surface-wave/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-007 --roadmap WR-117
+  - cargo fmt --all
+  - cargo test -p editor_shell story_lab -- --nocapture
+  - cargo test -p runenwerk_editor editor_ux -- --nocapture
+  - cargo test -p editor_shell surface -- --nocapture
+  - cargo test -p runenwerk_editor surface -- --nocapture
+  - cargo test -p runenwerk_editor providers -- --nocapture
+  - RUNENWERK_WRITE_PM_EDITOR_UX_007_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_007 -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md
+  current_decision: Completed at runtime_proven for registered editor surface readiness evidence, app-owned manifest validation,
+    and product/fallback/diagnostic/hidden Story Lab proof across 44 unique registered surface definitions.
+  current_call: Archive WR-117 as completed PM-EDITOR-UX-007 evidence. Use WR-118 before game UI readiness seam proof.
+  first_move: Verify WR-117 closeout evidence before promoting WR-118.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-008 still owns game UI readiness seam proof.
+  - PM-EDITOR-UX-009 still owns final local-native no-gap certification and any perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md
+  diagram_call:
+  - readiness
+  - no placeholders
+  - all visible surfaces
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: implementation
+    reason: All-surface wave followed the active Story Lab and hide-or-certify doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-117-all-registered-visible-surface-wave/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-117 implementation followed the accepted all registered visible surface wave contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-117 completion requires completed all registered surface wave closeout evidence.
+  ddd_owner: editor_shell surface registry and app provider owners
+  adr_requirement: No ADR because surface readiness truth stayed in editor_shell, native evidence stayed app-owned, persistence
+    compatibility did not change, and domain/ui dependency direction did not change; ADR required before changing any of those
+    contracts.
+  fitness_function_requirement: Registry readiness, route, provider, fallback, diagnostic, visible-widget, native evidence,
+    accessibility, timing, roadmap, production, planning, and PUML validation suite.
+  ownership_mode: Stream-aligned editor product certification with editor shell registry support.
+- id: WR-118
+  title: Game UI Readiness Seam
+  diagram_title: Game UI readiness seam
+  alias: EDITORUXGAMESEAM
+  lane: Editor quality
+  dependency_level: L4
+  gate: After all-surface wave
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.7
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-117
+  write_scopes:
+  - domain/ui
+  - domain/editor
+  - docs-site/src/content/docs/reports/implementation-plans/wr-118-game-ui-readiness-seam/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-008 --roadmap WR-118
+  - cargo fmt --all
+  - cargo test -p ui_definition game -- --nocapture
+  - cargo test -p editor_shell game -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md
+  current_decision: Completed at runtime_proven for generic ui_definition game.runtime compatibility axes, fail-closed editor
+    command and stale/missing view-model diagnostics, and editor_shell Story Lab compatibility evidence without game HUD behavior.
+  current_call: Archive WR-118 as completed PM-EDITOR-UX-008 evidence. Use WR-119 before final local-native editor UX no-gap
+    certification.
+  first_move: Run task production:plan -- --milestone PM-EDITOR-UX-009 --roadmap WR-119 before starting final certification
+    work.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-EDITOR-UX-009 still owns final local-native no-gap certification and any perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md
+  diagram_call:
+  - target profile
+  - safe areas
+  - no editor shell coupling
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Game UI readiness seam followed the active editor UX ownership separation doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Compatibility evidence aligned with active game-runtime UI target-profile doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-118-game-ui-readiness-seam/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-118 implementation followed the accepted game UI readiness seam contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-118 completion requires completed game UI readiness seam closeout evidence.
+  ddd_owner: domain/ui target-profile contracts with editor_shell Story Lab evidence adapters and future game-runtime UI consumer
+    boundaries
+  adr_requirement: No ADR because this slice preserved generic target-profile ownership, avoided runtime HUD behavior, and
+    did not make editor_shell vocabulary a game-runtime dependency; ADR required before adding a game-runtime UI owner crate
+    or changing those boundaries.
+  fitness_function_requirement: Target-profile compatibility, safe-area, input-modality, evidence descriptor, stale/missing
+    view-model, forbidden editor-command, roadmap, production, planning, and PUML validation.
+  ownership_mode: Enabling UI platform seam for future stream-aligned game UI work.
+- id: WR-119
+  title: Final Local Native Editor UX No Gap Certification
+  diagram_title: Editor UX final certification
+  alias: EDITORUXFINAL
+  lane: Editor quality
+  dependency_level: L4
+  gate: After game UI readiness seam
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-118
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-119-final-local-native-editor-ux-no-gap-certification/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - task production:plan -- --milestone PM-EDITOR-UX-009 --roadmap WR-119
+  - ./quiet_full_gate.sh
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md
+  current_decision: Completed at perfectionist_verified for final local-native editor UX no-gap certification after quiet_full_gate,
+    docs, PUML, roadmap, production, planning, git diff, prerequisite closeout, and zero-gap checks passed.
+  current_call: Archive WR-119 as completed PM-EDITOR-UX-009 evidence. PT-EDITOR-UX is complete; future editor UX perfection
+    work requires a new roadmap intake or production track.
+  first_move: Verify final closeout evidence before starting any new editor UX production track.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: perfectionist_verified
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md
+  diagram_call:
+  - native screenshots
+  - zero gaps
+  - final audit
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: discovery
+    reason: Final certification must follow active editor product UX no-gap doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-119-final-local-native-editor-ux-no-gap-certification/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-119 requires an accepted final certification design contract before promotion or implementation planning.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-119 completion requires completed final local-native no-gap certification closeout evidence.
+  ddd_owner: editor product certification with app native evidence, domain/ui contracts, domain/editor surfaces, and workspace
+    planning metadata
+  adr_requirement: ADR or accepted design update required if final audit discovers source-truth, dependency-direction, completion-quality,
+    or local-native evidence authority changes.
+  fitness_function_requirement: Full local-native evidence suite, focused Rust tests, docs, roadmap, production, planning,
+    PUML, quiet full gate, git diff, and empty known quality gaps.
+  ownership_mode: Stream-aligned final certification with complicated-subsystem support from UI, editor, app evidence, and
+    workspace governance owners.

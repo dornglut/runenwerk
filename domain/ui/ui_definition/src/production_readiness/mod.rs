@@ -37,6 +37,18 @@ pub enum UiReadinessDiagnosticGroup {
     Performance,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum UiReadinessCompatibilityAxis {
+    SafeArea,
+    InputModality,
+    PlatformPrompt,
+    LocalizationTextExpansion,
+    Accessibility,
+    Size,
+    PerformanceReadability,
+    ViewModelFreshness,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UiReadinessValidationMode {
     Inspect,
@@ -86,6 +98,8 @@ pub struct UiReadinessEvidencePacket {
     #[serde(default)]
     pub target_profiles: BTreeSet<UiReadinessTargetProfileId>,
     #[serde(default)]
+    pub compatibility_axes: BTreeSet<UiReadinessCompatibilityAxis>,
+    #[serde(default)]
     pub required_evidence: BTreeSet<UiReadinessEvidenceKind>,
     #[serde(default)]
     pub artifacts: Vec<UiReadinessEvidenceArtifact>,
@@ -102,6 +116,8 @@ pub struct UiReadinessInspectionReport {
     pub id: UiReadinessInspectionReportId,
     #[serde(default)]
     pub target_profiles: BTreeSet<UiReadinessTargetProfileId>,
+    #[serde(default)]
+    pub compatibility_axes: BTreeSet<UiReadinessCompatibilityAxis>,
     #[serde(default)]
     pub diagnostic_groups: BTreeSet<UiReadinessDiagnosticGroup>,
     pub source_package: UiReadinessSourcePackageId,
@@ -298,6 +314,19 @@ impl UiReadinessValidationReport {
     }
 }
 
+pub fn game_runtime_required_compatibility_axes() -> BTreeSet<UiReadinessCompatibilityAxis> {
+    BTreeSet::from([
+        UiReadinessCompatibilityAxis::SafeArea,
+        UiReadinessCompatibilityAxis::InputModality,
+        UiReadinessCompatibilityAxis::PlatformPrompt,
+        UiReadinessCompatibilityAxis::LocalizationTextExpansion,
+        UiReadinessCompatibilityAxis::Accessibility,
+        UiReadinessCompatibilityAxis::Size,
+        UiReadinessCompatibilityAxis::PerformanceReadability,
+        UiReadinessCompatibilityAxis::ViewModelFreshness,
+    ])
+}
+
 pub fn validate_production_readiness(
     library: &UiReadinessLibrary,
     request: &UiReadinessValidationRequest,
@@ -411,6 +440,7 @@ impl ProductionReadinessValidator<'_> {
     ) {
         for packet in packets.values() {
             self.validate_packet_target_profile(packet);
+            self.validate_packet_game_runtime_axis_coverage(packet);
             self.validate_required_evidence(packet, &packet.required_evidence);
             self.validate_packet_artifacts(packet);
             self.validate_packet_expected_diagnostics(packet);
@@ -461,6 +491,36 @@ impl ProductionReadinessValidator<'_> {
                 )
                 .for_packet(packet)
                 .with_evidence_kind(*kind)
+                .with_target_profile(self.request.target_profile.clone()),
+            );
+        }
+    }
+
+    fn validate_packet_game_runtime_axis_coverage(&mut self, packet: &UiReadinessEvidencePacket) {
+        if self.request.target_profile.as_str() != "game.runtime" {
+            return;
+        }
+
+        let applies_to_runtime = packet.target_profiles.is_empty()
+            || packet
+                .target_profiles
+                .contains(&self.request.target_profile);
+        if !applies_to_runtime {
+            return;
+        }
+
+        let required = game_runtime_required_compatibility_axes();
+        if !required.is_subset(&packet.compatibility_axes) {
+            self.diagnostics.push(
+                UiReadinessDiagnostic::error(
+                    "ui.readiness.compatibility_axis.missing",
+                    format!(
+                        "Readiness evidence packet '{}' does not cover every game.runtime compatibility axis.",
+                        packet.id
+                    ),
+                    "Attach safe-area, input, platform-prompt, localization, accessibility, size, performance, and view-model freshness compatibility axes.",
+                )
+                .for_packet(packet)
                 .with_target_profile(self.request.target_profile.clone()),
             );
         }
@@ -584,6 +644,8 @@ impl ProductionReadinessValidator<'_> {
                 );
             }
 
+            self.validate_inspection_game_runtime_axis_coverage(inspection);
+
             if inspection.preview_only && self.request.mode == UiReadinessValidationMode::Production
             {
                 self.diagnostics.push(
@@ -600,6 +662,39 @@ impl ProductionReadinessValidator<'_> {
                     .preview_only(),
                 );
             }
+        }
+    }
+
+    fn validate_inspection_game_runtime_axis_coverage(
+        &mut self,
+        inspection: &UiReadinessInspectionReport,
+    ) {
+        if self.request.target_profile.as_str() != "game.runtime" {
+            return;
+        }
+
+        let applies_to_runtime = inspection.target_profiles.is_empty()
+            || inspection
+                .target_profiles
+                .contains(&self.request.target_profile);
+        if !applies_to_runtime {
+            return;
+        }
+
+        let required = game_runtime_required_compatibility_axes();
+        if !required.is_subset(&inspection.compatibility_axes) {
+            self.diagnostics.push(
+                UiReadinessDiagnostic::error(
+                    "ui.readiness.inspection.compatibility_axis.missing",
+                    format!(
+                        "Inspection report '{}' does not cover every game.runtime compatibility axis.",
+                        inspection.id
+                    ),
+                    "Attach safe-area, input, platform-prompt, localization, accessibility, size, performance, and view-model freshness compatibility axes.",
+                )
+                .for_inspection(inspection)
+                .with_target_profile(self.request.target_profile.clone()),
+            );
         }
     }
 
@@ -765,6 +860,10 @@ mod tests {
         ])
     }
 
+    fn compatibility_axes() -> BTreeSet<UiReadinessCompatibilityAxis> {
+        game_runtime_required_compatibility_axes()
+    }
+
     fn artifact(kind: UiReadinessEvidenceKind, suffix: &str) -> UiReadinessEvidenceArtifact {
         UiReadinessEvidenceArtifact {
             id: id(&format!("artifact.{suffix}")),
@@ -780,6 +879,7 @@ mod tests {
             id: id(id_value),
             document: id(&format!("{id_value}.document")),
             target_profiles: target_profiles(&["editor.workbench", "game.runtime"]),
+            compatibility_axes: compatibility_axes(),
             required_evidence: required_evidence(),
             artifacts: vec![
                 artifact(UiReadinessEvidenceKind::ProjectionSnapshot, "projection"),
@@ -810,6 +910,7 @@ mod tests {
         UiReadinessInspectionReport {
             id: id(id_value),
             target_profiles: target_profiles(&["editor.workbench", "game.runtime"]),
+            compatibility_axes: compatibility_axes(),
             diagnostic_groups: BTreeSet::from([
                 UiReadinessDiagnosticGroup::Composition,
                 UiReadinessDiagnosticGroup::Style,
@@ -893,6 +994,39 @@ mod tests {
 
         let report = validate_production_readiness(&library, &request("editor.workbench"));
 
+        assert!(codes(&report).contains("ui.readiness.evidence.missing"));
+    }
+
+    #[test]
+    fn game_runtime_readiness_requires_axis_coverage_and_external_artifacts() {
+        let mut library = library();
+        library.evidence_packets[1]
+            .compatibility_axes
+            .remove(&UiReadinessCompatibilityAxis::SafeArea);
+        library.inspection_reports[1]
+            .compatibility_axes
+            .remove(&UiReadinessCompatibilityAxis::SafeArea);
+        library.evidence_packets[1].artifacts[0].ownership =
+            UiReadinessArtifactOwnership::OwnsConcreteArtifact;
+
+        let report = validate_production_readiness(&library, &request("game.runtime"));
+        let codes = codes(&report);
+
+        assert!(codes.contains("ui.readiness.compatibility_axis.missing"));
+        assert!(codes.contains("ui.readiness.inspection.compatibility_axis.missing"));
+        assert!(codes.contains("ui.readiness.artifact.ownership_violation"));
+    }
+
+    #[test]
+    fn game_runtime_readiness_rejects_missing_compatibility_report() {
+        let mut library = library();
+        library.evidence_packets[1]
+            .artifacts
+            .retain(|artifact| artifact.kind != UiReadinessEvidenceKind::CompatibilityReport);
+
+        let report = validate_production_readiness(&library, &request("game.runtime"));
+
+        assert!(report.has_errors());
         assert!(codes(&report).contains("ui.readiness.evidence.missing"));
     }
 

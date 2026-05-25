@@ -6,7 +6,7 @@ use crate::plugins::render::api::{
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
     DrawIndexedIndirectArgs, GpuParams, IndirectDrawArgsBuffer, RenderDrawDescriptor,
-    RenderIndirectDrawArgsKind, RenderPassId, RenderPassKind, RenderPassNode,
+    RenderIndirectDrawResource, RenderPassId, RenderPassKind, RenderPassNode,
     RenderPassShapeIntent, RenderPassViewScope, RenderRasterState, RenderResourceId,
     RenderVertexBufferLayout, ShaderHandle,
 };
@@ -476,11 +476,7 @@ impl GraphicsPassBuilder {
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             vertex_count,
             instance_count,
-            id,
-            T::ARGS_KIND,
-            args_buffer.len(),
-            T::BYTE_SIZE,
-            0,
+            RenderIndirectDrawResource::new(id, T::ARGS_KIND, args_buffer.len(), T::BYTE_SIZE, 0),
         ));
         self
     }
@@ -497,11 +493,13 @@ impl GraphicsPassBuilder {
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             index_count,
             instance_count,
-            id,
-            DrawIndexedIndirectArgs::ARGS_KIND,
-            args_buffer.len(),
-            DrawIndexedIndirectArgs::BYTE_SIZE,
-            0,
+            RenderIndirectDrawResource::new(
+                id,
+                DrawIndexedIndirectArgs::ARGS_KIND,
+                args_buffer.len(),
+                DrawIndexedIndirectArgs::BYTE_SIZE,
+                0,
+            ),
         ));
         self
     }
@@ -539,11 +537,13 @@ impl GraphicsPassBuilder {
             instance_count,
             first_vertex,
             first_instance,
-            id,
-            T::ARGS_KIND,
-            args_buffer.len(),
-            T::BYTE_SIZE,
-            byte_offset,
+            RenderIndirectDrawResource::new(
+                id,
+                T::ARGS_KIND,
+                args_buffer.len(),
+                T::BYTE_SIZE,
+                byte_offset,
+            ),
         ));
         self
     }
@@ -604,24 +604,16 @@ impl GraphicsPassBuilder {
 
     pub(crate) fn draw_indirect_resource(
         mut self,
-        args_buffer: RenderResourceId,
-        args_kind: RenderIndirectDrawArgsKind,
-        args_element_count: u64,
-        args_element_size: u64,
+        indirect: RenderIndirectDrawResource,
         vertex_count: u32,
         instance_count: u32,
-        byte_offset: u64,
     ) -> Self {
-        push_unique_resource(&mut self.pass.reads, args_buffer);
-        push_unique_resource(&mut self.pass.indirect_buffers, args_buffer);
+        push_unique_resource(&mut self.pass.reads, indirect.args_buffer);
+        push_unique_resource(&mut self.pass.indirect_buffers, indirect.args_buffer);
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             vertex_count,
             instance_count,
-            args_buffer,
-            args_kind,
-            args_element_count,
-            args_element_size,
-            byte_offset,
+            indirect,
         ));
         self
     }

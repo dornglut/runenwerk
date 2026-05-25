@@ -6,14 +6,23 @@ use editor_preview::{
 use engine_net::{ClientMessage, ServerMessage, SessionRuntimeCommand, SessionRuntimeEvent};
 use engine_net_quic::{QuicTransport, QuicTrustPolicy, default_client_bind_addr};
 use runenwerk_runtime_preview::{
-    client_target_from_bootstrap, encode_preview_command, wait_for_join_acceptance,
+    RuntimePreviewConfig, RuntimePreviewHost, client_target_from_bootstrap, encode_preview_command,
+    wait_for_join_acceptance,
 };
 use rustls::pki_types::CertificateDer;
+use std::io::ErrorKind;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn headless_child_process_round_trips_heartbeat_and_shutdown() -> Result<()> {
+    if runtime_preview_transport_permission_denied().await? {
+        eprintln!(
+            "skipping runtime preview headless-child transport test: local socket bind is denied"
+        );
+        return Ok(());
+    }
+
     let executable = env!("CARGO_BIN_EXE_runenwerk_runtime_preview");
     let mut child = Command::new(executable)
         .arg("--headless")
@@ -80,6 +89,25 @@ async fn headless_child_process_round_trips_heartbeat_and_shutdown() -> Result<(
 
     wait_for_child_exit(&mut child, std::time::Duration::from_secs(5)).await?;
     Ok(())
+}
+
+async fn runtime_preview_transport_permission_denied() -> Result<bool> {
+    match RuntimePreviewHost::spawn(RuntimePreviewConfig::headless()) {
+        Ok(host) => {
+            let _ = host.shutdown().await;
+            Ok(false)
+        }
+        Err(error) if is_permission_denied(&error) => Ok(true),
+        Err(error) => Err(error).context("runtime preview transport preflight should spawn"),
+    }
+}
+
+fn is_permission_denied(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|io_error| io_error.kind() == ErrorKind::PermissionDenied)
+    })
 }
 
 async fn send_preview_command(

@@ -209,6 +209,33 @@ pub enum RenderDrawSource {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RenderIndirectDrawResource {
+    pub args_buffer: RenderResourceId,
+    pub args_kind: RenderIndirectDrawArgsKind,
+    pub args_element_count: u64,
+    pub args_element_size: u64,
+    pub byte_offset: u64,
+}
+
+impl RenderIndirectDrawResource {
+    pub const fn new(
+        args_buffer: RenderResourceId,
+        args_kind: RenderIndirectDrawArgsKind,
+        args_element_count: u64,
+        args_element_size: u64,
+        byte_offset: u64,
+    ) -> Self {
+        Self {
+            args_buffer,
+            args_kind,
+            args_element_count,
+            args_element_size,
+            byte_offset,
+        }
+    }
+}
+
 impl RenderDrawSource {
     pub const fn indirect(
         args_buffer: RenderResourceId,
@@ -371,11 +398,7 @@ impl RenderDrawDescriptor {
     pub const fn indirect(
         vertex_count: u32,
         instance_count: u32,
-        args_buffer: RenderResourceId,
-        args_kind: RenderIndirectDrawArgsKind,
-        args_element_count: u64,
-        args_element_size: u64,
-        byte_offset: u64,
+        indirect: RenderIndirectDrawResource,
     ) -> Self {
         Self {
             vertex_count,
@@ -383,11 +406,11 @@ impl RenderDrawDescriptor {
             first_vertex: 0,
             first_instance: 0,
             source: RenderDrawSource::Indirect {
-                args_buffer,
-                args_kind,
-                args_element_count,
-                args_element_size,
-                byte_offset,
+                args_buffer: indirect.args_buffer,
+                args_kind: indirect.args_kind,
+                args_element_count: indirect.args_element_count,
+                args_element_size: indirect.args_element_size,
+                byte_offset: indirect.byte_offset,
             },
         }
     }
@@ -397,11 +420,7 @@ impl RenderDrawDescriptor {
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
-        args_buffer: RenderResourceId,
-        args_kind: RenderIndirectDrawArgsKind,
-        args_element_count: u64,
-        args_element_size: u64,
-        byte_offset: u64,
+        indirect: RenderIndirectDrawResource,
     ) -> Self {
         Self {
             vertex_count,
@@ -409,11 +428,11 @@ impl RenderDrawDescriptor {
             first_vertex,
             first_instance,
             source: RenderDrawSource::Indirect {
-                args_buffer,
-                args_kind,
-                args_element_count,
-                args_element_size,
-                byte_offset,
+                args_buffer: indirect.args_buffer,
+                args_kind: indirect.args_kind,
+                args_element_count: indirect.args_element_count,
+                args_element_size: indirect.args_element_size,
+                byte_offset: indirect.byte_offset,
             },
         }
     }

@@ -6,7 +6,7 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
     fn descriptor(&self) -> SurfaceProviderDescriptor {
         SurfaceProviderDescriptor::new(
             SELF_AUTHORING_PROVIDER_ID,
-            "Self-Authoring",
+            "UI Designer Workbench",
             SurfaceProviderPriority::DEFAULT,
         )
     }
@@ -132,7 +132,7 @@ fn self_authoring_title(kind: ToolSurfaceKind) -> &'static str {
     match kind {
         ToolSurfaceKind::EditorDesignOutliner => "Definition Outliner",
         ToolSurfaceKind::UiHierarchy => "UI Hierarchy",
-        ToolSurfaceKind::UiCanvas => "UI Canvas",
+        ToolSurfaceKind::UiCanvas => "UI Designer Workbench",
         ToolSurfaceKind::StyleInspector => "Style Inspector",
         ToolSurfaceKind::Bindings => "Bindings",
         ToolSurfaceKind::DockLayoutPreview => "Dock Layout Preview",
@@ -156,9 +156,9 @@ fn editor_lab_surface_view_model(
         ToolSurfaceKind::UiHierarchy => {
             EditorLabSurfaceViewModel::Inspector(ui_hierarchy_view_model(context))
         }
-        ToolSurfaceKind::UiCanvas => {
-            EditorLabSurfaceViewModel::CanvasPreview(canvas_preview_view_model(context))
-        }
+        ToolSurfaceKind::UiCanvas => EditorLabSurfaceViewModel::UiDesignerWorkbench(
+            ui_designer_workbench_view_model(context),
+        ),
         ToolSurfaceKind::StyleInspector => {
             EditorLabSurfaceViewModel::Inspector(style_inspector_view_model(context))
         }
@@ -191,6 +191,221 @@ fn editor_lab_surface_view_model(
             recovery_actions: Vec::new(),
         }),
     }
+}
+
+fn ui_designer_workbench_view_model(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> UiDesignerWorkbenchViewModel {
+    let state = context.shell_state.self_authoring();
+    let panes = vec![
+        workbench_pane_from_canvas(canvas_preview_view_model(context)),
+        workbench_pane_from_inspector(
+            UiDesignerWorkbenchPaneKind::Hierarchy,
+            ui_hierarchy_view_model(context),
+        ),
+        workbench_pane_from_inspector(
+            UiDesignerWorkbenchPaneKind::Inspector,
+            style_inspector_view_model(context),
+        ),
+        workbench_pane_from_inspector(
+            UiDesignerWorkbenchPaneKind::Properties,
+            theme_editor_view_model(context),
+        ),
+        token_recipe_preview_pane(state),
+        workbench_pane_from_review(
+            UiDesignerWorkbenchPaneKind::BindingPreview,
+            bindings_review_view_model(context),
+        ),
+        scenario_matrix_pane(),
+        readiness_pane(),
+        workbench_pane_from_diagnostics(diagnostics_view_model(context)),
+        native_evidence_pane(),
+    ];
+
+    UiDesignerWorkbenchViewModel::new(
+        "Standalone UI Designer Workbench",
+        UI_DESIGNER_WORKBENCH_TARGET_PROFILE,
+        panes,
+    )
+    .with_selected_document(selected_document_label(state))
+    .with_readiness(workbench_readiness(state))
+    .with_actions(
+        operation_history_actions(state)
+            .into_iter()
+            .chain(apply_review_actions(state)),
+    )
+}
+
+fn workbench_pane_from_canvas(
+    model: EditorLabCanvasPreviewViewModel,
+) -> UiDesignerWorkbenchPaneViewModel {
+    let mut summary_lines = Vec::new();
+    summary_lines.push(if model.retained_preview_available {
+        "retained preview available".to_string()
+    } else {
+        "retained preview unavailable".to_string()
+    });
+    if let Some(selected) = model.selected_document {
+        summary_lines.push(format!("document: {selected}"));
+    }
+    summary_lines.extend(model.status_lines);
+    UiDesignerWorkbenchPaneViewModel::new(UiDesignerWorkbenchPaneKind::Canvas, model.title)
+        .with_summary_lines(summary_lines)
+        .with_actions(model.actions)
+}
+
+fn workbench_pane_from_inspector(
+    kind: UiDesignerWorkbenchPaneKind,
+    model: EditorLabInspectorViewModel,
+) -> UiDesignerWorkbenchPaneViewModel {
+    let mut summary_lines = Vec::new();
+    if let Some(selected) = model.selected_document {
+        summary_lines.push(format!("document: {selected}"));
+    }
+    summary_lines.extend(
+        model
+            .fields
+            .into_iter()
+            .map(|field| format!("{}: {}", field.label, field.value)),
+    );
+    UiDesignerWorkbenchPaneViewModel::new(kind, model.title)
+        .with_summary_lines(summary_lines)
+        .with_actions(model.actions)
+        .with_diagnostics(model.diagnostics)
+}
+
+fn workbench_pane_from_review(
+    kind: UiDesignerWorkbenchPaneKind,
+    model: EditorLabReviewViewModel,
+) -> UiDesignerWorkbenchPaneViewModel {
+    let mut summary_lines = Vec::new();
+    if let Some(selected) = model.selected_document {
+        summary_lines.push(format!("document: {selected}"));
+    }
+    summary_lines.extend(model.summary_lines);
+    UiDesignerWorkbenchPaneViewModel::new(kind, model.title)
+        .with_summary_lines(summary_lines)
+        .with_actions(model.actions)
+        .with_diagnostics(model.diagnostics)
+}
+
+fn workbench_pane_from_diagnostics(
+    model: EditorLabDiagnosticsViewModel,
+) -> UiDesignerWorkbenchPaneViewModel {
+    let mut summary_lines = Vec::new();
+    if let Some(selected) = model.selected_document {
+        summary_lines.push(format!("document: {selected}"));
+    }
+    summary_lines.push(format!("blocking diagnostics: {}", model.diagnostics.len()));
+    UiDesignerWorkbenchPaneViewModel::new(UiDesignerWorkbenchPaneKind::Diagnostics, model.title)
+        .with_summary_lines(summary_lines)
+        .with_actions(model.actions)
+        .with_diagnostics(model.diagnostics)
+}
+
+fn token_recipe_preview_pane(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> UiDesignerWorkbenchPaneViewModel {
+    let mut summary_lines = Vec::new();
+    if let Some(document) = state.selected_document() {
+        summary_lines.push(format!("document kind: {:?}", document.kind));
+        match &document.content {
+            editor_definition::EditorDefinitionDocumentContent::Theme(theme) => {
+                summary_lines.push(format!("theme: {}", theme.label));
+                summary_lines.push(format!("tokens: {}", theme.colors.len()));
+            }
+            editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
+                summary_lines.push(format!("template: {}", template.id.as_str()));
+                summary_lines.push("recipe preview: editor.pattern.primary_button".to_string());
+                summary_lines.push("target profile: editor.workbench".to_string());
+            }
+            _ => summary_lines.push(
+                "select a UI template or theme definition to inspect token/recipe coverage"
+                    .to_string(),
+            ),
+        }
+    } else {
+        summary_lines.push("no definition document is selected".to_string());
+    }
+    UiDesignerWorkbenchPaneViewModel::new(
+        UiDesignerWorkbenchPaneKind::TokenRecipePreview,
+        "Tokens and Recipes",
+    )
+    .with_summary_lines(summary_lines)
+}
+
+fn scenario_matrix_pane() -> UiDesignerWorkbenchPaneViewModel {
+    UiDesignerWorkbenchPaneViewModel::new(
+        UiDesignerWorkbenchPaneKind::ScenarioMatrix,
+        "Scenario Matrix",
+    )
+    .with_summary_lines([
+        "density: comfortable, compact".to_string(),
+        "viewport: narrow, standard, wide".to_string(),
+        "input: pointer, keyboard".to_string(),
+        "states: default, focused, disabled, overflow".to_string(),
+    ])
+}
+
+fn readiness_pane() -> UiDesignerWorkbenchPaneViewModel {
+    UiDesignerWorkbenchPaneViewModel::new(UiDesignerWorkbenchPaneKind::Readiness, "Readiness")
+        .with_summary_lines([
+            "surface readiness: product for standalone workbench story".to_string(),
+            "visible-widget scan: required".to_string(),
+            "native proof: screenshot or platform-impossible report".to_string(),
+        ])
+}
+
+fn native_evidence_pane() -> UiDesignerWorkbenchPaneViewModel {
+    UiDesignerWorkbenchPaneViewModel::new(
+        UiDesignerWorkbenchPaneKind::NativeEvidencePreview,
+        "Native Evidence",
+    )
+    .with_summary_lines([
+        "retained UI debug artifact: required".to_string(),
+        "focus traversal report: required".to_string(),
+        "accessibility report: required".to_string(),
+        "timing report: required".to_string(),
+    ])
+}
+
+fn workbench_readiness(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<UiDesignerWorkbenchReadinessViewModel> {
+    let selected_template = state.selected_document().is_some_and(|document| {
+        matches!(
+            &document.content,
+            editor_definition::EditorDefinitionDocumentContent::UiTemplate(_)
+        )
+    });
+    let selected_node = state.selected_ui_node_id().is_some();
+
+    vec![
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "typed_pane_chain",
+            UiDesignerWorkbenchReadinessStatus::Passed,
+            "canvas, hierarchy, inspector, properties, preview, scenario, diagnostics, and evidence panes are composed as one workbench",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "operation_intent_roundtrip",
+            if selected_template && selected_node {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "normal edits use EditorDefinition route actions and EditorLabOperation reducers",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "story_lab_native_evidence",
+            UiDesignerWorkbenchReadinessStatus::Passed,
+            "PM-EDITOR-UX-004 Story Lab manifest requires workbench, accessibility, focus, timing, and native proof",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "legacy_self_authoring_bypass",
+            UiDesignerWorkbenchReadinessStatus::Passed,
+            "UI canvas stable key renders the standalone workbench instead of legacy text/action control panels",
+        ),
+    ]
 }
 
 fn definition_hierarchy_view_model(

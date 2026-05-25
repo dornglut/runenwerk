@@ -7,8 +7,8 @@ use crate::{
     EditorLabDiagnosticsViewModel, EditorLabInspectorViewModel, EditorLabPaletteViewModel,
     EditorLabReviewViewModel, EditorLabSurfaceViewModel, EditorLabTextFieldViewModel,
     SurfaceLocalAction, SurfaceLocalRoute, SurfaceRouteTable, SurfaceWidgetScope,
-    ToolSurfaceInstanceId, UiNode, WidgetId, button, label, panel, text_input, vscroll,
-    vstack_with_policies,
+    ToolSurfaceInstanceId, UiDesignerWorkbenchViewModel, UiNode, WidgetId, button, label, panel,
+    text_input, vscroll, vstack_with_policies,
 };
 use ui_layout::SizePolicy;
 use ui_text::{FontId, TextStyle};
@@ -26,11 +26,21 @@ pub fn build_editor_lab_surface(
     let text_style = theme.body_small_text_style(FontId(1));
     let mut routes = SurfaceRouteTable::empty();
     let mut children = vec![
-        label(ids.next(), "Editor Lab", text_style.clone()),
+        label(ids.next(), view_model.product_label(), text_style.clone()),
         label(ids.next(), view_model.title(), text_style.clone()),
     ];
 
     match view_model {
+        EditorLabSurfaceViewModel::UiDesignerWorkbench(model) => {
+            build_ui_designer_workbench(
+                model,
+                theme,
+                text_style.clone(),
+                &mut ids,
+                &mut routes,
+                &mut children,
+            );
+        }
         EditorLabSurfaceViewModel::DefinitionHierarchy(model) => {
             build_definition_hierarchy(
                 model,
@@ -121,6 +131,66 @@ pub fn build_editor_lab_surface(
     );
     let scroll = vscroll(ids.next(), theme.clone(), vec![body]);
     (panel(ids.next(), theme.clone(), vec![scroll]), routes)
+}
+
+fn build_ui_designer_workbench(
+    model: &UiDesignerWorkbenchViewModel,
+    theme: &ThemeTokens,
+    text_style: TextStyle,
+    ids: &mut EditorLabWidgetIds,
+    routes: &mut SurfaceRouteTable,
+    children: &mut Vec<UiNode>,
+) {
+    if let Some(selected) = &model.selected_document {
+        children.push(label(
+            ids.next(),
+            format!("Selected: {selected}"),
+            text_style.clone(),
+        ));
+    }
+    children.push(label(
+        ids.next(),
+        format!("target profile: {}", model.target_profile),
+        text_style.clone(),
+    ));
+
+    for pane in &model.panes {
+        children.push(label(
+            ids.next(),
+            format!("{} - {}", pane.kind.label(), pane.title),
+            text_style.clone(),
+        ));
+        for line in &pane.summary_lines {
+            children.push(label(ids.next(), line.clone(), text_style.clone()));
+        }
+        push_actions(
+            children,
+            routes,
+            ids,
+            theme,
+            text_style.clone(),
+            &pane.actions,
+        );
+        push_diagnostic_rows(children, ids, text_style.clone(), &pane.diagnostics);
+    }
+
+    if !model.readiness.is_empty() {
+        children.push(label(ids.next(), "Readiness Evidence", text_style.clone()));
+        for item in &model.readiness {
+            children.push(label(
+                ids.next(),
+                format!(
+                    "[{}] {} - {}",
+                    item.status.label(),
+                    item.check,
+                    item.evidence
+                ),
+                text_style.clone(),
+            ));
+        }
+    }
+
+    push_actions(children, routes, ids, theme, text_style, &model.actions);
 }
 
 fn build_definition_hierarchy(
@@ -466,6 +536,7 @@ fn push_diagnostic_rows(
 impl EditorLabSurfaceViewModel {
     fn title(&self) -> &str {
         match self {
+            Self::UiDesignerWorkbench(model) => &model.title,
             Self::DefinitionHierarchy(model) => &model.title,
             Self::Palette(model) => &model.title,
             Self::CanvasPreview(model) => &model.title,
@@ -474,6 +545,13 @@ impl EditorLabSurfaceViewModel {
             Self::Diagnostics(model) => &model.title,
             Self::Console(model) => &model.title,
             Self::Degraded(model) => &model.title,
+        }
+    }
+
+    fn product_label(&self) -> &str {
+        match self {
+            Self::UiDesignerWorkbench(_) => "UI Designer Workbench",
+            _ => "Editor Lab",
         }
     }
 }
@@ -568,6 +646,48 @@ mod tests {
 
         assert!(contains_text(&root, "Selected definition cannot preview"));
         assert!(routes.is_empty());
+    }
+
+    #[test]
+    fn ui_designer_workbench_surface_routes_typed_pane_actions() {
+        let surface_id = ToolSurfaceInstanceId::try_from_raw(11).unwrap();
+        let view_model = EditorLabSurfaceViewModel::UiDesignerWorkbench(
+            crate::UiDesignerWorkbenchViewModel::new(
+                "Standalone UI Designer",
+                "editor.workbench",
+                [crate::UiDesignerWorkbenchPaneViewModel::new(
+                    crate::UiDesignerWorkbenchPaneKind::Canvas,
+                    "Canvas",
+                )
+                .with_summary_lines(["selected node: toolbar.save".to_string()])
+                .with_actions([EditorLabActionViewModel::enabled(
+                    "Select toolbar.save",
+                    EditorDefinitionSurfaceAction::SelectUiNode {
+                        node_id: "toolbar.save".to_string(),
+                    },
+                )])],
+            )
+            .with_selected_document(Some("runenwerk.editor.toolbar".to_string()))
+            .with_readiness([crate::UiDesignerWorkbenchReadinessViewModel::new(
+                "typed workbench route",
+                crate::UiDesignerWorkbenchReadinessStatus::Passed,
+                "canvas pane emits EditorDefinition routes",
+            )]),
+        );
+
+        let (root, routes) =
+            build_editor_lab_surface(&ThemeTokens::default(), surface_id, &view_model);
+
+        assert!(contains_text(&root, "UI Designer Workbench"));
+        assert!(contains_text(&root, "target profile: editor.workbench"));
+        assert!(contains_text(&root, "Canvas - Canvas"));
+        assert_route_action(
+            &routes,
+            surface_widget_id(surface_id, WidgetId(70_006)),
+            EditorDefinitionSurfaceAction::SelectUiNode {
+                node_id: "toolbar.save".to_string(),
+            },
+        );
     }
 
     fn assert_route_action(

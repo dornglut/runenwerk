@@ -7,6 +7,7 @@ pub mod expression;
 pub mod ids;
 pub mod observation;
 pub mod runtime;
+pub mod story_lab;
 pub mod surface_provider;
 pub mod surfaces;
 pub mod tool_suite;
@@ -22,6 +23,7 @@ pub use expression::*;
 pub use ids::*;
 pub use observation::*;
 pub use runtime::*;
+pub use story_lab::*;
 pub use surface_provider::*;
 pub use surfaces::{
     AssetBrowserRowViewModel, AssetBrowserViewModel, AssetDetailViewModel, AssetSurfaceAction,
@@ -55,7 +57,9 @@ pub use surfaces::{
     MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel, OutlinerDomainMutation,
     OutlinerSurfaceAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
     SdfOperationSurfaceAction, TexturePreviewChannelSelection, TextureSurfaceAction,
-    TextureViewerSurfaceKind, ViewportDomainMutation, ViewportSessionMutation,
+    TextureViewerSurfaceKind, UiDesignerWorkbenchPaneKind, UiDesignerWorkbenchPaneViewModel,
+    UiDesignerWorkbenchReadinessStatus, UiDesignerWorkbenchReadinessViewModel,
+    UiDesignerWorkbenchViewModel, ViewportDomainMutation, ViewportSessionMutation,
     ViewportSurfaceAction,
 };
 pub use tool_suite::{
@@ -145,6 +149,7 @@ pub use workspace::{
     tool_surface_capabilities_from_registry_or_legacy, tool_surface_capability_set,
     tool_surface_definition_id, tool_surface_display_metadata_from_registry_or_legacy,
     tool_surface_kind_definition_key, tool_surface_kind_from_definition_key,
+    tool_surface_readiness, tool_surface_readiness_for_definition_id,
     tool_surface_retention_class_from_registry_or_legacy, tool_surface_session_retention_class,
     viewport_embed_slot_for,
 };

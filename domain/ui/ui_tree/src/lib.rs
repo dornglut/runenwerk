@@ -4,10 +4,12 @@
 
 pub mod computed_layout;
 pub mod ids;
+pub mod inspection;
 pub mod tree;
 
 pub use computed_layout::{ComputedLayout, ComputedLayoutMap};
 pub use ids::*;
+pub use inspection::*;
 pub use tree::*;
 
 #[cfg(test)]

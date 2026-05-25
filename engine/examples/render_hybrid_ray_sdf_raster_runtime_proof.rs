@@ -466,21 +466,13 @@ fn ray_query_supported() -> RenderRayQueryInspection {
             acceleration_resource(
                 RenderRayQueryAccelerationResourceKind::BottomLevel,
                 "hybrid.blas.scene_mesh",
-                "mesh",
-                "scene_mesh.lod0",
-                4100,
-                7,
-                "mesh-cache:4100:7",
+                acceleration_lineage("mesh", "scene_mesh.lod0", 4100, 7, "mesh-cache:4100:7"),
                 16_384,
             ),
             acceleration_resource(
                 RenderRayQueryAccelerationResourceKind::TopLevel,
                 "hybrid.tlas.main_scene",
-                "scene",
-                "scene.hybrid.main",
-                4200,
-                7,
-                "scene-cache:4200:7",
+                acceleration_lineage("scene", "scene.hybrid.main", 4200, 7, "scene-cache:4200:7"),
                 8192,
             ),
         ],
@@ -501,28 +493,35 @@ fn ray_query_fallback() -> RenderRayQueryInspection {
 fn acceleration_resource(
     kind: RenderRayQueryAccelerationResourceKind,
     debug_label: &str,
+    lineage: RenderRayQueryAccelerationSourceLineage,
+    memory_bytes: u64,
+) -> RenderRayQueryAccelerationResourceEvidence {
+    let build_version = lineage.generation;
+    RenderRayQueryAccelerationResourceEvidence {
+        kind,
+        debug_label: debug_label.to_string(),
+        status: RenderRayQueryAccelerationResourceStatus::Ready,
+        source_lineage: vec![lineage],
+        memory_bytes,
+        build_version,
+        invalidation_reason: None,
+        exposes_backend_handle: false,
+    }
+}
+
+fn acceleration_lineage(
     source_kind: &str,
     source_id: &str,
     product_id: u64,
     generation: u64,
     cache_id: &str,
-    memory_bytes: u64,
-) -> RenderRayQueryAccelerationResourceEvidence {
-    RenderRayQueryAccelerationResourceEvidence {
-        kind,
-        debug_label: debug_label.to_string(),
-        status: RenderRayQueryAccelerationResourceStatus::Ready,
-        source_lineage: vec![RenderRayQueryAccelerationSourceLineage {
-            source_kind: source_kind.to_string(),
-            source_id: source_id.to_string(),
-            product_id: Some(product_id),
-            generation: Some(generation),
-            cache_id: Some(cache_id.to_string()),
-        }],
-        memory_bytes,
-        build_version: Some(generation),
-        invalidation_reason: None,
-        exposes_backend_handle: false,
+) -> RenderRayQueryAccelerationSourceLineage {
+    RenderRayQueryAccelerationSourceLineage {
+        source_kind: source_kind.to_string(),
+        source_id: source_id.to_string(),
+        product_id: Some(product_id),
+        generation: Some(generation),
+        cache_id: Some(cache_id.to_string()),
     }
 }
 

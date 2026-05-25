@@ -1083,6 +1083,38 @@ mod tests {
     }
 
     #[test]
+    fn game_runtime_visual_layout_edits_are_profile_gated() {
+        let mut operation = operation(
+            "game.split",
+            "root/stack",
+            "stack",
+            UiVisualLayoutEditKind::ChangeStackAxis {
+                axis: UiAxisDefinition::Horizontal,
+            },
+        );
+        operation.target_profile = "game.runtime".into();
+        let edit_context =
+            UiVisualLayoutEditContext::with_supported_target_profiles(["game.runtime".into()]);
+
+        let report = apply_visual_layout_operation(
+            stack_template(),
+            &operation,
+            UiVisualLayoutActivationMode::Activate,
+            &edit_context,
+        );
+
+        assert!(!report.has_errors(), "{:?}", report.diagnostics);
+        assert_eq!(
+            report
+                .diff
+                .expect("successful game runtime edit has diff")
+                .target_profile
+                .as_str(),
+            "game.runtime"
+        );
+    }
+
+    #[test]
     fn visual_layout_insert_rejects_duplicate_ids_inside_new_subtree() {
         let operation = operation(
             "insert.duplicate.subtree",

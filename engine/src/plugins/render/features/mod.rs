@@ -523,6 +523,7 @@ mod tests {
                 "detail".to_string(),
                 "material".to_string(),
                 "particle.vfx".to_string(),
+                "world.visual".to_string(),
                 "deformation".to_string(),
                 "wind.fields".to_string(),
             ]

@@ -1806,7 +1806,7 @@ fn editor_lab_provider_builds_typed_direct_control_surfaces() {
 }
 
 #[test]
-fn editor_lab_canvas_degraded_state_is_typed_and_recoverable() {
+fn ui_designer_workbench_canvas_is_standalone_and_recoverable() {
     let registry = EditorSurfaceProviderRegistry::runenwerk_default();
     let app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();
@@ -1825,9 +1825,15 @@ fn editor_lab_canvas_degraded_state_is_typed_and_recoverable() {
     let text = provider_frame_text(&frame);
 
     assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
-    assert!(text.contains("Editor Lab"));
+    assert_eq!(frame.title, "UI Designer Workbench");
+    assert!(text.contains("UI Designer Workbench"));
+    assert!(text.contains("Standalone UI Designer Workbench"));
+    assert!(text.contains("Canvas - UI Canvas"));
+    assert!(text.contains("Scenario Matrix - Scenario Matrix"));
+    assert!(text.contains("Native Evidence - Native Evidence"));
     assert!(text.contains("Selected definition cannot form a retained UI preview"));
     assert!(frame_has_editor_definition_route(&frame));
+    assert!(!text.contains("build_self_authoring_control_panel"));
 }
 
 #[test]

@@ -302,21 +302,21 @@ package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" 
 package "PT-EDITOR-UX Editor Product UX Native Story Lab And Surface Perfection" {
   component "PM-EDITOR-UX-001 Governance Truth Audit And Track Activation\nkind=design\nstate=completed\nWR=WR-111" as PM_EDITOR_UX_001 <<completed>>
 
-  component "PM-EDITOR-UX-002 Native Editor UX Story Lab And Evidence Harness\nkind=implementation\nstate=designing\nWR=WR-112" as PM_EDITOR_UX_002 <<designing>>
+  component "PM-EDITOR-UX-002 Native Editor UX Story Lab And Evidence Harness\nkind=implementation\nstate=completed\nWR=WR-112" as PM_EDITOR_UX_002 <<completed>>
 
-  component "PM-EDITOR-UX-003 Layered Editor Design System Migration\nkind=implementation\nstate=designing\nWR=WR-113" as PM_EDITOR_UX_003 <<designing>>
+  component "PM-EDITOR-UX-003 Layered Editor Design System Migration\nkind=implementation\nstate=completed\nWR=WR-113" as PM_EDITOR_UX_003 <<completed>>
 
-  component "PM-EDITOR-UX-004 Standalone UI Designer Workbench\nkind=implementation\nstate=designing\nWR=WR-114" as PM_EDITOR_UX_004 <<designing>>
+  component "PM-EDITOR-UX-004 Standalone UI Designer Workbench\nkind=implementation\nstate=completed\nWR=WR-114" as PM_EDITOR_UX_004 <<completed>>
 
-  component "PM-EDITOR-UX-005 Graph Canvas And Node Editor Productization\nkind=implementation\nstate=designing\nWR=WR-115" as PM_EDITOR_UX_005 <<designing>>
+  component "PM-EDITOR-UX-005 Graph Canvas And Node Editor Productization\nkind=implementation\nstate=completed\nWR=WR-115" as PM_EDITOR_UX_005 <<completed>>
 
-  component "PM-EDITOR-UX-006 Shell And Product Pattern Polish\nkind=implementation\nstate=designing\nWR=WR-116" as PM_EDITOR_UX_006 <<designing>>
+  component "PM-EDITOR-UX-006 Shell And Product Pattern Polish\nkind=implementation\nstate=completed\nWR=WR-116" as PM_EDITOR_UX_006 <<completed>>
 
-  component "PM-EDITOR-UX-007 All Registered Visible Surface Wave\nkind=implementation\nstate=designing\nWR=WR-117" as PM_EDITOR_UX_007 <<designing>>
+  component "PM-EDITOR-UX-007 All Registered Visible Surface Wave\nkind=implementation\nstate=completed\nWR=WR-117" as PM_EDITOR_UX_007 <<completed>>
 
-  component "PM-EDITOR-UX-008 Game UI Readiness Seam\nkind=hardening\nstate=designing\nWR=WR-118" as PM_EDITOR_UX_008 <<designing>>
+  component "PM-EDITOR-UX-008 Game UI Readiness Seam\nkind=hardening\nstate=completed\nWR=WR-118" as PM_EDITOR_UX_008 <<completed>>
 
-  component "PM-EDITOR-UX-009 Final Local Native No Gap Certification\nkind=release\nstate=designing\nWR=WR-119" as PM_EDITOR_UX_009 <<designing>>
+  component "PM-EDITOR-UX-009 Final Local Native No Gap Certification\nkind=release\nstate=completed\nWR=WR-119" as PM_EDITOR_UX_009 <<completed>>
 
 }
 

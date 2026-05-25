@@ -30,11 +30,14 @@ pub enum UiPreviewDataStateKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum UiPreviewMatrixAxisKind {
     Platform,
+    SafeArea,
+    PlatformPrompt,
     Accessibility,
     Localization,
     Input,
     Size,
     Performance,
+    ViewModelFreshness,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -765,6 +768,8 @@ impl PreviewValidator<'_> {
                 }
             }
 
+            self.validate_game_runtime_axis_coverage(matrix, &axis_kinds);
+
             for evidence in &matrix.evidence {
                 if !evidence.target_profiles.is_empty()
                     && !evidence
@@ -799,6 +804,50 @@ impl PreviewValidator<'_> {
                     .with_target_profile(self.request.target_profile.clone()),
                 );
             }
+        }
+    }
+
+    fn validate_game_runtime_axis_coverage(
+        &mut self,
+        matrix: &UiPreviewMatrixDeclaration,
+        axis_kinds: &BTreeSet<UiPreviewMatrixAxisKind>,
+    ) {
+        if self.request.target_profile.as_str() != "game.runtime" {
+            return;
+        }
+
+        let applies_to_runtime = matrix.target_profiles.is_empty()
+            || matrix
+                .target_profiles
+                .contains(&self.request.target_profile);
+        if !applies_to_runtime {
+            return;
+        }
+
+        let required = BTreeSet::from([
+            UiPreviewMatrixAxisKind::SafeArea,
+            UiPreviewMatrixAxisKind::Input,
+            UiPreviewMatrixAxisKind::PlatformPrompt,
+            UiPreviewMatrixAxisKind::Localization,
+            UiPreviewMatrixAxisKind::Accessibility,
+            UiPreviewMatrixAxisKind::Size,
+            UiPreviewMatrixAxisKind::Performance,
+            UiPreviewMatrixAxisKind::ViewModelFreshness,
+        ]);
+
+        if !required.is_subset(axis_kinds) {
+            self.diagnostics.push(
+                UiPreviewDiagnostic::error(
+                    "ui.preview.matrix.game_runtime_axis_coverage_missing",
+                    format!(
+                        "Matrix '{}' does not cover every game.runtime compatibility axis.",
+                        matrix.id
+                    ),
+                    "Add safe-area, input, platform-prompt, localization, accessibility, size, performance, and view-model freshness axes.",
+                )
+                .for_matrix(matrix)
+                .with_target_profile(self.request.target_profile.clone()),
+            );
         }
     }
 
@@ -886,12 +935,36 @@ mod tests {
             target_profiles: profiles(&["editor.workbench", "game.runtime"]),
             axes: vec![
                 UiPreviewMatrixAxis {
-                    kind: UiPreviewMatrixAxisKind::Platform,
-                    value: "desktop".to_string(),
+                    kind: UiPreviewMatrixAxisKind::SafeArea,
+                    value: "hud-safe-area".to_string(),
                 },
                 UiPreviewMatrixAxis {
                     kind: UiPreviewMatrixAxisKind::Input,
                     value: "keyboard".to_string(),
+                },
+                UiPreviewMatrixAxis {
+                    kind: UiPreviewMatrixAxisKind::PlatformPrompt,
+                    value: "keyboard-prompts".to_string(),
+                },
+                UiPreviewMatrixAxis {
+                    kind: UiPreviewMatrixAxisKind::Localization,
+                    value: "expanded-text".to_string(),
+                },
+                UiPreviewMatrixAxis {
+                    kind: UiPreviewMatrixAxisKind::Accessibility,
+                    value: "high-contrast".to_string(),
+                },
+                UiPreviewMatrixAxis {
+                    kind: UiPreviewMatrixAxisKind::Size,
+                    value: "split-screen".to_string(),
+                },
+                UiPreviewMatrixAxis {
+                    kind: UiPreviewMatrixAxisKind::Performance,
+                    value: "readability-budget".to_string(),
+                },
+                UiPreviewMatrixAxis {
+                    kind: UiPreviewMatrixAxisKind::ViewModelFreshness,
+                    value: "fresh-required".to_string(),
                 },
             ],
             evidence: vec![UiPreviewEvidenceDescriptor {
@@ -1014,7 +1087,7 @@ mod tests {
     fn preview_fixture_rejects_matrix_axis_conflicts() {
         let mut library = library();
         library.matrices[0].axes.push(UiPreviewMatrixAxis {
-            kind: UiPreviewMatrixAxisKind::Platform,
+            kind: UiPreviewMatrixAxisKind::Input,
             value: "mobile".to_string(),
         });
 
@@ -1022,6 +1095,30 @@ mod tests {
 
         assert!(report.has_errors());
         assert!(codes(&report).contains("ui.preview.matrix.axis.incompatible"));
+    }
+
+    #[test]
+    fn game_runtime_preview_matrix_requires_all_compatibility_axes() {
+        let mut library = library();
+        library.matrices[0]
+            .axes
+            .retain(|axis| axis.kind != UiPreviewMatrixAxisKind::SafeArea);
+
+        let report = validate_preview_fixtures(&library, &request("game.runtime"));
+
+        assert!(report.has_errors());
+        assert!(codes(&report).contains("ui.preview.matrix.game_runtime_axis_coverage_missing"));
+    }
+
+    #[test]
+    fn game_runtime_preview_matrix_rejects_editor_only_evidence() {
+        let mut library = library();
+        library.matrices[0].evidence[0].target_profiles = profiles(&["editor.workbench"]);
+
+        let report = validate_preview_fixtures(&library, &request("game.runtime"));
+
+        assert!(report.has_errors());
+        assert!(codes(&report).contains("ui.preview.evidence.target_profile.unsupported"));
     }
 
     #[test]

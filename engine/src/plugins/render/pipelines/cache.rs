@@ -12,7 +12,7 @@ pub struct PipelineCacheResource {
 
 impl PipelineCacheResource {
     pub fn stats(&self) -> PipelineCacheStats {
-        self.stats.clone()
+        self.stats
     }
 
     pub fn observe_stats(&mut self, stats: PipelineCacheStats) {

@@ -25,7 +25,9 @@ pub use build_editor_shell::{
 };
 pub use build_entity_table_panel::build_entity_table_panel;
 pub use build_inspector_panel::build_inspector_panel;
-pub use build_material_graph_surface::build_material_graph_surface;
+pub use build_material_graph_surface::{
+    MATERIAL_GRAPH_CANVAS_WIDGET_ID, build_material_graph_surface,
+};
 pub use build_outliner_panel::build_outliner_panel;
 pub use build_self_authoring_control_panel::build_self_authoring_control_panel;
 pub use build_toolbar::build_toolbar;

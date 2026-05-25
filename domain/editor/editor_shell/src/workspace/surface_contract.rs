@@ -7,7 +7,8 @@ use ui_surface::{
 };
 
 use crate::{
-    PanelKind, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceState, WorkspaceState,
+    PanelKind, ToolSurfaceKind, ToolSurfaceMount, ToolSurfaceReadiness, ToolSurfaceState,
+    WorkspaceState,
     tool_suite::{
         ToolSurfaceRegistry, ToolSurfaceStableKey,
         stable_key_for_tool_surface_kind as legacy_stable_key_for_tool_surface_kind,
@@ -383,6 +384,38 @@ pub fn tool_surface_definition_id(kind: ToolSurfaceKind) -> SurfaceDefinitionId 
         ToolSurfaceKind::SimulationPreview => SIMULATION_PREVIEW_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::SimulationDiagnostics => SIMULATION_DIAGNOSTICS_SURFACE_DEFINITION_ID,
         ToolSurfaceKind::Placeholder => PLACEHOLDER_SURFACE_DEFINITION_ID,
+    }
+}
+
+pub fn tool_surface_readiness(kind: ToolSurfaceKind) -> ToolSurfaceReadiness {
+    tool_surface_readiness_for_definition_id(tool_surface_definition_id(kind))
+}
+
+pub fn tool_surface_readiness_for_definition_id(
+    definition_id: SurfaceDefinitionId,
+) -> ToolSurfaceReadiness {
+    match definition_id {
+        OUTLINER_SURFACE_DEFINITION_ID
+        | VIEWPORT_SURFACE_DEFINITION_ID
+        | INSPECTOR_SURFACE_DEFINITION_ID
+        | CONSOLE_SURFACE_DEFINITION_ID
+        | ENTITY_TABLE_SURFACE_DEFINITION_ID
+        | ASSET_BROWSER_SURFACE_DEFINITION_ID
+        | IMPORT_INSPECTOR_SURFACE_DEFINITION_ID
+        | FIELD_PRODUCT_VIEWER_SURFACE_DEFINITION_ID
+        | SDF_BRUSH_BROWSER_SURFACE_DEFINITION_ID
+        | MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID
+        | MATERIAL_INSPECTOR_SURFACE_DEFINITION_ID
+        | MATERIAL_PREVIEW_SURFACE_DEFINITION_ID
+        | TEXTURE_VIEWER_SURFACE_DEFINITION_ID
+        | VOLUME_TEXTURE_VIEWER_SURFACE_DEFINITION_ID => ToolSurfaceReadiness::Product,
+        PLACEHOLDER_SURFACE_DEFINITION_ID => ToolSurfaceReadiness::FallbackOnly,
+        DIAGNOSTICS_SURFACE_DEFINITION_ID
+        | RUNTIME_DEBUG_SURFACE_DEFINITION_ID
+        | GAMEPLAY_COMPILER_DIAGNOSTICS_SURFACE_DEFINITION_ID
+        | PHYSICS_DEBUG_SURFACE_DEFINITION_ID
+        | SIMULATION_DIAGNOSTICS_SURFACE_DEFINITION_ID => ToolSurfaceReadiness::Diagnostic,
+        _ => ToolSurfaceReadiness::HiddenUntilProductized,
     }
 }
 
@@ -958,6 +991,43 @@ mod tests {
         assert_eq!(
             tool_surface_session_retention_class(ToolSurfaceKind::Placeholder),
             SessionRetentionClass::Ephemeral,
+        );
+    }
+
+    #[test]
+    fn surface_readiness_classifies_product_diagnostic_fallback_and_hidden_surfaces() {
+        assert_eq!(
+            tool_surface_readiness(ToolSurfaceKind::Outliner),
+            ToolSurfaceReadiness::Product
+        );
+        assert_eq!(
+            tool_surface_readiness(ToolSurfaceKind::Diagnostics),
+            ToolSurfaceReadiness::Diagnostic
+        );
+        assert_eq!(
+            tool_surface_readiness(ToolSurfaceKind::Placeholder),
+            ToolSurfaceReadiness::FallbackOnly
+        );
+        assert_eq!(
+            tool_surface_readiness(ToolSurfaceKind::ProcgenGraphCanvas),
+            ToolSurfaceReadiness::HiddenUntilProductized
+        );
+        for kind in [
+            ToolSurfaceKind::SdfGraphCanvas,
+            ToolSurfaceKind::ProcgenGraphCanvas,
+            ToolSurfaceKind::GameplayGraphCanvas,
+            ToolSurfaceKind::ParticleGraphCanvas,
+            ToolSurfaceKind::AnimationGraphCanvas,
+        ] {
+            assert_eq!(
+                tool_surface_readiness(kind),
+                ToolSurfaceReadiness::HiddenUntilProductized,
+                "{kind:?} must stay hidden until productized instead of presenting a placeholder graph canvas"
+            );
+        }
+        assert_eq!(
+            tool_surface_readiness(ToolSurfaceKind::MaterialGraphCanvas),
+            ToolSurfaceReadiness::Product
         );
     }
 

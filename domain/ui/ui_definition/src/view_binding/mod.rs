@@ -731,6 +731,28 @@ impl BindingValidator<'_> {
                 .with_target_profile(self.request.target_profile.clone()),
             );
         }
+
+        let applies_to_target = intent.target_profiles.is_empty()
+            || intent
+                .target_profiles
+                .contains(&self.request.target_profile);
+        if self.request.target_profile.as_str() == "game.runtime"
+            && applies_to_target
+            && matches!(intent.descriptor, UiIntentDescriptorRef::EditorCommand(_))
+        {
+            self.diagnostics.push(
+                UiBindingDiagnostic::error(
+                    "ui.binding.intent.descriptor.editor_command_for_runtime",
+                    format!(
+                        "Intent '{}' uses an editor command descriptor for game.runtime.",
+                        intent.id
+                    ),
+                    "Use a game intent or adapter intent descriptor for game.runtime declarations.",
+                )
+                .for_intent(intent)
+                .with_target_profile(self.request.target_profile.clone()),
+            );
+        }
     }
 
     fn validate_direct_mutation(&mut self, intent: &UiIntentDeclaration) {
@@ -975,6 +997,30 @@ mod tests {
     }
 
     #[test]
+    fn game_runtime_rejects_missing_or_stale_view_model_packages() {
+        let mut runtime_library = library();
+        runtime_library.bindings = vec![binding("title.binding", "combat.hud", "title")];
+        runtime_library.intents[0].descriptor = UiIntentDescriptorRef::GameIntent(id("use.item"));
+        runtime_library.known_intent_descriptors =
+            [UiIntentDescriptorRef::GameIntent(id("use.item"))]
+                .into_iter()
+                .collect();
+
+        let missing = validate_ui_bindings(
+            &runtime_library,
+            &UiBindingValidationRequest::activate("game.runtime"),
+        );
+        let stale = validate_ui_bindings(
+            &runtime_library,
+            &request("game.runtime", "combat.hud")
+                .with_package_status("combat.hud", UiViewModelPackageStatus::Stale),
+        );
+
+        assert!(codes(&missing).contains("ui.binding.view_model_package.missing"));
+        assert!(codes(&stale).contains("ui.binding.view_model_package.stale"));
+    }
+
+    #[test]
     fn view_binding_rejects_denied_capability() {
         let report = validate_ui_bindings(
             &library(),
@@ -997,6 +1043,17 @@ mod tests {
         assert!(
             codes(&report).contains("ui.binding.view_model_package.target_profile_unsupported")
         );
+    }
+
+    #[test]
+    fn game_runtime_rejects_editor_command_descriptor() {
+        let mut runtime_library = library();
+        runtime_library.bindings = vec![binding("title.binding", "combat.hud", "title")];
+
+        let report = validate_ui_bindings(&runtime_library, &request("game.runtime", "combat.hud"));
+
+        assert!(report.has_errors());
+        assert!(codes(&report).contains("ui.binding.intent.descriptor.editor_command_for_runtime"));
     }
 
     #[test]

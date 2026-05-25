@@ -352,16 +352,16 @@ fn validate_acceleration_resources(
     counts: &RenderRayQueryAccelerationResourceCounts,
     diagnostics: &mut Vec<RenderRayQueryDiagnostic>,
 ) {
-    if let Some(max_bytes) = request.max_acceleration_resource_bytes {
-        if counts.total_memory_bytes > max_bytes {
-            diagnostics.push(RenderRayQueryDiagnostic::error(
-                "acceleration_resource_budget_exceeded",
-                format!(
-                    "derived acceleration resources use {} bytes over the {} byte budget",
-                    counts.total_memory_bytes, max_bytes
-                ),
-            ));
-        }
+    if let Some(max_bytes) = request.max_acceleration_resource_bytes
+        && counts.total_memory_bytes > max_bytes
+    {
+        diagnostics.push(RenderRayQueryDiagnostic::error(
+            "acceleration_resource_budget_exceeded",
+            format!(
+                "derived acceleration resources use {} bytes over the {} byte budget",
+                counts.total_memory_bytes, max_bytes
+            ),
+        ));
     }
 
     if request.capability_profile.supports_ray_query_invocation() {

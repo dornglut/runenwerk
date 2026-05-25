@@ -214,6 +214,7 @@ fn readiness_library() -> UiReadinessLibrary {
             id: id("editor.lab.ready"),
             document: id("editor.lab"),
             target_profiles: ids(&["editor.workbench"]),
+            compatibility_axes: BTreeSet::new(),
             required_evidence: required.clone(),
             artifacts: required
                 .iter()
@@ -234,6 +235,7 @@ fn readiness_library() -> UiReadinessLibrary {
         inspection_reports: vec![UiReadinessInspectionReport {
             id: id("editor.lab.inspection"),
             target_profiles: ids(&["editor.workbench"]),
+            compatibility_axes: BTreeSet::new(),
             diagnostic_groups: BTreeSet::from([UiReadinessDiagnosticGroup::Composition]),
             source_package: id("ui.example"),
             source_location: None,

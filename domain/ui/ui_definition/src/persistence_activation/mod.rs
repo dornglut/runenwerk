@@ -1273,6 +1273,21 @@ mod tests {
     }
 
     #[test]
+    fn game_runtime_persistence_activation_requires_migration_diff_and_determinism() {
+        let mut library = library();
+        library.activation_requests[0].migration_report = None;
+        library.activation_requests[0].diff = None;
+        library.diffs[0].deterministic_text = None;
+
+        let report = validate_persistence_activation(&library, &request("game.runtime"));
+        let codes = codes(&report);
+
+        assert!(codes.contains("ui.persistence.activation.migration_report_missing"));
+        assert!(codes.contains("ui.persistence.activation.diff_missing"));
+        assert!(codes.contains("ui.persistence.diff.non_deterministic"));
+    }
+
+    #[test]
     fn persistence_activation_rejects_unsupported_target_profile() {
         let report = validate_persistence_activation(&library(), &request("console.runtime"));
         let codes = codes(&report);

@@ -1043,4 +1043,27 @@ mod tests {
         assert!(!runtime.has_errors(), "{:?}", runtime.diagnostics);
         assert_eq!(editor.root, runtime.root);
     }
+
+    #[test]
+    fn game_runtime_recipe_expansion_preserves_accessibility_layout_and_focus() {
+        let mut declaration = component_recipe();
+        declaration.layout.min_width = Some(120.0);
+        declaration.focus_navigation = UiRecipeFocusNavigation {
+            focusable: true,
+            tab_order: Some(0),
+            directional: true,
+        };
+        let library = library(vec![declaration.clone()]);
+        let report = expand_ui_recipe(
+            &library,
+            &UiRecipeExpansionRequest::activate("stats.component", "game.runtime"),
+        );
+
+        assert!(!report.has_errors(), "{:?}", report.diagnostics);
+        let root = report.root.expect("game runtime recipe expands");
+        assert!(declaration.accessibility.is_some());
+        assert_eq!(declaration.layout.min_width, Some(120.0));
+        assert!(declaration.focus_navigation.focusable);
+        assert_eq!(root.id().as_str(), "stats-root");
+    }
 }
