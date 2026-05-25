@@ -1,0 +1,125 @@
+version: 1
+idea: PM-UI-LAB-PERF-003 Command And Surface Source Truth Closure
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-command-surface-source-truth-closure-design.md
+owner: editor
+created_at: '2026-05-25'
+governance_notes:
+- Architecture governance keeps concrete editor command descriptors, command dispatch, dynamic availability, and app
+  diagnostics in apps/runenwerk_editor.
+- domain/editor/editor_shell owns app-neutral surface metadata, tool-suite registry validation, and shell projection
+  contracts; it must not execute app provider behavior.
+- domain/ui/ui_definition remains behavior-free and must not own concrete editor command semantics, provider families,
+  surface execution, or shortcut/menu behavior.
+- No ADR is required while PM003 preserves app-owned command execution, editor_shell-owned surface contracts, and explicit
+  legacy compatibility adapters.
+open_questions:
+- Which fallback table can be closed first without breaking persisted legacy surface data?
+- Which current disabled-reason or route-action duplication should be treated as stale data instead of compatibility?
+item:
+  id: WR-107
+  title: UI Lab command and surface source-truth closure
+  diagram_title: UI Lab command surface truth
+  alias: UILABPERFCMDSURF
+  lane: Editor architecture
+  dependency_level: L4
+  gate: After WR-105 runtime evidence closure
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 3
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.1
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-105
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/command_catalog
+  - apps/runenwerk_editor/src/shell/command_resolution.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/toolbar_adapter.rs
+  - apps/runenwerk_editor/src/runtime/systems/input_bridge.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - domain/editor/editor_shell/src/tool_suite
+  - domain/editor/editor_shell/src/workspace/surface_contract.rs
+  - assets/editor/ui/editor_bindings.ron
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/design/accepted/ui-lab-command-surface-source-truth-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-107-ui-lab-command-and-surface-source-truth-closure/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-003-command-and-surface-s
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo test -p runenwerk_editor command_catalog
+  - cargo test -p runenwerk_editor command_source_truth
+  - cargo test -p runenwerk_editor surface_source_truth
+  - cargo test -p editor_shell tool_suite
+  - cargo test -p editor_shell surface_contract
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: Accepted PM-UI-LAB-PERF-003 command and surface source-truth closure design plus completed WR-105
+    runtime evidence closeout clear WR-107 for promotion planning.
+  current_decision: Ready for promotion planning only; use task production:plan before implementation and preserve
+    app-owned command execution plus editor_shell-owned surface metadata.
+  current_call: Prepare a bounded PM003 implementation contract that closes command and surface source-of-truth drift
+    without starting UX, persistence/API, or final certification work.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-003 --roadmap WR-107 and write the promotion or
+    implementation-readiness contract it reports.
+  main_blocker: Awaiting promotion to current_candidate and a decision-complete implementation contract.
+  why_not_ready: Ready for promotion planning; not implementation until roadmap promotion and production contract gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - command truth closure
+  - surface registry truth
+  - legacy adapters only
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PM003 consumes the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-command-surface-source-truth-closure-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PM003 implementation must follow the accepted command and surface source-truth closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PM003 follows completed runtime evidence platform closure evidence.
+  ddd_owner: editor command and surface architecture with apps/runenwerk_editor command/provider execution and editor_shell
+    surface metadata ownership
+  adr_requirement: No ADR for app-owned command execution and editor_shell-owned surface metadata; ADR or accepted design
+    update required before moving concrete command semantics, provider-family authority, or surface execution into
+    ui_definition or a cross-domain platform.
+  fitness_function_requirement: Command catalog and surface registry tests proving normal route, toolbar, menu, keybinding,
+    disabled reason, dispatch, provider support, surface metadata, and legacy adapter paths share one source of truth.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from editor_shell and UI definition
+    owners.
+edges:
+- source: WR-105
+  target: WR-107
+  label: runtime evidence before source-truth closure

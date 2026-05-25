@@ -36,30 +36,11 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
                 )
             })?;
         let title = self_authoring_title(surface_kind).to_string();
-        let (root, routes) = match surface_kind {
-            ToolSurfaceKind::UiCanvas => context
-                .shell_state
-                .self_authoring()
-                .formed_selected_preview_with_scope(
-                    context.theme,
-                    Some(editor_shell::surface_widget_scope_base(
-                        request.tool_surface_instance_id,
-                    )),
-                )
-                .map(|product| (product.root, SurfaceRouteTable::empty()))
-                .unwrap_or_else(|| {
-                    build_editor_lab_surface(
-                        context.theme,
-                        request.tool_surface_instance_id,
-                        &editor_lab_surface_view_model(context, surface_kind),
-                    )
-                }),
-            _ => build_editor_lab_surface(
-                context.theme,
-                request.tool_surface_instance_id,
-                &editor_lab_surface_view_model(context, surface_kind),
-            ),
-        };
+        let (root, routes) = build_editor_lab_surface(
+            context.theme,
+            request.tool_surface_instance_id,
+            &editor_lab_surface_view_model(context, surface_kind),
+        );
 
         Ok(ProviderSurfaceFrame {
             title,
@@ -176,7 +157,7 @@ fn editor_lab_surface_view_model(
             EditorLabSurfaceViewModel::Inspector(ui_hierarchy_view_model(context))
         }
         ToolSurfaceKind::UiCanvas => {
-            EditorLabSurfaceViewModel::Degraded(canvas_degraded_view_model(context))
+            EditorLabSurfaceViewModel::CanvasPreview(canvas_preview_view_model(context))
         }
         ToolSurfaceKind::StyleInspector => {
             EditorLabSurfaceViewModel::Inspector(style_inspector_view_model(context))
@@ -295,19 +276,74 @@ fn ui_hierarchy_view_model(
     }
 }
 
-fn canvas_degraded_view_model(
+fn canvas_preview_view_model(
     context: &SurfaceProviderBuildContext<'_>,
-) -> EditorLabDegradedViewModel {
+) -> EditorLabCanvasPreviewViewModel {
     let state = context.shell_state.self_authoring();
-    EditorLabDegradedViewModel {
+    let retained_preview_available = state.formed_selected_preview(context.theme).is_some();
+    let mut status_lines = Vec::new();
+    let mut actions = Vec::new();
+
+    if let Some(document) = state.selected_document() {
+        status_lines.push(format!("document kind: {:?}", document.kind));
+        match &document.content {
+            editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
+                status_lines.push(format!("template: {}", template.id.as_str()));
+                status_lines.push(format!(
+                    "selected node: {}",
+                    state.selected_ui_node_id().unwrap_or("none")
+                ));
+                actions.extend(ui_node_selection_actions(
+                    &template.root,
+                    state.selected_ui_node_id(),
+                ));
+                if let Some(node_id) = state.selected_ui_node_id()
+                    && let Some(text) = ui_node_authored_text(&template.root, node_id)
+                {
+                    actions.push(EditorLabActionViewModel::enabled(
+                        format!("Apply canvas text edit to {node_id}"),
+                        EditorDefinitionSurfaceAction::SetUiNodeText {
+                            node_id: node_id.to_string(),
+                            text,
+                        },
+                    ));
+                }
+            }
+            _ => {
+                status_lines
+                    .push("Selected definition cannot form a retained UI preview".to_string());
+                actions.extend(select_ui_layout_actions(state));
+            }
+        }
+    } else {
+        status_lines.push("no definition document is selected".to_string());
+        actions.extend(select_ui_layout_actions(state));
+    }
+
+    if let Some(report) = state.last_operation_report() {
+        status_lines.push(format!(
+            "last operation: {} {:?}",
+            report.operation_id, report.status
+        ));
+        status_lines.push(format!(
+            "last operation diagnostics: {}",
+            report.diagnostics.len()
+        ));
+    }
+
+    let history = state.operation_history_snapshot();
+    status_lines.push(format!(
+        "operation history: undo={} redo={}",
+        history.undo_count, history.redo_count
+    ));
+    actions.extend(operation_history_actions(state));
+
+    EditorLabCanvasPreviewViewModel {
         title: "UI Canvas".to_string(),
-        reason: "Selected definition cannot form a retained UI preview".to_string(),
-        details: selected_document_label(state)
-            .into_iter()
-            .chain(["Select a UI layout document from the hierarchy to preview it.".to_string()])
-            .collect(),
-        diagnostics: selected_diagnostics_view_models(state),
-        recovery_actions: select_ui_layout_actions(state),
+        selected_document: selected_document_label(state),
+        retained_preview_available,
+        status_lines,
+        actions,
     }
 }
 
@@ -316,6 +352,7 @@ fn style_inspector_view_model(
 ) -> EditorLabInspectorViewModel {
     let state = context.shell_state.self_authoring();
     let mut fields = Vec::new();
+    let actions = selected_document_actions(state);
     if let Some(document) = state.selected_document() {
         fields.push(field("Document id", document.id.as_str().to_string()));
         fields.push(field("Kind", format!("{:?}", document.kind)));
@@ -335,12 +372,31 @@ fn style_inspector_view_model(
                 },
             )),
         });
+        if let editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) =
+            &document.content
+            && let Some(node_id) = state.selected_ui_node_id()
+            && let Some(text) = ui_node_authored_text(&template.root, node_id)
+        {
+            fields.push(EditorLabInspectorFieldViewModel {
+                label: "Selected node text".to_string(),
+                value: text.clone(),
+                text_field: Some(EditorLabTextFieldViewModel::new(
+                    "Edit selected node text",
+                    text,
+                    "Text",
+                    EditorDefinitionSurfaceAction::SetUiNodeText {
+                        node_id: node_id.to_string(),
+                        text: String::new(),
+                    },
+                )),
+            });
+        }
     }
     EditorLabInspectorViewModel {
         title: "Style Inspector".to_string(),
         selected_document: selected_document_label(state),
         fields,
-        actions: selected_document_actions(state),
+        actions,
         diagnostics: selected_diagnostics_view_models(state),
     }
 }
@@ -510,7 +566,7 @@ fn diagnostics_view_model(
     EditorLabDiagnosticsViewModel {
         title: "Definition Validation".to_string(),
         selected_document: selected_document_label(state),
-        diagnostics: selected_diagnostics_view_models(state),
+        diagnostics: editor_lab_diagnostics_view_models(state),
         actions: apply_review_actions(state),
     }
 }
@@ -552,8 +608,8 @@ fn command_review_view_model(
         ));
         for row in review.diff_rows.iter().take(3) {
             summary.push(format!(
-                "apply diff: {} {:?} -> {:?}",
-                row.path, row.before, row.after
+                "apply diff: {:?}/{:?} {} {:?} -> {:?}: {}",
+                row.family, row.kind, row.path, row.before, row.after, row.summary
             ));
         }
     }
@@ -833,6 +889,23 @@ fn selected_diagnostics_view_models(
             path: diagnostic.path.map(|path| format!("{path:?}")),
         })
         .collect()
+}
+
+fn editor_lab_diagnostics_view_models(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Vec<EditorLabDiagnosticViewModel> {
+    let mut diagnostics = selected_diagnostics_view_models(state);
+    if let Some(report) = state.last_operation_report() {
+        diagnostics.extend(report.diagnostics.iter().map(|diagnostic| {
+            EditorLabDiagnosticViewModel {
+                severity: format!("{:?}", diagnostic.severity),
+                code: diagnostic.code.clone(),
+                message: diagnostic.message.clone(),
+                path: diagnostic.path.as_ref().map(|path| format!("{path:?}")),
+            }
+        }));
+    }
+    diagnostics
 }
 
 fn selected_document_label(

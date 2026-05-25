@@ -5,12 +5,14 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-24
+last_reviewed: 2026-05-25
 related:
   - ./README.md
   - ./editor-definition/current-architecture.md
   - ../../design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+  - ../../design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
   - ../../reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+  - ../../reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
 ---
 
 # Editor Definition Usage
@@ -68,6 +70,21 @@ Use `form_editor_theme_tokens` when the caller needs to validate and form
 editor theme definitions into `ui_theme` tokens without entering the app
 runtime.
 
+## Apply Review Handoff
+
+The app-owned Editor Lab apply review compares a selected draft against the
+currently applied document and exposes structural rows, not a single serialized
+document-content blob. Normal public-domain code should hand validated
+documents and `EditorLabOperationReport` values to the app boundary; the app
+then owns package save/reload, apply review, activation, reload-last-applied,
+rollback, failed activation preservation, and runtime artifacts.
+
+For UI template drafts, structural rows identify the UI template family and
+node-level paths such as `document.content.ui_template.root.<node>.label`.
+For other editor-definition kinds, rows remain typed by family so the product
+surface can explain whether the change belongs to metadata, theme, workspace,
+menu, shortcut, command binding, registry, or editor bindings state.
+
 ## Complete Example
 
 Run the public example from the workspace root:
@@ -89,7 +106,8 @@ The example:
 After domain validation and operation application, app-owned Editor Lab flows
 take over for project IO, apply review, live activation, failed activation
 preservation, reload, rollback, and runtime evidence. Those product paths are
-proved by the PM-UI-LAB-005 and PM-UI-LAB-006 closeouts.
+proved by the PM-UI-LAB-005 and PM-UI-LAB-006 closeouts and rechecked by the
+PM-UI-LAB-PERF-005 no-gap persistence/API/examples closure.
 
 `editor_definition` should only receive typed documents, operations, reports,
 diffs, and diagnostics. It should not gain app-specific file locations,

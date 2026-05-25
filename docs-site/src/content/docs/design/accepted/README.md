@@ -40,6 +40,10 @@ Move a design to `implemented/` only after code has been checked against it and 
 - [UI Lab API Docs Examples Runtime Closeout Design](ui-lab-api-docs-examples-runtime-closeout-design.md)
 - [UI Lab Perfectionist Audit Design](ui-lab-perfectionist-audit-design.md)
 - [UI Lab Runtime Evidence Platform Closure Design](ui-lab-runtime-evidence-platform-closure-design.md)
+- [UI Lab Command And Surface Source Truth Closure Design](ui-lab-command-surface-source-truth-closure-design.md)
+- [UI Lab Direct Manipulation UX Closure Design](ui-lab-direct-manipulation-ux-closure-design.md)
+- [UI Lab Persistence API Examples Ergonomics Closure Design](ui-lab-persistence-api-examples-ergonomics-closure-design.md)
+- [UI Lab Final No Gap Certification Closeout Design](ui-lab-final-no-gap-certification-closeout-design.md)
 
 ### Workspace / Cross-Domain
 

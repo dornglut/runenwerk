@@ -5,11 +5,13 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-24
+last_reviewed: 2026-05-25
 related:
   - ./README.md
   - ../../design/accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
+  - ../../design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
   - ../../reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+  - ../../reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
 ---
 
 # UI Definition Usage
@@ -69,6 +71,21 @@ Use `validate_ui_preview_library`, `validate_ui_persistence_flow`, and
 `validate_ui_readiness` for behavior-free descriptor checks. Concrete runtime
 evidence for Editor Lab scenarios lives under `apps/runenwerk_editor` and the
 PM-UI-LAB closeout artifacts.
+
+## Persistence And Diff Boundary
+
+`validate_ui_persistence_flow` validates behavior-free descriptors for
+migration reports, deterministic diffs, activation requests, source packages,
+target profiles, and diagnostics. It does not save project files, execute live
+activation, or rollback editor state.
+
+When a behavior-free UI template is edited through Editor Lab, the app-owned
+apply review is responsible for comparing the draft against the applied
+document and surfacing structural rows such as
+`document.content.ui_template.root.<node>.label`. `ui_definition` remains the
+owner of generic layout diffs and persistence descriptors; the native editor
+app owns project packages, review decisions, activation, rollback, and runtime
+artifacts.
 
 ## Complete Example
 

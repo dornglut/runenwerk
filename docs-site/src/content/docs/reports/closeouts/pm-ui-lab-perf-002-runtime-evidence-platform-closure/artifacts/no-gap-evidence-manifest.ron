@@ -114,7 +114,7 @@
                 (
                     kind: ProviderSnapshot,
                     path: "artifacts/provider-snapshot.ron",
-                    bytes: 1096,
+                    bytes: 1097,
                     description: "Resolved Editor Lab provider frames.",
                 ),
             ],
@@ -295,7 +295,7 @@
                 (
                     kind: ProjectPackage,
                     path: "artifacts/project-package.ron",
-                    bytes: 51649,
+                    bytes: 51650,
                     description: "Saved Editor Lab project package used by reload scenario.",
                 ),
                 (
@@ -321,7 +321,7 @@
                         (
                             kind: ProjectPackage,
                             path: "artifacts/project-package.ron",
-                            bytes: 51649,
+                            bytes: 51650,
                             description: "Saved Editor Lab project package used by reload scenario.",
                         ),
                     ],
@@ -349,7 +349,7 @@
                 (
                     kind: RetainedUiDebug,
                     path: "artifacts/apply-retained-surface-debug.txt",
-                    bytes: 27193,
+                    bytes: 27251,
                     description: "Command surface after apply and activation.",
                 ),
             ],
@@ -397,7 +397,7 @@
                 (
                     kind: RetainedUiDebug,
                     path: "artifacts/rollback-retained-surface-debug.txt",
-                    bytes: 27655,
+                    bytes: 27713,
                     description: "Command surface after rollback.",
                 ),
             ],
@@ -446,7 +446,7 @@
                 (
                     kind: RetainedUiDebug,
                     path: "artifacts/degraded-provider-retained-surface-debug.txt",
-                    bytes: 15377,
+                    bytes: 20218,
                     description: "Typed degraded canvas surface for non-previewable selection.",
                 ),
             ],
@@ -466,7 +466,7 @@
                         (
                             kind: RetainedUiDebug,
                             path: "artifacts/degraded-provider-retained-surface-debug.txt",
-                            bytes: 15377,
+                            bytes: 20218,
                             description: "Typed degraded canvas surface for non-previewable selection.",
                         ),
                     ],
@@ -485,7 +485,7 @@
             accessibility: Some((
                 scenario_id: "editor-lab.accessibility",
                 labelled_controls: 58,
-                disabled_reason_controls: 4,
+                disabled_reason_controls: 6,
                 focusable_routes: 58,
                 unsupported_checks: [],
             )),
@@ -506,7 +506,7 @@
                 (
                     kind: RetainedUiDebug,
                     path: "artifacts/accessibility-retained-surface-debug.txt",
-                    bytes: 15377,
+                    bytes: 20218,
                     description: "Retained Editor Lab surface inspected for accessibility controls.",
                 ),
             ],
@@ -566,10 +566,10 @@
             accessibility: None,
             performance: Some((
                 scenario_id: "editor-lab.performance",
-                setup_micros: 5480,
-                retained_surface_micros: 1373,
+                setup_micros: 5313,
+                retained_surface_micros: 1230,
                 artifact_count: 14,
-                artifact_bytes: 251787,
+                artifact_bytes: 261587,
                 unsupported_checks: [],
             )),
             artifacts: [
@@ -582,7 +582,7 @@
                 (
                     kind: RetainedUiDebug,
                     path: "artifacts/performance-retained-surface-debug.txt",
-                    bytes: 1096,
+                    bytes: 1097,
                     description: "Retained provider snapshot used for performance evidence context.",
                 ),
             ],

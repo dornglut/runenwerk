@@ -48,21 +48,21 @@ pub fn build_toolbar_observation_frame(
         ToolbarObservedButton {
             id: MENU_FILE_ID,
             stable_name: "menu_file",
-            label: active_menu_label(active_menus, "file", "File"),
+            label: active_menu_label(active_menus, "file", "editor.toolbar.menu.file"),
             is_active: active_toolbar_menu == Some(ToolbarMenuKind::File),
             enabled: true,
         },
         ToolbarObservedButton {
             id: MENU_EDIT_ID,
             stable_name: "menu_edit",
-            label: active_menu_label(active_menus, "edit", "Edit"),
+            label: active_menu_label(active_menus, "edit", "editor.toolbar.menu.edit"),
             is_active: active_toolbar_menu == Some(ToolbarMenuKind::Edit),
             enabled: true,
         },
         ToolbarObservedButton {
             id: MENU_WINDOW_ID,
             stable_name: "menu_window",
-            label: active_menu_label(active_menus, "window", "Window"),
+            label: active_menu_label(active_menus, "window", "editor.toolbar.menu.window"),
             is_active: active_toolbar_menu == Some(ToolbarMenuKind::Window),
             enabled: true,
         },
@@ -126,12 +126,18 @@ pub fn toolbar_binding_with_active_menus(
 fn active_menu_label(
     active_menus: &BTreeMap<String, EditorMenuDefinition>,
     menu_id: &str,
-    fallback: &str,
+    catalog_route: &str,
 ) -> String {
     active_menus
         .get(menu_id)
         .map(|menu| menu.label.clone())
-        .unwrap_or_else(|| fallback.to_string())
+        .unwrap_or_else(|| {
+            editor_command_catalog()
+                .descriptor_for_key(catalog_route)
+                .expect("compiled-in toolbar menu route should have a command descriptor")
+                .label
+                .to_string()
+        })
 }
 
 fn extend_toolbar_menu_items_from_active_menu(
@@ -377,5 +383,36 @@ mod tests {
             .expect("workspace menu should expose the Materials workspace");
         assert_eq!(material_menu_item.label, "Materials");
         assert!(material_menu_item.enabled);
+    }
+
+    #[test]
+    fn default_menu_buttons_use_catalog_labels() {
+        let frame = build_toolbar_observation_frame(
+            None,
+            false,
+            false,
+            false,
+            None,
+            SCENE_WORKSPACE_PROFILE_ID,
+            &[SCENE_WORKSPACE_PROFILE_ID],
+            RealityVersion(1),
+            &BTreeMap::new(),
+        );
+
+        for (stable_name, route) in [
+            ("menu_file", "editor.toolbar.menu.file"),
+            ("menu_edit", "editor.toolbar.menu.edit"),
+            ("menu_window", "editor.toolbar.menu.window"),
+        ] {
+            let button = frame
+                .buttons
+                .iter()
+                .find(|button| button.stable_name == stable_name)
+                .expect("default menu button should be projected");
+            let descriptor = editor_command_catalog()
+                .descriptor_for_key(route)
+                .expect("default menu route should resolve through the command catalog");
+            assert_eq!(button.label, descriptor.label);
+        }
     }
 }

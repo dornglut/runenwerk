@@ -5,7 +5,8 @@ use anyhow::{Context, Result};
 use editor_definition::{
     EditorCommandBindingDefinition, EditorCommandBindingSetDefinition, EditorDefinitionDocument,
     EditorDefinitionDocumentContent, EditorDefinitionDocumentKind, EditorDefinitionId,
-    EditorDefinitionLifecycleState, EditorLabOperation, EditorLabOperationKind,
+    EditorDefinitionLifecycleState, EditorLabOperation, EditorLabOperationDiff,
+    EditorLabOperationDiffChange, EditorLabOperationDiffFamily, EditorLabOperationKind,
     EditorLabOperationReport, EditorLabOperationStatus, EditorMenuDefinition,
     EditorMenuItemDefinition, EditorShortcutDefinition, EditorShortcutSetDefinition,
     EditorThemeDefinition, EditorTypographyTokenDefinition, EditorWorkspaceHostDefinition,
@@ -19,16 +20,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ui_definition::{
     AuthoredUiTemplate, FormedRetainedUiProduct, UiDefinitionContext, UiDefinitionDiagnostic,
-    UiDefinitionDiagnosticSeverity, VersionedAuthoredUiTemplate, migrate_authored_ui_template,
-    normalize_authored_template,
+    UiDefinitionDiagnosticSeverity, UiNodeDefinition, UiValueBinding, VersionedAuthoredUiTemplate,
+    migrate_authored_ui_template, normalize_authored_template,
 };
 use ui_theme::ThemeTokens;
 
 use crate::shell::editor_lab_project::{
-    DefinitionApplyDiffRow, DefinitionApplyReview, DefinitionApplyReviewStatus,
-    EditorLabDocumentStore, EditorLabProjectImportReport, EditorLabProjectLoadReport,
-    EditorLabProjectPackage, EditorLabProjectStoreReport, EditorLabRollbackRecord,
-    EditorLabRollbackStatus, editor_lab_document_source,
+    DefinitionApplyDiffFamily, DefinitionApplyDiffRow, DefinitionApplyReview,
+    DefinitionApplyReviewStatus, EditorLabDocumentStore, EditorLabProjectImportReport,
+    EditorLabProjectLoadReport, EditorLabProjectPackage, EditorLabProjectStoreReport,
+    EditorLabRollbackRecord, EditorLabRollbackStatus,
 };
 use crate::shell::ui_definition_assets::{EDITOR_BINDINGS_SOURCE, EDITOR_UI_ASSET_SOURCES};
 
@@ -250,6 +251,8 @@ impl SelfAuthoringWorkspaceState {
         let report = operation_history_restore_report(
             format!("{}.undo", entry.id),
             entry.document_id.clone(),
+            "Undo",
+            &entry.after,
             entry.before.clone(),
         );
         self.restore_operation_document(entry.document_id.clone(), entry.before.clone());
@@ -270,6 +273,8 @@ impl SelfAuthoringWorkspaceState {
         let report = operation_history_restore_report(
             format!("{}.redo", entry.id),
             entry.document_id.clone(),
+            "Redo",
+            &entry.before,
             entry.after.clone(),
         );
         self.restore_operation_document(entry.document_id.clone(), entry.after.clone());
@@ -1102,43 +1107,519 @@ fn definition_apply_diff_rows(
     match applied_before {
         Some(before) => {
             if before.display_name != proposed.display_name {
-                rows.push(DefinitionApplyDiffRow {
-                    path: "document.display_name".to_string(),
-                    before: before.display_name.clone(),
-                    after: proposed.display_name.clone(),
-                });
+                rows.push(DefinitionApplyDiffRow::updated(
+                    DefinitionApplyDiffFamily::DocumentMetadata,
+                    "document.display_name",
+                    before.display_name.clone(),
+                    proposed.display_name.clone(),
+                    "display name changed",
+                ));
             }
             if before.kind != proposed.kind {
-                rows.push(DefinitionApplyDiffRow {
-                    path: "document.kind".to_string(),
-                    before: format!("{:?}", before.kind),
-                    after: format!("{:?}", proposed.kind),
-                });
+                rows.push(DefinitionApplyDiffRow::updated(
+                    DefinitionApplyDiffFamily::DocumentMetadata,
+                    "document.kind",
+                    format!("{:?}", before.kind),
+                    format!("{:?}", proposed.kind),
+                    "document kind changed",
+                ));
             }
             if before.lifecycle_state != proposed.lifecycle_state {
-                rows.push(DefinitionApplyDiffRow {
-                    path: "document.lifecycle_state".to_string(),
-                    before: format!("{:?}", before.lifecycle_state),
-                    after: format!("{:?}", proposed.lifecycle_state),
-                });
+                rows.push(DefinitionApplyDiffRow::state_changed(
+                    DefinitionApplyDiffFamily::DocumentMetadata,
+                    "document.lifecycle_state",
+                    format!("{:?}", before.lifecycle_state),
+                    format!("{:?}", proposed.lifecycle_state),
+                    "document lifecycle state changed",
+                ));
             }
             if before.content != proposed.content {
-                rows.push(DefinitionApplyDiffRow {
-                    path: "document.content".to_string(),
-                    before: editor_lab_document_source(before)
-                        .unwrap_or_else(|error| format!("<serialize failed: {}>", error.message)),
-                    after: editor_lab_document_source(proposed)
-                        .unwrap_or_else(|error| format!("<serialize failed: {}>", error.message)),
-                });
+                definition_content_diff_rows(&before.content, &proposed.content, &mut rows);
             }
         }
-        None => rows.push(DefinitionApplyDiffRow {
-            path: "document".to_string(),
-            before: "<not applied>".to_string(),
-            after: proposed.display_name.clone(),
-        }),
+        None => rows.push(DefinitionApplyDiffRow::added(
+            DefinitionApplyDiffFamily::Document,
+            "document",
+            proposed.display_name.clone(),
+            "definition will be added to applied state",
+        )),
     }
     rows
+}
+
+fn definition_content_diff_rows(
+    before: &EditorDefinitionDocumentContent,
+    proposed: &EditorDefinitionDocumentContent,
+    rows: &mut Vec<DefinitionApplyDiffRow>,
+) {
+    match (before, proposed) {
+        (
+            EditorDefinitionDocumentContent::UiTemplate(before),
+            EditorDefinitionDocumentContent::UiTemplate(proposed),
+        ) => ui_template_diff_rows(before, proposed, rows),
+        (
+            EditorDefinitionDocumentContent::WorkspaceProfile(before),
+            EditorDefinitionDocumentContent::WorkspaceProfile(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::WorkspaceProfile,
+            "document.content.workspace_profile",
+            before,
+            proposed,
+            "workspace profile changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::WorkspaceLayout(before),
+            EditorDefinitionDocumentContent::WorkspaceLayout(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::WorkspaceLayout,
+            "document.content.workspace_layout",
+            before,
+            proposed,
+            "workspace layout changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::Menu(before),
+            EditorDefinitionDocumentContent::Menu(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::Menu,
+            "document.content.menu",
+            before,
+            proposed,
+            "menu definition changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::Theme(before),
+            EditorDefinitionDocumentContent::Theme(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::Theme,
+            "document.content.theme",
+            before,
+            proposed,
+            "theme definition changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::Shortcuts(before),
+            EditorDefinitionDocumentContent::Shortcuts(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::ShortcutSet,
+            "document.content.shortcuts",
+            before,
+            proposed,
+            "shortcut set changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::CommandBindings(before),
+            EditorDefinitionDocumentContent::CommandBindings(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::CommandBindingSet,
+            "document.content.command_bindings",
+            before,
+            proposed,
+            "command binding set changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::PanelRegistry(before),
+            EditorDefinitionDocumentContent::PanelRegistry(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::PanelRegistry,
+            "document.content.panel_registry",
+            before,
+            proposed,
+            "panel registry changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::ToolSurfaceRegistry(before),
+            EditorDefinitionDocumentContent::ToolSurfaceRegistry(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::ToolSurfaceRegistry,
+            "document.content.tool_surface_registry",
+            before,
+            proposed,
+            "tool surface registry changed",
+        ),
+        (
+            EditorDefinitionDocumentContent::EditorBindings(before),
+            EditorDefinitionDocumentContent::EditorBindings(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::EditorBindings,
+            "document.content.editor_bindings",
+            before,
+            proposed,
+            "editor bindings changed",
+        ),
+        _ => rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::Document,
+            "document.content.kind",
+            editor_definition_content_label(before),
+            editor_definition_content_label(proposed),
+            "document content kind changed",
+        )),
+    }
+}
+
+fn ui_template_diff_rows(
+    before: &AuthoredUiTemplate,
+    proposed: &AuthoredUiTemplate,
+    rows: &mut Vec<DefinitionApplyDiffRow>,
+) {
+    if before.id != proposed.id {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            "document.content.ui_template.id",
+            before.id.to_string(),
+            proposed.id.to_string(),
+            "UI template id changed",
+        ));
+    }
+    ui_node_diff_rows(
+        "document.content.ui_template.root",
+        &before.root,
+        &proposed.root,
+        rows,
+    );
+    if before.templates != proposed.templates {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            "document.content.ui_template.templates",
+            before.templates.len().to_string(),
+            proposed.templates.len().to_string(),
+            "child template collection changed",
+        ));
+    }
+    if before.menus != proposed.menus {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            "document.content.ui_template.menus",
+            before.menus.len().to_string(),
+            proposed.menus.len().to_string(),
+            "template menu collection changed",
+        ));
+    }
+}
+
+fn ui_node_diff_rows(
+    path: &str,
+    before: &UiNodeDefinition,
+    proposed: &UiNodeDefinition,
+    rows: &mut Vec<DefinitionApplyDiffRow>,
+) {
+    let node_path = format!("{path}.{}", proposed.id().as_str());
+    if before.id() != proposed.id() {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            format!("{node_path}.id"),
+            before.id().to_string(),
+            proposed.id().to_string(),
+            "UI node id changed",
+        ));
+    }
+    let before_kind = ui_node_kind(before);
+    let proposed_kind = ui_node_kind(proposed);
+    if before_kind != proposed_kind {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            format!("{node_path}.kind"),
+            before_kind,
+            proposed_kind,
+            "UI node kind changed",
+        ));
+        return;
+    }
+
+    ui_node_field_diff_rows(&node_path, before, proposed, rows);
+
+    let before_children = before.children();
+    let proposed_children = proposed.children();
+    if before_children.len() != proposed_children.len() {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            format!("{node_path}.children"),
+            before_children.len().to_string(),
+            proposed_children.len().to_string(),
+            "UI node child count changed",
+        ));
+        return;
+    }
+    for (before_child, proposed_child) in before_children.iter().zip(proposed_children) {
+        ui_node_diff_rows(&node_path, before_child, proposed_child, rows);
+    }
+}
+
+fn ui_node_field_diff_rows(
+    node_path: &str,
+    before: &UiNodeDefinition,
+    proposed: &UiNodeDefinition,
+    rows: &mut Vec<DefinitionApplyDiffRow>,
+) {
+    match (before, proposed) {
+        (
+            UiNodeDefinition::Stack { axis: before, .. },
+            UiNodeDefinition::Stack { axis: proposed, .. },
+        ) => push_value_row(
+            rows,
+            format!("{node_path}.axis"),
+            format!("{before:?}"),
+            format!("{proposed:?}"),
+            "stack axis changed",
+        ),
+        (
+            UiNodeDefinition::Split {
+                axis: before_axis,
+                ratio: before_ratio,
+                ..
+            },
+            UiNodeDefinition::Split {
+                axis: proposed_axis,
+                ratio: proposed_ratio,
+                ..
+            },
+        ) => {
+            push_value_row(
+                rows,
+                format!("{node_path}.axis"),
+                format!("{before_axis:?}"),
+                format!("{proposed_axis:?}"),
+                "split axis changed",
+            );
+            push_value_row(
+                rows,
+                format!("{node_path}.ratio"),
+                before_ratio.to_string(),
+                proposed_ratio.to_string(),
+                "split ratio changed",
+            );
+        }
+        (
+            UiNodeDefinition::Label { label: before, .. },
+            UiNodeDefinition::Label {
+                label: proposed, ..
+            },
+        )
+        | (
+            UiNodeDefinition::Button { label: before, .. },
+            UiNodeDefinition::Button {
+                label: proposed, ..
+            },
+        ) => push_value_row(
+            rows,
+            format!("{node_path}.label"),
+            ui_value_binding_text(before),
+            ui_value_binding_text(proposed),
+            "UI node label changed",
+        ),
+        (
+            UiNodeDefinition::Toggle {
+                label: before_label,
+                checked: before_checked,
+                ..
+            },
+            UiNodeDefinition::Toggle {
+                label: proposed_label,
+                checked: proposed_checked,
+                ..
+            },
+        ) => {
+            push_value_row(
+                rows,
+                format!("{node_path}.label"),
+                ui_value_binding_text(before_label),
+                ui_value_binding_text(proposed_label),
+                "toggle label changed",
+            );
+            push_value_row(
+                rows,
+                format!("{node_path}.checked"),
+                ui_value_binding_text(before_checked),
+                ui_value_binding_text(proposed_checked),
+                "toggle checked binding changed",
+            );
+        }
+        (
+            UiNodeDefinition::TextInput {
+                value: before_value,
+                placeholder: before_placeholder,
+                ..
+            },
+            UiNodeDefinition::TextInput {
+                value: proposed_value,
+                placeholder: proposed_placeholder,
+                ..
+            },
+        ) => {
+            push_value_row(
+                rows,
+                format!("{node_path}.value"),
+                ui_value_binding_text(before_value),
+                ui_value_binding_text(proposed_value),
+                "text input value changed",
+            );
+            push_value_row(
+                rows,
+                format!("{node_path}.placeholder"),
+                format!("{before_placeholder:?}"),
+                format!("{proposed_placeholder:?}"),
+                "text input placeholder changed",
+            );
+        }
+        (
+            UiNodeDefinition::NumericInput { value: before, .. },
+            UiNodeDefinition::NumericInput {
+                value: proposed, ..
+            },
+        ) => push_value_row(
+            rows,
+            format!("{node_path}.value"),
+            ui_value_binding_text(before),
+            ui_value_binding_text(proposed),
+            "numeric input value changed",
+        ),
+        (
+            UiNodeDefinition::Repeat {
+                template: before_template,
+                axis: before_axis,
+                ..
+            },
+            UiNodeDefinition::Repeat {
+                template: proposed_template,
+                axis: proposed_axis,
+                ..
+            },
+        ) => {
+            push_value_row(
+                rows,
+                format!("{node_path}.template"),
+                before_template.to_string(),
+                proposed_template.to_string(),
+                "repeat template changed",
+            );
+            push_value_row(
+                rows,
+                format!("{node_path}.axis"),
+                format!("{before_axis:?}"),
+                format!("{proposed_axis:?}"),
+                "repeat axis changed",
+            );
+        }
+        (
+            UiNodeDefinition::TemplateRef {
+                template: before, ..
+            },
+            UiNodeDefinition::TemplateRef {
+                template: proposed, ..
+            },
+        ) => push_value_row(
+            rows,
+            format!("{node_path}.template"),
+            before.to_string(),
+            proposed.to_string(),
+            "template reference changed",
+        ),
+        _ => {
+            if before != proposed && before.children() == proposed.children() {
+                rows.push(DefinitionApplyDiffRow::updated(
+                    DefinitionApplyDiffFamily::UiTemplate,
+                    node_path,
+                    format!("{before:#?}"),
+                    format!("{proposed:#?}"),
+                    "UI node fields changed",
+                ));
+            }
+        }
+    }
+}
+
+fn push_value_row(
+    rows: &mut Vec<DefinitionApplyDiffRow>,
+    path: impl Into<String>,
+    before: String,
+    proposed: String,
+    summary: impl Into<String>,
+) {
+    if before != proposed {
+        rows.push(DefinitionApplyDiffRow::updated(
+            DefinitionApplyDiffFamily::UiTemplate,
+            path,
+            before,
+            proposed,
+            summary,
+        ));
+    }
+}
+
+fn push_structural_debug_row<T: std::fmt::Debug + PartialEq>(
+    rows: &mut Vec<DefinitionApplyDiffRow>,
+    family: DefinitionApplyDiffFamily,
+    path: impl Into<String>,
+    before: &T,
+    proposed: &T,
+    summary: impl Into<String>,
+) {
+    if before != proposed {
+        rows.push(DefinitionApplyDiffRow::updated(
+            family,
+            path,
+            format!("{before:#?}"),
+            format!("{proposed:#?}"),
+            summary,
+        ));
+    }
+}
+
+fn ui_value_binding_text(binding: &UiValueBinding) -> String {
+    match binding {
+        UiValueBinding::Static(value) => value.as_text(),
+        UiValueBinding::Slot(slot) => format!("slot:{slot}"),
+    }
+}
+
+fn editor_definition_content_label(content: &EditorDefinitionDocumentContent) -> &'static str {
+    match content {
+        EditorDefinitionDocumentContent::UiTemplate(_) => "ui_template",
+        EditorDefinitionDocumentContent::WorkspaceProfile(_) => "workspace_profile",
+        EditorDefinitionDocumentContent::WorkspaceLayout(_) => "workspace_layout",
+        EditorDefinitionDocumentContent::Menu(_) => "menu",
+        EditorDefinitionDocumentContent::Theme(_) => "theme",
+        EditorDefinitionDocumentContent::Shortcuts(_) => "shortcuts",
+        EditorDefinitionDocumentContent::CommandBindings(_) => "command_bindings",
+        EditorDefinitionDocumentContent::PanelRegistry(_) => "panel_registry",
+        EditorDefinitionDocumentContent::ToolSurfaceRegistry(_) => "tool_surface_registry",
+        EditorDefinitionDocumentContent::EditorBindings(_) => "editor_bindings",
+    }
+}
+
+fn ui_node_kind(node: &UiNodeDefinition) -> &'static str {
+    match node {
+        UiNodeDefinition::Panel { .. } => "panel",
+        UiNodeDefinition::Row { .. } => "row",
+        UiNodeDefinition::Column { .. } => "column",
+        UiNodeDefinition::Stack { .. } => "stack",
+        UiNodeDefinition::Scroll { .. } => "scroll",
+        UiNodeDefinition::Split { .. } => "split",
+        UiNodeDefinition::Spacer { .. } => "spacer",
+        UiNodeDefinition::Separator { .. } => "separator",
+        UiNodeDefinition::Label { .. } => "label",
+        UiNodeDefinition::Button { .. } => "button",
+        UiNodeDefinition::Toggle { .. } => "toggle",
+        UiNodeDefinition::TextInput { .. } => "text_input",
+        UiNodeDefinition::NumericInput { .. } => "numeric_input",
+        UiNodeDefinition::Select { .. } => "select",
+        UiNodeDefinition::Tabs { .. } => "tabs",
+        UiNodeDefinition::Table { .. } => "table",
+        UiNodeDefinition::Tree { .. } => "tree",
+        UiNodeDefinition::Repeat { .. } => "repeat",
+        UiNodeDefinition::TemplateRef { .. } => "template_ref",
+        UiNodeDefinition::MenuSlot { .. } => "menu_slot",
+        UiNodeDefinition::EmbedSlot { .. } => "embed_slot",
+    }
 }
 
 fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
@@ -1330,17 +1811,36 @@ fn editor_lab_operation_label(operation: &EditorLabOperation) -> String {
 fn operation_history_restore_report(
     operation_id: String,
     document_id: EditorDefinitionId,
+    kind: &'static str,
+    before: &EditorDefinitionDocument,
     document: EditorDefinitionDocument,
 ) -> EditorLabOperationReport {
     let diagnostics = validate_editor_definition_document(&document);
+    let diff = Some(EditorLabOperationDiff {
+        operation_id: operation_id.clone(),
+        document_id: document_id.clone(),
+        target_profile: "editor.workbench".to_string(),
+        changes: vec![EditorLabOperationDiffChange {
+            family: EditorLabOperationDiffFamily::EditorDocument,
+            kind: kind.to_string(),
+            path: "document".to_string(),
+            before: Some(operation_history_document_snapshot(before)),
+            after: Some(operation_history_document_snapshot(&document)),
+        }],
+    });
     EditorLabOperationReport {
         operation_id,
         document_id,
         status: EditorLabOperationStatus::Accepted,
         document,
-        diff: None,
+        diff,
         diagnostics,
     }
+}
+
+fn operation_history_document_snapshot(document: &EditorDefinitionDocument) -> String {
+    ron::ser::to_string_pretty(document, PrettyConfig::default())
+        .unwrap_or_else(|error| format!("snapshot serialization failed: {error}"))
 }
 
 fn first_text_editable_ui_node_id(node: &ui_definition::UiNodeDefinition) -> Option<String> {

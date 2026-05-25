@@ -153,19 +153,6 @@ package "PT-UI-DESIGN UI Designer And Interface Lab Platform" {
 
 }
 
-package "PT-UI-LAB-PERFECTION Editor Lab V1 Perfectionist No-Gap Certification" {
-  component "PT-UI-LAB-PERFECTION completed prerequisites\nmilestones=1\nquality=bounded_contract=1" as PT_UI_LAB_PERFECTION_COMPLETED <<completed>>
-
-  component "PM-UI-LAB-PERF-003 Command And Surface Source Of Truth Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_003 <<designing>>
-
-  component "PM-UI-LAB-PERF-004 Direct Manipulation Editor Lab UX Closure\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_004 <<designing>>
-
-  component "PM-UI-LAB-PERF-005 Persistence Diff Apply API And Examples Ergonomics\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_005 <<designing>>
-
-  component "PM-UI-LAB-PERF-006 Final No Gap Certification Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_LAB_PERF_006 <<designing>>
-
-}
-
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
   component "PM-GAME-RUNTIME-UI-001 Governance Owner Boundary And Code Truth Matrix\nkind=design\nstate=designing\nWR=WR-104" as PM_GAME_RUNTIME_UI_001 <<designing>>
 
@@ -226,10 +213,6 @@ PM_VIEWPORT_PROJECTION_001 -down-> PM_VIEWPORT_PROJECTION_003 : production prere
 PM_VIEWPORT_PROJECTION_002 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
 PM_VIEWPORT_PROJECTION_003 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
 PM_VIEWPORT_PROJECTION_004 -down-> PM_VIEWPORT_PROJECTION_005 : production prerequisite
-PT_UI_LAB_PERFECTION_COMPLETED -down-> PM_UI_LAB_PERF_003 : completed prerequisite
-PM_UI_LAB_PERF_003 -down-> PM_UI_LAB_PERF_004 : production prerequisite
-PM_UI_LAB_PERF_004 -down-> PM_UI_LAB_PERF_005 : production prerequisite
-PM_UI_LAB_PERF_005 -down-> PM_UI_LAB_PERF_006 : production prerequisite
 PT_UI_DESIGN_COMPLETED -down-> PM_GAME_RUNTIME_UI_001 : PT-UI-DESIGN completed prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

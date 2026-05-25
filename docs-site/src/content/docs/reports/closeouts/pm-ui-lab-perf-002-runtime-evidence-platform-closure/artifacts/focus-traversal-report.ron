@@ -1,7 +1,7 @@
 (
     scenario_id: "editor-lab.accessibility",
     labelled_controls: 58,
-    disabled_reason_controls: 4,
+    disabled_reason_controls: 6,
     focusable_routes: 58,
     unsupported_checks: [],
 )

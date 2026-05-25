@@ -212,9 +212,105 @@ pub enum DefinitionApplyReviewStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DefinitionApplyDiffRow {
+    pub family: DefinitionApplyDiffFamily,
+    pub kind: DefinitionApplyDiffKind,
     pub path: String,
     pub before: String,
     pub after: String,
+    pub summary: String,
+}
+
+impl DefinitionApplyDiffRow {
+    pub fn new(
+        family: DefinitionApplyDiffFamily,
+        kind: DefinitionApplyDiffKind,
+        path: impl Into<String>,
+        before: impl Into<String>,
+        after: impl Into<String>,
+        summary: impl Into<String>,
+    ) -> Self {
+        Self {
+            family,
+            kind,
+            path: path.into(),
+            before: before.into(),
+            after: after.into(),
+            summary: summary.into(),
+        }
+    }
+
+    pub fn added(
+        family: DefinitionApplyDiffFamily,
+        path: impl Into<String>,
+        after: impl Into<String>,
+        summary: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            family,
+            DefinitionApplyDiffKind::Added,
+            path,
+            "<not present>",
+            after,
+            summary,
+        )
+    }
+
+    pub fn updated(
+        family: DefinitionApplyDiffFamily,
+        path: impl Into<String>,
+        before: impl Into<String>,
+        after: impl Into<String>,
+        summary: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            family,
+            DefinitionApplyDiffKind::Updated,
+            path,
+            before,
+            after,
+            summary,
+        )
+    }
+
+    pub fn state_changed(
+        family: DefinitionApplyDiffFamily,
+        path: impl Into<String>,
+        before: impl Into<String>,
+        after: impl Into<String>,
+        summary: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            family,
+            DefinitionApplyDiffKind::StateChanged,
+            path,
+            before,
+            after,
+            summary,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DefinitionApplyDiffFamily {
+    Document,
+    DocumentMetadata,
+    UiTemplate,
+    WorkspaceProfile,
+    WorkspaceLayout,
+    Theme,
+    ShortcutSet,
+    Menu,
+    CommandBindingSet,
+    PanelRegistry,
+    ToolSurfaceRegistry,
+    EditorBindings,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DefinitionApplyDiffKind {
+    Added,
+    Updated,
+    StateChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,0 +1,107 @@
+version: 1
+idea: PM-UI-LAB-PERF-006 Final No Gap Certification Closeout
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-final-no-gap-certification-closeout-design.md
+owner: editor
+created_at: '2026-05-25'
+governance_notes:
+- Architecture governance ran for the design-only PM006 closeout contract.
+- Keep PM006 as final audit, metadata, drift-check, and evidence reconciliation work until a WR contract authorizes anything else.
+- Keep app runtime evidence, provider sessions, project IO, activation, rollback, and artifact writing app-owned.
+- Keep ui_definition behavior-free and editor_definition runtime-neutral.
+- Add an ADR only if final certification changes durable ownership, dependency direction, persisted public formats, or cross-domain contracts.
+open_questions:
+- Which PM002 and PM005 artifact-writing commands must be rerun for final evidence versus referenced from completed closeouts?
+- Does the final drift-check find any real product gap that must stop PM006 and create a separate follow-up WR?
+item:
+  id: WR-110
+  title: UI Lab final no-gap certification closeout
+  diagram_title: UI Lab final certification
+  alias: UILABPERFFINAL
+  lane: Editor quality
+  dependency_level: L4
+  gate: After WR-109 persistence API examples ergonomics closure
+  planning_state: ready_next
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-109
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/ui-lab-final-no-gap-certification-closeout-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-006-final-no-gap-certific
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition
+  - cargo test -p editor_definition
+  - cargo test -p runenwerk_editor editor_lab_project
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor editor_definition_activation
+  - cargo run -p ui_definition --example ui_definition_workflow
+  - cargo run -p editor_definition --example editor_definition_workflow
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: Accepted PM-UI-LAB-PERF-006 final no-gap certification closeout design plus completed WR-109 persistence API examples ergonomics evidence clear WR-110 for promotion planning.
+  current_decision: Ready for promotion planning only; use task production:plan before final audit or metadata completion and keep PM006 limited to final evidence reconciliation, drift-check, closeout, and truthful perfectionist_verified claim rules.
+  current_call: Prepare a bounded PM006 implementation contract that verifies PM001 through PM005 evidence gates, runtime artifacts, public API/docs/examples agreement, roadmap and production state freshness, phase drift-check evidence, and empty known quality gaps before any final no-gap claim.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-006 --roadmap WR-110 and write the promotion or implementation-readiness contract it reports.
+  main_blocker: Awaiting promotion to current_candidate and a decision-complete final audit contract.
+  why_not_ready: Ready for promotion planning; not implementation until roadmap promotion and production contract gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - final audit
+  - drift check
+  - no known gaps
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 consumes the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-final-no-gap-certification-closeout-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 implementation must follow the accepted final closeout and perfectionist_verified claim contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM006 follows completed persistence, diff/apply, public API, and examples ergonomics evidence.
+  ddd_owner: editor final certification with app-owned runtime evidence, UI-definition behavior-free contracts, editor-definition reusable contracts, and workspace planning metadata ownership
+  adr_requirement: No ADR for bounded final audit and metadata closeout; ADR or accepted design update required before changing source-truth authority, persisted public formats, dependency direction, or runtime evidence ownership.
+  fitness_function_requirement: Final audit must verify prerequisite closeouts and artifacts, rerun focused runtime/API/example validation, run phase drift-check, and pass roadmap, production, docs, PUML, planning, and whitespace gates before any perfectionist_verified claim.
+  ownership_mode: Stream-aligned editor product certification with complicated-subsystem support from UI definition, editor definition, app runtime evidence, and workspace planning owners.
+edges:
+- source: WR-109
+  target: WR-110
+  label: persistence API evidence before final no-gap certification

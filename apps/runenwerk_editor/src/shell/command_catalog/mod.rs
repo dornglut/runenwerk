@@ -388,6 +388,31 @@ pub enum EditorCommandCatalogDiagnostic {
         first: KnownEditorCommand,
         duplicate: KnownEditorCommand,
     },
+    DuplicateRouteTarget {
+        route_target: &'static str,
+        first: KnownEditorCommand,
+        duplicate: KnownEditorCommand,
+    },
+    MissingKnownCommand {
+        command: KnownEditorCommand,
+    },
+    EmptyCommandLabel {
+        command: KnownEditorCommand,
+    },
+    EmptyStaticDisabledDiagnostic {
+        command: KnownEditorCommand,
+    },
+    EmptyStaticDisabledReason {
+        command: KnownEditorCommand,
+    },
+    RouteTargetDoesNotRoundTrip {
+        command: KnownEditorCommand,
+        route_target: &'static str,
+    },
+    ToolbarCommandDoesNotRoundTrip {
+        command: KnownEditorCommand,
+        toolbar_command: ToolbarCommandKind,
+    },
 }
 
 pub struct EditorCommandCatalog {
@@ -440,6 +465,8 @@ impl EditorCommandCatalog {
         let mut diagnostics = Vec::new();
         let mut keys = std::collections::BTreeMap::<&'static str, KnownEditorCommand>::new();
         let mut aliases = std::collections::BTreeMap::<&'static str, KnownEditorCommand>::new();
+        let mut route_targets =
+            std::collections::BTreeMap::<&'static str, KnownEditorCommand>::new();
         for descriptor in self.descriptors {
             if let Some(first) = keys.insert(descriptor.key, descriptor.command) {
                 diagnostics.push(EditorCommandCatalogDiagnostic::DuplicateCommandKey {
@@ -456,6 +483,66 @@ impl EditorCommandCatalog {
                         duplicate: descriptor.command,
                     });
                 }
+            }
+            for route_target in descriptor.route_targets() {
+                if let Some(first) = route_targets.insert(route_target, descriptor.command) {
+                    diagnostics.push(EditorCommandCatalogDiagnostic::DuplicateRouteTarget {
+                        route_target,
+                        first,
+                        duplicate: descriptor.command,
+                    });
+                }
+                if self.command_for_key(route_target) != Some(descriptor.command) {
+                    diagnostics.push(
+                        EditorCommandCatalogDiagnostic::RouteTargetDoesNotRoundTrip {
+                            command: descriptor.command,
+                            route_target,
+                        },
+                    );
+                }
+            }
+            if descriptor.label.trim().is_empty() {
+                diagnostics.push(EditorCommandCatalogDiagnostic::EmptyCommandLabel {
+                    command: descriptor.command,
+                });
+            }
+            if let EditorCommandAvailabilityRule::StaticDisabled {
+                diagnostic_code,
+                reason,
+            } = descriptor.availability
+            {
+                if diagnostic_code.trim().is_empty() {
+                    diagnostics.push(
+                        EditorCommandCatalogDiagnostic::EmptyStaticDisabledDiagnostic {
+                            command: descriptor.command,
+                        },
+                    );
+                }
+                if reason.trim().is_empty() {
+                    diagnostics.push(EditorCommandCatalogDiagnostic::EmptyStaticDisabledReason {
+                        command: descriptor.command,
+                    });
+                }
+            }
+            if let Some(toolbar_command) = descriptor.toolbar_command()
+                && self
+                    .descriptor_for_toolbar_command(toolbar_command)
+                    .map(|descriptor| descriptor.command)
+                    != Some(descriptor.command)
+            {
+                diagnostics.push(
+                    EditorCommandCatalogDiagnostic::ToolbarCommandDoesNotRoundTrip {
+                        command: descriptor.command,
+                        toolbar_command,
+                    },
+                );
+            }
+        }
+        for command in KnownEditorCommand::all() {
+            if self.descriptor(*command).is_none() {
+                diagnostics.push(EditorCommandCatalogDiagnostic::MissingKnownCommand {
+                    command: *command,
+                });
             }
         }
         if diagnostics.is_empty() {
@@ -826,21 +913,52 @@ mod tests {
 
         if let Some(workspaces) = &bindings.toolbar.workspace_catalog {
             for entry in &workspaces.entries {
-                assert!(
-                    catalog.is_known_key(entry.route.as_str()),
-                    "workspace entry route '{}' should resolve through the command catalog",
-                    entry.route
+                let descriptor = catalog
+                    .descriptor_for_key(entry.route.as_str())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "workspace entry route '{}' should resolve through the command catalog",
+                            entry.route
+                        )
+                    });
+                assert_eq!(
+                    entry.label, descriptor.label,
+                    "workspace entry route '{}' should use catalog label '{}'",
+                    entry.route, descriptor.label
                 );
             }
         }
 
         for item in &bindings.toolbar.menu_items {
-            assert!(
-                catalog.is_known_key(item.route.as_str()),
-                "menu item '{}' route '{}' should resolve through the command catalog",
-                item.item_id,
-                item.route
+            let descriptor = catalog
+                .descriptor_for_key(item.route.as_str())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "menu item '{}' route '{}' should resolve through the command catalog",
+                        item.item_id, item.route
+                    )
+                });
+            assert_eq!(
+                item.label, descriptor.label,
+                "menu item '{}' route '{}' should use catalog label '{}'",
+                item.item_id, item.route, descriptor.label
             );
+            if let Some(ui_definition::UiAvailabilityBinding::Static(
+                ui_definition::UiAvailability::Disabled { reason },
+            )) = &item.availability
+            {
+                let availability = descriptor.availability(EditorCommandAvailabilityContext {
+                    can_undo: false,
+                    can_redo: false,
+                });
+                assert_eq!(
+                    Some(reason.as_str()),
+                    availability.reason(),
+                    "menu item '{}' route '{}' should use catalog disabled reason",
+                    item.item_id,
+                    item.route
+                );
+            }
         }
     }
 

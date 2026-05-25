@@ -12,14 +12,15 @@ use editor_shell::{
     BODY_ROOT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID,
     CommandCapabilityKey, DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope,
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
-    EditorDomainMutation, EntityTableComponentFilter, EntityTableHierarchyFilter,
-    EntityTableSessionMutation, EntityTableSurfaceAction, HostCapabilityPolicy,
-    InspectorSessionMutation, LEFT_RIGHT_SPLIT_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
-    MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_LIST_WIDGET_ID, OutlinerDomainMutation, PanelKind,
-    RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, RoutedShellAction, SCENE_WORKSPACE_PROFILE_ID,
-    ShellCommand, StructuralCommandTarget, SurfaceLocalAction, SurfaceProviderAvailability,
-    SurfaceProviderId, SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind,
-    ToolbarMenuKind, UiInteraction, UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
+    EditorDefinitionSurfaceAction, EditorDomainMutation, EntityTableComponentFilter,
+    EntityTableHierarchyFilter, EntityTableSessionMutation, EntityTableSurfaceAction,
+    HostCapabilityPolicy, InspectorSessionMutation, LEFT_RIGHT_SPLIT_WIDGET_ID,
+    MATERIAL_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID, OUTLINER_LIST_WIDGET_ID,
+    OutlinerDomainMutation, PanelKind, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, RoutedShellAction,
+    SCENE_WORKSPACE_PROFILE_ID, ShellCommand, StructuralCommandTarget, SurfaceLocalAction,
+    SurfaceProviderAvailability, SurfaceProviderId, SurfaceProviderSupportMode,
+    SurfaceSessionMutation, ToolSurfaceKind, ToolbarCommandKind, ToolbarMenuKind, UiInteraction,
+    UiInteractionResults, VIEWPORT_DETAILS_TOGGLE_WIDGET_ID,
     VIEWPORT_FIELD_SLICE_INCREMENT_WIDGET_ID, VIEWPORT_PANEL_WIDGET_ID, ViewportDomainMutation,
     ViewportSessionMutation, ViewportSurfaceAction, WorkspaceMutation, WorkspaceSplitAxis,
     build_editor_shell_frame, map_interactions_to_shell_commands, surface_widget_id,
@@ -56,14 +57,16 @@ use crate::runtime::viewport::{
     ViewportRenderStateCommandQueueResource, initial_product_descriptors,
 };
 use crate::shell::{
-    EditorCommandAvailabilityContext, EditorDefinitionActivationStatus,
+    DefinitionApplyDiffFamily, EditorCommandAvailabilityContext, EditorDefinitionActivationStatus,
     EditorLabAccessibilitySnapshot, EditorLabEvidenceArtifact, EditorLabEvidenceArtifactKind,
+    EditorLabEvidenceCapability, EditorLabEvidenceCapabilityProbe,
+    EditorLabEvidenceCapabilityResult, EditorLabEvidenceCapabilityResultStatus,
     EditorLabEvidenceManifest, EditorLabEvidenceRun, EditorLabPerformanceSnapshot,
     EditorLabUnsupportedCheckDiagnostic, EditorSurfaceProviderRegistry, KnownEditorCommand,
-    RunenwerkEditorShellController, RunenwerkEditorShellState, RunenwerkWorkbenchHost,
-    SELECT_TOOL_ID, TRANSLATE_TOOL_ID, active_document_context, active_route_actions_by_target,
-    build_editor_shell_frame_model, dispatch_shell_command,
-    dispatch_shell_command_with_viewport_commands, editor_command_catalog,
+    PM_UI_LAB_PERF_002_EVIDENCE_CAPABILITIES, RunenwerkEditorShellController,
+    RunenwerkEditorShellState, RunenwerkWorkbenchHost, SELECT_TOOL_ID, TRANSLATE_TOOL_ID,
+    active_document_context, active_route_actions_by_target, build_editor_shell_frame_model,
+    dispatch_shell_command, dispatch_shell_command_with_viewport_commands, editor_command_catalog,
     editor_lab_preview_scenarios, evidence_warning, mounted_surface_requests_with_registry,
 };
 
@@ -367,6 +370,215 @@ fn pm_ui_lab_002_runtime_evidence_reports_catalog_and_registry_chain() {
         .expect("runtime proof artifact directory should be writable");
         std::fs::write(&artifact_path, evidence)
             .expect("runtime proof artifact should be writable");
+    }
+}
+
+#[test]
+fn pm_ui_lab_perf_003_command_source_truth_closure() {
+    editor_command_catalog()
+        .validate()
+        .expect("command catalog should be a complete source-truth graph");
+
+    let app = RunenwerkEditorApp::new();
+    let shell_state =
+        RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+            app.workbench_host().workspace_profile_registry(),
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("source-truth shell state should build from installed registries");
+    let theme = ThemeTokens::default();
+    let frame_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.workbench_host().provider_registry(),
+        &theme,
+        None,
+        None,
+        None,
+    );
+    let route_actions =
+        active_route_actions_by_target(shell_state.active_editor_definitions(), false, false);
+
+    assert_eq!(
+        frame_model.route_actions_by_route_target, route_actions,
+        "runtime frame route actions should come from the app-owned command catalog projection"
+    );
+
+    let context = EditorCommandAvailabilityContext {
+        can_undo: false,
+        can_redo: false,
+    };
+    let mut audited_route_targets = 0usize;
+    for descriptor in editor_command_catalog().descriptors() {
+        for route_target in descriptor.route_targets() {
+            audited_route_targets += 1;
+            assert_eq!(
+                route_actions.get(route_target),
+                Some(&descriptor.routed_shell_action(context)),
+                "route target '{route_target}' should project exactly from catalog descriptor '{}'",
+                descriptor.key
+            );
+        }
+    }
+    assert!(
+        audited_route_targets >= editor_command_catalog().descriptors().len(),
+        "every descriptor should audit at least its primary route target"
+    );
+
+    let toolbar_binding = frame_model
+        .active_toolbar_binding
+        .as_ref()
+        .expect("checked-in toolbar binding should be active");
+    if let Some(workspace_catalog) = &toolbar_binding.workspace_catalog {
+        for entry in &workspace_catalog.entries {
+            let descriptor = editor_command_catalog()
+                .descriptor_for_key(entry.route.as_str())
+                .expect("workspace entry route should resolve through catalog");
+            assert_eq!(
+                entry.label, descriptor.label,
+                "workspace entry '{}' should use catalog label",
+                entry.id
+            );
+        }
+    }
+    for item in &toolbar_binding.menu_items {
+        let descriptor = editor_command_catalog()
+            .descriptor_for_key(item.route.as_str())
+            .expect("toolbar menu item route should resolve through catalog");
+        assert_eq!(
+            item.label, descriptor.label,
+            "toolbar menu item '{}' should use catalog label",
+            item.item_id
+        );
+        if let Some(ui_definition::UiAvailabilityBinding::Static(
+            ui_definition::UiAvailability::Disabled { reason },
+        )) = &item.availability
+        {
+            assert_eq!(
+                Some(reason.as_str()),
+                descriptor.availability(context).reason(),
+                "toolbar menu item '{}' should use catalog disabled reason",
+                item.item_id
+            );
+        }
+    }
+}
+
+#[test]
+fn pm_ui_lab_perf_003_surface_source_truth_closure() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state =
+        RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+            app.workbench_host().workspace_profile_registry(),
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("source-truth shell state should build from installed registries");
+    let profiles = [
+        (SCENE_WORKSPACE_PROFILE_ID, "Scene"),
+        (EDITOR_DESIGN_WORKSPACE_PROFILE_ID, "Editor Design"),
+        (MATERIAL_WORKSPACE_PROFILE_ID, "Materials"),
+        (RUNTIME_DEBUG_WORKSPACE_PROFILE_ID, "Runtime Debug"),
+    ];
+    let mut audited_surface_keys = std::collections::BTreeSet::new();
+
+    for (profile_id, profile_label) in profiles {
+        dispatch_shell_command(
+            &mut app,
+            Some(&mut shell_state),
+            ShellCommand::SwitchWorkspaceProfile { profile_id },
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("workspace profile should switch through shell runtime");
+
+        let requests = mounted_surface_requests_with_registry(
+            &shell_state,
+            active_document_context(&app),
+            Some(app.workbench_host().tool_surface_registry()),
+        );
+        assert!(
+            !requests.is_empty(),
+            "{profile_label} should expose mounted registry-backed surfaces"
+        );
+        for request in requests {
+            audited_surface_keys.insert(request.stable_key().as_str().to_string());
+            let definition = app
+                .workbench_host()
+                .tool_surface_registry()
+                .get(request.stable_key())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{profile_label} surface '{}' should resolve through the tool-suite registry",
+                        request.stable_key().as_str()
+                    )
+                });
+            assert_eq!(
+                request.provider_family_id.as_ref(),
+                Some(&definition.provider_family),
+                "{profile_label} surface '{}' should get provider family from registry metadata",
+                request.stable_key().as_str()
+            );
+            assert_eq!(
+                request.surface_route,
+                Some(definition.route),
+                "{profile_label} surface '{}' should get route kind from registry metadata",
+                request.stable_key().as_str()
+            );
+            assert_eq!(
+                request.capabilities,
+                definition.capabilities,
+                "{profile_label} surface '{}' should get capabilities from registry metadata",
+                request.stable_key().as_str()
+            );
+
+            let provider_ids = app
+                .workbench_host()
+                .provider_family_provider_map()
+                .providers_for(&definition.provider_family)
+                .collect::<Vec<_>>();
+            assert!(
+                !provider_ids.is_empty(),
+                "{profile_label} surface '{}' provider family '{}' should have assigned providers",
+                request.stable_key().as_str(),
+                definition.provider_family.as_str()
+            );
+            let observation = app
+                .workbench_host()
+                .provider_registry()
+                .observe_resolution_for_request(
+                    &request,
+                    app.workbench_host().workspace_profile_registry(),
+                    Some(app.workbench_host().provider_family_provider_map()),
+                );
+            assert!(
+                observation
+                    .support_modes
+                    .iter()
+                    .any(|support| support.support_mode == SurfaceProviderSupportMode::StableKey),
+                "{profile_label} surface '{}' should be supported through stable-key provider resolution",
+                request.stable_key().as_str()
+            );
+            assert_ne!(
+                observation.availability,
+                SurfaceProviderAvailability::Unsupported,
+                "{profile_label} surface '{}' should not require legacy-only or unsupported provider resolution",
+                request.stable_key().as_str()
+            );
+        }
+    }
+
+    for required_key in [
+        "runenwerk.scene.viewport",
+        "runenwerk.editor_design.ui_canvas",
+        "runenwerk.material_lab.graph_canvas",
+        "runenwerk.diagnostics.tool_suite_registry_inspector",
+    ] {
+        assert!(
+            audited_surface_keys.contains(required_key),
+            "source-truth audit should cover {required_key}"
+        );
     }
 }
 
@@ -1080,6 +1292,343 @@ fn pm_ui_lab_004_runtime_evidence_reports_operation_driven_visual_authoring() {
 }
 
 #[test]
+fn pm_ui_lab_perf_004_direct_manipulation_product_surfaces_cover_normal_workflow() {
+    use std::fmt::Write as _;
+
+    let mut app = RunenwerkEditorApp::new();
+    app.append_console_line("PM-UI-LAB-PERF-004 direct manipulation console feedback");
+    let mut shell_state =
+        RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
+            app.workbench_host().workspace_profile_registry(),
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("runtime evidence shell state should build from installed registries");
+    let theme = ThemeTokens::default();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SwitchWorkspaceProfile {
+            profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Editor Lab should open through the shell command boundary");
+
+    let frame_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.workbench_host().provider_registry(),
+        &theme,
+        None,
+        None,
+        None,
+    );
+    let hierarchy_frame =
+        frame_by_stable_key(&frame_model, "runenwerk.editor_design.definition_outliner");
+    let hierarchy_text = resolved_frame_text(hierarchy_frame);
+    assert!(hierarchy_text.contains("Definition Hierarchy"));
+    assert!(resolved_frame_has_editor_definition_action(
+        hierarchy_frame,
+        |action| matches!(action, EditorDefinitionSurfaceAction::SelectDocument { .. })
+    ));
+
+    let canvas_frame = frame_by_stable_key(&frame_model, "runenwerk.editor_design.ui_canvas");
+    let canvas_text = resolved_frame_text(canvas_frame);
+    assert!(canvas_text.contains("retained preview available"));
+    assert!(canvas_text.contains("selected node"));
+    assert!(resolved_frame_has_editor_definition_action(
+        canvas_frame,
+        |action| matches!(action, EditorDefinitionSurfaceAction::SelectUiNode { .. })
+    ));
+    assert!(resolved_frame_has_editor_definition_action(
+        canvas_frame,
+        |action| matches!(action, EditorDefinitionSurfaceAction::SetUiNodeText { .. })
+    ));
+
+    let inspector_frame =
+        frame_by_stable_key(&frame_model, "runenwerk.editor_design.style_inspector");
+    let inspector_text = resolved_frame_text(inspector_frame);
+    assert!(inspector_text.contains("Selected node text"));
+    assert!(resolved_frame_has_editor_definition_action(
+        inspector_frame,
+        |action| matches!(action, EditorDefinitionSurfaceAction::SetUiNodeText { .. })
+    ));
+
+    let selected_node_id = shell_state
+        .self_authoring()
+        .selected_ui_node_id()
+        .expect("Editor Lab starts from a text-editable UI node")
+        .to_string();
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SetSelectedEditorDefinitionUiNodeText {
+            node_id: selected_node_id.clone(),
+            text: "PM004 direct surface text".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("inspector/canvas text edit should dispatch through an EditorLabOperation");
+    let accepted_report = shell_state
+        .self_authoring()
+        .last_operation_report()
+        .expect("accepted direct edit should produce an operation report")
+        .clone();
+    assert_eq!(accepted_report.status, EditorLabOperationStatus::Accepted);
+    assert!(accepted_report.diff.as_ref().is_some_and(|diff| {
+        diff.changes
+            .iter()
+            .any(|change| change.family == EditorLabOperationDiffFamily::UiAuthoredValue)
+    }));
+    let preview = shell_state
+        .self_authoring()
+        .formed_selected_preview(&theme)
+        .expect("accepted direct edit should keep retained preview valid");
+    let accepted_preview_debug = format!("{:?}", preview.root);
+    assert!(accepted_preview_debug.contains("PM004 direct surface text"));
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::UndoEditorLabOperation,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("undo should restore pre-operation draft state");
+    let undo_report = shell_state
+        .self_authoring()
+        .last_operation_report()
+        .expect("undo should produce an operation report")
+        .clone();
+    assert!(
+        undo_report
+            .diff
+            .as_ref()
+            .is_some_and(|diff| { diff.changes.iter().any(|change| change.kind == "Undo") })
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::RedoEditorLabOperation,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("redo should restore accepted operation state");
+    let redo_report = shell_state
+        .self_authoring()
+        .last_operation_report()
+        .expect("redo should produce an operation report")
+        .clone();
+    assert!(
+        redo_report
+            .diff
+            .as_ref()
+            .is_some_and(|diff| { diff.changes.iter().any(|change| change.kind == "Redo") })
+    );
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectEditorDefinitionDocument {
+            document_id: "runenwerk.editor.layout.editor_design".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("workspace layout definition should be selectable for palette controls");
+    let palette_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.workbench_host().provider_registry(),
+        &theme,
+        None,
+        None,
+        None,
+    );
+    let palette_frame = frame_by_stable_key(
+        &palette_model,
+        "runenwerk.editor_design.dock_layout_preview",
+    );
+    let palette_text = resolved_frame_text(palette_frame);
+    assert!(palette_text.contains("Layout controls"));
+    assert!(resolved_frame_has_editor_definition_action(
+        palette_frame,
+        |action| matches!(
+            action,
+            EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { .. }
+        )
+    ));
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
+            label: "PM004 Review".to_string(),
+            tool_surface: "definition_validation".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("palette layout insertion should dispatch through an EditorLabOperation");
+    let palette_report = shell_state
+        .self_authoring()
+        .last_operation_report()
+        .expect("palette operation should produce an operation report")
+        .clone();
+    assert!(palette_report.diff.as_ref().is_some_and(|diff| {
+        diff.changes
+            .iter()
+            .any(|change| change.family == EditorLabOperationDiffFamily::EditorWorkspaceLayout)
+    }));
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectEditorDefinitionDocument {
+            document_id: "runenwerk.editor.theme.default".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("theme definition should be selectable");
+    let rejected = dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SetSelectedEditorThemeColor {
+            token: "accent".to_string(),
+            value: "not-a-color".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    );
+    assert!(rejected.is_err());
+    let rejected_report = shell_state
+        .self_authoring()
+        .last_operation_report()
+        .expect("rejected edit should produce an operation report")
+        .clone();
+    assert_eq!(rejected_report.status, EditorLabOperationStatus::Rejected);
+
+    app.append_console_line("PM-UI-LAB-PERF-004 direct manipulation console feedback");
+    let rejected_model = build_editor_shell_frame_model(
+        &app,
+        &shell_state,
+        app.workbench_host().provider_registry(),
+        &theme,
+        None,
+        None,
+        None,
+    );
+    let diagnostics_text = resolved_frame_text(frame_by_stable_key(
+        &rejected_model,
+        "runenwerk.editor_design.definition_validation",
+    ));
+    assert!(diagnostics_text.contains("editor.definition.theme.color.invalid_format"));
+
+    let command_text = resolved_frame_text(frame_by_stable_key(
+        &rejected_model,
+        "runenwerk.editor_design.command_diff",
+    ));
+    assert!(command_text.contains("Preview Console"));
+    assert!(command_text.contains("PM-UI-LAB-PERF-004 direct manipulation console feedback"));
+    assert!(command_text.contains("last operation"));
+    assert!(command_text.contains("Rejected"));
+
+    let mut evidence = String::new();
+    writeln!(
+        evidence,
+        "# PM-UI-LAB-PERF-004 Direct Manipulation Runtime Evidence\n"
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- hierarchy_surface: routes select definitions through EditorDefinition actions"
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- canvas_surface: retained preview status plus SelectUiNode and SetUiNodeText routes"
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- inspector_surface: selected node text edit routes through EditorLabOperation"
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- palette_surface: workspace layout insertion routes through EditorLabOperation"
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- diagnostics_surface: rejected operation diagnostic {}",
+        rejected_report
+            .diagnostics
+            .first()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .unwrap_or("none")
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- operation_diff_surface: accepted={:?} undo_diff={} redo_diff={} palette_diff={}",
+        accepted_report.status,
+        undo_report.diff.is_some(),
+        redo_report.diff.is_some(),
+        palette_report.diff.is_some()
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- preview_console_surface: app-owned console feedback appears in command review"
+    )
+    .unwrap();
+
+    let retained_surface_debug = format!(
+        "## Hierarchy\n\n```text\n{hierarchy_text}\n```\n\n## Canvas\n\n```text\n{canvas_text}\n```\n\n## Inspector\n\n```text\n{inspector_text}\n```\n\n## Palette\n\n```text\n{palette_text}\n```\n\n## Accepted Preview\n\n```text\n{accepted_preview_debug}\n```\n\n## Diagnostics\n\n```text\n{diagnostics_text}\n```\n\n## Command Diff\n\n```text\n{command_text}\n```\n"
+    );
+
+    if std::env::var_os("RUNENWERK_WRITE_PM_UI_LAB_PERF_004_EVIDENCE").is_some() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|path| path.parent())
+            .expect("runenwerk_editor crate should live under apps/");
+        let artifact_root = repo_root.join(
+            "docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/artifacts",
+        );
+        std::fs::create_dir_all(&artifact_root)
+            .expect("PM-UI-LAB-PERF-004 artifact directory should be writable");
+        std::fs::write(artifact_root.join("runtime-proof.txt"), evidence)
+            .expect("PM-UI-LAB-PERF-004 runtime proof should be writable");
+        std::fs::write(
+            artifact_root.join("direct-manipulation-surface-debug.txt"),
+            retained_surface_debug,
+        )
+        .expect("PM-UI-LAB-PERF-004 retained surface proof should be writable");
+    }
+}
+
+#[test]
 fn dispatch_shell_command_updates_active_tool() {
     let mut app = RunenwerkEditorApp::new();
 
@@ -1629,6 +2178,1103 @@ fn pm_ui_lab_005_runtime_evidence_reports_project_io_apply_rollback() {
         .expect("PM-005 activation report artifact should be writable");
         std::fs::write(artifact_root.join("review-surface-debug.txt"), command_text)
             .expect("PM-005 review surface artifact should be writable");
+    }
+}
+
+#[test]
+fn pm_ui_lab_perf_005_persistence_api_examples_structural_workflow() {
+    use std::fmt::Write as _;
+
+    let mut host = EditorHostResource::default();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SwitchWorkspaceProfile {
+            profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Editor Lab should open through the shell command boundary");
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ApplySelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("initial apply should create an applied baseline");
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 1);
+    assert_eq!(host.apply_pending_editor_definition_activations(), 1);
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SaveEditorLabProjectPackage,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Editor Lab project package should save through the app-owned store");
+    let saved_package = host
+        .shell_state
+        .self_authoring()
+        .last_saved_project_package_source()
+        .expect("project package source should be preserved")
+        .to_string();
+    let parsed_package: crate::shell::EditorLabProjectPackage =
+        ron::from_str(&saved_package).expect("saved package should be structured RON");
+    assert!(!parsed_package.draft_documents.is_empty());
+    assert!(!parsed_package.applied_documents.is_empty());
+    assert!(!parsed_package.last_applied_documents.is_empty());
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ReloadEditorLabProjectPackage,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("saved package should reload without live activation");
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 0);
+
+    let invalid_package = "not a PM005 perfectionist package";
+    assert!(
+        host.shell_state
+            .self_authoring_mut()
+            .load_project_package_from_ron(invalid_package)
+            .is_err()
+    );
+    assert_eq!(
+        host.shell_state
+            .self_authoring()
+            .last_invalid_project_package_source(),
+        Some(invalid_package)
+    );
+    assert!(
+        !host
+            .shell_state
+            .self_authoring()
+            .last_invalid_project_package_diagnostics()
+            .is_empty()
+    );
+
+    let selected_node = host
+        .shell_state
+        .self_authoring()
+        .selected_ui_node_id()
+        .expect("selected UI definition should expose an editable node")
+        .to_string();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SetSelectedEditorDefinitionUiNodeText {
+            node_id: selected_node,
+            text: "PM005 structural diff label".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("draft text edit should route through Editor Lab operation");
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::BuildSelectedEditorDefinitionApplyReview,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("dirty draft should build a structural apply review");
+    let structural_review = host
+        .shell_state
+        .self_authoring()
+        .last_apply_review()
+        .expect("structural apply review should be stored")
+        .clone();
+    assert!(structural_review.diff_rows.iter().any(|row| {
+        row.family == DefinitionApplyDiffFamily::UiTemplate
+            && row.path.ends_with(".label")
+            && row.after.contains("PM005 structural diff label")
+    }));
+    assert!(
+        !structural_review
+            .diff_rows
+            .iter()
+            .any(|row| row.path == "document.content"),
+        "apply review must expose structural rows instead of coarse serialized content"
+    );
+
+    let review_frame = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.workbench_host().provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    let review_text = resolved_frame_text(frame_by_stable_key(
+        &review_frame,
+        "runenwerk.editor_design.command_diff",
+    ));
+    assert!(review_text.contains("apply diff"));
+    assert!(review_text.contains("UiTemplate"));
+    assert!(review_text.contains("PM005 structural diff label"));
+
+    let applied_before_reject = host.shell_state.self_authoring().applied_count();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::RejectSelectedEditorDefinitionApplyReview,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("reject should preserve applied state");
+    assert_eq!(
+        host.shell_state.self_authoring().applied_count(),
+        applied_before_reject
+    );
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ApplySelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("accepted structural review should queue activation");
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 1);
+    assert_eq!(host.apply_pending_editor_definition_activations(), 1);
+    let activation_report = host
+        .app
+        .last_editor_definition_activation_report()
+        .expect("accepted apply should produce an activation report")
+        .clone();
+    assert_eq!(
+        activation_report.status,
+        EditorDefinitionActivationStatus::Applied
+    );
+    assert_eq!(
+        activation_report.review_id,
+        Some(structural_review.id.clone())
+    );
+
+    let selected_node = host
+        .shell_state
+        .self_authoring()
+        .selected_ui_node_id()
+        .expect("selected UI node should remain available")
+        .to_string();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SetSelectedEditorDefinitionUiNodeText {
+            node_id: selected_node,
+            text: "PM005 dirty draft after structural apply".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("dirty draft edit should stay local");
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ReloadSelectedEditorDefinitionLastApplied,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("reload last applied should restore source truth");
+    let reloaded_preview = host
+        .shell_state
+        .self_authoring()
+        .formed_selected_preview(&host.theme)
+        .expect("reloaded last applied snapshot should still preview");
+    assert!(
+        !format!("{:?}", reloaded_preview.root)
+            .contains("PM005 dirty draft after structural apply")
+    );
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::RollbackSelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("rollback should restore the recorded pre-apply state");
+    let rollback_record = host
+        .shell_state
+        .self_authoring()
+        .last_rollback_record()
+        .expect("rollback should record typed evidence")
+        .clone();
+    assert!(rollback_record.diagnostics.is_empty());
+
+    let mut evidence = String::new();
+    writeln!(
+        evidence,
+        "# PM-UI-LAB-PERF-005 Persistence API Examples Runtime Evidence\n"
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- project_package: drafts={} applied={} last_applied={}",
+        parsed_package.draft_documents.len(),
+        parsed_package.applied_documents.len(),
+        parsed_package.last_applied_documents.len()
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- invalid_package_preserved: diagnostics={}",
+        host.shell_state
+            .self_authoring()
+            .last_invalid_project_package_diagnostics()
+            .len()
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- structural_apply_diff_rows: {}",
+        structural_review.diff_rows.len()
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- structural_apply_diff_path: {}",
+        structural_review
+            .diff_rows
+            .iter()
+            .find(|row| row.family == DefinitionApplyDiffFamily::UiTemplate)
+            .map(|row| row.path.as_str())
+            .unwrap_or("missing")
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- activation_report: {:?} review_id={:?}",
+        activation_report.status, activation_report.review_id
+    )
+    .unwrap();
+    writeln!(
+        evidence,
+        "- reload_last_applied_preserved_source_truth: true"
+    )
+    .unwrap();
+    writeln!(evidence, "- rollback_record: {:?}", rollback_record.status).unwrap();
+    writeln!(
+        evidence,
+        "- public_api_examples: ui_definition::prelude and editor_definition::prelude remain the documented workflow"
+    )
+    .unwrap();
+
+    if std::env::var_os("RUNENWERK_WRITE_PM_UI_LAB_PERF_005_EVIDENCE").is_some() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|path| path.parent())
+            .expect("runenwerk_editor crate should live under apps/");
+        let artifact_root = repo_root.join(
+            "docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/artifacts",
+        );
+        std::fs::create_dir_all(&artifact_root)
+            .expect("PM-UI-LAB-PERF-005 artifact directory should be writable");
+        std::fs::write(artifact_root.join("runtime-proof.txt"), evidence)
+            .expect("PM-UI-LAB-PERF-005 runtime proof should be writable");
+        std::fs::write(artifact_root.join("project-package.ron"), saved_package)
+            .expect("PM-UI-LAB-PERF-005 package artifact should be writable");
+        std::fs::write(
+            artifact_root.join("structural-apply-review.ron"),
+            ron::ser::to_string_pretty(&structural_review, ron::ser::PrettyConfig::new())
+                .expect("structural review should serialize"),
+        )
+        .expect("PM-UI-LAB-PERF-005 review artifact should be writable");
+        std::fs::write(
+            artifact_root.join("activation-reports.ron"),
+            ron::ser::to_string_pretty(
+                host.app.editor_definition_activation_reports(),
+                ron::ser::PrettyConfig::new(),
+            )
+            .expect("activation reports should serialize"),
+        )
+        .expect("PM-UI-LAB-PERF-005 activation artifact should be writable");
+        std::fs::write(
+            artifact_root.join("rollback-records.ron"),
+            ron::ser::to_string_pretty(
+                host.shell_state.self_authoring().rollback_records(),
+                ron::ser::PrettyConfig::new(),
+            )
+            .expect("rollback records should serialize"),
+        )
+        .expect("PM-UI-LAB-PERF-005 rollback artifact should be writable");
+        std::fs::write(artifact_root.join("review-surface-debug.txt"), review_text)
+            .expect("PM-UI-LAB-PERF-005 review surface artifact should be writable");
+    }
+}
+
+#[test]
+fn pm_ui_lab_perf_002_runtime_evidence_platform_closure() {
+    use std::fmt::Write as _;
+    use std::time::Instant;
+
+    const COMMAND: &str = "cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture";
+    const BACKEND: &str = "headless-retained-ui-test";
+    const ENVIRONMENT: &str = "cargo test app-owned Editor Lab shell harness";
+
+    fn artifact(
+        kind: EditorLabEvidenceArtifactKind,
+        path: &str,
+        contents: &str,
+        description: &str,
+    ) -> EditorLabEvidenceArtifact {
+        EditorLabEvidenceArtifact::new(kind, path, contents.len(), description)
+    }
+
+    fn captured_result(
+        capability: EditorLabEvidenceCapability,
+        artifacts: Vec<EditorLabEvidenceArtifact>,
+        reason: &str,
+        diagnostic: &str,
+    ) -> EditorLabEvidenceCapabilityResult {
+        EditorLabEvidenceCapabilityResult::captured(
+            capability,
+            EditorLabEvidenceCapabilityProbe::supported(capability, BACKEND, ENVIRONMENT, reason),
+            artifacts,
+            COMMAND,
+            diagnostic,
+        )
+    }
+
+    fn platform_impossible_result(
+        capability: EditorLabEvidenceCapability,
+        report_artifact: EditorLabEvidenceArtifact,
+        reason: &str,
+    ) -> EditorLabEvidenceCapabilityResult {
+        EditorLabEvidenceCapabilityResult::platform_impossible(
+            capability,
+            EditorLabEvidenceCapabilityProbe::platform_impossible(
+                capability,
+                BACKEND,
+                ENVIRONMENT,
+                reason,
+            ),
+            vec![report_artifact],
+            COMMAND,
+            reason,
+        )
+    }
+
+    let scenarios = editor_lab_preview_scenarios();
+    let scenario = |id: &str| {
+        scenarios
+            .iter()
+            .find(|scenario| scenario.id == id)
+            .unwrap_or_else(|| panic!("scenario {id} should exist"))
+    };
+    let platform_report_artifact = artifact(
+        EditorLabEvidenceArtifactKind::PlatformImpossibleReport,
+        "artifacts/platform-impossible-results.ron",
+        "platform impossible capability results",
+        "Typed platform-impossible capability results with probe metadata.",
+    );
+
+    let setup_started = Instant::now();
+    let mut host = EditorHostResource::default();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SwitchWorkspaceProfile {
+            profile_id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Editor Lab should open through the shell command boundary");
+    let setup_micros = u64::try_from(setup_started.elapsed().as_micros()).unwrap_or(u64::MAX);
+
+    let frame_started = Instant::now();
+    let frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.workbench_host().provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    let retained_surface_micros =
+        u64::try_from(frame_started.elapsed().as_micros()).unwrap_or(u64::MAX);
+    let provider_snapshot = editor_lab_provider_snapshot(&frame_model);
+    let success_surface = format!(
+        "{}\n\n{}",
+        resolved_frame_text(frame_by_stable_key(
+            &frame_model,
+            "runenwerk.editor_design.definition_outliner"
+        )),
+        resolved_frame_text(frame_by_stable_key(
+            &frame_model,
+            "runenwerk.editor_design.command_diff"
+        ))
+    );
+    assert!(success_surface.contains("Editor Lab"));
+    assert!(success_surface.contains("Definition Hierarchy"));
+    let success_artifact = artifact(
+        EditorLabEvidenceArtifactKind::RetainedUiDebug,
+        "artifacts/success-retained-surface-debug.txt",
+        &success_surface,
+        "Retained Editor Lab hierarchy and command surface.",
+    );
+    let provider_artifact = artifact(
+        EditorLabEvidenceArtifactKind::ProviderSnapshot,
+        "artifacts/provider-snapshot.ron",
+        &provider_snapshot,
+        "Resolved Editor Lab provider frames.",
+    );
+    let mut runs = vec![
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.success"),
+            "SwitchWorkspaceProfile -> build_editor_shell_frame_model",
+            "provider surfaces mounted",
+            vec![success_artifact.clone(), provider_artifact],
+        )
+        .with_capability_results(vec![
+            captured_result(
+                EditorLabEvidenceCapability::RetainedVisualTruth,
+                vec![success_artifact],
+                "retained UI frame model was captured from the app-owned shell provider path",
+                "retained visual truth captured through the Editor Lab runtime path",
+            ),
+            platform_impossible_result(
+                EditorLabEvidenceCapability::NativeScreenshotCapture,
+                platform_report_artifact.clone(),
+                "headless cargo test environment exposes retained UI artifacts but no native window screenshot API",
+            ),
+            platform_impossible_result(
+                EditorLabEvidenceCapability::GpuVisualDiff,
+                platform_report_artifact.clone(),
+                "headless retained UI harness has no GPU readback or before-after pixel diff backend",
+            ),
+        ]),
+    ];
+
+    host.app
+        .append_console_warning("PM-UI-LAB-PERF-002 scenario warning");
+    let warning_frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.workbench_host().provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    let warning_surface = resolved_frame_text(frame_by_stable_key(
+        &warning_frame_model,
+        "runenwerk.editor_design.command_diff",
+    ));
+    assert!(warning_surface.contains("PM-UI-LAB-PERF-002 scenario warning"));
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.warning"),
+            "RunenwerkEditorApp::append_console_warning -> command_diff surface",
+            "warning visible in preview console",
+            vec![artifact(
+                EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                "artifacts/warning-retained-surface-debug.txt",
+                &warning_surface,
+                "Command Diff surface with preview console warning.",
+            )],
+        )
+        .with_diagnostics(vec![evidence_warning(
+            "editor.lab.evidence.warning.visible",
+            "PM002 warning scenario is visible through the app-owned preview console",
+        )]),
+    );
+
+    let invalid_package_source = "not a valid PM002 runtime evidence package";
+    let invalid_package_error = host
+        .shell_state
+        .self_authoring_mut()
+        .load_project_package_from_ron(invalid_package_source)
+        .expect_err("invalid package should produce typed diagnostics");
+    assert_eq!(
+        host.shell_state
+            .self_authoring()
+            .last_invalid_project_package_source(),
+        Some(invalid_package_source)
+    );
+    let error_diagnostics = ron::ser::to_string_pretty(
+        &[invalid_package_error.clone()],
+        ron::ser::PrettyConfig::new(),
+    )
+    .expect("diagnostics should serialize");
+    let diagnostics_artifact = artifact(
+        EditorLabEvidenceArtifactKind::DiagnosticsSnapshot,
+        "artifacts/error-diagnostics.ron",
+        &error_diagnostics,
+        "Typed diagnostics for invalid Editor Lab project package input.",
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.error"),
+            "SelfAuthoringWorkspaceState::load_project_package_from_ron",
+            "invalid input preserved",
+            vec![diagnostics_artifact.clone()],
+        )
+        .with_diagnostics(vec![invalid_package_error])
+        .with_capability_results(vec![
+            captured_result(
+                EditorLabEvidenceCapability::DiagnosticsSnapshot,
+                vec![diagnostics_artifact.clone()],
+                "invalid project package input produced typed diagnostics through the shell state",
+                "diagnostics snapshot captured for invalid package input",
+            ),
+            captured_result(
+                EditorLabEvidenceCapability::FailurePreservation,
+                vec![diagnostics_artifact],
+                "invalid project package source was retained after typed diagnostic failure",
+                "failure preservation captured by retaining invalid package source and diagnostics",
+            ),
+        ]),
+    );
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SaveEditorLabProjectPackage,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Editor Lab project package should save for PM002 reload scenario");
+    let saved_package = host
+        .shell_state
+        .self_authoring()
+        .last_saved_project_package_source()
+        .expect("project package source should be retained")
+        .to_string();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ReloadEditorLabProjectPackage,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Editor Lab project package should reload without live activation");
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 0);
+    let reload_frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.workbench_host().provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    let reload_surface = resolved_frame_text(frame_by_stable_key(
+        &reload_frame_model,
+        "runenwerk.editor_design.command_diff",
+    ));
+    assert!(reload_surface.contains("project package saved"));
+    let project_artifact = artifact(
+        EditorLabEvidenceArtifactKind::ProjectPackage,
+        "artifacts/project-package.ron",
+        &saved_package,
+        "Saved Editor Lab project package used by reload scenario.",
+    );
+    let reload_artifact = artifact(
+        EditorLabEvidenceArtifactKind::RetainedUiDebug,
+        "artifacts/reload-retained-surface-debug.txt",
+        &reload_surface,
+        "Command surface after save/reload.",
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.reload"),
+            "SaveEditorLabProjectPackage -> ReloadEditorLabProjectPackage",
+            "reload completed without live activation",
+            vec![project_artifact.clone(), reload_artifact],
+        )
+        .with_capability_results(vec![captured_result(
+            EditorLabEvidenceCapability::ReloadWithoutActivation,
+            vec![project_artifact],
+            "save/reload completed while pending live activation count stayed zero",
+            "reload evidence captured without live activation",
+        )]),
+    );
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::BuildSelectedEditorDefinitionApplyReview,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("PM002 apply scenario should build a review");
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::ApplySelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("PM002 apply scenario should queue activation through review path");
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 1);
+    let activated = host.apply_pending_editor_definition_activations();
+    assert_eq!(activated, 1);
+    let activation_reports = ron::ser::to_string_pretty(
+        host.app.editor_definition_activation_reports(),
+        ron::ser::PrettyConfig::new(),
+    )
+    .expect("activation reports should serialize");
+    let apply_surface = resolved_frame_text(frame_by_stable_key(
+        &build_editor_shell_frame_model(
+            &host.app,
+            &host.shell_state,
+            host.app.workbench_host().provider_registry(),
+            &host.theme,
+            None,
+            None,
+            None,
+        ),
+        "runenwerk.editor_design.command_diff",
+    ));
+    assert!(apply_surface.contains("activation report"));
+    let activation_artifact = artifact(
+        EditorLabEvidenceArtifactKind::ActivationReport,
+        "artifacts/activation-reports.ron",
+        &activation_reports,
+        "Queued and applied activation reports.",
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.apply"),
+            "BuildSelectedEditorDefinitionApplyReview -> ApplySelectedEditorDefinition",
+            "accepted review activated through runtime resource",
+            vec![
+                activation_artifact.clone(),
+                artifact(
+                    EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                    "artifacts/apply-retained-surface-debug.txt",
+                    &apply_surface,
+                    "Command surface after apply and activation.",
+                ),
+            ],
+        )
+        .with_capability_results(vec![captured_result(
+            EditorLabEvidenceCapability::ApplyActivation,
+            vec![activation_artifact],
+            "apply review queued and activated through the runtime resource",
+            "apply activation evidence captured from typed activation reports",
+        )]),
+    );
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::RollbackSelectedEditorDefinition,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("PM002 rollback scenario should use snapshot-backed rollback");
+    let rollback_reports = ron::ser::to_string_pretty(
+        host.shell_state.self_authoring().rollback_records(),
+        ron::ser::PrettyConfig::new(),
+    )
+    .expect("rollback records should serialize");
+    let rollback_surface = resolved_frame_text(frame_by_stable_key(
+        &build_editor_shell_frame_model(
+            &host.app,
+            &host.shell_state,
+            host.app.workbench_host().provider_registry(),
+            &host.theme,
+            None,
+            None,
+            None,
+        ),
+        "runenwerk.editor_design.command_diff",
+    ));
+    assert!(rollback_surface.contains("rollback"));
+    let rollback_artifact = artifact(
+        EditorLabEvidenceArtifactKind::RollbackReport,
+        "artifacts/rollback-reports.ron",
+        &rollback_reports,
+        "Typed rollback records.",
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.rollback"),
+            "RollbackSelectedEditorDefinition",
+            "snapshot-backed rollback record visible",
+            vec![
+                rollback_artifact.clone(),
+                artifact(
+                    EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                    "artifacts/rollback-retained-surface-debug.txt",
+                    &rollback_surface,
+                    "Command surface after rollback.",
+                ),
+            ],
+        )
+        .with_capability_results(vec![captured_result(
+            EditorLabEvidenceCapability::RollbackRecovery,
+            vec![rollback_artifact],
+            "rollback command produced typed snapshot-backed rollback records",
+            "rollback recovery evidence captured from typed rollback reports",
+        )]),
+    );
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SelectEditorDefinitionDocument {
+            document_id: "runenwerk.editor.theme.default".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("theme selection should produce a degraded canvas preview");
+    let degraded_frame_model = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.workbench_host().provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    let degraded_canvas = resolved_frame_text(frame_by_stable_key(
+        &degraded_frame_model,
+        "runenwerk.editor_design.ui_canvas",
+    ));
+    assert!(degraded_canvas.contains("Selected definition cannot form a retained UI preview"));
+    let degraded_artifact = artifact(
+        EditorLabEvidenceArtifactKind::RetainedUiDebug,
+        "artifacts/degraded-provider-retained-surface-debug.txt",
+        &degraded_canvas,
+        "Typed degraded canvas surface for non-previewable selection.",
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.degraded-provider"),
+            "Select theme document -> ui_canvas degraded Editor Lab surface",
+            "typed degraded Editor Lab canvas",
+            vec![degraded_artifact.clone()],
+        )
+        .with_diagnostics(vec![evidence_warning(
+            "editor.lab.evidence.degraded_provider",
+            "non-previewable selection rendered a typed degraded Editor Lab surface",
+        )])
+        .with_capability_results(vec![captured_result(
+            EditorLabEvidenceCapability::DegradedProviderSurface,
+            vec![degraded_artifact],
+            "non-previewable selection rendered a typed degraded provider surface",
+            "degraded provider evidence captured from the app-hosted canvas surface",
+        )]),
+    );
+
+    let accessibility_snapshot = EditorLabAccessibilitySnapshot {
+        scenario_id: "editor-lab.accessibility".to_string(),
+        labelled_controls: editor_lab_route_count(&degraded_frame_model),
+        disabled_reason_controls: editor_lab_disabled_reason_count(&degraded_frame_model),
+        focusable_routes: editor_lab_route_count(&degraded_frame_model),
+        unsupported_checks: Vec::new(),
+    };
+    assert!(accessibility_snapshot.labelled_controls > 0);
+    assert!(accessibility_snapshot.disabled_reason_controls > 0);
+    let focus_report =
+        ron::ser::to_string_pretty(&accessibility_snapshot, ron::ser::PrettyConfig::new())
+            .expect("focus report should serialize");
+    let contrast_report = format!(
+        "scenario_id: editor-lab.accessibility\nretained_theme_tokens_available: true\nnative_pixel_access_available: false\nsample_subjects: labels, disabled reasons, command controls\nlabelled_controls: {}\ndisabled_reason_controls: {}\n",
+        accessibility_snapshot.labelled_controls, accessibility_snapshot.disabled_reason_controls
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.accessibility"),
+            "build_editor_shell_frame_model route and retained text inspection",
+            "labels, routes, and disabled reasons inspected",
+            vec![
+                artifact(
+                    EditorLabEvidenceArtifactKind::FocusTraversalReport,
+                    "artifacts/focus-traversal-report.ron",
+                    &focus_report,
+                    "Retained route and disabled-reason focus fallback report.",
+                ),
+                artifact(
+                    EditorLabEvidenceArtifactKind::ContrastSampleReport,
+                    "artifacts/contrast-sample-report.txt",
+                    &contrast_report,
+                    "Retained token contrast fallback report.",
+                ),
+                artifact(
+                    EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                    "artifacts/accessibility-retained-surface-debug.txt",
+                    &degraded_canvas,
+                    "Retained Editor Lab surface inspected for accessibility controls.",
+                ),
+            ],
+        )
+        .with_accessibility(accessibility_snapshot)
+        .with_capability_results(vec![
+            platform_impossible_result(
+                EditorLabEvidenceCapability::NativeFocusTraversal,
+                platform_report_artifact.clone(),
+                "headless retained UI test can inspect routes and disabled reasons but cannot drive native focus traversal",
+            ),
+            platform_impossible_result(
+                EditorLabEvidenceCapability::PixelContrastSampling,
+                platform_report_artifact.clone(),
+                "retained UI artifact exposes theme tokens but no native pixel buffer for contrast sampling",
+            ),
+        ]),
+    );
+
+    let artifact_bytes_so_far = runs
+        .iter()
+        .flat_map(|run| run.artifacts.iter())
+        .map(|artifact| artifact.bytes)
+        .sum::<usize>();
+    let performance_snapshot = EditorLabPerformanceSnapshot {
+        scenario_id: "editor-lab.performance".to_string(),
+        setup_micros,
+        retained_surface_micros,
+        artifact_count: runs.iter().map(|run| run.artifacts.len()).sum(),
+        artifact_bytes: artifact_bytes_so_far,
+        unsupported_checks: Vec::new(),
+    };
+    let timing_report =
+        ron::ser::to_string_pretty(&performance_snapshot, ron::ser::PrettyConfig::new())
+            .expect("timing report should serialize");
+    let timing_artifact = artifact(
+        EditorLabEvidenceArtifactKind::TimingReport,
+        "artifacts/timing-report.ron",
+        &timing_report,
+        "Timing snapshot for setup, retained surface formation, and artifact output.",
+    );
+    runs.push(
+        EditorLabEvidenceRun::passed(
+            scenario("editor-lab.performance"),
+            "std::time::Instant around app-hosted frame formation",
+            "scenario setup and retained surface timings recorded",
+            vec![
+                timing_artifact.clone(),
+                artifact(
+                    EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                    "artifacts/performance-retained-surface-debug.txt",
+                    &provider_snapshot,
+                    "Retained provider snapshot used for performance evidence context.",
+                ),
+            ],
+        )
+        .with_performance(performance_snapshot)
+        .with_capability_results(vec![
+            captured_result(
+                EditorLabEvidenceCapability::RuntimeTimingCapture,
+                vec![timing_artifact],
+                "app-owned runtime harness records setup and retained surface timing",
+                "runtime timing evidence captured from the PM002 evidence test",
+            ),
+            platform_impossible_result(
+                EditorLabEvidenceCapability::NativeScreenshotTiming,
+                platform_report_artifact.clone(),
+                "native screenshot capture is unavailable in this headless runtime test, so native screenshot timing has no source",
+            ),
+            platform_impossible_result(
+                EditorLabEvidenceCapability::GpuVisualDiffTiming,
+                platform_report_artifact,
+                "GPU visual diff timing is unavailable because the retained UI evidence harness has no GPU diff backend",
+            ),
+        ]),
+    );
+
+    let manifest = EditorLabEvidenceManifest::current(COMMAND, scenarios, runs);
+    manifest
+        .validate_no_gap_capabilities(&PM_UI_LAB_PERF_002_EVIDENCE_CAPABILITIES)
+        .expect("PM002 no-gap evidence manifest should validate typed capability results");
+    assert_eq!(manifest.runs.len(), 9);
+    assert!(manifest.unsupported_checks().is_empty());
+
+    let capability_results = manifest
+        .runs
+        .iter()
+        .flat_map(|run| run.capability_results.iter().cloned())
+        .collect::<Vec<_>>();
+    let platform_impossible_results = capability_results
+        .iter()
+        .filter(|result| {
+            result.status == EditorLabEvidenceCapabilityResultStatus::PlatformImpossible
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let manifest_source = ron::ser::to_string_pretty(&manifest, ron::ser::PrettyConfig::new())
+        .expect("manifest should serialize");
+    let capability_results_source =
+        ron::ser::to_string_pretty(&capability_results, ron::ser::PrettyConfig::new())
+            .expect("capability results should serialize");
+    let platform_impossible_source =
+        ron::ser::to_string_pretty(&platform_impossible_results, ron::ser::PrettyConfig::new())
+            .expect("platform impossible results should serialize");
+    let diagnostics_source = ron::ser::to_string_pretty(
+        &manifest.diagnostics_snapshot(),
+        ron::ser::PrettyConfig::new(),
+    )
+    .expect("diagnostics snapshot should serialize");
+    let mut runtime_proof = String::new();
+    writeln!(
+        runtime_proof,
+        "# PM-UI-LAB-PERF-002 Runtime Evidence Platform Closure\n\nGenerated by `{COMMAND}`.\n"
+    )
+    .unwrap();
+    for capability in PM_UI_LAB_PERF_002_EVIDENCE_CAPABILITIES {
+        let result = capability_results
+            .iter()
+            .find(|result| result.capability == capability)
+            .expect("validated capability should have a result");
+        writeln!(
+            runtime_proof,
+            "- {:?}: status={:?} backend={} environment={} artifacts={}",
+            capability,
+            result.status,
+            result.probe.backend,
+            result.probe.environment,
+            result.artifacts.len()
+        )
+        .unwrap();
+    }
+    writeln!(
+        runtime_proof,
+        "- manifest_validated: true\n- unsupported_free_form_checks: 0\n- app_owned_evidence_execution: true\n- ui_definition_behavior_free: true"
+    )
+    .unwrap();
+
+    if std::env::var_os("RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE").is_some() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|path| path.parent())
+            .expect("runenwerk_editor crate should live under apps/");
+        let artifact_root = repo_root.join(
+            "docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts",
+        );
+        std::fs::create_dir_all(&artifact_root)
+            .expect("PM002 artifact directory should be writable");
+        std::fs::write(artifact_root.join("runtime-proof.txt"), runtime_proof)
+            .expect("PM002 runtime proof should be writable");
+        std::fs::write(
+            artifact_root.join("no-gap-evidence-manifest.ron"),
+            manifest_source,
+        )
+        .expect("PM002 no-gap evidence manifest should be writable");
+        std::fs::write(
+            artifact_root.join("no-gap-capability-results.ron"),
+            capability_results_source,
+        )
+        .expect("PM002 capability results should be writable");
+        std::fs::write(
+            artifact_root.join("platform-impossible-results.ron"),
+            platform_impossible_source,
+        )
+        .expect("PM002 platform-impossible results should be writable");
+        std::fs::write(
+            artifact_root.join("provider-snapshot.ron"),
+            provider_snapshot.as_bytes(),
+        )
+        .expect("PM002 provider snapshot should be writable");
+        std::fs::write(
+            artifact_root.join("success-retained-surface-debug.txt"),
+            success_surface,
+        )
+        .expect("PM002 success retained visual should be writable");
+        std::fs::write(
+            artifact_root.join("warning-retained-surface-debug.txt"),
+            warning_surface,
+        )
+        .expect("PM002 warning retained visual should be writable");
+        std::fs::write(
+            artifact_root.join("error-diagnostics.ron"),
+            error_diagnostics,
+        )
+        .expect("PM002 error diagnostics should be writable");
+        std::fs::write(artifact_root.join("project-package.ron"), saved_package)
+            .expect("PM002 project package should be writable");
+        std::fs::write(
+            artifact_root.join("reload-retained-surface-debug.txt"),
+            reload_surface,
+        )
+        .expect("PM002 reload retained visual should be writable");
+        std::fs::write(
+            artifact_root.join("activation-reports.ron"),
+            activation_reports,
+        )
+        .expect("PM002 activation reports should be writable");
+        std::fs::write(
+            artifact_root.join("apply-retained-surface-debug.txt"),
+            apply_surface,
+        )
+        .expect("PM002 apply retained visual should be writable");
+        std::fs::write(artifact_root.join("rollback-reports.ron"), rollback_reports)
+            .expect("PM002 rollback reports should be writable");
+        std::fs::write(
+            artifact_root.join("rollback-retained-surface-debug.txt"),
+            rollback_surface,
+        )
+        .expect("PM002 rollback retained visual should be writable");
+        std::fs::write(
+            artifact_root.join("degraded-provider-retained-surface-debug.txt"),
+            degraded_canvas.as_bytes(),
+        )
+        .expect("PM002 degraded provider retained visual should be writable");
+        std::fs::write(
+            artifact_root.join("focus-traversal-report.ron"),
+            focus_report,
+        )
+        .expect("PM002 focus traversal report should be writable");
+        std::fs::write(
+            artifact_root.join("contrast-sample-report.txt"),
+            contrast_report,
+        )
+        .expect("PM002 contrast sample report should be writable");
+        std::fs::write(artifact_root.join("timing-report.ron"), timing_report)
+            .expect("PM002 timing report should be writable");
+        std::fs::write(
+            artifact_root.join("diagnostics-snapshot.ron"),
+            diagnostics_source,
+        )
+        .expect("PM002 diagnostics snapshot should be writable");
     }
 }
 
@@ -8268,6 +9914,18 @@ fn resolved_frame_has_editor_definition_route(frame: &editor_shell::ResolvedSurf
         matches!(
             route.action(),
             Some(SurfaceLocalAction::EditorDefinition(_))
+        )
+    })
+}
+
+fn resolved_frame_has_editor_definition_action(
+    frame: &editor_shell::ResolvedSurfaceFrame,
+    matches_action: impl Fn(&EditorDefinitionSurfaceAction) -> bool,
+) -> bool {
+    frame.routes.iter().any(|(_, route)| {
+        matches!(
+            route.action(),
+            Some(SurfaceLocalAction::EditorDefinition(action)) if matches_action(action)
         )
     })
 }

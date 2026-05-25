@@ -96,6 +96,11 @@ impl EditorLabEvidenceArtifact {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum EditorLabEvidenceArtifactKind {
     RetainedUiDebug,
+    NativeScreenshot,
+    GpuVisualDiff,
+    FocusTraversalReport,
+    ContrastSampleReport,
+    TimingReport,
     ProviderSnapshot,
     DiagnosticsSnapshot,
     ActivationReport,
@@ -103,8 +108,161 @@ pub enum EditorLabEvidenceArtifactKind {
     RollbackReport,
     AccessibilityReport,
     PerformanceReport,
+    PlatformImpossibleReport,
     UnsupportedCheckReport,
     EvidenceManifest,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabEvidenceCapability {
+    RetainedVisualTruth,
+    NativeScreenshotCapture,
+    GpuVisualDiff,
+    NativeFocusTraversal,
+    PixelContrastSampling,
+    RuntimeTimingCapture,
+    NativeScreenshotTiming,
+    GpuVisualDiffTiming,
+    DiagnosticsSnapshot,
+    DegradedProviderSurface,
+    ReloadWithoutActivation,
+    ApplyActivation,
+    RollbackRecovery,
+    FailurePreservation,
+}
+
+pub const PM_UI_LAB_PERF_002_EVIDENCE_CAPABILITIES: [EditorLabEvidenceCapability; 14] = [
+    EditorLabEvidenceCapability::RetainedVisualTruth,
+    EditorLabEvidenceCapability::NativeScreenshotCapture,
+    EditorLabEvidenceCapability::GpuVisualDiff,
+    EditorLabEvidenceCapability::NativeFocusTraversal,
+    EditorLabEvidenceCapability::PixelContrastSampling,
+    EditorLabEvidenceCapability::RuntimeTimingCapture,
+    EditorLabEvidenceCapability::NativeScreenshotTiming,
+    EditorLabEvidenceCapability::GpuVisualDiffTiming,
+    EditorLabEvidenceCapability::DiagnosticsSnapshot,
+    EditorLabEvidenceCapability::DegradedProviderSurface,
+    EditorLabEvidenceCapability::ReloadWithoutActivation,
+    EditorLabEvidenceCapability::ApplyActivation,
+    EditorLabEvidenceCapability::RollbackRecovery,
+    EditorLabEvidenceCapability::FailurePreservation,
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditorLabEvidenceCapabilitySupportStatus {
+    Supported,
+    PlatformImpossible,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabEvidenceCapabilityProbe {
+    pub capability: EditorLabEvidenceCapability,
+    pub backend: String,
+    pub environment: String,
+    pub support_status: EditorLabEvidenceCapabilitySupportStatus,
+    pub reason: String,
+}
+
+impl EditorLabEvidenceCapabilityProbe {
+    pub fn supported(
+        capability: EditorLabEvidenceCapability,
+        backend: impl Into<String>,
+        environment: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            capability,
+            backend: backend.into(),
+            environment: environment.into(),
+            support_status: EditorLabEvidenceCapabilitySupportStatus::Supported,
+            reason: reason.into(),
+        }
+    }
+
+    pub fn platform_impossible(
+        capability: EditorLabEvidenceCapability,
+        backend: impl Into<String>,
+        environment: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            capability,
+            backend: backend.into(),
+            environment: environment.into(),
+            support_status: EditorLabEvidenceCapabilitySupportStatus::PlatformImpossible,
+            reason: reason.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditorLabEvidenceCapabilityResultStatus {
+    Captured,
+    PlatformImpossible,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabEvidenceCapabilityResult {
+    pub capability: EditorLabEvidenceCapability,
+    pub status: EditorLabEvidenceCapabilityResultStatus,
+    pub probe: EditorLabEvidenceCapabilityProbe,
+    pub artifacts: Vec<EditorLabEvidenceArtifact>,
+    pub reproduction_command: String,
+    pub diagnostic: String,
+}
+
+impl EditorLabEvidenceCapabilityResult {
+    pub fn captured(
+        capability: EditorLabEvidenceCapability,
+        probe: EditorLabEvidenceCapabilityProbe,
+        artifacts: Vec<EditorLabEvidenceArtifact>,
+        reproduction_command: impl Into<String>,
+        diagnostic: impl Into<String>,
+    ) -> Self {
+        Self {
+            capability,
+            status: EditorLabEvidenceCapabilityResultStatus::Captured,
+            probe,
+            artifacts,
+            reproduction_command: reproduction_command.into(),
+            diagnostic: diagnostic.into(),
+        }
+    }
+
+    pub fn platform_impossible(
+        capability: EditorLabEvidenceCapability,
+        probe: EditorLabEvidenceCapabilityProbe,
+        artifacts: Vec<EditorLabEvidenceArtifact>,
+        reproduction_command: impl Into<String>,
+        diagnostic: impl Into<String>,
+    ) -> Self {
+        Self {
+            capability,
+            status: EditorLabEvidenceCapabilityResultStatus::PlatformImpossible,
+            probe,
+            artifacts,
+            reproduction_command: reproduction_command.into(),
+            diagnostic: diagnostic.into(),
+        }
+    }
+
+    pub fn failed(
+        capability: EditorLabEvidenceCapability,
+        probe: EditorLabEvidenceCapabilityProbe,
+        artifacts: Vec<EditorLabEvidenceArtifact>,
+        reproduction_command: impl Into<String>,
+        diagnostic: impl Into<String>,
+    ) -> Self {
+        Self {
+            capability,
+            status: EditorLabEvidenceCapabilityResultStatus::Failed,
+            probe,
+            artifacts,
+            reproduction_command: reproduction_command.into(),
+            diagnostic: diagnostic.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -153,6 +311,8 @@ pub struct EditorLabEvidenceRun {
     pub performance: Option<EditorLabPerformanceSnapshot>,
     pub artifacts: Vec<EditorLabEvidenceArtifact>,
     pub unsupported_checks: Vec<EditorLabUnsupportedCheckDiagnostic>,
+    #[serde(default)]
+    pub capability_results: Vec<EditorLabEvidenceCapabilityResult>,
 }
 
 impl EditorLabEvidenceRun {
@@ -173,6 +333,7 @@ impl EditorLabEvidenceRun {
             performance: None,
             artifacts,
             unsupported_checks: Vec::new(),
+            capability_results: Vec::new(),
         }
     }
 
@@ -199,6 +360,20 @@ impl EditorLabEvidenceRun {
             self.status = EditorLabEvidenceRunStatus::PassedWithUnsupportedChecks;
         }
         self.unsupported_checks = unsupported_checks;
+        self
+    }
+
+    pub fn with_capability_results(
+        mut self,
+        capability_results: Vec<EditorLabEvidenceCapabilityResult>,
+    ) -> Self {
+        if capability_results
+            .iter()
+            .any(|result| result.status == EditorLabEvidenceCapabilityResultStatus::Failed)
+        {
+            self.status = EditorLabEvidenceRunStatus::Failed;
+        }
+        self.capability_results = capability_results;
         self
     }
 }
@@ -347,6 +522,155 @@ impl EditorLabEvidenceManifest {
             .flat_map(|run| run.unsupported_checks.iter().cloned())
             .collect()
     }
+
+    pub fn validate_no_gap_capabilities(
+        &self,
+        required_capabilities: &[EditorLabEvidenceCapability],
+    ) -> Result<(), UiDefinitionDiagnostic> {
+        self.validate()?;
+
+        let required = required_capabilities
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if required.is_empty() {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.manifest.no_gap.empty_requirement",
+                "no no-gap evidence capabilities were required",
+            ));
+        }
+
+        let mut satisfied = BTreeSet::new();
+        for run in &self.runs {
+            for result in &run.capability_results {
+                Self::validate_no_gap_capability_result(&run.scenario_id, result)?;
+                if required.contains(&result.capability)
+                    && matches!(
+                        result.status,
+                        EditorLabEvidenceCapabilityResultStatus::Captured
+                            | EditorLabEvidenceCapabilityResultStatus::PlatformImpossible
+                    )
+                {
+                    satisfied.insert(result.capability);
+                }
+            }
+        }
+
+        for capability in required {
+            if !satisfied.contains(&capability) {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.manifest.no_gap.missing_capability",
+                    format!("no-gap evidence capability '{capability:?}' was not recorded"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_no_gap_capability_result(
+        scenario_id: &str,
+        result: &EditorLabEvidenceCapabilityResult,
+    ) -> Result<(), UiDefinitionDiagnostic> {
+        if result.probe.capability != result.capability {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.manifest.no_gap.probe_mismatch",
+                format!(
+                    "scenario '{scenario_id}' records {:?} with a {:?} probe",
+                    result.capability, result.probe.capability
+                ),
+            ));
+        }
+        if result.probe.backend.trim().is_empty()
+            || result.probe.environment.trim().is_empty()
+            || result.probe.reason.trim().is_empty()
+            || result.reproduction_command.trim().is_empty()
+            || result.diagnostic.trim().is_empty()
+        {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.manifest.no_gap.missing_probe_metadata",
+                format!(
+                    "scenario '{scenario_id}' result {:?} is missing typed probe metadata",
+                    result.capability
+                ),
+            ));
+        }
+        if result.artifacts.is_empty() {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.manifest.no_gap.missing_result_artifact",
+                format!(
+                    "scenario '{scenario_id}' result {:?} has no evidence artifact",
+                    result.capability
+                ),
+            ));
+        }
+
+        match result.status {
+            EditorLabEvidenceCapabilityResultStatus::Captured => {
+                if result.probe.support_status
+                    != EditorLabEvidenceCapabilitySupportStatus::Supported
+                {
+                    return Err(UiDefinitionDiagnostic::error(
+                        "editor.lab.evidence.manifest.no_gap.status_mismatch",
+                        format!(
+                            "scenario '{scenario_id}' captured {:?} with a non-supported probe",
+                            result.capability
+                        ),
+                    ));
+                }
+                if result.artifacts.iter().all(|artifact| {
+                    matches!(
+                        artifact.kind,
+                        EditorLabEvidenceArtifactKind::UnsupportedCheckReport
+                            | EditorLabEvidenceArtifactKind::PlatformImpossibleReport
+                            | EditorLabEvidenceArtifactKind::EvidenceManifest
+                    )
+                }) {
+                    return Err(UiDefinitionDiagnostic::error(
+                        "editor.lab.evidence.manifest.no_gap.descriptor_only_capture",
+                        format!(
+                            "scenario '{scenario_id}' captured {:?} without a concrete runtime artifact",
+                            result.capability
+                        ),
+                    ));
+                }
+            }
+            EditorLabEvidenceCapabilityResultStatus::PlatformImpossible => {
+                if result.probe.support_status
+                    != EditorLabEvidenceCapabilitySupportStatus::PlatformImpossible
+                {
+                    return Err(UiDefinitionDiagnostic::error(
+                        "editor.lab.evidence.manifest.no_gap.status_mismatch",
+                        format!(
+                            "scenario '{scenario_id}' marked {:?} platform-impossible with a supported probe",
+                            result.capability
+                        ),
+                    ));
+                }
+                if !result.artifacts.iter().any(|artifact| {
+                    artifact.kind == EditorLabEvidenceArtifactKind::PlatformImpossibleReport
+                }) {
+                    return Err(UiDefinitionDiagnostic::error(
+                        "editor.lab.evidence.manifest.no_gap.missing_platform_impossible_report",
+                        format!(
+                            "scenario '{scenario_id}' platform-impossible {:?} lacks a typed report artifact",
+                            result.capability
+                        ),
+                    ));
+                }
+            }
+            EditorLabEvidenceCapabilityResultStatus::Failed => {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.manifest.no_gap.failed_capability",
+                    format!(
+                        "scenario '{scenario_id}' result {:?} failed",
+                        result.capability
+                    ),
+                ));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn editor_lab_preview_scenarios() -> Vec<EditorLabPreviewScenario> {
@@ -476,5 +800,98 @@ mod tests {
             .validate()
             .expect_err("descriptor-only evidence should be rejected");
         assert_eq!(error.code, "editor.lab.evidence.manifest.missing_artifact");
+    }
+
+    #[test]
+    fn no_gap_validation_accepts_captured_capability_evidence() {
+        let scenario = editor_lab_preview_scenarios()
+            .into_iter()
+            .find(|scenario| scenario.id == "editor-lab.success")
+            .expect("success scenario should exist");
+        let artifact = EditorLabEvidenceArtifact::new(
+            EditorLabEvidenceArtifactKind::RetainedUiDebug,
+            "artifacts/success-retained-surface-debug.txt",
+            128,
+            "retained visual truth artifact",
+        );
+        let run = EditorLabEvidenceRun::passed(
+            &scenario,
+            "build_editor_shell_frame_model",
+            "provider surfaces mounted",
+            vec![artifact.clone()],
+        )
+        .with_capability_results(vec![EditorLabEvidenceCapabilityResult::captured(
+            EditorLabEvidenceCapability::RetainedVisualTruth,
+            EditorLabEvidenceCapabilityProbe::supported(
+                EditorLabEvidenceCapability::RetainedVisualTruth,
+                "retained-ui-test",
+                "cargo test",
+                "retained surface text and provider frames were captured",
+            ),
+            vec![artifact],
+            "cargo test -p runenwerk_editor editor_lab_evidence",
+            "retained visual evidence was captured by the app-owned evidence harness",
+        )]);
+        let manifest = EditorLabEvidenceManifest::current("test", vec![scenario], vec![run]);
+
+        manifest
+            .validate_no_gap_capabilities(&[EditorLabEvidenceCapability::RetainedVisualTruth])
+            .expect("captured no-gap capability evidence should validate");
+    }
+
+    #[test]
+    fn no_gap_validation_rejects_platform_impossible_without_probe_metadata() {
+        let scenario = editor_lab_preview_scenarios()
+            .into_iter()
+            .find(|scenario| scenario.id == "editor-lab.accessibility")
+            .expect("accessibility scenario should exist");
+        let retained_artifact = EditorLabEvidenceArtifact::new(
+            EditorLabEvidenceArtifactKind::RetainedUiDebug,
+            "artifacts/accessibility-retained-surface-debug.txt",
+            128,
+            "retained accessibility surface",
+        );
+        let platform_report = EditorLabEvidenceArtifact::new(
+            EditorLabEvidenceArtifactKind::PlatformImpossibleReport,
+            "artifacts/platform-impossible-results.ron",
+            128,
+            "typed platform-impossible report",
+        );
+        let run = EditorLabEvidenceRun::passed(
+            &scenario,
+            "build_editor_shell_frame_model route and retained text inspection",
+            "labels, routes, and disabled reasons inspected",
+            vec![retained_artifact, platform_report.clone()],
+        )
+        .with_accessibility(EditorLabAccessibilitySnapshot {
+            scenario_id: "editor-lab.accessibility".to_string(),
+            labelled_controls: 1,
+            disabled_reason_controls: 1,
+            focusable_routes: 1,
+            unsupported_checks: Vec::new(),
+        })
+        .with_capability_results(vec![EditorLabEvidenceCapabilityResult {
+            capability: EditorLabEvidenceCapability::NativeFocusTraversal,
+            status: EditorLabEvidenceCapabilityResultStatus::PlatformImpossible,
+            probe: EditorLabEvidenceCapabilityProbe {
+                capability: EditorLabEvidenceCapability::NativeFocusTraversal,
+                backend: String::new(),
+                environment: String::new(),
+                support_status: EditorLabEvidenceCapabilitySupportStatus::PlatformImpossible,
+                reason: String::new(),
+            },
+            artifacts: vec![platform_report],
+            reproduction_command: "cargo test -p runenwerk_editor editor_lab_evidence".to_string(),
+            diagnostic: "native focus traversal is not available".to_string(),
+        }]);
+        let manifest = EditorLabEvidenceManifest::current("test", vec![scenario], vec![run]);
+
+        let error = manifest
+            .validate_no_gap_capabilities(&[EditorLabEvidenceCapability::NativeFocusTraversal])
+            .expect_err("platform-impossible evidence requires typed probe metadata");
+        assert_eq!(
+            error.code,
+            "editor.lab.evidence.manifest.no_gap.missing_probe_metadata"
+        );
     }
 }

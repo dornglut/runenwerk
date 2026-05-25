@@ -1,0 +1,135 @@
+version: 1
+idea: PM-UI-LAB-PERF-005 Persistence Diff Apply API And Examples Ergonomics
+source_path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
+owner: editor
+created_at: '2026-05-25'
+governance_notes:
+- Architecture governance ran for the design-only PM005 closure action.
+- Keep app runtime project IO, activation execution, rollback, provider sessions, and artifact writing app-owned.
+- Keep ui_definition behavior-free and editor_definition runtime-neutral.
+- Add an ADR only if implementation changes durable ownership, dependency direction, public API compatibility, or cross-domain contracts.
+open_questions:
+- Which exact public API or prelude exports need repair after auditing current usage docs and examples?
+- Can one bounded WR slice cover persistence plus public docs/examples, or should the implementation contract split runtime evidence from API/docs?
+item:
+  id: WR-109
+  title: UI Lab persistence API examples ergonomics closure
+  diagram_title: UI Lab persistence API examples
+  alias: UILABPERFAPI
+  lane: Editor UX
+  dependency_level: L4
+  gate: After WR-108 direct-manipulation UX closure
+  planning_state: ready_next
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 3
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-108
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/editor_lab_project
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/editor_app
+  - apps/runenwerk_editor/src/runtime
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - domain/editor/editor_definition/src/lib.rs
+  - domain/editor/editor_definition/src/prelude.rs
+  - domain/editor/editor_definition/src/workflow.rs
+  - domain/ui/ui_definition/src/lib.rs
+  - domain/ui/ui_definition/src/prelude.rs
+  - domain/ui/ui_definition/src/workflow.rs
+  - docs-site/src/content/docs/domain/ui/ui-definition-usage.md
+  - docs-site/src/content/docs/domain/editor/editor-definition-usage.md
+  - docs-site/src/content/docs/design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-109-ui-lab-persistence-api-examples-ergonomics-closure/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-005-persistence-diff-appl
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition
+  - cargo test -p editor_definition
+  - cargo test -p runenwerk_editor editor_lab_project
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_005
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor editor_definition_activation
+  - cargo run -p ui_definition --example ui_definition_workflow
+  - cargo run -p editor_definition --example editor_definition_workflow
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: Accepted PM-UI-LAB-PERF-005 persistence API examples ergonomics closure design plus completed WR-108 direct-manipulation UX closeout clear WR-109 for promotion planning.
+  current_decision: Ready for promotion planning only; use task production:plan before implementation and keep PM005 limited to persistence, structural diff/apply, rollback review, public API, guide, and example ergonomics.
+  current_call: Prepare a bounded PM005 implementation contract that proves persistence, structural diff/apply, rollback, public API discoverability, usage guides, and examples agree without starting final certification scope.
+  first_move: Run task production:plan -- --milestone PM-UI-LAB-PERF-005 --roadmap WR-109 and write the promotion or implementation-readiness contract it reports.
+  main_blocker: Awaiting promotion to current_candidate and a decision-complete implementation contract.
+  why_not_ready: Ready for promotion planning; not implementation until roadmap promotion and production contract gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - persistence UX
+  - API examples
+  - structural review
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PM005 consumes the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: PM005 implementation must follow the accepted persistence, API, and examples ergonomics closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PM005 follows completed direct-manipulation UX closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PM005 consumes the earlier persistence and rollback runtime proof as supporting evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PM005 consumes the earlier public API docs and examples proof as supporting evidence.
+  ddd_owner: editor persistence, diff/apply, rollback, API ergonomics, docs, and examples with app-owned runtime execution and domain-owned behavior-free contracts
+  adr_requirement: No ADR for bounded PM005 closure; ADR or accepted design update required before moving project IO, activation execution, rollback, provider sessions, or app history into ui_definition or editor_definition.
+  fitness_function_requirement: Product-surface, runtime, public API, guide, and example tests proving package/reload/import/export, structural diff/apply, rollback, public exports, and examples agree without console-only or internal-only proof.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor definition, and docs owners.
+edges:
+- source: WR-108
+  target: WR-109
+  label: direct manipulation evidence before persistence API ergonomics closure

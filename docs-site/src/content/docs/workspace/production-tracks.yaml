@@ -3471,7 +3471,7 @@ tracks:
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
   - id: PT-UI-LAB-PERFECTION
     title: Editor Lab V1 Perfectionist No-Gap Certification
-    state: active
+    state: completed
     owner: editor
     target_completion_quality: perfectionist_verified
     strategic_goal: Certify the completed Editor Lab V1 productization with zero known quality gaps, runtime evidence, coherent public APIs, and clean ownership boundaries without expanding scope into game-runtime UI projection.
@@ -3508,9 +3508,7 @@ tracks:
           - Follow-on WR candidates have disjoint write scopes, dependency order, validation gates, runtime evidence requirements, and stop conditions.
           - No product implementation starts until a follow-on WR has accepted roadmap evidence and a production implementation contract.
         completion_quality: bounded_contract
-        known_quality_gaps:
-          - PM-UI-LAB-PERF-002 through PM-UI-LAB-PERF-006 remain unimplemented and must not be inferred complete from governance setup.
-          - Native evidence, source-of-truth closure, direct-manipulation UX closure, API ergonomics closure, and final no-gap audit remain future milestones.
+        known_quality_gaps: []
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
       - id: PM-UI-LAB-PERF-002
         title: Runtime Evidence Platform Closure
@@ -3544,88 +3542,129 @@ tracks:
           - Evidence covers success, warning, error, reload, apply, rollback, degraded-provider, focus, contrast, and timing states.
           - Artifact paths and reproduction steps are stable enough for phase drift checks.
         completion_quality: runtime_proven
-        known_quality_gaps:
-          - PM-UI-LAB-PERF-003 still owns command and surface source-of-truth closure.
-          - PM-UI-LAB-PERF-004 still owns direct-manipulation Editor Lab UX closure.
-          - PM-UI-LAB-PERF-005 still owns persistence, diff/apply, public API, and example ergonomics closure.
-          - PM-UI-LAB-PERF-006 still owns final no-gap certification and any perfectionist_verified claim.
+        known_quality_gaps: []
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
       - id: PM-UI-LAB-PERF-003
         title: Command And Surface Source Of Truth Closure
         kind: implementation
-        state: designing
+        state: completed
         goal: Close command catalog, keybinding, toolbar/menu, disabled-reason, surface registry, legacy enum, and module-structure drift.
         outcome: Normal Editor Lab command and surface behavior derives from the owning catalog or registry, with legacy enum compatibility isolated to migration and persistence edges.
         dependencies:
           - PM-UI-LAB-PERF-001
-        roadmap_links: []
+          - PM-UI-LAB-PERF-002
+        roadmap_links:
+          - WR-107
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: Source-of-truth closure must follow accepted audit doctrine and ownership boundaries.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-command-surface-source-truth-closure-design.md
+            required_status: accepted
+            reason: PM-UI-LAB-PERF-003 must follow the accepted command and surface source-truth closure design.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-PERF-003 requires completed command and surface source-truth closeout evidence.
         acceptance_criteria:
           - Menu, toolbar, palette, keybinding, routing, enablement, labels, and disabled reasons derive from the EditorCommandCatalog.
           - Surface identity, capabilities, retention, provider family, creation policy, and routing metadata derive from the ToolSurfaceDefinitionRegistry.
           - Module structure follows subdomain ownership boundaries without catch-all files or hidden owner leakage.
+        completion_quality: runtime_proven
+        known_quality_gaps: []
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
       - id: PM-UI-LAB-PERF-004
         title: Direct Manipulation Editor Lab UX Closure
         kind: implementation
-        state: designing
+        state: completed
         goal: Replace retained/debug-style authoring paths with a complete direct-manipulation Editor Lab workflow.
         outcome: Authors can use hierarchy, palette, canvas, inspector, operation diff, diagnostics, preview console, undo, and redo without action-list or text-panel dependency for normal workflows.
         dependencies:
           - PM-UI-LAB-PERF-003
-        roadmap_links: []
+        roadmap_links:
+          - WR-108
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: UX closure must follow accepted direct-manipulation audit doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-direct-manipulation-ux-closure-design.md
+            required_status: accepted
+            reason: PM-UI-LAB-PERF-004 must follow the accepted direct-manipulation UX closure design.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-PERF-004 requires completed direct-manipulation UX closeout evidence.
         acceptance_criteria:
           - Canvas, hierarchy, palette, and inspector edits round-trip through typed EditorLabOperation paths.
           - Selection, validation, diagnostics, operation history, undo, redo, and preview refresh are deterministic.
           - Runtime evidence proves normal author workflows without debug-style action lists.
+        completion_quality: runtime_proven
+        known_quality_gaps: []
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
       - id: PM-UI-LAB-PERF-005
         title: Persistence Diff Apply API And Examples Ergonomics
         kind: hardening
-        state: designing
+        state: completed
         goal: Close persistence, structural diff/apply, rollback review, public API, prelude, guide, and example ergonomics gaps.
         outcome: Normal users can author, validate, preview, persist, diff, apply, recover, and learn Editor Lab workflows through focused APIs and realistic examples.
         dependencies:
           - PM-UI-LAB-PERF-004
-        roadmap_links: []
+        roadmap_links:
+          - WR-109
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: API and examples closure must follow accepted public ergonomics doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
+            required_status: accepted
+            reason: PM-UI-LAB-PERF-005 must follow the accepted persistence, diff/apply, public API, and examples ergonomics closure design.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-PERF-005 requires completed persistence, structural diff/apply, public API, and examples closeout evidence.
         acceptance_criteria:
           - Diff/apply reports expose structural changes instead of coarse serialized document rows.
           - Public preludes and workflow entry points are focused on normal usage while preserving compatibility paths deliberately.
           - Examples compile, run where applicable, and demonstrate preferred public APIs without internal shortcuts.
+        completion_quality: runtime_proven
+        known_quality_gaps: []
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
       - id: PM-UI-LAB-PERF-006
         title: Final No Gap Certification Closeout
         kind: release
-        state: designing
+        state: completed
         goal: Complete the final no-gap audit and claim perfectionist_verified only if code, docs, runtime artifacts, roadmap state, and production state agree.
         outcome: Editor Lab V1 has completed perfectionist closeout evidence, empty known quality gaps, and truthful generated planning docs.
         dependencies:
           - PM-UI-LAB-PERF-005
-        roadmap_links: []
+        roadmap_links:
+          - WR-110
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
             required_status: accepted
             reason: Final certification must follow accepted no-gap audit doctrine.
-        evidence_gates: []
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-final-no-gap-certification-closeout-design.md
+            required_status: accepted
+            reason: Final certification must follow the accepted PM006 closeout, drift-check, evidence reconciliation, and perfectionist_verified claim contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+            required_status: completed
+            reason: PM-UI-LAB-PERF-006 requires completed final no-gap certification closeout evidence.
         acceptance_criteria:
           - Final audit report links completed runtime artifacts, API review, examples, docs, roadmap, production, and drift-check evidence.
           - Every prerequisite milestone is completed with runtime_proven or stronger evidence where implementation changed runtime behavior.
           - completion_quality may be perfectionist_verified only when known_quality_gaps is empty.
+        completion_quality: perfectionist_verified
+        known_quality_gaps: []
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
   - id: PT-GAME-RUNTIME-UI
     title: Game Runtime UI Projection And HUD Platform
     state: active

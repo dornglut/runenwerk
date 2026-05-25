@@ -39,7 +39,7 @@
       (menu_id: "window", item_id: "window_next_workspace", label: "Next Workspace", route: AuthoredId("editor.toolbar.window.next_workspace"), availability: None),
       (menu_id: "window", item_id: "window_previous_workspace", label: "Previous Workspace", route: AuthoredId("editor.toolbar.window.previous_workspace"), availability: None),
       (menu_id: "window", item_id: "window_save_workspace", label: "Save Workspace", route: AuthoredId("editor.toolbar.window.save_workspace"), availability: None),
-      (menu_id: "window", item_id: "window_load_custom", label: "No Custom Workspaces", route: AuthoredId("editor.toolbar.window.load_custom_workspace"), availability: Some(Static(Disabled(reason: "custom workspaces are not implemented yet")))),
+      (menu_id: "window", item_id: "window_load_custom", label: "Load Custom Workspace", route: AuthoredId("editor.toolbar.window.load_custom_workspace"), availability: Some(Static(Disabled(reason: "custom workspaces are not implemented yet")))),
       (menu_id: "workspace", item_id: "workspace_menu_scene", label: "Scene", route: AuthoredId("editor.workspace.scene.activate"), availability: None),
       (menu_id: "workspace", item_id: "workspace_menu_modelling", label: "Modelling", route: AuthoredId("editor.workspace.modelling.activate"), availability: None),
       (menu_id: "workspace", item_id: "workspace_menu_editor_design", label: "Editor Design", route: AuthoredId("editor.workspace.editor_design.activate"), availability: None),

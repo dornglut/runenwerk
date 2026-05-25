@@ -118,7 +118,7 @@
             (
                 kind: ProjectPackage,
                 path: "artifacts/project-package.ron",
-                bytes: 51649,
+                bytes: 51650,
                 description: "Saved Editor Lab project package used by reload scenario.",
             ),
         ],
@@ -181,7 +181,7 @@
             (
                 kind: RetainedUiDebug,
                 path: "artifacts/degraded-provider-retained-surface-debug.txt",
-                bytes: 15377,
+                bytes: 20218,
                 description: "Typed degraded canvas surface for non-previewable selection.",
             ),
         ],

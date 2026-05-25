@@ -6882,10 +6882,7 @@ items:
   main_blocker: Completed.
   why_not_ready: ''
   completion_quality: bounded_contract
-  known_quality_gaps:
-  - PM-UI-LAB-PERF-002 through PM-UI-LAB-PERF-006 remain unimplemented and must not be inferred complete from governance setup.
-  - Native evidence, source-of-truth closure, direct-manipulation UX closure, API ergonomics closure, and final no-gap audit
-    remain future milestones.
+  known_quality_gaps: []
   completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
   diagram_call:
   - governance contract
@@ -6978,11 +6975,7 @@ items:
   main_blocker: Completed.
   why_not_ready: ''
   completion_quality: runtime_proven
-  known_quality_gaps:
-  - PM-UI-LAB-PERF-003 still owns command and surface source-of-truth closure.
-  - PM-UI-LAB-PERF-004 still owns direct-manipulation Editor Lab UX closure.
-  - PM-UI-LAB-PERF-005 still owns persistence, diff/apply, public API, and example ergonomics closure.
-  - PM-UI-LAB-PERF-006 still owns final no-gap certification and any perfectionist_verified claim.
+  known_quality_gaps: []
   completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
   diagram_call:
   - runtime evidence closure
@@ -7015,14 +7008,496 @@ items:
     applies_to: implementation
     reason: WR-105 completion requires completed runtime evidence platform closeout evidence.
   ddd_owner: editor app-owned runtime evidence with editor_shell and ui_definition support boundaries
-  adr_requirement: No ADR because screenshot, focus, contrast, timing, provider sessions, platform probes, and artifact
-    writing remain app-owned; ADR or accepted design update is required before moving evidence ownership into a reusable
-    cross-domain platform.
-  fitness_function_requirement: Evidence manifest tests reject descriptor-only proof, reject platform-impossible results
-    without typed probe metadata, require captured/platform-impossible per-capability results, and preserve app-owned artifact
-    generation.
+  adr_requirement: No ADR because screenshot, focus, contrast, timing, provider sessions, platform probes, and artifact writing
+    remain app-owned; ADR or accepted design update is required before moving evidence ownership into a reusable cross-domain
+    platform.
+  fitness_function_requirement: Evidence manifest tests reject descriptor-only proof, reject platform-impossible results without
+    typed probe metadata, require captured/platform-impossible per-capability results, and preserve app-owned artifact generation.
   ownership_mode: Stream-aligned editor evidence work with complicated-subsystem support from app runtime/windowing and shell
     owners.
+- id: WR-107
+  title: UI Lab command and surface source-truth closure
+  diagram_title: UI Lab command surface truth
+  alias: UILABPERFCMDSURF
+  lane: Editor architecture
+  dependency_level: L4
+  gate: After WR-105 runtime evidence closure
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 3
+  rr_oe: 3
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.1
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-105
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/command_catalog
+  - apps/runenwerk_editor/src/shell/command_resolution.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/toolbar_adapter.rs
+  - apps/runenwerk_editor/src/runtime/systems/input_bridge.rs
+  - apps/runenwerk_editor/src/shell/providers
+  - domain/editor/editor_shell/src/tool_suite
+  - domain/editor/editor_shell/src/workspace/surface_contract.rs
+  - assets/editor/ui/editor_bindings.ron
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/design/accepted/ui-lab-command-surface-source-truth-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-107-ui-lab-command-and-surface-source-truth-closure/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-003-command-and-surface-s
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p runenwerk_editor command_catalog
+  - cargo test -p runenwerk_editor command_source_truth
+  - cargo test -p runenwerk_editor surface_source_truth
+  - cargo test -p editor_shell tool_suite
+  - cargo test -p editor_shell surface_contract
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
+  current_decision: Completed at runtime_proven for app-owned command catalog route, toolbar, menu, label, disabled-reason,
+    and dispatch source-truth audits plus registry-backed stable-key surface provider source-truth audits.
+  current_call: Archive WR-107 as completed PM-UI-LAB-PERF-003 evidence.
+  first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION before selecting the next milestone action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
+  diagram_call:
+  - command truth closure
+  - surface registry truth
+  - legacy adapters only
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM003 consumed the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-command-surface-source-truth-closure-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM003 implementation followed the accepted command and surface source-truth closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-107-ui-lab-command-and-surface-source-truth-closure/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-107 implementation followed the active current-candidate implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM003 depended on completed runtime evidence platform closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-107 completion requires completed command and surface source-truth closeout evidence.
+  ddd_owner: editor command and surface architecture with apps/runenwerk_editor command/provider execution and editor_shell
+    surface metadata ownership
+  adr_requirement: No ADR because command execution remains app-owned, surface metadata remains editor_shell-owned, and ui_definition
+    remains behavior-free; ADR or accepted design update is required before moving concrete command semantics, provider-family
+    authority, or surface execution into ui_definition or a cross-domain platform.
+  fitness_function_requirement: Command catalog and surface registry tests prove normal route, toolbar, menu, keybinding,
+    disabled reason, dispatch, provider support, surface metadata, and legacy adapter paths share one source of truth.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from editor_shell and UI definition
+    owners.
+- id: WR-108
+  title: UI Lab direct manipulation UX closure
+  diagram_title: UI Lab direct manipulation UX
+  alias: UILABPERFUX
+  lane: Editor UX
+  dependency_level: L4
+  gate: After WR-107 command and surface source-truth closure
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 3
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-107
+  write_scopes:
+  - domain/editor/editor_definition/src/operation.rs
+  - domain/editor/editor_definition/src/workflow.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition/build_editor_lab_surface.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/design/accepted/ui-lab-direct-manipulation-ux-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-108-ui-lab-direct-manipulation-ux-closure/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-004-direct-manipulation-e
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p editor_definition operation
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p runenwerk_editor editor_lab_operation
+  - cargo test -p runenwerk_editor direct_manipulation
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_004
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+  current_decision: Completed at runtime_proven for direct-manipulation Editor Lab hierarchy, palette, canvas, inspector,
+    diagnostics, operation diff, preview console, undo, and redo product-surface evidence.
+  current_call: Archive WR-108 as completed PM-UI-LAB-PERF-004 evidence.
+  first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION before selecting the next milestone action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+  diagram_call:
+  - direct controls
+  - operation review UX
+  - product evidence
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM004 consumed the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-direct-manipulation-ux-closure-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM004 implementation followed the accepted direct-manipulation UX closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-108-ui-lab-direct-manipulation-ux-closure/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-108 implementation followed the active current-candidate implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM004 depended on completed command and surface source-truth closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM004 consumed the earlier operation-driven authoring runtime proof as supporting evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-108 completion requires completed direct-manipulation closeout evidence.
+  ddd_owner: editor direct-manipulation authoring UX with editor_definition operation contracts, editor_shell product surfaces,
+    and apps/runenwerk_editor execution.
+  adr_requirement: No ADR because operation execution remains app-owned, editor_definition remains runtime-neutral, editor_shell
+    owns product surface view models, and ui_definition remains behavior-free; ADR or accepted design update is required before
+    moving editor semantics, app history, provider behavior, command execution, or runtime preview refresh into ui_definition
+    or a global operation bus.
+  fitness_function_requirement: Product-surface tests prove hierarchy, palette, canvas, inspector, diagnostics, operation
+    diff, preview console, undo, and redo route through operation reports and runtime artifacts without debug-only evidence.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor definition,
+    and editor shell owners.
+- id: WR-109
+  title: UI Lab persistence API examples ergonomics closure
+  diagram_title: UI Lab persistence API examples
+  alias: UILABPERFAPI
+  lane: Editor UX
+  dependency_level: L4
+  gate: After WR-108 direct-manipulation UX closure
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 3
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.5
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-108
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/editor_lab_project
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/editor_app
+  - apps/runenwerk_editor/src/runtime
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - domain/editor/editor_definition/src/lib.rs
+  - domain/editor/editor_definition/src/prelude.rs
+  - domain/editor/editor_definition/src/workflow.rs
+  - domain/ui/ui_definition/src/lib.rs
+  - domain/ui/ui_definition/src/prelude.rs
+  - domain/ui/ui_definition/src/workflow.rs
+  - docs-site/src/content/docs/domain/ui/ui-definition-usage.md
+  - docs-site/src/content/docs/domain/editor/editor-definition-usage.md
+  - docs-site/src/content/docs/design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-109-ui-lab-persistence-api-examples-ergonomics-closure/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-005-persistence-diff-appl
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition
+  - cargo test -p editor_definition
+  - cargo test -p runenwerk_editor editor_lab_project
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_005
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor editor_definition_activation
+  - cargo run -p ui_definition --example ui_definition_workflow
+  - cargo run -p editor_definition --example editor_definition_workflow
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+  current_decision: Completed at runtime_proven for structural persistence, diff/apply, rollback review, public API, usage
+    guide, and examples ergonomics evidence.
+  current_call: Archive WR-109 as completed PM-UI-LAB-PERF-005 evidence.
+  first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION before selecting the next milestone action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+  diagram_call:
+  - persistence review UX
+  - structural apply diff
+  - public API examples
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM005 consumed the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-api-examples-ergonomics-closure-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM005 implementation followed the accepted persistence, API, and examples ergonomics closure design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-109-ui-lab-persistence-api-examples-ergonomics-closure/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-109 implementation followed the active current-candidate implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM005 depended on completed direct-manipulation UX closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM005 consumed the earlier persistence and rollback runtime proof as supporting evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM005 consumed the earlier public API docs and examples proof as supporting evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-109 completion requires completed persistence API examples ergonomics closeout evidence.
+  ddd_owner: editor persistence, diff/apply, rollback, API ergonomics, docs, and examples with app-owned runtime execution
+    and domain-owned behavior-free contracts.
+  adr_requirement: No ADR because project IO, activation execution, rollback, provider sessions, and app history remain app-owned;
+    editor_definition remains runtime-neutral; ui_definition remains behavior-free. ADR or accepted design update is required
+    before moving those responsibilities.
+  fitness_function_requirement: Product-surface, runtime, public API, guide, and example tests prove package/reload/import/export,
+    structural diff/apply, rollback, public exports, and examples agree without console-only, descriptor-only, or internal-only
+    proof.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from UI definition, editor definition,
+    and docs owners.
+- id: WR-110
+  title: UI Lab final no-gap certification closeout
+  diagram_title: UI Lab final certification
+  alias: UILABPERFFINAL
+  lane: Editor quality
+  dependency_level: L4
+  gate: After WR-109 persistence API examples ergonomics closure
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-109
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/ui-lab-final-no-gap-certification-closeout-design.md
+  - docs-site/src/content/docs/design/accepted/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-110-ui-lab-final-no-gap-certification-closeout/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-006-final-no-gap-certific
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt
+  - cargo test -p ui_definition
+  - cargo test -p editor_definition
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p runenwerk_editor editor_lab_project
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_002
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_004
+  - cargo test -p runenwerk_editor pm_ui_lab_perf_005
+  - cargo test -p runenwerk_editor editor_lab
+  - cargo test -p runenwerk_editor editor_definition_activation
+  - cargo run -p ui_definition --example ui_definition_workflow
+  - cargo run -p editor_definition --example editor_definition_workflow
+  - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture
+  - $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_005_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_005 -- --nocapture
+  - task docs:validate
+  - task puml:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+  current_decision: Completed at perfectionist_verified for final no-gap certification evidence, verified PM001-PM005
+    closeouts, runtime artifacts, API/docs/examples agreement, source-truth ownership, roadmap and production state, phase
+    drift-check evidence, and empty known quality gaps.
+  current_call: Archive WR-110 as completed PM-UI-LAB-PERF-006 evidence.
+  first_move: Rerun task ai:goal -- --track PT-UI-LAB-PERFECTION to verify track completion.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: perfectionist_verified
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+  diagram_call:
+  - final audit
+  - drift check
+  - no known gaps
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-perfectionist-audit-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 consumed the accepted no-gap audit doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-final-no-gap-certification-closeout-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 implementation followed the accepted final closeout and perfectionist_verified claim contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-110-ui-lab-final-no-gap-certification-closeout/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-110 final audit followed the active promotion and implementation-readiness contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: PM006 followed completed persistence, diff/apply, public API, and examples ergonomics evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-110 completion requires completed final no-gap certification closeout evidence.
+  ddd_owner: editor final certification with app-owned runtime evidence, UI-definition behavior-free contracts, editor-definition
+    reusable contracts, and workspace planning metadata ownership
+  adr_requirement: No ADR because WR-110 was a bounded final audit and metadata closeout. ADR or accepted design update remains
+    required before changing source-truth authority, persisted public formats, dependency direction, or runtime evidence ownership.
+  fitness_function_requirement: Final audit verified prerequisite closeouts and artifacts, reran focused runtime/API/example
+    validation, ran phase drift-check, and passed roadmap, production, docs, PUML, planning, and whitespace gates before the
+    perfectionist_verified claim.
+  ownership_mode: Stream-aligned editor product certification with complicated-subsystem support from UI definition, editor
+    definition, app runtime evidence, and workspace planning owners.
 - id: WR-101
   title: Procedural Camera And View Projection
   diagram_title: Procedural camera projection
