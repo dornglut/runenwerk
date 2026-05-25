@@ -150,7 +150,7 @@ tasks:
   docs:validate:
     desc: Validate docs-site structure and links handled by repository docs validation.
     cmds:
-      - python tools/docs/validate_docs.py
+      - uv run python tools/docs/validate_docs.py
 
   puml:validate:
     desc: Validate every PlantUML diagram in the repository.

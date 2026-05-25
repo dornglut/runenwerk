@@ -3665,6 +3665,234 @@ tracks:
         completion_quality: perfectionist_verified
         known_quality_gaps: []
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+  - id: PT-EDITOR-UX
+    title: Editor Product UX Native Story Lab And Surface Perfection
+    state: active
+    owner: editor
+    target_completion_quality: perfectionist_verified
+    strategic_goal: Make the editor product UI certifiable through a native Story Lab, all-surface readiness policy, reusable design-system layers, graph/node-editor productization, standalone UI Designer workbench proof, and local-native no-gap evidence while preserving future game UI target-profile compatibility.
+    success_criteria:
+      - PT-EDITOR-UX is a new product UX track and does not reopen PT-UI-LAB or implement PT-GAME-RUNTIME-UI.
+      - Generic UI truth remains in domain/ui, editor product semantics remain in domain/editor, and native evidence execution remains in apps/runenwerk_editor.
+      - Every registered visible user-facing editor surface and explicit diagnostic/fallback surface is certified, fallback-only, diagnostic, or hidden until productized.
+      - Every certified primitive widget, product widget pattern, registered surface, and host scenario has Story Lab coverage, visible-widget scan evidence, and state matrix evidence.
+      - Final certification requires local-native screenshots where supported, accessibility and interaction reports, performance evidence, and zero hard-budget UI gaps.
+      - Future game-runtime UI readiness is proven only through target-profile compatibility seams and never through editor-shell dependency.
+    milestones:
+      - id: PM-EDITOR-UX-001
+        title: Governance Truth Audit And Track Activation
+        kind: design
+        state: completed
+        goal: Activate PT-EDITOR-UX with source-truth boundaries, active design doctrine, code-truth and evidence matrices, and bounded follow-on WR labels before product implementation starts.
+        outcome: The editor product UX track exists with nine ordered milestones, an active design, completed WR-111 governance closeout evidence, and blocked follow-on rows for the native Story Lab through final no-gap certification.
+        dependencies:
+          - PM-UI-LAB-PERF-006
+        roadmap_links:
+          - WR-111
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Governance must be anchored by the active editor product UX Story Lab and game-UI-ready foundations design.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-111-editor-product-ux-governance-and-track-activation/plan.md
+            required_status: active
+            reason: WR-111 execution must follow the governance and track-activation contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
+            required_status: completed
+            reason: PM-EDITOR-UX-001 requires completed governance, truth-audit, and track-activation closeout evidence.
+        acceptance_criteria:
+          - PT-EDITOR-UX exists as an active production track with milestone order PM-EDITOR-UX-001 through PM-EDITOR-UX-009.
+          - WR-111 is archived as completed governance evidence and does not authorize product runtime code changes.
+          - WR-112 through WR-119 exist only as follow-on blocked/deferred labels until each receives its own implementation contract.
+          - The active design records source-truth, Story Lab, readiness, evidence, game-UI seam, quality gate, and stop-condition doctrine.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-EDITOR-UX-002 through PM-EDITOR-UX-009 remain unimplemented and must not be inferred complete from governance setup.
+          - No Story Lab catalog, design-system migration, standalone UI Designer workbench, graph canvas productization, all-surface migration, game UI readiness proof, or final local-native no-gap certification is implemented in PM001.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
+      - id: PM-EDITOR-UX-002
+        title: Native Editor UX Story Lab And Evidence Harness
+        kind: implementation
+        state: designing
+        goal: Build the native Storybook-inspired Editor UX Story Lab before product polish so every later UI change has executable story, state, interaction, visible-widget, and evidence coverage.
+        outcome: Editor UX stories, args, controls, interactions, fixture matrices, local-native evidence manifests, and hard widget/surface gates are available for primitives, patterns, surfaces, and host scenarios.
+        dependencies:
+          - PM-EDITOR-UX-001
+        roadmap_links:
+          - WR-112
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Story Lab implementation must follow the active editor product UX doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Typed story catalog, story id, story kind, args, interactions, scenario matrix, and evidence manifest contracts exist at the correct ownership layer.
+          - Primitive widget, product pattern, registered surface, and host scenario stories can be executed natively.
+          - Visible-widget scans fail hard for missing bounds, labels/accessibility metadata, focus reachability, overflow behavior, or required state coverage.
+      - id: PM-EDITOR-UX-003
+        title: Layered Editor Design System Migration
+        kind: implementation
+        state: designing
+        goal: Migrate primitive widgets and editor product patterns onto token, recipe, state, and readiness contracts without creating a parallel app-only style layer.
+        outcome: Editor UI styling and product patterns resolve through shared UI Designer token/recipe/state contracts while editor-specific semantics remain in domain/editor adapters.
+        dependencies:
+          - PM-EDITOR-UX-002
+        roadmap_links:
+          - WR-113
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Design-system migration must consume the native Story Lab proof model.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-theme-tokens-modes-skins-and-state-variants-design.md
+            required_status: accepted
+            reason: Styling must follow accepted token graph and state variant ownership.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+            required_status: accepted
+            reason: Component, widget, and surface recipes must follow accepted UI Designer recipe ownership.
+        evidence_gates: []
+        acceptance_criteria:
+          - UI primitives consume shared token and recipe contracts where appropriate.
+          - Editor product patterns expose story coverage for all required states and density/viewport variants.
+          - App-only styling paths are removed or isolated as temporary compatibility shims.
+      - id: PM-EDITOR-UX-004
+        title: Standalone UI Designer Workbench
+        kind: implementation
+        state: designing
+        goal: Ship a real standalone UI Designer workbench instead of legacy self-authoring panels or retained-preview labels.
+        outcome: Authors can use canvas, hierarchy, inspector, property panels, token/recipe/binding previews, scenario matrices, and readiness evidence in a standalone UI Designer workbench.
+        dependencies:
+          - PM-EDITOR-UX-003
+        roadmap_links:
+          - WR-114
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: UI Designer workbench must use the track's native evidence and readiness doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-designer-interface-lab-platform-design.md
+            required_status: active
+            reason: UI Designer workbench must preserve the generic Designer/Lab source-truth boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - The standalone workbench has real canvas, hierarchy, inspector, property editing, diagnostics, and preview workflows.
+          - Normal workflows do not depend on legacy text/action self-authoring panels.
+          - Scenario matrix and readiness evidence cover editor.workbench and game.runtime-compatible descriptor axes without implementing game UI.
+      - id: PM-EDITOR-UX-005
+        title: Graph Canvas And Node Editor Productization
+        kind: implementation
+        state: designing
+        goal: Productize graph canvas and node editor workflows across material and registered future graph surfaces with hide-or-certify policy for unfinished families.
+        outcome: Material graph UX is complete enough for product evidence, and SDF/procgen/gameplay/particle/animation graph surfaces are either productized, fallback-only/diagnostic, or hidden until productized.
+        dependencies:
+          - PM-EDITOR-UX-002
+          - PM-EDITOR-UX-003
+        roadmap_links:
+          - WR-115
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Graph UX must satisfy Story Lab, visible-widget, and readiness gates.
+        evidence_gates: []
+        acceptance_criteria:
+          - Graph UX covers palettes, node cards, sockets, links, selection, drag, marquee, shortcut, overlay, diagnostic, dense graph, and degraded provider scenarios.
+          - Text/action panels cannot masquerade as product graph canvases.
+          - Unfinished graph families are hidden or explicit fallback/diagnostic surfaces.
+      - id: PM-EDITOR-UX-006
+        title: Shell And Product Pattern Polish
+        kind: implementation
+        state: designing
+        goal: Certify editor shell product patterns including inspector, palette, diagnostics, preview, tables, trees, tabs, toolbar/status, split/dock, and keyboard/focus workflows.
+        outcome: Editor product patterns have reusable adapters, story coverage, state coverage, focus/keyboard coverage, overflow policy, and native evidence.
+        dependencies:
+          - PM-EDITOR-UX-003
+          - PM-EDITOR-UX-004
+          - PM-EDITOR-UX-005
+        roadmap_links:
+          - WR-116
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Product pattern polish must pass the Story Lab and native evidence gates.
+        evidence_gates: []
+        acceptance_criteria:
+          - Inspector, palette, diagnostics, preview, table, tree, tab, toolbar/status, split, and dock patterns have dense state-matrix stories.
+          - Keyboard, focus, disabled, readonly, loading, empty, warning, error, degraded, long-text, and overflow behavior are covered.
+          - Hard zero budgets pass for certified patterns.
+      - id: PM-EDITOR-UX-007
+        title: All Registered Visible Surface Wave
+        kind: implementation
+        state: designing
+        goal: Migrate every registered visible user-facing editor surface and explicit diagnostic/fallback surface to product, fallback-only, diagnostic, or hidden readiness.
+        outcome: The editor has no visible misleading placeholders and every visible registered surface has readiness classification, story coverage, scenario evidence, and native proof where required.
+        dependencies:
+          - PM-EDITOR-UX-004
+          - PM-EDITOR-UX-005
+          - PM-EDITOR-UX-006
+        roadmap_links:
+          - WR-117
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: All-surface migration must follow the track's readiness and hide-or-certify policy.
+        evidence_gates: []
+        acceptance_criteria:
+          - Every registered visible user-facing editor surface and explicit diagnostic/fallback surface has `ToolSurfaceReadiness`.
+          - Normal product workflows expose no generic text/action panels or placeholder product surfaces.
+          - Surface stories and host scenarios prove readiness decisions.
+      - id: PM-EDITOR-UX-008
+        title: Game UI Readiness Seam
+        kind: hardening
+        state: designing
+        goal: Prove editor UI recipes, target profiles, fixtures, safe-area/layout axes, input modality axes, and evidence descriptors can represent future game.runtime UI without importing editor shell or implementing game HUD behavior.
+        outcome: Future game-runtime UI has compatible generic UI contracts and evidence descriptors while PT-GAME-RUNTIME-UI remains the owner of runtime HUD implementation.
+        dependencies:
+          - PM-EDITOR-UX-007
+        roadmap_links:
+          - WR-118
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Game UI readiness seam must preserve editor/game ownership separation.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: active
+            reason: Compatibility evidence must align with the active game-runtime UI target-profile doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Target-profile compatibility axes include safe areas, input modality, platform prompts, localization/text expansion, accessibility modes, split-screen-like sizing, performance/readability budgets, and stale/missing view-model diagnostics.
+          - No editor shell, Workbench host policy, editor command route, or editor provider vocabulary enters game.runtime contracts.
+          - No game HUD runtime behavior is implemented in this milestone.
+      - id: PM-EDITOR-UX-009
+        title: Final Local Native No Gap Certification
+        kind: release
+        state: designing
+        goal: Complete final editor product UX certification only when native artifacts, story evidence, accessibility, interactions, visual/performance reports, docs, roadmap, and production state agree with zero known gaps.
+        outcome: PT-EDITOR-UX can claim perfectionist_verified only after local-native evidence and all hard zero-budget gates pass with empty known_quality_gaps.
+        dependencies:
+          - PM-EDITOR-UX-008
+        roadmap_links:
+          - WR-119
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+            required_status: active
+            reason: Final certification must follow the active no-gap editor product UX doctrine.
+        evidence_gates: []
+        acceptance_criteria:
+          - Final closeout links local-native screenshots, retained manifests, accessibility reports, interaction reports, visual diffs where available, performance budgets, docs, roadmap, and production validation.
+          - Every prerequisite milestone has completed evidence.
+          - completion_quality may be perfectionist_verified only when known_quality_gaps is empty and all linked WR rows satisfy final audit rules.
   - id: PT-GAME-RUNTIME-UI
     title: Game Runtime UI Projection And HUD Platform
     state: active

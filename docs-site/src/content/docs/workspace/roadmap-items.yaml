@@ -1003,3 +1003,54 @@ edges:
 - source: WR-101
   target: WR-106
   label: procedural camera proof
+- source: WR-004
+  target: WR-111
+  label: editor guardrails before UX track
+- source: WR-046
+  target: WR-111
+  label: UI Designer doctrine before editor UX track
+- source: WR-054
+  target: WR-111
+  label: UI readiness contracts before editor UX track
+- source: WR-110
+  target: WR-111
+  label: UI Lab perfection input before editor UX track
+- source: WR-111
+  target: WR-112
+  label: governance before native Story Lab
+- source: WR-112
+  target: WR-113
+  label: Story Lab before design-system migration
+- source: WR-113
+  target: WR-114
+  label: design-system layers before UI Designer workbench
+- source: WR-112
+  target: WR-115
+  label: Story Lab before graph UX proof
+- source: WR-113
+  target: WR-115
+  label: design-system layers before graph UX proof
+- source: WR-113
+  target: WR-116
+  label: design-system layers before shell polish
+- source: WR-114
+  target: WR-116
+  label: Designer workbench before shell polish
+- source: WR-115
+  target: WR-116
+  label: graph UX before shell polish
+- source: WR-114
+  target: WR-117
+  label: UI Designer proof before all-surface wave
+- source: WR-115
+  target: WR-117
+  label: graph readiness before all-surface wave
+- source: WR-116
+  target: WR-117
+  label: shell patterns before all-surface wave
+- source: WR-117
+  target: WR-118
+  label: all surfaces before game UI seam
+- source: WR-118
+  target: WR-119
+  label: game UI seam before final certification

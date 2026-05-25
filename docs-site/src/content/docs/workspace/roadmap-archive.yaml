@@ -7498,6 +7498,114 @@ items:
     perfectionist_verified claim.
   ownership_mode: Stream-aligned editor product certification with complicated-subsystem support from UI definition, editor
     definition, app runtime evidence, and workspace planning owners.
+- id: WR-111
+  title: Editor Product UX Governance And Track Activation
+  diagram_title: Editor UX governance
+  alias: EDITORUXGOV
+  lane: Editor quality
+  dependency_level: L4
+  gate: Governance before editor product UX implementation
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 3
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-054
+  - WR-110
+  write_scopes:
+  - docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+  - docs-site/src/content/docs/design/active/README.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-111-editor-product-ux-governance-and-track-activation/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task puml:validate
+  - task docs:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
+  current_decision: Completed as bounded governance evidence for PT-EDITOR-UX activation, active design doctrine, source-truth
+    boundaries, code-truth matrix, evidence matrix, and follow-on WR labels.
+  current_call: Archive WR-111 as completed PM-EDITOR-UX-001 evidence. Do not use this row as permission for product code
+    changes.
+  first_move: Run task production:plan -- --milestone PM-EDITOR-UX-002 --roadmap WR-112 before starting the native Story Lab
+    implementation slice.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - WR-112 native Editor UX Story Lab and evidence harness remains future work.
+  - WR-113 layered editor design system migration remains future work.
+  - WR-114 standalone UI Designer workbench remains future work.
+  - WR-115 graph canvas and node editor productization remains future work.
+  - WR-116 shell and product pattern polish remains future work.
+  - WR-117 all registered visible surface migration remains future work.
+  - WR-118 game UI readiness seam remains future work.
+  - WR-119 final local-native no-gap certification remains future work.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
+  diagram_call:
+  - editor UX track
+  - governance only
+  - no product code
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/editor-product-ux-story-lab-and-game-ui-ready-foundations-design.md
+    required_status: active
+    applies_to: discovery
+    reason: Governance is anchored by the active editor product UX Story Lab and game-UI-ready foundations design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-111-editor-product-ux-governance-and-track-activation/plan.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-111 execution followed the active governance and track-activation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: PT-EDITOR-UX consumes completed UI Lab perfection evidence rather than reopening it.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: WR-111 completion requires completed editor UX governance closeout evidence.
+  ddd_owner: editor product UX with domain/ui generic support, domain/editor product semantics, apps/runenwerk_editor native
+    evidence, and workspace planning metadata ownership
+  adr_requirement: No ADR for governance setup. Require an ADR or accepted design update before moving source-truth authority,
+    changing dependency direction, adding game-runtime UI owner crates, or making native evidence artifacts domain truth.
+  fitness_function_requirement: Governance validators for docs, roadmap, production, planning, PUML, and whitespace now.
+    Follow-on WRs must add focused Story Lab, widget scan, surface readiness, native screenshot, accessibility, interaction,
+    graph canvas, UI Designer, game-runtime compatibility, and final no-gap tests before product closeout.
+  ownership_mode: Stream-aligned editor product UX work with complicated-subsystem support from UI definition, UI runtime,
+    graph editor, editor shell, and app evidence owners.
 - id: WR-101
   title: Procedural Camera And View Projection
   diagram_title: Procedural camera projection
