@@ -1,0 +1,155 @@
+version: 1
+idea: UI Designer Workbench operation diff apply rollback
+source_path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+owner: editor
+created_at: '2026-05-26'
+governance_notes:
+- Architecture governance kickoff was run for PM-UI-DESIGNER-WB-005 before implementation planning.
+- domain/ui owns generic visual layout operations, persistence/diff/activation descriptors, and UI-definition diagnostics.
+- domain/editor owns editor/workbench operation envelopes, operation reports, editor-specific diff families, and app-neutral review view models.
+- apps/runenwerk_editor owns concrete UI Designer draft mutation, operation history, apply/reject, rollback, reload preservation, and runtime evidence.
+- No ADR is required while WR-124 preserves current ownership and dependency direction.
+open_questions:
+- Which current-candidate promotion, if any, does task production:plan require before WR-124 implementation?
+- Which PM005 operation path should provide the first runtime evidence artifact after promotion?
+item:
+  id: WR-124
+  title: Operation Diff Apply And Rollback
+  diagram_title: UI Designer operation diff apply rollback
+  alias: UIDESIGNEROPS
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-004 product-surface closeout
+  planning_state: ready_next
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-096
+  - WR-108
+  - WR-120
+  - WR-122
+  - WR-123
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-124-operation-diff-apply-and-rollback/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-operation-diff-app
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - domain/ui/ui_definition/src/visual_layout
+  - domain/ui/ui_definition/src/persistence_activation
+  - domain/editor/editor_definition/src/operation.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/applied_editor_definition
+  - apps/runenwerk_editor/src/shell/tests.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-005 --roadmap WR-124
+  - cargo fmt --package ui_definition --package editor_definition --package editor_shell --package runenwerk_editor
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p ui_definition persistence_activation
+  - cargo test -p editor_definition operation
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p runenwerk_editor editor_lab_operation
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor apply_selected
+  - cargo test -p runenwerk_editor rollback_selected
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Accepted UI Designer product, visual layout, persistence/diff/activation, and UI Lab operation/apply/rollback
+    designs; completed PM-UI-DESIGNER-WB-004 closeout; active WR-124 operation/apply/rollback contract.
+  current_decision: Ready-next planning row for PM-UI-DESIGNER-WB-005. Product code must not start until production:plan
+    and roadmap promotion/current-candidate gates pass.
+  current_call: Use WR-124 to implement only typed UI Designer operations, deterministic diffs, apply/reject, undo/redo,
+    rollback, and reload preservation over the accepted product model.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-005 --roadmap WR-124 and follow the reported promotion
+    or implementation action.
+  main_blocker: Awaiting production:plan promotion/current-candidate gate before implementation.
+  why_not_ready: Ready for promotion planning, but not current_candidate and not authorized for product code until task production:plan
+    and roadmap gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - typed operations
+  - deterministic diffs
+  - apply rollback
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM005 operation/apply/rollback behavior must preserve the accepted UI Designer Workbench product contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Visual authoring operations must preserve stable ids, Canonical UI IR diffs, and deterministic textual patches.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Diff, activation preflight, and fail-closed diagnostics must follow the accepted generic UI persistence doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Operation reports, deterministic diffs, history, undo/redo, and retained preview refresh must follow accepted UI Lab operation doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Apply/reject, failed activation preservation, reload, and rollback must follow accepted UI Lab recovery doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-124-operation-diff-apply-and-rollback/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Operation/apply/rollback implementation requires the WR-124 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Operation/apply/rollback builds on completed UI Designer product surfaces.
+  ddd_owner: domain/ui owns generic operation and persistence contracts; domain/editor owns editor/workbench operation adapters;
+    apps/runenwerk_editor owns concrete UI Designer draft mutation, history, apply/reject, rollback, reload preservation, and evidence.
+  adr_requirement: No ADR while WR-124 keeps generic UI truth in domain/ui, editor operation adapters in domain/editor, and app execution in apps/runenwerk_editor.
+    Require ADR or accepted design update before moving source truth, history authority, project IO, or activation execution across those boundaries.
+  fitness_function_requirement: Operation dispatch tests proving typed accept/reject, deterministic diffs, undo/redo, apply/reject,
+    rollback, reload preservation, activation failure preservation where applicable, and UI Designer surface refresh.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+edges:
+- source: WR-123
+  target: WR-124
+  label: product surfaces before operation apply rollback
+- source: WR-096
+  target: WR-124
+  label: operation-driven core before UI Designer product apply rollback

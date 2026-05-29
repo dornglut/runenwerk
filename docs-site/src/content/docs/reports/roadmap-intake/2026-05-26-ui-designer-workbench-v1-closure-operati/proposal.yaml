@@ -1,0 +1,105 @@
+version: 1
+idea: UI Designer Workbench V1 closure operation diff apply rollback parity
+source_path: ''
+owner: editor
+created_at: '2026-05-26'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-130
+  title: UI Designer Workbench V1 closure operation diff apply rollback parity
+  diagram_title: UI Designer Workbench V1 closure operation parity
+  alias: WR130
+  lane: Discovery
+  dependency_level: L4
+  gate: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-004 operation parity closure contract
+  planning_state: ready_next
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-129
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-operati
+  - docs-site/src/content/docs/reports/implementation-plans/wr-130-ui-designer-workbench-v1-closure-operation-diff-apply-rollback-parity/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-004 --roadmap WR-130
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-004 design-first operation parity contract at docs-site/src/content/docs/reports/implementation-plans/wr-130-ui-designer-workbench-v1-closure-operation-diff-apply-rollback-parity/plan.md;
+    WR-129 prerequisite is completed, design gates are accepted, write scopes are bounded, and architecture governance keeps
+    ownership in existing domains.
+  current_decision: Accepted design-first operation parity contract for PM-UI-DESIGNER-WB-V1-CLOSURE-004. Promote only after
+    production:plan reports WR-130 promotable.
+  current_call: Use WR-130 only for operation-driven insert/move/reorder/layout/token/binding/accessibility edit parity,
+    deterministic operation reports/diffs, undo/redo, apply/reject/reload/rollback parity, and fail-closed diagnostics.
+    Do not infer scenario evidence, performance baselines, final closeout, or concrete game HUD runtime behavior from this row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-004 --roadmap WR-130 and follow the promotion
+    preflight before product code.
+  main_blocker: Awaiting WR-130 promotion to current_candidate.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - operation parity
+  - diff apply rollback
+  - design first
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Operation dispatch, reports, history, undo/redo, and direct-control parity must follow accepted UI Lab operation doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Accepted edits must produce deterministic reviewable diffs before activation.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Binding and intent edits must remain validated descriptors and proposals, not runtime command execution.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Operation parity depends on completed recipe insertion and source-versioned authoring-surface evidence.
+  ddd_owner: domain/ui/ui_definition owns generic visual layout, binding, and recipe primitives; domain/editor/editor_definition owns editor operation vocabulary and reducers; domain/editor/editor_shell owns app-neutral action/view-model projection; apps/runenwerk_editor owns source-versioned session orchestration, dispatch, persistence, and evidence.
+  adr_requirement: No ADR required while WR-130 preserves existing ownership and dependency direction; require ADR or accepted design update before moving generic UI operation truth into apps/runenwerk_editor, making editor projections authoritative source truth, or implementing game-runtime HUD behavior.
+  fitness_function_requirement: Define focused tests for operation taxonomy coverage, deterministic diffs, rejected-operation diagnostics, undo/redo history, apply/reject/reload/rollback parity, and source-version freshness before promotion.
+  ownership_mode: Stream-aligned editor product closure with complicated-subsystem support from domain/ui, domain/editor, and apps/runenwerk_editor owners.
+edges: []

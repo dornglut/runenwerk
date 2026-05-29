@@ -32,6 +32,7 @@ use super::{
 pub enum RunenwerkWorkbenchComposition {
     FullEditor,
     MaterialLab,
+    UiDesigner,
     HeadlessValidation,
     Constrained,
     Custom,
@@ -61,6 +62,10 @@ impl RunenwerkWorkbenchHost {
         Self::from_composition(RunenwerkWorkbenchComposition::MaterialLab)
     }
 
+    pub fn ui_designer() -> Result<Self, RunenwerkWorkbenchHostError> {
+        Self::from_composition(RunenwerkWorkbenchComposition::UiDesigner)
+    }
+
     pub fn headless_validation() -> Result<Self, RunenwerkWorkbenchHostError> {
         Self::from_composition(RunenwerkWorkbenchComposition::HeadlessValidation)
     }
@@ -80,6 +85,10 @@ impl RunenwerkWorkbenchHost {
             RunenwerkWorkbenchComposition::MaterialLab => (
                 material_lab_workbench_tool_suites(),
                 EditorSurfaceProviderRegistry::runenwerk_material_lab_workbench(),
+            ),
+            RunenwerkWorkbenchComposition::UiDesigner => (
+                ui_designer_workbench_tool_suites(),
+                EditorSurfaceProviderRegistry::runenwerk_ui_designer_workbench(),
             ),
             RunenwerkWorkbenchComposition::HeadlessValidation => (
                 headless_validation_tool_suites(),
@@ -262,6 +271,13 @@ fn material_lab_workbench_tool_suites() -> Vec<EditorToolSuite> {
     ]
 }
 
+fn ui_designer_workbench_tool_suites() -> Vec<EditorToolSuite> {
+    vec![
+        tool_suites::core_tool_suite::editor_core_tool_suite(),
+        tool_suites::editor_design_tool_suite::editor_design_tool_suite(),
+    ]
+}
+
 fn headless_validation_tool_suites() -> Vec<EditorToolSuite> {
     vec![
         tool_suites::core_tool_suite::editor_core_tool_suite(),
@@ -276,6 +292,7 @@ fn host_capability_policy_for_composition(
     match composition {
         RunenwerkWorkbenchComposition::FullEditor
         | RunenwerkWorkbenchComposition::MaterialLab
+        | RunenwerkWorkbenchComposition::UiDesigner
         | RunenwerkWorkbenchComposition::Custom => HostCapabilityPolicy::allow_all(),
         RunenwerkWorkbenchComposition::HeadlessValidation
         | RunenwerkWorkbenchComposition::Constrained => HostCapabilityPolicy::deny_all(),
@@ -345,19 +362,7 @@ const FULL_EDITOR_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] = &[
         id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
         label: "Editor Design",
         default_layout_template: WorkspaceLayoutTemplate::EditorDesign,
-        default_surface_keys: &[
-            "runenwerk.editor_design.definition_outliner",
-            "runenwerk.editor_design.ui_hierarchy",
-            "runenwerk.editor_design.ui_canvas",
-            "runenwerk.editor_design.style_inspector",
-            "runenwerk.editor_design.bindings",
-            "runenwerk.editor_design.dock_layout_preview",
-            "runenwerk.editor_design.theme_editor",
-            "runenwerk.editor_design.shortcut_editor",
-            "runenwerk.editor_design.menu_editor",
-            "runenwerk.editor_design.definition_validation",
-            "runenwerk.editor_design.command_diff",
-        ],
+        default_surface_keys: tool_suites::EDITOR_DESIGN_SURFACE_KEYS,
         default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
         document_kind_filters: &[
             DocumentKind::UiLayout,
@@ -571,6 +576,25 @@ const MATERIAL_LAB_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] =
         ],
     }];
 
+const UI_DESIGNER_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] =
+    &[CompiledWorkspaceProfileSpec {
+        id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+        label: "UI Designer",
+        default_layout_template: WorkspaceLayoutTemplate::EditorDesign,
+        default_surface_keys: tool_suites::EDITOR_DESIGN_SURFACE_KEYS,
+        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
+        document_kind_filters: &[
+            DocumentKind::UiLayout,
+            DocumentKind::WorkspaceDefinition,
+            DocumentKind::Theme,
+            DocumentKind::Shortcut,
+            DocumentKind::Menu,
+            DocumentKind::CommandBinding,
+            DocumentKind::PanelRegistry,
+            DocumentKind::ToolSurfaceDefinition,
+        ],
+    }];
+
 const HEADLESS_VALIDATION_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] =
     &[CompiledWorkspaceProfileSpec {
         id: RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
@@ -644,6 +668,7 @@ fn default_workspace_profile_id_for_composition(
         | RunenwerkWorkbenchComposition::Constrained
         | RunenwerkWorkbenchComposition::Custom => SCENE_WORKSPACE_PROFILE_ID,
         RunenwerkWorkbenchComposition::MaterialLab => MATERIAL_WORKSPACE_PROFILE_ID,
+        RunenwerkWorkbenchComposition::UiDesigner => EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
         RunenwerkWorkbenchComposition::HeadlessValidation => RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
     }
 }
@@ -656,6 +681,7 @@ fn workspace_profile_specs_for_composition(
             FULL_EDITOR_PROFILE_SPECS
         }
         RunenwerkWorkbenchComposition::MaterialLab => MATERIAL_LAB_PROFILE_SPECS,
+        RunenwerkWorkbenchComposition::UiDesigner => UI_DESIGNER_PROFILE_SPECS,
         RunenwerkWorkbenchComposition::HeadlessValidation => HEADLESS_VALIDATION_PROFILE_SPECS,
         RunenwerkWorkbenchComposition::Custom => &[],
     }
@@ -895,6 +921,7 @@ mod tests {
     fn explicit_workbench_presets_are_composition_data() {
         let full_editor = RunenwerkWorkbenchHost::full_editor().expect("host should build");
         let material_lab = RunenwerkWorkbenchHost::material_lab().expect("host should build");
+        let ui_designer = RunenwerkWorkbenchHost::ui_designer().expect("host should build");
         let headless_validation =
             RunenwerkWorkbenchHost::headless_validation().expect("host should build");
         let constrained = RunenwerkWorkbenchHost::constrained().expect("host should build");
@@ -906,6 +933,10 @@ mod tests {
         assert_eq!(
             material_lab.composition(),
             RunenwerkWorkbenchComposition::MaterialLab
+        );
+        assert_eq!(
+            ui_designer.composition(),
+            RunenwerkWorkbenchComposition::UiDesigner
         );
         assert_eq!(
             headless_validation.composition(),
@@ -937,6 +968,21 @@ mod tests {
         assert_eq!(
             headless_validation.default_workspace_profile_id(),
             RUNTIME_DEBUG_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            suite_ids(&ui_designer),
+            vec!["runenwerk.editor", "runenwerk.editor_design"]
+        );
+        assert_eq!(
+            provider_family_ids(&ui_designer),
+            ["runenwerk.editor", "runenwerk.editor_design"]
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+        );
+        assert_eq!(ui_designer.profiles().len(), 1);
+        assert_eq!(
+            ui_designer.default_workspace_profile_id(),
+            editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID
         );
         assert_eq!(suite_ids(&constrained), suite_ids(&full_editor));
         assert_eq!(constrained.profiles().len(), full_editor.profiles().len());
@@ -1410,6 +1456,43 @@ mod tests {
     }
 
     #[test]
+    fn ui_designer_workbench_installs_editor_design_support_composition() {
+        let host = RunenwerkWorkbenchHost::ui_designer().expect("host should build");
+        let suite_ids = host
+            .tool_suite_registry()
+            .suites()
+            .iter()
+            .map(|suite| suite.suite_id.as_str())
+            .collect::<Vec<_>>();
+        let provider_ids = host
+            .provider_registry()
+            .provider_ids()
+            .collect::<BTreeSet<_>>();
+        let expected_provider_ids = [5, 6]
+            .into_iter()
+            .map(surface_provider_id)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            host.composition(),
+            RunenwerkWorkbenchComposition::UiDesigner
+        );
+        assert_eq!(
+            suite_ids,
+            vec!["runenwerk.editor", "runenwerk.editor_design"]
+        );
+        assert_eq!(provider_ids, expected_provider_ids);
+
+        let editor_design_family = ProviderFamilyId::new("runenwerk.editor_design").unwrap();
+        assert_eq!(
+            host.provider_family_provider_map()
+                .providers_for(&editor_design_family)
+                .collect::<Vec<_>>(),
+            vec![surface_provider_id(6)]
+        );
+    }
+
+    #[test]
     fn material_lab_workbench_bootstraps_material_workspace_profile() {
         let host = RunenwerkWorkbenchHost::material_lab().expect("host should build");
         let shell_state =
@@ -1456,6 +1539,39 @@ mod tests {
     }
 
     #[test]
+    fn ui_designer_workbench_bootstraps_editor_design_workspace_profile() {
+        let host = RunenwerkWorkbenchHost::ui_designer().expect("host should build");
+        let shell_state =
+            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
+                editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+                host.workspace_profile_registry(),
+                host.tool_surface_registry(),
+            )
+            .expect("UI Designer workbench should build editor design workspace");
+        let mounted_keys = shell_state
+            .workspace_state()
+            .tool_surfaces()
+            .map(|surface| surface.stable_surface_key().as_str())
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            shell_state.active_workspace_profile_id(),
+            editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            shell_state.open_workspace_profile_ids(),
+            &[editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID]
+        );
+        assert_eq!(mounted_keys, ui_designer_mounted_surface_keys());
+        assert!(
+            shell_state
+                .workspace_state()
+                .validate_tool_surface_registry_compatibility(host.tool_surface_registry())
+                .is_fully_compatible()
+        );
+    }
+
+    #[test]
     fn material_lab_full_editor_and_standalone_resolve_mounted_material_workspace_surfaces() {
         assert_material_profile_requests_resolve_from_host(
             "full editor",
@@ -1466,6 +1582,20 @@ mod tests {
             "standalone Material Lab",
             RunenwerkEditorApp::new_material_lab_workbench(),
             RunenwerkWorkbenchComposition::MaterialLab,
+        );
+    }
+
+    #[test]
+    fn ui_designer_embedded_and_standalone_resolve_same_canvas_contract() {
+        assert_ui_designer_canvas_request_resolves_from_host(
+            "full editor embedded Editor Design",
+            RunenwerkEditorApp::new(),
+            RunenwerkWorkbenchComposition::FullEditor,
+        );
+        assert_ui_designer_canvas_request_resolves_from_host(
+            "standalone UI Designer",
+            RunenwerkEditorApp::new_ui_designer_workbench(),
+            RunenwerkWorkbenchComposition::UiDesigner,
         );
     }
 
@@ -1900,6 +2030,87 @@ mod tests {
         }
     }
 
+    fn assert_ui_designer_canvas_request_resolves_from_host(
+        label: &str,
+        app: RunenwerkEditorApp,
+        expected_composition: RunenwerkWorkbenchComposition,
+    ) {
+        let host = app.workbench_host();
+        let shell_state =
+            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
+                editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+                host.workspace_profile_registry(),
+                host.tool_surface_registry(),
+            )
+            .expect("Editor Design workspace profile should build from the host registries");
+        let requests = mounted_surface_requests_with_registry(
+            &shell_state,
+            SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(77),
+                document_kind: DocumentKind::UiLayout,
+            },
+            Some(host.tool_surface_registry()),
+        );
+        let mounted_keys = requests
+            .iter()
+            .map(|request| request.stable_surface_key.as_str())
+            .collect::<BTreeSet<_>>();
+        let expected_keys = ui_designer_mounted_surface_keys();
+        let canvas_request = requests
+            .iter()
+            .find(|request| {
+                request.stable_surface_key.as_str() == "runenwerk.editor_design.ui_canvas"
+            })
+            .expect("Editor Design profile should mount the UI Designer canvas");
+        let theme = ThemeTokens::default();
+        let context = context(&app, &shell_state, &theme);
+
+        assert_eq!(host.composition(), expected_composition, "{label}");
+        assert_eq!(
+            mounted_keys, expected_keys,
+            "{label} should mount the shared Editor Design workbench layout surface set"
+        );
+        assert_eq!(
+            canvas_request
+                .provider_family_id
+                .as_ref()
+                .map(ProviderFamilyId::as_str),
+            Some("runenwerk.editor_design"),
+            "{label}: UI Designer canvas should carry editor-design provider family"
+        );
+        assert_eq!(
+            canvas_request.surface_route,
+            Some(ToolSurfaceRoute::ProviderOwnedLocal),
+            "{label}: UI Designer canvas should carry hosted route metadata"
+        );
+
+        let frame = host
+            .provider_registry()
+            .resolve_frame_with_provider_family_map(
+                &context,
+                canvas_request,
+                &SurfaceSessionState::default(),
+                Some(host.provider_family_provider_map()),
+            );
+
+        assert_eq!(
+            frame.availability,
+            SurfaceProviderAvailability::Available,
+            "{label}: UI Designer canvas should resolve through the active host provider-family map"
+        );
+        assert_eq!(frame.provider_id, Some(surface_provider_id(6)), "{label}");
+        assert_eq!(frame.title, "UI Designer Workbench", "{label}");
+        assert_eq!(
+            frame.stable_surface_key, canvas_request.stable_surface_key,
+            "{label}: resolved frame should preserve the stable surface key"
+        );
+        let text = format!("{:?}", frame.artifact.root);
+        assert!(
+            text.contains("Standalone UI Designer Workbench"),
+            "{label}: resolved frame should use the shared UI Designer workbench view model"
+        );
+    }
+
     fn expected_material_profile_provider_case(
         stable_key: &str,
     ) -> (&'static str, SurfaceProviderId, ToolSurfaceRoute) {
@@ -1941,6 +2152,21 @@ mod tests {
             ),
             _ => panic!("unexpected Material Lab profile surface key `{stable_key}`"),
         }
+    }
+
+    fn ui_designer_mounted_surface_keys() -> BTreeSet<&'static str> {
+        [
+            "runenwerk.editor_design.definition_outliner",
+            "runenwerk.editor_design.ui_hierarchy",
+            "runenwerk.editor_design.ui_canvas",
+            "runenwerk.editor_design.style_inspector",
+            "runenwerk.editor_design.bindings",
+            "runenwerk.editor_design.dock_layout_preview",
+            "runenwerk.editor_design.definition_validation",
+            "runenwerk.editor_design.command_diff",
+        ]
+        .into_iter()
+        .collect()
     }
 
     fn material_graph_request() -> SurfaceProviderRequest {

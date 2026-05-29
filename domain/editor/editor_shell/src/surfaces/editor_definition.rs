@@ -1,6 +1,8 @@
 //! File: domain/editor/editor_shell/src/surfaces/editor_definition.rs
 //! Purpose: Editor-definition self-authoring surface workflow contracts.
 
+use crate::ToolSurfaceReadiness;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditorDefinitionSurfaceAction {
     SelectDocument { document_id: String },
@@ -18,6 +20,9 @@ pub enum EditorDefinitionSurfaceAction {
     UndoOperation,
     RedoOperation,
     SelectUiNode { node_id: String },
+    InsertRecipe { recipe_id: String },
+    SetRecipeCatalogFilter { query: String },
+    CaptureScenarioEvidence,
     SetUiNodeText { node_id: String, text: String },
     SetThemeColor { token: String, value: String },
     AddWorkspaceLayoutTab { label: String, tool_surface: String },
@@ -127,6 +132,8 @@ pub struct UiDesignerWorkbenchPaneViewModel {
     pub kind: UiDesignerWorkbenchPaneKind,
     pub title: String,
     pub summary_lines: Vec<String>,
+    pub filter_field: Option<EditorLabTextFieldViewModel>,
+    pub catalog_items: Vec<EditorLabCatalogItemViewModel>,
     pub actions: Vec<EditorLabActionViewModel>,
     pub diagnostics: Vec<EditorLabDiagnosticViewModel>,
 }
@@ -137,6 +144,8 @@ impl UiDesignerWorkbenchPaneViewModel {
             kind,
             title: title.into(),
             summary_lines: Vec::new(),
+            filter_field: None,
+            catalog_items: Vec::new(),
             actions: Vec::new(),
             diagnostics: Vec::new(),
         }
@@ -144,6 +153,19 @@ impl UiDesignerWorkbenchPaneViewModel {
 
     pub fn with_summary_lines(mut self, lines: impl IntoIterator<Item = String>) -> Self {
         self.summary_lines = lines.into_iter().collect();
+        self
+    }
+
+    pub fn with_catalog_items(
+        mut self,
+        items: impl IntoIterator<Item = EditorLabCatalogItemViewModel>,
+    ) -> Self {
+        self.catalog_items = items.into_iter().collect();
+        self
+    }
+
+    pub fn with_filter_field(mut self, field: EditorLabTextFieldViewModel) -> Self {
+        self.filter_field = Some(field);
         self
     }
 
@@ -208,6 +230,106 @@ impl UiDesignerWorkbenchViewModel {
         actions: impl IntoIterator<Item = EditorLabActionViewModel>,
     ) -> Self {
         self.actions = actions.into_iter().collect();
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorLabCatalogItemViewModel {
+    pub recipe_id: String,
+    pub label: String,
+    pub category: String,
+    pub target_profile: String,
+    pub target_compatibility: String,
+    pub source_package: String,
+    pub slot_compatibility: String,
+    pub readiness_label: String,
+    pub disabled_reason: Option<String>,
+    pub searchable_text: String,
+    pub required_token_families: Vec<String>,
+    pub supported_states: Vec<String>,
+    pub accessibility_requirements: Vec<String>,
+    pub readiness: ToolSurfaceReadiness,
+    pub action: EditorLabActionViewModel,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorLabCatalogItemDetails {
+    pub recipe_id: String,
+    pub label: String,
+    pub category: String,
+    pub target_profile: String,
+    pub target_compatibility: String,
+    pub source_package: String,
+    pub slot_compatibility: String,
+}
+
+impl EditorLabCatalogItemViewModel {
+    pub fn new(details: EditorLabCatalogItemDetails, action: EditorLabActionViewModel) -> Self {
+        let EditorLabCatalogItemDetails {
+            recipe_id,
+            label,
+            category,
+            target_profile,
+            target_compatibility,
+            source_package,
+            slot_compatibility,
+        } = details;
+        let disabled_reason = action.disabled_reason.clone();
+        Self {
+            recipe_id,
+            searchable_text: format!(
+                "{label} {category} {target_profile} {target_compatibility} {source_package} {slot_compatibility}"
+            )
+            .to_lowercase(),
+            label,
+            category,
+            target_profile,
+            target_compatibility,
+            source_package,
+            slot_compatibility,
+            readiness_label: ToolSurfaceReadiness::HiddenUntilProductized.label().to_string(),
+            disabled_reason,
+            required_token_families: Vec::new(),
+            supported_states: Vec::new(),
+            accessibility_requirements: Vec::new(),
+            readiness: ToolSurfaceReadiness::HiddenUntilProductized,
+            action,
+        }
+    }
+
+    pub fn with_required_token_families(
+        mut self,
+        families: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.required_token_families = families.into_iter().map(Into::into).collect();
+        self
+    }
+
+    pub fn with_supported_states(
+        mut self,
+        states: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.supported_states = states.into_iter().map(Into::into).collect();
+        self
+    }
+
+    pub fn with_accessibility_requirements(
+        mut self,
+        requirements: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.accessibility_requirements = requirements.into_iter().map(Into::into).collect();
+        self
+    }
+
+    pub fn with_readiness(mut self, readiness: ToolSurfaceReadiness) -> Self {
+        self.readiness_label = readiness.label().to_string();
+        self.readiness = readiness;
+        self
+    }
+
+    pub fn with_searchable_text(mut self, searchable_text: impl Into<String>) -> Self {
+        self.searchable_text = searchable_text.into().to_lowercase();
         self
     }
 }

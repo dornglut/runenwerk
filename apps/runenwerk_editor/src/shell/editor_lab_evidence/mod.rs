@@ -1,5 +1,7 @@
 //! App-owned Editor Lab preview scenario and runtime evidence contracts.
 
+pub mod game_runtime;
+
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use ui_definition::{UiDefinitionDiagnostic, UiDefinitionDiagnosticSeverity};
@@ -69,11 +71,24 @@ pub enum EditorLabEvidenceRunStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabEvidenceArtifactProvenance {
+    ProductPath,
+    #[default]
+    DescriptorCompatibility,
+    UnsupportedCheck,
+    ImportedManifest,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditorLabEvidenceArtifact {
     pub kind: EditorLabEvidenceArtifactKind,
     pub path: String,
     pub bytes: usize,
+    #[serde(default)]
+    pub digest: String,
+    #[serde(default)]
+    pub provenance: EditorLabEvidenceArtifactProvenance,
     pub description: String,
 }
 
@@ -88,8 +103,37 @@ impl EditorLabEvidenceArtifact {
             kind,
             path: path.into(),
             bytes,
+            digest: String::new(),
+            provenance: EditorLabEvidenceArtifactProvenance::DescriptorCompatibility,
             description: description.into(),
         }
+    }
+
+    pub fn from_content(
+        kind: EditorLabEvidenceArtifactKind,
+        path: impl Into<String>,
+        content: &[u8],
+        provenance: EditorLabEvidenceArtifactProvenance,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind,
+            path: path.into(),
+            bytes: content.len(),
+            digest: format!("blake3:{}", blake3::hash(content).to_hex()),
+            provenance,
+            description: description.into(),
+        }
+    }
+
+    pub fn with_digest(
+        mut self,
+        digest: impl Into<String>,
+        provenance: EditorLabEvidenceArtifactProvenance,
+    ) -> Self {
+        self.digest = digest.into();
+        self.provenance = provenance;
+        self
     }
 }
 
@@ -302,6 +346,750 @@ pub struct EditorLabPerformanceSnapshot {
     pub artifact_count: usize,
     pub artifact_bytes: usize,
     pub unsupported_checks: Vec<EditorLabUnsupportedCheckDiagnostic>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabEvidenceFreshness {
+    Fresh,
+    Stale,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabEvidenceCaptureMode {
+    ExplicitCommand,
+    AutomaticFrame,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabPerformanceBaselineKind {
+    Resize,
+    CanvasInteraction,
+    CatalogProjection,
+    DiagnosticsProjection,
+    FrameBuild,
+}
+
+pub const UI_DESIGNER_SCENARIO_BASELINE_KINDS: [EditorLabPerformanceBaselineKind; 5] = [
+    EditorLabPerformanceBaselineKind::Resize,
+    EditorLabPerformanceBaselineKind::CanvasInteraction,
+    EditorLabPerformanceBaselineKind::CatalogProjection,
+    EditorLabPerformanceBaselineKind::DiagnosticsProjection,
+    EditorLabPerformanceBaselineKind::FrameBuild,
+];
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabMeasurementProvenance {
+    ProductPath,
+    DescriptorProjection,
+    #[default]
+    StatusSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabPerformanceBaseline {
+    pub kind: EditorLabPerformanceBaselineKind,
+    pub elapsed_micros: u64,
+    pub sample_count: usize,
+    #[serde(default)]
+    pub provenance: EditorLabMeasurementProvenance,
+    pub description: String,
+}
+
+impl EditorLabPerformanceBaseline {
+    pub fn new(
+        kind: EditorLabPerformanceBaselineKind,
+        elapsed_micros: u64,
+        sample_count: usize,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind,
+            elapsed_micros,
+            sample_count,
+            provenance: EditorLabMeasurementProvenance::StatusSummary,
+            description: description.into(),
+        }
+    }
+
+    pub fn product_path(
+        kind: EditorLabPerformanceBaselineKind,
+        elapsed_micros: u64,
+        sample_count: usize,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind,
+            elapsed_micros,
+            sample_count,
+            provenance: EditorLabMeasurementProvenance::ProductPath,
+            description: description.into(),
+        }
+    }
+
+    pub fn descriptor_projection(
+        kind: EditorLabPerformanceBaselineKind,
+        elapsed_micros: u64,
+        sample_count: usize,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind,
+            elapsed_micros,
+            sample_count,
+            provenance: EditorLabMeasurementProvenance::DescriptorProjection,
+            description: description.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EditorLabDescriptorCompatibility {
+    Compatible,
+    Incompatible,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabReadOnlyFixtureBindingDescriptor {
+    pub fixture_id: String,
+    pub binding_id: String,
+    pub target_profile: String,
+    pub compatibility: EditorLabDescriptorCompatibility,
+    pub read_only: bool,
+    pub source: String,
+}
+
+impl EditorLabReadOnlyFixtureBindingDescriptor {
+    pub fn new(
+        fixture_id: impl Into<String>,
+        binding_id: impl Into<String>,
+        target_profile: impl Into<String>,
+        compatibility: EditorLabDescriptorCompatibility,
+        source: impl Into<String>,
+    ) -> Self {
+        Self {
+            fixture_id: fixture_id.into(),
+            binding_id: binding_id.into(),
+            target_profile: target_profile.into(),
+            compatibility,
+            read_only: true,
+            source: source.into(),
+        }
+    }
+
+    pub fn mutable_for_test(mut self) -> Self {
+        self.read_only = false;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabValidatedIntentDescriptor {
+    pub intent_id: String,
+    pub target_profile: String,
+    pub command_descriptor: String,
+    pub validated: bool,
+    pub executes_runtime_command: bool,
+}
+
+impl EditorLabValidatedIntentDescriptor {
+    pub fn new(
+        intent_id: impl Into<String>,
+        target_profile: impl Into<String>,
+        command_descriptor: impl Into<String>,
+    ) -> Self {
+        Self {
+            intent_id: intent_id.into(),
+            target_profile: target_profile.into(),
+            command_descriptor: command_descriptor.into(),
+            validated: true,
+            executes_runtime_command: false,
+        }
+    }
+
+    pub fn unvalidated_for_test(mut self) -> Self {
+        self.validated = false;
+        self
+    }
+
+    pub fn runtime_command_for_test(mut self) -> Self {
+        self.executes_runtime_command = true;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabSourceRevision {
+    pub document_id: String,
+    pub schema_version: u32,
+    pub content_hash: String,
+    pub session_epoch: u64,
+}
+
+impl EditorLabSourceRevision {
+    pub fn new(
+        document_id: impl Into<String>,
+        schema_version: u32,
+        content_hash: impl Into<String>,
+        session_epoch: u64,
+    ) -> Self {
+        Self {
+            document_id: document_id.into(),
+            schema_version,
+            content_hash: content_hash.into(),
+            session_epoch,
+        }
+    }
+
+    pub fn display_label(&self) -> String {
+        format!(
+            "{}@schema{}:{}:epoch{}",
+            self.document_id, self.schema_version, self.content_hash, self.session_epoch
+        )
+    }
+
+    pub fn validate(&self) -> Result<(), UiDefinitionDiagnostic> {
+        if self.document_id.trim().is_empty()
+            || self.content_hash.trim().is_empty()
+            || !self.content_hash.starts_with("blake3:")
+        {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.source_revision.invalid",
+                "source revision requires a document id and blake3 content hash",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabScenarioEvidenceIdentity {
+    pub package_id: String,
+    pub document_id: String,
+    pub source_revision: EditorLabSourceRevision,
+    pub target_profile: String,
+    pub scenario_id: String,
+    pub capture_mode: EditorLabEvidenceCaptureMode,
+    pub freshness: EditorLabEvidenceFreshness,
+    pub diagnostics: Vec<UiDefinitionDiagnostic>,
+}
+
+impl EditorLabScenarioEvidenceIdentity {
+    pub fn new(
+        package_id: impl Into<String>,
+        document_id: impl Into<String>,
+        source_revision: EditorLabSourceRevision,
+        target_profile: impl Into<String>,
+        scenario_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            package_id: package_id.into(),
+            document_id: document_id.into(),
+            source_revision,
+            target_profile: target_profile.into(),
+            scenario_id: scenario_id.into(),
+            capture_mode: EditorLabEvidenceCaptureMode::ExplicitCommand,
+            freshness: EditorLabEvidenceFreshness::Fresh,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    pub fn source_version(&self) -> String {
+        self.source_revision.display_label()
+    }
+
+    pub fn with_capture_mode(mut self, capture_mode: EditorLabEvidenceCaptureMode) -> Self {
+        self.capture_mode = capture_mode;
+        self
+    }
+
+    pub fn with_freshness(mut self, freshness: EditorLabEvidenceFreshness) -> Self {
+        self.freshness = freshness;
+        self
+    }
+
+    pub fn with_diagnostics(mut self, diagnostics: Vec<UiDefinitionDiagnostic>) -> Self {
+        self.diagnostics = diagnostics;
+        self
+    }
+
+    fn validate_common(&self) -> Result<(), UiDefinitionDiagnostic> {
+        for (field, value) in [
+            ("package_id", self.package_id.as_str()),
+            ("document_id", self.document_id.as_str()),
+            ("target_profile", self.target_profile.as_str()),
+            ("scenario_id", self.scenario_id.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.missing_identity",
+                    format!("scenario evidence packet is missing {field}"),
+                ));
+            }
+        }
+        self.source_revision.validate()?;
+
+        if self.document_id != self.source_revision.document_id {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.source_document_mismatch",
+                "scenario evidence source revision document does not match packet document",
+            ));
+        }
+
+        if self.capture_mode != EditorLabEvidenceCaptureMode::ExplicitCommand {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.implicit_capture",
+                "scenario evidence capture must be explicit and must not run automatically every frame",
+            ));
+        }
+
+        if self.freshness != EditorLabEvidenceFreshness::Fresh {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.stale_packet",
+                "scenario evidence packet is stale",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabDescriptorCompatibilityEvidencePacket {
+    pub identity: EditorLabScenarioEvidenceIdentity,
+    pub artifacts: Vec<EditorLabEvidenceArtifact>,
+    pub unsupported_checks: Vec<EditorLabUnsupportedCheckDiagnostic>,
+    #[serde(default)]
+    pub fixture_bindings: Vec<EditorLabReadOnlyFixtureBindingDescriptor>,
+    #[serde(default)]
+    pub intent_descriptors: Vec<EditorLabValidatedIntentDescriptor>,
+}
+
+impl EditorLabDescriptorCompatibilityEvidencePacket {
+    pub fn new(
+        package_id: impl Into<String>,
+        document_id: impl Into<String>,
+        source_revision: EditorLabSourceRevision,
+        target_profile: impl Into<String>,
+        scenario_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            identity: EditorLabScenarioEvidenceIdentity::new(
+                package_id,
+                document_id,
+                source_revision,
+                target_profile,
+                scenario_id,
+            ),
+            artifacts: Vec::new(),
+            unsupported_checks: Vec::new(),
+            fixture_bindings: Vec::new(),
+            intent_descriptors: Vec::new(),
+        }
+    }
+
+    pub fn with_capture_mode(mut self, capture_mode: EditorLabEvidenceCaptureMode) -> Self {
+        self.identity.capture_mode = capture_mode;
+        self
+    }
+
+    pub fn with_freshness(mut self, freshness: EditorLabEvidenceFreshness) -> Self {
+        self.identity.freshness = freshness;
+        self
+    }
+
+    pub fn with_diagnostics(mut self, diagnostics: Vec<UiDefinitionDiagnostic>) -> Self {
+        self.identity.diagnostics = diagnostics;
+        self
+    }
+
+    pub fn with_artifacts(mut self, artifacts: Vec<EditorLabEvidenceArtifact>) -> Self {
+        self.artifacts = artifacts;
+        self
+    }
+
+    pub fn with_unsupported_checks(
+        mut self,
+        unsupported_checks: Vec<EditorLabUnsupportedCheckDiagnostic>,
+    ) -> Self {
+        self.unsupported_checks = unsupported_checks;
+        self
+    }
+
+    pub fn with_fixture_bindings(
+        mut self,
+        fixture_bindings: Vec<EditorLabReadOnlyFixtureBindingDescriptor>,
+    ) -> Self {
+        self.fixture_bindings = fixture_bindings;
+        self
+    }
+
+    pub fn with_intent_descriptors(
+        mut self,
+        intent_descriptors: Vec<EditorLabValidatedIntentDescriptor>,
+    ) -> Self {
+        self.intent_descriptors = intent_descriptors;
+        self
+    }
+
+    pub fn validate_descriptor_compatibility(&self) -> Result<(), UiDefinitionDiagnostic> {
+        self.identity.validate_common()?;
+
+        if self.artifacts.is_empty() && self.unsupported_checks.is_empty() {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.missing_artifact_or_reason",
+                "scenario evidence packet needs at least one artifact reference or typed unsupported reason",
+            ));
+        }
+
+        for artifact in &self.artifacts {
+            if artifact.path.trim().is_empty() || artifact.description.trim().is_empty() {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.invalid_artifact",
+                    "scenario evidence artifact is missing path or description",
+                ));
+            }
+            if artifact.provenance == EditorLabEvidenceArtifactProvenance::ProductPath {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.descriptor.product_artifact",
+                    "descriptor compatibility evidence must not claim product-path artifacts",
+                ));
+            }
+        }
+
+        for unsupported in &self.unsupported_checks {
+            if unsupported.check.trim().is_empty() || unsupported.reason.trim().is_empty() {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.invalid_unsupported_reason",
+                    "scenario evidence unsupported check reason is incomplete",
+                ));
+            }
+        }
+
+        if self.fixture_bindings.is_empty() {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.missing_fixture_binding",
+                "scenario evidence packet requires at least one read-only fixture or binding descriptor",
+            ));
+        }
+        for binding in &self.fixture_bindings {
+            for (field, value) in [
+                ("fixture_id", binding.fixture_id.as_str()),
+                ("binding_id", binding.binding_id.as_str()),
+                ("target_profile", binding.target_profile.as_str()),
+                ("source", binding.source.as_str()),
+            ] {
+                if value.trim().is_empty() {
+                    return Err(UiDefinitionDiagnostic::error(
+                        "editor.lab.evidence.scenario.invalid_fixture_binding",
+                        format!("scenario evidence fixture binding is missing {field}"),
+                    ));
+                }
+            }
+            if binding.target_profile != self.identity.target_profile {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.fixture_binding_target_mismatch",
+                    "scenario evidence fixture binding target profile does not match the packet",
+                ));
+            }
+            if !binding.read_only {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.mutable_fixture_binding",
+                    "scenario evidence fixture and binding descriptors must be read-only",
+                ));
+            }
+        }
+
+        if self.intent_descriptors.is_empty() {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.missing_intent_descriptor",
+                "scenario evidence packet requires at least one validated intent descriptor",
+            ));
+        }
+        for intent in &self.intent_descriptors {
+            for (field, value) in [
+                ("intent_id", intent.intent_id.as_str()),
+                ("target_profile", intent.target_profile.as_str()),
+                ("command_descriptor", intent.command_descriptor.as_str()),
+            ] {
+                if value.trim().is_empty() {
+                    return Err(UiDefinitionDiagnostic::error(
+                        "editor.lab.evidence.scenario.invalid_intent_descriptor",
+                        format!("scenario evidence intent descriptor is missing {field}"),
+                    ));
+                }
+            }
+            if intent.target_profile != self.identity.target_profile {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.intent_target_mismatch",
+                    "scenario evidence intent descriptor target profile does not match the packet",
+                ));
+            }
+            if !intent.validated {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.unvalidated_intent",
+                    "scenario evidence intent descriptors must be validated proposals",
+                ));
+            }
+            if intent.executes_runtime_command {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.runtime_command_execution",
+                    "scenario evidence intent descriptors must not execute game-runtime commands",
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLabRuntimeProductEvidencePacket {
+    pub identity: EditorLabScenarioEvidenceIdentity,
+    pub artifacts: Vec<EditorLabEvidenceArtifact>,
+    pub unsupported_checks: Vec<EditorLabUnsupportedCheckDiagnostic>,
+    pub performance_baselines: Vec<EditorLabPerformanceBaseline>,
+}
+
+impl EditorLabRuntimeProductEvidencePacket {
+    pub fn new(
+        package_id: impl Into<String>,
+        document_id: impl Into<String>,
+        source_revision: EditorLabSourceRevision,
+        target_profile: impl Into<String>,
+        scenario_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            identity: EditorLabScenarioEvidenceIdentity::new(
+                package_id,
+                document_id,
+                source_revision,
+                target_profile,
+                scenario_id,
+            ),
+            artifacts: Vec::new(),
+            unsupported_checks: Vec::new(),
+            performance_baselines: Vec::new(),
+        }
+    }
+
+    pub fn with_capture_mode(mut self, capture_mode: EditorLabEvidenceCaptureMode) -> Self {
+        self.identity.capture_mode = capture_mode;
+        self
+    }
+
+    pub fn with_freshness(mut self, freshness: EditorLabEvidenceFreshness) -> Self {
+        self.identity.freshness = freshness;
+        self
+    }
+
+    pub fn with_diagnostics(mut self, diagnostics: Vec<UiDefinitionDiagnostic>) -> Self {
+        self.identity.diagnostics = diagnostics;
+        self
+    }
+
+    pub fn with_artifacts(mut self, artifacts: Vec<EditorLabEvidenceArtifact>) -> Self {
+        self.artifacts = artifacts;
+        self
+    }
+
+    pub fn with_unsupported_checks(
+        mut self,
+        unsupported_checks: Vec<EditorLabUnsupportedCheckDiagnostic>,
+    ) -> Self {
+        self.unsupported_checks = unsupported_checks;
+        self
+    }
+
+    pub fn with_performance_baselines(
+        mut self,
+        performance_baselines: Vec<EditorLabPerformanceBaseline>,
+    ) -> Self {
+        self.performance_baselines = performance_baselines;
+        self
+    }
+
+    pub fn validate_runtime_product_evidence(&self) -> Result<(), UiDefinitionDiagnostic> {
+        self.identity.validate_common()?;
+
+        if self.artifacts.is_empty() {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.runtime.missing_artifact",
+                "runtime product evidence requires at least one product-path artifact",
+            ));
+        }
+
+        for artifact in &self.artifacts {
+            if artifact.path.trim().is_empty()
+                || artifact.description.trim().is_empty()
+                || artifact.bytes == 0
+                || !artifact.digest.starts_with("blake3:")
+            {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.runtime.invalid_artifact",
+                    "runtime product evidence artifact requires path, description, bytes, and blake3 digest",
+                ));
+            }
+            if artifact.path.starts_with("memory://")
+                || artifact.provenance != EditorLabEvidenceArtifactProvenance::ProductPath
+            {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.runtime.non_product_artifact",
+                    "runtime product evidence requires product-path artifact provenance",
+                ));
+            }
+        }
+
+        let mut seen = BTreeSet::new();
+        for baseline in &self.performance_baselines {
+            if !seen.insert(baseline.kind) {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.duplicate_baseline",
+                    format!(
+                        "scenario evidence baseline {:?} is recorded more than once",
+                        baseline.kind
+                    ),
+                ));
+            }
+            if baseline.sample_count == 0 || baseline.description.trim().is_empty() {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.scenario.invalid_baseline",
+                    format!(
+                        "scenario evidence baseline {:?} is missing samples or description",
+                        baseline.kind
+                    ),
+                ));
+            }
+            if baseline.provenance != EditorLabMeasurementProvenance::ProductPath {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.lab.evidence.runtime.non_product_baseline",
+                    format!(
+                        "runtime evidence baseline {:?} was not measured through a product path",
+                        baseline.kind
+                    ),
+                ));
+            }
+        }
+
+        let required = UI_DESIGNER_SCENARIO_BASELINE_KINDS
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if !required.is_subset(&seen) {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.missing_baseline",
+                "scenario evidence packet is missing one or more required performance baselines",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditorLabScenarioEvidencePacket {
+    DescriptorCompatibility(EditorLabDescriptorCompatibilityEvidencePacket),
+    RuntimeProduct(EditorLabRuntimeProductEvidencePacket),
+}
+
+impl EditorLabScenarioEvidencePacket {
+    pub fn descriptor(packet: EditorLabDescriptorCompatibilityEvidencePacket) -> Self {
+        Self::DescriptorCompatibility(packet)
+    }
+
+    pub fn runtime(packet: EditorLabRuntimeProductEvidencePacket) -> Self {
+        Self::RuntimeProduct(packet)
+    }
+
+    pub fn identity(&self) -> &EditorLabScenarioEvidenceIdentity {
+        match self {
+            Self::DescriptorCompatibility(packet) => &packet.identity,
+            Self::RuntimeProduct(packet) => &packet.identity,
+        }
+    }
+
+    pub fn document_id(&self) -> &str {
+        &self.identity().document_id
+    }
+
+    pub fn source_revision(&self) -> &EditorLabSourceRevision {
+        &self.identity().source_revision
+    }
+
+    pub fn source_version(&self) -> String {
+        self.identity().source_version()
+    }
+
+    pub fn target_profile(&self) -> &str {
+        &self.identity().target_profile
+    }
+
+    pub fn scenario_id(&self) -> &str {
+        &self.identity().scenario_id
+    }
+
+    pub fn capture_mode(&self) -> EditorLabEvidenceCaptureMode {
+        self.identity().capture_mode
+    }
+
+    pub fn diagnostics(&self) -> &[UiDefinitionDiagnostic] {
+        &self.identity().diagnostics
+    }
+
+    pub fn artifacts(&self) -> &[EditorLabEvidenceArtifact] {
+        match self {
+            Self::DescriptorCompatibility(packet) => &packet.artifacts,
+            Self::RuntimeProduct(packet) => &packet.artifacts,
+        }
+    }
+
+    pub fn unsupported_checks(&self) -> &[EditorLabUnsupportedCheckDiagnostic] {
+        match self {
+            Self::DescriptorCompatibility(packet) => &packet.unsupported_checks,
+            Self::RuntimeProduct(packet) => &packet.unsupported_checks,
+        }
+    }
+
+    pub fn fixture_bindings(&self) -> &[EditorLabReadOnlyFixtureBindingDescriptor] {
+        match self {
+            Self::DescriptorCompatibility(packet) => &packet.fixture_bindings,
+            Self::RuntimeProduct(_) => &[],
+        }
+    }
+
+    pub fn intent_descriptors(&self) -> &[EditorLabValidatedIntentDescriptor] {
+        match self {
+            Self::DescriptorCompatibility(packet) => &packet.intent_descriptors,
+            Self::RuntimeProduct(_) => &[],
+        }
+    }
+
+    pub fn performance_baselines(&self) -> &[EditorLabPerformanceBaseline] {
+        match self {
+            Self::DescriptorCompatibility(_) => &[],
+            Self::RuntimeProduct(packet) => &packet.performance_baselines,
+        }
+    }
+
+    pub fn is_runtime_product(&self) -> bool {
+        matches!(self, Self::RuntimeProduct(_))
+    }
+
+    pub fn validate_scenario_evidence(&self) -> Result<(), UiDefinitionDiagnostic> {
+        match self {
+            Self::DescriptorCompatibility(packet) => packet.validate_descriptor_compatibility(),
+            Self::RuntimeProduct(packet) => packet.validate_runtime_product_evidence(),
+        }
+    }
+
+    pub fn validate_runtime_product_evidence(&self) -> Result<(), UiDefinitionDiagnostic> {
+        match self {
+            Self::RuntimeProduct(packet) => packet.validate_runtime_product_evidence(),
+            Self::DescriptorCompatibility(_) => Err(UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.runtime.descriptor_only",
+                "descriptor compatibility evidence cannot satisfy runtime product readiness",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -897,6 +1685,185 @@ mod tests {
         assert_eq!(
             error.code,
             "editor.lab.evidence.manifest.no_gap.missing_probe_metadata"
+        );
+    }
+
+    #[test]
+    fn scenario_evidence_splits_descriptor_and_runtime_packets() {
+        let revision = EditorLabSourceRevision::new(
+            "runenwerk.editor.toolbar",
+            1,
+            "blake3:0123456789abcdef",
+            7,
+        );
+        let descriptor = EditorLabScenarioEvidencePacket::descriptor(
+            EditorLabDescriptorCompatibilityEvidencePacket::new(
+                "runenwerk.editor.ui_designer_workbench.v1",
+                "runenwerk.editor.toolbar",
+                revision.clone(),
+                "game.runtime",
+                "ui-designer.v1-closure.pm005.game-runtime",
+            )
+            .with_artifacts(vec![EditorLabEvidenceArtifact::from_content(
+                EditorLabEvidenceArtifactKind::UnsupportedCheckReport,
+                "evidence://ui-designer/v1-closure/pm005/game-runtime/unsupported",
+                b"typed unsupported check report",
+                EditorLabEvidenceArtifactProvenance::UnsupportedCheck,
+                "typed unsupported check report",
+            )])
+            .with_unsupported_checks(vec![EditorLabUnsupportedCheckDiagnostic::new(
+                "concrete game HUD runtime",
+                "PT-GAME-RUNTIME-UI owns concrete game HUD behavior",
+            )])
+            .with_fixture_bindings(vec![EditorLabReadOnlyFixtureBindingDescriptor::new(
+                "fixture.game-runtime.safe-area",
+                "binding.game-runtime.hud-data",
+                "game.runtime",
+                EditorLabDescriptorCompatibility::Compatible,
+                "read-only game.runtime fixture descriptor",
+            )])
+            .with_intent_descriptors(vec![EditorLabValidatedIntentDescriptor::new(
+                "intent.game-runtime.open-hud-preview",
+                "game.runtime",
+                "validated descriptor only; no runtime command is executed",
+            )]),
+        );
+
+        descriptor
+            .validate_scenario_evidence()
+            .expect("descriptor compatibility packet should validate");
+        let error = descriptor
+            .validate_runtime_product_evidence()
+            .expect_err("descriptor packets must not satisfy runtime product evidence");
+        assert_eq!(error.code, "editor.lab.evidence.runtime.descriptor_only");
+
+        let runtime = EditorLabScenarioEvidencePacket::runtime(
+            EditorLabRuntimeProductEvidencePacket::new(
+                "runenwerk.editor.ui_designer_workbench.v1",
+                "runenwerk.editor.toolbar",
+                revision,
+                "editor.workbench",
+                "ui-designer.v1-closure.pm005.editor-workbench",
+            )
+            .with_artifacts(vec![EditorLabEvidenceArtifact::from_content(
+                EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                "evidence://ui-designer/runtime/retained-ui-debug",
+                b"retained ui debug",
+                EditorLabEvidenceArtifactProvenance::ProductPath,
+                "retained UI Designer surface evidence",
+            )])
+            .with_performance_baselines(
+                UI_DESIGNER_SCENARIO_BASELINE_KINDS
+                    .iter()
+                    .copied()
+                    .map(|kind| {
+                        EditorLabPerformanceBaseline::product_path(kind, 1, 1, "test baseline")
+                    })
+                    .collect(),
+            ),
+        );
+
+        runtime
+            .validate_runtime_product_evidence()
+            .expect("runtime product packet should validate");
+    }
+
+    #[test]
+    fn scenario_evidence_packet_rejects_implicit_stale_or_incomplete_capture() {
+        let revision = EditorLabSourceRevision::new(
+            "runenwerk.editor.toolbar",
+            1,
+            "blake3:0123456789abcdef",
+            7,
+        );
+        let incomplete = EditorLabScenarioEvidencePacket::runtime(
+            EditorLabRuntimeProductEvidencePacket::new(
+                "runenwerk.editor.ui_designer_workbench.v1",
+                "runenwerk.editor.toolbar",
+                revision.clone(),
+                "editor.workbench",
+                "ui-designer.v1-closure.pm005.editor-workbench",
+            )
+            .with_capture_mode(EditorLabEvidenceCaptureMode::AutomaticFrame)
+            .with_freshness(EditorLabEvidenceFreshness::Stale),
+        );
+
+        let error = incomplete
+            .validate_scenario_evidence()
+            .expect_err("implicit stale packet should fail before artifacts are considered");
+        assert_eq!(error.code, "editor.lab.evidence.scenario.implicit_capture");
+
+        let missing_baselines = EditorLabScenarioEvidencePacket::runtime(
+            EditorLabRuntimeProductEvidencePacket::new(
+                "runenwerk.editor.ui_designer_workbench.v1",
+                "runenwerk.editor.toolbar",
+                revision,
+                "editor.workbench",
+                "ui-designer.v1-closure.pm005.editor-workbench",
+            )
+            .with_artifacts(vec![EditorLabEvidenceArtifact::from_content(
+                EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                "evidence://ui-designer/runtime/retained-ui-debug",
+                b"retained ui debug",
+                EditorLabEvidenceArtifactProvenance::ProductPath,
+                "retained UI Designer surface evidence",
+            )]),
+        );
+
+        let error = missing_baselines
+            .validate_scenario_evidence()
+            .expect_err("packet without all baseline kinds should fail");
+        assert_eq!(error.code, "editor.lab.evidence.scenario.missing_baseline");
+    }
+
+    #[test]
+    fn scenario_evidence_packet_rejects_mutable_fixture_or_runtime_intent() {
+        let packet = EditorLabScenarioEvidencePacket::descriptor(
+            EditorLabDescriptorCompatibilityEvidencePacket::new(
+                "runenwerk.editor.ui_designer_workbench.v1",
+                "runenwerk.editor.toolbar",
+                EditorLabSourceRevision::new(
+                    "runenwerk.editor.toolbar",
+                    1,
+                    "blake3:0123456789abcdef",
+                    7,
+                ),
+                "game.runtime",
+                "ui-designer.v1-closure.pm005.game-runtime",
+            )
+            .with_artifacts(vec![EditorLabEvidenceArtifact::from_content(
+                EditorLabEvidenceArtifactKind::UnsupportedCheckReport,
+                "evidence://ui-designer/v1-closure/pm005/game-runtime/unsupported",
+                b"typed unsupported check report",
+                EditorLabEvidenceArtifactProvenance::UnsupportedCheck,
+                "typed unsupported check report",
+            )])
+            .with_fixture_bindings(vec![
+                EditorLabReadOnlyFixtureBindingDescriptor::new(
+                    "fixture.game-runtime.safe-area",
+                    "binding.game-runtime.hud-data",
+                    "game.runtime",
+                    EditorLabDescriptorCompatibility::Compatible,
+                    "read-only game.runtime fixture descriptor",
+                )
+                .mutable_for_test(),
+            ])
+            .with_intent_descriptors(vec![
+                EditorLabValidatedIntentDescriptor::new(
+                    "intent.game-runtime.open-hud-preview",
+                    "game.runtime",
+                    "validated descriptor only",
+                )
+                .runtime_command_for_test(),
+            ]),
+        );
+
+        let error = packet
+            .validate_scenario_evidence()
+            .expect_err("mutable fixture descriptors should fail before runtime intents");
+        assert_eq!(
+            error.code,
+            "editor.lab.evidence.scenario.mutable_fixture_binding"
         );
     }
 }

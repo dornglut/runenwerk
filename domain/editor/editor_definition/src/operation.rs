@@ -9,8 +9,9 @@ use crate::{
 use ron::ser::{PrettyConfig, to_string_pretty};
 use serde::{Deserialize, Serialize};
 use ui_definition::{
-    AuthoredUiNodePath, UiDefinitionDiagnostic, UiDefinitionDiagnosticSeverity, UiNodeDefinition,
-    UiValueBinding, UiVisualLayoutActivationMode, UiVisualLayoutDiffChange,
+    AuthoredUiNodePath, UiAvailability, UiAvailabilityBinding, UiAvailabilityId,
+    UiDefinitionDiagnostic, UiDefinitionDiagnosticSeverity, UiNodeDefinition, UiValueBinding,
+    UiValueSlotId, UiVisualLayoutActivationMode, UiVisualLayoutDiffChange,
     UiVisualLayoutDiffChangeKind, UiVisualLayoutEditContext, UiVisualLayoutOperation,
     apply_visual_layout_operation,
 };
@@ -33,6 +34,14 @@ pub enum EditorLabOperationKind {
     SetUiNodeText {
         node_id: String,
         text: String,
+    },
+    SetUiNodeValueSlot {
+        node_id: String,
+        slot: String,
+    },
+    SetUiNodeAvailabilityRef {
+        node_id: String,
+        availability: String,
     },
     RenameDocument {
         display_name: String,
@@ -133,6 +142,18 @@ pub fn apply_editor_lab_operation(
         EditorLabOperationKind::SetUiNodeText { node_id, text } => {
             apply_ui_node_text_operation(document.clone(), operation, node_id, text)
         }
+        EditorLabOperationKind::SetUiNodeValueSlot { node_id, slot } => {
+            apply_ui_node_value_slot_operation(document.clone(), operation, node_id, slot)
+        }
+        EditorLabOperationKind::SetUiNodeAvailabilityRef {
+            node_id,
+            availability,
+        } => apply_ui_node_availability_ref_operation(
+            document.clone(),
+            operation,
+            node_id,
+            availability,
+        ),
         EditorLabOperationKind::RenameDocument { display_name } => {
             apply_rename_operation(document.clone(), operation, display_name)
         }
@@ -250,6 +271,106 @@ fn apply_ui_node_text_operation(
         path.as_str().to_string(),
         Some(before),
         Some(text.to_string()),
+    );
+    finalize_accepted(document, operation, Some(diff))
+}
+
+fn apply_ui_node_value_slot_operation(
+    mut document: EditorDefinitionDocument,
+    operation: &EditorLabOperation,
+    node_id: &str,
+    slot: &str,
+) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+    if slot.trim().is_empty() {
+        return Err(UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_value_slot.empty",
+            "UI value slot reference must not be empty",
+        ));
+    }
+    let EditorDefinitionDocumentContent::UiTemplate(template) = &mut document.content else {
+        return Err(UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_value_slot.not_ui_template",
+            "UI value slot operations require a UI template document",
+        ));
+    };
+    let path = ui_node_path(&template.root, node_id).ok_or_else(|| {
+        UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_value_slot.target_missing",
+            format!("UI node '{node_id}' is not present in the selected definition"),
+        )
+    })?;
+    let before = ui_node_value_binding_text(&template.root, node_id).ok_or_else(|| {
+        UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_value_slot.unsupported_target",
+            format!("UI node '{node_id}' does not expose an authored value binding"),
+        )
+    })?;
+    let binding = UiValueBinding::Slot(UiValueSlotId::new(slot.to_string()));
+    set_ui_node_value_binding(&mut template.root, node_id, binding).ok_or_else(|| {
+        UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_value_slot.unsupported_target",
+            format!("UI node '{node_id}' does not expose an authored value binding"),
+        )
+    })?;
+    let diff = single_change_diff(
+        operation,
+        &document.id,
+        EditorLabOperationDiffFamily::UiAuthoredValue,
+        "Update",
+        format!("{}.value_binding", path.as_str()),
+        Some(before),
+        Some(format!("slot:{slot}")),
+    );
+    finalize_accepted(document, operation, Some(diff))
+}
+
+fn apply_ui_node_availability_ref_operation(
+    mut document: EditorDefinitionDocument,
+    operation: &EditorLabOperation,
+    node_id: &str,
+    availability: &str,
+) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+    if availability.trim().is_empty() {
+        return Err(UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_availability_ref.empty",
+            "UI availability reference must not be empty",
+        ));
+    }
+    let EditorDefinitionDocumentContent::UiTemplate(template) = &mut document.content else {
+        return Err(UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_availability_ref.not_ui_template",
+            "UI availability operations require a UI template document",
+        ));
+    };
+    let path = ui_node_path(&template.root, node_id).ok_or_else(|| {
+        UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_availability_ref.target_missing",
+            format!("UI node '{node_id}' is not present in the selected definition"),
+        )
+    })?;
+    let before = ui_node_availability_binding_text(&template.root, node_id).ok_or_else(|| {
+        UiDefinitionDiagnostic::error(
+            "editor.lab.operation.ui_availability_ref.unsupported_target",
+            format!("UI node '{node_id}' does not expose an authored availability binding"),
+        )
+    })?;
+    let binding = UiAvailabilityBinding::Ref(UiAvailabilityId::new(availability.to_string()));
+    set_ui_node_availability_binding(&mut template.root, node_id, Some(binding)).ok_or_else(
+        || {
+            UiDefinitionDiagnostic::error(
+                "editor.lab.operation.ui_availability_ref.unsupported_target",
+                format!("UI node '{node_id}' does not expose an authored availability binding"),
+            )
+        },
+    )?;
+    let diff = single_change_diff(
+        operation,
+        &document.id,
+        EditorLabOperationDiffFamily::UiAuthoredValue,
+        "Update",
+        format!("{}.availability", path.as_str()),
+        before,
+        Some(format!("ref:{availability}")),
     );
     finalize_accepted(document, operation, Some(diff))
 }
@@ -598,6 +719,111 @@ fn set_ui_node_text(node: &mut UiNodeDefinition, node_id: &str, text: String) ->
     None
 }
 
+fn ui_node_value_binding_text(node: &UiNodeDefinition, node_id: &str) -> Option<String> {
+    if node.id().as_str() == node_id {
+        return ui_node_value_binding(node).map(ui_value_binding_text);
+    }
+    node.children()
+        .iter()
+        .find_map(|child| ui_node_value_binding_text(child, node_id))
+}
+
+fn ui_node_value_binding(node: &UiNodeDefinition) -> Option<&UiValueBinding> {
+    match node {
+        UiNodeDefinition::Label { label, .. }
+        | UiNodeDefinition::Button { label, .. }
+        | UiNodeDefinition::Toggle { label, .. } => Some(label),
+        UiNodeDefinition::TextInput { value, .. }
+        | UiNodeDefinition::NumericInput { value, .. } => Some(value),
+        _ => None,
+    }
+}
+
+fn set_ui_node_value_binding(
+    node: &mut UiNodeDefinition,
+    node_id: &str,
+    binding: UiValueBinding,
+) -> Option<()> {
+    if node.id().as_str() == node_id {
+        return match node {
+            UiNodeDefinition::Label { label, .. }
+            | UiNodeDefinition::Button { label, .. }
+            | UiNodeDefinition::Toggle { label, .. } => {
+                *label = binding;
+                Some(())
+            }
+            UiNodeDefinition::TextInput { value, .. }
+            | UiNodeDefinition::NumericInput { value, .. } => {
+                *value = binding;
+                Some(())
+            }
+            _ => None,
+        };
+    }
+
+    for child in node.children_mut()? {
+        if set_ui_node_value_binding(child, node_id, binding.clone()).is_some() {
+            return Some(());
+        }
+    }
+    None
+}
+
+fn ui_node_availability_binding_text(
+    node: &UiNodeDefinition,
+    node_id: &str,
+) -> Option<Option<String>> {
+    if node.id().as_str() == node_id {
+        return ui_node_availability_binding(node)
+            .map(|binding| binding.map(ui_availability_binding_text));
+    }
+    node.children()
+        .iter()
+        .find_map(|child| ui_node_availability_binding_text(child, node_id))
+}
+
+fn ui_node_availability_binding(node: &UiNodeDefinition) -> Option<Option<&UiAvailabilityBinding>> {
+    match node {
+        UiNodeDefinition::Panel { availability, .. }
+        | UiNodeDefinition::Label { availability, .. }
+        | UiNodeDefinition::Button { availability, .. }
+        | UiNodeDefinition::Toggle { availability, .. }
+        | UiNodeDefinition::TextInput { availability, .. }
+        | UiNodeDefinition::NumericInput { availability, .. }
+        | UiNodeDefinition::Select { availability, .. } => Some(availability.as_ref()),
+        _ => None,
+    }
+}
+
+fn set_ui_node_availability_binding(
+    node: &mut UiNodeDefinition,
+    node_id: &str,
+    binding: Option<UiAvailabilityBinding>,
+) -> Option<()> {
+    if node.id().as_str() == node_id {
+        return match node {
+            UiNodeDefinition::Panel { availability, .. }
+            | UiNodeDefinition::Label { availability, .. }
+            | UiNodeDefinition::Button { availability, .. }
+            | UiNodeDefinition::Toggle { availability, .. }
+            | UiNodeDefinition::TextInput { availability, .. }
+            | UiNodeDefinition::NumericInput { availability, .. }
+            | UiNodeDefinition::Select { availability, .. } => {
+                *availability = binding;
+                Some(())
+            }
+            _ => None,
+        };
+    }
+
+    for child in node.children_mut()? {
+        if set_ui_node_availability_binding(child, node_id, binding.clone()).is_some() {
+            return Some(());
+        }
+    }
+    None
+}
+
 fn ui_node_path(node: &UiNodeDefinition, node_id: &str) -> Option<AuthoredUiNodePath> {
     ui_node_path_segments(node, node_id, Vec::new())
         .map(|segments| AuthoredUiNodePath(segments.join("/")))
@@ -624,6 +850,23 @@ fn ui_value_binding_text(binding: &UiValueBinding) -> String {
     match binding {
         UiValueBinding::Static(value) => value.as_text(),
         UiValueBinding::Slot(slot) => format!("slot:{slot:?}"),
+    }
+}
+
+fn ui_availability_binding_text(binding: &UiAvailabilityBinding) -> String {
+    match binding {
+        UiAvailabilityBinding::Static(availability) => {
+            format!("static:{}", ui_availability_text(availability))
+        }
+        UiAvailabilityBinding::Ref(availability) => format!("ref:{availability}"),
+    }
+}
+
+fn ui_availability_text(availability: &UiAvailability) -> String {
+    match availability {
+        UiAvailability::Available => "available".to_string(),
+        UiAvailability::Disabled { reason } => format!("disabled:{reason}"),
+        UiAvailability::Unavailable { reason } => format!("unavailable:{reason}"),
     }
 }
 
@@ -737,6 +980,115 @@ mod tests {
         assert_eq!(change.family, EditorLabOperationDiffFamily::UiVisualLayout);
         assert_eq!(change.kind, "Update");
         assert_eq!(change.path, "root/stack");
+    }
+
+    #[test]
+    fn editor_lab_operation_visual_layout_insert_produces_deterministic_diff() {
+        let document = ui_template_document();
+        let operation = EditorLabOperation {
+            id: "layout.insert".to_string(),
+            document_id: document.id.clone(),
+            target_profile: "editor.workbench".to_string(),
+            kind: EditorLabOperationKind::UiVisualLayout(Box::new(UiVisualLayoutOperation {
+                id: "insert.label".into(),
+                source_document: UiTemplateId::from("test.template"),
+                target_path: AuthoredUiNodePath("root".to_string()),
+                expected_node_id: "root".into(),
+                target_profile: "editor.workbench".into(),
+                kind: UiVisualLayoutEditKind::InsertNode {
+                    index: 1,
+                    node: UiNodeDefinition::Label {
+                        id: "inserted".into(),
+                        label: UiValueBinding::static_text("Inserted"),
+                        availability: None,
+                    },
+                },
+                source_location: None,
+                preview_only: false,
+            })),
+            preview_only: false,
+            source: Some("operation.test".to_string()),
+        };
+
+        let first = apply_editor_lab_operation(&document, &operation);
+        let second = apply_editor_lab_operation(&document, &operation);
+
+        assert!(first.accepted(), "{:?}", first.diagnostics);
+        assert_eq!(first.diff, second.diff);
+        let change = first
+            .diff
+            .as_ref()
+            .and_then(|diff| diff.changes.first())
+            .expect("insert operation should produce a diff change");
+        assert_eq!(change.family, EditorLabOperationDiffFamily::UiVisualLayout);
+        assert_eq!(change.kind, "Insert");
+        assert_eq!(change.path, "root/inserted");
+        assert!(
+            change
+                .after
+                .as_deref()
+                .is_some_and(|after| after.contains("Inserted"))
+        );
+    }
+
+    #[test]
+    fn editor_lab_operation_value_slot_edit_produces_diff() {
+        let document = ui_template_document();
+        let operation = EditorLabOperation {
+            id: "binding.value".to_string(),
+            document_id: document.id.clone(),
+            target_profile: "editor.workbench".to_string(),
+            kind: EditorLabOperationKind::SetUiNodeValueSlot {
+                node_id: "child".to_string(),
+                slot: "workbench.title".to_string(),
+            },
+            preview_only: false,
+            source: Some("operation.test".to_string()),
+        };
+
+        let report = apply_editor_lab_operation(&document, &operation);
+
+        assert!(report.accepted(), "{:?}", report.diagnostics);
+        let change = report
+            .diff
+            .as_ref()
+            .and_then(|diff| diff.changes.first())
+            .expect("binding edit should produce a diff change");
+        assert_eq!(change.family, EditorLabOperationDiffFamily::UiAuthoredValue);
+        assert_eq!(change.kind, "Update");
+        assert_eq!(change.path, "root/stack/child.value_binding");
+        assert_eq!(change.before.as_deref(), Some("Child"));
+        assert_eq!(change.after.as_deref(), Some("slot:workbench.title"));
+    }
+
+    #[test]
+    fn editor_lab_operation_availability_ref_edit_produces_diff() {
+        let document = ui_template_document();
+        let operation = EditorLabOperation {
+            id: "binding.availability".to_string(),
+            document_id: document.id.clone(),
+            target_profile: "editor.workbench".to_string(),
+            kind: EditorLabOperationKind::SetUiNodeAvailabilityRef {
+                node_id: "child".to_string(),
+                availability: "definition.selected".to_string(),
+            },
+            preview_only: false,
+            source: Some("operation.test".to_string()),
+        };
+
+        let report = apply_editor_lab_operation(&document, &operation);
+
+        assert!(report.accepted(), "{:?}", report.diagnostics);
+        let change = report
+            .diff
+            .as_ref()
+            .and_then(|diff| diff.changes.first())
+            .expect("availability edit should produce a diff change");
+        assert_eq!(change.family, EditorLabOperationDiffFamily::UiAuthoredValue);
+        assert_eq!(change.kind, "Update");
+        assert_eq!(change.path, "root/stack/child.availability");
+        assert_eq!(change.before, None);
+        assert_eq!(change.after.as_deref(), Some("ref:definition.selected"));
     }
 
     #[test]

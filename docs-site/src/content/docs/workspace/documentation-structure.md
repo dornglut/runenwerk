@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-30
+last_reviewed: 2026-05-29
 related_adrs:
   - ../adr/accepted/0001-use-domain-owned-commands.md
   - ../adr/accepted/0002-keep-ai-out-of-foundation.md
@@ -116,6 +116,7 @@ Recommended high-level structure:
 content/docs/
 ├── index.mdx
 ├── workspace/
+├── software-development/
 ├── guidelines/
 ├── foundation/
 ├── adr/
@@ -147,6 +148,26 @@ workspace/validation-commands.md
 `workspace/` is for documentation about the repository itself.
 
 It should not contain crate-specific implementation detail unless the document is an index or status tracker.
+
+### `software-development/`
+
+Use `software-development/` for project-neutral engineering guidance extracted
+from repository practice.
+
+Examples:
+
+```text
+software-development/README.md
+software-development/principles.md
+```
+
+`software-development/` is for reusable software-development doctrine,
+checklists, and practices that are useful outside Runenwerk.
+
+It should not contain Runenwerk-specific crate placement rules, roadmap
+metadata, product decisions, implementation evidence, or historical audit
+reports. Those remain in their owning guideline, workspace, design, roadmap, or
+report folders.
 
 ### `guidelines/`
 

@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-25'
+  last_reviewed: '2026-05-26'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -1054,3 +1054,18 @@ edges:
 - source: WR-118
   target: WR-119
   label: game UI seam before final certification
+- source: WR-114
+  target: WR-120
+  label: bounded workbench evidence before product-track repair
+- source: WR-120
+  target: WR-122
+  label: product governance before host parity
+- source: WR-114
+  target: WR-122
+  label: historical bounded workbench evidence before stricter host proof
+- source: WR-122
+  target: WR-123
+  label: host parity before product surfaces
+- source: WR-108
+  target: WR-123
+  label: direct manipulation evidence before UI Designer product surface replacement

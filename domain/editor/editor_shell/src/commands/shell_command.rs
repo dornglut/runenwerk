@@ -201,6 +201,13 @@ pub enum ShellCommand {
     SelectEditorDefinitionUiNode {
         node_id: String,
     },
+    InsertSelectedEditorDefinitionRecipe {
+        recipe_id: String,
+    },
+    SetEditorDefinitionRecipeCatalogFilter {
+        query: String,
+    },
+    CaptureUiDesignerScenarioEvidence,
     SetSelectedEditorDefinitionUiNodeText {
         node_id: String,
         text: String,

@@ -1,7 +1,7 @@
 version: 1
 production:
   title: Runenwerk Production Tracks
-  last_reviewed: "2026-05-24"
+  last_reviewed: "2026-05-25"
   owner: workspace
 render:
   production_index: docs-site/src/content/docs/workspace/production-track-index.md
@@ -3993,6 +3993,623 @@ tracks:
         completion_quality: perfectionist_verified
         known_quality_gaps: []
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md
+  - id: PT-UI-DESIGNER-WORKBENCH
+    title: UI Designer Workbench Productization
+    state: completed
+    owner: editor
+    target_completion_quality: runtime_proven
+    strategic_goal: Deliver the real standalone and embedded UI Designer workbench described by the accepted product design while preserving generic UI truth in domain/ui, editor adapters in domain/editor, app execution and evidence in apps/runenwerk_editor, and game-runtime UI implementation downstream of a compatibility seam.
+    success_criteria:
+      - The track does not reopen PT-EDITOR-UX; archived WR-114 remains bounded evidence for an earlier workbench route and evidence slice.
+      - Product implementation follows the accepted UI Designer Workbench Product Design and completes the V1 package, catalog, canvas, inspector, operation, scenario, evidence, and performance contracts before runtime_proven closeout.
+      - Generic UI definition and token truth remain in domain/ui, editor/workbench adapters remain in domain/editor, and app-hosted execution plus evidence remain in apps/runenwerk_editor.
+      - Game-runtime compatibility is proven only as a target-profile seam; runtime HUD behavior remains owned by PT-GAME-RUNTIME-UI or later game UI tracks.
+      - Product readiness claims require code truth, source-versioned evidence, diagnostics, performance baselines, docs, examples, and roadmap/production validation.
+    milestones:
+      - id: PM-UI-DESIGNER-WB-001
+        title: Governance Code Truth And Track Activation
+        kind: design
+        state: completed
+        goal: Reconcile code truth, planning truth, archived WR-114 evidence, accepted product design, and follow-on implementation scope before product code starts.
+        outcome: PT-UI-DESIGNER-WORKBENCH has production metadata, active design gates, a drift report requirement, disjoint follow-on WR candidate scopes, validation gates, and explicit stop conditions without product code changes.
+        dependencies:
+          - PM-EDITOR-UX-004
+        roadmap_links:
+          - WR-120
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Governance must follow the accepted UI Designer Workbench Product Design.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+            required_status: completed
+            reason: Governance must reconcile the archived WR-114 bounded workbench evidence before defining the repair track.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-001 requires completed governance, code-truth reconciliation, follow-on scope, and validation closeout evidence.
+        acceptance_criteria:
+          - Code-truth and planning-truth drift is classified for UI Designer and Editor UX claims.
+          - Follow-on WR candidates have disjoint write scopes, dependencies, validation gates, runtime evidence requirements, and stop conditions.
+          - No product implementation starts until a follow-on WR has accepted roadmap evidence and a production implementation contract.
+          - The archived WR-114 closeout remains historical bounded evidence unless a separate correction row authorizes changes.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-002 through PM-UI-DESIGNER-WB-008 remain unimplemented and must not be inferred complete from governance setup.
+          - No standalone app shell, package model, catalog, canvas, inspector, operation pipeline, scenario matrix, performance baseline, or game.runtime compatibility seam is implemented in this milestone.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md
+      - id: PM-UI-DESIGNER-WB-002
+        title: V1 Package Document Session And Evidence Model
+        kind: design
+        state: completed
+        goal: Accept the V1 package, document, session, source-version, persistence, and evidence model before product UI implementation.
+        outcome: The workbench has accepted source-truth and session boundaries, persistence shape, evidence packet freshness rules, diagnostics requirements, and first package fixtures.
+        dependencies:
+          - PM-UI-DESIGNER-WB-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Package model implementation must follow an accepted workbench product contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-002-v1-package-document-session-and-evidence-model/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-002 requires completed V1 package, document, session, and evidence model design acceptance closeout evidence.
+        acceptance_criteria:
+          - UI package, UI document, workbench session, and evidence packet ownership are accepted.
+          - Session state is reconstructable and cannot become source truth.
+          - V1 persistence and reload behavior have focused fitness functions.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-003 through PM-UI-DESIGNER-WB-008 remain unimplemented and must not be inferred complete from design acceptance.
+          - No standalone app shell, product catalog, canvas, inspector, operation pipeline, scenario matrix, performance baseline, or game.runtime compatibility seam is implemented in this milestone.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-002-v1-package-document-session-and-evidence-model/closeout.md
+      - id: PM-UI-DESIGNER-WB-003
+        title: Standalone App Shell And Embedded Host Parity
+        kind: implementation
+        state: completed
+        goal: Add the standalone UI Designer launch path and prove embedded Editor Design hosts the same product contract.
+        outcome: Authors can launch a UI Designer app directly, and the embedded editor workspace consumes the same package/session/evidence model.
+        dependencies:
+          - PM-UI-DESIGNER-WB-002
+        roadmap_links:
+          - WR-122
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Standalone and embedded hosts must preserve the accepted workbench product contract.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-122-standalone-app-shell-and-embedded-host-parity/plan.md
+            required_status: active
+            reason: Host parity implementation requires the WR-122 decision-complete contract before product code starts.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-003 requires completed standalone launch wiring and embedded host-parity runtime evidence.
+        acceptance_criteria:
+          - Standalone launch opens the UI Designer workbench, not the full editor or Material Lab.
+          - Embedded Editor Design uses the same app-neutral view-model contracts.
+          - No generic UI truth moves into app code.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Headless runtime evidence proves the UI Designer host path; no native-window screenshot evidence is claimed in this milestone.
+          - PM-UI-DESIGNER-WB-004 still owns catalog, hierarchy, canvas, inspector, diagnostics, and normal authoring surfaces.
+          - PM-UI-DESIGNER-WB-005 still owns operation diff, apply, rollback, undo/redo, and deterministic textual patch flow.
+          - PM-UI-DESIGNER-WB-006 still owns scenario evidence and performance baselines.
+          - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+          - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+      - id: PM-UI-DESIGNER-WB-004
+        title: Catalog Hierarchy Canvas Inspector V1
+        kind: implementation
+        state: completed
+        goal: Deliver the normal V1 authoring surfaces without debug action lists.
+        outcome: The catalog, hierarchy, canvas, inspector, diagnostics, and diff/review surfaces support the shared component catalog and editor tool panel workflows.
+        dependencies:
+          - PM-UI-DESIGNER-WB-003
+        roadmap_links:
+          - WR-123
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Product surface implementation must follow the accepted V1 workbench cut.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+            required_status: accepted
+            reason: Catalog rows, recipe provenance, disabled reasons, slot compatibility, and accessibility requirements must follow the accepted recipe/library doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+            required_status: accepted
+            reason: Hierarchy, canvas, inspector, and layout composition must follow the accepted visual composition doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-canonical-ir-and-composition-design.md
+            required_status: accepted
+            reason: Product surfaces must preserve Canonical UI IR as source truth before operation apply/rollback lands.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-123-catalog-hierarchy-canvas-inspector-v1/plan.md
+            required_status: active
+            reason: Catalog, hierarchy, canvas, inspector, diagnostics, and diff/review implementation requires a decision-complete WR-123 contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-004 requires completed product catalog, hierarchy, canvas, inspector, diagnostics, and review surface runtime evidence.
+        acceptance_criteria:
+          - Catalog entries expose target compatibility, disabled reasons, slots, tokens, states, accessibility requirements, and provenance.
+          - Hierarchy, canvas, and inspector selection stay synchronized by source version.
+          - Normal workflows do not expose generic text/action self-authoring panels.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM004 proves product-surface projection, not actual recipe insertion or operation application.
+          - PM-UI-DESIGNER-WB-005 still owns operation diff, apply, rollback, undo/redo, deterministic textual patches, and apply/reject workflow.
+          - PM-UI-DESIGNER-WB-006 still owns scenario evidence and performance baselines.
+          - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+          - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+      - id: PM-UI-DESIGNER-WB-005
+        title: Operation Diff Apply And Rollback
+        kind: implementation
+        state: completed
+        goal: Route visual authoring through typed operations, Canonical UI IR diffs, deterministic textual patches, apply/reject, undo/redo, and rollback.
+        outcome: V1 authoring gestures are reviewable, deterministic, source-mapped, undoable, and fail closed when they cannot be serialized.
+        dependencies:
+          - PM-UI-DESIGNER-WB-004
+        roadmap_links:
+          - WR-124
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+            required_status: accepted
+            reason: Visual authoring must preserve accepted Canonical UI IR and deterministic diff doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Apply/reject/rollback behavior must follow the accepted workbench product contract.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+            required_status: accepted
+            reason: Diff, activation preflight, and fail-closed diagnostics must follow the accepted generic UI persistence doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+            required_status: accepted
+            reason: Operation reports, deterministic diffs, history, undo/redo, and retained preview refresh must follow accepted UI Lab operation doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+            required_status: accepted
+            reason: Apply/reject, failed activation preservation, reload, and rollback must follow accepted UI Lab recovery doctrine.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-124-operation-diff-apply-and-rollback/plan.md
+            required_status: active
+            reason: Operation/apply/rollback implementation requires a decision-complete WR-124 contract.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+            required_status: completed
+            reason: Operation/apply/rollback builds on completed UI Designer product surfaces.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-005 requires completed operation diff, apply review, reload, rollback, and runtime provider evidence.
+        acceptance_criteria:
+          - Insert, move, reorder, layout edit, token-reference edit, binding-reference edit, and accessibility edit produce typed operations or typed rejection diagnostics.
+          - Apply/reject/rollback and reload preserve authored package and document state.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-006 still owns source-versioned scenario evidence and performance baselines.
+          - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+          - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+          - PM005 proves app/headless provider behavior; no native-window screenshot evidence or packaged product release readiness is claimed in this milestone.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+      - id: PM-UI-DESIGNER-WB-006
+        title: Scenario Evidence And Performance Baselines
+        kind: hardening
+        state: completed
+        goal: Add scenario matrix, source-versioned evidence packets, diagnostics snapshots, and measured resize, canvas, catalog, and diagnostics performance baselines.
+        outcome: Product readiness claims are backed by source-versioned evidence and measured interaction/performance counters.
+        dependencies:
+          - PM-UI-DESIGNER-WB-005
+        roadmap_links:
+          - WR-125
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+            required_status: accepted
+            reason: Scenario and matrix evidence must follow accepted UI Designer preview doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+            required_status: accepted
+            reason: Production evidence must follow accepted readiness doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Performance and resize evidence must follow the accepted workbench contract.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-125-scenario-evidence-and-performance-baselines/plan.md
+            required_status: active
+            reason: Scenario evidence and performance baseline implementation requires a decision-complete WR-125 contract.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+            required_status: completed
+            reason: Scenario evidence and baselines build on completed operation/apply/rollback runtime evidence.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-006 requires completed source-versioned scenario evidence, diagnostics snapshots, explicit capture, and performance baseline runtime evidence.
+        acceptance_criteria:
+          - Evidence packets include package id, document id, source version, target profile, scenario id, diagnostics, artifacts or typed unsupported reasons, performance counters, and freshness status.
+          - Resize, canvas interaction, catalog projection, diagnostics projection, and frame build have measured baselines.
+          - Evidence capture is explicit and does not run accidentally every frame.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+          - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+          - PM006 records a typed unsupported native-screenshot reason in headless validation; it does not claim native-window screenshot artifacts.
+          - PM006 proves app/headless evidence capture and provider projection; it does not claim packaged product release readiness.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md
+      - id: PM-UI-DESIGNER-WB-007
+        title: Game Runtime Compatibility Seam
+        kind: hardening
+        state: completed
+        goal: Prove game.runtime target-profile compatibility axes without implementing runtime HUD behavior.
+        outcome: Future game-runtime UI has compatible Designer package, recipe, fixture, view-model, intent, safe-area, input, localization, accessibility, diagnostics, and evidence descriptors.
+        dependencies:
+          - PM-UI-DESIGNER-WB-006
+        roadmap_links:
+          - WR-118
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Game.runtime seam proof must preserve the workbench product boundary.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: active
+            reason: Compatibility evidence must align with the active game-runtime UI projection doctrine.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-007 requires completed game.runtime compatibility seam evidence and explicit no-HUD-runtime-behavior closeout.
+        acceptance_criteria:
+          - Game.runtime preview descriptors do not import editor shell, Workbench host policy, editor command route, or editor provider vocabulary.
+          - The seam proves descriptor and evidence compatibility only; no game HUD runtime behavior is implemented.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+          - PT-GAME-RUNTIME-UI still owns concrete game HUD runtime behavior, game-runtime UI projection execution, and SDF HUD rendering proof.
+          - PM007 does not claim native runtime-window screenshot evidence, in-frame HUD rendering evidence, packaged release readiness, or perfectionist no-gap quality.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md
+      - id: PM-UI-DESIGNER-WB-008
+        title: Runtime Proven Closeout And Handoff
+        kind: release
+        state: completed
+        goal: Close the workbench productization track at runtime_proven quality and hand off remaining game-runtime UI and no-gap work to separate tracks.
+        outcome: PT-UI-DESIGNER-WORKBENCH has runtime-proven closeout evidence, truthful known gaps, usage docs, examples, and downstream handoff notes for game-runtime UI.
+        dependencies:
+          - PM-UI-DESIGNER-WB-007
+        roadmap_links:
+          - WR-126
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Final closeout must follow the accepted workbench product contract.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-126-runtime-proven-closeout-and-handoff/plan.md
+            required_status: active
+            reason: Runtime-proven closeout and handoff requires the WR-126 decision-complete contract before final docs and metadata changes.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md
+            required_status: completed
+            reason: Final closeout depends on completed game.runtime compatibility seam evidence and explicit downstream HUD boundary.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-008 requires completed runtime-proven closeout, usage docs, examples, validation, and handoff evidence.
+        acceptance_criteria:
+          - Closeout links completed runtime proof, diagnostics, docs, examples, planning, roadmap, and production evidence.
+          - Known gaps are listed truthfully and do not block runtime_proven completion unless they contradict V1 product workflows.
+          - Perfectionist no-gap quality and game HUD runtime behavior remain separate tracks.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Accepted V1 product workflow closure is now routed to PT-UI-DESIGNER-WB-V1-CLOSURE because follow-up review found that the completed evidence does not yet prove the full product design interaction depth.
+          - Native runtime-window screenshot evidence and packaged release readiness are not claimed by this track.
+          - PT-GAME-RUNTIME-UI still owns concrete game HUD runtime behavior, game-runtime UI projection execution, and SDF HUD rendering proof.
+          - A separate no-gap audit or certification track must own any future perfectionist_verified claim.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+  - id: PT-UI-DESIGNER-WB-V1-CLOSURE
+    title: UI Designer Workbench V1 Product Closure
+    state: completed
+    owner: editor
+    target_completion_quality: runtime_proven
+    strategic_goal: Repair the completed UI Designer Workbench productization overclaim by closing the accepted V1 product workflows with code-truth evidence, while preserving generic UI truth in domain/ui, editor adapters in domain/editor, app-hosted execution in apps/runenwerk_editor, and game-runtime HUD implementation in PT-GAME-RUNTIME-UI.
+    success_criteria:
+      - The track does not reopen PT-UI-DESIGNER-WORKBENCH implementation history; it records a governed closure path for accepted V1 workflow gaps discovered after the completed closeout.
+      - The accepted UI Designer Workbench Product Design is the product contract for package/session source truth, recipe catalog insertion, hierarchy, canvas, inspector, operations, scenario matrix, evidence, and performance closure.
+      - Canonical UI IR, recipes, bindings, fixtures, persistence, activation, and readiness contracts remain owned by domain/ui and domain/ui/ui_theme; editor/workbench adapters remain in domain/editor.
+      - apps/runenwerk_editor owns concrete session state, preview orchestration, runtime launch, evidence capture, and user-facing workbench behavior without becoming generic UI source truth.
+      - game.runtime compatibility is proven as target-profile descriptor, fixture, binding, intent, and evidence workflow only; concrete HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+      - Runtime-proven completion requires source-versioned code truth, normal author workflow evidence, typed diagnostics, deterministic diffs, performance baselines, docs, roadmap and production validation, and an explicit known-gap list.
+    milestones:
+      - id: PM-UI-DESIGNER-WB-V1-CLOSURE-001
+        title: Governance Drift Audit And Correction Contract
+        kind: design
+        state: completed
+        goal: Reconcile accepted product design, completed closeout claims, current code truth, and follow-on repair scope before product implementation resumes.
+        outcome: The closure track has explicit drift findings, DDD ownership, dependency direction, stop conditions, disjoint write scopes, validation gates, and a first implementation-contract path.
+        dependencies:
+          - PM-UI-DESIGNER-WB-008
+        roadmap_links:
+          - WR-127
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Closure governance must follow the accepted UI Designer Workbench product contract.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+            required_status: completed
+            reason: Closure governance must reconcile the completed closeout claim before creating implementation repair rows.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-V1-CLOSURE-001 requires completed governance, drift audit, owner-boundary, follow-on scope, and validation closeout evidence.
+        acceptance_criteria:
+          - Drift findings name each accepted V1 workflow claim that is not yet proven by code and runtime evidence.
+          - Architecture governance names the owners for generic UI truth, editor adapters, shell view models, app session/evidence, and runtime launch.
+          - Follow-on WR candidates have disjoint write scopes, required design gates, stop conditions, focused validations, and closeout evidence paths.
+          - No product implementation starts until a promoted WR row has a production implementation contract from task production:plan.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - Package/session, recipe insertion, canvas, inspector, operation parity, game.runtime workflow, evidence, and performance implementation remain intentionally unstarted in this governance milestone.
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-002 through PM-UI-DESIGNER-WB-V1-CLOSURE-006 remain incomplete and require separate WR rows, production plans, validation, and closeout evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md
+      - id: PM-UI-DESIGNER-WB-V1-CLOSURE-002
+        title: Package Session Source Truth Closure
+        kind: implementation
+        state: completed
+        goal: Implement the V1 editable package, document, session, source-version, persistence, reload, and evidence model as real product source truth.
+        outcome: The standalone and embedded workbench edit one source-versioned package whose draft, applied, rollback, reload, diagnostics, and evidence state are reconstructable and cannot become provider/runtime cache truth.
+        dependencies:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-001
+        roadmap_links:
+          - WR-128
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Package and session closure must follow the accepted V1 product model.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-canonical-ir-and-composition-design.md
+            required_status: accepted
+            reason: Package source truth must normalize through Canonical UI IR and preserve stable authored ids.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+            required_status: accepted
+            reason: Persistence, reload, and activation must use deterministic migration, diff, and fail-closed gates.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-V1-CLOSURE-002 requires completed package/session source-truth, reload, rollback, diagnostics, and evidence freshness closeout evidence.
+        acceptance_criteria:
+          - Package and document ids, schema versions, source versions, draft/applied snapshots, and rollback points are explicit and testable.
+          - Session state remains reconstructable app-owned state and does not become definition source truth.
+          - Reload and rollback prove authored state survival with deterministic diagnostics and diff descriptors.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-004 still owns operation diff/apply/rollback parity.
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix, game-runtime compatibility workflow, evidence packets, and performance baselines.
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns runtime-proven final closeout and handoff.
+          - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+      - id: PM-UI-DESIGNER-WB-V1-CLOSURE-003
+        title: Recipe Catalog Insertion And Authoring Surface Closure
+        kind: implementation
+        state: completed
+        goal: Replace static catalog/status panes with searchable recipe insertion, source-versioned hierarchy/canvas/inspector updates, and typed diagnostics.
+        outcome: Authors can search compatible recipes, inspect slots/tokens/states/accessibility requirements, insert compatible recipes into the active document, and see hierarchy, canvas, inspector, diagnostics, and diff update from one source version.
+        dependencies:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-002
+        roadmap_links:
+          - WR-129
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+            required_status: accepted
+            reason: Catalog insertion must use generic recipe declarations, composition, slot diagnostics, and target-profile compatibility.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+            required_status: accepted
+            reason: Hierarchy, canvas, and inspector edits must preserve stable ids and deterministic visual layout operations.
+          - kind: design
+            path: docs-site/src/content/docs/guidelines/module-structure-guidelines.md
+            required_status: active
+            reason: New implementation modules must use responsibility-based module boundaries, not catch-all product files.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-V1-CLOSURE-003 requires completed WR-129 recipe catalog insertion and source-versioned authoring-surface closeout evidence.
+        acceptance_criteria:
+          - Catalog entries come from recipe contracts rather than hard-coded status rows.
+          - Compatible recipe insertion expands into Canonical UI IR with stable authored ids and deterministic diagnostics.
+          - Canvas, hierarchy, inspector, diagnostics, and diff surfaces project the same source version and expose disabled reasons before dispatch.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-004 still owns full operation diff/apply/rollback parity, undo/redo policy, and complete operation taxonomy.
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix expansion, game-runtime compatibility workflow, evidence packets, and performance baselines.
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns runtime-proven final closeout and handoff.
+          - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+      - id: PM-UI-DESIGNER-WB-V1-CLOSURE-004
+        title: Operation Diff Apply Rollback Parity Closure
+        kind: implementation
+        state: completed
+        goal: Complete operation-driven insert, move, reorder, layout edit, token-reference edit, binding-reference edit, accessibility edit, deterministic patch preview, apply, reject, undo, redo, reload, and rollback parity.
+        outcome: Every supported canvas, hierarchy, inspector, and catalog gesture routes through typed operation reports with deterministic diffs, fail-closed diagnostics, history, and recovery evidence.
+        dependencies:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-003
+        roadmap_links:
+          - WR-130
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+            required_status: accepted
+            reason: Operation dispatch, reports, history, undo/redo, and direct-control parity must follow accepted UI Lab operation doctrine.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+            required_status: accepted
+            reason: Accepted edits must produce deterministic reviewable diffs before activation.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+            required_status: accepted
+            reason: Binding and intent edits must remain read-only descriptor and validated-proposal behavior.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-130-ui-designer-workbench-v1-closure-operation-diff-apply-rollback-parity/plan.md
+            required_status: active
+            reason: Operation parity implementation must follow the accepted WR-130 design-first contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-V1-CLOSURE-004 requires completed operation diff/apply/rollback parity, typed diagnostics, undo/redo, and recovery closeout evidence.
+        acceptance_criteria:
+          - Supported edits use the same operation report shape from catalog, canvas, hierarchy, and inspector entry points.
+          - Invalid operations preserve draft state, produce typed diagnostics, and never enter history.
+          - Apply, reject, undo, redo, reload, and rollback are source-versioned and covered by focused runtime/evidence tests.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix expansion, game-runtime compatibility workflow, source-versioned evidence packets, and measured performance baselines.
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns final runtime-proven product closeout, honest known-gap classification, and downstream handoff.
+          - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+      - id: PM-UI-DESIGNER-WB-V1-CLOSURE-005
+        title: Scenario Matrix Game Runtime And Evidence Closure
+        kind: hardening
+        state: completed
+        goal: Complete editor.workbench and game.runtime scenario matrix workflows, read-only fixture bindings, validated intent descriptors, source-versioned evidence packets, and measured performance baselines.
+        outcome: Product readiness claims are backed by target-profile-aware scenario evidence, typed diagnostics snapshots, artifact freshness policy, and measured frame build, canvas projection, catalog projection, diagnostics projection, and resize relayout counters.
+        dependencies:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-004
+        roadmap_links:
+          - WR-131
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+            required_status: accepted
+            reason: Scenario matrices and evidence packets must be target-profile aware and replayable.
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+            required_status: accepted
+            reason: Readiness decisions must be descriptor-based and fail closed for missing, stale, or mismatched evidence.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+            required_status: active
+            reason: game.runtime closure must remain a compatibility seam and must not implement concrete game HUD runtime behavior.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-131-ui-designer-workbench-v1-closure-scenario-matrix-game-runtime-evidence-and-performance-baselines/plan.md
+            required_status: active
+            reason: Scenario matrix and evidence implementation must follow the accepted WR-131 design-first contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-V1-CLOSURE-005 requires completed scenario matrix, game.runtime descriptor, source-versioned evidence packet, and performance baseline closeout evidence.
+        acceptance_criteria:
+          - game.runtime workflow exposes compatible HUD-oriented recipes, incompatible editor-only recipes, safe-area/input/localization/accessibility/sizing axes, read-only fixture packets, and validated intent descriptors.
+          - Evidence packets include source package provenance, target profile, diagnostics, projection/accessibility/compatibility/performance descriptor references, freshness policy, and explicit unsupported reasons.
+          - Performance baselines are measured through product paths and cannot be synthetic status summaries.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns final runtime-proven product closeout, honest known-gap classification, and downstream handoff.
+          - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+          - Native window screenshot artifacts remain typed unsupported evidence in headless validation; retained workbench evidence is sufficient for this bounded PM-005 proof but not for no-gap certification.
+          - Packaged release readiness and perfectionist no-gap certification are not claimed by this slice.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+      - id: PM-UI-DESIGNER-WB-V1-CLOSURE-006
+        title: Runtime-Proven Product Closeout And Handoff
+        kind: release
+        state: completed
+        goal: Close the V1 product closure track at runtime_proven quality with honest known gaps and downstream handoff to PT-GAME-RUNTIME-UI and any future no-gap audit.
+        outcome: UI Designer Workbench V1 product closure has runtime-proven evidence for normal author workflows, docs, examples, validation, completion-quality classification, and explicit downstream boundaries.
+        dependencies:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-005
+        roadmap_links:
+          - WR-132
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: Final closure must satisfy the accepted V1 product workflow contract.
+          - kind: design
+            path: docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+            required_status: active
+            reason: Final closeout must classify completion quality honestly and guard against status-panel-only evidence.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/implementation-plans/wr-132-ui-designer-workbench-v1-closure-runtime-proven-product-closeout-and-handoff/plan.md
+            required_status: active
+            reason: Final closeout implementation must follow the accepted WR-132 design-first contract.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-WB-V1-CLOSURE-006 requires completed final runtime-proven closeout, docs, validation, completion-quality classification, and downstream handoff evidence.
+        acceptance_criteria:
+          - Closeout links completed workflow evidence for package/session, catalog insertion, hierarchy/canvas/inspector, operations, scenario matrix, game.runtime compatibility descriptors, performance baselines, docs, and validation.
+          - Known gaps are listed truthfully and do not contradict the accepted V1 product workflows.
+          - Concrete game HUD runtime behavior, packaged release readiness, and perfectionist no-gap certification remain separate tracks unless explicitly completed by accepted evidence.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Runtime evidence overclaim details are superseded by PT-UI-DESIGNER-EVIDENCE-CORRECTION / PM-UI-DESIGNER-EVIDENCE-CORRECTION-001; current readiness must use source-revisioned runtime product evidence, not descriptor-only packets or synthetic baselines.
+          - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+          - SDF HUD rendering and in-frame game-runtime UI projection execution are not claimed by this track.
+          - Native runtime-window screenshot evidence and packaged release readiness are not claimed by this track.
+          - A separate no-gap audit or certification track must own any future perfectionist_verified claim.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+  - id: PT-UI-DESIGNER-EVIDENCE-CORRECTION
+    title: UI Designer Workbench Runtime Evidence Correction
+    state: completed
+    owner: editor
+    target_completion_quality: runtime_proven
+    strategic_goal: Supersede the earlier UI Designer Workbench runtime-evidence overclaim with source-revisioned, type-separated, product-path evidence while preserving historical closeouts and keeping game-runtime UI execution owned by PT-GAME-RUNTIME-UI.
+    success_criteria:
+      - Descriptor compatibility and runtime product evidence are different app-owned contracts.
+      - editor.workbench runtime readiness requires fresh source revision equality, content-addressed product artifacts, product-path measurement provenance, and focused tests.
+      - game.runtime descriptor compatibility remains visible but cannot satisfy UI Designer Workbench runtime readiness.
+      - Catalog rows expose structured metadata, filter state, disabled reasons, and insertion routes only for compatible rows.
+      - Prior completed UI Designer Workbench rows are annotated as superseded rather than rewritten as if the historical closeouts never happened.
+    milestones:
+      - id: PM-UI-DESIGNER-EVIDENCE-CORRECTION-001
+        title: Runtime Evidence Source Revision And Catalog Correction
+        kind: implementation
+        state: completed
+        goal: Correct UI Designer Workbench runtime evidence truth by splitting evidence packet types, content-addressing source revisions and artifacts, invalidating stale evidence centrally, routing catalog filters, and moving game-runtime descriptor fixtures to app evidence ownership.
+        outcome: Runtime readiness now accepts only fresh editor.workbench runtime product evidence; game.runtime compatibility remains descriptor-only; catalog rows are filterable structured product rows; editor_shell no longer owns game HUD recipe vocabulary.
+        dependencies:
+          - PM-UI-DESIGNER-WB-V1-CLOSURE-006
+        roadmap_links:
+          - WR-133
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+            required_status: accepted
+            reason: The correction preserves the accepted UI Designer Workbench product contract while repairing evidence truth.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+            required_status: completed
+            reason: The correction supersedes, rather than rewrites, the previous completed runtime-proven closeout.
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
+            required_status: completed
+            reason: PM-UI-DESIGNER-EVIDENCE-CORRECTION-001 requires completed corrective evidence, focused tests, docs, and planning truth updates.
+        acceptance_criteria:
+          - Descriptor-only packets cannot validate as runtime product evidence.
+          - Runtime packets require source revision, product-path artifacts, artifact digests, nonzero bytes, and product-path performance baselines.
+          - Source-affecting mutations invalidate stored scenario evidence.
+          - Catalog filtering routes through the shell and leaves disabled rows without insertion routes.
+          - editor_shell recipe ownership remains editor-only; game-runtime descriptors live in app evidence.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+          - Native runtime-window screenshot evidence, packaged release readiness, and perfectionist no-gap certification remain out of scope.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
   - id: PT-GAME-RUNTIME-UI
     title: Game Runtime UI Projection And HUD Platform
     state: active

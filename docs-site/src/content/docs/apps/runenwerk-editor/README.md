@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-29
 ---
 
 # Runenwerk Editor
@@ -13,6 +13,10 @@ last_reviewed: 2026-05-07
 ## Current Architecture
 
 - [`current-architecture.md`](./current-architecture.md)
+
+## Product Guides
+
+- [`ui-designer-workbench.md`](./ui-designer-workbench.md)
 
 ## MVP
 

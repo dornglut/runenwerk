@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap Archive
-  last_reviewed: '2026-05-25'
+  last_reviewed: '2026-05-26'
   owner: workspace
 items:
 - id: WR-001
@@ -8522,3 +8522,1554 @@ items:
     PUML, quiet full gate, git diff, and empty known quality gaps.
   ownership_mode: Stream-aligned final certification with complicated-subsystem support from UI, editor, app evidence, and
     workspace governance owners.
+- id: WR-120
+  title: UI Designer Workbench Product Track Governance
+  diagram_title: UI Designer workbench product governance
+  alias: UIDESIGNERTRACK
+  lane: Editor quality
+  dependency_level: L4
+  gate: After accepted UI Designer Workbench Product Design
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 4
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-114
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-120-ui-designer-workbench-product-track-governance/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-create-a-new-pt-ui-designer-workbench-pr
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-001 --roadmap WR-120
+  - task ai:architecture-governance -- --task "PT-UI-DESIGNER-WORKBENCH product track governance" --scope "docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md;
+    docs-site/src/content/docs/workspace/production-tracks.yaml; docs-site/src/content/docs/workspace/roadmap-items.yaml;
+    docs-site/src/content/docs/workspace/roadmap-archive.yaml"
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task docs:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md
+  current_decision: Completed as bounded governance evidence for PT-UI-DESIGNER-WORKBENCH activation, accepted product design
+    doctrine, code-truth/planning-truth drift classification, and follow-on candidate decomposition.
+  current_call: Archive WR-120 as completed PM-UI-DESIGNER-WB-001 evidence. Do not use this row as permission for product
+    code changes.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WORKBENCH and follow the next legal design action before promoting
+    or implementing any follow-on UI Designer Workbench product row.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-002 still owns the V1 package, document, session, and evidence model.
+  - PM-UI-DESIGNER-WB-003 still owns standalone app shell and embedded host parity.
+  - PM-UI-DESIGNER-WB-004 still owns catalog, hierarchy, canvas, and inspector V1.
+  - PM-UI-DESIGNER-WB-005 still owns operation diff, apply, and rollback.
+  - PM-UI-DESIGNER-WB-006 still owns scenario evidence and performance baselines.
+  - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+  - PM-UI-DESIGNER-WB-008 still owns runtime-proven closeout and handoff.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md
+  diagram_call:
+  - governance
+  - code truth
+  - product track
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Product-track governance follows the accepted UI Designer Workbench Product Design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-120-ui-designer-workbench-product-track-governance/plan.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-120 followed the active design-first governance contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: WR-120 reconciled the archived standalone workbench evidence before creating the new product track.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-120 completion requires completed governance closeout evidence.
+  ddd_owner: domain/ui owns generic UI definition and token truth, domain/editor owns editor workbench adapters, apps/runenwerk_editor
+    owns app-hosted execution and evidence.
+  adr_requirement: No ADR for governance-only track creation because ownership remains unchanged. Require ADR or accepted
+    design update before adding a game UI owner crate, changing dependency direction, or making projections/evidence authoritative.
+  fitness_function_requirement: Code-truth/planning-truth drift report, follow-on milestone dependency graph, write-scope
+    split, validation gates, and stop conditions are recorded in the WR-120 contract and closeout before product implementation
+    rows start.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+- id: WR-122
+  title: Standalone App Shell And Embedded Host Parity
+  diagram_title: UI Designer standalone host parity
+  alias: UIDESIGNERHOST
+  lane: Editor quality
+  dependency_level: L4
+  gate: After accepted UI Designer Workbench Product Design and PM-UI-DESIGNER-WB-002 closeout
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-114
+  - WR-120
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-122-standalone-app-shell-and-embedded-host-parity/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-standalone-app-shell-and-embedded-host-parity
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - apps/runenwerk_editor/src/runtime/app.rs
+  - apps/runenwerk_editor/src/runtime/mod.rs
+  - apps/runenwerk_editor/src/bin
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/runtime/resources.rs
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/providers/mod.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - domain/editor/editor_shell/src/workspace/state.rs
+  - domain/editor/editor_shell/src/workspace/profile.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition/build_editor_lab_surface.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-003 --roadmap WR-122
+  - cargo test -p runenwerk_editor runtime
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p editor_shell ui_designer
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+  current_decision: Completed as runtime-proven host-parity evidence for standalone UI Designer launch wiring and embedded
+    Editor Design provider-family parity over the accepted package/session/evidence model.
+  current_call: Archive WR-122 as completed PM-UI-DESIGNER-WB-003 evidence. Do not infer catalog, canvas, operation, scenario,
+    performance, game-runtime, or final handoff behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WORKBENCH and follow the next legal design action before promoting
+    or implementing any follow-on UI Designer Workbench product row.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Headless runtime evidence proves the UI Designer host path; no native-window screenshot evidence is claimed in this milestone.
+  - PM-UI-DESIGNER-WB-004 still owns catalog, hierarchy, canvas, inspector, diagnostics, and normal authoring surfaces.
+  - PM-UI-DESIGNER-WB-005 still owns operation diff, apply, rollback, undo/redo, and deterministic textual patch flow.
+  - PM-UI-DESIGNER-WB-006 still owns scenario evidence and performance baselines.
+  - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+  - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+  diagram_call:
+  - standalone UI Designer launch
+  - embedded host parity
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Standalone and embedded host work must preserve the accepted workbench product contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-122-standalone-app-shell-and-embedded-host-parity/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Host parity implementation followed the WR-122 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-002-v1-package-document-session-and-evidence-model/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Host parity consumes the accepted V1 package, document, session, and evidence model.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-122 completion requires completed standalone launch and embedded host-parity closeout evidence.
+  ddd_owner: apps/runenwerk_editor owns runtime launch and evidence; domain/editor owns editor workbench adapters; domain/ui
+    owns generic UI truth.
+  adr_requirement: No ADR while the slice keeps existing app/domain ownership and dependency direction. Require ADR or accepted
+    design update before moving generic UI truth into app code or adding a new owner boundary.
+  fitness_function_requirement: Runtime workbench selection tests, host registry/profile parity tests, embedded UI Designer
+    provider parity tests, and dependency-direction guards.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+- id: WR-123
+  title: Catalog Hierarchy Canvas Inspector V1
+  diagram_title: UI Designer catalog hierarchy canvas inspector
+  alias: UIDESIGNERSURFACES
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-003 standalone host parity closeout
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-108
+  - WR-120
+  - WR-122
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-123-catalog-hierarchy-canvas-inspector-v1/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-catalog-hierarchy-canvas-inspector-v1
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - domain/editor/editor_shell/src/lib.rs
+  - domain/editor/editor_shell/src/surfaces
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell/providers
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-004 --roadmap WR-123
+  - cargo fmt --package editor_shell --package runenwerk_editor
+  - cargo test -p editor_shell ui_designer
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo test -p runenwerk_editor direct_manipulation
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+  current_decision: Completed as runtime-proven UI Designer product-surface evidence for catalog rows, hierarchy, canvas,
+    inspector, diagnostics, and review projection over the real provider/composition path.
+  current_call: Archive WR-123 as completed PM-UI-DESIGNER-WB-004 evidence. Do not infer operation apply/rollback, scenario
+    evidence, performance baseline, game-runtime, or final handoff behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WORKBENCH and follow the next legal design action before promoting
+    or implementing any follow-on UI Designer Workbench product row.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM004 proves product-surface projection, not actual recipe insertion or operation application.
+  - PM-UI-DESIGNER-WB-005 still owns operation diff, apply, rollback, undo/redo, deterministic textual patches, and apply/reject
+    workflow.
+  - PM-UI-DESIGNER-WB-006 still owns scenario evidence and performance baselines.
+  - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+  - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+  diagram_call:
+  - product catalog
+  - canvas parity
+  - inspector parity
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM004 product surfaces preserved the accepted UI Designer Workbench product contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Catalog rows and recipe insertion affordances followed the accepted recipe/library doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Hierarchy, canvas, inspector, and layout composition followed the accepted visual composition doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-canonical-ir-and-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM004 preserved Canonical UI IR as source truth before operation apply/rollback lands.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-123-catalog-hierarchy-canvas-inspector-v1/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Product-surface implementation followed the WR-123 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Product surfaces built on completed standalone and embedded host parity.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-123 completion requires completed product-surface closeout evidence.
+  ddd_owner: domain/editor owns UI Designer product surface view models and retained composition; apps/runenwerk_editor owns
+    provider execution and session state; domain/ui owns generic UI truth.
+  adr_requirement: No ADR while WR-123 kept generic UI truth in domain/ui and app-neutral surface contracts in domain/editor.
+    Require ADR or accepted design update before moving source truth into app code, changing dependency direction, or adding
+    a new owner crate.
+  fitness_function_requirement: Product-surface tests proving catalog compatibility/disabled reasons, source-versioned hierarchy/canvas/inspector
+    selection parity, typed diagnostics, and normal workflows without debug action panels.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+- id: WR-124
+  title: Operation Diff Apply And Rollback
+  diagram_title: UI Designer operation diff apply rollback
+  alias: UIDESIGNEROPS
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-004 product-surface closeout
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-096
+  - WR-108
+  - WR-120
+  - WR-122
+  - WR-123
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-124-operation-diff-apply-and-rollback/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-operation-diff-app
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - domain/ui/ui_definition/src/visual_layout
+  - domain/ui/ui_definition/src/persistence_activation
+  - domain/editor/editor_definition/src/operation.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/applied_editor_definition
+  - apps/runenwerk_editor/src/shell/tests.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-005 --roadmap WR-124
+  - cargo fmt --package ui_definition --package editor_definition --package editor_shell --package runenwerk_editor
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p ui_definition persistence_activation
+  - cargo test -p editor_definition operation
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p runenwerk_editor editor_lab_operation
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor apply_selected
+  - cargo test -p runenwerk_editor rollback_selected
+  - cargo test -p runenwerk_editor apply_and_rollback_keep_explicit_snapshots
+  - cargo test -p runenwerk_editor apply_review_reject_reload_and_rollback_are_snapshot_backed
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+  current_decision: Completed as runtime-proven UI Designer operation/apply/rollback evidence for typed operation diffs, apply
+    review rejection and acceptance, last-applied reload, rollback records, and real provider surface projection.
+  current_call: Archive WR-124 as completed PM-UI-DESIGNER-WB-005 evidence. Do not infer scenario evidence, performance baseline,
+    game-runtime seam, packaged product readiness, or final handoff behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WORKBENCH and follow the next legal design action before promoting
+    or implementing any follow-on UI Designer Workbench product row.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-006 still owns source-versioned scenario evidence and performance baselines.
+  - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+  - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+  - PM005 proves app/headless provider behavior; no native-window screenshot evidence or packaged product release readiness
+    is claimed in this milestone.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+  diagram_call:
+  - typed operations
+  - deterministic diffs
+  - apply rollback
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM005 operation/apply/rollback behavior preserved the accepted UI Designer Workbench product contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Visual authoring operations preserved stable ids, Canonical UI IR diffs, and deterministic textual patches.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Diff, activation preflight, and fail-closed diagnostics followed the accepted generic UI persistence doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Operation reports, deterministic diffs, history, undo/redo, and retained preview refresh followed accepted UI
+      Lab operation doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Apply/reject, failed activation preservation, reload, and rollback followed accepted UI Lab recovery doctrine.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-124-operation-diff-apply-and-rollback/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Operation/apply/rollback implementation followed the WR-124 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Operation/apply/rollback built on completed UI Designer product surfaces.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-124 completion requires completed operation/apply/rollback closeout evidence.
+  ddd_owner: domain/ui owns generic operation and persistence contracts; domain/editor owns editor/workbench operation adapters;
+    apps/runenwerk_editor owns concrete UI Designer draft mutation, history, apply/reject, rollback, reload preservation,
+    and evidence.
+  adr_requirement: No ADR while WR-124 kept generic UI truth in domain/ui, editor operation adapters in domain/editor, and
+    app execution in apps/runenwerk_editor. Require ADR or accepted design update before moving source truth, history authority,
+    project IO, or activation execution across those boundaries.
+  fitness_function_requirement: Operation dispatch and provider tests proving typed accept/reject, deterministic diffs, undo/redo
+    evidence, apply/reject, rollback, reload preservation, and UI Designer surface refresh.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+- id: WR-125
+  title: Scenario Evidence And Performance Baselines
+  diagram_title: UI Designer scenario evidence performance baselines
+  alias: UIDESIGNEREVIDENCE
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-005 operation/apply/rollback closeout
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-052
+  - WR-054
+  - WR-120
+  - WR-122
+  - WR-123
+  - WR-124
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-125-scenario-evidence-and-performance-baselines/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-scenario-evidence-
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - domain/ui/ui_definition/src/preview_fixture
+  - domain/ui/ui_definition/src/production_readiness
+  - domain/editor/editor_shell/src/ux_lab
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell/editor_lab_evidence
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-006 --roadmap WR-125
+  - cargo fmt --package ui_definition --package editor_shell --package runenwerk_editor
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p ui_definition production_readiness
+  - cargo test -p editor_shell ux_lab
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p runenwerk_editor ui_designer
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md
+  current_decision: Completed as runtime-proven UI Designer scenario evidence and performance baseline evidence for explicit
+    source-versioned capture, diagnostics snapshots, retained artifacts or typed unsupported reasons, freshness checks, and
+    resize/canvas/catalog/diagnostics/frame-build baselines.
+  current_call: Archive WR-125 as completed PM-UI-DESIGNER-WB-006 evidence. Do not infer game-runtime seam, game HUD runtime,
+    final handoff, native-window screenshot, or packaged product release behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WORKBENCH and follow the next legal design action before promoting
+    or implementing any follow-on UI Designer Workbench product row.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-007 still owns game-runtime compatibility seam proof.
+  - PM-UI-DESIGNER-WB-008 still owns final runtime-proven track closeout, usage docs, examples, and handoff notes.
+  - PM006 records a typed unsupported native-screenshot reason in headless validation; it does not claim native-window screenshot
+    artifacts.
+  - PM006 proves app/headless evidence capture and provider projection; it does not claim packaged product release readiness.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md
+  diagram_call:
+  - scenario evidence
+  - source versions
+  - performance baselines
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 scenario and target matrix evidence preserved accepted preview fixture doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 evidence packets, diagnostics snapshots, freshness, and performance reports preserved accepted readiness
+      doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 performance and resize evidence preserved the accepted UI Designer Workbench product contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-125-scenario-evidence-and-performance-baselines/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Scenario evidence and performance baseline implementation followed the WR-125 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Scenario evidence and baselines built on completed operation/apply/rollback runtime evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-125 completion requires completed scenario evidence and performance baseline closeout evidence.
+  ddd_owner: domain/ui owns generic preview and readiness evidence contracts; domain/editor owns editor/workbench scenario
+    vocabulary and app-neutral surface contracts; apps/runenwerk_editor owns concrete capture orchestration, timings, snapshots,
+    and artifacts.
+  adr_requirement: No ADR while WR-125 kept generic evidence descriptors in domain/ui and concrete capture/runtime artifacts
+    in apps/runenwerk_editor. Require ADR or accepted design update before domain/ui owns screenshot bytes, renderer handles,
+    provider sessions, app windows, project IO, or performance runner implementation.
+  fitness_function_requirement: Scenario evidence tests proving source-versioned packets, diagnostics snapshots, explicit
+    capture controls, unsupported artifact reasons, freshness decisions, and resize/canvas/catalog/diagnostics/frame-build
+    baseline records.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui, domain/editor, and
+    app evidence tooling.
+- id: WR-126
+  title: Runtime Proven Closeout And Handoff
+  diagram_title: UI Designer runtime-proven closeout and handoff
+  alias: UIDESIGNERCLOSEOUT
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-007 game-runtime compatibility seam closeout
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-120
+  - WR-122
+  - WR-123
+  - WR-124
+  - WR-125
+  - WR-118
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-126-runtime-proven-closeout-and-handoff/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-runtime-proven-clo
+  - docs-site/src/content/docs/apps/runenwerk-editor
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-008 --roadmap WR-126
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p ui_definition game -- --nocapture
+  - cargo test -p editor_shell game -- --nocapture
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+  current_decision: Completed as runtime-proven final UI Designer Workbench closeout and handoff evidence with usage docs,
+    representative runtime tests, completed PM001-PM007 evidence aggregation, roadmap/production validation, and explicit
+    game-runtime UI and no-gap handoff boundaries.
+  current_call: Archive WR-126 as completed PM-UI-DESIGNER-WB-008 evidence. Do not infer game HUD runtime behavior, native
+    runtime-window screenshot evidence, packaged release readiness, or perfectionist no-gap quality from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WORKBENCH and verify the production track reports no incomplete
+    milestones before relying on completion.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Native runtime-window screenshot evidence and packaged release readiness are not claimed by this track.
+  - PT-GAME-RUNTIME-UI still owns concrete game HUD runtime behavior, game-runtime UI projection execution, and SDF HUD rendering
+    proof.
+  - A separate no-gap audit or certification track must own any future perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+  diagram_call:
+  - runtime proven
+  - usage docs
+  - handoff
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Final closeout preserved the accepted UI Designer Workbench product boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-126-runtime-proven-closeout-and-handoff/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Final closeout followed the WR-126 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Runtime-proven closeout depended on completed game.runtime compatibility seam evidence and explicit no-HUD-runtime-behavior
+      boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-126 completion requires completed runtime-proven closeout, usage docs, validation, and handoff evidence.
+  ddd_owner: domain/ui owns generic UI definition and evidence contracts; domain/editor owns UI Designer app-neutral workbench
+    and UX Lab contracts; apps/runenwerk_editor owns concrete runtime/provider evidence; docs/workspace owns final closeout
+    and handoff metadata.
+  adr_requirement: No ADR because WR-126 only closed out existing evidence, usage docs, examples, and handoff metadata. Require
+    ADR or accepted design update before moving source-truth ownership, adding a game-runtime UI owner crate, changing dependency
+    direction, or claiming perfectionist no-gap quality.
+  fitness_function_requirement: Representative UI Designer app evidence tests, PM007 game-runtime seam tests, docs validation,
+    roadmap render/validate/check, production render/validate/check, planning validation, PUML validation, and git diff hygiene.
+  ownership_mode: Stream-aligned editor product closeout with complicated-subsystem support from domain/ui, domain/editor,
+    apps/runenwerk_editor, and workspace governance.
+- id: WR-127
+  title: UI Designer Workbench V1 Closure Track Governance
+  diagram_title: UI Designer V1 closure governance
+  alias: WR127
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed bounded governance evidence for the closure production track
+  planning_state: completed
+  priority: P3
+  value: 5
+  blocker: 5
+  tc: 2
+  rr_oe: 4
+  du: 3
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.4
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-126
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-add-a-ui-designer-workbench-v1-closure-p
+  - docs-site/src/content/docs/reports/implementation-plans/wr-127-ui-designer-workbench-v1-closure-track-governance/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-001 --roadmap WR-127
+  - task ai:architecture-governance -- --task "UI Designer Workbench V1 product completion repair" --scope "domain/ui/ui_definition;
+    domain/ui/ui_theme; domain/editor/editor_definition; domain/editor/editor_shell; apps/runenwerk_editor/src/shell; apps/runenwerk_editor/src/runtime;
+    docs-site/src/content/docs/workspace/production-tracks.yaml"
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md
+  current_decision: Completed as bounded governance evidence for PT-UI-DESIGNER-WB-V1-CLOSURE activation, accepted V1 product
+    drift findings, owner-boundary confirmation, follow-on closure scope decomposition, and validation.
+  current_call: Archive WR-127 as completed PM-UI-DESIGNER-WB-V1-CLOSURE-001 evidence. Do not use this row as permission for
+    product code changes.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WB-V1-CLOSURE and follow the next legal action before promoting
+    or implementing any follow-on UI Designer Workbench closure row.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-004 still owns operation diff/apply/rollback parity closure.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix, game-runtime compatibility workflow, evidence, and performance
+    closure.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns runtime-proven product closeout and handoff.
+  - PT-GAME-RUNTIME-UI still owns concrete game HUD runtime behavior.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md
+  diagram_call:
+  - closure governance
+  - drift audit
+  - bounded contract
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Closure governance is anchored in the accepted UI Designer Workbench product contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-127-ui-designer-workbench-v1-closure-track-governance/plan.md
+    required_status: active
+    applies_to: discovery
+    reason: WR-127 followed the active design-first governance contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: Closure governance reconciles the completed UI Designer Workbench productization closeout.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: WR-127 completion requires completed bounded governance closeout evidence.
+  ddd_owner: Editor product work coordinates the closure; domain/ui/ui_definition owns generic UI contracts, domain/ui/ui_theme
+    owns tokens, domain/editor/editor_definition owns editor adapters and operation vocabulary, domain/editor/editor_shell
+    owns app-neutral view models, and apps/runenwerk_editor owns session, preview, evidence orchestration, and runtime launch.
+  adr_requirement: No ADR for governance closeout; ADR or accepted design update required before changing dependency direction,
+    creating a new game-runtime UI owner, making projection output authoritative, or moving app/session/runtime truth into
+    domain/ui.
+  fitness_function_requirement: Follow-on rows must define checks for package/session source truth, recipe expansion into
+    Canonical UI IR, source-versioned hierarchy/canvas/inspector updates, operation report parity, deterministic diffs, fail-closed
+    activation, game.runtime descriptor evidence, measured performance baselines, and absence of editor-shell ownership in
+    game-runtime seams.
+  ownership_mode: Stream-aligned editor product repair with complicated-subsystem support from UI definition, UI theme, editor
+    definition, editor shell, and app runtime owners.
+- id: WR-128
+  title: UI Designer Workbench V1 Closure Package Session Source Truth
+  diagram_title: UI Designer Workbench V1 closure package session
+  alias: WR128
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed package/session source-truth closure evidence
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-127
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-package
+  - docs-site/src/content/docs/reports/implementation-plans/wr-128-ui-designer-workbench-v1-closure-package-session-source-truth/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/editor_lab_project/mod.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-002 --roadmap WR-128
+  - cargo test -p runenwerk_editor self_authoring
+  - cargo test -p runenwerk_editor editor_lab_project
+  - cargo test -p runenwerk_editor ui_designer
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+  current_decision: Completed as runtime-proven package/session source-truth closure evidence with focused self_authoring,
+    editor_lab_project, and ui_designer tests.
+  current_call: Archive WR-128 as completed PM-UI-DESIGNER-WB-V1-CLOSURE-002 evidence. Do not infer catalog insertion, operation
+    parity, scenario matrix, performance baseline, final closeout, or game HUD runtime behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WB-V1-CLOSURE and follow the next legal closure action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-004 still owns operation diff/apply/rollback parity.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix, game-runtime compatibility workflow, evidence packets, and
+    performance baselines.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns runtime-proven final closeout and handoff.
+  - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+  diagram_call:
+  - package session
+  - source truth
+  - design first
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Package/session closure must follow the accepted V1 product model.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-canonical-ir-and-composition-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Package source truth must normalize through Canonical UI IR and preserve stable authored ids.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Persistence, reload, rollback, and activation must use deterministic migration, diff, and fail-closed gates.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-128-ui-designer-workbench-v1-closure-package-session-source-truth/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-128 followed the active package/session source-truth implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-128 completion requires completed package/session source-truth closeout evidence.
+  ddd_owner: domain/ui/ui_definition owns generic UI package/document/Canonical UI IR truth; domain/editor owns editor adapter
+    and operation vocabulary; apps/runenwerk_editor owns reconstructable session, preview, persistence orchestration, and
+    evidence capture.
+  adr_requirement: No ADR required if PM-002 preserves existing ownership and dependency direction; require ADR or accepted
+    design update before making app session state authoritative UI source truth or moving persistence/runtime details into
+    domain/ui.
+  fitness_function_requirement: Define source-version, reload, rollback, deterministic diagnostics, package persistence, and
+    evidence freshness checks before promotion.
+  ownership_mode: Stream-aligned editor product repair with complicated-subsystem support from UI definition, editor definition,
+    editor shell, and app runtime owners.
+- id: WR-129
+  title: UI Designer Workbench V1 Closure Recipe Catalog Insertion
+  diagram_title: UI Designer Workbench V1 closure recipe catalog
+  alias: WR129
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed recipe catalog insertion and authoring-surface closure evidence
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-123
+  - WR-128
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-recipe-
+  - docs-site/src/content/docs/reports/implementation-plans/wr-129-ui-designer-workbench-v1-closure-recipe-catalog-insertion/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+  - domain/ui/ui_definition/src/component_recipe/mod.rs
+  - domain/editor/editor_shell/src/commands/shell_command.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/ux_lab/design_system.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-003 --roadmap WR-129
+  - cargo test -p ui_definition component_recipe
+  - cargo test -p editor_shell ui_designer
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p editor_shell design_system
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor self_authoring
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+  current_decision: Completed as runtime-proven recipe catalog insertion and source-versioned authoring-surface closure evidence
+    with focused ui_definition, editor_shell, runenwerk_editor provider, and self_authoring tests.
+  current_call: Archive WR-129 as completed PM-UI-DESIGNER-WB-V1-CLOSURE-003 evidence. Do not infer full operation parity,
+    scenario evidence, performance baselines, final closeout, or concrete game HUD runtime behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WB-V1-CLOSURE and follow the next legal closure action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-004 still owns full operation diff/apply/rollback parity, undo/redo policy, and complete
+    operation taxonomy.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix expansion, game-runtime compatibility workflow, evidence packets,
+    and performance baselines.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns runtime-proven final closeout and handoff.
+  - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+  diagram_call:
+  - recipe insertion
+  - author surface closure
+  - source version
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Recipe insertion uses generic recipe declarations, slot contracts, target-profile compatibility, and typed recipe
+      diagnostics.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Hierarchy, canvas, and inspector updates preserve stable authored ids and deterministic layout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/guidelines/module-structure-guidelines.md
+    required_status: active
+    applies_to: implementation
+    reason: Implementation stayed within responsibility-based module boundaries.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Recipe insertion closure depends on completed package/session source truth and reload/rollback evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-129-ui-designer-workbench-v1-closure-recipe-catalog-insertion/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-129 followed the active recipe catalog insertion implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-129 completion requires completed recipe catalog insertion and authoring-surface closeout evidence.
+  ddd_owner: domain/ui/ui_definition owns generic recipe declarations, Canonical UI IR expansion, compatibility, and diagnostics;
+    domain/editor/editor_shell owns app-neutral catalog/hierarchy/canvas/inspector projections; apps/runenwerk_editor owns
+    concrete workbench provider state, source-versioned author workflow orchestration, dispatch, and evidence capture.
+  adr_requirement: No ADR required because WR-129 preserves existing ownership and dependency direction; require ADR or accepted
+    design update before moving generic recipe truth into apps/runenwerk_editor, making editor projections authoritative source
+    truth, or implementing concrete game-runtime HUD behavior.
+  fitness_function_requirement: Focused checks cover recipe expansion, compatible catalog route projection, disabled reasons,
+    insertion into source-versioned package state, synchronized workbench projections, deterministic diffs, and explicit non-coverage
+    of full operation parity.
+  ownership_mode: Stream-aligned editor product closure with complicated-subsystem support from domain/ui recipe contracts,
+    domain/editor editor shell projections, and apps/runenwerk_editor provider/runtime owners.
+- id: WR-130
+  title: UI Designer Workbench V1 closure operation diff apply rollback parity
+  diagram_title: UI Designer Workbench V1 closure operation parity
+  alias: WR130
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed operation diff/apply/rollback parity closure evidence
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-129
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-operati
+  - docs-site/src/content/docs/reports/implementation-plans/wr-130-ui-designer-workbench-v1-closure-operation-diff-apply-rollback-parity/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+  - domain/ui/ui_definition/src/visual_layout/operation.rs
+  - domain/ui/ui_definition/src/visual_layout/apply.rs
+  - domain/editor/editor_definition/src/operation.rs
+  - domain/editor/editor_shell/src/commands/shell_command.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition/build_editor_lab_surface.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/editor_lab_project/mod.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-004 --roadmap WR-130
+  - cargo test -p ui_definition visual_layout
+  - cargo test -p editor_definition editor_lab_operation
+  - cargo test -p editor_shell editor_lab
+  - cargo test -p runenwerk_editor self_authoring
+  - cargo test -p runenwerk_editor ui_designer
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+  current_decision: Completed as runtime-proven operation diff/apply/rollback parity evidence with focused ui_definition,
+    editor_definition, editor_shell, runenwerk_editor provider, and self_authoring tests.
+  current_call: Archive WR-130 as completed PM-UI-DESIGNER-WB-V1-CLOSURE-004 evidence. Do not infer scenario matrix evidence,
+    performance baselines, final closeout, or concrete game HUD runtime behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WB-V1-CLOSURE and follow the next legal closure action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-005 still owns scenario matrix expansion, game-runtime compatibility workflow, source-versioned
+    evidence packets, and measured performance baselines.
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns final runtime-proven product closeout, honest known-gap classification, and
+    downstream handoff.
+  - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+  diagram_call:
+  - operation parity
+  - deterministic diffs
+  - source recovery
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Operation dispatch, reports, history, undo/redo, and direct-control parity follow accepted UI Lab operation doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-persistence-migration-diff-and-activation-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Accepted edits produce deterministic reviewable diffs before activation.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-view-model-capability-and-intent-binding-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Binding and intent edits remain validated descriptors and proposals, not runtime command execution.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Operation parity depends on completed recipe insertion and source-versioned authoring-surface evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-130-ui-designer-workbench-v1-closure-operation-diff-apply-rollback-parity/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-130 followed the active operation parity implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-130 completion requires completed operation diff/apply/rollback parity closeout evidence.
+  ddd_owner: domain/ui/ui_definition owns generic visual layout, binding, and recipe primitives; domain/editor/editor_definition
+    owns editor operation vocabulary and reducers; domain/editor/editor_shell owns app-neutral action/view-model projection;
+    apps/runenwerk_editor owns source-versioned session orchestration, dispatch, persistence, and evidence.
+  adr_requirement: No ADR required because WR-130 preserves existing ownership and dependency direction; require ADR or accepted
+    design update before moving generic UI operation truth into apps/runenwerk_editor, making editor projections authoritative
+    source truth, or implementing concrete game-runtime HUD behavior.
+  fitness_function_requirement: Focused checks cover visual layout operation primitives, editor operation taxonomy and deterministic
+    diffs, recipe insertion through operation reports, rejected-operation diagnostics, undo/redo history, apply/reject/reload/rollback
+    parity, and source-version freshness.
+  ownership_mode: Stream-aligned editor product closure with complicated-subsystem support from domain/ui visual layout contracts,
+    domain/editor operation reducers and shell projections, and apps/runenwerk_editor provider/runtime owners.
+- id: WR-131
+  title: UI Designer Workbench V1 closure scenario matrix game runtime evidence and performance baselines
+  diagram_title: UI Designer Workbench V1 closure scenario matrix
+  alias: WR131
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed PM-UI-DESIGNER-WB-V1-CLOSURE-005 scenario matrix and evidence closure
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-130
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-scenari
+  - docs-site/src/content/docs/reports/implementation-plans/wr-131-ui-designer-workbench-v1-closure-scenario-matrix-game-runtime-evidence-and-performance-baselines/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+  - domain/ui/ui_definition/src/production_readiness/mod.rs
+  - domain/ui/ui_definition/src/preview_fixture/mod.rs
+  - domain/ui/ui_definition/src/component_recipe/mod.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition/build_editor_lab_surface.rs
+  - domain/editor/editor_shell/src/commands/shell_command.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-005 --roadmap WR-131
+  - cargo test -p ui_definition production_readiness
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p editor_shell ui_designer
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor self_authoring
+  - cargo test -p runenwerk_editor scenario_evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+  current_decision: Completed as runtime-proven scenario matrix, game.runtime descriptor, source-versioned evidence packet,
+    and measured product-path performance baseline evidence with focused ui_definition, editor_shell, runenwerk_editor provider,
+    dispatch, self_authoring, and scenario_evidence tests.
+  current_call: Archive WR-131 as completed PM-UI-DESIGNER-WB-V1-CLOSURE-005 evidence. Do not infer final V1 closeout, packaged
+    release readiness, perfectionist no-gap certification, or concrete game HUD runtime behavior from this row.
+  first_move: Rerun task ai:goal -- --track PT-UI-DESIGNER-WB-V1-CLOSURE and follow the next legal closure action.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-DESIGNER-WB-V1-CLOSURE-006 still owns final runtime-proven product closeout, honest known-gap classification, and
+    downstream handoff.
+  - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+  - Native window screenshot artifacts remain typed unsupported evidence in headless validation; retained workbench evidence
+    is sufficient for this bounded PM-005 proof but not for no-gap certification.
+  - Packaged release readiness and perfectionist no-gap certification are not claimed by this slice.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+  diagram_call:
+  - scenario matrix
+  - game runtime evidence
+  - performance baselines
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Scenario matrices and evidence packets are target-profile aware and replayable.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Readiness decisions are descriptor-based and fail closed for missing, stale, or mismatched evidence.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: game.runtime closure remains a compatibility seam and does not implement concrete game HUD runtime behavior.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Scenario/evidence closure depends on completed operation diff/apply/rollback parity evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-131-ui-designer-workbench-v1-closure-scenario-matrix-game-runtime-evidence-and-performance-baselines/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-131 followed the active PM-005 implementation contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-131 completion requires completed scenario matrix, evidence packet, and performance closeout evidence.
+  ddd_owner: domain/ui/ui_definition owns generic scenario, fixture, readiness, compatibility, and evidence packet contracts;
+    domain/editor/editor_shell owns app-neutral workbench action and projection contracts; apps/runenwerk_editor owns concrete
+    scenario orchestration, evidence capture, and measured product-path baselines.
+  adr_requirement: No ADR required because WR-131 preserves existing ownership and dependency direction; require ADR or accepted
+    design update before adding concrete game HUD runtime behavior, moving game-runtime UI ownership into editor shell, or
+    making evidence packets authoritative source truth.
+  fitness_function_requirement: Focused checks cover target-profile scenario matrix coverage, source-versioned evidence freshness,
+    typed diagnostics snapshots, read-only fixture/binding descriptors, validated intent descriptors, explicit shell-command
+    capture, game.runtime unsupported-check boundaries, and measured frame/canvas/catalog/diagnostics/resize baselines.
+  ownership_mode: Stream-aligned editor product closure with complicated-subsystem support from domain/ui readiness and apps/runenwerk_editor
+    evidence owners.
+- id: WR-132
+  title: UI Designer Workbench V1 closure runtime-proven product closeout and handoff
+  diagram_title: 'UI Designer Workbench V1 closure runtime-proven '
+  alias: WR132
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed PM-UI-DESIGNER-WB-V1-CLOSURE-006 runtime-proven closeout and handoff
+  planning_state: completed
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-131
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-runtime
+  - docs-site/src/content/docs/reports/implementation-plans/wr-132-ui-designer-workbench-v1-closure-runtime-proven-product-closeout-and-handoff/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/README.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/ui-designer-workbench.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-006 --roadmap WR-132
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor scenario_evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+  current_decision: Completed as the final runtime-proven UI Designer Workbench V1 closure with PM001-PM005 evidence aggregation,
+    practical app docs, focused UI Designer and scenario evidence validation, production evidence, roadmap archive evidence,
+    and downstream PT-GAME-RUNTIME-UI handoff.
+  current_call: Archive WR-132 as completed PM-UI-DESIGNER-WB-V1-CLOSURE-006 evidence. Do not infer concrete game HUD runtime
+    behavior, SDF HUD rendering, packaged release readiness, native-window no-gap proof, or perfectionist certification from
+    this row.
+  first_move: Use PT-GAME-RUNTIME-UI for concrete game-runtime UI projection and HUD behavior. Reopen this closure track only
+    if completed evidence regresses.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+  - SDF HUD rendering and in-frame game-runtime UI projection execution are not claimed by this track.
+  - Native runtime-window screenshot evidence and packaged release readiness are not claimed by this track.
+  - A separate no-gap audit or certification track must own any future perfectionist_verified claim.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+  diagram_call:
+  - final closeout
+  - handoff
+  - runtime proven
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Final closeout satisfies the accepted V1 product workflow contract.
+  - kind: design
+    path: docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+    required_status: active
+    applies_to: implementation
+    reason: Final closeout classifies completion quality honestly and guards against status-panel-only evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-132-ui-designer-workbench-v1-closure-runtime-proven-product-closeout-and-handoff/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM006 final closeout followed the accepted WR-132 design-first contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Final V1 closure depends on completed PM005 scenario/evidence/performance closeout evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-132 completion requires completed final runtime-proven closeout, docs, validation, and handoff evidence.
+  ddd_owner: docs/workspace owns final closeout, usage docs, production metadata, roadmap metadata, and handoff notes; domain/ui,
+    domain/editor, and apps/runenwerk_editor completed evidence remains source truth for product behavior.
+  adr_requirement: No ADR required because WR-132 is docs/workspace final closeout only; require ADR or accepted design update
+    before changing source-truth ownership, dependency direction, concrete game HUD runtime behavior, or no-gap claim rules.
+  fitness_function_requirement: Focused checks cover UI Designer docs validation, completed PM001-PM005 evidence aggregation,
+    runtime_proven quality classification, downstream PT-GAME-RUNTIME-UI handoff, roadmap/production render and validation,
+    and no product-code changes.
+  ownership_mode: Stream-aligned final closeout with docs/workspace ownership and completed domain/app evidence inputs.
+- id: WR-133
+  title: UI Designer Workbench runtime evidence source revision and catalog correction
+  diagram_title: UI Designer evidence correction
+  alias: WR133
+  lane: Discovery
+  dependency_level: L4
+  gate: Completed PM-UI-DESIGNER-EVIDENCE-CORRECTION-001 runtime evidence correction
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 3
+  rr_oe: 4
+  du: 3
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.2
+  rice: N/A
+  kano: Must
+  dependencies:
+  - WR-132
+  write_scopes:
+  - apps/runenwerk_editor/src/shell/editor_lab_evidence
+  - apps/runenwerk_editor/src/shell/self_authoring
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition/build_editor_lab_surface.rs
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/src/ux_lab/design_system.rs
+  - docs-site/src/content/docs/apps/runenwerk-editor/ui-designer-workbench.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  validations:
+  - cargo test -p runenwerk_editor editor_lab_evidence --quiet
+  - cargo test -p runenwerk_editor ui_designer --quiet
+  - cargo test -p runenwerk_editor source_revision --quiet
+  - cargo test -p editor_shell ui_designer --quiet
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  - ./quiet_full_gate.sh
+  next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
+  current_decision: Completed corrective batch for UI Designer Workbench runtime evidence truth. Descriptor compatibility and runtime product evidence are now separate contracts, source revisions are content-addressed, stale evidence is invalidated, game.runtime remains descriptor-only, and catalog rows are structured/filterable.
+  current_call: Archive WR-133 as the supersession row for current UI Designer Workbench runtime readiness. Preserve WR-124 through WR-132 as historical closeouts, but use WR-133 evidence rules for current readiness claims.
+  first_move: Use PT-GAME-RUNTIME-UI for concrete game-runtime UI projection and HUD behavior. Use this correction standard for future UI Designer Workbench readiness.
+  main_blocker: Completed.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
+  - Native runtime-window screenshot evidence, packaged release readiness, and perfectionist no-gap certification remain out of scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
+  diagram_call:
+  - evidence correction
+  - source revision
+  - descriptor split
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Runtime evidence correction preserves the accepted UI Designer Workbench product contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-133 supersedes the prior completed runtime evidence claim shape without rewriting history.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-133 completion requires completed corrective evidence and validation closeout.
+  ddd_owner: apps/runenwerk_editor owns runtime evidence capture and source revision freshness; domain/editor/editor_shell owns app-neutral catalog view models and routes; docs/workspace owns supersession metadata.
+  adr_requirement: No ADR required because this corrects app/evidence contracts and editor-shell ownership within accepted UI Designer design boundaries; require ADR or accepted design update before moving game-runtime UI execution into editor_shell.
+  fitness_function_requirement: Focused UI Designer, evidence, source revision, editor_shell UI, docs, roadmap, production, PUML, diff, and full gate validation protect the corrected readiness boundary.
+  ownership_mode: Stream-aligned editor product correction with app-owned evidence and domain/editor shell adapter support.

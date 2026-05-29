@@ -320,6 +320,45 @@ package "PT-EDITOR-UX Editor Product UX Lab And Surface Perfection" {
 
 }
 
+package "PT-UI-DESIGNER-WORKBENCH UI Designer Workbench Productization" {
+  component "PM-UI-DESIGNER-WB-001 Governance Code Truth And Track Activation\nkind=design\nstate=completed\nWR=WR-120" as PM_UI_DESIGNER_WB_001 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-002 V1 Package Document Session And Evidence Model\nkind=design\nstate=completed\nWR=N/A" as PM_UI_DESIGNER_WB_002 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-003 Standalone App Shell And Embedded Host Parity\nkind=implementation\nstate=completed\nWR=WR-122" as PM_UI_DESIGNER_WB_003 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-004 Catalog Hierarchy Canvas Inspector V1\nkind=implementation\nstate=completed\nWR=WR-123" as PM_UI_DESIGNER_WB_004 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-005 Operation Diff Apply And Rollback\nkind=implementation\nstate=completed\nWR=WR-124" as PM_UI_DESIGNER_WB_005 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-006 Scenario Evidence And Performance Baselines\nkind=hardening\nstate=completed\nWR=WR-125" as PM_UI_DESIGNER_WB_006 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-007 Game Runtime Compatibility Seam\nkind=hardening\nstate=completed\nWR=WR-118" as PM_UI_DESIGNER_WB_007 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-008 Runtime Proven Closeout And Handoff\nkind=release\nstate=completed\nWR=WR-126" as PM_UI_DESIGNER_WB_008 <<completed>>
+
+}
+
+package "PT-UI-DESIGNER-WB-V1-CLOSURE UI Designer Workbench V1 Product Closure" {
+  component "PM-UI-DESIGNER-WB-V1-CLOSURE-001 Governance Drift Audit And Correction Contract\nkind=design\nstate=completed\nWR=WR-127" as PM_UI_DESIGNER_WB_V1_CLOSURE_001 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-V1-CLOSURE-002 Package Session Source Truth Closure\nkind=implementation\nstate=completed\nWR=WR-128" as PM_UI_DESIGNER_WB_V1_CLOSURE_002 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-V1-CLOSURE-003 Recipe Catalog Insertion And Authoring Surface Closure\nkind=implementation\nstate=completed\nWR=WR-129" as PM_UI_DESIGNER_WB_V1_CLOSURE_003 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-V1-CLOSURE-004 Operation Diff Apply Rollback Parity Closure\nkind=implementation\nstate=completed\nWR=WR-130" as PM_UI_DESIGNER_WB_V1_CLOSURE_004 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-V1-CLOSURE-005 Scenario Matrix Game Runtime And Evidence Closure\nkind=hardening\nstate=completed\nWR=WR-131" as PM_UI_DESIGNER_WB_V1_CLOSURE_005 <<completed>>
+
+  component "PM-UI-DESIGNER-WB-V1-CLOSURE-006 Runtime-Proven Product Closeout And Handoff\nkind=release\nstate=completed\nWR=WR-132" as PM_UI_DESIGNER_WB_V1_CLOSURE_006 <<completed>>
+
+}
+
+package "PT-UI-DESIGNER-EVIDENCE-CORRECTION UI Designer Workbench Runtime Evidence Correction" {
+  component "PM-UI-DESIGNER-EVIDENCE-CORRECTION-001 Runtime Evidence Source Revision And Catalog Correction\nkind=implementation\nstate=completed\nWR=WR-133" as PM_UI_DESIGNER_EVIDENCE_CORRECTION_001 <<completed>>
+
+}
+
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
   component "PM-GAME-RUNTIME-UI-001 Governance Owner Boundary And Code Truth Matrix\nkind=design\nstate=designing\nWR=WR-104" as PM_GAME_RUNTIME_UI_001 <<designing>>
 
@@ -517,6 +556,21 @@ PM_EDITOR_UX_005 -down-> PM_EDITOR_UX_007 : production prerequisite
 PM_EDITOR_UX_006 -down-> PM_EDITOR_UX_007 : production prerequisite
 PM_EDITOR_UX_007 -down-> PM_EDITOR_UX_008 : production prerequisite
 PM_EDITOR_UX_008 -down-> PM_EDITOR_UX_009 : production prerequisite
+PM_EDITOR_UX_004 -down-> PM_UI_DESIGNER_WB_001 : production prerequisite
+PM_UI_DESIGNER_WB_001 -down-> PM_UI_DESIGNER_WB_002 : production prerequisite
+PM_UI_DESIGNER_WB_002 -down-> PM_UI_DESIGNER_WB_003 : production prerequisite
+PM_UI_DESIGNER_WB_003 -down-> PM_UI_DESIGNER_WB_004 : production prerequisite
+PM_UI_DESIGNER_WB_004 -down-> PM_UI_DESIGNER_WB_005 : production prerequisite
+PM_UI_DESIGNER_WB_005 -down-> PM_UI_DESIGNER_WB_006 : production prerequisite
+PM_UI_DESIGNER_WB_006 -down-> PM_UI_DESIGNER_WB_007 : production prerequisite
+PM_UI_DESIGNER_WB_007 -down-> PM_UI_DESIGNER_WB_008 : production prerequisite
+PM_UI_DESIGNER_WB_008 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_001 : production prerequisite
+PM_UI_DESIGNER_WB_V1_CLOSURE_001 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_002 : production prerequisite
+PM_UI_DESIGNER_WB_V1_CLOSURE_002 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_003 : production prerequisite
+PM_UI_DESIGNER_WB_V1_CLOSURE_003 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_004 : production prerequisite
+PM_UI_DESIGNER_WB_V1_CLOSURE_004 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_005 : production prerequisite
+PM_UI_DESIGNER_WB_V1_CLOSURE_005 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_006 : production prerequisite
+PM_UI_DESIGNER_WB_V1_CLOSURE_006 -down-> PM_UI_DESIGNER_EVIDENCE_CORRECTION_001 : production prerequisite
 PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

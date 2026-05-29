@@ -1,0 +1,110 @@
+version: 1
+idea: UI Designer Workbench V1 closure scenario matrix game runtime evidence and performance baselines
+source_path: docs-site/src/content/docs/workspace/production-tracks.yaml
+owner: editor
+created_at: '2026-05-26'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions: []
+item:
+  id: WR-131
+  title: UI Designer Workbench V1 closure scenario matrix game runtime evidence and performance baselines
+  diagram_title: UI Designer Workbench V1 closure scenario matrix
+  alias: WR131
+  lane: Discovery
+  dependency_level: L4
+  gate: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-005 scenario matrix and evidence closure contract
+  planning_state: ready_next
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-130
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-scenari
+  - docs-site/src/content/docs/reports/implementation-plans/wr-131-ui-designer-workbench-v1-closure-scenario-matrix-game-runtime-evidence-and-performance-baselines/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-005 --roadmap WR-131
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-005 design-first scenario matrix, game-runtime compatibility evidence,
+    and performance baseline contract at docs-site/src/content/docs/reports/implementation-plans/wr-131-ui-designer-workbench-v1-closure-scenario-matrix-game-runtime-evidence-and-performance-baselines/plan.md;
+    WR-130 prerequisite is completed, design gates are accepted, write scopes are bounded, and production:plan reports WR-131
+    promotable.
+  current_decision: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-005 design-first scenario/evidence contract; no product code
+    changes are authorized until WR-131 is applied, promoted, and receives an implementation contract.
+  current_call: Use WR-131 only for editor.workbench and game.runtime scenario matrix workflows, read-only fixture bindings,
+    validated intent descriptors, source-versioned evidence packets, and measured performance baselines. Do not infer final
+    product closeout or concrete game HUD runtime behavior from this row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-005 --roadmap WR-131 and follow the
+    promotion preflight before product code.
+  main_blocker: Awaiting WR-131 promotion to current_candidate.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - scenario matrix
+  - game runtime evidence
+  - design first
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Scenario matrices and evidence packets must be target-profile aware and replayable.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Readiness decisions must be descriptor-based and fail closed for missing, stale, or mismatched evidence.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+    required_status: active
+    applies_to: implementation
+    reason: game.runtime closure must remain a compatibility seam and must not implement concrete game HUD runtime behavior.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Scenario/evidence closure depends on completed operation diff/apply/rollback parity evidence.
+  ddd_owner: domain/ui/ui_definition owns generic scenario, fixture, readiness, compatibility, and evidence packet contracts;
+    domain/editor/editor_shell owns app-neutral workbench projection; apps/runenwerk_editor owns concrete scenario orchestration,
+    evidence capture, and measured product-path baselines.
+  adr_requirement: No ADR required while WR-131 preserves existing ownership and dependency direction; require ADR or accepted
+    design update before adding concrete game HUD runtime behavior, moving game-runtime UI ownership into editor shell, or
+    making evidence packets authoritative source truth.
+  fitness_function_requirement: Define focused tests for target-profile scenario matrix coverage, source-versioned evidence
+    freshness, typed diagnostics snapshots, read-only fixture/binding descriptors, validated intent descriptors, and measured
+    frame/canvas/catalog/diagnostics/resize baselines before promotion.
+  ownership_mode: Stream-aligned editor product closure with complicated-subsystem support from domain/ui readiness and
+    apps/runenwerk_editor evidence owners.
+edges: []

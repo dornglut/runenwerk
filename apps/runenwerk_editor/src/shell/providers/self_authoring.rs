@@ -101,6 +101,15 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
             SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::SelectUiNode {
                 node_id,
             }) => ShellCommand::SelectEditorDefinitionUiNode { node_id },
+            SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::InsertRecipe {
+                recipe_id,
+            }) => ShellCommand::InsertSelectedEditorDefinitionRecipe { recipe_id },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SetRecipeCatalogFilter { query },
+            ) => ShellCommand::SetEditorDefinitionRecipeCatalogFilter { query },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::CaptureScenarioEvidence,
+            ) => ShellCommand::CaptureUiDesignerScenarioEvidence,
             SurfaceLocalAction::EditorDefinition(
                 EditorDefinitionSurfaceAction::SetUiNodeText { node_id, text },
             ) => ShellCommand::SetSelectedEditorDefinitionUiNodeText { node_id, text },
@@ -219,7 +228,7 @@ fn ui_designer_workbench_view_model(
         scenario_matrix_pane(),
         readiness_pane(),
         workbench_pane_from_diagnostics(diagnostics_view_model(context)),
-        native_evidence_pane(),
+        native_evidence_pane(context),
     ];
 
     UiDesignerWorkbenchViewModel::new(
@@ -228,7 +237,7 @@ fn ui_designer_workbench_view_model(
         panes,
     )
     .with_selected_document(selected_document_label(state))
-    .with_readiness(workbench_readiness(state))
+    .with_readiness(workbench_readiness(context))
     .with_actions(
         operation_history_actions(state)
             .into_iter()
@@ -306,7 +315,22 @@ fn workbench_pane_from_diagnostics(
 fn token_recipe_preview_pane(
     state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
 ) -> UiDesignerWorkbenchPaneViewModel {
+    let library = editor_shell::editor_design_system_recipe_library();
+    let catalog_items = component_catalog_items(state, &library);
+    let enabled_insertions = catalog_items
+        .iter()
+        .filter(|item| item.action.enabled)
+        .count();
     let mut summary_lines = Vec::new();
+    if let Some(source_version) = ui_designer_source_version_label(state) {
+        summary_lines.push(format!("source version: {source_version}"));
+    }
+    summary_lines.push("catalog target profile: editor.workbench".to_string());
+    summary_lines.push(format!(
+        "recipe declarations: {} enabled insertions: {}",
+        library.declarations.len(),
+        enabled_insertions
+    ));
     if let Some(document) = state.selected_document() {
         summary_lines.push(format!("document kind: {:?}", document.kind));
         match &document.content {
@@ -316,7 +340,8 @@ fn token_recipe_preview_pane(
             }
             editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
                 summary_lines.push(format!("template: {}", template.id.as_str()));
-                summary_lines.push("recipe preview: editor.pattern.primary_button".to_string());
+                summary_lines
+                    .push("recipe catalog source: editor.product.design_system".to_string());
                 summary_lines.push("target profile: editor.workbench".to_string());
             }
             _ => summary_lines.push(
@@ -329,9 +354,193 @@ fn token_recipe_preview_pane(
     }
     UiDesignerWorkbenchPaneViewModel::new(
         UiDesignerWorkbenchPaneKind::TokenRecipePreview,
-        "Tokens and Recipes",
+        "Component Catalog",
     )
     .with_summary_lines(summary_lines)
+    .with_filter_field(EditorLabTextFieldViewModel::new(
+        "Filter component catalog",
+        state.recipe_catalog_filter().to_string(),
+        "Filter recipes by name, category, target, token, or state",
+        EditorDefinitionSurfaceAction::SetRecipeCatalogFilter {
+            query: state.recipe_catalog_filter().to_string(),
+        },
+    ))
+    .with_catalog_items(catalog_items)
+}
+
+fn component_catalog_items(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+    library: &ui_definition::UiRecipeLibrary,
+) -> Vec<EditorLabCatalogItemViewModel> {
+    let selected_template = state.selected_document().is_some_and(|document| {
+        matches!(
+            &document.content,
+            editor_definition::EditorDefinitionDocumentContent::UiTemplate(_)
+        )
+    });
+    let filter = state.recipe_catalog_filter().trim().to_lowercase();
+    library
+        .declarations
+        .iter()
+        .map(|declaration| recipe_catalog_item(declaration, selected_template))
+        .filter(|item| catalog_item_matches_filter(item, &filter))
+        .collect()
+}
+
+fn recipe_catalog_item(
+    declaration: &ui_definition::UiRecipeDeclaration,
+    selected_template: bool,
+) -> EditorLabCatalogItemViewModel {
+    let target_profile =
+        ui_definition::UiRecipeTargetProfileId::from(UI_DESIGNER_WORKBENCH_TARGET_PROFILE);
+    let expansion = ui_definition::expand_ui_recipe(
+        &ui_definition::UiRecipeLibrary {
+            declarations: vec![declaration.clone()],
+        },
+        &ui_definition::UiRecipeExpansionRequest::activate(
+            declaration.id.clone(),
+            target_profile.clone(),
+        ),
+    );
+    let mut action = EditorLabActionViewModel::enabled(
+        format!("Insert {}", declaration.label),
+        EditorDefinitionSurfaceAction::InsertRecipe {
+            recipe_id: declaration.id.as_str().to_string(),
+        },
+    );
+    if !selected_template {
+        action = action.disabled("requires a selected UI template document");
+    } else if expansion.has_errors() {
+        action = action.disabled(recipe_catalog_disabled_reason(
+            &expansion.as_definition_diagnostics(),
+        ));
+    }
+
+    let readiness = recipe_readiness(declaration, &target_profile, expansion.has_errors());
+    let searchable_text = format!(
+        "{} {} {} {} {} {} {} {}",
+        declaration.id.as_str(),
+        declaration.label,
+        declaration.category,
+        target_profile.as_str(),
+        declaration.source_package.as_str(),
+        recipe_target_compatibility(declaration, &target_profile),
+        recipe_token_requirements(declaration).join(" "),
+        declaration
+            .state_variants
+            .iter()
+            .map(|state| state.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+
+    EditorLabCatalogItemViewModel::new(
+        EditorLabCatalogItemDetails {
+            recipe_id: declaration.id.as_str().to_string(),
+            label: declaration.label.clone(),
+            category: declaration.category.clone(),
+            target_profile: target_profile.as_str().to_string(),
+            target_compatibility: recipe_target_compatibility(declaration, &target_profile),
+            source_package: declaration.source_package.as_str().to_string(),
+            slot_compatibility: recipe_slot_compatibility(declaration),
+        },
+        action,
+    )
+    .with_required_token_families(recipe_token_requirements(declaration))
+    .with_supported_states(
+        declaration
+            .state_variants
+            .iter()
+            .map(|state| state.as_str().to_string()),
+    )
+    .with_accessibility_requirements(recipe_accessibility_requirements(declaration))
+    .with_readiness(readiness)
+    .with_searchable_text(searchable_text)
+}
+
+fn catalog_item_matches_filter(item: &EditorLabCatalogItemViewModel, filter: &str) -> bool {
+    filter.is_empty() || item.searchable_text.contains(filter)
+}
+
+fn recipe_target_compatibility(
+    declaration: &ui_definition::UiRecipeDeclaration,
+    target_profile: &ui_definition::UiRecipeTargetProfileId,
+) -> String {
+    if declaration.target_profiles.is_empty() {
+        return "compatible: all target profiles".to_string();
+    }
+    if declaration.target_profiles.contains(target_profile) {
+        return format!("compatible: {}", target_profile.as_str());
+    }
+    format!(
+        "incompatible: requires {}",
+        declaration
+            .target_profiles
+            .iter()
+            .map(|profile| profile.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn recipe_slot_compatibility(declaration: &ui_definition::UiRecipeDeclaration) -> String {
+    if declaration.slots.is_empty() {
+        return "direct insert into selected container".to_string();
+    }
+    declaration
+        .slots
+        .iter()
+        .map(|slot| format!("{} accepts {:?}", slot.id.as_str(), slot.accepted_kinds))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn recipe_token_requirements(declaration: &ui_definition::UiRecipeDeclaration) -> Vec<String> {
+    declaration
+        .token_requirements
+        .iter()
+        .map(|requirement| {
+            requirement
+                .token
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| format!("{:?}", requirement.family))
+        })
+        .collect()
+}
+
+fn recipe_accessibility_requirements(
+    declaration: &ui_definition::UiRecipeDeclaration,
+) -> Vec<String> {
+    let Some(accessibility) = &declaration.accessibility else {
+        return Vec::new();
+    };
+    let mut requirements = vec![format!("role:{:?}", accessibility.role)];
+    requirements.extend(accessibility.required_semantics.iter().cloned());
+    requirements
+}
+
+fn recipe_readiness(
+    declaration: &ui_definition::UiRecipeDeclaration,
+    target_profile: &ui_definition::UiRecipeTargetProfileId,
+    has_errors: bool,
+) -> ToolSurfaceReadiness {
+    if !declaration.target_profiles.is_empty()
+        && !declaration.target_profiles.contains(target_profile)
+    {
+        ToolSurfaceReadiness::HiddenUntilProductized
+    } else if declaration.preview_only || has_errors {
+        ToolSurfaceReadiness::Diagnostic
+    } else {
+        ToolSurfaceReadiness::Product
+    }
+}
+
+fn recipe_catalog_disabled_reason(diagnostics: &[ui_definition::UiDefinitionDiagnostic]) -> String {
+    diagnostics
+        .first()
+        .map(|diagnostic| format!("{}: {}", diagnostic.code, diagnostic.message))
+        .unwrap_or_else(|| "recipe expansion was rejected".to_string())
 }
 
 fn scenario_matrix_pane() -> UiDesignerWorkbenchPaneViewModel {
@@ -356,22 +565,87 @@ fn readiness_pane() -> UiDesignerWorkbenchPaneViewModel {
         ])
 }
 
-fn native_evidence_pane() -> UiDesignerWorkbenchPaneViewModel {
-    UiDesignerWorkbenchPaneViewModel::new(
-        UiDesignerWorkbenchPaneKind::NativeEvidencePreview,
-        "Native Evidence",
-    )
-    .with_summary_lines([
+fn native_evidence_pane(
+    context: &SurfaceProviderBuildContext<'_>,
+) -> UiDesignerWorkbenchPaneViewModel {
+    let mut summary_lines = vec![
         "retained UI debug artifact: required".to_string(),
         "focus traversal report: required".to_string(),
         "accessibility report: required".to_string(),
         "timing report: required".to_string(),
-    ])
+    ];
+
+    for packet in context
+        .shell_state
+        .self_authoring()
+        .last_scenario_evidence_packets()
+    {
+        let source_freshness = if context
+            .shell_state
+            .self_authoring()
+            .selected_source_revision()
+            .as_ref()
+            == Some(packet.source_revision())
+        {
+            "Fresh"
+        } else {
+            "Stale"
+        };
+        summary_lines.push(format!(
+            "pm005 evidence packet: {} kind={} target={} document={} source={} capture={:?} freshness={}",
+            packet.scenario_id(),
+            if packet.is_runtime_product() { "runtime-product" } else { "descriptor-compatibility" },
+            packet.target_profile(),
+            packet.document_id(),
+            packet.source_version(),
+            packet.capture_mode(),
+            source_freshness
+        ));
+        summary_lines.push(format!(
+            "pm005 diagnostics snapshot: {} diagnostics",
+            packet.diagnostics().len()
+        ));
+        for binding in packet.fixture_bindings() {
+            summary_lines.push(format!(
+                "pm005 fixture binding: {} {} read_only={} compatibility={:?}",
+                binding.fixture_id, binding.binding_id, binding.read_only, binding.compatibility
+            ));
+        }
+        for intent in packet.intent_descriptors() {
+            summary_lines.push(format!(
+                "pm005 intent descriptor: {} validated={} runtime_command={}",
+                intent.intent_id, intent.validated, intent.executes_runtime_command
+            ));
+        }
+        for baseline in packet.performance_baselines() {
+            summary_lines.push(format!(
+                "pm005 baseline: {:?} {}us samples={} provenance={:?}",
+                baseline.kind, baseline.elapsed_micros, baseline.sample_count, baseline.provenance
+            ));
+        }
+        for unsupported in packet.unsupported_checks() {
+            summary_lines.push(format!(
+                "pm005 unsupported check: {} - {}",
+                unsupported.check, unsupported.reason
+            ));
+        }
+    }
+
+    UiDesignerWorkbenchPaneViewModel::new(
+        UiDesignerWorkbenchPaneKind::NativeEvidencePreview,
+        "Native Evidence",
+    )
+    .with_summary_lines(summary_lines)
+    .with_actions([EditorLabActionViewModel::enabled(
+        "Capture scenario evidence",
+        EditorDefinitionSurfaceAction::CaptureScenarioEvidence,
+    )])
 }
 
 fn workbench_readiness(
-    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+    context: &SurfaceProviderBuildContext<'_>,
 ) -> Vec<UiDesignerWorkbenchReadinessViewModel> {
+    let state = context.shell_state.self_authoring();
     let selected_template = state.selected_document().is_some_and(|document| {
         matches!(
             &document.content,
@@ -379,6 +653,56 @@ fn workbench_readiness(
         )
     });
     let selected_node = state.selected_ui_node_id().is_some();
+    let history = state.operation_history_snapshot();
+    let has_operation_diff = state
+        .last_operation_report()
+        .and_then(|report| report.diff.as_ref())
+        .is_some_and(|diff| !diff.changes.is_empty());
+    let has_apply_review = state.last_apply_review().is_some();
+    let has_last_applied_snapshot = state.selected_last_applied_document().is_some();
+    let has_rollback_record = state.last_rollback_record().is_some();
+    let scenario_packets = state.last_scenario_evidence_packets();
+    let current_source_revision = state.selected_source_revision();
+    let has_editor_workbench_runtime_packet = scenario_packets.iter().any(|packet| {
+        packet.target_profile() == "editor.workbench"
+            && packet.validate_runtime_product_evidence().is_ok()
+            && current_source_revision.as_ref() == Some(packet.source_revision())
+    });
+    let has_pm005_baselines = scenario_packets.iter().any(|packet| {
+        packet.target_profile() == "editor.workbench"
+            && packet.validate_runtime_product_evidence().is_ok()
+            && packet.performance_baselines().len()
+                >= crate::shell::editor_lab_evidence::UI_DESIGNER_SCENARIO_BASELINE_KINDS.len()
+            && packet.performance_baselines().iter().all(|baseline| {
+                baseline.provenance
+                    == crate::shell::editor_lab_evidence::EditorLabMeasurementProvenance::ProductPath
+            })
+    });
+    let has_game_runtime_descriptor_packet = scenario_packets.iter().any(|packet| {
+        packet.target_profile() == "game.runtime"
+            && !packet.is_runtime_product()
+            && packet.validate_scenario_evidence().is_ok()
+            && current_source_revision.as_ref() == Some(packet.source_revision())
+            && !packet.fixture_bindings().is_empty()
+            && packet
+                .fixture_bindings()
+                .iter()
+                .all(|binding| binding.read_only)
+            && !packet.intent_descriptors().is_empty()
+            && packet
+                .intent_descriptors()
+                .iter()
+                .all(|intent| intent.validated && !intent.executes_runtime_command)
+    });
+    let recipe_catalog_items =
+        component_catalog_items(state, &editor_shell::editor_design_system_recipe_library());
+    let has_recipe_insertion = selected_template
+        && recipe_catalog_items.iter().any(|item| {
+            matches!(
+                &item.action.action,
+                EditorDefinitionSurfaceAction::InsertRecipe { .. }
+            ) && item.action.enabled
+        });
 
     vec![
         UiDesignerWorkbenchReadinessViewModel::new(
@@ -404,6 +728,74 @@ fn workbench_readiness(
             "legacy_self_authoring_bypass",
             UiDesignerWorkbenchReadinessStatus::Passed,
             "UI canvas stable key renders the standalone workbench instead of legacy text/action control panels",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm003_recipe_catalog_insertion",
+            if has_recipe_insertion {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "component catalog rows are projected from UiRecipeDeclaration metadata and route compatible rows through InsertRecipe",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm004_product_catalog_rows",
+            UiDesignerWorkbenchReadinessStatus::Passed,
+            "component catalog rows expose target compatibility, source package, slots, tokens, states, accessibility, readiness, and disabled reasons",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm004_source_version_selection_parity",
+            if selected_template && selected_node {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "hierarchy, canvas, inspector, diagnostics, and diff/review panes share the selected authored id and source version label",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm005_operation_diff_history",
+            if has_operation_diff && (history.can_undo || history.can_redo) {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "typed operations produce deterministic diffs and session undo/redo history without entering source truth",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm005_apply_reload_rollback",
+            if has_apply_review && has_last_applied_snapshot && has_rollback_record {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "apply review, last-applied reload, and rollback expose typed recovery state for the selected authored package",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm005_runtime_product_evidence_packet",
+            if has_editor_workbench_runtime_packet {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "editor.workbench scenario evidence must be a fresh runtime product packet with source revision, product artifacts, and product-path provenance",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm005_performance_baselines",
+            if has_pm005_baselines {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "explicit runtime capture records resize, canvas interaction, catalog, diagnostics, and frame-build baselines through product-path measurements",
+        ),
+        UiDesignerWorkbenchReadinessViewModel::new(
+            "pm005_game_runtime_descriptor_only",
+            if has_game_runtime_descriptor_packet {
+                UiDesignerWorkbenchReadinessStatus::Passed
+            } else {
+                UiDesignerWorkbenchReadinessStatus::Warning
+            },
+            "game.runtime evidence remains descriptor compatibility only until PT-GAME-RUNTIME-UI provides a real runtime product path",
         ),
     ]
 }
@@ -446,6 +838,9 @@ fn ui_hierarchy_view_model(
 
     if let Some(document) = state.selected_document() {
         fields.push(field("Document", document.display_name.clone()));
+        if let Some(source_version) = ui_designer_source_version_label(state) {
+            fields.push(field("Source version", source_version));
+        }
         match &document.content {
             editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
                 fields.push(field("Template", template.id.as_str().to_string()));
@@ -500,6 +895,9 @@ fn canvas_preview_view_model(
     let mut actions = Vec::new();
 
     if let Some(document) = state.selected_document() {
+        if let Some(source_version) = ui_designer_source_version_label(state) {
+            status_lines.push(format!("source version: {source_version}"));
+        }
         status_lines.push(format!("document kind: {:?}", document.kind));
         match &document.content {
             editor_definition::EditorDefinitionDocumentContent::UiTemplate(template) => {
@@ -540,6 +938,14 @@ fn canvas_preview_view_model(
             "last operation: {} {:?}",
             report.operation_id, report.status
         ));
+        if let Some(diff) = &report.diff {
+            for change in diff.changes.iter().take(3) {
+                status_lines.push(format!(
+                    "operation diff: {:?} {} {:?} -> {:?}",
+                    change.family, change.path, change.before, change.after
+                ));
+            }
+        }
         status_lines.push(format!(
             "last operation diagnostics: {}",
             report.diagnostics.len()
@@ -551,6 +957,91 @@ fn canvas_preview_view_model(
         "operation history: undo={} redo={}",
         history.undo_count, history.redo_count
     ));
+    if let Some(review) = state.last_apply_review() {
+        status_lines.push(format!(
+            "apply review: {} {:?} diffs={} diagnostics={}",
+            review.display_name,
+            review.status,
+            review.diff_rows.len(),
+            review.diagnostics.len()
+        ));
+        for row in review.diff_rows.iter().take(2) {
+            status_lines.push(format!(
+                "apply diff: {:?}/{:?} {} {:?} -> {:?}: {}",
+                row.family, row.kind, row.path, row.before, row.after, row.summary
+            ));
+        }
+    }
+    if let Some(snapshot) = state.selected_last_applied_document() {
+        status_lines.push(format!(
+            "last applied snapshot: {} {:?}",
+            snapshot.display_name, snapshot.lifecycle_state
+        ));
+    }
+    if let Some(record) = state.last_rollback_record() {
+        status_lines.push(format!(
+            "rollback: {} {:?}",
+            record.display_name, record.status
+        ));
+    }
+    for packet in state.last_scenario_evidence_packets() {
+        let source_freshness =
+            if state.selected_source_revision().as_ref() == Some(packet.source_revision()) {
+                "Fresh"
+            } else {
+                "Stale"
+            };
+        status_lines.push(format!(
+            "evidence packet: {} kind={} target={} document={} source={} capture={:?} freshness={}",
+            packet.scenario_id(),
+            if packet.is_runtime_product() {
+                "runtime-product"
+            } else {
+                "descriptor-compatibility"
+            },
+            packet.target_profile(),
+            packet.document_id(),
+            packet.source_version(),
+            packet.capture_mode(),
+            source_freshness
+        ));
+        status_lines.push(format!(
+            "evidence diagnostics: {} artifacts={} unsupported={}",
+            packet.diagnostics().len(),
+            packet.artifacts().len(),
+            packet.unsupported_checks().len()
+        ));
+        for artifact in packet.artifacts().iter().take(2) {
+            status_lines.push(format!(
+                "evidence artifact: {:?} {} bytes={} provenance={:?}",
+                artifact.kind, artifact.path, artifact.bytes, artifact.provenance
+            ));
+        }
+        for unsupported in packet.unsupported_checks().iter().take(2) {
+            status_lines.push(format!(
+                "unsupported check: {} - {}",
+                unsupported.check, unsupported.reason
+            ));
+        }
+        for binding in packet.fixture_bindings().iter().take(2) {
+            status_lines.push(format!(
+                "fixture binding: {} {} read_only={} compatibility={:?}",
+                binding.fixture_id, binding.binding_id, binding.read_only, binding.compatibility
+            ));
+        }
+        for intent in packet.intent_descriptors().iter().take(2) {
+            status_lines.push(format!(
+                "intent descriptor: {} validated={} runtime_command={}",
+                intent.intent_id, intent.validated, intent.executes_runtime_command
+            ));
+        }
+        for baseline in packet.performance_baselines().iter().take(5) {
+            status_lines.push(format!(
+                "baseline: {:?} {}us samples={} provenance={:?}",
+                baseline.kind, baseline.elapsed_micros, baseline.sample_count, baseline.provenance
+            ));
+        }
+    }
     actions.extend(operation_history_actions(state));
 
     EditorLabCanvasPreviewViewModel {
@@ -570,6 +1061,9 @@ fn style_inspector_view_model(
     let actions = selected_document_actions(state);
     if let Some(document) = state.selected_document() {
         fields.push(field("Document id", document.id.as_str().to_string()));
+        if let Some(source_version) = ui_designer_source_version_label(state) {
+            fields.push(field("Source version", source_version));
+        }
         fields.push(field("Kind", format!("{:?}", document.kind)));
         fields.push(field(
             "Lifecycle",
@@ -801,6 +1295,12 @@ fn command_review_view_model(
     if let Some(last_apply) = state.last_apply_preview() {
         summary.push(format!("last apply preview: {}", last_apply.display_name));
     }
+    if let Some(snapshot) = state.selected_last_applied_document() {
+        summary.push(format!(
+            "last applied snapshot: {} {:?}",
+            snapshot.display_name, snapshot.lifecycle_state
+        ));
+    }
     if let Some(source) = state.last_saved_project_package_source() {
         summary.push(format!("project package saved: {} bytes", source.len()));
     }
@@ -877,8 +1377,11 @@ fn command_review_view_model(
 fn review_view_model(
     title: impl Into<String>,
     state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
-    summary_lines: Vec<String>,
+    mut summary_lines: Vec<String>,
 ) -> EditorLabReviewViewModel {
+    if let Some(source_version) = ui_designer_source_version_label(state) {
+        summary_lines.insert(0, format!("source version: {source_version}"));
+    }
     let mut actions = operation_history_actions(state);
     actions.extend(apply_review_actions(state));
     EditorLabReviewViewModel {
@@ -1129,6 +1632,12 @@ fn selected_document_label(
     state
         .selected_document()
         .map(|document| format!("{} ({})", document.display_name, document.id.as_str()))
+}
+
+fn ui_designer_source_version_label(
+    state: &crate::shell::self_authoring::SelfAuthoringWorkspaceState,
+) -> Option<String> {
+    state.selected_source_version_label()
 }
 
 fn field(label: impl Into<String>, value: impl Into<String>) -> EditorLabInspectorFieldViewModel {

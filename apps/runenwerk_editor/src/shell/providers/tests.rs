@@ -1837,6 +1837,334 @@ fn ui_designer_workbench_canvas_is_standalone_and_recoverable() {
 }
 
 #[test]
+fn ui_designer_workbench_exposes_v1_catalog_and_source_version_parity() {
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let app = RunenwerkEditorApp::new();
+    let shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+    let state = shell_state.self_authoring();
+    let source_version = state
+        .selected_source_version_label()
+        .expect("default shell state should expose source revision");
+
+    let frame = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &self_authoring_request(ToolSurfaceKind::UiCanvas),
+        &SurfaceSessionState::default(),
+    );
+    let text = provider_frame_text(&frame);
+
+    assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+    assert!(text.contains("Token / Recipe Preview - Component Catalog"));
+    assert!(text.contains("catalog target profile: editor.workbench"));
+    assert!(text.contains("recipe declarations: 2 enabled insertions: 1"));
+    assert!(text.contains("Primary Button (editor.pattern.primary_button)"));
+    assert!(text.contains(
+        "category=editor.product.action target=editor.workbench compatibility=compatible: editor.workbench source=editor.product.design_system slots=direct insert into selected container readiness=product"
+    ));
+    assert!(text.contains("Insert Primary Button"));
+    assert!(
+        text.contains(
+            "tokens=color.accent, color.foreground, radius.sm, spacing.sm, typography.body"
+        )
+    );
+    assert!(text.contains("Toolbar Command Group (editor.pattern.toolbar_command_group)"));
+    assert!(text.contains("readiness=diagnostic"));
+    assert!(text.contains("ui.recipe.preview_only_activation"));
+    assert!(text.contains("pm003_recipe_catalog_insertion"));
+    assert!(text.contains("pm004_product_catalog_rows"));
+    assert!(text.contains("pm004_source_version_selection_parity"));
+    assert!(
+        text.matches(&format!("source version: {source_version}"))
+            .count()
+            >= 3,
+        "catalog, canvas, hierarchy, and inspector panes should share source version: {text}"
+    );
+    assert_eq!(
+        frame
+            .routes
+            .iter()
+            .filter(|(_, route)| matches!(
+                route.action(),
+                Some(SurfaceLocalAction::EditorDefinition(
+                    EditorDefinitionSurfaceAction::InsertRecipe { recipe_id }
+                )) if recipe_id.as_str() == editor_shell::EDITOR_UX_PRIMARY_BUTTON_RECIPE_ID
+            ))
+            .count(),
+        1,
+        "only the compatible recipe row should expose an InsertRecipe route: {text}"
+    );
+    assert!(frame_has_editor_definition_route(&frame));
+}
+
+#[test]
+fn ui_designer_workbench_catalog_filter_routes_and_filters_structured_rows() {
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+
+    let unfiltered = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &self_authoring_request(ToolSurfaceKind::UiCanvas),
+        &SurfaceSessionState::default(),
+    );
+    assert!(unfiltered.routes.iter().any(|(_, route)| matches!(
+        route.action(),
+        Some(SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetRecipeCatalogFilter { .. }
+        ))
+    )));
+
+    crate::shell::dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SetEditorDefinitionRecipeCatalogFilter {
+            query: "toolbar".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("catalog filter command should dispatch through shell state");
+
+    let filtered = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &self_authoring_request(ToolSurfaceKind::UiCanvas),
+        &SurfaceSessionState::default(),
+    );
+    let text = provider_frame_text(&filtered);
+
+    assert!(text.contains("Filter component catalog"));
+    assert!(text.contains("Toolbar Command Group (editor.pattern.toolbar_command_group)"));
+    assert!(!text.contains("Primary Button (editor.pattern.primary_button)"));
+    assert!(!text.contains("Insert Primary Button"));
+}
+
+#[test]
+fn ui_designer_workbench_exposes_operation_apply_reload_and_rollback_state() {
+    use crate::shell::editor_lab_project::{DefinitionApplyReviewStatus, EditorLabRollbackStatus};
+    use editor_definition::{
+        EditorLabOperation, EditorLabOperationDiffFamily, EditorLabOperationKind,
+        EditorLabOperationStatus,
+    };
+
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+    let document_id = shell_state
+        .self_authoring()
+        .selected_document_id()
+        .expect("default shell state should select a UI Designer document")
+        .clone();
+    let selected_node_id = shell_state
+        .self_authoring()
+        .selected_ui_node_id()
+        .expect("default UI Designer document should expose a text-capable node")
+        .to_string();
+    let operation_id = shell_state.self_authoring().next_operation_id("pm005_text");
+
+    let report = shell_state
+        .self_authoring_mut()
+        .apply_editor_lab_operation(EditorLabOperation {
+            id: operation_id.clone(),
+            document_id: document_id.clone(),
+            target_profile: "editor.workbench".to_string(),
+            kind: EditorLabOperationKind::SetUiNodeText {
+                node_id: selected_node_id.clone(),
+                text: "PM005 operation text".to_string(),
+            },
+            preview_only: false,
+            source: Some("pm005.ui_designer_workbench".to_string()),
+        })
+        .expect("UI Designer text edit should dispatch through EditorLabOperation");
+    assert_eq!(report.status, EditorLabOperationStatus::Accepted);
+    assert!(report.diff.as_ref().is_some_and(|diff| {
+        diff.changes
+            .iter()
+            .any(|change| change.family == EditorLabOperationDiffFamily::UiAuthoredValue)
+    }));
+
+    let rejected = shell_state
+        .self_authoring_mut()
+        .reject_last_apply_review()
+        .expect("apply review should reject without mutating applied state");
+    assert_eq!(rejected.status, DefinitionApplyReviewStatus::Rejected);
+    assert_eq!(shell_state.self_authoring().applied_count(), 0);
+
+    shell_state
+        .self_authoring_mut()
+        .apply_selected()
+        .expect("selected UI Designer document should apply through a review");
+    assert_eq!(
+        shell_state
+            .self_authoring()
+            .last_apply_review()
+            .expect("apply should record a review")
+            .status,
+        DefinitionApplyReviewStatus::Accepted
+    );
+    assert!(
+        shell_state
+            .self_authoring()
+            .last_applied_document(&document_id)
+            .is_some()
+    );
+
+    shell_state
+        .self_authoring_mut()
+        .set_selected_ui_node_text(&selected_node_id, "PM005 dirty draft")
+        .expect("draft edits should remain app-owned after apply");
+    shell_state
+        .self_authoring_mut()
+        .reload_selected_from_last_applied()
+        .expect("last applied snapshot should reload into the draft");
+    let reloaded_preview = shell_state
+        .self_authoring()
+        .formed_selected_preview(&theme)
+        .expect("reloaded applied snapshot should still form a preview");
+    assert!(format!("{:?}", reloaded_preview.root).contains("PM005 operation text"));
+    assert!(!format!("{:?}", reloaded_preview.root).contains("PM005 dirty draft"));
+
+    shell_state
+        .self_authoring_mut()
+        .rollback_selected()
+        .expect("applied UI Designer document should roll back");
+    assert_eq!(
+        shell_state
+            .self_authoring()
+            .last_rollback_record()
+            .expect("rollback should record typed recovery state")
+            .status,
+        EditorLabRollbackStatus::RolledBack
+    );
+    let history = shell_state.self_authoring().operation_history_snapshot();
+    assert_eq!(history.undo_count, 1);
+    let source_version = shell_state
+        .self_authoring()
+        .selected_source_version_label()
+        .expect("selected document should expose source revision");
+
+    let frame = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &self_authoring_request(ToolSurfaceKind::UiCanvas),
+        &SurfaceSessionState::default(),
+    );
+    let text = provider_frame_text(&frame);
+
+    assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+    assert!(text.contains("pm005_operation_diff_history"));
+    assert!(text.contains("pm005_apply_reload_rollback"));
+    assert!(text.contains(&format!("source version: {source_version}")));
+    assert!(text.contains(&format!("last operation: {operation_id} Accepted")));
+    assert!(text.contains("operation diff: UiAuthoredValue"));
+    assert!(text.contains("operation history: undo=1 redo=0"));
+    assert!(text.contains("apply review:"));
+    assert!(text.contains("Accepted diffs="));
+    assert!(text.contains("last applied snapshot:"));
+    assert!(text.contains("rollback:"));
+    assert!(text.contains("RolledBack"));
+    assert!(text.contains("Reload last applied"));
+    assert!(text.contains("Apply selected definition"));
+    assert!(frame_has_editor_definition_route(&frame));
+}
+
+#[test]
+fn ui_designer_workbench_exposes_pm005_scenario_evidence_and_performance_baselines() {
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+    let source_version = shell_state
+        .self_authoring()
+        .selected_source_version_label()
+        .expect("default UI Designer document should expose a source version");
+
+    let packets = shell_state
+        .self_authoring_mut()
+        .capture_pm005_scenario_evidence_packets(&theme)
+        .expect("explicit PM005 scenario evidence capture should validate");
+    assert_eq!(packets.len(), 2);
+    let editor_packet = packets
+        .iter()
+        .find(|packet| packet.target_profile() == "editor.workbench")
+        .expect("editor.workbench should have runtime evidence");
+    assert_eq!(editor_packet.source_version(), source_version);
+    assert_eq!(
+        editor_packet.scenario_id(),
+        "ui-designer.v1-closure.pm005.editor-workbench"
+    );
+    assert_eq!(editor_packet.performance_baselines().len(), 5);
+    assert!(editor_packet.validate_runtime_product_evidence().is_ok());
+    assert!(editor_packet.artifacts().iter().all(|artifact| {
+        artifact.provenance
+            == crate::shell::editor_lab_evidence::EditorLabEvidenceArtifactProvenance::ProductPath
+            && artifact.bytes > 0
+            && artifact.digest.starts_with("blake3:")
+    }));
+
+    let game_packet = packets
+        .iter()
+        .find(|packet| packet.target_profile() == "game.runtime")
+        .expect("game.runtime should have descriptor compatibility evidence");
+    assert_eq!(game_packet.source_version(), source_version);
+    assert_eq!(
+        game_packet.scenario_id(),
+        "ui-designer.v1-closure.pm005.game-runtime"
+    );
+    assert!(!game_packet.is_runtime_product());
+    assert!(game_packet.validate_scenario_evidence().is_ok());
+    assert!(game_packet.validate_runtime_product_evidence().is_err());
+    assert!(
+        game_packet
+            .fixture_bindings()
+            .iter()
+            .all(|binding| binding.read_only)
+    );
+    assert!(
+        game_packet
+            .intent_descriptors()
+            .iter()
+            .all(|intent| intent.validated && !intent.executes_runtime_command)
+    );
+
+    let frame = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &self_authoring_request(ToolSurfaceKind::UiCanvas),
+        &SurfaceSessionState::default(),
+    );
+    let text = provider_frame_text(&frame);
+
+    assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
+    assert!(text.contains("pm005_runtime_product_evidence_packet"));
+    assert!(text.contains("pm005_performance_baselines"));
+    assert!(text.contains("pm005_game_runtime_descriptor_only"));
+    assert!(text.contains("evidence packet: ui-designer.v1-closure.pm005.editor-workbench"));
+    assert!(text.contains("evidence packet: ui-designer.v1-closure.pm005.game-runtime"));
+    assert!(text.contains("kind=runtime-product"));
+    assert!(text.contains("kind=descriptor-compatibility"));
+    assert!(text.contains("target=editor.workbench"));
+    assert!(text.contains("target=game.runtime"));
+    assert!(text.contains("document=runenwerk.editor.toolbar"));
+    assert!(text.contains(&format!("source={source_version}")));
+    assert!(text.contains("capture=ExplicitCommand"));
+    assert!(text.contains("freshness=Fresh"));
+    assert!(text.contains("evidence artifact: RetainedUiDebug"));
+    assert!(text.contains("evidence artifact: UnsupportedCheckReport"));
+    assert!(text.contains("unsupported check: concrete game HUD runtime"));
+    assert!(text.contains("fixture binding: fixture.game-runtime.safe-area"));
+    assert!(text.contains("intent descriptor: intent.game-runtime.open-hud-preview"));
+    assert!(text.contains("baseline: Resize"));
+    assert!(text.contains("baseline: CanvasInteraction"));
+    assert!(text.contains("baseline: CatalogProjection"));
+    assert!(text.contains("baseline: DiagnosticsProjection"));
+    assert!(text.contains("baseline: FrameBuild"));
+    assert!(frame_has_editor_definition_route(&frame));
+}
+
+#[test]
 fn ambiguous_provider_support_fails_closed_with_zero_routes() {
     let registry =
         EditorSurfaceProviderRegistry::new(vec![dummy(1, 100, true), dummy(2, 100, true)])

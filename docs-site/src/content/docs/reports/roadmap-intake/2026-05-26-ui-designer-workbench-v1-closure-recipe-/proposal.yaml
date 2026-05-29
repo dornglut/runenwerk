@@ -1,0 +1,99 @@
+version: 1
+idea: UI Designer Workbench V1 closure recipe catalog insertion and authoring surface closure
+source_path: ''
+owner: docs-site/src/content/docs/workspace/production-tracks.yaml
+created_at: '2026-05-26'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- What accepted design, ADR, or closeout evidence justifies promotion?
+- Which existing WR items does this depend on?
+- Which exact write scopes and validation commands will bound implementation?
+item:
+  id: WR-129
+  title: UI Designer Workbench V1 Closure Recipe Catalog Insertion
+  diagram_title: UI Designer Workbench V1 closure recipe catalog
+  alias: WR129
+  lane: Discovery
+  dependency_level: L4
+  gate: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-003 recipe insertion closure contract
+  planning_state: ready_next
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-123
+  - WR-128
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-recipe-
+  - docs-site/src/content/docs/reports/implementation-plans/wr-129-ui-designer-workbench-v1-closure-recipe-catalog-insertion/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-003 --roadmap WR-129
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: docs-site/src/content/docs/reports/implementation-plans/wr-129-ui-designer-workbench-v1-closure-recipe-catalog-insertion/plan.md
+  current_decision: Ready-next planning row for PM-UI-DESIGNER-WB-V1-CLOSURE-003 after accepted WR-129 design-first contract. No product code may change until promotion preflight passes, WR-129 is promoted, task ai:goal is rerun, and production:plan reports the implementation action.
+  current_call: Use WR-129 only for recipe catalog search/compatibility/insertion, source-versioned hierarchy/canvas/inspector projections, typed diagnostics, and deterministic diff preview depth. Do not infer full operation apply/rollback parity, scenario evidence, performance baselines, final closeout, or concrete game HUD runtime behavior from this row.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-003 --roadmap WR-129 and follow the promotion preflight before product code.
+  main_blocker: Awaiting WR-129 promotion to current_candidate.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - recipe insertion
+  - author surface closure
+  - design first
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-component-surface-and-widget-recipe-library-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Recipe insertion must use generic recipe declarations, slot contracts, target-profile compatibility, and typed recipe diagnostics.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Hierarchy, canvas, and inspector updates must preserve stable authored ids and deterministic layout operations.
+  - kind: doc
+    path: docs-site/src/content/docs/guidelines/module-structure-guidelines.md
+    required_status: active
+    applies_to: implementation
+    reason: Any new implementation modules must use responsibility-based module boundaries.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Recipe insertion closure depends on completed package/session source truth and reload/rollback evidence.
+  ddd_owner: domain/ui/ui_definition owns generic recipe declarations, Canonical UI IR expansion, compatibility, and diagnostics; domain/editor/editor_shell owns app-neutral catalog/hierarchy/canvas/inspector projections; apps/runenwerk_editor owns concrete workbench provider state, author workflow orchestration, and evidence capture.
+  adr_requirement: No ADR required while WR-129 preserves existing ownership and dependency direction; require ADR or accepted design update before moving generic recipe truth into apps/runenwerk_editor, making editor projections authoritative source truth, or implementing concrete game-runtime HUD behavior.
+  fitness_function_requirement: Define focused checks for searchable compatible recipes, disabled reasons, insertion into source-versioned package state, synchronized hierarchy/canvas/inspector/diagnostics/diff projections, and explicit non-coverage of full operation parity.
+  ownership_mode: Stream-aligned editor product closure with complicated-subsystem support from domain/ui recipe contracts, domain/editor editor shell projections, and apps/runenwerk_editor provider/runtime owners.
+edges: []

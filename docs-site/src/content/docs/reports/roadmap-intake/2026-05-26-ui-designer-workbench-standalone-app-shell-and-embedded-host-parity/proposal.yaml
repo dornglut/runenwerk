@@ -1,0 +1,115 @@
+version: 1
+idea: UI Designer Workbench standalone app shell and embedded host parity
+source_path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+owner: apps/runenwerk_editor
+created_at: '2026-05-26'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Does the future implementation need a new ADR? Current planning says no while ownership and dependency direction stay unchanged.
+- Which current-candidate switch, if any, does task production:plan require before WR-122 implementation?
+item:
+  id: WR-122
+  title: Standalone App Shell And Embedded Host Parity
+  diagram_title: UI Designer standalone host parity
+  alias: UIDESIGNERHOST
+  lane: Editor quality
+  dependency_level: L4
+  gate: After accepted UI Designer Workbench Product Design and PM-UI-DESIGNER-WB-002 closeout
+  planning_state: ready_next
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-114
+  - WR-120
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-122-standalone-app-shell-and-embedded-host-parity/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-standalone-app-shell-and-embedded-host-parity
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - apps/runenwerk_editor/src/runtime/app.rs
+  - apps/runenwerk_editor/src/runtime/mod.rs
+  - apps/runenwerk_editor/src/bin
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/shell/workbench_host.rs
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - domain/editor/editor_shell/src/workspace/state.rs
+  - domain/editor/editor_shell/src/workspace/profile.rs
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition/build_editor_lab_surface.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-003 --roadmap WR-122
+  - cargo test -p runenwerk_editor runtime
+  - cargo test -p runenwerk_editor workbench_host
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p editor_shell ui_designer
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Promote or select WR-122 only after task production:plan confirms the ready-next host parity contract and no current-candidate metadata blocker remains.
+  current_decision: Ready-next planning row for PM-UI-DESIGNER-WB-003. Product code must not start until production:plan and roadmap promotion or current-candidate selection gates pass.
+  current_call: Use WR-122 to implement only the standalone UI Designer app shell and embedded Editor Design host parity over the accepted package/session/evidence model.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-003 --roadmap WR-122 and follow the reported promotion or implementation action.
+  main_blocker: Awaiting production:plan promotion/current-candidate gate before implementation.
+  why_not_ready: Ready for promotion planning, but not current_candidate and not authorized for product code until task production:plan and roadmap gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - standalone UI Designer launch
+  - embedded host parity
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Standalone and embedded host work must preserve the accepted workbench product contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-122-standalone-app-shell-and-embedded-host-parity/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Host parity implementation requires the WR-122 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-002-v1-package-document-session-and-evidence-model/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Host parity must consume the accepted V1 package, document, session, and evidence model.
+  ddd_owner: apps/runenwerk_editor owns runtime launch and evidence; domain/editor owns editor workbench adapters; domain/ui owns generic UI truth.
+  adr_requirement: No ADR while the slice keeps existing app/domain ownership and dependency direction. Require ADR or accepted design update before moving generic UI truth into app code or adding a new owner boundary.
+  fitness_function_requirement: Runtime workbench selection tests, host registry/profile parity tests, embedded UI Designer provider parity tests, and dependency-direction guards.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+edges:
+- source: WR-120
+  target: WR-122
+  label: product governance before host parity
+- source: WR-114
+  target: WR-122
+  label: historical bounded workbench evidence before stricter host proof

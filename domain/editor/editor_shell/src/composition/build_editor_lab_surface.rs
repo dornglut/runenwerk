@@ -2,8 +2,8 @@
 //! Purpose: Compose typed Editor Lab surface view models into retained UI controls.
 
 use crate::{
-    EditorLabActionViewModel, EditorLabCanvasPreviewViewModel, EditorLabConsoleViewModel,
-    EditorLabDefinitionHierarchyViewModel, EditorLabDegradedViewModel,
+    EditorLabActionViewModel, EditorLabCanvasPreviewViewModel, EditorLabCatalogItemViewModel,
+    EditorLabConsoleViewModel, EditorLabDefinitionHierarchyViewModel, EditorLabDegradedViewModel,
     EditorLabDiagnosticsViewModel, EditorLabInspectorViewModel, EditorLabPaletteViewModel,
     EditorLabReviewViewModel, EditorLabSurfaceViewModel, EditorLabTextFieldViewModel,
     SurfaceLocalAction, SurfaceLocalRoute, SurfaceRouteTable, SurfaceWidgetScope,
@@ -163,6 +163,24 @@ fn build_ui_designer_workbench(
         for line in &pane.summary_lines {
             children.push(label(ids.next(), line.clone(), text_style.clone()));
         }
+        if let Some(filter_field) = &pane.filter_field {
+            push_text_field(
+                children,
+                routes,
+                ids,
+                theme,
+                text_style.clone(),
+                filter_field,
+            );
+        }
+        push_catalog_items(
+            children,
+            routes,
+            ids,
+            theme,
+            text_style.clone(),
+            &pane.catalog_items,
+        );
         push_actions(
             children,
             routes,
@@ -427,6 +445,69 @@ fn build_degraded(
         text_style,
         &model.recovery_actions,
     );
+}
+
+fn push_catalog_items(
+    children: &mut Vec<UiNode>,
+    routes: &mut SurfaceRouteTable,
+    ids: &mut EditorLabWidgetIds,
+    theme: &ThemeTokens,
+    text_style: TextStyle,
+    items: &[EditorLabCatalogItemViewModel],
+) {
+    for item in items {
+        children.push(label(
+            ids.next(),
+            format!("{} ({})", item.label, item.recipe_id),
+            text_style.clone(),
+        ));
+        children.push(label(
+            ids.next(),
+            format!(
+                "category={} target={} compatibility={} source={} slots={} readiness={}",
+                item.category,
+                item.target_profile,
+                item.target_compatibility,
+                item.source_package,
+                item.slot_compatibility,
+                item.readiness_label
+            ),
+            text_style.clone(),
+        ));
+        children.push(label(
+            ids.next(),
+            format!(
+                "tokens={} states={} accessibility={}",
+                comma_list(&item.required_token_families),
+                comma_list(&item.supported_states),
+                comma_list(&item.accessibility_requirements)
+            ),
+            text_style.clone(),
+        ));
+        push_action_button(
+            children,
+            routes,
+            ids,
+            theme,
+            text_style.clone(),
+            &item.action,
+        );
+        if let Some(reason) = &item.disabled_reason {
+            children.push(label(
+                ids.next(),
+                format!("disabled: {reason}"),
+                theme.body_small_text_style(FontId(1)),
+            ));
+        }
+    }
+}
+
+fn comma_list(values: &[String]) -> String {
+    if values.is_empty() {
+        "none".to_string()
+    } else {
+        values.join(", ")
+    }
 }
 
 fn push_actions(

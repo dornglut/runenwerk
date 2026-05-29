@@ -13,6 +13,10 @@ export default defineConfig({
 					autogenerate: { directory: 'workspace' },
 				},
 				{
+					label: 'Software Development',
+					autogenerate: { directory: 'software-development' },
+				},
+				{
 					label: 'Domain',
 					autogenerate: { directory: 'domain' },
 				},

@@ -55,7 +55,8 @@ pub fn map_interactions_to_shell_commands(
                             EditorDefinitionSurfaceAction::RenameSelected { .. }
                                 | EditorDefinitionSurfaceAction::SetUiNodeText { .. }
                                 | EditorDefinitionSurfaceAction::SetThemeColor { .. }
-                                | EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { .. },
+                                | EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { .. }
+                                | EditorDefinitionSurfaceAction::SetRecipeCatalogFilter { .. },
                         ) | SurfaceLocalAction::Material(
                             MaterialSurfaceAction::SetNodeValue { .. }
                                 | MaterialSurfaceAction::PickTextureResource { .. }
@@ -602,6 +603,11 @@ fn surface_text_action(action: &SurfaceLocalAction, text: String) -> SurfaceLoca
                 label: text,
                 tool_surface: tool_surface.clone(),
             },
+        ),
+        SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetRecipeCatalogFilter { .. },
+        ) => SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetRecipeCatalogFilter { query: text },
         ),
         SurfaceLocalAction::Material(MaterialSurfaceAction::SetNodeValue {
             node_id, key, ..

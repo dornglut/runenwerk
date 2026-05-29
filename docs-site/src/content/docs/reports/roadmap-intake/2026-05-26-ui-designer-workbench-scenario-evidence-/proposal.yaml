@@ -1,0 +1,137 @@
+version: 1
+idea: UI Designer Workbench scenario evidence and performance baselines
+source_path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+owner: editor
+created_at: '2026-05-26'
+governance_notes:
+- Architecture governance kickoff was run for PM-UI-DESIGNER-WB-006 before implementation planning.
+- domain/ui owns generic preview fixture, scenario, target matrix, production readiness, evidence packet, diagnostic, and freshness contracts.
+- domain/editor owns editor/workbench scenario matrix vocabulary and app-neutral surface evidence projection contracts.
+- apps/runenwerk_editor owns concrete UI Designer evidence capture orchestration, performance sampling, diagnostics snapshots, and retained artifact records.
+- No ADR is required while WR-125 preserves current source-truth ownership and treats screenshots, timings, provider snapshots, and reports as app-produced artifacts referenced by domain contracts.
+open_questions:
+- Which current-candidate promotion, if any, does task production:plan require before WR-125 implementation?
+- Which first scenario matrix should provide the initial source-versioned PM006 evidence packet?
+item:
+  id: WR-125
+  title: Scenario Evidence And Performance Baselines
+  diagram_title: UI Designer scenario evidence performance baselines
+  alias: UIDESIGNEREVIDENCE
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-005 operation/apply/rollback closeout
+  planning_state: ready_next
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-052
+  - WR-054
+  - WR-120
+  - WR-122
+  - WR-123
+  - WR-124
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-125-scenario-evidence-and-performance-baselines/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-scenario-evidence-
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - domain/ui/ui_definition/src/preview_fixture
+  - domain/ui/ui_definition/src/production_readiness
+  - domain/editor/editor_shell/src/ux_lab
+  - domain/editor/editor_shell/src/surfaces/editor_definition.rs
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor/src/shell/editor_lab_evidence
+  - apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/self_authoring.rs
+  - apps/runenwerk_editor/src/shell/tests.rs
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-006 --roadmap WR-125
+  - cargo fmt --package ui_definition --package editor_shell --package runenwerk_editor
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p ui_definition production_readiness
+  - cargo test -p editor_shell ux_lab
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p runenwerk_editor ui_designer
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Accepted UI Designer product, live-preview scenario matrix, and production readiness evidence designs; completed PM-UI-DESIGNER-WB-005 closeout; active WR-125 scenario evidence/performance baseline contract.
+  current_decision: Ready-next planning row for PM-UI-DESIGNER-WB-006. Product code must not start until production:plan and roadmap promotion/current-candidate gates pass.
+  current_call: Use WR-125 to implement only source-versioned UI Designer evidence packets, diagnostics snapshots, explicit capture controls, and resize/canvas/catalog/diagnostics/frame-build baselines.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-006 --roadmap WR-125 and follow the reported promotion or implementation action.
+  main_blocker: Awaiting production:plan promotion/current-candidate gate before implementation.
+  why_not_ready: Ready for promotion planning, but not current_candidate and not authorized for product code until task production:plan and roadmap gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - scenario evidence
+  - source versions
+  - performance baselines
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-live-preview-fixtures-scenarios-and-target-matrix-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 scenario and target matrix evidence must preserve accepted preview fixture doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-production-readiness-and-evidence-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 evidence packets, diagnostics snapshots, freshness, and performance reports must preserve accepted readiness doctrine.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: PM006 performance and resize evidence must preserve the accepted UI Designer Workbench product contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-125-scenario-evidence-and-performance-baselines/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Scenario evidence and performance baseline implementation requires the WR-125 decision-complete contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Scenario evidence and baselines build on completed operation/apply/rollback runtime evidence.
+  ddd_owner: domain/ui owns generic preview and readiness evidence contracts; domain/editor owns editor/workbench scenario vocabulary and app-neutral surface contracts; apps/runenwerk_editor owns concrete capture orchestration, timings, snapshots, and artifacts.
+  adr_requirement: No ADR while WR-125 keeps generic evidence descriptors in domain/ui and concrete capture/runtime artifacts in apps/runenwerk_editor. Require ADR or accepted design update before domain/ui owns screenshot bytes, renderer handles, provider sessions, app windows, project IO, or performance runner implementation.
+  fitness_function_requirement: Scenario evidence tests proving source-versioned packets, diagnostics snapshots, explicit capture controls, unsupported artifact reasons, freshness decisions, and resize/canvas/catalog/diagnostics/frame-build baseline records.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui, domain/editor, and app evidence tooling.
+edges:
+- source: WR-124
+  target: WR-125
+  label: operation apply rollback before evidence baselines
+- source: WR-052
+  target: WR-125
+  label: preview scenario contracts before workbench evidence
+- source: WR-054
+  target: WR-125
+  label: readiness evidence contracts before baselines

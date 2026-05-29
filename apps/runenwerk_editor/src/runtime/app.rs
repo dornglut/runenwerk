@@ -25,6 +25,7 @@ pub const ACTION_EDITOR_VIEWPORT_TOOL_RADIAL: &str = "editor.viewport.tool_radia
 
 const EDITOR_WINDOW_TITLE: &str = "Runenwerk Editor";
 const MATERIAL_LAB_WINDOW_TITLE: &str = "Runenwerk Material Lab";
+const UI_DESIGNER_WINDOW_TITLE: &str = "Runenwerk UI Designer";
 const EDITOR_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
 const EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
@@ -43,6 +44,7 @@ const EDITOR_VIEWPORT_TRANSPARENT_CLEAR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 pub enum RunenwerkRuntimeWorkbench {
     FullEditor,
     MaterialLab,
+    UiDesigner,
 }
 
 impl RunenwerkRuntimeWorkbench {
@@ -50,6 +52,7 @@ impl RunenwerkRuntimeWorkbench {
         match self {
             Self::FullEditor => EDITOR_WINDOW_TITLE,
             Self::MaterialLab => MATERIAL_LAB_WINDOW_TITLE,
+            Self::UiDesigner => UI_DESIGNER_WINDOW_TITLE,
         }
     }
 
@@ -57,6 +60,7 @@ impl RunenwerkRuntimeWorkbench {
         match self {
             Self::FullEditor => EditorHostResource::new(),
             Self::MaterialLab => EditorHostResource::material_lab_workbench(),
+            Self::UiDesigner => EditorHostResource::ui_designer_workbench(),
         }
     }
 }
@@ -191,6 +195,10 @@ pub fn build_material_lab_workbench_headless_app() -> App {
     build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::MaterialLab)
 }
 
+pub fn build_ui_designer_workbench_headless_app() -> App {
+    build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::UiDesigner)
+}
+
 pub fn run() -> Result<()> {
     let mut app = App::new();
     configure_app(&mut app);
@@ -203,9 +211,15 @@ pub fn run_material_lab_workbench() -> Result<()> {
     app.run()
 }
 
+pub fn run_ui_designer_workbench() -> Result<()> {
+    let mut app = App::new();
+    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiDesigner);
+    app.run()
+}
+
 #[cfg(test)]
 mod tests {
-    use editor_shell::MATERIAL_WORKSPACE_PROFILE_ID;
+    use editor_shell::{EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID};
 
     use crate::runtime::resources::EditorHostResource;
     use crate::shell::RunenwerkWorkbenchComposition;
@@ -231,6 +245,28 @@ mod tests {
         assert_eq!(
             host.shell_state.open_workspace_profile_ids(),
             &[MATERIAL_WORKSPACE_PROFILE_ID]
+        );
+    }
+
+    #[test]
+    fn ui_designer_headless_app_installs_ui_designer_workbench_host() {
+        let app = build_ui_designer_workbench_headless_app();
+        let host = app
+            .world()
+            .resource::<EditorHostResource>()
+            .expect("runtime app should install editor host resource");
+
+        assert_eq!(
+            host.app.workbench_host().composition(),
+            RunenwerkWorkbenchComposition::UiDesigner
+        );
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            EDITOR_DESIGN_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            host.shell_state.open_workspace_profile_ids(),
+            &[EDITOR_DESIGN_WORKSPACE_PROFILE_ID]
         );
     }
 }

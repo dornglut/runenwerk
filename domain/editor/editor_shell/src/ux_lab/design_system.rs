@@ -15,6 +15,7 @@ use ui_theme::{ThemeTokenFamily, ThemeTokenId};
 pub const EDITOR_UX_TARGET_PROFILE: &str = "editor.workbench";
 pub const EDITOR_UX_DESIGN_SYSTEM_PACKAGE_ID: &str = "editor.product.design_system";
 pub const EDITOR_UX_PRIMARY_BUTTON_RECIPE_ID: &str = "editor.pattern.primary_button";
+pub const EDITOR_UX_TOOLBAR_COMMAND_GROUP_RECIPE_ID: &str = "editor.pattern.toolbar_command_group";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorUxDesignSystemEvidence {
@@ -42,7 +43,7 @@ impl EditorUxDesignSystemEvidence {
 
 pub fn editor_design_system_recipe_library() -> UiRecipeLibrary {
     UiRecipeLibrary {
-        declarations: vec![primary_button_recipe()],
+        declarations: vec![primary_button_recipe(), toolbar_command_group_recipe()],
     }
 }
 
@@ -50,7 +51,7 @@ pub fn primary_button_recipe() -> UiRecipeDeclaration {
     UiRecipeDeclaration {
         id: id(EDITOR_UX_PRIMARY_BUTTON_RECIPE_ID),
         kind: UiRecipeKind::Widget,
-        label: "Editor Primary Button".to_string(),
+        label: "Primary Button".to_string(),
         category: "editor.product.action".to_string(),
         source_package: id(EDITOR_UX_DESIGN_SYSTEM_PACKAGE_ID),
         source_location: None,
@@ -89,6 +90,54 @@ pub fn primary_button_recipe() -> UiRecipeDeclaration {
             directional: true,
         },
         preview_only: false,
+    }
+}
+
+pub fn toolbar_command_group_recipe() -> UiRecipeDeclaration {
+    UiRecipeDeclaration {
+        id: id(EDITOR_UX_TOOLBAR_COMMAND_GROUP_RECIPE_ID),
+        kind: UiRecipeKind::Widget,
+        label: "Toolbar Command Group".to_string(),
+        category: "editor.product.toolbar".to_string(),
+        source_package: id(EDITOR_UX_DESIGN_SYSTEM_PACKAGE_ID),
+        source_location: None,
+        target_profiles: ids([EDITOR_UX_TARGET_PROFILE]),
+        template: UiNodeDefinition::Row {
+            id: id("toolbar-command-group"),
+            children: vec![UiNodeDefinition::Button {
+                id: id("toolbar-command-primary"),
+                label: UiValueBinding::static_text("Run"),
+                route: None,
+                availability: None,
+                selected: None,
+            }],
+        },
+        slots: Vec::new(),
+        token_requirements: vec![
+            required_token(ThemeTokenFamily::Spacing, "spacing.sm"),
+            required_token(ThemeTokenFamily::Color, "color.background_panel"),
+            required_token(ThemeTokenFamily::Color, "color.foreground"),
+            optional_token(ThemeTokenFamily::Typography, "typography.body"),
+        ],
+        state_variants: ids(["default", "focused", "disabled"]),
+        accessibility: Some(UiRecipeAccessibilityDefinition {
+            role: UiRecipeAccessibilityRole::Toolbar,
+            label: UiRecipeAccessibilityLabel::Static("Toolbar command group".to_string()),
+            required_semantics: ["menu role".to_string(), "shortcut hint".to_string()]
+                .into_iter()
+                .collect(),
+        }),
+        layout: UiRecipeLayoutBehavior {
+            min_width: Some(120.0),
+            min_height: Some(28.0),
+            resizable: true,
+        },
+        focus_navigation: ui_definition::UiRecipeFocusNavigation {
+            focusable: true,
+            tab_order: Some(0),
+            directional: true,
+        },
+        preview_only: true,
     }
 }
 
@@ -180,5 +229,22 @@ mod tests {
         let report = expand_primary_button_recipe_contract();
         assert!(!report.has_errors(), "{:?}", report.diagnostics);
         assert!(report.root.is_some());
+    }
+
+    #[test]
+    fn recipe_catalog_stays_editor_owned() {
+        let library = editor_design_system_recipe_library();
+
+        assert_eq!(library.declarations.len(), 2);
+        assert!(
+            toolbar_command_group_recipe().preview_only,
+            "toolbar command group remains preview-only until a toolbar slot insertion policy is accepted"
+        );
+        assert!(
+            library.declarations.iter().all(|declaration| declaration
+                .target_profiles
+                .contains(&id(EDITOR_UX_TARGET_PROFILE))),
+            "editor_shell recipe library must not own game-runtime UI recipe vocabulary"
+        );
     }
 }

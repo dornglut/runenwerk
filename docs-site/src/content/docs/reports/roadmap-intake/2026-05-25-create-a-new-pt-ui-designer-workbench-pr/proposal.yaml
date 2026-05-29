@@ -1,0 +1,94 @@
+version: 1
+idea: Create PT-UI-DESIGNER-WORKBENCH as a governed product track for the real standalone and embedded UI Designer workbench.
+  Start with code-truth and planning-truth reconciliation against the archived WR-114 / PM-EDITOR-UX-004 claim, then define
+  follow-on implementation rows for the V1 package/document/session/evidence model, standalone app shell, recipe catalog,
+  hierarchy, canvas, inspector, Canonical UI IR operation diffs, scenario/evidence capture, performance and resize baselines,
+  embedded Editor Design parity, and game.runtime compatibility seam proof without HUD implementation.
+source_path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+owner: editor
+created_at: '2026-05-25'
+governance_notes:
+- Run architecture governance review before implementation.
+- Confirm Clean Architecture dependency direction and DDD owner.
+- Record ADR only if the decision changes durable ownership, dependency direction, or cross-domain contracts.
+open_questions:
+- Which V1 package persistence format is allowed for the first implementation row?
+item:
+  id: WR-120
+  title: UI Designer Workbench Product Track Governance
+  diagram_title: UI Designer workbench product governance
+  alias: UIDESIGNERTRACK
+  lane: Editor quality
+  dependency_level: L4
+  gate: After accepted UI Designer Workbench Product Design
+  planning_state: blocked_deferred
+  priority: P1
+  value: 5
+  blocker: 4
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Performance
+  dependencies:
+  - WR-114
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-25-create-a-new-pt-ui-designer-workbench-pr
+  validations:
+  - task ai:architecture-governance -- --task "PT-UI-DESIGNER-WORKBENCH product track governance" --scope "docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md; docs-site/src/content/docs/workspace/production-tracks.yaml; docs-site/src/content/docs/workspace/roadmap-items.yaml; docs-site/src/content/docs/workspace/roadmap-archive.yaml"
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task planning:validate
+  - task docs:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Active UI Designer Workbench Product Design plus WR-120 implementation plan and closeout evidence proving code-truth/planning-truth reconciliation, production-track activation, generated planning updates, and follow-on WR candidates.
+  current_decision: Intake proposal only; after approval, use WR-120 for product-track governance and code-truth reconciliation only.
+  current_call: Do not implement product code under WR-120. Use it to install PT-UI-DESIGNER-WORKBENCH, reconcile interpretation of WR-114/PM-EDITOR-UX-004 against current code truth, preserve the archived closeout as bounded evidence unless a separate correction row authorizes edits, and define disjoint follow-on implementation rows.
+  first_move: Apply this intake after review, then run task production:plan -- --milestone PM-UI-DESIGNER-WB-001 --roadmap WR-120 before editing production-tracks.yaml.
+  main_blocker: Intake has not been approved or applied; production-track YAML and follow-on WR rows do not exist yet.
+  why_not_ready: New product track needs roadmap approval, architecture governance, production-track metadata, and a bounded governance closeout before implementation.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - governance
+  - code truth
+  - product track
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Product-track governance must follow the accepted UI Designer Workbench Product Design.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md
+    required_status: completed
+    applies_to: discovery
+    reason: WR-120 must reconcile the archived standalone workbench evidence before creating the new product track.
+  ddd_owner: domain/ui owns generic UI definition and token truth, domain/editor owns editor workbench adapters, apps/runenwerk_editor owns app-hosted execution and evidence.
+  adr_requirement: No ADR for governance-only track creation if ownership remains unchanged. Require ADR or accepted design update before adding a game UI owner crate, changing dependency direction, or making projections/evidence authoritative.
+  fitness_function_requirement: Code-truth/planning-truth drift report, follow-on milestone dependency graph, write-scope split, validation gates, and stop conditions before any implementation row can be promoted.
+  ownership_mode: Stream-aligned editor product work with complicated-subsystem support from domain/ui and domain/editor.
+edges:
+- source: WR-114
+  target: WR-120
+  label: bounded workbench evidence before product-track repair

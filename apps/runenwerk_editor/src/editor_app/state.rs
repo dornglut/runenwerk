@@ -89,6 +89,16 @@ impl RunenwerkEditorApp {
         RunenwerkWorkbenchHost::material_lab().map(Self::with_workbench_host)
     }
 
+    pub fn new_ui_designer_workbench() -> Self {
+        let workbench_host = RunenwerkWorkbenchHost::ui_designer()
+            .expect("UI Designer workbench host composition must build");
+        Self::with_workbench_host(workbench_host)
+    }
+
+    pub fn try_new_ui_designer_workbench() -> Result<Self, RunenwerkWorkbenchHostError> {
+        RunenwerkWorkbenchHost::ui_designer().map(Self::with_workbench_host)
+    }
+
     fn with_workbench_host(workbench_host: RunenwerkWorkbenchHost) -> Self {
         Self {
             runtime: RunenwerkEditorRuntime::new(),

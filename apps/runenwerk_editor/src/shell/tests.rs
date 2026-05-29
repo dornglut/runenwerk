@@ -1725,6 +1725,41 @@ fn dispatch_shell_command_applies_and_rolls_back_selected_editor_definition() {
 }
 
 #[test]
+fn dispatch_shell_command_captures_ui_designer_scenario_evidence() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::CaptureUiDesignerScenarioEvidence,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("UI Designer scenario evidence capture should dispatch through shell state");
+
+    let packets = shell_state
+        .self_authoring()
+        .last_scenario_evidence_packets();
+    assert_eq!(packets.len(), 2);
+    assert!(packets.iter().any(|packet| {
+        packet.target_profile() == "editor.workbench"
+            && packet.validate_runtime_product_evidence().is_ok()
+    }));
+    assert!(packets.iter().any(|packet| {
+        packet.target_profile() == "game.runtime"
+            && !packet.is_runtime_product()
+            && packet.validate_scenario_evidence().is_ok()
+            && packet
+                .unsupported_checks()
+                .iter()
+                .any(|check| check.check == "concrete game HUD runtime")
+    }));
+}
+
+#[test]
 fn dispatch_shell_command_edits_selected_ui_and_theme_definition_drafts() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();

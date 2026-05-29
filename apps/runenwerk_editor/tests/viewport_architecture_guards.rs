@@ -1136,7 +1136,8 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
         read_workspace_source("domain/editor/editor_shell/src/workspace/definition_form.rs");
     let shell_surface_contract =
         read_workspace_source("domain/editor/editor_shell/src/workspace/surface_contract.rs");
-    let self_authoring = read_workspace_source("apps/runenwerk_editor/src/shell/self_authoring.rs");
+    let self_authoring =
+        read_workspace_source_tree_contents("apps/runenwerk_editor/src/shell/self_authoring");
 
     assert!(
         activation.contains("WorkspaceLayoutChanged")

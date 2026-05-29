@@ -8,8 +8,8 @@ use editor_scene::{
     SceneModelMeshSourceId,
 };
 use editor_shell::{
-    MATERIAL_WORKSPACE_PROFILE_ID, ToolSurfaceInstanceId, WorkspaceIdentityAllocator,
-    form_workspace_state_from_definition_with_registry,
+    EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID, ToolSurfaceInstanceId,
+    WorkspaceIdentityAllocator, form_workspace_state_from_definition_with_registry,
 };
 use editor_viewport::{
     ViewportCameraSettings, ViewportFieldVisualizerSettings, ViewportId, ViewportRuntimeSettings,
@@ -97,6 +97,22 @@ impl EditorHostResource {
                 app.workbench_host().tool_surface_registry(),
             )
             .expect("Material Lab shell workspace should be compatible with workbench registry");
+        Self {
+            app,
+            shell_state,
+            theme: ThemeTokens::default(),
+        }
+    }
+
+    pub fn ui_designer_workbench() -> Self {
+        let app = RunenwerkEditorApp::new_ui_designer_workbench();
+        let shell_state =
+            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
+                EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
+                app.workbench_host().workspace_profile_registry(),
+                app.workbench_host().tool_surface_registry(),
+            )
+            .expect("UI Designer shell workspace should be compatible with workbench registry");
         Self {
             app,
             shell_state,
@@ -1504,6 +1520,24 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn ui_designer_workbench_host_resource_bootstraps_editor_design_profile() {
+        let host = EditorHostResource::ui_designer_workbench();
+
+        assert_eq!(
+            host.app.workbench_host().composition(),
+            crate::shell::RunenwerkWorkbenchComposition::UiDesigner
+        );
+        assert_eq!(
+            host.shell_state.active_workspace_profile_id(),
+            EDITOR_DESIGN_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            host.shell_state.open_workspace_profile_ids(),
+            &[EDITOR_DESIGN_WORKSPACE_PROFILE_ID]
+        );
     }
 
     #[test]

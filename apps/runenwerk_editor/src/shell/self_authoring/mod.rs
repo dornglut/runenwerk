@@ -1,5 +1,18 @@
-//! File: apps/runenwerk_editor/src/shell/self_authoring.rs
+//! File: apps/runenwerk_editor/src/shell/self_authoring/mod.rs
 //! Purpose: App-owned UI/editor definition authoring state, preview, apply, and rollback.
+
+mod evidence;
+mod operations;
+mod project_io;
+mod recipes;
+mod session;
+
+pub use evidence::EditorLabProductPathEvidenceCapture;
+use operations::*;
+pub use project_io::{DefinitionApplyPreview, EditorDefinitionExportPackage};
+use recipes::*;
+use session::EditorLabOperationHistory;
+pub use session::{EditorLabOperationHistoryEntry, EditorLabOperationHistorySnapshot};
 
 use anyhow::{Context, Result};
 use editor_definition::{
@@ -17,14 +30,27 @@ use editor_definition::{
 };
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::Instant,
+};
 use ui_definition::{
-    AuthoredUiTemplate, FormedRetainedUiProduct, UiDefinitionContext, UiDefinitionDiagnostic,
-    UiDefinitionDiagnosticSeverity, UiNodeDefinition, UiValueBinding, VersionedAuthoredUiTemplate,
+    AuthoredId, AuthoredUiNodePath, AuthoredUiTemplate, FormedRetainedUiProduct,
+    UiDefinitionContext, UiDefinitionDiagnostic, UiDefinitionDiagnosticSeverity, UiNodeDefinition,
+    UiRecipeExpansionRequest, UiRecipeId, UiRecipeLibrary, UiRecipeTargetProfileId, UiValueBinding,
+    UiVisualLayoutEditKind, UiVisualLayoutOperation, VersionedAuthoredUiTemplate, expand_ui_recipe,
     migrate_authored_ui_template, normalize_authored_template,
 };
 use ui_theme::ThemeTokens;
 
+use crate::shell::editor_lab_evidence::{
+    EditorLabDescriptorCompatibility, EditorLabDescriptorCompatibilityEvidencePacket,
+    EditorLabEvidenceArtifact, EditorLabEvidenceArtifactKind, EditorLabEvidenceArtifactProvenance,
+    EditorLabPerformanceBaseline, EditorLabPerformanceBaselineKind,
+    EditorLabReadOnlyFixtureBindingDescriptor, EditorLabRuntimeProductEvidencePacket,
+    EditorLabScenarioEvidencePacket, EditorLabSourceRevision, EditorLabUnsupportedCheckDiagnostic,
+    EditorLabValidatedIntentDescriptor, game_runtime,
+};
 use crate::shell::editor_lab_project::{
     DefinitionApplyDiffFamily, DefinitionApplyDiffRow, DefinitionApplyReview,
     DefinitionApplyReviewStatus, EditorLabDocumentStore, EditorLabProjectImportReport,
@@ -35,56 +61,11 @@ use crate::shell::ui_definition_assets::{EDITOR_BINDINGS_SOURCE, EDITOR_UI_ASSET
 
 pub const EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION: u32 = 1;
 pub const EDITOR_DEFINITION_EXPORT_PACKAGE_KIND: &str = "runenwerk.editor.definition.export";
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EditorDefinitionExportPackage {
-    pub package_version: u32,
-    pub package_kind: String,
-    pub document: EditorDefinitionDocument,
-}
-
-impl EditorDefinitionExportPackage {
-    pub fn current(document: EditorDefinitionDocument) -> Self {
-        Self {
-            package_version: EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION,
-            package_kind: EDITOR_DEFINITION_EXPORT_PACKAGE_KIND.to_string(),
-            document,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DefinitionApplyPreview {
-    pub document_id: EditorDefinitionId,
-    pub display_name: String,
-    pub diagnostics: Vec<UiDefinitionDiagnostic>,
-    pub summary: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct EditorLabOperationHistoryEntry {
-    pub id: String,
-    pub label: String,
-    pub document_id: EditorDefinitionId,
-    pub before: EditorDefinitionDocument,
-    pub after: EditorDefinitionDocument,
-    pub report: EditorLabOperationReport,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct EditorLabOperationHistorySnapshot {
-    pub undo_count: usize,
-    pub redo_count: usize,
-    pub can_undo: bool,
-    pub can_redo: bool,
-}
-
-#[derive(Debug, Clone, Default)]
-struct EditorLabOperationHistory {
-    undo: Vec<EditorLabOperationHistoryEntry>,
-    redo: Vec<EditorLabOperationHistoryEntry>,
-    next_sequence: u64,
-}
+const UI_DESIGNER_SCENARIO_EVIDENCE_TARGETS: [&str; 2] = [
+    UI_DESIGNER_WORKBENCH_TARGET_PROFILE,
+    game_runtime::GAME_RUNTIME_TARGET_PROFILE,
+];
+const UI_DESIGNER_WORKBENCH_TARGET_PROFILE: &str = "editor.workbench";
 
 #[derive(Debug, Clone, Default)]
 pub struct SelfAuthoringWorkspaceState {
@@ -100,6 +81,9 @@ pub struct SelfAuthoringWorkspaceState {
     rollback_snapshots: BTreeMap<EditorDefinitionId, Option<EditorDefinitionDocument>>,
     rollback_records: Vec<EditorLabRollbackRecord>,
     last_applied_snapshots: BTreeMap<EditorDefinitionId, EditorDefinitionDocument>,
+    last_scenario_evidence_packets: Vec<EditorLabScenarioEvidencePacket>,
+    source_revision_epoch: u64,
+    recipe_catalog_filter: String,
 }
 
 impl SelfAuthoringWorkspaceState {
@@ -155,6 +139,9 @@ impl SelfAuthoringWorkspaceState {
             rollback_snapshots: BTreeMap::new(),
             rollback_records: Vec::new(),
             last_applied_snapshots: BTreeMap::new(),
+            last_scenario_evidence_packets: Vec::new(),
+            source_revision_epoch: 1,
+            recipe_catalog_filter: String::new(),
         })
     }
 
@@ -164,6 +151,24 @@ impl SelfAuthoringWorkspaceState {
 
     pub fn selected_document_id(&self) -> Option<&EditorDefinitionId> {
         self.selected_document_id.as_ref()
+    }
+
+    pub fn selected_source_version_label(&self) -> Option<String> {
+        self.selected_source_revision()
+            .map(|revision| revision.display_label())
+    }
+
+    pub fn selected_source_revision(&self) -> Option<EditorLabSourceRevision> {
+        self.selected_document()
+            .map(|document| self.source_revision_for_document(document))
+    }
+
+    pub fn recipe_catalog_filter(&self) -> &str {
+        &self.recipe_catalog_filter
+    }
+
+    pub fn set_recipe_catalog_filter(&mut self, query: impl Into<String>) {
+        self.recipe_catalog_filter = query.into();
     }
 
     pub fn selected_document(&self) -> Option<&EditorDefinitionDocument> {
@@ -235,8 +240,176 @@ impl SelfAuthoringWorkspaceState {
                     report: report.clone(),
                 });
             self.operation_history.redo.clear();
+            self.record_source_change();
         }
         Ok(report)
+    }
+
+    pub fn insert_selected_ui_recipe(
+        &mut self,
+        library: &UiRecipeLibrary,
+        recipe_id: UiRecipeId,
+        target_profile: UiRecipeTargetProfileId,
+    ) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+        let document_id = self.selected_document_id.clone().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.recipe.no_selection",
+                "no definition document is selected for recipe insertion",
+            )
+        })?;
+        let before = self.drafts.get(&document_id).cloned().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.recipe.unresolved_document",
+                "selected definition document is not loaded",
+            )
+        })?;
+        let operation_id = self.next_operation_id("recipe_insert");
+        let target_profile_label = target_profile.as_str().to_string();
+
+        if !matches!(
+            &before.content,
+            EditorDefinitionDocumentContent::UiTemplate(_)
+        ) {
+            return self.reject_recipe_insert(
+                operation_id,
+                document_id,
+                target_profile_label,
+                before,
+                vec![UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.recipe.not_ui_template",
+                    "selected definition is not a UI template",
+                )],
+            );
+        }
+
+        let expansion = expand_ui_recipe(
+            library,
+            &UiRecipeExpansionRequest::activate(recipe_id.clone(), target_profile),
+        );
+        if expansion.has_errors() {
+            return self.reject_recipe_insert(
+                operation_id,
+                document_id,
+                target_profile_label,
+                before,
+                expansion.as_definition_diagnostics(),
+            );
+        }
+        let Some(mut inserted_root) = expansion.root else {
+            return self.reject_recipe_insert(
+                operation_id,
+                document_id,
+                target_profile_label,
+                before,
+                vec![UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.recipe.empty_expansion",
+                    format!(
+                        "recipe '{}' did not produce an insertable root node",
+                        recipe_id
+                    ),
+                )],
+            );
+        };
+
+        namespace_ui_recipe_node_ids(
+            &mut inserted_root,
+            &recipe_id,
+            self.operation_history.next_sequence + 1,
+        );
+        let inserted_node_id = inserted_root.id().as_str().to_string();
+
+        let EditorDefinitionDocumentContent::UiTemplate(template) = &before.content else {
+            unreachable!("non-UI template documents were rejected before recipe expansion");
+        };
+
+        let parent_id = self
+            .selected_ui_node_id
+            .as_deref()
+            .filter(|node_id| ui_node_accepts_children(&template.root, node_id))
+            .unwrap_or_else(|| template.root.id().as_str())
+            .to_string();
+        let Some(parent_path) = ui_node_path(&template.root, &parent_id) else {
+            return self.reject_recipe_insert(
+                operation_id,
+                document_id,
+                target_profile_label,
+                before,
+                vec![UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.recipe.parent_unresolved",
+                    format!("recipe insertion parent '{parent_id}' is not present"),
+                )],
+            );
+        };
+        let Some(insert_index) = ui_node_child_count(&template.root, &parent_id) else {
+            return self.reject_recipe_insert(
+                operation_id,
+                document_id,
+                target_profile_label,
+                before,
+                vec![UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.recipe.parent_not_container",
+                    format!("recipe insertion parent '{parent_id}' cannot contain children"),
+                )],
+            );
+        };
+
+        let operation = EditorLabOperation {
+            id: operation_id.clone(),
+            document_id,
+            target_profile: target_profile_label.clone(),
+            kind: EditorLabOperationKind::UiVisualLayout(Box::new(UiVisualLayoutOperation {
+                id: AuthoredId::new(operation_id_from_recipe(&recipe_id, &inserted_node_id)),
+                source_document: template.id.clone(),
+                target_path: AuthoredUiNodePath(parent_path),
+                expected_node_id: AuthoredId::new(parent_id),
+                target_profile: AuthoredId::new(target_profile_label),
+                kind: UiVisualLayoutEditKind::InsertNode {
+                    index: insert_index,
+                    node: inserted_root,
+                },
+                source_location: None,
+                preview_only: false,
+            })),
+            preview_only: false,
+            source: Some(format!("recipe:{}", recipe_id.as_str())),
+        };
+        let report = self.apply_editor_lab_operation(operation)?;
+        if report.status == EditorLabOperationStatus::Rejected {
+            return Err(report.diagnostics.first().cloned().unwrap_or_else(|| {
+                UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.recipe.rejected",
+                    "recipe insertion operation was rejected",
+                )
+            }));
+        }
+        self.selected_ui_node_id = Some(inserted_node_id);
+        Ok(report)
+    }
+
+    fn reject_recipe_insert(
+        &mut self,
+        operation_id: String,
+        document_id: EditorDefinitionId,
+        _target_profile: String,
+        document: EditorDefinitionDocument,
+        diagnostics: Vec<UiDefinitionDiagnostic>,
+    ) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+        let first_diagnostic = diagnostics.first().cloned().unwrap_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.recipe.rejected",
+                "recipe insertion was rejected",
+            )
+        });
+        let report = EditorLabOperationReport {
+            operation_id,
+            document_id,
+            status: EditorLabOperationStatus::Rejected,
+            document,
+            diff: None,
+            diagnostics,
+        };
+        self.last_operation_report = Some(report);
+        Err(first_diagnostic)
     }
 
     pub fn undo_editor_lab_operation(
@@ -258,6 +431,7 @@ impl SelfAuthoringWorkspaceState {
         self.restore_operation_document(entry.document_id.clone(), entry.before.clone());
         self.operation_history.redo.push(entry);
         self.last_operation_report = Some(report.clone());
+        self.record_source_change();
         Ok(report)
     }
 
@@ -280,6 +454,7 @@ impl SelfAuthoringWorkspaceState {
         self.restore_operation_document(entry.document_id.clone(), entry.after.clone());
         self.operation_history.undo.push(entry);
         self.last_operation_report = Some(report.clone());
+        self.record_source_change();
         Ok(report)
     }
 
@@ -299,6 +474,7 @@ impl SelfAuthoringWorkspaceState {
         }
         self.selected_ui_node_id = selected_ui_default_node_id(&self.drafts, &document_id);
         self.selected_document_id = Some(document_id);
+        self.record_source_change();
         true
     }
 
@@ -340,6 +516,7 @@ impl SelfAuthoringWorkspaceState {
         self.selected_ui_node_id = selected_ui_default_node_for_document(&document);
         self.selected_document_id = Some(document.id.clone());
         self.drafts.insert(document.id.clone(), document);
+        self.record_source_change();
         Ok(())
     }
 
@@ -370,6 +547,7 @@ impl SelfAuthoringWorkspaceState {
         self.drafts.insert(new_id.clone(), duplicate);
         self.selected_document_id = Some(new_id.clone());
         self.selected_ui_node_id = selected_ui_default_node_id(&self.drafts, &new_id);
+        self.record_source_change();
         Ok(new_id)
     }
 
@@ -390,6 +568,7 @@ impl SelfAuthoringWorkspaceState {
             )
         })?;
         document.display_name = display_name.into();
+        self.record_source_change();
         Ok(())
     }
 
@@ -419,6 +598,7 @@ impl SelfAuthoringWorkspaceState {
             .selected_document_id
             .as_ref()
             .and_then(|id| selected_ui_default_node_id(&self.drafts, id));
+        self.record_source_change();
         Ok(removed)
     }
 
@@ -509,7 +689,9 @@ impl SelfAuthoringWorkspaceState {
                 "editor.self_authoring.node.unsupported_text_edit",
                 format!("UI node '{node_id}' does not expose an authored text value"),
             )
-        })
+        })?;
+        self.record_source_change();
+        Ok(())
     }
 
     pub fn set_selected_theme_color(
@@ -536,6 +718,7 @@ impl SelfAuthoringWorkspaceState {
             ));
         };
         theme.colors.insert(token.to_string(), value.into());
+        self.record_source_change();
         Ok(())
     }
 
@@ -559,6 +742,7 @@ impl SelfAuthoringWorkspaceState {
             tool_surface: tool_surface.into(),
         });
         *host.active_tab = Some(tab_id.clone());
+        self.record_source_change();
         Ok(tab_id)
     }
 
@@ -596,6 +780,7 @@ impl SelfAuthoringWorkspaceState {
                 active_tab: Some("validation".to_string()),
             }),
         };
+        self.record_source_change();
         Ok(())
     }
 
@@ -617,6 +802,7 @@ impl SelfAuthoringWorkspaceState {
         }
         let removed = host.tabs.pop().expect("tab length was checked");
         *host.active_tab = host.tabs.last().map(|tab| tab.id.clone());
+        self.record_source_change();
         Ok(removed)
     }
 
@@ -758,6 +944,7 @@ impl SelfAuthoringWorkspaceState {
             .is_some();
         self.selected_document_id = Some(document.id.clone());
         self.selected_ui_node_id = selected_ui_default_node_id(&self.drafts, &document.id);
+        self.record_source_change();
         Ok(EditorLabProjectImportReport {
             document_id: document.id,
             display_name: document.display_name,
@@ -954,6 +1141,7 @@ impl SelfAuthoringWorkspaceState {
         self.applied.insert(preview.document_id.clone(), applied);
         self.last_apply_preview = Some(preview.clone());
         self.last_apply_review = Some(review.with_status(DefinitionApplyReviewStatus::Accepted));
+        self.record_source_change();
         Ok(preview)
     }
 
@@ -1015,6 +1203,7 @@ impl SelfAuthoringWorkspaceState {
         }
         let mut rolled_back = removed_document;
         rolled_back.lifecycle_state = EditorDefinitionLifecycleState::RolledBack;
+        self.record_source_change();
         Ok(rolled_back)
     }
 
@@ -1039,6 +1228,7 @@ impl SelfAuthoringWorkspaceState {
             })?;
         self.drafts.insert(document_id.clone(), snapshot.clone());
         self.applied.insert(document_id, snapshot.clone());
+        self.record_source_change();
         Ok(snapshot)
     }
 
@@ -1048,6 +1238,64 @@ impl SelfAuthoringWorkspaceState {
 
     pub fn rollback_records(&self) -> &[EditorLabRollbackRecord] {
         &self.rollback_records
+    }
+
+    pub fn last_applied_document(
+        &self,
+        id: &EditorDefinitionId,
+    ) -> Option<&EditorDefinitionDocument> {
+        self.last_applied_snapshots.get(id)
+    }
+
+    pub fn selected_last_applied_document(&self) -> Option<&EditorDefinitionDocument> {
+        self.selected_document_id
+            .as_ref()
+            .and_then(|id| self.last_applied_document(id))
+    }
+
+    pub fn last_scenario_evidence_packets(&self) -> &[EditorLabScenarioEvidencePacket] {
+        &self.last_scenario_evidence_packets
+    }
+
+    pub fn capture_pm005_scenario_evidence_packets(
+        &mut self,
+        theme: &ThemeTokens,
+    ) -> Result<Vec<EditorLabScenarioEvidencePacket>, UiDefinitionDiagnostic> {
+        self.capture_pm005_scenario_evidence_packets_with_product_capture(
+            theme,
+            EditorLabProductPathEvidenceCapture::default(),
+        )
+    }
+
+    pub fn capture_pm005_scenario_evidence_packets_with_product_capture(
+        &mut self,
+        theme: &ThemeTokens,
+        product_capture: EditorLabProductPathEvidenceCapture,
+    ) -> Result<Vec<EditorLabScenarioEvidencePacket>, UiDefinitionDiagnostic> {
+        let document = self.selected_document().cloned().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.scenario.no_selected_document",
+                "no selected UI Designer document is available for scenario evidence capture",
+            )
+        })?;
+        let source_revision = self.source_revision_for_document(&document);
+        let diagnostics = self.diagnostics_for_document(&document.id);
+        let runtime_product_capture =
+            self.runtime_product_evidence_capture_for_selected_document(theme, product_capture)?;
+        let mut packets = Vec::new();
+        for target_profile in UI_DESIGNER_SCENARIO_EVIDENCE_TARGETS {
+            let packet = self.capture_pm005_scenario_evidence_packet_for_target(
+                &document,
+                source_revision.clone(),
+                diagnostics.clone(),
+                theme,
+                target_profile,
+                &runtime_product_capture,
+            )?;
+            packets.push(packet);
+        }
+        self.last_scenario_evidence_packets = packets.clone();
+        Ok(packets)
     }
 
     pub fn applied_document(&self, id: &EditorDefinitionId) -> Option<&EditorDefinitionDocument> {
@@ -1091,12 +1339,264 @@ impl SelfAuthoringWorkspaceState {
             .and_then(|id| selected_ui_default_node_id(&self.drafts, id));
         self.last_apply_preview = None;
         self.last_apply_review = None;
+        self.last_scenario_evidence_packets.clear();
+        self.record_source_change();
         Ok(EditorLabProjectLoadReport {
             draft_count: self.drafts.len(),
             applied_count: self.applied.len(),
             last_applied_count: self.last_applied_snapshots.len(),
         })
     }
+
+    fn source_revision_for_document(
+        &self,
+        document: &EditorDefinitionDocument,
+    ) -> EditorLabSourceRevision {
+        let serialized = ron::ser::to_string_pretty(document, PrettyConfig::new())
+            .unwrap_or_else(|_| format!("{document:?}"));
+        EditorLabSourceRevision::new(
+            document.id.as_str(),
+            document.schema_version,
+            format!("blake3:{}", blake3::hash(serialized.as_bytes()).to_hex()),
+            self.source_revision_epoch,
+        )
+    }
+
+    fn capture_pm005_scenario_evidence_packet_for_target(
+        &self,
+        document: &EditorDefinitionDocument,
+        source_revision: EditorLabSourceRevision,
+        diagnostics: Vec<UiDefinitionDiagnostic>,
+        _theme: &ThemeTokens,
+        target_profile: &str,
+        runtime_product_capture: &EditorLabProductPathEvidenceCapture,
+    ) -> Result<EditorLabScenarioEvidencePacket, UiDefinitionDiagnostic> {
+        if target_profile == game_runtime::GAME_RUNTIME_TARGET_PROFILE {
+            let unsupported_report = format!(
+                "target={target_profile}\ndocument={}\nsource={}\nstatus=descriptor-compatible\nruntime-proof-owner=PT-GAME-RUNTIME-UI\n",
+                document.id.as_str(),
+                source_revision.display_label()
+            );
+            let artifact = EditorLabEvidenceArtifact::from_content(
+                EditorLabEvidenceArtifactKind::UnsupportedCheckReport,
+                format!(
+                    "evidence://ui-designer/v1-closure/pm005/{}/{}/descriptor-compatibility",
+                    target_profile.replace('.', "-"),
+                    document.id.as_str()
+                ),
+                unsupported_report.as_bytes(),
+                EditorLabEvidenceArtifactProvenance::UnsupportedCheck,
+                "game.runtime descriptor compatibility report; runtime proof is owned by PT-GAME-RUNTIME-UI",
+            );
+            let packet = EditorLabDescriptorCompatibilityEvidencePacket::new(
+                "runenwerk.editor.ui_designer_workbench.v1",
+                document.id.as_str(),
+                source_revision,
+                target_profile,
+                pm005_scenario_id(target_profile),
+            )
+            .with_diagnostics(diagnostics)
+            .with_artifacts(vec![artifact])
+            .with_unsupported_checks(vec![EditorLabUnsupportedCheckDiagnostic::new(
+                "concrete game HUD runtime",
+                "PT-GAME-RUNTIME-UI owns concrete game HUD behavior; UI Designer records descriptor compatibility only",
+            )])
+            .with_fixture_bindings(pm005_fixture_binding_descriptors(target_profile))
+            .with_intent_descriptors(pm005_intent_descriptors(target_profile));
+
+            let packet = EditorLabScenarioEvidencePacket::descriptor(packet);
+            packet.validate_scenario_evidence()?;
+            return Ok(packet);
+        }
+
+        let packet = EditorLabRuntimeProductEvidencePacket::new(
+            "runenwerk.editor.ui_designer_workbench.v1",
+            document.id.as_str(),
+            source_revision,
+            target_profile,
+            pm005_scenario_id(target_profile),
+        )
+        .with_diagnostics(diagnostics)
+        .with_artifacts(runtime_product_capture.artifacts.clone())
+        .with_performance_baselines(runtime_product_capture.performance_baselines.clone());
+
+        let packet = EditorLabScenarioEvidencePacket::runtime(packet);
+        packet.validate_scenario_evidence()?;
+        Ok(packet)
+    }
+
+    fn measured_product_path_baseline(
+        &self,
+        kind: EditorLabPerformanceBaselineKind,
+        description: impl Into<String>,
+        sample: impl FnOnce() -> usize,
+    ) -> EditorLabPerformanceBaseline {
+        let started = Instant::now();
+        let sample_count = sample().max(1);
+        let elapsed_micros = started.elapsed().as_micros().min(u128::from(u64::MAX)) as u64;
+        EditorLabPerformanceBaseline::product_path(kind, elapsed_micros, sample_count, description)
+    }
+
+    fn runtime_product_evidence_capture_for_selected_document(
+        &self,
+        theme: &ThemeTokens,
+        mut product_capture: EditorLabProductPathEvidenceCapture,
+    ) -> Result<EditorLabProductPathEvidenceCapture, UiDefinitionDiagnostic> {
+        let document = self.selected_document().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.runtime.no_selected_document",
+                "runtime product evidence capture requires a selected document",
+            )
+        })?;
+        let source_revision = self.source_revision_for_document(document);
+        let preview_started = Instant::now();
+        let preview = self.formed_selected_preview(theme).ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.lab.evidence.runtime.no_retained_preview",
+                "runtime product evidence capture requires a retained UI preview product",
+            )
+        })?;
+        let preview_debug = format!("{preview:#?}");
+        let preview_elapsed = preview_started
+            .elapsed()
+            .as_micros()
+            .min(u128::from(u64::MAX)) as u64;
+        product_capture
+            .artifacts
+            .push(EditorLabEvidenceArtifact::from_content(
+                EditorLabEvidenceArtifactKind::RetainedUiDebug,
+                format!(
+                    "evidence://ui-designer/runtime/{}/{}/retained-ui-debug",
+                    document.id.as_str(),
+                    source_revision.content_hash
+                ),
+                preview_debug.as_bytes(),
+                EditorLabEvidenceArtifactProvenance::ProductPath,
+                "retained UI Designer workbench product formed through ui_definition",
+            ));
+        product_capture
+            .performance_baselines
+            .push(EditorLabPerformanceBaseline::product_path(
+                EditorLabPerformanceBaselineKind::CanvasInteraction,
+                preview_elapsed,
+                1,
+                "editor.workbench retained canvas preview formation through ui_definition",
+            ));
+        product_capture
+            .performance_baselines
+            .push(self.measured_product_path_baseline(
+                EditorLabPerformanceBaselineKind::Resize,
+                "editor.workbench retained canvas formation across responsive widget id scopes",
+                || {
+                    [10_u64, 20_u64, 30_u64]
+                        .into_iter()
+                        .filter(|scope| {
+                            self.formed_selected_preview_with_scope(theme, Some(*scope))
+                                .is_some()
+                        })
+                        .count()
+                },
+            ));
+        product_capture
+            .performance_baselines
+            .push(self.measured_product_path_baseline(
+                EditorLabPerformanceBaselineKind::CatalogProjection,
+                "editor.workbench component catalog projection from editor design recipe library",
+                || {
+                    editor_shell::editor_design_system_recipe_library()
+                        .declarations
+                        .len()
+                },
+            ));
+        product_capture
+            .performance_baselines
+            .push(self.measured_product_path_baseline(
+            EditorLabPerformanceBaselineKind::DiagnosticsProjection,
+            "editor.workbench selected diagnostics projection through editor_definition validation",
+            || self.selected_diagnostics().len(),
+        ));
+        if !product_capture
+            .performance_baselines
+            .iter()
+            .any(|baseline| baseline.kind == EditorLabPerformanceBaselineKind::FrameBuild)
+        {
+            product_capture
+                .performance_baselines
+                .push(self.measured_product_path_baseline(
+                    EditorLabPerformanceBaselineKind::FrameBuild,
+                    "editor.workbench apply preview frame inventory from selected product state",
+                    || {
+                        usize::from(self.build_apply_preview().is_some())
+                            + self.draft_documents().count()
+                            + self.applied_count()
+                    },
+                ));
+        }
+
+        dedupe_product_path_baselines(&mut product_capture.performance_baselines);
+        Ok(product_capture)
+    }
+
+    fn record_source_change(&mut self) {
+        self.source_revision_epoch = self.source_revision_epoch.saturating_add(1);
+        self.last_scenario_evidence_packets.clear();
+    }
+}
+
+fn pm005_scenario_id(target_profile: &str) -> String {
+    format!(
+        "ui-designer.v1-closure.pm005.{}",
+        target_profile.replace('.', "-")
+    )
+}
+
+fn dedupe_product_path_baselines(baselines: &mut Vec<EditorLabPerformanceBaseline>) {
+    let mut seen = BTreeSet::new();
+    baselines.retain(|baseline| seen.insert(baseline.kind));
+}
+
+fn pm005_fixture_binding_descriptors(
+    target_profile: &str,
+) -> Vec<EditorLabReadOnlyFixtureBindingDescriptor> {
+    if target_profile == game_runtime::GAME_RUNTIME_TARGET_PROFILE {
+        return game_runtime::descriptor_fixture_bindings();
+    }
+    let profile_segment = target_profile.replace('.', "-");
+    vec![
+        EditorLabReadOnlyFixtureBindingDescriptor::new(
+            format!("fixture.{profile_segment}.selected-template"),
+            format!("binding.{profile_segment}.source-version"),
+            target_profile,
+            EditorLabDescriptorCompatibility::Compatible,
+            "source-versioned selected UI template fixture",
+        ),
+        EditorLabReadOnlyFixtureBindingDescriptor::new(
+            format!("fixture.{profile_segment}.safe-area"),
+            format!("binding.{profile_segment}.target-profile"),
+            target_profile,
+            EditorLabDescriptorCompatibility::Compatible,
+            "read-only target-profile compatibility fixture",
+        ),
+    ]
+}
+
+fn pm005_intent_descriptors(target_profile: &str) -> Vec<EditorLabValidatedIntentDescriptor> {
+    if target_profile == game_runtime::GAME_RUNTIME_TARGET_PROFILE {
+        return game_runtime::validated_intent_descriptors();
+    }
+    let profile_segment = target_profile.replace('.', "-");
+    vec![
+        EditorLabValidatedIntentDescriptor::new(
+            format!("intent.{profile_segment}.select-node"),
+            target_profile,
+            "validated EditorDefinition route descriptor",
+        ),
+        EditorLabValidatedIntentDescriptor::new(
+            format!("intent.{profile_segment}.preview-activation"),
+            target_profile,
+            "validated preview intent descriptor; no game-runtime command execution",
+        ),
+    ]
 }
 
 fn definition_apply_diff_rows(
@@ -1777,21 +2277,34 @@ fn selected_ui_node_after_operation(
 ) -> Option<String> {
     match &operation.kind {
         EditorLabOperationKind::SetUiNodeText { node_id, .. } => Some(node_id.clone()),
-        EditorLabOperationKind::UiVisualLayout(layout_operation) => {
-            Some(layout_operation.expected_node_id.as_str().to_string())
-        }
+        EditorLabOperationKind::SetUiNodeValueSlot { node_id, .. } => Some(node_id.clone()),
+        EditorLabOperationKind::SetUiNodeAvailabilityRef { node_id, .. } => Some(node_id.clone()),
+        EditorLabOperationKind::UiVisualLayout(layout_operation) => match &layout_operation.kind {
+            UiVisualLayoutEditKind::InsertNode { node, .. } => Some(node.id().as_str().to_string()),
+            _ => Some(layout_operation.expected_node_id.as_str().to_string()),
+        },
         _ => selected_ui_default_node_for_document(document),
     }
 }
 
 fn editor_lab_operation_label(operation: &EditorLabOperation) -> String {
     match &operation.kind {
-        EditorLabOperationKind::UiVisualLayout(layout_operation) => {
-            format!("visual layout {:?}", layout_operation.kind)
-        }
+        EditorLabOperationKind::UiVisualLayout(layout_operation) => match &layout_operation.kind {
+            UiVisualLayoutEditKind::InsertNode { node, .. } => {
+                format!("insert UI node {}", node.id())
+            }
+            _ => format!("visual layout {:?}", layout_operation.kind),
+        },
         EditorLabOperationKind::SetUiNodeText { node_id, .. } => {
             format!("set UI node text {node_id}")
         }
+        EditorLabOperationKind::SetUiNodeValueSlot { node_id, slot } => {
+            format!("set UI node value slot {node_id}:{slot}")
+        }
+        EditorLabOperationKind::SetUiNodeAvailabilityRef {
+            node_id,
+            availability,
+        } => format!("set UI node availability {node_id}:{availability}"),
         EditorLabOperationKind::RenameDocument { .. } => "rename definition".to_string(),
         EditorLabOperationKind::SetThemeColor { token, .. } => {
             format!("set theme color {token}")
@@ -1838,25 +2351,51 @@ fn operation_history_restore_report(
     }
 }
 
-fn operation_history_document_snapshot(document: &EditorDefinitionDocument) -> String {
-    ron::ser::to_string_pretty(document, PrettyConfig::default())
-        .unwrap_or_else(|error| format!("snapshot serialization failed: {error}"))
-}
-
-fn first_text_editable_ui_node_id(node: &ui_definition::UiNodeDefinition) -> Option<String> {
-    match node {
-        ui_definition::UiNodeDefinition::Label { id, .. }
-        | ui_definition::UiNodeDefinition::Button { id, .. }
-        | ui_definition::UiNodeDefinition::Toggle { id, .. }
-        | ui_definition::UiNodeDefinition::TextInput { id, .. } => {
-            return Some(id.as_str().to_string());
-        }
-        _ => {}
+fn ui_node_accepts_children(node: &UiNodeDefinition, node_id: &str) -> bool {
+    if node.id().as_str() == node_id {
+        return matches!(
+            node,
+            UiNodeDefinition::Panel { .. }
+                | UiNodeDefinition::Row { .. }
+                | UiNodeDefinition::Column { .. }
+                | UiNodeDefinition::Stack { .. }
+                | UiNodeDefinition::Scroll { .. }
+                | UiNodeDefinition::Split { .. }
+        );
     }
-
     node.children()
         .iter()
-        .find_map(first_text_editable_ui_node_id)
+        .any(|child| ui_node_accepts_children(child, node_id))
+}
+
+fn ui_node_path(node: &UiNodeDefinition, node_id: &str) -> Option<String> {
+    ui_node_path_segments(node, node_id, Vec::new()).map(|segments| segments.join("/"))
+}
+
+fn ui_node_path_segments(
+    node: &UiNodeDefinition,
+    node_id: &str,
+    mut ancestors: Vec<String>,
+) -> Option<Vec<String>> {
+    ancestors.push(node.id().as_str().to_string());
+    if node.id().as_str() == node_id {
+        return Some(ancestors);
+    }
+    for child in node.children() {
+        if let Some(path) = ui_node_path_segments(child, node_id, ancestors.clone()) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn ui_node_child_count(node: &UiNodeDefinition, node_id: &str) -> Option<usize> {
+    if node.id().as_str() == node_id {
+        return Some(node.children().len());
+    }
+    node.children()
+        .iter()
+        .find_map(|child| ui_node_child_count(child, node_id))
 }
 
 struct AuthoredTabStackMut<'a> {
@@ -2174,6 +2713,221 @@ mod tests {
         assert_eq!(
             theme.colors.get("accent").map(String::as_str),
             Some("#3366ff")
+        );
+    }
+
+    #[test]
+    fn recipe_insertion_updates_source_versioned_draft_and_history() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let library = editor_shell::editor_design_system_recipe_library();
+        let before_source_version = state
+            .selected_source_version_label()
+            .expect("default UI definition should expose a source version");
+
+        let report = state
+            .insert_selected_ui_recipe(
+                &library,
+                ui_definition::UiRecipeId::new(editor_shell::EDITOR_UX_PRIMARY_BUTTON_RECIPE_ID),
+                ui_definition::UiRecipeTargetProfileId::new(
+                    editor_shell::UI_DESIGNER_WORKBENCH_TARGET_PROFILE,
+                ),
+            )
+            .expect("primary button recipe should insert into selected UI template");
+
+        let inserted_node = state
+            .selected_ui_node_id()
+            .expect("inserted recipe root should become selected")
+            .to_string();
+        assert!(inserted_node.contains("editor.pattern.primary_button.primary-button"));
+        assert_eq!(report.status, EditorLabOperationStatus::Accepted);
+        assert_eq!(state.operation_history_snapshot().undo_count, 1);
+        assert_eq!(
+            state
+                .last_operation_report()
+                .expect("recipe insertion should record a report")
+                .operation_id,
+            report.operation_id
+        );
+        let after_source_version = state
+            .selected_source_version_label()
+            .expect("inserted UI definition should expose a source version");
+        assert_ne!(before_source_version, after_source_version);
+        assert!(after_source_version.contains(":epoch"));
+        assert!(after_source_version.contains("blake3:"));
+
+        let selected = state
+            .selected_document()
+            .expect("recipe insertion should keep the document selected");
+        let EditorDefinitionDocumentContent::UiTemplate(template) = &selected.content else {
+            panic!("selected document should remain a UI template");
+        };
+        assert!(ui_node_exists(&template.root, &inserted_node));
+        let diff = report
+            .diff
+            .expect("accepted insertion should produce a diff");
+        assert_eq!(diff.changes.len(), 1);
+        assert_eq!(
+            diff.changes[0].family,
+            EditorLabOperationDiffFamily::UiVisualLayout
+        );
+        assert!(
+            diff.changes[0]
+                .after
+                .as_deref()
+                .is_some_and(|after| after.contains("Primary action"))
+        );
+
+        state
+            .undo_editor_lab_operation()
+            .expect("recipe insertion should be undoable");
+        let undo_document = state
+            .selected_document()
+            .expect("undo should keep the UI document selected");
+        let EditorDefinitionDocumentContent::UiTemplate(undo_template) = &undo_document.content
+        else {
+            panic!("undo should keep the selected document as a UI template");
+        };
+        assert!(!ui_node_exists(&undo_template.root, &inserted_node));
+        assert_eq!(state.operation_history_snapshot().redo_count, 1);
+
+        state
+            .redo_editor_lab_operation()
+            .expect("recipe insertion should be redoable");
+        let redo_document = state
+            .selected_document()
+            .expect("redo should keep the UI document selected");
+        let EditorDefinitionDocumentContent::UiTemplate(redo_template) = &redo_document.content
+        else {
+            panic!("redo should keep the selected document as a UI template");
+        };
+        assert!(ui_node_exists(&redo_template.root, &inserted_node));
+        assert_eq!(state.operation_history_snapshot().undo_count, 1);
+    }
+
+    #[test]
+    fn source_revision_changes_and_evidence_invalidates_on_mutations() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let theme = ThemeTokens::default();
+        let library = editor_shell::editor_design_system_recipe_library();
+
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("initial evidence capture should validate");
+        let before_revision = state
+            .selected_source_revision()
+            .expect("selected document should expose source revision");
+        assert_eq!(state.last_scenario_evidence_packets().len(), 2);
+
+        state
+            .rename_selected("toolbar source revision test")
+            .expect("rename should mutate selected document");
+        let after_rename = state
+            .selected_source_revision()
+            .expect("renamed document should expose source revision");
+        assert_ne!(before_revision, after_rename);
+        assert!(state.last_scenario_evidence_packets().is_empty());
+
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("evidence capture after rename should validate");
+        state
+            .insert_selected_ui_recipe(
+                &library,
+                ui_definition::UiRecipeId::new(editor_shell::EDITOR_UX_PRIMARY_BUTTON_RECIPE_ID),
+                ui_definition::UiRecipeTargetProfileId::new(
+                    editor_shell::UI_DESIGNER_WORKBENCH_TARGET_PROFILE,
+                ),
+            )
+            .expect("recipe insertion should mutate selected document");
+        assert!(state.last_scenario_evidence_packets().is_empty());
+
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("evidence capture after insert should validate");
+        state
+            .undo_editor_lab_operation()
+            .expect("undo should mutate selected document");
+        assert!(state.last_scenario_evidence_packets().is_empty());
+
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("evidence capture after undo should validate");
+        state
+            .redo_editor_lab_operation()
+            .expect("redo should mutate selected document");
+        assert!(state.last_scenario_evidence_packets().is_empty());
+
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("evidence capture before apply should validate");
+        state
+            .apply_selected()
+            .expect("apply should mutate applied source state");
+        assert!(state.last_scenario_evidence_packets().is_empty());
+
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("evidence capture before rollback should validate");
+        state
+            .rollback_selected()
+            .expect("rollback should mutate applied source state");
+        assert!(state.last_scenario_evidence_packets().is_empty());
+
+        let saved = state
+            .save_project_package_to_ron()
+            .expect("project package should save");
+        state
+            .capture_pm005_scenario_evidence_packets(&theme)
+            .expect("evidence capture before project load should validate");
+        state
+            .load_project_package_from_ron(&saved)
+            .expect("project package load should mutate session source state");
+        assert!(state.last_scenario_evidence_packets().is_empty());
+    }
+
+    #[test]
+    fn recipe_insertion_rejects_incompatible_target_without_mutating_history() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let library = editor_shell::editor_design_system_recipe_library();
+        let before_history = state.operation_history_snapshot();
+        let before_document = operation_history_document_snapshot(
+            state
+                .selected_document()
+                .expect("default UI definition should be selected"),
+        );
+
+        let diagnostic = state
+            .insert_selected_ui_recipe(
+                &library,
+                ui_definition::UiRecipeId::new(editor_shell::EDITOR_UX_PRIMARY_BUTTON_RECIPE_ID),
+                ui_definition::UiRecipeTargetProfileId::new(
+                    game_runtime::GAME_RUNTIME_TARGET_PROFILE,
+                ),
+            )
+            .expect_err("editor recipe should be rejected in the game runtime target");
+
+        assert_eq!(diagnostic.code, "ui.recipe.target_profile.unsupported");
+        assert_eq!(state.operation_history_snapshot(), before_history);
+        let after_document = operation_history_document_snapshot(
+            state
+                .selected_document()
+                .expect("rejected recipe insertion should preserve selection"),
+        );
+        assert_eq!(after_document, before_document);
+        let report = state
+            .last_operation_report()
+            .expect("rejected recipe insertion should record diagnostics");
+        assert_eq!(report.status, EditorLabOperationStatus::Rejected);
+        assert!(report.diff.is_none());
+        assert_eq!(
+            report
+                .diagnostics
+                .first()
+                .map(|diagnostic| diagnostic.code.as_str()),
+            Some("ui.recipe.target_profile.unsupported")
         );
     }
 

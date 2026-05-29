@@ -1,0 +1,116 @@
+version: 1
+idea: UI Designer Workbench runtime-proven closeout and handoff
+source_path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+owner: editor
+created_at: '2026-05-26'
+governance_notes:
+- Architecture governance kickoff was run for PM-UI-DESIGNER-WB-008 before final closeout planning.
+- domain/ui remains the owner for generic UI definition, target-profile, preview, readiness, binding, recipe, persistence, and visual-layout truth.
+- domain/editor remains the owner for UI Designer app-neutral workbench view models, UX Lab evidence adapters, and editor/workbench vocabulary.
+- apps/runenwerk_editor remains the owner for concrete standalone/embedded launch wiring, session state, provider projection, evidence capture, and headless runtime proof.
+- PM008 is a docs, closeout, and handoff slice; it must not implement game HUD runtime behavior, claim native screenshot evidence, or make a perfectionist no-gap claim.
+open_questions:
+- Which final closeout wording most clearly separates runtime_proven UI Designer Workbench completion from PT-GAME-RUNTIME-UI and future no-gap claims?
+- Should the final usage guide live only under apps/runenwerk-editor, or should a later docs refactor add a broader domain/ui authoring guide?
+item:
+  id: WR-126
+  title: Runtime Proven Closeout And Handoff
+  diagram_title: UI Designer runtime-proven closeout and handoff
+  alias: UIDESIGNERCLOSEOUT
+  lane: Editor quality
+  dependency_level: L4
+  gate: After PM-UI-DESIGNER-WB-007 game-runtime compatibility seam closeout
+  planning_state: ready_next
+  priority: P1
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.9
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-120
+  - WR-122
+  - WR-123
+  - WR-124
+  - WR-125
+  - WR-118
+  write_scopes:
+  - docs-site/src/content/docs/reports/implementation-plans/wr-126-runtime-proven-closeout-and-handoff/plan.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-runtime-proven-clo
+  - docs-site/src/content/docs/apps/runenwerk-editor
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-008 --roadmap WR-126
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor editor_lab_evidence
+  - cargo test -p ui_definition game -- --nocapture
+  - cargo test -p editor_shell game -- --nocapture
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Accepted UI Designer Workbench product design; completed PM001-PM007 closeouts; active WR-126 final closeout and handoff contract.
+  current_decision: Ready-next planning row for PM-UI-DESIGNER-WB-008. Final closeout docs and handoff notes must not start until production:plan and roadmap promotion/current-candidate gates pass.
+  current_call: Use WR-126 to complete only runtime-proven track closeout, usage docs, examples, production/roadmap metadata, and downstream handoff notes.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-008 --roadmap WR-126 and follow the reported promotion or implementation action.
+  main_blocker: Awaiting production:plan promotion/current-candidate gate before final closeout implementation.
+  why_not_ready: Ready for promotion planning, but not current_candidate and not authorized for final closeout edits until task production:plan and roadmap gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - runtime proven
+  - usage docs
+  - handoff
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Final closeout must preserve the accepted UI Designer Workbench product boundary.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-126-runtime-proven-closeout-and-handoff/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: Final closeout requires a decision-complete WR-126 contract before docs, metadata, or handoff edits.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Runtime-proven closeout depends on completed game.runtime compatibility seam evidence and explicit no-HUD-runtime-behavior boundary.
+  ddd_owner: domain/ui owns generic UI definition and evidence contracts; domain/editor owns UI Designer app-neutral workbench and UX Lab contracts; apps/runenwerk_editor owns concrete runtime/provider evidence; docs/workspace owns final closeout and handoff metadata.
+  adr_requirement: No ADR while WR-126 only closes out existing evidence, usage docs, examples, and handoff metadata. Require ADR or accepted design update before moving source-truth ownership, adding a game-runtime UI owner crate, changing dependency direction, or claiming perfectionist no-gap quality.
+  fitness_function_requirement: Final closeout must rerun representative UI Designer app evidence tests, PM007 game-runtime seam tests, docs validation, roadmap render/validate/check, production render/validate/check, planning validation, PUML validation, and git diff hygiene.
+  ownership_mode: Stream-aligned editor product closeout with complicated-subsystem support from domain/ui, domain/editor, apps/runenwerk_editor, and workspace governance.
+edges:
+- source: WR-125
+  target: WR-126
+  label: scenario evidence baselines before final closeout
+- source: WR-118
+  target: WR-126
+  label: game runtime seam before handoff
+- source: WR-120
+  target: WR-126
+  label: product governance before runtime proven closeout

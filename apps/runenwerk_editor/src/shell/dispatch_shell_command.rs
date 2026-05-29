@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 use editor_core::{DirtyDocumentClosePolicy, EditorMutationError};
 use editor_definition::{
@@ -7,7 +7,8 @@ use editor_definition::{
 };
 use editor_shell::{
     FloatingHostBounds, ShellCommand, TabDropDestination, TabStackPopupMenuKind,
-    ToolbarCommandKind, WorkspaceMutation,
+    ToolbarCommandKind, UI_DESIGNER_WORKBENCH_TARGET_PROFILE, WorkspaceMutation,
+    editor_design_system_recipe_library,
 };
 
 use crate::editor_app::RunenwerkEditorApp;
@@ -24,10 +25,20 @@ use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportPresentationStateResource, ViewportRenderStateCommandQueueResource,
 };
+use crate::shell::editor_lab_evidence::{
+    EditorLabEvidenceArtifact, EditorLabEvidenceArtifactKind, EditorLabEvidenceArtifactProvenance,
+    EditorLabPerformanceBaseline, EditorLabPerformanceBaselineKind,
+};
+use crate::shell::providers::{
+    EditorShellFrameMetrics, EditorSurfaceProviderRegistry,
+    build_editor_shell_frame_model_with_frame_metrics,
+};
+use crate::shell::self_authoring::EditorLabProductPathEvidenceCapture;
 use crate::shell::{
     EditorCommandAvailabilityContext, ROTATE_TOOL_ID, RunenwerkEditorShellState, SCALE_TOOL_ID,
     SELECT_TOOL_ID, TRANSLATE_TOOL_ID, editor_command_catalog,
 };
+use ui_theme::ThemeTokens;
 
 const DEFAULT_EDITOR_SCENE_PATH: &str = "editor-scenes/default.scene.ron";
 
@@ -976,6 +987,91 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 }
             }
         }
+        ShellCommand::InsertSelectedEditorDefinitionRecipe { recipe_id } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition recipe insertion",
+                    ))?;
+            let library = editor_design_system_recipe_library();
+            match shell_state.self_authoring_mut().insert_selected_ui_recipe(
+                &library,
+                ui_definition::UiRecipeId::new(recipe_id.clone()),
+                ui_definition::UiRecipeTargetProfileId::new(UI_DESIGNER_WORKBENCH_TARGET_PROFILE),
+            ) {
+                Ok(report) => {
+                    let diff_count = report
+                        .diff
+                        .as_ref()
+                        .map(|diff| diff.changes.len())
+                        .unwrap_or(0);
+                    app.append_console_line(format!(
+                        "[editor-definition] inserted recipe {recipe_id} (diff changes: {diff_count})"
+                    ));
+                }
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] recipe insertion blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "editor definition recipe insertion blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::SetEditorDefinitionRecipeCatalogFilter { query } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for editor definition recipe catalog filter",
+                    ))?;
+            shell_state
+                .self_authoring_mut()
+                .set_recipe_catalog_filter(query);
+        }
+        ShellCommand::CaptureUiDesignerScenarioEvidence => {
+            let theme = ThemeTokens::default();
+            let product_capture = {
+                let shell_state_ref =
+                    shell_state
+                        .as_deref()
+                        .ok_or(EditorMutationError::runtime_rejected(
+                            "missing shell state for UI Designer scenario evidence capture",
+                        ))?;
+                capture_ui_designer_product_path_evidence(app, shell_state_ref, &theme)
+            };
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for UI Designer scenario evidence capture",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .capture_pm005_scenario_evidence_packets_with_product_capture(
+                    &theme,
+                    product_capture,
+                ) {
+                Ok(packets) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] captured UI Designer scenario evidence packets: {}",
+                        packets.len()
+                    ));
+                }
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] scenario evidence capture blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "UI Designer scenario evidence capture blocked",
+                    ));
+                }
+            }
+        }
         ShellCommand::SetSelectedEditorDefinitionUiNodeText { node_id, text } => {
             let shell_state =
                 shell_state
@@ -1189,6 +1285,45 @@ fn append_editor_lab_restore_console_line(
     ));
 }
 
+fn capture_ui_designer_product_path_evidence(
+    app: &RunenwerkEditorApp,
+    shell_state: &RunenwerkEditorShellState,
+    theme: &ThemeTokens,
+) -> EditorLabProductPathEvidenceCapture {
+    let registry = EditorSurfaceProviderRegistry::runenwerk_ui_designer_workbench();
+    let started = Instant::now();
+    let frame_model = build_editor_shell_frame_model_with_frame_metrics(
+        app,
+        shell_state,
+        &registry,
+        theme,
+        Some(EditorShellFrameMetrics {
+            fps_ema: 60.0,
+            frame_ms_ema: 16.67,
+        }),
+        None,
+        None,
+        None,
+    );
+    let elapsed_micros = started.elapsed().as_micros().min(u128::from(u64::MAX)) as u64;
+    let frame_debug = format!("{frame_model:#?}");
+    let digest = format!("blake3:{}", blake3::hash(frame_debug.as_bytes()).to_hex());
+    let artifact = EditorLabEvidenceArtifact::from_content(
+        EditorLabEvidenceArtifactKind::ProviderSnapshot,
+        format!("evidence://ui-designer/runtime/frame-model/{digest}"),
+        frame_debug.as_bytes(),
+        EditorLabEvidenceArtifactProvenance::ProductPath,
+        "UI Designer workbench frame model built through the surface provider registry",
+    );
+    let baseline = EditorLabPerformanceBaseline::product_path(
+        EditorLabPerformanceBaselineKind::FrameBuild,
+        elapsed_micros,
+        frame_model.surfaces.len().max(1),
+        "editor.workbench frame model built through surface provider registry",
+    );
+    EditorLabProductPathEvidenceCapture::new([artifact], [baseline])
+}
+
 fn shell_command_label(command: &ShellCommand) -> &'static str {
     match command {
         ShellCommand::ActivateSelectTool => "ActivateSelectTool",
@@ -1254,6 +1389,13 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::UndoEditorLabOperation => "UndoEditorLabOperation",
         ShellCommand::RedoEditorLabOperation => "RedoEditorLabOperation",
         ShellCommand::SelectEditorDefinitionUiNode { .. } => "SelectEditorDefinitionUiNode",
+        ShellCommand::InsertSelectedEditorDefinitionRecipe { .. } => {
+            "InsertSelectedEditorDefinitionRecipe"
+        }
+        ShellCommand::SetEditorDefinitionRecipeCatalogFilter { .. } => {
+            "SetEditorDefinitionRecipeCatalogFilter"
+        }
+        ShellCommand::CaptureUiDesignerScenarioEvidence => "CaptureUiDesignerScenarioEvidence",
         ShellCommand::SetSelectedEditorDefinitionUiNodeText { .. } => {
             "SetSelectedEditorDefinitionUiNodeText"
         }

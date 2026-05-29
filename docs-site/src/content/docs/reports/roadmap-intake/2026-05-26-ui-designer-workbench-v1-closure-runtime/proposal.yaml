@@ -1,0 +1,106 @@
+version: 1
+idea: UI Designer Workbench V1 closure runtime-proven product closeout and handoff
+source_path: ''
+owner: editor
+created_at: '2026-05-26'
+governance_notes:
+- Architecture governance kickoff was run for PM-UI-DESIGNER-WB-V1-CLOSURE-006 before final closeout planning.
+- No ADR is required while the slice remains documentation, metadata, evidence aggregation, and handoff.
+- Require ADR or accepted design update before changing source-truth ownership, dependency direction, concrete game HUD runtime behavior, or no-gap claim rules.
+open_questions:
+- Which final closeout wording most clearly separates runtime_proven V1 closure from PT-GAME-RUNTIME-UI and future no-gap claims?
+- Which UI Designer Workbench docs must be updated so normal author workflows match the completed PM001-PM005 code truth?
+item:
+  id: WR-132
+  title: UI Designer Workbench V1 closure runtime-proven product closeout and handoff
+  diagram_title: 'UI Designer Workbench V1 closure runtime-proven '
+  alias: WR132
+  lane: Discovery
+  dependency_level: L4
+  gate: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-006 runtime-proven closeout and handoff contract
+  planning_state: ready_next
+  priority: P3
+  value: 2
+  blocker: 2
+  tc: 1
+  rr_oe: 2
+  du: 1
+  effort: 8
+  confidence: 0.3
+  expected_score: 0.2
+  rice: N/A
+  kano: Unknown
+  dependencies:
+  - WR-131
+  write_scopes:
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-26-ui-designer-workbench-v1-closure-runtime
+  - docs-site/src/content/docs/reports/implementation-plans/wr-132-ui-designer-workbench-v1-closure-runtime-proven-product-closeout-and-handoff/plan.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/README.md
+  - docs-site/src/content/docs/apps/runenwerk-editor/ui-designer-workbench.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-index.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  validations:
+  - task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-006 --roadmap WR-132
+  - cargo test -p runenwerk_editor ui_designer
+  - cargo test -p runenwerk_editor scenario_evidence
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - task puml:validate
+  - git diff --check
+  next_evidence: Accepted PM-UI-DESIGNER-WB-V1-CLOSURE-006 final closeout and handoff contract, completed PM001-PM005 closeout evidence, usage docs, final closeout evidence, roadmap archive evidence, and production completion evidence.
+  current_decision: Ready for promotion planning only; use task production:plan before final closeout implementation and keep WR-132 limited to documentation, evidence aggregation, production/roadmap metadata, and truthful runtime_proven handoff.
+  current_call: Use WR-132 only for final PM006 closeout, UI Designer Workbench docs, evidence aggregation, production/roadmap metadata, and downstream handoff. Do not implement product code, concrete game HUD runtime behavior, packaged release readiness, or no-gap certification.
+  first_move: Run task production:plan -- --milestone PM-UI-DESIGNER-WB-V1-CLOSURE-006 --roadmap WR-132 and follow the promotion/current-candidate gate before final closeout edits.
+  main_blocker: Awaiting production:plan promotion/current-candidate gate before final closeout implementation.
+  why_not_ready: Ready for promotion planning, but not current_candidate and not authorized for final closeout edits until task production:plan and roadmap gates pass.
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - final closeout
+  - handoff
+  - runtime proven
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/ui-designer-workbench-product-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Final closeout must satisfy the accepted V1 product workflow contract.
+  - kind: design
+    path: docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+    required_status: active
+    applies_to: implementation
+    reason: Final closeout must classify completion quality honestly and guard against status-panel-only evidence.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-132-ui-designer-workbench-v1-closure-runtime-proven-product-closeout-and-handoff/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: PM006 final closeout implementation must follow the accepted WR-132 design-first contract.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: Final V1 closure depends on completed PM005 scenario/evidence/performance closeout evidence.
+  ddd_owner: docs/workspace owns final closeout, usage docs, production metadata, roadmap metadata, and handoff notes; domain/ui, domain/editor, and apps/runenwerk_editor completed evidence remains source truth for product behavior.
+  adr_requirement: No ADR for docs-only final closeout and handoff. Require ADR or accepted design update before changing source-truth ownership, dependency direction, concrete game HUD runtime behavior, or no-gap claim rules.
+  fitness_function_requirement: Focused checks must cover UI Designer docs validation, completed PM001-PM005 evidence aggregation, runtime_proven quality classification, downstream PT-GAME-RUNTIME-UI handoff, roadmap/production render and validation, and no product-code changes.
+  ownership_mode: Stream-aligned final closeout with docs/workspace ownership and completed domain/app evidence inputs.
+edges: []
