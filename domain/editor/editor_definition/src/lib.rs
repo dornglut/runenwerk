@@ -15,6 +15,7 @@ pub mod surface;
 pub mod theme;
 pub mod toolbar;
 pub mod validate;
+pub mod workbench;
 pub mod workflow;
 pub mod workspace;
 
@@ -31,6 +32,7 @@ pub use surface::*;
 pub use theme::*;
 pub use toolbar::*;
 pub use validate::*;
+pub use workbench::*;
 pub use workflow::*;
 pub use workspace::*;
 

@@ -10039,15 +10039,20 @@ items:
   - git diff --check
   - ./quiet_full_gate.sh
   next_evidence: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
-  current_decision: Completed corrective batch for UI Designer Workbench runtime evidence truth. Descriptor compatibility and runtime product evidence are now separate contracts, source revisions are content-addressed, stale evidence is invalidated, game.runtime remains descriptor-only, and catalog rows are structured/filterable.
-  current_call: Archive WR-133 as the supersession row for current UI Designer Workbench runtime readiness. Preserve WR-124 through WR-132 as historical closeouts, but use WR-133 evidence rules for current readiness claims.
-  first_move: Use PT-GAME-RUNTIME-UI for concrete game-runtime UI projection and HUD behavior. Use this correction standard for future UI Designer Workbench readiness.
+  current_decision: Completed corrective batch for UI Designer Workbench runtime evidence truth. Descriptor compatibility
+    and runtime product evidence are now separate contracts, source revisions are content-addressed, stale evidence is invalidated,
+    game.runtime remains descriptor-only, and catalog rows are structured/filterable.
+  current_call: Archive WR-133 as the supersession row for current UI Designer Workbench runtime readiness. Preserve WR-124
+    through WR-132 as historical closeouts, but use WR-133 evidence rules for current readiness claims.
+  first_move: Use PT-GAME-RUNTIME-UI for concrete game-runtime UI projection and HUD behavior. Use this correction standard
+    for future UI Designer Workbench readiness.
   main_blocker: Completed.
   why_not_ready: ''
   completion_quality: runtime_proven
   known_quality_gaps:
   - Concrete game HUD runtime behavior remains downstream of PT-GAME-RUNTIME-UI.
-  - Native runtime-window screenshot evidence, packaged release readiness, and perfectionist no-gap certification remain out of scope.
+  - Native runtime-window screenshot evidence, packaged release readiness, and perfectionist no-gap certification remain out
+    of scope.
   completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
   diagram_call:
   - evidence correction
@@ -10069,7 +10074,86 @@ items:
     required_status: completed
     applies_to: implementation
     reason: WR-133 completion requires completed corrective evidence and validation closeout.
-  ddd_owner: apps/runenwerk_editor owns runtime evidence capture and source revision freshness; domain/editor/editor_shell owns app-neutral catalog view models and routes; docs/workspace owns supersession metadata.
-  adr_requirement: No ADR required because this corrects app/evidence contracts and editor-shell ownership within accepted UI Designer design boundaries; require ADR or accepted design update before moving game-runtime UI execution into editor_shell.
-  fitness_function_requirement: Focused UI Designer, evidence, source revision, editor_shell UI, docs, roadmap, production, PUML, diff, and full gate validation protect the corrected readiness boundary.
+  ddd_owner: apps/runenwerk_editor owns runtime evidence capture and source revision freshness; domain/editor/editor_shell
+    owns app-neutral catalog view models and routes; docs/workspace owns supersession metadata.
+  adr_requirement: No ADR required because this corrects app/evidence contracts and editor-shell ownership within accepted
+    UI Designer design boundaries; require ADR or accepted design update before moving game-runtime UI execution into editor_shell.
+  fitness_function_requirement: Focused UI Designer, evidence, source revision, editor_shell UI, docs, roadmap, production,
+    PUML, diff, and full gate validation protect the corrected readiness boundary.
   ownership_mode: Stream-aligned editor product correction with app-owned evidence and domain/editor shell adapter support.
+- id: WR-134
+  title: Workbench composition manifest compiler and authored custom workbench contract
+  diagram_title: Workbench composition manifest compiler and auth
+  alias: WR134
+  lane: Editor quality
+  dependency_level: L2
+  gate: User-approved architecture-sensitive workbench compiler batch
+  planning_state: completed
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.6
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-114
+  - WR-122
+  write_scopes:
+  - domain/editor/editor_definition/src
+  - domain/editor/editor_shell/src
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/runtime/resources.rs
+  - docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
+  - docs-site/src/content/docs/reports/closeouts/wr-134-workbench-composition-manifest-compiler-and-authored-custom-workbench-contract/closeout.md
+  validations:
+  - cargo test -p editor_definition workbench --quiet
+  - cargo test -p editor_shell tool_suite workspace_profile workbench --quiet
+  - cargo test -p runenwerk_editor workbench_host ui_designer material_lab --quiet
+  - cargo test -p runenwerk_editor workbench_composition --quiet
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - ./quiet_full_gate.sh
+  next_evidence: Completed through the WR-134 closeout. Future rows should build on authored WorkbenchComposition packages,
+    ProfileRef authority, and manifest-first host activation.
+  current_decision: Completed at bounded_contract after authored composition/profile/layout package activation, package-aware
+    apply/rollback, focused compiler/host/runtime tests, and docs closeout.
+  current_call: Preserve the manifest-first compiler path and app-owned provider validation as the durable workbench declaration
+    authority.
+  first_move: Completed; workbench compiler modules, authored documents, host replacement, package activation, and UI Designer
+    composition editing are in place.
+  main_blocker: Complete; remaining gaps are future cleanup/product polish, not WR-134 blockers.
+  why_not_ready: ''
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - This is not a perfectionist_verified claim.
+  - External dynamic plugin loading remains out of scope.
+  - UI Designer can still add richer picker widgets for suite/profile selection; WR-134 provides the durable text-field document
+    contract and compiler path.
+  - WorkspaceProfileId compatibility call sites remain until a later cleanup can remove profile-id-first APIs.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/wr-134-workbench-composition-manifest-compiler-and-authored-custom-workbench-contract/closeout.md
+  diagram_call:
+  - ProfileRef authority
+  - manifest compiler
+  - authored workbenches
+  decision_gates: []
+  ddd_owner: domain/editor/editor_shell owns app-neutral workbench contracts; apps/runenwerk_editor owns concrete host composition
+    and provider validation.
+  adr_requirement: No new ADR while preserving ADR 0012 Workbench identity, app/provider ownership, and domain dependency
+    direction.
+  fitness_function_requirement: Focused editor_shell compiler/profile tests, runenwerk_editor host/provider tests, planning/docs
+    gates, and quiet_full_gate before closeout.
+  ownership_mode: Stream-aligned editor workbench contract work with app-shell support from runenwerk_editor.

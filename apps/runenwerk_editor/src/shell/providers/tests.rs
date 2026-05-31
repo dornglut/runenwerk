@@ -1675,16 +1675,16 @@ fn live_mounted_surface_requests_include_provider_family_when_registry_resolves(
 
 #[test]
 fn unresolved_registry_surface_request_reports_diagnostic_in_live_frame_path() {
-    let app = RunenwerkEditorApp::with_surface_provider_registry(
-        EditorSurfaceProviderRegistry::new(vec![dummy(1, 100, true)]).expect("ids are unique"),
-    );
+    let app = RunenwerkEditorApp::new();
+    let provider_registry =
+        EditorSurfaceProviderRegistry::new(vec![dummy(100, 100, true)]).expect("ids are unique");
     let shell_state = RunenwerkEditorShellState::new();
     let theme = ThemeTokens::default();
 
     let frame_model = build_editor_shell_frame_model(
         &app,
         &shell_state,
-        app.surface_provider_registry(),
+        &provider_registry,
         &theme,
         None,
         None,

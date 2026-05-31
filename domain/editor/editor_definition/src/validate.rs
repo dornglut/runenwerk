@@ -2,7 +2,8 @@
 
 use crate::{
     CURRENT_EDITOR_DEFINITION_SCHEMA_VERSION, EditorDefinitionBindings, EditorDefinitionDocument,
-    EditorDefinitionDocumentContent, EditorWorkspaceHostDefinition, form_theme_tokens,
+    EditorDefinitionDocumentContent, EditorWorkbenchHostPolicyDefinition,
+    EditorWorkspaceHostDefinition, form_theme_tokens,
 };
 use std::collections::BTreeSet;
 use ui_definition::{UiDefinitionDiagnostic, UiDefinitionDiagnosticSeverity, UiTemplateId};
@@ -313,6 +314,57 @@ pub fn validate_editor_definition_document(
                 }
             }
         }
+        EditorDefinitionDocumentContent::WorkbenchComposition(composition) => {
+            guard_required(
+                &composition.id,
+                "editor.definition.workbench_composition.id",
+                &mut diagnostics,
+            );
+            guard_required(
+                &composition.label,
+                "editor.definition.workbench_composition.label",
+                &mut diagnostics,
+            );
+            guard_required(
+                &composition.default_profile_ref,
+                "editor.definition.workbench_composition.default_profile_ref",
+                &mut diagnostics,
+            );
+            guard_lowercase_dotted_id(
+                &composition.id,
+                "editor.definition.workbench_composition.id",
+                &mut diagnostics,
+            );
+            guard_lowercase_dotted_id(
+                &composition.default_profile_ref,
+                "editor.definition.workbench_composition.default_profile_ref",
+                &mut diagnostics,
+            );
+            validate_unique_lowercase_dotted_list(
+                &composition.installed_suites,
+                "editor.definition.workbench_composition.installed_suite",
+                &mut diagnostics,
+            );
+            validate_unique_lowercase_dotted_list(
+                &composition.profile_refs,
+                "editor.definition.workbench_composition.profile_ref",
+                &mut diagnostics,
+            );
+            if !composition
+                .profile_refs
+                .iter()
+                .any(|profile_ref| profile_ref == &composition.default_profile_ref)
+            {
+                diagnostics.push(UiDefinitionDiagnostic::error(
+                    "editor.definition.workbench_composition.default_profile_ref.unresolved",
+                    format!(
+                        "default profile ref '{}' must be listed in profile_refs",
+                        composition.default_profile_ref
+                    ),
+                ));
+            }
+            validate_workbench_host_policy(&composition.host_policy, &mut diagnostics);
+        }
         EditorDefinitionDocumentContent::EditorBindings(bindings) => {
             guard_required(
                 bindings.toolbar.template.as_str(),
@@ -492,6 +544,102 @@ fn guard_durable_id(value: &str, field: &str, diagnostics: &mut Vec<UiDefinition
     }
 }
 
+fn validate_unique_lowercase_dotted_list(
+    values: &[String],
+    field: &str,
+    diagnostics: &mut Vec<UiDefinitionDiagnostic>,
+) {
+    let mut seen = BTreeSet::<&str>::new();
+    for value in values {
+        guard_required(value, field, diagnostics);
+        guard_lowercase_dotted_id(value, field, diagnostics);
+        if !seen.insert(value.as_str()) {
+            diagnostics.push(UiDefinitionDiagnostic::error(
+                format!("{field}.duplicate"),
+                format!("{field} '{value}' is duplicated"),
+            ));
+        }
+    }
+}
+
+fn validate_workbench_host_policy(
+    policy: &EditorWorkbenchHostPolicyDefinition,
+    diagnostics: &mut Vec<UiDefinitionDiagnostic>,
+) {
+    let EditorWorkbenchHostPolicyDefinition::Explicit {
+        allowed_commands,
+        denied_commands,
+        allowed_products,
+        denied_products,
+        allowed_resources,
+        denied_resources,
+        ..
+    } = policy
+    else {
+        return;
+    };
+
+    validate_unique_lowercase_dotted_list(
+        allowed_commands,
+        "editor.definition.workbench_composition.host_policy.allowed_command",
+        diagnostics,
+    );
+    validate_unique_lowercase_dotted_list(
+        denied_commands,
+        "editor.definition.workbench_composition.host_policy.denied_command",
+        diagnostics,
+    );
+    validate_unique_lowercase_dotted_list(
+        allowed_products,
+        "editor.definition.workbench_composition.host_policy.allowed_product",
+        diagnostics,
+    );
+    validate_unique_lowercase_dotted_list(
+        denied_products,
+        "editor.definition.workbench_composition.host_policy.denied_product",
+        diagnostics,
+    );
+    validate_unique_lowercase_dotted_list(
+        allowed_resources,
+        "editor.definition.workbench_composition.host_policy.allowed_resource",
+        diagnostics,
+    );
+    validate_unique_lowercase_dotted_list(
+        denied_resources,
+        "editor.definition.workbench_composition.host_policy.denied_resource",
+        diagnostics,
+    );
+}
+
+fn guard_lowercase_dotted_id(
+    value: &str,
+    field: &str,
+    diagnostics: &mut Vec<UiDefinitionDiagnostic>,
+) {
+    guard_durable_id(value, field, diagnostics);
+    if !is_lowercase_dotted_id(value) {
+        diagnostics.push(UiDefinitionDiagnostic::error(
+            format!("{field}.invalid"),
+            format!("{field} '{value}' must be a lowercase dotted identifier"),
+        ));
+    }
+}
+
+fn is_lowercase_dotted_id(value: &str) -> bool {
+    if value.is_empty() || value.trim().is_empty() {
+        return false;
+    }
+
+    value.split('.').all(|segment| {
+        let mut chars = segment.chars();
+        let Some(first) = chars.next() else {
+            return false;
+        };
+        first.is_ascii_lowercase()
+            && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,6 +649,7 @@ mod tests {
         EditorMenuDefinition, EditorMenuItemDefinition, EditorPanelDefinition,
         EditorPanelRegistryDefinition, EditorShortcutDefinition, EditorShortcutSetDefinition,
         EditorToolSurfaceDefinition, EditorToolSurfaceRegistryDefinition,
+        EditorWorkbenchCompositionDefinition, EditorWorkbenchHostPolicyDefinition,
         EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition,
         EditorWorkspacePanelTabDefinition, EditorWorkspaceSplitAxisDefinition,
     };
@@ -614,6 +763,69 @@ mod tests {
     }
 
     #[test]
+    fn workbench_composition_document_accepts_durable_lowercase_dotted_contracts() {
+        let diagnostics = validate_editor_definition_document(&workbench_composition_document(
+            valid_workbench_composition_definition(),
+        ));
+
+        assert!(
+            !editor_definition_has_blocking_diagnostics(&diagnostics),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn workbench_composition_document_rejects_duplicate_suite_and_profile_refs() {
+        let mut definition = valid_workbench_composition_definition();
+        definition
+            .installed_suites
+            .push("runenwerk.editor".to_string());
+        definition
+            .profile_refs
+            .push("runenwerk.editor.workspace".to_string());
+
+        let diagnostics =
+            validate_editor_definition_document(&workbench_composition_document(definition));
+
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic.code
+            == "editor.definition.workbench_composition.installed_suite.duplicate"));
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic.code
+            == "editor.definition.workbench_composition.profile_ref.duplicate"));
+    }
+
+    #[test]
+    fn workbench_composition_document_rejects_default_profile_drift() {
+        let mut definition = valid_workbench_composition_definition();
+        definition.default_profile_ref = "runenwerk.editor.missing".to_string();
+
+        let diagnostics =
+            validate_editor_definition_document(&workbench_composition_document(definition));
+
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic.code
+            == "editor.definition.workbench_composition.default_profile_ref.unresolved"));
+    }
+
+    #[test]
+    fn workbench_composition_document_rejects_invalid_host_policy_keys() {
+        let mut definition = valid_workbench_composition_definition();
+        definition.host_policy = EditorWorkbenchHostPolicyDefinition::Explicit {
+            allow_all: false,
+            allowed_commands: vec!["Runenwerk.Editor.Open".to_string()],
+            denied_commands: Vec::new(),
+            allowed_products: Vec::new(),
+            denied_products: Vec::new(),
+            allowed_resources: Vec::new(),
+            denied_resources: Vec::new(),
+        };
+
+        let diagnostics =
+            validate_editor_definition_document(&workbench_composition_document(definition));
+
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic.code
+            == "editor.definition.workbench_composition.host_policy.allowed_command.invalid"));
+    }
+
+    #[test]
     fn catalog_definition_validation_rejects_malformed_activation_inputs() {
         let documents = [
             EditorDefinitionDocument::current(
@@ -694,6 +906,39 @@ mod tests {
                 "malformed {:?} should be rejected",
                 document.kind
             );
+        }
+    }
+
+    fn workbench_composition_document(
+        definition: EditorWorkbenchCompositionDefinition,
+    ) -> EditorDefinitionDocument {
+        EditorDefinitionDocument::current(
+            EditorDefinitionId::from(definition.id.as_str()),
+            definition.label.clone(),
+            EditorDefinitionDocumentKind::WorkbenchComposition,
+            EditorDefinitionDocumentContent::WorkbenchComposition(definition),
+        )
+    }
+
+    fn valid_workbench_composition_definition() -> EditorWorkbenchCompositionDefinition {
+        EditorWorkbenchCompositionDefinition {
+            id: "runenwerk.editor.workbench".to_string(),
+            label: "Editor Workbench".to_string(),
+            installed_suites: vec![
+                "runenwerk.editor".to_string(),
+                "runenwerk.editor_design".to_string(),
+            ],
+            profile_refs: vec!["runenwerk.editor.workspace".to_string()],
+            default_profile_ref: "runenwerk.editor.workspace".to_string(),
+            host_policy: EditorWorkbenchHostPolicyDefinition::Explicit {
+                allow_all: false,
+                allowed_commands: vec!["runenwerk.editor.open".to_string()],
+                denied_commands: vec!["runenwerk.editor.close".to_string()],
+                allowed_products: vec!["runenwerk.product.scene".to_string()],
+                denied_products: Vec::new(),
+                allowed_resources: vec!["runenwerk.resource.asset".to_string()],
+                denied_resources: Vec::new(),
+            },
         }
     }
 }

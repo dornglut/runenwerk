@@ -50,6 +50,15 @@ pub enum EditorLabOperationKind {
         token: String,
         value: String,
     },
+    SetWorkbenchInstalledSuites {
+        installed_suites: Vec<String>,
+    },
+    SetWorkbenchProfileRefs {
+        profile_refs: Vec<String>,
+    },
+    SetWorkbenchDefaultProfileRef {
+        profile_ref: String,
+    },
     AddWorkspaceLayoutTab {
         label: String,
         tool_surface: String,
@@ -74,6 +83,7 @@ pub enum EditorLabOperationDiffFamily {
     EditorDocument,
     EditorTheme,
     EditorWorkspaceLayout,
+    EditorWorkbenchComposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,6 +169,19 @@ pub fn apply_editor_lab_operation(
         }
         EditorLabOperationKind::SetThemeColor { token, value } => {
             apply_theme_color_operation(document.clone(), operation, token, value)
+        }
+        EditorLabOperationKind::SetWorkbenchInstalledSuites { installed_suites } => {
+            apply_workbench_installed_suites_operation(
+                document.clone(),
+                operation,
+                installed_suites,
+            )
+        }
+        EditorLabOperationKind::SetWorkbenchProfileRefs { profile_refs } => {
+            apply_workbench_profile_refs_operation(document.clone(), operation, profile_refs)
+        }
+        EditorLabOperationKind::SetWorkbenchDefaultProfileRef { profile_ref } => {
+            apply_workbench_default_profile_ref_operation(document.clone(), operation, profile_ref)
         }
         EditorLabOperationKind::AddWorkspaceLayoutTab {
             label,
@@ -426,6 +449,71 @@ fn apply_theme_color_operation(
     finalize_accepted(document, operation, Some(diff))
 }
 
+fn apply_workbench_installed_suites_operation(
+    mut document: EditorDefinitionDocument,
+    operation: &EditorLabOperation,
+    installed_suites: &[String],
+) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+    let document_id = document.id.clone();
+    let composition = workbench_composition_mut(&mut document, "installed_suites")?;
+    let before = composition.installed_suites.join(", ");
+    composition.installed_suites = installed_suites.to_vec();
+    let after = composition.installed_suites.join(", ");
+    let diff = single_change_diff(
+        operation,
+        &document_id,
+        EditorLabOperationDiffFamily::EditorWorkbenchComposition,
+        "Update",
+        "installed_suites",
+        Some(before),
+        Some(after),
+    );
+    finalize_accepted(document, operation, Some(diff))
+}
+
+fn apply_workbench_profile_refs_operation(
+    mut document: EditorDefinitionDocument,
+    operation: &EditorLabOperation,
+    profile_refs: &[String],
+) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+    let document_id = document.id.clone();
+    let composition = workbench_composition_mut(&mut document, "profile_refs")?;
+    let before = composition.profile_refs.join(", ");
+    composition.profile_refs = profile_refs.to_vec();
+    let after = composition.profile_refs.join(", ");
+    let diff = single_change_diff(
+        operation,
+        &document_id,
+        EditorLabOperationDiffFamily::EditorWorkbenchComposition,
+        "Update",
+        "profile_refs",
+        Some(before),
+        Some(after),
+    );
+    finalize_accepted(document, operation, Some(diff))
+}
+
+fn apply_workbench_default_profile_ref_operation(
+    mut document: EditorDefinitionDocument,
+    operation: &EditorLabOperation,
+    profile_ref: &str,
+) -> Result<EditorLabOperationReport, UiDefinitionDiagnostic> {
+    let document_id = document.id.clone();
+    let composition = workbench_composition_mut(&mut document, "default_profile_ref")?;
+    let before = composition.default_profile_ref.clone();
+    composition.default_profile_ref = profile_ref.to_string();
+    let diff = single_change_diff(
+        operation,
+        &document_id,
+        EditorLabOperationDiffFamily::EditorWorkbenchComposition,
+        "Update",
+        "default_profile_ref",
+        Some(before),
+        Some(profile_ref.to_string()),
+    );
+    finalize_accepted(document, operation, Some(diff))
+}
+
 fn apply_add_workspace_tab_operation(
     mut document: EditorDefinitionDocument,
     operation: &EditorLabOperation,
@@ -659,6 +747,20 @@ fn workspace_layout_mut<'a>(
         ));
     };
     Ok(layout)
+}
+
+fn workbench_composition_mut<'a>(
+    document: &'a mut EditorDefinitionDocument,
+    operation: &str,
+) -> Result<&'a mut crate::EditorWorkbenchCompositionDefinition, UiDefinitionDiagnostic> {
+    let EditorDefinitionDocumentContent::WorkbenchComposition(composition) = &mut document.content
+    else {
+        return Err(UiDefinitionDiagnostic::error(
+            format!("editor.lab.operation.workbench.{operation}.not_composition"),
+            "workbench composition operations require a workbench composition document",
+        ));
+    };
+    Ok(composition)
 }
 
 struct AuthoredTabStackMut<'a> {

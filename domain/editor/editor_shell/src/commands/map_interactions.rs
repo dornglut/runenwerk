@@ -55,6 +55,9 @@ pub fn map_interactions_to_shell_commands(
                             EditorDefinitionSurfaceAction::RenameSelected { .. }
                                 | EditorDefinitionSurfaceAction::SetUiNodeText { .. }
                                 | EditorDefinitionSurfaceAction::SetThemeColor { .. }
+                                | EditorDefinitionSurfaceAction::SetWorkbenchInstalledSuites { .. }
+                                | EditorDefinitionSurfaceAction::SetWorkbenchProfileRefs { .. }
+                                | EditorDefinitionSurfaceAction::SetWorkbenchDefaultProfileRef { .. }
                                 | EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { .. }
                                 | EditorDefinitionSurfaceAction::SetRecipeCatalogFilter { .. },
                         ) | SurfaceLocalAction::Material(
@@ -596,6 +599,23 @@ fn surface_text_action(action: &SurfaceLocalAction, text: String) -> SurfaceLoca
             token: token.clone(),
             value: text,
         }),
+        SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetWorkbenchInstalledSuites { .. },
+        ) => SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetWorkbenchInstalledSuites {
+                installed_suites: text,
+            },
+        ),
+        SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetWorkbenchProfileRefs { .. },
+        ) => SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetWorkbenchProfileRefs { profile_refs: text },
+        ),
+        SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetWorkbenchDefaultProfileRef { .. },
+        ) => SurfaceLocalAction::EditorDefinition(
+            EditorDefinitionSurfaceAction::SetWorkbenchDefaultProfileRef { profile_ref: text },
+        ),
         SurfaceLocalAction::EditorDefinition(
             EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab { tool_surface, .. },
         ) => SurfaceLocalAction::EditorDefinition(

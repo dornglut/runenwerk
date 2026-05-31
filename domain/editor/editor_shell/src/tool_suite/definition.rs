@@ -101,27 +101,6 @@ impl ProviderFamilyDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ToolSuiteProfileDefinition {
-    pub profile_ref: ProfileRef,
-    pub label: String,
-    pub default_surfaces: Vec<SurfaceRef>,
-}
-
-impl ToolSuiteProfileDefinition {
-    pub fn new(
-        profile_ref: ProfileRef,
-        label: impl Into<String>,
-        default_surfaces: Vec<SurfaceRef>,
-    ) -> Self {
-        Self {
-            profile_ref,
-            label: label.into(),
-            default_surfaces,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolSurfaceDefinition {
     pub key: ToolSurfaceStableKey,
     pub label: String,

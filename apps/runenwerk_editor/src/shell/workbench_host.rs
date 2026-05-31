@@ -3,30 +3,27 @@
 
 use std::{collections::BTreeSet, fmt, sync::Arc};
 
-use editor_core::{
-    DocumentKind, EDIT_MODE_ID, ModeId, PLAY_MODE_ID, PREVIEW_MODE_ID, SIMULATE_MODE_ID,
-};
+use editor_core::{DocumentId, DocumentKind};
 use editor_shell::{
-    ANIMATION_WORKSPACE_PROFILE_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID, EditorToolSuite,
-    FIELD_WORLD_WORKSPACE_PROFILE_ID, GAMEPLAY_WORKSPACE_PROFILE_ID, GRAPH_WORKSPACE_PROFILE_ID,
-    HostCapabilityPolicy, MATERIAL_WORKSPACE_PROFILE_ID, MODELLING_WORKSPACE_PROFILE_ID,
-    PARTICLE_WORKSPACE_PROFILE_ID, PHYSICS_WORKSPACE_PROFILE_ID, PROCGEN_WORKSPACE_PROFILE_ID,
-    ProfileRef, ProviderBundle, ProviderBundleError, ProviderFamilyProviderAssignment,
-    ProviderFamilyProviderMap, ProviderFamilyProviderMapError, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-    SCENE_WORKSPACE_PROFILE_ID, SIMULATION_WORKSPACE_PROFILE_ID, SurfaceProviderId, SurfaceRef,
-    TEXTURE_WORKSPACE_PROFILE_ID, ToolSuiteProfileDefinition, ToolSuiteRegistry,
-    ToolSuiteRegistryError, ToolSurfaceRegistry, WorkbenchCompositionBuildError,
-    WorkbenchCompositionBuilder, WorkspaceLayoutTemplate, WorkspaceProfile, WorkspaceProfileId,
-    WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError,
+    EditorToolSuite, HostCapabilityPolicy, PanelInstanceId, ProfileRef, ProviderBundle,
+    ProviderBundleError, ProviderFamilyId, ProviderFamilyProviderAssignment,
+    ProviderFamilyProviderMap, ProviderFamilyProviderMapError, SurfaceDocumentContext,
+    SurfaceProviderDiagnostic, SurfaceProviderId, SurfaceProviderRequest, TabStackId,
+    ToolSuiteRegistry, ToolSuiteRegistryError, ToolSurfaceDefinition, ToolSurfaceInstanceId,
+    ToolSurfaceRegistry, ToolSurfaceStableKey, WorkbenchCompositionCompileError,
+    WorkbenchCompositionCompilerInput, WorkbenchCompositionManifest, WorkspaceProfile,
+    WorkspaceProfileId, WorkspaceProfileManifest, WorkspaceProfileRegistry,
+    WorkspaceProfileRegistryBackedBuildError, compile_workbench_composition,
 };
 
 use crate::material_lab::material_lab_tool_suite;
 
 use super::{
-    EditorSurfaceProviderRegistry, SurfaceProviderRegistryError,
-    runenwerk_provider_family_assignments,
-    tool_suites::{self, runenwerk_shell_tool_suites},
+    EditorSurfaceProviderRegistry, SurfaceProviderRegistryError, compositions,
+    runenwerk_provider_family_assignments, tool_suites,
 };
+
+const PROVIDER_VALIDATION_INSTANCE_RAW_ID: u64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunenwerkWorkbenchComposition {
@@ -40,8 +37,10 @@ pub enum RunenwerkWorkbenchComposition {
 
 pub struct RunenwerkWorkbenchHost {
     composition: RunenwerkWorkbenchComposition,
+    composition_ref: ProfileRef,
+    label: String,
     tool_suite_registry: ToolSuiteRegistry,
-    profiles: Vec<ToolSuiteProfileDefinition>,
+    profiles: Vec<WorkspaceProfileManifest>,
     workspace_profile_registry: WorkspaceProfileRegistry,
     provider_bundle: ProviderBundle,
     provider_family_provider_map: ProviderFamilyProviderMap,
@@ -72,6 +71,24 @@ impl RunenwerkWorkbenchHost {
 
     pub fn constrained() -> Result<Self, RunenwerkWorkbenchHostError> {
         Self::from_composition(RunenwerkWorkbenchComposition::Constrained)
+    }
+
+    pub(crate) fn authored(
+        composition_manifest: WorkbenchCompositionManifest,
+        workspace_profile_manifests: Vec<WorkspaceProfileManifest>,
+    ) -> Result<Self, RunenwerkWorkbenchHostError> {
+        let tool_suites = installed_tool_suites();
+        let provider_registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let provider_family_assignments =
+            provider_family_assignments_for_composition(&composition_manifest, &tool_suites);
+        Self::from_manifest_tool_suites_provider_registry_and_provider_family_assignments(
+            RunenwerkWorkbenchComposition::Custom,
+            composition_manifest,
+            tool_suites,
+            provider_registry,
+            provider_family_assignments,
+            workspace_profile_manifests,
+        )
     }
 
     fn from_composition(
@@ -127,7 +144,7 @@ impl RunenwerkWorkbenchHost {
         provider_registry: EditorSurfaceProviderRegistry,
     ) -> Result<Self, RunenwerkWorkbenchHostError> {
         let provider_family_assignments = provider_family_assignments_for_tool_suites(&tool_suites);
-        let host_capability_policy = host_capability_policy_for_composition(composition);
+        let host_capability_policy = compositions::host_policy_for(composition);
         Self::from_composition_tool_suites_provider_registry_and_provider_family_assignments(
             composition,
             tool_suites,
@@ -137,6 +154,7 @@ impl RunenwerkWorkbenchHost {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn from_tool_suites_provider_registry_and_provider_family_assignments(
         tool_suites: Vec<EditorToolSuite>,
         provider_registry: EditorSurfaceProviderRegistry,
@@ -167,6 +185,32 @@ impl RunenwerkWorkbenchHost {
         provider_family_assignments: Vec<ProviderFamilyProviderAssignment>,
         host_capability_policy: HostCapabilityPolicy,
     ) -> Result<Self, RunenwerkWorkbenchHostError> {
+        let installed_suite_ids = tool_suites
+            .iter()
+            .map(|suite| suite.suite_id.clone())
+            .collect::<Vec<_>>();
+        let mut composition_manifest =
+            compositions::composition_manifest_for(composition, installed_suite_ids);
+        composition_manifest.host_policy = host_capability_policy;
+        let profiles = workspace_profile_manifests_for_composition(composition, &tool_suites);
+        Self::from_manifest_tool_suites_provider_registry_and_provider_family_assignments(
+            composition,
+            composition_manifest,
+            tool_suites,
+            provider_registry,
+            provider_family_assignments,
+            profiles,
+        )
+    }
+
+    fn from_manifest_tool_suites_provider_registry_and_provider_family_assignments(
+        composition: RunenwerkWorkbenchComposition,
+        composition_manifest: WorkbenchCompositionManifest,
+        tool_suites: Vec<EditorToolSuite>,
+        provider_registry: EditorSurfaceProviderRegistry,
+        provider_family_assignments: Vec<ProviderFamilyProviderAssignment>,
+        workspace_profile_manifests: Vec<WorkspaceProfileManifest>,
+    ) -> Result<Self, RunenwerkWorkbenchHostError> {
         for assignment in &provider_family_assignments {
             if !provider_registry.has_provider_id(assignment.provider_id) {
                 return Err(RunenwerkWorkbenchHostError::UnknownProviderId {
@@ -175,35 +219,39 @@ impl RunenwerkWorkbenchHost {
                 });
             }
         }
-        let profiles = tool_suite_profile_definitions_for_composition(composition);
-        let composition_model = WorkbenchCompositionBuilder::new()
-            .with_suites(tool_suites)
-            .with_profiles(profiles)
-            .with_provider_assignments(provider_family_assignments)
-            .with_host_policy(host_capability_policy)
-            .build()?;
-        let (tool_suite_registry, profiles, provider_bundle, host_capability_policy) =
-            composition_model.into_parts();
-        let workspace_profile_registry = workspace_profile_registry_for_composition(
-            composition,
-            &profiles,
-            tool_suite_registry.surfaces(),
-        )?;
-        let provider_family_provider_map = provider_bundle.provider_map(&tool_suite_registry)?;
+        let compiled = compile_workbench_composition(WorkbenchCompositionCompilerInput {
+            composition_manifest,
+            tool_suite_manifests: tool_suites,
+            capability_declarations: Vec::new(),
+            workspace_profile_manifests,
+            provider_assignments: provider_family_assignments,
+        })?;
+        validate_provider_registry_support(&compiled, &provider_registry)?;
+        let parts = compiled.into_parts();
         Ok(Self {
             composition,
-            tool_suite_registry,
-            profiles,
-            workspace_profile_registry,
-            provider_bundle,
-            provider_family_provider_map,
-            host_capability_policy,
+            composition_ref: parts.composition_ref,
+            label: parts.label,
+            tool_suite_registry: parts.tool_suite_registry,
+            profiles: parts.profiles,
+            workspace_profile_registry: parts.workspace_profile_registry,
+            provider_bundle: parts.provider_bundle,
+            provider_family_provider_map: parts.provider_family_provider_map,
+            host_capability_policy: parts.host_policy,
             provider_registry: Arc::new(provider_registry),
         })
     }
 
     pub fn composition(&self) -> RunenwerkWorkbenchComposition {
         self.composition
+    }
+
+    pub fn composition_ref(&self) -> &ProfileRef {
+        &self.composition_ref
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
     pub fn tool_suite_registry(&self) -> &ToolSuiteRegistry {
@@ -214,7 +262,7 @@ impl RunenwerkWorkbenchHost {
         self.tool_suite_registry.surfaces()
     }
 
-    pub fn profiles(&self) -> &[ToolSuiteProfileDefinition] {
+    pub fn profiles(&self) -> &[WorkspaceProfileManifest] {
         &self.profiles
     }
 
@@ -232,6 +280,14 @@ impl RunenwerkWorkbenchHost {
 
     pub fn default_workspace_profile_id(&self) -> WorkspaceProfileId {
         self.workspace_profile_registry.default_profile_id()
+    }
+
+    pub fn default_workspace_profile_ref(&self) -> &ProfileRef {
+        self.workspace_profile_registry.default_profile_ref()
+    }
+
+    pub fn workspace_profile_by_ref(&self, profile_ref: &ProfileRef) -> Option<&WorkspaceProfile> {
+        self.workspace_profile_registry.profile_by_ref(profile_ref)
     }
 
     pub fn provider_family_provider_map(&self) -> &ProviderFamilyProviderMap {
@@ -256,9 +312,17 @@ impl RunenwerkWorkbenchHost {
 }
 
 fn installed_tool_suites() -> Vec<EditorToolSuite> {
-    let mut suites = runenwerk_shell_tool_suites();
-    suites.push(material_lab_tool_suite());
-    suites
+    vec![
+        tool_suites::core_tool_suite::scene_tool_suite(),
+        tool_suites::core_tool_suite::editor_core_tool_suite(),
+        tool_suites::editor_design_tool_suite::editor_design_tool_suite(),
+        tool_suites::asset_tool_suite::asset_tool_suite(),
+        tool_suites::field_sdf_tool_suite::field_sdf_tool_suite(),
+        tool_suites::diagnostics_tool_suite::diagnostics_tool_suite(),
+        tool_suites::texture_tool_suite::texture_tool_suite(),
+        tool_suites::procgen_tool_suite::procgen_tool_suite(),
+        material_lab_tool_suite(),
+    ]
 }
 
 fn material_lab_workbench_tool_suites() -> Vec<EditorToolSuite> {
@@ -286,19 +350,6 @@ fn headless_validation_tool_suites() -> Vec<EditorToolSuite> {
     ]
 }
 
-fn host_capability_policy_for_composition(
-    composition: RunenwerkWorkbenchComposition,
-) -> HostCapabilityPolicy {
-    match composition {
-        RunenwerkWorkbenchComposition::FullEditor
-        | RunenwerkWorkbenchComposition::MaterialLab
-        | RunenwerkWorkbenchComposition::UiDesigner
-        | RunenwerkWorkbenchComposition::Custom => HostCapabilityPolicy::allow_all(),
-        RunenwerkWorkbenchComposition::HeadlessValidation
-        | RunenwerkWorkbenchComposition::Constrained => HostCapabilityPolicy::deny_all(),
-    }
-}
-
 fn provider_family_assignments_for_tool_suites(
     tool_suites: &[EditorToolSuite],
 ) -> Vec<ProviderFamilyProviderAssignment> {
@@ -316,414 +367,151 @@ fn provider_family_assignments_for_tool_suites(
         .collect()
 }
 
-#[derive(Debug, Clone, Copy)]
-struct CompiledWorkspaceProfileSpec {
-    id: WorkspaceProfileId,
-    label: &'static str,
-    default_layout_template: WorkspaceLayoutTemplate,
-    default_surface_keys: &'static [&'static str],
-    default_modes: &'static [ModeId],
-    document_kind_filters: &'static [DocumentKind],
-}
-
-const FULL_EDITOR_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] = &[
-    CompiledWorkspaceProfileSpec {
-        id: SCENE_WORKSPACE_PROFILE_ID,
-        label: "Scene",
-        default_layout_template: WorkspaceLayoutTemplate::Scene,
-        default_surface_keys: &[
-            "runenwerk.scene.viewport",
-            "runenwerk.scene.outliner",
-            "runenwerk.scene.inspector",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[
-            EDIT_MODE_ID,
-            PREVIEW_MODE_ID,
-            SIMULATE_MODE_ID,
-            PLAY_MODE_ID,
-        ],
-        document_kind_filters: &[DocumentKind::Scene],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: MODELLING_WORKSPACE_PROFILE_ID,
-        label: "Modelling",
-        default_layout_template: WorkspaceLayoutTemplate::Modelling,
-        default_surface_keys: &[
-            "runenwerk.scene.viewport",
-            "runenwerk.scene.outliner",
-            "runenwerk.scene.inspector",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::Scene, DocumentKind::SdfBrushLayer],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-        label: "Editor Design",
-        default_layout_template: WorkspaceLayoutTemplate::EditorDesign,
-        default_surface_keys: tool_suites::EDITOR_DESIGN_SURFACE_KEYS,
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::UiLayout,
-            DocumentKind::WorkspaceDefinition,
-            DocumentKind::Theme,
-            DocumentKind::Shortcut,
-            DocumentKind::Menu,
-            DocumentKind::CommandBinding,
-            DocumentKind::PanelRegistry,
-            DocumentKind::ToolSurfaceDefinition,
-        ],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: FIELD_WORLD_WORKSPACE_PROFILE_ID,
-        label: "Field World",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.field_world.layer_stack",
-            "runenwerk.field_world.sdf_graph_canvas",
-            "runenwerk.field_world.product_viewer",
-            "runenwerk.field_world.sdf_brush_browser",
-            "runenwerk.diagnostics.diagnostics",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::Scene,
-            DocumentKind::SdfGraph,
-            DocumentKind::SdfBrushLayer,
-            DocumentKind::FieldWorldDefinition,
-            DocumentKind::FieldProductPreview,
-        ],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: MATERIAL_WORKSPACE_PROFILE_ID,
-        label: "Materials",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: MATERIAL_PROFILE_SURFACE_KEYS,
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::Scene,
-            DocumentKind::MaterialGraph,
-            DocumentKind::Material,
-        ],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: TEXTURE_WORKSPACE_PROFILE_ID,
-        label: "Textures",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.texture.viewer_2d",
-            "runenwerk.texture.viewer_3d",
-            "runenwerk.diagnostics.diagnostics",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::ProceduralTexture, DocumentKind::VolumeTexture],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: PROCGEN_WORKSPACE_PROFILE_ID,
-        label: "Procedural Generation",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.procgen.graph_canvas",
-            "runenwerk.procgen.preview",
-            "runenwerk.diagnostics.diagnostics",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::ProceduralGenerationGraph],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: GAMEPLAY_WORKSPACE_PROFILE_ID,
-        label: "Gameplay Graph",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.gameplay.graph_canvas",
-            "runenwerk.gameplay.compiler_diagnostics",
-            "runenwerk.diagnostics.runtime_debug",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::GameplayGraph,
-            DocumentKind::GameplayRuleTrigger,
-            DocumentKind::Ability,
-            DocumentKind::Quest,
-        ],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: PARTICLE_WORKSPACE_PROFILE_ID,
-        label: "Particles",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.particle.graph_canvas",
-            "runenwerk.particle.preview",
-            "runenwerk.diagnostics.diagnostics",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::ParticleGraph, DocumentKind::ParticleEmitter],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: PHYSICS_WORKSPACE_PROFILE_ID,
-        label: "Physics",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.physics.authoring",
-            "runenwerk.physics.debug",
-            "runenwerk.diagnostics.runtime_debug",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::PhysicsScene, DocumentKind::PhysicsConfig],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: ANIMATION_WORKSPACE_PROFILE_ID,
-        label: "Animation",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.animation.timeline",
-            "runenwerk.animation.curve_editor",
-            "runenwerk.animation.graph_canvas",
-            "runenwerk.diagnostics.diagnostics",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::AnimationClip,
-            DocumentKind::AnimationGraph,
-            DocumentKind::Timeline,
-        ],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: SIMULATION_WORKSPACE_PROFILE_ID,
-        label: "Simulation Processes",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.simulation.preview",
-            "runenwerk.simulation.diagnostics",
-            "runenwerk.diagnostics.runtime_debug",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::FieldWorldDefinition,
-            DocumentKind::FieldProductPreview,
-            DocumentKind::RuntimeDebug,
-        ],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-        label: "Runtime Debug",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: RUNTIME_DEBUG_PROFILE_SURFACE_KEYS,
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::RuntimeDebug, DocumentKind::Scene],
-    },
-    CompiledWorkspaceProfileSpec {
-        id: GRAPH_WORKSPACE_PROFILE_ID,
-        label: "Graph",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: &[
-            "runenwerk.assets.browser",
-            "runenwerk.graph.canvas",
-            "runenwerk.diagnostics.diagnostics",
-            "runenwerk.editor.console",
-        ],
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::Graph],
-    },
-];
-
-const MATERIAL_PROFILE_SURFACE_KEYS: &[&str] = &[
-    "runenwerk.assets.browser",
-    "runenwerk.material_lab.graph_canvas",
-    "runenwerk.material_lab.inspector",
-    "runenwerk.material_lab.preview",
-    "runenwerk.texture.viewer_2d",
-    "runenwerk.diagnostics.diagnostics",
-    "runenwerk.editor.console",
-];
-
-const RUNTIME_DEBUG_PROFILE_SURFACE_KEYS: &[&str] = &[
-    "runenwerk.assets.browser",
-    "runenwerk.diagnostics.runtime_debug",
-    "runenwerk.diagnostics.diagnostics",
-    "runenwerk.diagnostics.tool_suite_registry_inspector",
-    "runenwerk.editor.console",
-];
-
-const MATERIAL_LAB_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] =
-    &[CompiledWorkspaceProfileSpec {
-        id: MATERIAL_WORKSPACE_PROFILE_ID,
-        label: "Materials",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: MATERIAL_PROFILE_SURFACE_KEYS,
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::Scene,
-            DocumentKind::MaterialGraph,
-            DocumentKind::Material,
-        ],
-    }];
-
-const UI_DESIGNER_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] =
-    &[CompiledWorkspaceProfileSpec {
-        id: EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-        label: "UI Designer",
-        default_layout_template: WorkspaceLayoutTemplate::EditorDesign,
-        default_surface_keys: tool_suites::EDITOR_DESIGN_SURFACE_KEYS,
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[
-            DocumentKind::UiLayout,
-            DocumentKind::WorkspaceDefinition,
-            DocumentKind::Theme,
-            DocumentKind::Shortcut,
-            DocumentKind::Menu,
-            DocumentKind::CommandBinding,
-            DocumentKind::PanelRegistry,
-            DocumentKind::ToolSurfaceDefinition,
-        ],
-    }];
-
-const HEADLESS_VALIDATION_PROFILE_SPECS: &[CompiledWorkspaceProfileSpec] =
-    &[CompiledWorkspaceProfileSpec {
-        id: RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-        label: "Runtime Debug",
-        default_layout_template: WorkspaceLayoutTemplate::ToolWorkspace,
-        default_surface_keys: RUNTIME_DEBUG_PROFILE_SURFACE_KEYS,
-        default_modes: &[EDIT_MODE_ID, PREVIEW_MODE_ID],
-        document_kind_filters: &[DocumentKind::RuntimeDebug, DocumentKind::Scene],
-    }];
-
-fn tool_suite_profile_definitions_for_composition(
-    composition: RunenwerkWorkbenchComposition,
-) -> Vec<ToolSuiteProfileDefinition> {
-    workspace_profile_specs_for_composition(composition)
+fn provider_family_assignments_for_composition(
+    composition: &WorkbenchCompositionManifest,
+    tool_suites: &[EditorToolSuite],
+) -> Vec<ProviderFamilyProviderAssignment> {
+    let selected_suite_ids = composition
+        .installed_suites
         .iter()
-        .map(tool_suite_profile_definition)
-        .collect()
-}
-
-fn tool_suite_profile_definition(
-    spec: &CompiledWorkspaceProfileSpec,
-) -> ToolSuiteProfileDefinition {
-    ToolSuiteProfileDefinition::new(
-        workspace_profile_ref(spec.id),
-        spec.label,
-        spec.default_surface_keys
-            .iter()
-            .map(|stable_key| {
-                SurfaceRef::new(
-                    editor_shell::ToolSurfaceStableKey::new(*stable_key)
-                        .expect("compiled-in workspace profile surface key should be valid"),
-                )
-            })
-            .collect(),
-    )
-}
-
-fn workspace_profile_registry_for_composition(
-    composition: RunenwerkWorkbenchComposition,
-    profile_definitions: &[ToolSuiteProfileDefinition],
-    tool_surface_registry: &ToolSurfaceRegistry,
-) -> Result<WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError> {
-    let specs = workspace_profile_specs_for_composition(composition);
-    let profiles = profile_definitions
+        .map(|suite_id| suite_id.as_str().to_string())
+        .collect::<BTreeSet<_>>();
+    let selected_tool_suites = tool_suites
         .iter()
-        .filter_map(|definition| {
-            let spec = specs
-                .iter()
-                .find(|spec| workspace_profile_ref(spec.id) == definition.profile_ref)?;
-            Some(WorkspaceProfile::from_tool_suite_profile_definition(
-                spec.id,
-                spec.default_layout_template,
-                definition,
-                spec.default_modes.to_vec(),
-                spec.document_kind_filters.to_vec(),
-                tool_surface_registry,
-            ))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(WorkspaceProfileRegistry::new(
-        default_workspace_profile_id_for_composition(composition),
-        profiles,
-    ))
+        .filter(|suite| selected_suite_ids.contains(suite.suite_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    provider_family_assignments_for_tool_suites(&selected_tool_suites)
 }
 
-fn default_workspace_profile_id_for_composition(
+fn workspace_profile_manifests_for_composition(
     composition: RunenwerkWorkbenchComposition,
-) -> WorkspaceProfileId {
-    match composition {
-        RunenwerkWorkbenchComposition::FullEditor
-        | RunenwerkWorkbenchComposition::Constrained
-        | RunenwerkWorkbenchComposition::Custom => SCENE_WORKSPACE_PROFILE_ID,
-        RunenwerkWorkbenchComposition::MaterialLab => MATERIAL_WORKSPACE_PROFILE_ID,
-        RunenwerkWorkbenchComposition::UiDesigner => EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-        RunenwerkWorkbenchComposition::HeadlessValidation => RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-    }
-}
-
-fn workspace_profile_specs_for_composition(
-    composition: RunenwerkWorkbenchComposition,
-) -> &'static [CompiledWorkspaceProfileSpec] {
+    tool_suites: &[EditorToolSuite],
+) -> Vec<WorkspaceProfileManifest> {
     match composition {
         RunenwerkWorkbenchComposition::FullEditor | RunenwerkWorkbenchComposition::Constrained => {
-            FULL_EDITOR_PROFILE_SPECS
+            compositions::profiles::full_editor_profiles()
         }
-        RunenwerkWorkbenchComposition::MaterialLab => MATERIAL_LAB_PROFILE_SPECS,
-        RunenwerkWorkbenchComposition::UiDesigner => UI_DESIGNER_PROFILE_SPECS,
-        RunenwerkWorkbenchComposition::HeadlessValidation => HEADLESS_VALIDATION_PROFILE_SPECS,
-        RunenwerkWorkbenchComposition::Custom => &[],
+        RunenwerkWorkbenchComposition::MaterialLab => {
+            compositions::profiles::material_lab_profiles()
+        }
+        RunenwerkWorkbenchComposition::UiDesigner => compositions::profiles::ui_designer_profiles(),
+        RunenwerkWorkbenchComposition::HeadlessValidation => {
+            compositions::profiles::headless_validation_profiles()
+        }
+        RunenwerkWorkbenchComposition::Custom => {
+            compositions::profiles::custom_profiles_for_tool_suites(tool_suites)
+        }
     }
 }
 
-fn workspace_profile_ref(profile_id: WorkspaceProfileId) -> ProfileRef {
-    let stable_key = if profile_id == SCENE_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.scene"
-    } else if profile_id == MODELLING_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.modelling"
-    } else if profile_id == EDITOR_DESIGN_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.editor_design"
-    } else if profile_id == FIELD_WORLD_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.field_world"
-    } else if profile_id == MATERIAL_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.materials"
-    } else if profile_id == TEXTURE_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.textures"
-    } else if profile_id == PROCGEN_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.procgen"
-    } else if profile_id == GAMEPLAY_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.gameplay"
-    } else if profile_id == PARTICLE_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.particles"
-    } else if profile_id == PHYSICS_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.physics"
-    } else if profile_id == ANIMATION_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.animation"
-    } else if profile_id == SIMULATION_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.simulation"
-    } else if profile_id == RUNTIME_DEBUG_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.runtime_debug"
-    } else if profile_id == GRAPH_WORKSPACE_PROFILE_ID {
-        "runenwerk.workspace.graph"
-    } else {
-        panic!(
-            "compiled-in workspace profile {} must have a typed profile ref",
-            profile_id.raw()
-        );
-    };
+fn validate_provider_registry_support(
+    compiled: &editor_shell::CompiledWorkbenchComposition,
+    provider_registry: &EditorSurfaceProviderRegistry,
+) -> Result<(), RunenwerkWorkbenchHostError> {
+    for surface in compiled.tool_surface_registry().iter() {
+        let assigned_providers = compiled
+            .provider_family_provider_map()
+            .providers_for(&surface.provider_family)
+            .collect::<Vec<_>>();
+        if assigned_providers.is_empty() {
+            return Err(RunenwerkWorkbenchHostError::MissingProviderAssignment {
+                provider_family_id: surface.provider_family.clone(),
+            });
+        }
+        let mut supports_surface = false;
+        for document_context in
+            provider_validation_document_contexts(compiled.workspace_profile_registry())
+        {
+            let request = provider_validation_request(
+                surface,
+                compiled.workspace_profile_registry().default_profile_id(),
+                document_context,
+            )?;
+            if provider_registry
+                .assigned_provider_supports_request(
+                    &request,
+                    compiled.provider_family_provider_map(),
+                )
+                .unwrap_or(false)
+            {
+                supports_surface = true;
+                break;
+            }
+        }
+        if !supports_surface {
+            return Err(RunenwerkWorkbenchHostError::UnsupportedSurfaceProvider {
+                surface_key: surface.key.clone(),
+                provider_family_id: surface.provider_family.clone(),
+            });
+        }
+    }
 
-    ProfileRef::new(stable_key).expect("compiled-in workspace profile ref should be valid")
+    Ok(())
+}
+
+fn provider_validation_request(
+    surface: &ToolSurfaceDefinition,
+    workspace_profile_id: WorkspaceProfileId,
+    document_context: SurfaceDocumentContext,
+) -> Result<SurfaceProviderRequest, RunenwerkWorkbenchHostError> {
+    let panel_instance_id = PanelInstanceId::try_from_raw(PROVIDER_VALIDATION_INSTANCE_RAW_ID)
+        .map_err(
+            |_| RunenwerkWorkbenchHostError::InvalidProviderValidationRequestId {
+                field: "panel_instance_id",
+                raw: PROVIDER_VALIDATION_INSTANCE_RAW_ID,
+            },
+        )?;
+    let tab_stack_id =
+        TabStackId::try_from_raw(PROVIDER_VALIDATION_INSTANCE_RAW_ID).map_err(|_| {
+            RunenwerkWorkbenchHostError::InvalidProviderValidationRequestId {
+                field: "tab_stack_id",
+                raw: PROVIDER_VALIDATION_INSTANCE_RAW_ID,
+            }
+        })?;
+    let tool_surface_instance_id =
+        ToolSurfaceInstanceId::try_from_raw(PROVIDER_VALIDATION_INSTANCE_RAW_ID).map_err(|_| {
+            RunenwerkWorkbenchHostError::InvalidProviderValidationRequestId {
+                field: "tool_surface_instance_id",
+                raw: PROVIDER_VALIDATION_INSTANCE_RAW_ID,
+            }
+        })?;
+
+    Ok(SurfaceProviderRequest {
+        workspace_profile_id,
+        document_context,
+        panel_instance_id,
+        tab_stack_id,
+        tool_surface_instance_id,
+        stable_surface_key: surface.key.clone(),
+        provider_family_id: Some(surface.provider_family.clone()),
+        surface_route: Some(surface.route),
+        surface_definition_id: editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID,
+        capabilities: surface.capabilities,
+    })
+}
+
+fn provider_validation_document_contexts(
+    workspace_profile_registry: &WorkspaceProfileRegistry,
+) -> Vec<SurfaceDocumentContext> {
+    let mut document_kinds = Vec::<DocumentKind>::new();
+    for profile in workspace_profile_registry.profiles() {
+        for document_kind in &profile.document_kind_filters {
+            if !document_kinds.contains(document_kind) {
+                document_kinds.push(document_kind.clone());
+            }
+        }
+    }
+
+    let mut contexts = vec![SurfaceDocumentContext::NoActiveDocument];
+    contexts.extend(document_kinds.into_iter().enumerate().map(|(index, kind)| {
+        SurfaceDocumentContext::Resolved {
+            document_id: DocumentId(index as u64 + 1),
+            document_kind: kind,
+        }
+    }));
+    contexts
 }
 
 #[derive(Debug)]
@@ -732,12 +520,24 @@ pub enum RunenwerkWorkbenchHostError {
     SurfaceProviderRegistry(SurfaceProviderRegistryError),
     ProviderFamilyProviderMap(ProviderFamilyProviderMapError),
     ProviderBundle(ProviderBundleError),
-    WorkbenchComposition(WorkbenchCompositionBuildError),
+    WorkbenchComposition(WorkbenchCompositionCompileError),
     WorkspaceProfileRegistry(WorkspaceProfileRegistryBackedBuildError),
     UnknownProviderId {
-        provider_family_id: editor_shell::ProviderFamilyId,
+        provider_family_id: ProviderFamilyId,
         provider_id: SurfaceProviderId,
     },
+    MissingProviderAssignment {
+        provider_family_id: ProviderFamilyId,
+    },
+    UnsupportedSurfaceProvider {
+        provider_family_id: ProviderFamilyId,
+        surface_key: ToolSurfaceStableKey,
+    },
+    InvalidProviderValidationRequestId {
+        field: &'static str,
+        raw: u64,
+    },
+    SurfaceProviderSupport(SurfaceProviderDiagnostic),
 }
 
 impl fmt::Display for RunenwerkWorkbenchHostError {
@@ -767,6 +567,26 @@ impl fmt::Display for RunenwerkWorkbenchHostError {
             } => write!(
                 f,
                 "provider family `{provider_family_id}` references unknown provider `{provider_id}`"
+            ),
+            Self::MissingProviderAssignment { provider_family_id } => write!(
+                f,
+                "provider family `{provider_family_id}` has no concrete provider assignment"
+            ),
+            Self::UnsupportedSurfaceProvider {
+                provider_family_id,
+                surface_key,
+            } => write!(
+                f,
+                "provider family `{provider_family_id}` has no assigned provider that supports surface `{surface_key}`"
+            ),
+            Self::InvalidProviderValidationRequestId { field, raw } => write!(
+                f,
+                "invalid synthetic provider validation request id `{raw}` for `{field}`"
+            ),
+            Self::SurfaceProviderSupport(diagnostic) => write!(
+                f,
+                "failed to validate provider support: {}: {}",
+                diagnostic.code, diagnostic.message
             ),
         }
     }
@@ -798,18 +618,15 @@ impl From<ProviderBundleError> for RunenwerkWorkbenchHostError {
     }
 }
 
-impl From<WorkbenchCompositionBuildError> for RunenwerkWorkbenchHostError {
-    fn from(error: WorkbenchCompositionBuildError) -> Self {
-        match error {
-            WorkbenchCompositionBuildError::ToolSuiteRegistry(error) => {
-                Self::ToolSuiteRegistry(error)
-            }
-            WorkbenchCompositionBuildError::ProviderBundle(error) => Self::ProviderBundle(error),
-            WorkbenchCompositionBuildError::DuplicateProfileRef { .. }
-            | WorkbenchCompositionBuildError::UnknownProfileDefaultSurface { .. } => {
-                Self::WorkbenchComposition(error)
-            }
-        }
+impl From<WorkbenchCompositionCompileError> for RunenwerkWorkbenchHostError {
+    fn from(error: WorkbenchCompositionCompileError) -> Self {
+        Self::WorkbenchComposition(error)
+    }
+}
+
+impl From<SurfaceProviderDiagnostic> for RunenwerkWorkbenchHostError {
+    fn from(error: SurfaceProviderDiagnostic) -> Self {
+        Self::SurfaceProviderSupport(error)
     }
 }
 
@@ -829,8 +646,8 @@ mod tests {
         MATERIAL_WORKSPACE_PROFILE_ID, PanelInstanceId, ProviderFamilyId,
         ProviderFamilyProviderAssignment, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
         SurfaceDocumentContext, SurfaceProviderAvailability, SurfaceProviderId,
-        SurfaceProviderRequest, TabStackId, ToolSuiteRegistryError, ToolSurfaceInstanceId,
-        ToolSurfaceKind, ToolSurfacePersistence, ToolSurfaceRoute, WorkspaceState,
+        SurfaceProviderRequest, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
+        ToolSurfacePersistence, ToolSurfaceRoute, WorkspaceState,
         saveable_tool_surface_stable_key_candidates, tool_surface_capability_set,
         tool_surface_kind_for_stable_key,
     };
@@ -1080,6 +897,9 @@ mod tests {
         let host = RunenwerkWorkbenchHost::new().expect("host should build");
 
         for candidate in saveable_tool_surface_stable_key_candidates() {
+            if !provider_backed_candidate_kind(candidate.kind) {
+                continue;
+            }
             let key = editor_shell::ToolSurfaceStableKey::new(candidate.stable_key).unwrap();
             assert!(
                 host.tool_surface_registry().get(&key).is_some(),
@@ -1124,6 +944,9 @@ mod tests {
         let host = RunenwerkWorkbenchHost::new().expect("host should build");
 
         for candidate in saveable_tool_surface_stable_key_candidates() {
+            if !provider_backed_candidate_kind(candidate.kind) {
+                continue;
+            }
             let key = editor_shell::ToolSurfaceStableKey::new(candidate.stable_key).unwrap();
             assert!(
                 host.tool_surface_registry().get(&key).is_some(),
@@ -1352,8 +1175,8 @@ mod tests {
 
         assert!(matches!(
             error,
-            RunenwerkWorkbenchHostError::ToolSuiteRegistry(
-                ToolSuiteRegistryError::DuplicateToolSuiteId { .. }
+            RunenwerkWorkbenchHostError::WorkbenchComposition(
+                WorkbenchCompositionCompileError::DuplicateInstalledSuiteId { .. }
             )
         ));
     }
@@ -1925,12 +1748,29 @@ mod tests {
             "runenwerk.simulation.preview",
         ] {
             let key = editor_shell::ToolSurfaceStableKey::new(key).unwrap();
-            let definition = host
-                .tool_surface_registry()
-                .get(&key)
-                .expect("future-facing current placeholder surface should have metadata");
-            assert_ne!(definition.route, ToolSurfaceRoute::ProviderOwnedGraphCanvas);
+            assert!(
+                host.tool_surface_registry().get(&key).is_none(),
+                "future-facing metadata-only surface must not be installed until it has a provider"
+            );
         }
+    }
+
+    fn provider_backed_candidate_kind(kind: ToolSurfaceKind) -> bool {
+        !matches!(
+            kind,
+            ToolSurfaceKind::GraphCanvas
+                | ToolSurfaceKind::GameplayGraphCanvas
+                | ToolSurfaceKind::GameplayCompilerDiagnostics
+                | ToolSurfaceKind::ParticleGraphCanvas
+                | ToolSurfaceKind::ParticlePreview
+                | ToolSurfaceKind::PhysicsAuthoring
+                | ToolSurfaceKind::PhysicsDebug
+                | ToolSurfaceKind::Timeline
+                | ToolSurfaceKind::CurveEditor
+                | ToolSurfaceKind::AnimationGraphCanvas
+                | ToolSurfaceKind::SimulationPreview
+                | ToolSurfaceKind::SimulationDiagnostics
+        )
     }
 
     fn assert_material_profile_requests_resolve_from_host(
@@ -1959,7 +1799,7 @@ mod tests {
             .iter()
             .map(|request| request.stable_surface_key.as_str())
             .collect::<BTreeSet<_>>();
-        let expected_keys = MATERIAL_PROFILE_SURFACE_KEYS
+        let expected_keys = compositions::profiles::MATERIAL_PROFILE_SURFACE_KEYS
             .iter()
             .copied()
             .collect::<BTreeSet<_>>();

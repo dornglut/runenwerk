@@ -6,14 +6,18 @@ use std::fmt;
 use editor_core::{
     DocumentKind, EDIT_MODE_ID, ModeId, PLAY_MODE_ID, PREVIEW_MODE_ID, SIMULATE_MODE_ID,
 };
+use editor_definition::EditorWorkspaceLayoutDefinition;
 use id_macros::id;
 
 use crate::{
     PanelHostKind, PanelKind, ToolSurfaceKind, WorkspaceId, WorkspaceIdentityAllocator,
     WorkspaceSplitAxis,
-    tool_suite::{ToolSuiteProfileDefinition, ToolSurfaceRegistry, ToolSurfaceStableKey},
+    tool_suite::{ProfileRef, ToolSurfaceRegistry, ToolSurfaceStableKey},
 };
 
+use super::definition_form::{
+    WorkspaceDefinitionFormationError, form_workspace_state_from_definition_with_registry,
+};
 use super::state::{
     WorkspaceDefaultToolSurface, WorkspaceState, WorkspaceStateError,
     WorkspaceSurfaceIdentityError, WorkspaceToolSurfaceRegistryCompatibilityReport,
@@ -105,11 +109,31 @@ impl WorkspaceLayoutTemplate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkspaceProfileLayoutSource {
+    Template(WorkspaceLayoutTemplate),
+    AuthoredLayout {
+        layout_ref: String,
+        layout: EditorWorkspaceLayoutDefinition,
+    },
+}
+
+impl WorkspaceProfileLayoutSource {
+    pub const fn template(&self) -> WorkspaceLayoutTemplate {
+        match self {
+            Self::Template(template) => *template,
+            Self::AuthoredLayout { .. } => WorkspaceLayoutTemplate::ToolWorkspace,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceProfile {
     pub id: WorkspaceProfileId,
+    pub profile_ref: ProfileRef,
     pub label: String,
     pub default_layout_template: WorkspaceLayoutTemplate,
+    pub layout_source: WorkspaceProfileLayoutSource,
     pub default_surfaces: Vec<WorkspaceDefaultToolSurface>,
     pub default_modes: Vec<ModeId>,
     pub document_kind_filters: Vec<DocumentKind>,
@@ -161,6 +185,10 @@ pub enum WorkspaceProfileRegistryBackedBuildError {
         profile_id: WorkspaceProfileId,
         error: Box<WorkspaceStateError>,
     },
+    WorkspaceDefinitionFormation {
+        profile_id: WorkspaceProfileId,
+        error: Box<WorkspaceDefinitionFormationError>,
+    },
 }
 
 impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
@@ -205,6 +233,11 @@ impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
                 "workspace profile {} failed to build workspace state: {error}",
                 profile_id.raw()
             ),
+            Self::WorkspaceDefinitionFormation { profile_id, error } => write!(
+                f,
+                "workspace profile {} failed to form authored workspace layout: {error:?}",
+                profile_id.raw()
+            ),
         }
     }
 }
@@ -220,10 +253,33 @@ impl WorkspaceProfile {
         default_modes: Vec<ModeId>,
         document_kind_filters: Vec<DocumentKind>,
     ) -> Self {
+        Self::new_with_profile_ref(
+            workspace_profile_ref_for_id(id),
+            id,
+            label,
+            WorkspaceProfileLayoutSource::Template(default_layout_template),
+            default_surfaces,
+            default_modes,
+            document_kind_filters,
+        )
+    }
+
+    pub fn new_with_profile_ref(
+        profile_ref: ProfileRef,
+        id: WorkspaceProfileId,
+        label: impl Into<String>,
+        layout_source: WorkspaceProfileLayoutSource,
+        default_surfaces: Vec<WorkspaceDefaultToolSurface>,
+        default_modes: Vec<ModeId>,
+        document_kind_filters: Vec<DocumentKind>,
+    ) -> Self {
+        let default_layout_template = layout_source.template();
         Self {
             id,
+            profile_ref,
             label: label.into(),
             default_layout_template,
+            layout_source,
             default_surfaces,
             default_modes,
             document_kind_filters,
@@ -245,44 +301,6 @@ impl WorkspaceProfile {
         Ok(Self::new(
             id,
             label,
-            default_layout_template,
-            default_surfaces,
-            default_modes,
-            document_kind_filters,
-        ))
-    }
-
-    pub fn from_tool_suite_profile_definition(
-        id: WorkspaceProfileId,
-        default_layout_template: WorkspaceLayoutTemplate,
-        definition: &ToolSuiteProfileDefinition,
-        default_modes: Vec<ModeId>,
-        document_kind_filters: Vec<DocumentKind>,
-        registry: &ToolSurfaceRegistry,
-    ) -> Result<Self, WorkspaceProfileRegistryBackedBuildError> {
-        let default_surfaces = definition
-            .default_surfaces
-            .iter()
-            .map(|surface_ref| {
-                let stable_surface_key = surface_ref.key().clone();
-                let Some(surface_definition) = registry.get(&stable_surface_key) else {
-                    return Err(
-                        WorkspaceProfileRegistryBackedBuildError::UnregisteredDefaultToolSurface {
-                            profile_id: id,
-                            legacy_tool_surface_kind: None,
-                            stable_surface_key,
-                        },
-                    );
-                };
-                Ok(WorkspaceDefaultToolSurface::new_with_panel_kind(
-                    stable_surface_key,
-                    surface_definition.panel_kind,
-                ))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self::new(
-            id,
-            definition.label.clone(),
             default_layout_template,
             default_surfaces,
             default_modes,
@@ -323,14 +341,30 @@ impl WorkspaceProfile {
         registry: &ToolSurfaceRegistry,
     ) -> Result<WorkspaceState, WorkspaceProfileRegistryBackedBuildError> {
         self.require_tool_surface_registry_compatibility(registry)?;
-        let workspace = self
-            .try_build_default_workspace_state(workspace_id, allocator)
-            .map_err(
-                |error| WorkspaceProfileRegistryBackedBuildError::WorkspaceState {
-                    profile_id: self.id,
-                    error: Box::new(error),
-                },
-            )?;
+        let workspace = match &self.layout_source {
+            WorkspaceProfileLayoutSource::Template(_) => self
+                .try_build_default_workspace_state(workspace_id, allocator)
+                .map_err(
+                    |error| WorkspaceProfileRegistryBackedBuildError::WorkspaceState {
+                        profile_id: self.id,
+                        error: Box::new(error),
+                    },
+                )?,
+            WorkspaceProfileLayoutSource::AuthoredLayout { layout, .. } => {
+                form_workspace_state_from_definition_with_registry(
+                    layout,
+                    workspace_id,
+                    allocator,
+                    registry,
+                )
+                .map_err(|error| {
+                    WorkspaceProfileRegistryBackedBuildError::WorkspaceDefinitionFormation {
+                        profile_id: self.id,
+                        error: Box::new(error),
+                    }
+                })?
+            }
+        };
         let report = workspace.validate_tool_surface_registry_compatibility(registry);
         if report.is_fully_compatible() {
             Ok(workspace)
@@ -517,16 +551,31 @@ fn tab_stack_panel_kinds_by_host(
     )
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceProfileRegistry {
     default_profile_id: WorkspaceProfileId,
+    default_profile_ref: ProfileRef,
     profiles: Vec<WorkspaceProfile>,
 }
 
 impl WorkspaceProfileRegistry {
     pub fn new(default_profile_id: WorkspaceProfileId, profiles: Vec<WorkspaceProfile>) -> Self {
+        let default_profile_ref = profiles
+            .iter()
+            .find(|profile| profile.id == default_profile_id)
+            .map(|profile| profile.profile_ref.clone())
+            .unwrap_or_else(|| workspace_profile_ref_for_id(default_profile_id));
+        Self::new_with_default_ref(default_profile_ref, default_profile_id, profiles)
+    }
+
+    pub fn new_with_default_ref(
+        default_profile_ref: ProfileRef,
+        default_profile_id: WorkspaceProfileId,
+        profiles: Vec<WorkspaceProfile>,
+    ) -> Self {
         Self {
             default_profile_id,
+            default_profile_ref,
             profiles,
         }
     }
@@ -535,8 +584,16 @@ impl WorkspaceProfileRegistry {
         self.default_profile_id
     }
 
+    pub fn default_profile_ref(&self) -> &ProfileRef {
+        &self.default_profile_ref
+    }
+
     pub fn default_profile(&self) -> Option<&WorkspaceProfile> {
         self.profile(self.default_profile_id)
+    }
+
+    pub fn default_profile_by_ref(&self) -> Option<&WorkspaceProfile> {
+        self.profile_by_ref(&self.default_profile_ref)
     }
 
     pub fn profile(&self, profile_id: WorkspaceProfileId) -> Option<&WorkspaceProfile> {
@@ -545,9 +602,51 @@ impl WorkspaceProfileRegistry {
             .find(|profile| profile.id == profile_id)
     }
 
+    pub fn profile_by_ref(&self, profile_ref: &ProfileRef) -> Option<&WorkspaceProfile> {
+        self.profiles
+            .iter()
+            .find(|profile| profile.profile_ref == *profile_ref)
+    }
+
     pub fn profiles(&self) -> impl Iterator<Item = &WorkspaceProfile> {
         self.profiles.iter()
     }
+}
+
+pub fn workspace_profile_ref_for_id(profile_id: WorkspaceProfileId) -> ProfileRef {
+    let stable_key = if profile_id == SCENE_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.scene".to_string()
+    } else if profile_id == MODELLING_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.modelling".to_string()
+    } else if profile_id == EDITOR_DESIGN_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.editor_design".to_string()
+    } else if profile_id == FIELD_WORLD_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.field_world".to_string()
+    } else if profile_id == MATERIAL_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.materials".to_string()
+    } else if profile_id == TEXTURE_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.textures".to_string()
+    } else if profile_id == PROCGEN_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.procgen".to_string()
+    } else if profile_id == GAMEPLAY_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.gameplay".to_string()
+    } else if profile_id == PARTICLE_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.particles".to_string()
+    } else if profile_id == PHYSICS_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.physics".to_string()
+    } else if profile_id == ANIMATION_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.animation".to_string()
+    } else if profile_id == SIMULATION_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.simulation".to_string()
+    } else if profile_id == RUNTIME_DEBUG_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.runtime_debug".to_string()
+    } else if profile_id == GRAPH_WORKSPACE_PROFILE_ID {
+        "runenwerk.workspace.graph".to_string()
+    } else {
+        format!("runenwerk.workspace.profile_{}", profile_id.raw())
+    };
+
+    ProfileRef::new(stable_key).expect("workspace profile ref should be a valid stable key")
 }
 
 pub fn default_workspace_profile_registry() -> WorkspaceProfileRegistry {

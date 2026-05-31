@@ -1,0 +1,82 @@
+version: 1
+idea: Workbench composition manifest compiler and authored custom workbench contract
+source_path: ''
+owner: editor_shell workbench contracts with runenwerk_editor shell composition support
+created_at: '2026-05-29'
+governance_notes:
+- Architecture governance kickoff ran for editor_shell workbench, workspace, tool_suite, runenwerk_editor workbench_host,
+  and shell compositions before Rust edits.
+- DDD owner remains domain/editor/editor_shell for app-neutral workbench contracts; runenwerk_editor owns concrete shell
+  composition manifests and provider assignments.
+- ADR 0012 remains the durable workbench identity authority; no new ADR is required while dependency direction and ownership
+  stay within the accepted Workbench clean-break.
+open_questions: []
+item:
+  id: WR-134
+  title: Workbench composition manifest compiler and authored custom workbench contract
+  diagram_title: Workbench composition manifest compiler and auth
+  alias: WR134
+  lane: Editor quality
+  dependency_level: L2
+  gate: User-approved architecture-sensitive workbench compiler batch
+  planning_state: current_candidate
+  priority: P1
+  value: 4
+  blocker: 2
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.6
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-004
+  - WR-046
+  - WR-114
+  - WR-122
+  write_scopes:
+  - domain/editor/editor_shell/src
+  - apps/runenwerk_editor/src/shell
+  - docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-05-29-workbench-composition-manifest-compiler-
+  validations:
+  - cargo test -p editor_shell tool_suite workspace_profile workbench --quiet
+  - cargo test -p runenwerk_editor workbench_host ui_designer material_lab --quiet
+  - task docs:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task planning:validate
+  - ./quiet_full_gate.sh
+  next_evidence: Implement an app-neutral workbench composition compiler, ProfileRef-authoritative profile registry support,
+    app-owned Runenwerk composition manifests, authored workspace/profile validation, focused compiler/host tests, and closeout
+    validation.
+  current_decision: User explicitly approved the long-term workbench compiler batch after architecture review; implement
+    without fluent builders, ECS rewrite, dynamic plugins, shortcuts, or half measures.
+  current_call: Compile built-in and authored workbench/profile manifests through one app-neutral editor_shell path while
+    leaving concrete provider support validation in runenwerk_editor.
+  first_move: Replace the public WorkbenchCompositionBuilder path with editor_shell/src/workbench manifest, compiler, compiled,
+    and diagnostics modules.
+  main_blocker: Validation breadth and authored-layout compatibility must be proven before closeout.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps: []
+  completion_audit: ''
+  diagram_call:
+  - ProfileRef authority
+  - manifest compiler
+  - authored workbenches
+  decision_gates: []
+  ddd_owner: domain/editor/editor_shell owns app-neutral workbench contracts; apps/runenwerk_editor owns concrete host
+    composition and provider validation.
+  adr_requirement: No new ADR while preserving ADR 0012 Workbench identity, app/provider ownership, and domain dependency
+    direction.
+  fitness_function_requirement: Focused editor_shell compiler/profile tests, runenwerk_editor host/provider tests, planning/docs
+    gates, and quiet_full_gate before closeout.
+  ownership_mode: Stream-aligned editor workbench contract work with app-shell support from runenwerk_editor.
+edges: []

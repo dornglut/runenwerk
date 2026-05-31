@@ -438,6 +438,32 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 }
             }
         }
+        ShellCommand::CreateEditorWorkbenchCompositionPackage => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workbench composition creation",
+                    ))?;
+            match shell_state
+                .self_authoring_mut()
+                .create_custom_workbench_package()
+            {
+                Ok(document_id) => app.append_console_line(format!(
+                    "[editor-definition] created custom workbench package {}",
+                    document_id.as_str()
+                )),
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] custom workbench creation blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "custom workbench creation blocked",
+                    ));
+                }
+            }
+        }
         ShellCommand::ApplySelectedEditorDefinition => {
             let shell_state =
                 shell_state
@@ -470,6 +496,38 @@ pub fn dispatch_shell_command_with_viewport_commands(
                     ));
                     return Err(EditorMutationError::runtime_rejected(
                         "editor definition apply blocked",
+                    ));
+                }
+            }
+        }
+        ShellCommand::ActivateSelectedEditorWorkbenchComposition => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workbench composition activation",
+                    ))?;
+            match shell_state
+                .self_authoring()
+                .selected_workbench_composition_payload()
+            {
+                Ok(payload) => {
+                    let review_id = shell_state
+                        .self_authoring()
+                        .last_apply_review()
+                        .map(|review| review.id.clone());
+                    app.queue_editor_definition_activation_payload_for_review(review_id, payload);
+                    app.append_console_line(
+                        "[editor-definition] queued custom workbench activation".to_string(),
+                    );
+                }
+                Err(diagnostic) => {
+                    app.append_console_line(format!(
+                        "[editor-definition] workbench activation blocked: {}",
+                        diagnostic.message
+                    ));
+                    return Err(EditorMutationError::runtime_rejected(
+                        "workbench composition activation blocked",
                     ));
                 }
             }
@@ -1100,6 +1158,52 @@ pub fn dispatch_shell_command_with_viewport_commands(
             )?;
             dispatch_editor_lab_operation(app, shell_state, operation)?;
         }
+        ShellCommand::SetSelectedWorkbenchInstalledSuites { installed_suites } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workbench composition edit",
+                    ))?;
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "workbench_installed_suites",
+                EditorLabOperationKind::SetWorkbenchInstalledSuites {
+                    installed_suites: parse_editor_definition_list_field(&installed_suites),
+                },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
+        }
+        ShellCommand::SetSelectedWorkbenchProfileRefs { profile_refs } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workbench composition edit",
+                    ))?;
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "workbench_profile_refs",
+                EditorLabOperationKind::SetWorkbenchProfileRefs {
+                    profile_refs: parse_editor_definition_list_field(&profile_refs),
+                },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
+        }
+        ShellCommand::SetSelectedWorkbenchDefaultProfileRef { profile_ref } => {
+            let shell_state =
+                shell_state
+                    .as_deref_mut()
+                    .ok_or(EditorMutationError::runtime_rejected(
+                        "missing shell state for workbench composition edit",
+                    ))?;
+            let operation = selected_editor_lab_operation(
+                shell_state,
+                "workbench_default_profile",
+                EditorLabOperationKind::SetWorkbenchDefaultProfileRef { profile_ref },
+            )?;
+            dispatch_editor_lab_operation(app, shell_state, operation)?;
+        }
         ShellCommand::AddSelectedEditorWorkspaceLayoutTab {
             label,
             tool_surface,
@@ -1220,6 +1324,15 @@ fn selected_editor_lab_operation(
         preview_only: false,
         source: Some("shell.dispatch".to_string()),
     })
+}
+
+fn parse_editor_definition_list_field(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(ToString::to_string)
+        .collect()
 }
 
 fn dispatch_editor_lab_operation(
@@ -1374,6 +1487,9 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::SaveEditorLabProjectPackage => "SaveEditorLabProjectPackage",
         ShellCommand::ReloadEditorLabProjectPackage => "ReloadEditorLabProjectPackage",
         ShellCommand::ExportSelectedEditorDefinition => "ExportSelectedEditorDefinition",
+        ShellCommand::CreateEditorWorkbenchCompositionPackage => {
+            "CreateEditorWorkbenchCompositionPackage"
+        }
         ShellCommand::BuildSelectedEditorDefinitionApplyReview => {
             "BuildSelectedEditorDefinitionApplyReview"
         }
@@ -1381,6 +1497,9 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
             "RejectSelectedEditorDefinitionApplyReview"
         }
         ShellCommand::ApplySelectedEditorDefinition => "ApplySelectedEditorDefinition",
+        ShellCommand::ActivateSelectedEditorWorkbenchComposition => {
+            "ActivateSelectedEditorWorkbenchComposition"
+        }
         ShellCommand::RollbackSelectedEditorDefinition => "RollbackSelectedEditorDefinition",
         ShellCommand::ReloadSelectedEditorDefinitionLastApplied => {
             "ReloadSelectedEditorDefinitionLastApplied"
@@ -1400,6 +1519,13 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
             "SetSelectedEditorDefinitionUiNodeText"
         }
         ShellCommand::SetSelectedEditorThemeColor { .. } => "SetSelectedEditorThemeColor",
+        ShellCommand::SetSelectedWorkbenchInstalledSuites { .. } => {
+            "SetSelectedWorkbenchInstalledSuites"
+        }
+        ShellCommand::SetSelectedWorkbenchProfileRefs { .. } => "SetSelectedWorkbenchProfileRefs",
+        ShellCommand::SetSelectedWorkbenchDefaultProfileRef { .. } => {
+            "SetSelectedWorkbenchDefaultProfileRef"
+        }
         ShellCommand::AddSelectedEditorWorkspaceLayoutTab { .. } => {
             "AddSelectedEditorWorkspaceLayoutTab"
         }
@@ -1626,11 +1752,37 @@ fn dispatch_toolbar_command(
                 editor_window_id.raw()
             ));
         }
+        ToolbarCommandKind::LoadCustomWorkspace => {
+            let shell_state = shell_state.ok_or(EditorMutationError::runtime_rejected(
+                "missing shell state for custom workspace command",
+            ))?;
+            dispatch_shell_command(
+                app,
+                Some(shell_state),
+                ShellCommand::ActivateSelectedEditorWorkbenchComposition,
+                None,
+                None,
+                None,
+                None,
+            )?;
+        }
+        ToolbarCommandKind::AddWorkspace => {
+            let shell_state = shell_state.ok_or(EditorMutationError::runtime_rejected(
+                "missing shell state for add workspace command",
+            ))?;
+            dispatch_shell_command(
+                app,
+                Some(shell_state),
+                ShellCommand::CreateEditorWorkbenchCompositionPackage,
+                None,
+                None,
+                None,
+                None,
+            )?;
+        }
         ToolbarCommandKind::SaveSceneAs
         | ToolbarCommandKind::OpenRecent
-        | ToolbarCommandKind::EditPreferences
-        | ToolbarCommandKind::LoadCustomWorkspace
-        | ToolbarCommandKind::AddWorkspace => {
+        | ToolbarCommandKind::EditPreferences => {
             return Err(unavailable_toolbar_command(app, command));
         }
     }

@@ -1,6 +1,7 @@
 pub mod applied_editor_definition;
 pub mod command_catalog;
 pub mod command_resolution;
+pub mod compositions;
 pub mod controller;
 pub mod dispatch;
 pub mod dispatch_shell_command;

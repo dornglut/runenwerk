@@ -81,11 +81,17 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
                 EditorDefinitionSurfaceAction::BuildApplyReview,
             ) => ShellCommand::BuildSelectedEditorDefinitionApplyReview,
             SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::CreateWorkbenchCompositionPackage,
+            ) => ShellCommand::CreateEditorWorkbenchCompositionPackage,
+            SurfaceLocalAction::EditorDefinition(
                 EditorDefinitionSurfaceAction::RejectApplyReview,
             ) => ShellCommand::RejectSelectedEditorDefinitionApplyReview,
             SurfaceLocalAction::EditorDefinition(EditorDefinitionSurfaceAction::ApplySelected) => {
                 ShellCommand::ApplySelectedEditorDefinition
             }
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::ActivateSelectedWorkbenchComposition,
+            ) => ShellCommand::ActivateSelectedEditorWorkbenchComposition,
             SurfaceLocalAction::EditorDefinition(
                 EditorDefinitionSurfaceAction::RollbackSelected,
             ) => ShellCommand::RollbackSelectedEditorDefinition,
@@ -116,6 +122,15 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
             SurfaceLocalAction::EditorDefinition(
                 EditorDefinitionSurfaceAction::SetThemeColor { token, value },
             ) => ShellCommand::SetSelectedEditorThemeColor { token, value },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SetWorkbenchInstalledSuites { installed_suites },
+            ) => ShellCommand::SetSelectedWorkbenchInstalledSuites { installed_suites },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SetWorkbenchProfileRefs { profile_refs },
+            ) => ShellCommand::SetSelectedWorkbenchProfileRefs { profile_refs },
+            SurfaceLocalAction::EditorDefinition(
+                EditorDefinitionSurfaceAction::SetWorkbenchDefaultProfileRef { profile_ref },
+            ) => ShellCommand::SetSelectedWorkbenchDefaultProfileRef { profile_ref },
             SurfaceLocalAction::EditorDefinition(
                 EditorDefinitionSurfaceAction::AddWorkspaceLayoutTab {
                     label,
@@ -1100,6 +1115,49 @@ fn style_inspector_view_model(
                 )),
             });
         }
+        if let editor_definition::EditorDefinitionDocumentContent::WorkbenchComposition(
+            composition,
+        ) = &document.content
+        {
+            let installed_suites = composition.installed_suites.join(", ");
+            fields.push(EditorLabInspectorFieldViewModel {
+                label: "Installed suites".to_string(),
+                value: installed_suites.clone(),
+                text_field: Some(EditorLabTextFieldViewModel::new(
+                    "Set installed suites",
+                    installed_suites,
+                    "suite ids",
+                    EditorDefinitionSurfaceAction::SetWorkbenchInstalledSuites {
+                        installed_suites: String::new(),
+                    },
+                )),
+            });
+            let profile_refs = composition.profile_refs.join(", ");
+            fields.push(EditorLabInspectorFieldViewModel {
+                label: "Profile refs".to_string(),
+                value: profile_refs.clone(),
+                text_field: Some(EditorLabTextFieldViewModel::new(
+                    "Set profile refs",
+                    profile_refs,
+                    "profile refs",
+                    EditorDefinitionSurfaceAction::SetWorkbenchProfileRefs {
+                        profile_refs: String::new(),
+                    },
+                )),
+            });
+            fields.push(EditorLabInspectorFieldViewModel {
+                label: "Default profile".to_string(),
+                value: composition.default_profile_ref.clone(),
+                text_field: Some(EditorLabTextFieldViewModel::new(
+                    "Set default profile",
+                    composition.default_profile_ref.clone(),
+                    "profile ref",
+                    EditorDefinitionSurfaceAction::SetWorkbenchDefaultProfileRef {
+                        profile_ref: String::new(),
+                    },
+                )),
+            });
+        }
     }
     EditorLabInspectorViewModel {
         title: "Style Inspector".to_string(),
@@ -1441,6 +1499,10 @@ fn apply_review_actions(
             "no Editor Lab project package has been saved in this session",
         ),
     );
+    actions.push(EditorLabActionViewModel::enabled(
+        "Create custom workbench",
+        EditorDefinitionSurfaceAction::CreateWorkbenchCompositionPackage,
+    ));
     for action in [
         EditorLabActionViewModel::enabled(
             "Build apply review",
@@ -1453,6 +1515,10 @@ fn apply_review_actions(
         EditorLabActionViewModel::enabled(
             "Apply selected definition",
             EditorDefinitionSurfaceAction::ApplySelected,
+        ),
+        EditorLabActionViewModel::enabled(
+            "Activate selected workbench",
+            EditorDefinitionSurfaceAction::ActivateSelectedWorkbenchComposition,
         ),
         EditorLabActionViewModel::enabled(
             "Rollback selected definition",

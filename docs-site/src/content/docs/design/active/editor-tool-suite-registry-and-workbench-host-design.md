@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain/app
 canonical: true
-last_reviewed: 2026-05-20
+last_reviewed: 2026-05-29
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
@@ -146,6 +146,68 @@ instead of being migrated through compatibility metadata.
 
 Canonical PlantUML source for startup and provider resolution:
 [diagrams/editor-tool-suite-registration-flow.puml](diagrams/editor-tool-suite-registration-flow.puml).
+
+## Workbench Composition Compiler
+
+Workbench composition is now declared through three separate manifests in
+`domain/editor/editor_shell/src/workbench/`:
+
+- `ToolSuiteManifest` for suite-owned surfaces, provider families, routes, and
+  capabilities.
+- `WorkspaceProfileManifest` for durable `ProfileRef` identity, compatibility
+  `WorkspaceProfileId`, default surfaces, modes, filters, and layout source.
+- `WorkbenchCompositionManifest` for the runnable workbench id, installed
+  suite ids, included profile refs, default profile ref, and host capability
+  policy.
+
+The app-neutral compiler accepts built-in manifests and authored
+editor-definition documents through the same validation path:
+
+```mermaid
+flowchart TD
+  A["ToolSuiteManifest[]"] --> D["compile_workbench_composition"]
+  B["WorkspaceProfileManifest[]"] --> D
+  C["WorkbenchCompositionManifest"] --> D
+  E["Authored composition/profile/layout documents"] --> F["manifest conversion"]
+  F --> B
+  F --> C
+  D --> G["CompiledWorkbenchComposition"]
+  G --> H["RunenwerkWorkbenchHost"]
+```
+
+`ProfileRef` is the durable profile authority. `WorkspaceProfileId` remains a
+runtime compatibility handle for older profile-first call sites until a later
+cleanup removes them. Legacy `ToolSurfaceKind` may appear only in compatibility
+metadata; provider validation and authored layouts use stable surface keys,
+provider-family ids, routes, and capabilities as authority.
+
+## Authored Package Activation
+
+Editor Lab custom workbenches are package operations, not single-document
+activation. A selected `WorkbenchComposition` document gathers its referenced
+profile documents and their referenced layout documents, then queues one atomic
+`WorkbenchCompositionPackage` payload.
+
+```mermaid
+flowchart TD
+  A["Editor Lab drafts"] --> B["Selected WorkbenchComposition"]
+  B --> C["Collect profile refs"]
+  C --> D["Collect referenced layouts"]
+  D --> E["Validate composition/profile/layout package"]
+  E --> F["Build authored RunenwerkWorkbenchHost"]
+  F --> G["Build replacement workspace state"]
+  G --> H{"All steps succeeded?"}
+  H -- "yes" --> I["Swap app workbench host"]
+  I --> J["Swap shell workspace state"]
+  J --> K["Record applied package snapshots"]
+  H -- "no" --> L["Preserve previous host, shell, drafts, applied, rollback state"]
+```
+
+Apply review and rollback are package-aware for workbench compositions: the
+composition, profiles, and layouts enter applied, last-applied, and rollback
+state together. Runtime activation preserves the previous host and shell state
+when manifest conversion, compiler validation, provider support validation, or
+replacement workspace formation fails.
 
 ## Ownership Rules
 
@@ -407,8 +469,9 @@ bridges.
 
 Full editor:
 
-- installs scene, material, texture, procgen, asset, debug, self-authoring,
-  viewport, and product suites.
+- installs only provider-backed scene, material, texture, procgen, asset,
+  diagnostics, editor-design, viewport, and product suites. Future metadata-only
+  suites stay outside runnable compositions until provider support exists.
 
 Standalone material editor:
 
@@ -420,43 +483,41 @@ Standalone UI editor:
 - installs UI layout, theme, menu, shortcut, command-binding, shell preview,
   and validation suites.
 
-Conceptual composition examples:
+The long-term composition path is a manifest compiler, not a fluent builder.
+Apps declare data; `domain/editor/editor_shell/src/workbench/compiler.rs` turns
+that data into validated registries:
 
-```rust
-RunenwerkWorkbench::new()
-    .install(MaterialToolSuite)
-    .install(TextureToolSuite)
-    .install(ProductPreviewToolSuite)
-    .with_project_io(MaterialProjectIo)
-    .with_render_preview_adapter(MaterialPreviewRenderAdapter)
-    .run();
+```text
+ToolSuiteManifest[]
+WorkspaceProfileManifest[]
+WorkbenchCompositionManifest
+Authored workspace/profile documents
+        |
+        v
+compile_workbench_composition(...)
+        |
+        v
+CompiledWorkbenchComposition
+        |
+        v
+RunenwerkWorkbenchHost
 ```
 
-```rust
-RunenwerkWorkbench::new()
-    .install(UiLayoutToolSuite)
-    .install(ThemeEditorToolSuite)
-    .install(MenuEditorToolSuite)
-    .install(ShortcutEditorToolSuite)
-    .install(CommandBindingToolSuite)
-    .run();
-```
+`ProfileRef` is the durable profile identity. `WorkspaceProfileId` remains a
+compiled/runtime compatibility handle for existing call sites. Built-in
+profiles and authored workspace/profile documents must pass through the same
+compiler validation path before the app host can expose them.
 
 Standalone apps must not depend on `apps/runenwerk_editor` internals. Shared
 app-neutral contracts belong in `domain/editor/editor_shell` or dedicated
 reusable app-support crates. Concrete app composition remains in `apps/*`.
 
-Current implementation note: `apps/runenwerk_editor/src/shell/workbench_host.rs`
-exposes named full-editor and Material Lab workbench compositions. The Material
-Lab composition installs editor core, assets, diagnostics, texture, and
-Material Lab suites, then pairs them with the app-owned material-focused
-provider registry. The `runenwerk_material_lab` binary starts that composition
-as a dedicated workbench and bootstraps the default Material workspace profile
-through
-`apps/runenwerk_editor/src/shell/state.rs::RunenwerkEditorShellState::new_for_workspace_profile_with_tool_surface_registry`.
-This is the compiled-in app composition boundary for a standalone Material Lab
-workbench; shared app-support crate extraction remains future work and must not
-be faked by forking `apps/runenwerk_editor` internals.
+Current implementation note: `apps/runenwerk_editor/src/shell/compositions/`
+owns the built-in Runenwerk composition/profile manifests. `RunenwerkWorkbenchHost`
+selects one composition, collects installed suite manifests and profile
+manifests, calls `compile_workbench_composition`, and then validates app-owned
+provider support. The Material Lab and UI Designer standalone binaries start
+named compositions through this same path.
 
 Canonical PlantUML source for workbench compositions:
 [diagrams/workbench-host-compositions.puml](diagrams/workbench-host-compositions.puml).
@@ -614,24 +675,22 @@ Status: Material Lab provider-owned graph routing implemented.
 
 ### Phase 6: WorkbenchHost Composition
 
-Status: WorkbenchHost composition wrapper introduced.
+Status: Workbench composition compiler introduced.
 
-- build the compiled-in suite metadata registry through
-  `RunenwerkWorkbenchHost`;
-- install Material Lab suite metadata in the host registry without making it
-  live workspace/profile authority;
-- centralize the existing app provider registry construction boundary while
-  preserving current enum-backed provider resolution;
-- keep provider-family filtering, stable-key-only live identity, dynamic
-  plugins, and standalone WorkbenchHost variants as future work.
+- build the compiled suite, profile, and provider-family registries through
+  `domain/editor/editor_shell/src/workbench/compiler.rs`;
+- keep profile identity `ProfileRef`-authoritative while preserving
+  `WorkspaceProfileId` compatibility lookups;
+- keep cross-suite built-in profiles in
+  `apps/runenwerk_editor/src/shell/compositions/`;
+- validate that every installed provider family has assigned app providers and
+  that assigned providers support compiled stable surface keys;
+- keep dynamic plugins and external workbench packaging deferred.
 
-Post-migration extension: `RunenwerkWorkbenchHost` now also exposes an app-owned
-Material Lab composition that installs only the material-support suite set and
-matching provider registry. `apps/runenwerk_editor/src/runtime/app.rs` wires
-that composition into a dedicated `runenwerk_material_lab` binary. This
-satisfies the compiled-in standalone workbench composition boundary; dynamic
-plugins, external workbench packaging, and separate shared app-support crates
-remain deferred.
+Post-migration extension: `RunenwerkWorkbenchHost` exposes Full Editor,
+Material Lab, UI Designer, Headless Validation, Constrained, and test/custom
+composition paths through the compiler. Metadata-only future suites no longer
+enter runnable workbenches without concrete provider support.
 
 ### Phase 7: Suite Ownership and Stable-Key Coverage
 

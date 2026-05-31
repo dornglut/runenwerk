@@ -297,6 +297,7 @@ pub enum DefinitionApplyDiffFamily {
     UiTemplate,
     WorkspaceProfile,
     WorkspaceLayout,
+    WorkbenchComposition,
     Theme,
     ShortcutSet,
     Menu,
@@ -316,15 +317,67 @@ pub enum DefinitionApplyDiffKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PendingEditorDefinitionActivation {
     pub review_id: Option<String>,
-    pub document: EditorDefinitionDocument,
+    pub payload: EditorDefinitionActivationPayload,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum EditorDefinitionActivationPayload {
+    Document(EditorDefinitionDocument),
+    WorkbenchCompositionPackage {
+        composition: editor_definition::EditorWorkbenchCompositionDefinition,
+        profiles: Vec<editor_definition::EditorWorkspaceProfileDefinition>,
+        layouts: Vec<editor_definition::EditorWorkspaceLayoutDefinition>,
+    },
+}
+
+impl EditorDefinitionActivationPayload {
+    pub fn primary_document_id(&self) -> EditorDefinitionId {
+        match self {
+            Self::Document(document) => document.id.clone(),
+            Self::WorkbenchCompositionPackage { composition, .. } => {
+                EditorDefinitionId::from(composition.id.as_str())
+            }
+        }
+    }
+
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::Document(document) => document.display_name.clone(),
+            Self::WorkbenchCompositionPackage { composition, .. } => composition.label.clone(),
+        }
+    }
 }
 
 impl PendingEditorDefinitionActivation {
     pub fn new(review_id: Option<String>, document: EditorDefinitionDocument) -> Self {
         Self {
             review_id,
-            document,
+            payload: EditorDefinitionActivationPayload::Document(document),
         }
+    }
+
+    pub fn workbench_package(
+        review_id: Option<String>,
+        composition: editor_definition::EditorWorkbenchCompositionDefinition,
+        profiles: Vec<editor_definition::EditorWorkspaceProfileDefinition>,
+        layouts: Vec<editor_definition::EditorWorkspaceLayoutDefinition>,
+    ) -> Self {
+        Self {
+            review_id,
+            payload: EditorDefinitionActivationPayload::WorkbenchCompositionPackage {
+                composition,
+                profiles,
+                layouts,
+            },
+        }
+    }
+
+    pub fn primary_document_id(&self) -> EditorDefinitionId {
+        self.payload.primary_document_id()
+    }
+
+    pub fn display_name(&self) -> String {
+        self.payload.display_name()
     }
 }
 
@@ -358,11 +411,11 @@ impl EditorDefinitionActivationReport {
         Self {
             id: format!(
                 "editor-lab.activation.{status_key}.{}",
-                request.document.id.as_str()
+                request.primary_document_id().as_str()
             ),
             review_id: request.review_id.clone(),
-            document_id: request.document.id.clone(),
-            display_name: request.document.display_name.clone(),
+            document_id: request.primary_document_id(),
+            display_name: request.display_name(),
             status,
             summary,
             diagnostics,

@@ -23,9 +23,10 @@ use crate::runtime::viewport::{
     EditorViewportRenderSelectionJournalEntry, EditorViewportRenderSelectionSummary,
 };
 use crate::shell::{
-    EditorDefinitionActivationReport, EditorDefinitionActivationStatus,
-    EditorSurfaceProviderRegistry, PendingEditorDefinitionActivation, RunenwerkWorkbenchHost,
-    RunenwerkWorkbenchHostError, SurfaceSessionStore,
+    EditorDefinitionActivationPayload, EditorDefinitionActivationReport,
+    EditorDefinitionActivationStatus, EditorSurfaceProviderRegistry,
+    PendingEditorDefinitionActivation, RunenwerkWorkbenchHost, RunenwerkWorkbenchHostError,
+    SurfaceSessionStore,
 };
 use crate::texture_preview::TexturePreviewRuntime;
 
@@ -131,19 +132,6 @@ impl RunenwerkEditorApp {
         }
     }
 
-    pub fn with_surface_provider_registry(
-        surface_provider_registry: EditorSurfaceProviderRegistry,
-    ) -> Self {
-        let workbench_host =
-            RunenwerkWorkbenchHost::from_tool_suites_provider_registry_and_provider_family_assignments(
-            vec![crate::material_lab::material_lab_tool_suite()],
-            surface_provider_registry,
-            Vec::new(),
-        )
-        .expect("custom workbench host composition must build");
-        Self::with_workbench_host(workbench_host)
-    }
-
     pub fn runtime(&self) -> &RunenwerkEditorRuntime {
         &self.runtime
     }
@@ -241,6 +229,10 @@ impl RunenwerkEditorApp {
         self.workbench_host.as_ref()
     }
 
+    pub fn replace_workbench_host(&mut self, workbench_host: RunenwerkWorkbenchHost) {
+        self.workbench_host = Arc::new(workbench_host);
+    }
+
     pub fn queue_editor_definition_activation(&mut self, document: EditorDefinitionDocument) {
         self.queue_editor_definition_activation_for_review(None, document);
     }
@@ -251,6 +243,40 @@ impl RunenwerkEditorApp {
         document: EditorDefinitionDocument,
     ) {
         let request = PendingEditorDefinitionActivation::new(review_id, document);
+        self.queue_editor_definition_activation_request(request);
+    }
+
+    pub fn queue_workbench_composition_package_activation_for_review(
+        &mut self,
+        review_id: Option<String>,
+        composition: editor_definition::EditorWorkbenchCompositionDefinition,
+        profiles: Vec<editor_definition::EditorWorkspaceProfileDefinition>,
+        layouts: Vec<editor_definition::EditorWorkspaceLayoutDefinition>,
+    ) {
+        let request = PendingEditorDefinitionActivation::workbench_package(
+            review_id,
+            composition,
+            profiles,
+            layouts,
+        );
+        self.queue_editor_definition_activation_request(request);
+    }
+
+    pub fn queue_editor_definition_activation_payload_for_review(
+        &mut self,
+        review_id: Option<String>,
+        payload: EditorDefinitionActivationPayload,
+    ) {
+        self.queue_editor_definition_activation_request(PendingEditorDefinitionActivation {
+            review_id,
+            payload,
+        });
+    }
+
+    fn queue_editor_definition_activation_request(
+        &mut self,
+        request: PendingEditorDefinitionActivation,
+    ) {
         self.record_editor_definition_activation_report(
             EditorDefinitionActivationReport::from_request(
                 &request,

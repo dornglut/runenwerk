@@ -442,6 +442,17 @@ impl EditorSurfaceProviderRegistry {
         }
     }
 
+    pub(crate) fn assigned_provider_supports_request(
+        &self,
+        request: &SurfaceProviderRequest,
+        provider_family_map: &ProviderFamilyProviderMap,
+    ) -> Result<bool, SurfaceProviderDiagnostic> {
+        Ok(self
+            .candidate_providers_for_request(request, Some(provider_family_map))?
+            .into_iter()
+            .any(|provider| provider.support_mode(request).is_supported()))
+    }
+
     pub fn resolve_frame(
         &self,
         context: &SurfaceProviderBuildContext<'_>,

@@ -3,8 +3,8 @@
 use crate::{
     EditorCommandBindingSetDefinition, EditorDefinitionBindings, EditorMenuDefinition,
     EditorPanelRegistryDefinition, EditorShortcutSetDefinition, EditorThemeDefinition,
-    EditorToolSurfaceRegistryDefinition, EditorWorkspaceLayoutDefinition,
-    EditorWorkspaceProfileDefinition,
+    EditorToolSurfaceRegistryDefinition, EditorWorkbenchCompositionDefinition,
+    EditorWorkspaceLayoutDefinition, EditorWorkspaceProfileDefinition,
 };
 use serde::{Deserialize, Serialize};
 use ui_definition::AuthoredUiTemplate;
@@ -48,6 +48,7 @@ pub enum EditorDefinitionDocumentKind {
     CommandBinding,
     PanelRegistry,
     ToolSurfaceDefinition,
+    WorkbenchComposition,
     EditorBindings,
 }
 
@@ -90,5 +91,6 @@ pub enum EditorDefinitionDocumentContent {
     CommandBindings(EditorCommandBindingSetDefinition),
     PanelRegistry(EditorPanelRegistryDefinition),
     ToolSurfaceRegistry(EditorToolSurfaceRegistryDefinition),
+    WorkbenchComposition(EditorWorkbenchCompositionDefinition),
     EditorBindings(EditorDefinitionBindings),
 }

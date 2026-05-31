@@ -12,6 +12,7 @@ pub mod surfaces;
 pub mod tool_suite;
 pub mod ux_lab;
 pub mod view_models;
+pub mod workbench;
 pub mod workspace;
 
 #[cfg(test)]
@@ -69,18 +70,17 @@ pub use tool_suite::{
     ProviderFamilyProviderMap, ProviderFamilyProviderMapError, ResourceCapabilityKey,
     SAVEABLE_TOOL_SURFACE_STABLE_KEY_CANDIDATES, SuiteRef, SurfaceRef, ToolServiceKey,
     ToolServiceNeed, ToolSuiteCapabilityDeclaration, ToolSuiteId, ToolSuiteIdentityError,
-    ToolSuiteProfileDefinition, ToolSuiteRegistry, ToolSuiteRegistryError,
-    ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRegistry,
-    ToolSurfaceResolution, ToolSurfaceRole, ToolSurfaceRoute, ToolSurfaceStableKey,
-    ToolSurfaceTargetProfileCompatibility, WorkbenchComposition, WorkbenchCompositionBuildError,
-    WorkbenchCompositionBuilder, resolve_legacy_tool_surface_kind,
-    saveable_tool_surface_stable_key_candidates, stable_key_candidate_for_key,
-    stable_key_candidate_for_kind, stable_key_candidate_for_persisted_kind,
-    stable_key_for_persisted_tool_surface_kind_v2, stable_key_for_tool_surface_kind,
-    tool_surface_kind_for_stable_key,
+    ToolSuiteRegistry, ToolSuiteRegistryError, ToolSurfaceCreationPolicy, ToolSurfaceDefinition,
+    ToolSurfacePersistence, ToolSurfaceRegistry, ToolSurfaceResolution, ToolSurfaceRole,
+    ToolSurfaceRoute, ToolSurfaceStableKey, ToolSurfaceTargetProfileCompatibility,
+    resolve_legacy_tool_surface_kind, saveable_tool_surface_stable_key_candidates,
+    stable_key_candidate_for_key, stable_key_candidate_for_kind,
+    stable_key_candidate_for_persisted_kind, stable_key_for_persisted_tool_surface_kind_v2,
+    stable_key_for_tool_surface_kind, tool_surface_kind_for_stable_key,
 };
 pub use ux_lab::*;
 pub use view_models::*;
+pub use workbench::*;
 pub use workspace::{
     ANIMATION_GRAPH_CANVAS_SURFACE_DEFINITION_ID, ANIMATION_WORKSPACE_PROFILE_ID,
     ASSET_BROWSER_SURFACE_DEFINITION_ID, AuthoredToolSurfaceResolution,
@@ -132,7 +132,7 @@ pub use workspace::{
     VIEWPORT_SURFACE_DEFINITION_ID, VOLUME_TEXTURE_VIEWER_SURFACE_DEFINITION_ID,
     WorkspaceDefaultToolSurface, WorkspaceDefinitionFormationError, WorkspaceId,
     WorkspaceIdentityAllocator, WorkspaceIdentitySeed, WorkspaceLayoutTemplate, WorkspaceMutation,
-    WorkspaceProfile, WorkspaceProfileId, WorkspaceProfileRegistry,
+    WorkspaceProfile, WorkspaceProfileId, WorkspaceProfileLayoutSource, WorkspaceProfileRegistry,
     WorkspaceProfileRegistryBackedBuildError, WorkspaceProfileToolSurfaceCompatibilityReport,
     WorkspaceProfileToolSurfaceCompatibleSurface, WorkspaceProfileToolSurfaceLegacySurface,
     WorkspaceProfileToolSurfaceUnmappedLegacySurface, WorkspaceProjectionArtifact,
@@ -151,5 +151,5 @@ pub use workspace::{
     tool_surface_kind_definition_key, tool_surface_kind_from_definition_key,
     tool_surface_readiness, tool_surface_readiness_for_definition_id,
     tool_surface_retention_class_from_registry_or_legacy, tool_surface_session_retention_class,
-    viewport_embed_slot_for,
+    viewport_embed_slot_for, workspace_profile_ref_for_id,
 };

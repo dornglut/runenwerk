@@ -188,9 +188,11 @@ pub enum ShellCommand {
     SaveEditorLabProjectPackage,
     ReloadEditorLabProjectPackage,
     ExportSelectedEditorDefinition,
+    CreateEditorWorkbenchCompositionPackage,
     BuildSelectedEditorDefinitionApplyReview,
     RejectSelectedEditorDefinitionApplyReview,
     ApplySelectedEditorDefinition,
+    ActivateSelectedEditorWorkbenchComposition,
     RollbackSelectedEditorDefinition,
     ReloadSelectedEditorDefinitionLastApplied,
     ApplyEditorLabOperation {
@@ -215,6 +217,15 @@ pub enum ShellCommand {
     SetSelectedEditorThemeColor {
         token: String,
         value: String,
+    },
+    SetSelectedWorkbenchInstalledSuites {
+        installed_suites: String,
+    },
+    SetSelectedWorkbenchProfileRefs {
+        profile_refs: String,
+    },
+    SetSelectedWorkbenchDefaultProfileRef {
+        profile_ref: String,
     },
     AddSelectedEditorWorkspaceLayoutTab {
         label: String,

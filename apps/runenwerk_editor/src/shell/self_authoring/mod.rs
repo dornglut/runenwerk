@@ -22,7 +22,8 @@ use editor_definition::{
     EditorLabOperationDiffChange, EditorLabOperationDiffFamily, EditorLabOperationKind,
     EditorLabOperationReport, EditorLabOperationStatus, EditorMenuDefinition,
     EditorMenuItemDefinition, EditorShortcutDefinition, EditorShortcutSetDefinition,
-    EditorThemeDefinition, EditorTypographyTokenDefinition, EditorWorkspaceHostDefinition,
+    EditorThemeDefinition, EditorTypographyTokenDefinition, EditorWorkbenchCompositionDefinition,
+    EditorWorkbenchHostPolicyDefinition, EditorWorkspaceHostDefinition,
     EditorWorkspaceLayoutDefinition, EditorWorkspacePanelTabDefinition,
     EditorWorkspaceProfileDefinition, EditorWorkspaceSplitAxisDefinition,
     apply_editor_lab_operation, editor_definition_has_blocking_diagnostics,
@@ -53,9 +54,9 @@ use crate::shell::editor_lab_evidence::{
 };
 use crate::shell::editor_lab_project::{
     DefinitionApplyDiffFamily, DefinitionApplyDiffRow, DefinitionApplyReview,
-    DefinitionApplyReviewStatus, EditorLabDocumentStore, EditorLabProjectImportReport,
-    EditorLabProjectLoadReport, EditorLabProjectPackage, EditorLabProjectStoreReport,
-    EditorLabRollbackRecord, EditorLabRollbackStatus,
+    DefinitionApplyReviewStatus, EditorDefinitionActivationPayload, EditorLabDocumentStore,
+    EditorLabProjectImportReport, EditorLabProjectLoadReport, EditorLabProjectPackage,
+    EditorLabProjectStoreReport, EditorLabRollbackRecord, EditorLabRollbackStatus,
 };
 use crate::shell::ui_definition_assets::{EDITOR_BINDINGS_SOURCE, EDITOR_UI_ASSET_SOURCES};
 
@@ -520,6 +521,154 @@ impl SelfAuthoringWorkspaceState {
         Ok(())
     }
 
+    pub fn create_custom_workbench_package(
+        &mut self,
+    ) -> Result<EditorDefinitionId, UiDefinitionDiagnostic> {
+        let package_index = (1..=999)
+            .find(|index| {
+                let composition_id = EditorDefinitionId::from(
+                    format!("runenwerk.editor.workbench.custom{index}").as_str(),
+                );
+                !self.drafts.contains_key(&composition_id)
+            })
+            .ok_or_else(|| {
+                UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.workbench.create.exhausted",
+                    "no custom workbench id is available",
+                )
+            })?;
+        let composition_id = format!("runenwerk.editor.workbench.custom{package_index}");
+        let profile_id = format!("runenwerk.editor.workspace.custom{package_index}");
+        let layout_id = format!("runenwerk.editor.layout.custom{package_index}");
+        let layout = self
+            .selected_workspace_layout()
+            .cloned()
+            .map(|mut layout| {
+                layout.id = layout_id.clone();
+                layout.label = format!("Custom {package_index} Layout");
+                layout
+            })
+            .unwrap_or_else(|| default_custom_workbench_layout(&layout_id, package_index));
+
+        let documents = vec![
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from(composition_id.as_str()),
+                format!("Custom Workbench {package_index}"),
+                EditorDefinitionDocumentKind::WorkbenchComposition,
+                EditorDefinitionDocumentContent::WorkbenchComposition(
+                    EditorWorkbenchCompositionDefinition {
+                        id: composition_id.clone(),
+                        label: format!("Custom Workbench {package_index}"),
+                        installed_suites: vec![
+                            "runenwerk.editor".to_string(),
+                            "runenwerk.editor_design".to_string(),
+                        ],
+                        profile_refs: vec![profile_id.clone()],
+                        default_profile_ref: profile_id.clone(),
+                        host_policy: EditorWorkbenchHostPolicyDefinition::AllowAll,
+                    },
+                ),
+            ),
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from(profile_id.as_str()),
+                format!("Custom Workspace {package_index}"),
+                EditorDefinitionDocumentKind::WorkspaceDefinition,
+                EditorDefinitionDocumentContent::WorkspaceProfile(
+                    EditorWorkspaceProfileDefinition {
+                        id: profile_id,
+                        label: format!("Custom {package_index}"),
+                        default_modes: vec!["editor-design".to_string()],
+                        document_kind_filters: vec![
+                            "UiLayout".to_string(),
+                            "WorkspaceDefinition".to_string(),
+                            "Theme".to_string(),
+                            "Shortcut".to_string(),
+                            "Menu".to_string(),
+                            "CommandBinding".to_string(),
+                        ],
+                        default_layout: layout_id,
+                    },
+                ),
+            ),
+            EditorDefinitionDocument::current(
+                EditorDefinitionId::from(layout.id.as_str()),
+                layout.label.clone(),
+                EditorDefinitionDocumentKind::WorkspaceDefinition,
+                EditorDefinitionDocumentContent::WorkspaceLayout(layout),
+            ),
+        ];
+
+        for document in &documents {
+            if self.drafts.contains_key(&document.id) {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.workbench.create.duplicate",
+                    format!(
+                        "definition document '{}' already exists",
+                        document.id.as_str()
+                    ),
+                ));
+            }
+            let diagnostics = validate_editor_definition_document(document);
+            if editor_definition_has_blocking_diagnostics(&diagnostics) {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.workbench.create.blocked",
+                    format!(
+                        "custom workbench document '{}' has blocking validation diagnostics",
+                        document.id.as_str()
+                    ),
+                ));
+            }
+        }
+
+        let selected_id = EditorDefinitionId::from(composition_id.as_str());
+        for document in documents {
+            self.drafts.insert(document.id.clone(), document);
+        }
+        self.selected_ui_node_id = None;
+        self.selected_document_id = Some(selected_id.clone());
+        self.record_source_change();
+        Ok(selected_id)
+    }
+
+    pub fn selected_workbench_composition_payload(
+        &self,
+    ) -> Result<EditorDefinitionActivationPayload, UiDefinitionDiagnostic> {
+        let (composition, profiles, layouts) = self.selected_workbench_composition_package()?;
+        Ok(
+            EditorDefinitionActivationPayload::WorkbenchCompositionPackage {
+                composition,
+                profiles,
+                layouts,
+            },
+        )
+    }
+
+    pub fn record_applied_workbench_composition_payload(
+        &mut self,
+        payload: &EditorDefinitionActivationPayload,
+    ) {
+        let EditorDefinitionActivationPayload::WorkbenchCompositionPackage {
+            composition,
+            profiles,
+            layouts,
+        } = payload
+        else {
+            return;
+        };
+
+        let documents = workbench_composition_package_documents(composition, profiles, layouts);
+
+        for mut document in documents {
+            document.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+            self.rollback_snapshots
+                .insert(document.id.clone(), self.applied.get(&document.id).cloned());
+            self.last_applied_snapshots
+                .insert(document.id.clone(), document.clone());
+            self.applied.insert(document.id.clone(), document);
+        }
+        self.record_source_change();
+    }
+
     pub fn duplicate_selected(
         &mut self,
         new_id: EditorDefinitionId,
@@ -831,6 +980,108 @@ impl SelfAuthoringWorkspaceState {
         Ok(layout)
     }
 
+    fn selected_workspace_layout(&self) -> Option<&EditorWorkspaceLayoutDefinition> {
+        let document = self.selected_document()?;
+        let EditorDefinitionDocumentContent::WorkspaceLayout(layout) = &document.content else {
+            return None;
+        };
+        Some(layout)
+    }
+
+    fn selected_workbench_composition_package(
+        &self,
+    ) -> Result<
+        (
+            EditorWorkbenchCompositionDefinition,
+            Vec<EditorWorkspaceProfileDefinition>,
+            Vec<EditorWorkspaceLayoutDefinition>,
+        ),
+        UiDefinitionDiagnostic,
+    > {
+        let document = self.selected_document().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.workbench.activate.no_selection",
+                "no workbench composition document is selected",
+            )
+        })?;
+        let EditorDefinitionDocumentContent::WorkbenchComposition(composition) = &document.content
+        else {
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.workbench.activate.not_composition",
+                "selected definition is not a workbench composition document",
+            ));
+        };
+
+        let mut profiles = Vec::new();
+        let mut layouts = Vec::new();
+        let mut layout_ids = BTreeSet::<String>::new();
+        for profile_ref in &composition.profile_refs {
+            let profile_document = self
+                .drafts
+                .values()
+                .find(|candidate| {
+                    matches!(
+                        &candidate.content,
+                        EditorDefinitionDocumentContent::WorkspaceProfile(profile)
+                            if profile.id == *profile_ref
+                    )
+                })
+                .ok_or_else(|| {
+                    UiDefinitionDiagnostic::error(
+                        "editor.self_authoring.workbench.activate.profile_missing",
+                        format!("workbench composition references missing profile `{profile_ref}`"),
+                    )
+                })?;
+            let EditorDefinitionDocumentContent::WorkspaceProfile(profile) =
+                &profile_document.content
+            else {
+                unreachable!("profile document content was matched above");
+            };
+            profiles.push(profile.clone());
+
+            if layout_ids.insert(profile.default_layout.clone()) {
+                let layout_document = self
+                    .drafts
+                    .values()
+                    .find(|candidate| {
+                        matches!(
+                            &candidate.content,
+                            EditorDefinitionDocumentContent::WorkspaceLayout(layout)
+                                if layout.id == profile.default_layout
+                        )
+                    })
+                    .ok_or_else(|| {
+                        UiDefinitionDiagnostic::error(
+                            "editor.self_authoring.workbench.activate.layout_missing",
+                            format!(
+                                "workspace profile `{}` references missing layout `{}`",
+                                profile.id, profile.default_layout
+                            ),
+                        )
+                    })?;
+                let EditorDefinitionDocumentContent::WorkspaceLayout(layout) =
+                    &layout_document.content
+                else {
+                    unreachable!("layout document content was matched above");
+                };
+                layouts.push(layout.clone());
+            }
+        }
+
+        Ok((composition.clone(), profiles, layouts))
+    }
+
+    fn selected_workbench_composition_package_documents(
+        &self,
+    ) -> Result<Vec<EditorDefinitionDocument>, UiDefinitionDiagnostic> {
+        let (composition, profiles, layouts) = self.selected_workbench_composition_package()?;
+        Ok(workbench_composition_package_documents(
+            &composition,
+            &profiles,
+            &layouts,
+        ))
+    }
+
     pub fn export_selected_to_ron(&self) -> Result<String, UiDefinitionDiagnostic> {
         let package = self.export_selected_package()?;
         ron::ser::to_string_pretty(&package, PrettyConfig::new()).map_err(|error| {
@@ -1021,6 +1272,12 @@ impl SelfAuthoringWorkspaceState {
 
     pub fn build_apply_preview(&self) -> Option<DefinitionApplyPreview> {
         let document = self.selected_document()?;
+        if matches!(
+            &document.content,
+            EditorDefinitionDocumentContent::WorkbenchComposition(_)
+        ) {
+            return Some(self.build_workbench_composition_package_apply_preview(document));
+        }
         let diagnostics = validate_editor_definition_document(document);
         let mut summary = vec![
             format!("document: {}", document.display_name),
@@ -1049,8 +1306,52 @@ impl SelfAuthoringWorkspaceState {
         })
     }
 
+    fn build_workbench_composition_package_apply_preview(
+        &self,
+        document: &EditorDefinitionDocument,
+    ) -> DefinitionApplyPreview {
+        match self.selected_workbench_composition_package_documents() {
+            Ok(package_documents) => {
+                let diagnostics = package_documents
+                    .iter()
+                    .flat_map(validate_editor_definition_document)
+                    .collect::<Vec<_>>();
+                let mut summary = vec![
+                    format!("workbench composition: {}", document.display_name),
+                    format!("package_documents: {}", package_documents.len()),
+                ];
+                summary.extend(
+                    package_documents.iter().map(|package_document| {
+                        format!("document: {}", package_document.id.as_str())
+                    }),
+                );
+                DefinitionApplyPreview {
+                    document_id: document.id.clone(),
+                    display_name: document.display_name.clone(),
+                    diagnostics,
+                    summary,
+                }
+            }
+            Err(diagnostic) => DefinitionApplyPreview {
+                document_id: document.id.clone(),
+                display_name: document.display_name.clone(),
+                diagnostics: vec![diagnostic],
+                summary: vec![
+                    format!("workbench composition: {}", document.display_name),
+                    "package assembly blocked".to_string(),
+                ],
+            },
+        }
+    }
+
     pub fn build_definition_apply_review(&self) -> Option<DefinitionApplyReview> {
         let document = self.selected_document()?;
+        if matches!(
+            &document.content,
+            EditorDefinitionDocumentContent::WorkbenchComposition(_)
+        ) {
+            return Some(self.build_workbench_composition_package_apply_review_model(document));
+        }
         let diagnostics = validate_editor_definition_document(document);
         let status = if editor_definition_has_blocking_diagnostics(&diagnostics) {
             DefinitionApplyReviewStatus::Blocked
@@ -1073,6 +1374,79 @@ impl SelfAuthoringWorkspaceState {
             rollback_target_available: self.rollback_snapshots.contains_key(&document.id)
                 || applied_before.is_some(),
         })
+    }
+
+    fn build_workbench_composition_package_apply_review_model(
+        &self,
+        document: &EditorDefinitionDocument,
+    ) -> DefinitionApplyReview {
+        match self.selected_workbench_composition_package_documents() {
+            Ok(package_documents) => {
+                let mut proposed_documents = package_documents;
+                for proposed in &mut proposed_documents {
+                    proposed.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+                }
+                let diagnostics = proposed_documents
+                    .iter()
+                    .flat_map(validate_editor_definition_document)
+                    .collect::<Vec<_>>();
+                let status = if editor_definition_has_blocking_diagnostics(&diagnostics) {
+                    DefinitionApplyReviewStatus::Blocked
+                } else {
+                    DefinitionApplyReviewStatus::Pending
+                };
+                let mut diff_rows = Vec::new();
+                for proposed in &proposed_documents {
+                    for mut row in
+                        definition_apply_diff_rows(self.applied.get(&proposed.id), proposed)
+                    {
+                        row.path = format!("{}:{}", proposed.id.as_str(), row.path);
+                        diff_rows.push(row);
+                    }
+                }
+                let proposed_primary = proposed_documents
+                    .iter()
+                    .find(|candidate| candidate.id == document.id)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        let mut proposed = document.clone();
+                        proposed.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+                        proposed
+                    });
+                DefinitionApplyReview {
+                    id: format!("editor-lab.apply-review.{}", document.id.as_str()),
+                    document_id: document.id.clone(),
+                    display_name: document.display_name.clone(),
+                    status,
+                    draft_snapshot: document.clone(),
+                    applied_before: self.applied.get(&document.id).cloned(),
+                    proposed_applied_snapshot: proposed_primary,
+                    diff_rows,
+                    diagnostics,
+                    rollback_target_available: proposed_documents.iter().any(|proposed| {
+                        self.rollback_snapshots.contains_key(&proposed.id)
+                            || self.applied.contains_key(&proposed.id)
+                    }),
+                }
+            }
+            Err(diagnostic) => {
+                let mut proposed = document.clone();
+                proposed.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+                DefinitionApplyReview {
+                    id: format!("editor-lab.apply-review.{}", document.id.as_str()),
+                    document_id: document.id.clone(),
+                    display_name: document.display_name.clone(),
+                    status: DefinitionApplyReviewStatus::Blocked,
+                    draft_snapshot: document.clone(),
+                    applied_before: self.applied.get(&document.id).cloned(),
+                    proposed_applied_snapshot: proposed,
+                    diff_rows: Vec::new(),
+                    diagnostics: vec![diagnostic],
+                    rollback_target_available: self.rollback_snapshots.contains_key(&document.id)
+                        || self.applied.contains_key(&document.id),
+                }
+            }
+        }
     }
 
     pub fn prepare_selected_apply_review(
@@ -1115,6 +1489,12 @@ impl SelfAuthoringWorkspaceState {
     }
 
     pub fn apply_selected(&mut self) -> Result<DefinitionApplyPreview, UiDefinitionDiagnostic> {
+        if matches!(
+            self.selected_document().map(|document| &document.content),
+            Some(EditorDefinitionDocumentContent::WorkbenchComposition(_))
+        ) {
+            return self.apply_selected_workbench_composition_package();
+        }
         let review = self.prepare_selected_apply_review()?;
         let preview = self.build_apply_preview().ok_or_else(|| {
             UiDefinitionDiagnostic::error(
@@ -1145,9 +1525,72 @@ impl SelfAuthoringWorkspaceState {
         Ok(preview)
     }
 
+    fn apply_selected_workbench_composition_package(
+        &mut self,
+    ) -> Result<DefinitionApplyPreview, UiDefinitionDiagnostic> {
+        let review = self.prepare_selected_apply_review()?;
+        let preview = self.build_apply_preview().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.apply.no_selection",
+                "no definition document is selected",
+            )
+        })?;
+        if review.status == DefinitionApplyReviewStatus::Blocked
+            || review.has_blocking_diagnostics()
+        {
+            self.last_apply_preview = Some(preview.clone());
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.apply.blocked",
+                "workbench composition package has blocking validation diagnostics",
+            ));
+        }
+
+        let mut applied_documents = self.selected_workbench_composition_package_documents()?;
+        for document in &mut applied_documents {
+            document.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+        }
+        let diagnostics = applied_documents
+            .iter()
+            .flat_map(validate_editor_definition_document)
+            .collect::<Vec<_>>();
+        if editor_definition_has_blocking_diagnostics(&diagnostics) {
+            self.last_apply_preview = Some(DefinitionApplyPreview {
+                diagnostics,
+                ..preview.clone()
+            });
+            return Err(UiDefinitionDiagnostic::error(
+                "editor.self_authoring.apply.blocked",
+                "workbench composition package has blocking validation diagnostics",
+            ));
+        }
+
+        let rollback_snapshots = applied_documents
+            .iter()
+            .map(|document| (document.id.clone(), self.applied.get(&document.id).cloned()))
+            .collect::<Vec<_>>();
+        for (document_id, snapshot) in rollback_snapshots {
+            self.rollback_snapshots.insert(document_id, snapshot);
+        }
+        for document in applied_documents {
+            self.last_applied_snapshots
+                .insert(document.id.clone(), document.clone());
+            self.applied.insert(document.id.clone(), document);
+        }
+        self.last_apply_preview = Some(preview.clone());
+        self.last_apply_review = Some(review.with_status(DefinitionApplyReviewStatus::Accepted));
+        self.record_source_change();
+        Ok(preview)
+    }
+
     pub fn rollback_selected(
         &mut self,
     ) -> Result<EditorDefinitionDocument, UiDefinitionDiagnostic> {
+        if matches!(
+            self.selected_document().map(|document| &document.content),
+            Some(EditorDefinitionDocumentContent::WorkbenchComposition(_))
+        ) {
+            return self.rollback_selected_workbench_composition_package();
+        }
         let document_id = self.selected_document_id.clone().ok_or_else(|| {
             UiDefinitionDiagnostic::error(
                 "editor.self_authoring.rollback.no_selection",
@@ -1202,6 +1645,91 @@ impl SelfAuthoringWorkspaceState {
             });
         }
         let mut rolled_back = removed_document;
+        rolled_back.lifecycle_state = EditorDefinitionLifecycleState::RolledBack;
+        self.record_source_change();
+        Ok(rolled_back)
+    }
+
+    fn rollback_selected_workbench_composition_package(
+        &mut self,
+    ) -> Result<EditorDefinitionDocument, UiDefinitionDiagnostic> {
+        let selected_document_id = self.selected_document_id.clone().ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.rollback.no_selection",
+                "no definition document is selected",
+            )
+        })?;
+        let package_documents = self.selected_workbench_composition_package_documents()?;
+        let package_ids = package_documents
+            .iter()
+            .map(|document| document.id.clone())
+            .collect::<Vec<_>>();
+
+        for document_id in &package_ids {
+            if !self.applied.contains_key(document_id) {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.rollback.no_applied_snapshot",
+                    format!(
+                        "workbench composition package document `{}` has no applied snapshot",
+                        document_id.as_str()
+                    ),
+                ));
+            }
+            if !self.rollback_snapshots.contains_key(document_id) {
+                return Err(UiDefinitionDiagnostic::error(
+                    "editor.self_authoring.rollback.no_recorded_snapshot",
+                    format!(
+                        "workbench composition package document `{}` has no recorded rollback snapshot",
+                        document_id.as_str()
+                    ),
+                ));
+            }
+        }
+
+        let mut selected_removed_document = None;
+        for document_id in package_ids {
+            let removed_document = self
+                .applied
+                .remove(&document_id)
+                .expect("package rollback preflight checked applied snapshot");
+            let rollback_snapshot = self
+                .rollback_snapshots
+                .remove(&document_id)
+                .expect("package rollback preflight checked rollback snapshot");
+            if document_id == selected_document_id {
+                selected_removed_document = Some(removed_document.clone());
+            }
+            if let Some(mut previous) = rollback_snapshot {
+                previous.lifecycle_state = EditorDefinitionLifecycleState::Applied;
+                self.applied.insert(document_id.clone(), previous.clone());
+                self.rollback_records.push(EditorLabRollbackRecord {
+                    id: format!("editor-lab.rollback.{}", document_id.as_str()),
+                    document_id,
+                    display_name: previous.display_name.clone(),
+                    status: EditorLabRollbackStatus::RolledBack,
+                    removed_document: Some(removed_document),
+                    restored_document: Some(previous),
+                    diagnostics: Vec::new(),
+                });
+            } else {
+                self.rollback_records.push(EditorLabRollbackRecord {
+                    id: format!("editor-lab.rollback.{}", document_id.as_str()),
+                    document_id,
+                    display_name: removed_document.display_name.clone(),
+                    status: EditorLabRollbackStatus::RolledBack,
+                    removed_document: Some(removed_document),
+                    restored_document: None,
+                    diagnostics: Vec::new(),
+                });
+            }
+        }
+
+        let mut rolled_back = selected_removed_document.ok_or_else(|| {
+            UiDefinitionDiagnostic::error(
+                "editor.self_authoring.rollback.package_primary_missing",
+                "selected workbench composition was not part of its rollback package",
+            )
+        })?;
         rolled_back.lifecycle_state = EditorDefinitionLifecycleState::RolledBack;
         self.record_source_change();
         Ok(rolled_back)
@@ -1680,6 +2208,17 @@ fn definition_content_diff_rows(
             "workspace layout changed",
         ),
         (
+            EditorDefinitionDocumentContent::WorkbenchComposition(before),
+            EditorDefinitionDocumentContent::WorkbenchComposition(proposed),
+        ) => push_structural_debug_row(
+            rows,
+            DefinitionApplyDiffFamily::WorkbenchComposition,
+            "document.content.workbench_composition",
+            before,
+            proposed,
+            "workbench composition changed",
+        ),
+        (
             EditorDefinitionDocumentContent::Menu(before),
             EditorDefinitionDocumentContent::Menu(proposed),
         ) => push_structural_debug_row(
@@ -2086,6 +2625,7 @@ fn editor_definition_content_label(content: &EditorDefinitionDocumentContent) ->
         EditorDefinitionDocumentContent::UiTemplate(_) => "ui_template",
         EditorDefinitionDocumentContent::WorkspaceProfile(_) => "workspace_profile",
         EditorDefinitionDocumentContent::WorkspaceLayout(_) => "workspace_layout",
+        EditorDefinitionDocumentContent::WorkbenchComposition(_) => "workbench_composition",
         EditorDefinitionDocumentContent::Menu(_) => "menu",
         EditorDefinitionDocumentContent::Theme(_) => "theme",
         EditorDefinitionDocumentContent::Shortcuts(_) => "shortcuts",
@@ -2124,6 +2664,24 @@ fn ui_node_kind(node: &UiNodeDefinition) -> &'static str {
 
 fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
     vec![
+        EditorDefinitionDocument::current(
+            EditorDefinitionId::from("runenwerk.editor.workbench.editor_design"),
+            "editor_design_workbench.ron",
+            EditorDefinitionDocumentKind::WorkbenchComposition,
+            EditorDefinitionDocumentContent::WorkbenchComposition(
+                EditorWorkbenchCompositionDefinition {
+                    id: "runenwerk.editor.workbench.editor_design".to_string(),
+                    label: "Editor Design Workbench".to_string(),
+                    installed_suites: vec![
+                        "runenwerk.editor".to_string(),
+                        "runenwerk.editor_design".to_string(),
+                    ],
+                    profile_refs: vec!["runenwerk.editor.workspace.editor_design".to_string()],
+                    default_profile_ref: "runenwerk.editor.workspace.editor_design".to_string(),
+                    host_policy: EditorWorkbenchHostPolicyDefinition::AllowAll,
+                },
+            ),
+        ),
         EditorDefinitionDocument::current(
             EditorDefinitionId::from("runenwerk.editor.workspace.editor_design"),
             "editor_design_workspace.ron",
@@ -2252,6 +2810,64 @@ fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
     ]
 }
 
+fn default_custom_workbench_layout(
+    layout_id: &str,
+    package_index: usize,
+) -> EditorWorkspaceLayoutDefinition {
+    EditorWorkspaceLayoutDefinition {
+        id: layout_id.to_string(),
+        label: format!("Custom {package_index} Layout"),
+        root: EditorWorkspaceHostDefinition::TabStack {
+            id: format!("custom-{package_index}-main"),
+            tabs: vec![
+                EditorWorkspacePanelTabDefinition {
+                    id: "definition-outliner".to_string(),
+                    label: "Definitions".to_string(),
+                    tool_surface: "editor_design_outliner".to_string(),
+                },
+                EditorWorkspacePanelTabDefinition {
+                    id: "ui-canvas".to_string(),
+                    label: "Canvas".to_string(),
+                    tool_surface: "ui_canvas".to_string(),
+                },
+            ],
+            active_tab: Some("definition-outliner".to_string()),
+        },
+        floating_hosts: Vec::new(),
+    }
+}
+
+fn workbench_composition_package_documents(
+    composition: &EditorWorkbenchCompositionDefinition,
+    profiles: &[EditorWorkspaceProfileDefinition],
+    layouts: &[EditorWorkspaceLayoutDefinition],
+) -> Vec<EditorDefinitionDocument> {
+    let mut documents = Vec::with_capacity(1 + profiles.len() + layouts.len());
+    documents.push(EditorDefinitionDocument::current(
+        EditorDefinitionId::from(composition.id.as_str()),
+        composition.label.clone(),
+        EditorDefinitionDocumentKind::WorkbenchComposition,
+        EditorDefinitionDocumentContent::WorkbenchComposition(composition.clone()),
+    ));
+    documents.extend(profiles.iter().map(|profile| {
+        EditorDefinitionDocument::current(
+            EditorDefinitionId::from(profile.id.as_str()),
+            profile.label.clone(),
+            EditorDefinitionDocumentKind::WorkspaceDefinition,
+            EditorDefinitionDocumentContent::WorkspaceProfile(profile.clone()),
+        )
+    }));
+    documents.extend(layouts.iter().map(|layout| {
+        EditorDefinitionDocument::current(
+            EditorDefinitionId::from(layout.id.as_str()),
+            layout.label.clone(),
+            EditorDefinitionDocumentKind::WorkspaceDefinition,
+            EditorDefinitionDocumentContent::WorkspaceLayout(layout.clone()),
+        )
+    }));
+    documents
+}
+
 fn selected_ui_default_node_id(
     drafts: &BTreeMap<EditorDefinitionId, EditorDefinitionDocument>,
     document_id: &EditorDefinitionId,
@@ -2283,6 +2899,9 @@ fn selected_ui_node_after_operation(
             UiVisualLayoutEditKind::InsertNode { node, .. } => Some(node.id().as_str().to_string()),
             _ => Some(layout_operation.expected_node_id.as_str().to_string()),
         },
+        EditorLabOperationKind::SetWorkbenchInstalledSuites { .. }
+        | EditorLabOperationKind::SetWorkbenchProfileRefs { .. }
+        | EditorLabOperationKind::SetWorkbenchDefaultProfileRef { .. } => None,
         _ => selected_ui_default_node_for_document(document),
     }
 }
@@ -2308,6 +2927,15 @@ fn editor_lab_operation_label(operation: &EditorLabOperation) -> String {
         EditorLabOperationKind::RenameDocument { .. } => "rename definition".to_string(),
         EditorLabOperationKind::SetThemeColor { token, .. } => {
             format!("set theme color {token}")
+        }
+        EditorLabOperationKind::SetWorkbenchInstalledSuites { .. } => {
+            "set workbench installed suites".to_string()
+        }
+        EditorLabOperationKind::SetWorkbenchProfileRefs { .. } => {
+            "set workbench profile refs".to_string()
+        }
+        EditorLabOperationKind::SetWorkbenchDefaultProfileRef { .. } => {
+            "set workbench default profile".to_string()
         }
         EditorLabOperationKind::AddWorkspaceLayoutTab { label, .. } => {
             format!("add workspace layout tab {label}")
@@ -2956,5 +3584,99 @@ mod tests {
             layout.root,
             EditorWorkspaceHostDefinition::Split { .. }
         ));
+    }
+
+    #[test]
+    fn workbench_composition_apply_and_rollback_are_package_atomic() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let composition_id = state
+            .create_custom_workbench_package()
+            .expect("custom workbench package should be created");
+
+        let review = state
+            .prepare_selected_apply_review()
+            .expect("workbench package should build an apply review");
+        assert_eq!(review.document_id, composition_id);
+        assert_eq!(review.status, DefinitionApplyReviewStatus::Pending);
+        assert!(
+            review
+                .diff_rows
+                .iter()
+                .any(|row| row.path.contains("runenwerk.editor.workspace.custom1"))
+        );
+        assert!(
+            review
+                .diff_rows
+                .iter()
+                .any(|row| row.path.contains("runenwerk.editor.layout.custom1"))
+        );
+
+        state
+            .apply_selected()
+            .expect("workbench package apply should be atomic");
+        let package = state.export_project_package();
+        let applied_ids = package
+            .applied_documents
+            .iter()
+            .map(|document| document.id.as_str())
+            .collect::<Vec<_>>();
+        assert!(applied_ids.contains(&"runenwerk.editor.workbench.custom1"));
+        assert!(applied_ids.contains(&"runenwerk.editor.workspace.custom1"));
+        assert!(applied_ids.contains(&"runenwerk.editor.layout.custom1"));
+        assert!(
+            state
+                .last_applied_document(&EditorDefinitionId::from("runenwerk.editor.layout.custom1"))
+                .is_some()
+        );
+
+        state
+            .rollback_selected()
+            .expect("workbench package rollback should be atomic");
+        let package = state.export_project_package();
+        let applied_ids = package
+            .applied_documents
+            .iter()
+            .map(|document| document.id.as_str())
+            .collect::<Vec<_>>();
+        assert!(!applied_ids.contains(&"runenwerk.editor.workbench.custom1"));
+        assert!(!applied_ids.contains(&"runenwerk.editor.workspace.custom1"));
+        assert!(!applied_ids.contains(&"runenwerk.editor.layout.custom1"));
+    }
+
+    #[test]
+    fn workbench_composition_apply_missing_layout_preserves_applied_state() {
+        let mut state =
+            SelfAuthoringWorkspaceState::from_checked_in_fixtures().expect("fixtures should load");
+        let composition_id = state
+            .create_custom_workbench_package()
+            .expect("custom workbench package should be created");
+        assert!(state.select_document_by_str("runenwerk.editor.layout.custom1"));
+        state
+            .delete_selected()
+            .expect("draft layout should be removable before apply");
+        assert!(state.select_document(composition_id));
+
+        let before_package = state.export_project_package();
+        let diagnostic = state
+            .apply_selected()
+            .expect_err("missing package layout should reject apply");
+        let after_package = state.export_project_package();
+
+        assert_eq!(diagnostic.code, "editor.self_authoring.apply.blocked");
+        assert_eq!(
+            before_package.applied_documents,
+            after_package.applied_documents
+        );
+        assert_eq!(
+            before_package.last_applied_documents,
+            after_package.last_applied_documents
+        );
+        assert!(
+            state
+                .last_apply_review()
+                .expect("blocked apply should leave review")
+                .has_blocking_diagnostics()
+        );
     }
 }

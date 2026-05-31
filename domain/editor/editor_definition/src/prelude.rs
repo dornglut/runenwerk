@@ -14,6 +14,7 @@ pub use crate::{
     EditorPanelDefinition, EditorPanelRegistryDefinition, EditorShortcutDefinition,
     EditorShortcutSetDefinition, EditorThemeDefinition, EditorThemeFormationError,
     EditorToolSurfaceDefinition, EditorToolSurfaceRegistryDefinition,
+    EditorWorkbenchCompositionDefinition, EditorWorkbenchHostPolicyDefinition,
     EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition,
     EditorWorkspacePanelTabDefinition, EditorWorkspaceProfileDefinition,
     EditorWorkspaceSplitAxisDefinition,

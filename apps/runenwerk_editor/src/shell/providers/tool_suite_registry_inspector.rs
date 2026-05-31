@@ -1203,6 +1203,31 @@ mod tests {
         )
     }
 
+    fn view_model_with_unassigned_future_suite() -> ToolSuiteRegistryInspectorViewModel {
+        let app = RunenwerkEditorApp::new();
+        let tool_suite_registry = ToolSuiteRegistry::new(vec![
+            crate::shell::tool_suites::diagnostics_tool_suite::diagnostics_tool_suite(),
+            crate::shell::tool_suites::gameplay_tool_suite::gameplay_tool_suite(),
+        ])
+        .expect("inspector fixture suite registry should build");
+        let provider_family_provider_map =
+            ProviderFamilyProviderMap::new(&tool_suite_registry, Vec::new())
+                .expect("empty assignments are valid for inspector diagnostics fixtures");
+        let shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
+            app.workbench_host().tool_surface_registry(),
+        )
+        .expect("shell state should build from hosted registry");
+
+        build_tool_suite_registry_inspector_view_model(
+            &tool_suite_registry,
+            app.workbench_host().workspace_profile_registry(),
+            &provider_family_provider_map,
+            app.workbench_host().provider_registry(),
+            &shell_state,
+            active_document_context(&app),
+        )
+    }
+
     fn view_model_from_shell_state(
         app: &RunenwerkEditorApp,
         shell_state: &RunenwerkEditorShellState,
@@ -1437,7 +1462,7 @@ mod tests {
 
     #[test]
     fn placeholder_future_suites_are_marked_metadata_only() {
-        let view_model = view_model();
+        let view_model = view_model_with_unassigned_future_suite();
 
         let placeholder = view_model
             .surface_rows
@@ -1759,7 +1784,7 @@ mod tests {
 
     #[test]
     fn missing_provider_family_assignment_appears_as_diagnostic() {
-        let view_model = view_model();
+        let view_model = view_model_with_unassigned_future_suite();
 
         assert!(view_model.diagnostic_rows.iter().any(|row| {
             row.code == "inspector.provider_family.missing_assignment"

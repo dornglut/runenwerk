@@ -10,8 +10,8 @@ pub mod registry;
 pub use capability::{HostCapabilityPolicy, HostCapabilityRequirements};
 pub use definition::{
     EditorToolSuite, ProductCapabilityNeed, ProviderFamilyDefinition, ToolServiceNeed,
-    ToolSuiteCapabilityDeclaration, ToolSuiteProfileDefinition, ToolSurfaceCreationPolicy,
-    ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
+    ToolSuiteCapabilityDeclaration, ToolSurfaceCreationPolicy, ToolSurfaceDefinition,
+    ToolSurfacePersistence, ToolSurfaceRole, ToolSurfaceRoute,
     ToolSurfaceTargetProfileCompatibility,
 };
 pub use identity::{
@@ -30,6 +30,5 @@ pub use legacy::{
 pub use registry::{
     ProviderBundle, ProviderBundleError, ProviderFamilyProviderAssignment,
     ProviderFamilyProviderMap, ProviderFamilyProviderMapError, ToolSuiteRegistry,
-    ToolSuiteRegistryError, ToolSurfaceRegistry, ToolSurfaceResolution, WorkbenchComposition,
-    WorkbenchCompositionBuildError, WorkbenchCompositionBuilder,
+    ToolSuiteRegistryError, ToolSurfaceRegistry, ToolSurfaceResolution,
 };

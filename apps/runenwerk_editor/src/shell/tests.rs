@@ -5,7 +5,10 @@ use editor_core::{
 use editor_definition::{
     EditorDefinitionDocument, EditorDefinitionDocumentContent, EditorDefinitionDocumentKind,
     EditorDefinitionId, EditorLabOperation, EditorLabOperationDiffFamily, EditorLabOperationKind,
-    EditorLabOperationStatus,
+    EditorLabOperationStatus, EditorWorkbenchCompositionDefinition,
+    EditorWorkbenchHostPolicyDefinition, EditorWorkspaceHostDefinition,
+    EditorWorkspaceLayoutDefinition, EditorWorkspacePanelTabDefinition,
+    EditorWorkspaceProfileDefinition,
 };
 use editor_inspector::{InspectorEditValue, InspectorPath};
 use editor_shell::{
@@ -3987,6 +3990,224 @@ fn applying_selected_workspace_layout_definition_replaces_live_workspace() {
             .panels()
             .any(|panel| panel.panel_kind == editor_shell::PanelKind::Viewport),
         "live workspace layout activation should replace the previous scene layout"
+    );
+}
+
+#[test]
+fn toolbar_custom_workbench_package_activates_atomically() {
+    let mut host = EditorHostResource::ui_designer_workbench();
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::RunToolbarCommand {
+            command: ToolbarCommandKind::AddWorkspace,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("toolbar add workspace should create a package");
+    let selected = host
+        .shell_state
+        .self_authoring()
+        .selected_document()
+        .expect("custom composition should be selected");
+    assert!(matches!(
+        &selected.content,
+        EditorDefinitionDocumentContent::WorkbenchComposition(_)
+    ));
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::RunToolbarCommand {
+            command: ToolbarCommandKind::LoadCustomWorkspace,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("toolbar load custom workspace should queue package activation");
+    assert_eq!(host.app.pending_editor_definition_activation_count(), 1);
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 1);
+    assert_eq!(
+        host.app.workbench_host().composition_ref().as_str(),
+        "runenwerk.editor.workbench.custom1"
+    );
+    assert_eq!(
+        host.app
+            .workbench_host()
+            .default_workspace_profile_ref()
+            .as_str(),
+        "runenwerk.editor.workspace.custom1"
+    );
+    assert_eq!(
+        host.app
+            .last_editor_definition_activation_report()
+            .expect("activation should report status")
+            .status,
+        EditorDefinitionActivationStatus::Applied
+    );
+    assert_eq!(host.app.failed_editor_definition_activations().len(), 0);
+    host.shell_state
+        .workspace_state()
+        .validate_integrity()
+        .expect("activated custom workspace should remain structurally valid");
+}
+
+#[test]
+fn invalid_custom_workbench_activation_preserves_previous_host_and_shell_state() {
+    let mut host = EditorHostResource::ui_designer_workbench();
+    let previous_composition_ref = host
+        .app
+        .workbench_host()
+        .composition_ref()
+        .as_str()
+        .to_string();
+    let previous_panel_count = host.shell_state.workspace_state().panels().count();
+
+    host.app
+        .queue_workbench_composition_package_activation_for_review(
+            Some("invalid-custom-workbench".to_string()),
+            EditorWorkbenchCompositionDefinition {
+                id: "runenwerk.editor.workbench.invalid".to_string(),
+                label: "Invalid Workbench".to_string(),
+                installed_suites: vec!["runenwerk.missing_suite".to_string()],
+                profile_refs: vec!["runenwerk.editor.workspace.invalid".to_string()],
+                default_profile_ref: "runenwerk.editor.workspace.invalid".to_string(),
+                host_policy: EditorWorkbenchHostPolicyDefinition::AllowAll,
+            },
+            vec![EditorWorkspaceProfileDefinition {
+                id: "runenwerk.editor.workspace.invalid".to_string(),
+                label: "Invalid Workspace".to_string(),
+                default_modes: vec!["editor-design".to_string()],
+                document_kind_filters: vec!["UiLayout".to_string()],
+                default_layout: "runenwerk.editor.layout.invalid".to_string(),
+            }],
+            vec![EditorWorkspaceLayoutDefinition {
+                id: "runenwerk.editor.layout.invalid".to_string(),
+                label: "Invalid Layout".to_string(),
+                root: EditorWorkspaceHostDefinition::TabStack {
+                    id: "root".to_string(),
+                    tabs: vec![EditorWorkspacePanelTabDefinition {
+                        id: "canvas".to_string(),
+                        label: "Canvas".to_string(),
+                        tool_surface: "runenwerk.editor_design.ui_canvas".to_string(),
+                    }],
+                    active_tab: Some("canvas".to_string()),
+                },
+                floating_hosts: Vec::new(),
+            }],
+        );
+
+    let activated = host.apply_pending_editor_definition_activations();
+
+    assert_eq!(activated, 0);
+    assert_eq!(
+        host.app.workbench_host().composition_ref().as_str(),
+        previous_composition_ref
+    );
+    assert_eq!(
+        host.shell_state.workspace_state().panels().count(),
+        previous_panel_count
+    );
+    assert_eq!(host.app.failed_editor_definition_activations().len(), 1);
+    let report = host
+        .app
+        .last_editor_definition_activation_report()
+        .expect("failed activation should report status");
+    assert_eq!(report.status, EditorDefinitionActivationStatus::Failed);
+    assert!(report.previous_state_preserved);
+}
+
+#[test]
+fn editor_lab_workbench_composition_fields_edit_suite_and_profile_lists() {
+    let mut host = EditorHostResource::ui_designer_workbench();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::RunToolbarCommand {
+            command: ToolbarCommandKind::AddWorkspace,
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("toolbar add workspace should create a package");
+
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SetSelectedWorkbenchInstalledSuites {
+            installed_suites: "runenwerk.editor, runenwerk.editor_design, runenwerk.assets"
+                .to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("installed suite list edit should be accepted");
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SetSelectedWorkbenchProfileRefs {
+            profile_refs: "runenwerk.editor.workspace.custom1, runenwerk.editor.workspace.extra"
+                .to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("profile ref list edit should be accepted");
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SetSelectedWorkbenchDefaultProfileRef {
+            profile_ref: "runenwerk.editor.workspace.custom1".to_string(),
+        },
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("default profile ref edit should be accepted");
+
+    let selected = host
+        .shell_state
+        .self_authoring()
+        .selected_document()
+        .expect("custom composition should stay selected");
+    let EditorDefinitionDocumentContent::WorkbenchComposition(composition) = &selected.content
+    else {
+        panic!("selected document should be the custom composition");
+    };
+    assert_eq!(
+        composition.installed_suites,
+        vec![
+            "runenwerk.editor".to_string(),
+            "runenwerk.editor_design".to_string(),
+            "runenwerk.assets".to_string()
+        ]
+    );
+    assert_eq!(
+        composition.profile_refs,
+        vec![
+            "runenwerk.editor.workspace.custom1".to_string(),
+            "runenwerk.editor.workspace.extra".to_string()
+        ]
+    );
+    assert_eq!(
+        composition.default_profile_ref,
+        "runenwerk.editor.workspace.custom1"
     );
 }
 

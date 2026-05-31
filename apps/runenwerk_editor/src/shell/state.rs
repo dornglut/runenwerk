@@ -3,11 +3,11 @@ use editor_shell::{
     CENTER_RIGHT_SPLIT_WIDGET_ID, DockDropCandidate, DockDropCandidateState, DockSplitSide,
     DockingInteractionVisualState, DockingPreviewDropTarget, EditorWindowId, EditorWindowRegistry,
     LEFT_RIGHT_SPLIT_WIDGET_ID, MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId,
-    SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId, TabStackPopupMenuKind,
-    ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
-    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceProfileId,
-    WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis,
-    WorkspaceState, WorkspaceStateError, reduce_workspace,
+    ProfileRef, SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId,
+    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime,
+    UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation,
+    WorkspaceProfileId, WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError,
+    WorkspaceSplitAxis, WorkspaceState, WorkspaceStateError, reduce_workspace,
 };
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::runtime::NativeWindowId;
@@ -434,6 +434,34 @@ impl RunenwerkEditorShellState {
         self.active_toolbar_menu = None;
         self.active_tab_stack_popup_menu = None;
         self.clear_cached_projection();
+    }
+
+    pub fn activate_workspace_profile_ref_with_registry(
+        &mut self,
+        profile_ref: &ProfileRef,
+        profile_registry: &WorkspaceProfileRegistry,
+        registry: &ToolSurfaceRegistry,
+    ) -> Result<WorkspaceProfileId, WorkspaceProfileRegistryBackedBuildError> {
+        let profile = profile_registry.profile_by_ref(profile_ref).ok_or(
+            WorkspaceProfileRegistryBackedBuildError::UnknownWorkspaceProfile {
+                profile_id: profile_registry.default_profile_id(),
+            },
+        )?;
+        let mut allocator =
+            WorkspaceIdentityAllocator::from_seed(self.identity_allocator.seed_snapshot());
+        let workspace_id = allocator.allocate_workspace_id();
+        let workspace_state = profile.build_default_workspace_state_with_registry(
+            workspace_id,
+            &mut allocator,
+            registry,
+        )?;
+        self.active_workspace_profile_id = profile.id;
+        self.open_workspace_profile_ids = vec![profile.id];
+        self.replace_workspace_state(workspace_state);
+        self.active_toolbar_menu = None;
+        self.active_tab_stack_popup_menu = None;
+        self.clear_cached_projection();
+        Ok(profile.id)
     }
 
     pub fn close_workspace_profile_id(
