@@ -364,25 +364,25 @@ package "PT-UI-PROGRAM UI Program Platform Proof" {
 
   component "PM-UI-PROGRAM-002 UI Program Contract Design\nkind=design\nstate=completed\nWR=WR-136" as PM_UI_PROGRAM_002 <<completed>>
 
-  component "PM-UI-PROGRAM-003 Control Package Proof Design\nkind=design\nstate=designing\nWR=WR-137" as PM_UI_PROGRAM_003 <<designing>>
+  component "PM-UI-PROGRAM-003 Control Package Proof Design\nkind=design\nstate=completed\nWR=WR-137" as PM_UI_PROGRAM_003 <<completed>>
 
-  component "PM-UI-PROGRAM-004 Compiler / Runtime Artifact Design\nkind=design\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_004 <<designing>>
+  component "PM-UI-PROGRAM-004 Compiler / Runtime Artifact Design\nkind=design\nstate=completed\nWR=WR-138" as PM_UI_PROGRAM_004 <<completed>>
 
-  component "PM-UI-PROGRAM-005 Evaluator / Host Design\nkind=design\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_005 <<designing>>
+  component "PM-UI-PROGRAM-005 Evaluator / Host Design\nkind=design\nstate=completed\nWR=WR-139" as PM_UI_PROGRAM_005 <<completed>>
 
-  component "PM-UI-PROGRAM-006 Retained UI Migration Design\nkind=design\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_006 <<designing>>
+  component "PM-UI-PROGRAM-006 Retained UI Migration Design\nkind=design\nstate=completed\nWR=WR-140" as PM_UI_PROGRAM_006 <<completed>>
 
-  component "PM-UI-PROGRAM-007 6A Label Structural UiFrame Text Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_007 <<designing>>
+  component "PM-UI-PROGRAM-007 6A Label Structural UiFrame Text Proof\nkind=implementation\nstate=completed\nWR=WR-141" as PM_UI_PROGRAM_007 <<completed>>
 
-  component "PM-UI-PROGRAM-008 6B Button Route Event Host Command Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_008 <<designing>>
+  component "PM-UI-PROGRAM-008 6B Button Route Event Host Command Proof\nkind=implementation\nstate=completed\nWR=WR-142" as PM_UI_PROGRAM_008 <<completed>>
 
-  component "PM-UI-PROGRAM-009 6C InspectorField Binding State Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_009 <<designing>>
+  component "PM-UI-PROGRAM-009 6C InspectorField Binding State Proof\nkind=implementation\nstate=completed\nWR=WR-143" as PM_UI_PROGRAM_009 <<completed>>
 
-  component "PM-UI-PROGRAM-010 6D ColorPicker ControlPackage Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_010 <<designing>>
+  component "PM-UI-PROGRAM-010 6D ColorPicker ControlPackage Proof\nkind=implementation\nstate=completed\nWR=WR-144" as PM_UI_PROGRAM_010 <<completed>>
 
-  component "PM-UI-PROGRAM-011 6E World Space Host Boundary Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_011 <<designing>>
+  component "PM-UI-PROGRAM-011 6E World Space Host Boundary Proof\nkind=implementation\nstate=completed\nWR=WR-145" as PM_UI_PROGRAM_011 <<completed>>
 
-  component "PM-UI-PROGRAM-012 6F Headless Fixture Diagnostics Source Map Proof\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_012 <<designing>>
+  component "PM-UI-PROGRAM-012 6F Headless Fixture Diagnostics Source Map Proof\nkind=hardening\nstate=active\nWR=WR-146" as PM_UI_PROGRAM_012 <<active>>
 
   component "PM-UI-PROGRAM-013 Runtime Proven Closeout And MaterialProgram Handoff\nkind=release\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_013 <<designing>>
 

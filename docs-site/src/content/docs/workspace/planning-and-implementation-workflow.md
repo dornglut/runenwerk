@@ -36,11 +36,14 @@ task --list
 task batch:kickoff -- --next
 task roadmap:intake -- --idea "<design or change idea>"
 task production:plan-track -- --track "<PT-ID>"
+task production:complete-track-contracts -- --track "<PT-ID>"
 task production:expand-track -- --track "<PT-ID>"   # read-only candidate listing
+task production:lock-track -- --track "<PT-ID>" --locked-by "<identity>"
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --max-actions 1
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --deny product_code --max-actions 2
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --allow agent_closeout --deny product_code --max-actions 10
-task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --max-actions 10
+task production:run-track -- --track "<PT-ID>" --mode full-track --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions 10
+task production:audit-track -- --track "<PT-ID>" --full-automation --require-lock
 task production:next -- --track "<PT-ID>"
 task production:audit-track -- --track "<PT-ID>"
 task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
@@ -91,6 +94,18 @@ Validation commands execute checks:
   machine-readable Track Execution Manifest scaffold when one is missing, or
   audits an existing manifest without overwriting it by default. It does not
   authorize implementation.
+- `task production:complete-track-contracts -- --track <PT-ID>` fills missing
+  machine-readable action contracts for remaining manifest-backed milestones
+  from manifest templates and milestone parameters. It updates the manifest and
+  human-readable manifest report, runs validation, and does not authorize
+  implementation, crates, MaterialProgram work, or shared `foundation/meta`
+  extraction.
+- `task production:lock-track -- --track <PT-ID> --locked-by <identity>`
+  creates the digest-locked AI execution authority required for
+  `--mode full-track`. It records manifest, production, roadmap, accepted
+  design, and workflow runner source digests, granted permissions, denied
+  permissions, strategic human gates, and invalidation rules. It does not
+  replace WR, plan, validation, writer, or closeout gates.
 - `task production:expand-track -- --track <PT-ID>` prints deferred WR
   candidates from a manifest. It is read-only and must not authorize
   implementation.
@@ -123,8 +138,19 @@ Validation commands execute checks:
   forbidden scopes, validation commands, closeout path, rollback/compatibility
   plan, and stop conditions. It must stop after one implementation WR and cannot
   create crates, extract shared `foundation/meta`, start MaterialProgram, run
-  for docs, design, or governance milestones, or claim `runtime_proven` without
-  runtime/test closeout evidence.
+  product implementation writes, or claim runtime closeout evidence by itself.
+- Add `--allow product_implementation` only when the active implementation WR
+  and accepted plan authorize exact product files. Manifest Runner V5 may write
+  those bounded files, including `new:` files, then must validate and stop
+  before closeout unless `agent_closeout` is also explicitly allowed. It cannot
+  run for docs, design, or governance milestones, or claim `runtime_proven`
+  without runtime/test closeout evidence.
+- Add `--mode full-track` only when the intent is end-to-end track automation.
+  Full-track mode requires a current Track Execution Lock, runs full automation
+  readiness preflight before mutation, appends a Track Execution Run ledger
+  after each successful action, and requires every remaining milestone to
+  declare a strict `execution_kind`, required permissions, contracts, evidence
+  categories, validation commands, and closeout path.
 - `task production:next -- --track <PT-ID>` audits the machine-readable
   manifest when present, then prints exactly one next legal production-track
   action. It fails closed on alignment errors, missing gates, invalid blocked

@@ -83,12 +83,54 @@ docs-site/src/content/docs/reports/track-execution-manifests/<track-id>/manifest
 If the YAML source and production or roadmap state disagree, workflow tooling
 must fail closed and report the conflict rather than guessing.
 
+## Execution Lock
+
+Full-track AI execution requires a machine-readable Track Execution Lock. The
+canonical lock source path is:
+
+```text
+docs-site/src/content/docs/workspace/track-execution-locks/<track-id>.yaml
+```
+
+The lock is generic and digest-based. It records `track_id`,
+`ai_executable`, `locked_by`, `locked_at`, the manifest digest, source digests
+for production, roadmap, accepted designs, manifest inputs, and workflow runner
+sources, granted permissions, denied permissions, strategic human gates, and
+invalidation rules.
+
+`--mode full-track` must refuse to mutate unless the lock exists, the manifest
+declares `ai_executable: true`, the lock declares `ai_executable: true`, all
+digests match current sources, requested permissions are granted, denied
+permissions are not requested, and no remaining milestone crosses a locked
+strategic human gate. Locks authorize execution only while their source digests
+remain current. They do not authorize implementation by themselves.
+
+Strategic human gates include accepting new ADRs, changing locked design
+direction, foundation/meta extraction, crate creation unless pre-authorized,
+external plugin or security boundaries, second-domain extraction, and
+`perfectionist_verified` release certification.
+
+## Run Ledger
+
+Full-track runs write machine-readable run ledgers under:
+
+```text
+docs-site/src/content/docs/reports/track-execution-runs/<track-id>/<run-id>.yaml
+```
+
+Each successful action appends pre-action digests, post-action digests,
+milestone id, WR id, strategy used, files changed, validation results,
+evidence paths, closeout paths, next legal action, and stop reason. Generated
+Markdown reports may mirror these ledgers later, but the YAML ledger is the run
+authority.
+
 ## Manifest Content
 
 A manifest must include these fields for the track:
 
 - track id;
 - authority level;
+- optional `ai_executable` declaration for locked full-track execution;
 - accepted design dependencies;
 - global forbidden scope;
 - global validation commands;
@@ -121,13 +163,45 @@ authority, not generated output, unless a write-scope entry explicitly uses a
 `generated:` or `derived:` marker. Unmarked generated or derived scope text is a
 validation blocker.
 
+## Generic Strategies And Evidence
+
+Manifest execution is strategy-driven. Runner code must dispatch by
+manifest-declared strategy names, not by production-track, milestone, or WR id.
+
+Writer strategies:
+
+- `no_writer`: default, fail closed.
+- `template_writer`: writes only declared template outputs inside exact scope.
+- `patch_writer`: applies bounded edits to declared existing files; new files
+  still require explicit `new:` scope.
+- `proof_aggregation_writer`: aggregates prior closeout evidence records and
+  must not patch prior milestone product files.
+- `agent_writer`: reserved until a scoped diff protocol exists; fail closed.
+
+Closeout strategies:
+
+- `bounded_contract_closeout`;
+- `runtime_proven_closeout`;
+- `handoff_closeout`;
+- `extraction_gate_closeout`.
+
+Runtime closeouts must include machine-readable `closeout_evidence`
+frontmatter or equivalent sidecar metadata. Reusable evidence categories are
+`runtime_test`, `fixture`, `diagnostics`, `source_maps`, `artifact`,
+`migration`, `reproducibility`, `visual`, and `handoff`. Proof aggregation reads
+these records, not prose. Missing evidence returns to the owning milestone.
+
 ## Command Model
 
-These commands are the workflow interface. `plan-track`, `next`, `audit-track`,
-and `run-track` are implemented as repository tooling. `expand-track` remains a
-read-only candidate listing command. The first automation layer is Manifest
-Runner V1 can perform one permission-gated `auto_safe` Track Expansion action
-and then must stop unless V2 `agent_design` is also explicitly allowed. Manifest
+These commands are the workflow interface. `plan-track`,
+`complete-track-contracts`, `next`, `audit-track`, and `run-track` are
+implemented as repository tooling. `expand-track` remains a read-only candidate
+listing command. `complete-track-contracts` fills missing machine-readable
+action contracts from manifest templates before full-track execution so the
+runner does not discover missing contracts one milestone at a time. The first
+automation layer is Manifest Runner V1 can perform one permission-gated
+`auto_safe` Track Expansion action and then must stop unless V2 `agent_design`
+is also explicitly allowed. Manifest
 Runner V2 can perform bounded design/planning document writes for the current
 docs-only or design-only milestone when the manifest provides an `agent_design`
 contract and the owning WR covers the exact write scope. Manifest Runner V3 can
@@ -138,16 +212,26 @@ gate only for the current implementation or hardening milestone when a concrete
 active WR, accepted production plan, exact write scopes, forbidden scopes,
 validation commands, closeout path, rollback/compatibility plan, and stop
 conditions are all present.
+Manifest Runner V5 is the separate bounded product implementation authoring
+layer. It requires both `product_code` and `product_implementation`, writes only
+the deterministic files covered by the active WR and accepted plan, requires
+new files to be marked with `new:`, runs validation after mutation, and stops
+before runtime closeout unless `agent_closeout` is also explicitly allowed.
 
 ```text
 task production:plan-track -- --track <TRACK_ID>
+task production:complete-track-contracts -- --track <TRACK_ID>
 task production:expand-track -- --track <TRACK_ID>
+task production:lock-track -- --track <TRACK_ID> --locked-by <IDENTITY>
 task production:run-track -- --track <TRACK_ID> --allow auto_safe --max-actions <N>
 task production:run-track -- --track <TRACK_ID> --allow auto_safe --allow agent_design --deny product_code --max-actions <N>
 task production:run-track -- --track <TRACK_ID> --allow auto_safe --allow agent_design --allow agent_closeout --deny product_code --max-actions <N>
-task production:run-track -- --track <TRACK_ID> --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --max-actions <N>
+task production:run-track -- --track <TRACK_ID> --mode full-track --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions <N>
+task production:run-track -- --track <TRACK_ID> --preflight-only --allow <PERMISSION>
 task production:next -- --track <TRACK_ID>
 task production:audit-track -- --track <TRACK_ID>
+task production:audit-track -- --track <TRACK_ID> --full-automation
+task production:audit-track -- --track <TRACK_ID> --full-automation --require-lock
 ```
 
 `production:plan-track`:
@@ -167,9 +251,46 @@ task production:audit-track -- --track <TRACK_ID>
 - use `production:run-track -- --allow auto_safe` for the guarded V1 mutation
   path.
 
+`production:complete-track-contracts`:
+
+- loads the machine-readable Track Execution Manifest and audits production,
+  roadmap, and WR state;
+- inspects all remaining milestones;
+- generates missing `auto_safe_contract`, `agent_design_contract`,
+  `product_code_contract`, `agent_closeout_contract`,
+  `runtime_closeout_contract`, and handoff contract blocks from manifest
+  templates and milestone parameters;
+- updates the machine-readable manifest and human-readable manifest report;
+- fails closed when exact product-code scope, template data, or evidence
+  categories cannot be generated safely;
+- runs validation;
+- does not authorize implementation, crate creation, MaterialProgram work, or
+  shared `foundation/meta` extraction.
+
+`production:lock-track`:
+
+- audits the manifest, production, roadmap, WR, and full automation contracts;
+- writes a digest-locked AI execution lock;
+- records granted permissions, denied permissions, strategic human gates, and
+  source digests;
+- does not authorize implementation without the active WR, plan, writer,
+  validation, and closeout gates.
+
 `production:run-track`:
 
 - runs the full manifest audit before mutating anything;
+- has explicit modes: `single-step`, `bounded-segment`, and `full-track`;
+- requires `--mode full-track` for full-track permission sets with more than
+  one action;
+- requires a current Track Execution Lock before any `--mode full-track`
+  mutation;
+- runs full automation readiness preflight before any `--mode full-track`
+  mutation;
+- supports `--preflight-only` to inspect every remaining milestone from the
+  current milestone to track completion without mutating production, roadmap,
+  manifest, docs, or product files;
+- refuses full-track execution when any remaining milestone lacks the required
+  machine-readable action contracts;
 - supports `--allow auto_safe` for mechanical Track Expansion;
 - supports `--allow agent_design --deny product_code` for bounded
   design/planning writes when the current milestone's manifest entry includes
@@ -197,6 +318,8 @@ task production:audit-track -- --track <TRACK_ID>
 - stops before crate creation, runtime-proven closeout, the next milestone's
   design authoring, additional WRs, MaterialProgram work, or shared
   `foundation/meta` extraction.
+- appends a Track Execution Run ledger entry after every successful full-track
+  action.
 
 `production:next`:
 
@@ -212,7 +335,21 @@ task production:audit-track -- --track <TRACK_ID>
 - checks every milestone has WR ownership or an explicit expansion blocker;
 - checks dependencies, evidence gates, validation commands, closeout paths, and
   forbidden scope;
+- supports `--full-automation` to validate every remaining milestone's
+  automation class, required permission classes, action contracts, exact writer
+  scopes, implementation writer strategy, runtime closeout contract, final
+  handoff contract, evidence categories, and dependency declarations before a
+  broad `run-track` command is attempted;
+- supports `--require-lock` to verify the Track Execution Lock is current and
+  grants the requested locked-track authority;
 - reports whether `/goal --track <TRACK_ID>` can proceed safely.
+
+Full automation preflight uses the manifest `execution_kind`, not production
+`kind`, as the automation authority. Valid execution kinds are
+`design_contract`, `implementation_proof`, `proof_aggregation`,
+`handoff_closeout`, and `extraction_gate`. Legacy production kinds such as
+`hardening` and `release` remain production taxonomy only; they are invalid as
+automation execution kinds.
 
 ## Drift Controls
 
@@ -239,6 +376,34 @@ validation rules.
 `task production:next -- --track <TRACK_ID>` use the same manifest audit before
 emitting normal next-action guidance. Audit-blocked manifests are stop
 conditions, not advisory warnings.
+
+## Closeout Evidence Metadata
+
+Runtime closeouts that feed automation must include a machine-readable
+`closeout_evidence` record in frontmatter. Prose closeouts remain useful for
+review, but proof aggregation must not scrape prose as execution authority.
+
+Minimum fields:
+
+- `milestone_id`
+- `wr_id`
+- `completion_quality`
+- `evidence_categories`
+- `validation_commands`
+- `validation_results`
+- `files_changed`
+- `runtime_artifacts`
+- `diagnostics`
+- `source_maps`
+- `known_gaps`
+- `closeout_path`
+
+`proof_aggregation_writer` reads these records from required prior closeouts.
+It fails closed when a prior closeout is missing metadata, claims the wrong
+milestone or WR, lacks the required completion quality, or the aggregate prior
+records do not cover the required evidence categories. Missing proof evidence
+returns to the owning earlier milestone; aggregation must not patch earlier
+product files to make evidence pass.
 
 ## Manifest Runner V1
 
@@ -338,6 +503,67 @@ conditions.
 Crate creation, runtime-proof closeout mutation, and shared foundation
 extraction remain out of scope until separate governance accepts future
 automation layers.
+
+## Manifest Runner V5
+
+Manifest Runner V5 writes bounded product/runtime implementation files only
+after V4 succeeds and `product_implementation` is explicitly granted. It is not
+a general code generator and it must not contain proof-slice-specific writer
+logic. The active manifest milestone and accepted implementation plan declare
+the writer strategy, exact files, required outputs, forbidden files/patterns,
+validation commands, runtime evidence requirements, and expected closeout path.
+
+Supported `implementation_writer.strategy` values are:
+
+- `no_writer`: the default fail-closed strategy.
+- `template_writer`: writes declared template contents to declared files only.
+- `patch_writer`: applies declared bounded text replacements to declared files.
+- `agent_writer`: reserved until a real agent diff protocol exists. The runner
+  must fail closed when this strategy is selected; it must not silently treat
+  agent-authored implementation as a `patch_writer`.
+- `proof_aggregation_writer`: aggregation-only strategy for proof milestones
+  that validate prior `runtime_proven` closeouts and evidence categories before
+  allowing closeout. It must not repair missing prior behavior or patch earlier
+  proof-slice product files.
+
+Implementation milestones may declare:
+
+- `implementation_writer.strategy`
+- `implementation_writer.allowed_files`
+- `implementation_writer.allowed_write_scopes`
+- `implementation_writer.aggregation_only`
+- `implementation_writer.required_prior_milestones`
+- `implementation_writer.required_prior_completion_quality`
+- `implementation_writer.required_evidence_categories`
+- `implementation_writer.required_outputs`
+- `implementation_writer.forbidden_files`
+- `implementation_writer.forbidden_scopes`
+- `implementation_writer.forbidden_patterns`
+- `implementation_writer.new_file_policy`
+- `implementation_writer.validation_commands`
+- `implementation_writer.closeout_path`
+- `implementation_writer.stop_conditions`
+- `implementation_writer.templates` for `template_writer`
+- `implementation_writer.patches` for `patch_writer`
+
+`product_implementation` may:
+
+- create an exact new file only when the owning WR or product contract marks it
+  with `new:`. New-file authority is determined from git tracked/index state,
+  not just filesystem existence; an untracked pre-existing file is still a new
+  file for workflow authority purposes.
+- update exact existing files already covered by the active WR and manifest;
+- run the active milestone validation commands after writing;
+- stop after one implementation WR by default.
+
+`product_implementation` must not:
+
+- run without `product_code`;
+- create placeholder folders;
+- touch broad or forbidden scopes;
+- create crates without a future accepted `crate_creation` layer;
+- extract shared `foundation/meta`;
+- start MaterialProgram.
 
 ## Placement
 

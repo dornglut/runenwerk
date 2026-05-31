@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+  component "WR-146 6F Headless Fixture Diagnostics Source Map Proof\nstate=current_candidate\nscore=1.0 V4 B2\ncall=current candidate\nimplementation plan only" as WR146 <<candidate>>
 
 }
 

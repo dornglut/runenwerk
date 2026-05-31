@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::SurfaceDefinitionId;
+use crate::{SurfaceDefinitionId, WorldSpacePromptAnchor, WorldSpacePromptHostEntityId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SurfaceInstanceId(u64);
@@ -51,6 +51,36 @@ impl MountedSurfaceInstance {
             host_instance_id,
             generation: 0,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldSpacePromptMount {
+    pub surface_instance_id: SurfaceInstanceId,
+    pub host_instance_id: SurfaceHostInstanceId,
+    pub entity_id: WorldSpacePromptHostEntityId,
+    pub anchor: WorldSpacePromptAnchor,
+    pub generation: u64,
+}
+
+impl WorldSpacePromptMount {
+    pub const fn new(
+        surface_instance_id: SurfaceInstanceId,
+        host_instance_id: SurfaceHostInstanceId,
+        anchor: WorldSpacePromptAnchor,
+    ) -> Self {
+        Self {
+            surface_instance_id,
+            host_instance_id,
+            entity_id: anchor.entity_id,
+            anchor,
+            generation: 0,
+        }
+    }
+
+    pub const fn with_generation(mut self, generation: u64) -> Self {
+        self.generation = generation;
+        self
     }
 }
 
@@ -126,5 +156,25 @@ mod tests {
             .mounted_surface(SurfaceInstanceId::new(11))
             .expect("surface should be mounted after second rebuild");
         assert_eq!(second.generation, 2);
+    }
+
+    #[test]
+    fn world_space_prompt_mount_tracks_host_identity_anchor_and_lifetime_generation() {
+        let anchor = WorldSpacePromptAnchor::new(
+            WorldSpacePromptHostEntityId::new(9),
+            crate::WorldSpacePromptAnchorPosition::new(4.0, 5.0, 6.0),
+        );
+        let mount = WorldSpacePromptMount::new(
+            SurfaceInstanceId::new(20),
+            SurfaceHostInstanceId::new(200),
+            anchor,
+        )
+        .with_generation(3);
+
+        assert_eq!(mount.surface_instance_id.raw(), 20);
+        assert_eq!(mount.host_instance_id.raw(), 200);
+        assert_eq!(mount.entity_id.raw(), 9);
+        assert_eq!(mount.anchor.position.x, 4.0);
+        assert_eq!(mount.generation, 3);
     }
 }

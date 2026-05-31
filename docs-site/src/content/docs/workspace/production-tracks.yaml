@@ -4710,7 +4710,7 @@ tracks:
       - id: PM-UI-PROGRAM-003
         title: Control Package Proof Design
         kind: design
-        state: designing
+        state: completed
         goal: Define ControlPackage contracts, package registry behavior, control kind IDs, schemas, kernels, fixtures, diagnostics, and migration rules before rich-control proof implementation.
         outcome: ControlPackage proof design makes package authority explicit and prepares ColorPicker proof constraints without creating runtime code.
         dependencies:
@@ -4730,20 +4730,30 @@ tracks:
             path: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
             required_status: active
             reason: ControlPackage design must stay aligned with the full staged execution manifest.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-003-control-package-proof-design/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-003 requires completed bounded-contract closeout evidence.
         acceptance_criteria:
           - Future WR candidate records Control Package Proof Design as design-only.
           - Design resolves explicit UI-owned package registries, package IDs, control kind IDs, property schemas, state schemas, event schemas, kernel IDs, fixture IDs, diagnostic IDs, and migration rules.
           - No code, crates, placeholder folders, production behavior changes, or shared foundation/meta extraction are authorized.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-PROGRAM-003 is a bounded design/governance closeout, not runtime_proven evidence.
+          - No product/runtime code, crates, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, or shared foundation/meta extraction was performed.
+          - Later PT-UI-PROGRAM milestones still require their own WRs, production plans, validation, and closeout evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-003-control-package-proof-design/closeout.md
       - id: PM-UI-PROGRAM-004
         title: Compiler / Runtime Artifact Design
         kind: design
-        state: designing
+        state: completed
         goal: Define UiCompiler inputs/outputs, UiRuntimeArtifactManifest, UiRuntimeArtifactTables, cache keys, source maps, diagnostics, and hot-path artifact strategy.
         outcome: Compiler and runtime artifact design separates durable manifest contracts from optimized runtime tables before runtime proof work.
         dependencies:
           - PM-UI-PROGRAM-003
-        roadmap_links: []
+        roadmap_links:
+          - WR-138
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4757,20 +4767,30 @@ tracks:
             path: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
             required_status: active
             reason: Compiler/artifact design must stay aligned with the full staged execution manifest.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-004-compiler-runtime-artifact-design/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-004 requires completed bounded-contract closeout evidence.
         acceptance_criteria:
           - Future WR candidate records Compiler / Runtime Artifact Design as design-only.
           - Design resolves compiler timing, runtime artifact manifest/tables, artifact IDs, source-map evidence, diagnostics, cache invalidation, and hot-path artifact execution.
           - No code, crates, placeholder folders, production behavior changes, or shared foundation/meta extraction are authorized.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-PROGRAM-004 is a bounded design/governance closeout, not runtime_proven evidence.
+          - No product/runtime code, crates, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, or shared foundation/meta extraction was performed.
+          - Later PT-UI-PROGRAM milestones still require their own WRs, production plans, validation, and closeout evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-004-compiler-runtime-artifact-design/closeout.md
       - id: PM-UI-PROGRAM-005
         title: Evaluator / Host Design
         kind: design
-        state: designing
+        state: completed
         goal: Define UiEvaluator, host contracts, event/route/command boundaries, headless evaluation, and editor/game/world-space host separation.
         outcome: Evaluator and host design proves that evaluators produce deterministic facts while hosts own environment effects.
         dependencies:
           - PM-UI-PROGRAM-004
-        roadmap_links: []
+        roadmap_links:
+          - WR-139
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4784,20 +4804,30 @@ tracks:
             path: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
             required_status: active
             reason: Evaluator/host design must stay aligned with the full staged execution manifest.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-005-evaluator-host-design/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-005 requires completed bounded-contract closeout evidence.
         acceptance_criteria:
           - Future WR candidate records Evaluator / Host Design as design-only.
           - Design resolves UiEvaluator timing, host profiles, editor/game/world/headless host contracts, UiEventPacket, HostCommand, DomainCommand, route maps, and capability checks.
           - No code, crates, placeholder folders, production behavior changes, or shared foundation/meta extraction are authorized.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-PROGRAM-005 is a bounded design/governance closeout, not runtime_proven evidence.
+          - No product/runtime code, crates, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, or shared foundation/meta extraction was performed.
+          - Later PT-UI-PROGRAM milestones still require their own WRs, production plans, validation, and closeout evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-005-evaluator-host-design/closeout.md
       - id: PM-UI-PROGRAM-006
         title: Retained UI Migration Design
         kind: design
-        state: designing
+        state: completed
         goal: Define the retained-current UI compatibility and strangler migration plan before any bounded UiProgram proof replaces a surface.
         outcome: Migration design preserves retained/current UI compatibility and identifies exact bounded surfaces that future proof slices may replace.
         dependencies:
           - PM-UI-PROGRAM-005
-        roadmap_links: []
+        roadmap_links:
+          - WR-140
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4811,20 +4841,30 @@ tracks:
             path: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
             required_status: active
             reason: Retained UI migration design must stay aligned with the full staged execution manifest.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-006-retained-ui-migration-design/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-006 requires completed bounded-contract closeout evidence.
         acceptance_criteria:
           - Future WR candidate records Retained UI Migration Design as design-only.
           - Design resolves dual-lowering, compatibility boundaries, source truth, proof-surface replacement rules, rollback, diagnostics, and drift guards.
           - No code, crates, placeholder folders, production behavior changes, or shared foundation/meta extraction are authorized.
+        completion_quality: bounded_contract
+        known_quality_gaps:
+          - PM-UI-PROGRAM-006 is a bounded design/governance closeout, not runtime_proven evidence.
+          - No product/runtime code, crates, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, or shared foundation/meta extraction was performed.
+          - Later PT-UI-PROGRAM milestones still require their own WRs, production plans, validation, and closeout evidence.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-006-retained-ui-migration-design/closeout.md
       - id: PM-UI-PROGRAM-007
         title: 6A Label Structural UiFrame Text Proof
         kind: implementation
-        state: designing
+        state: completed
         goal: Prove Label text output through font/style intent, text layout request, and structural UiFrame evidence without renderer-owned UI truth.
         outcome: Label produces runtime evidence for the text/render boundary and structural UiFrame output while retained/current UI compatibility is preserved.
         dependencies:
           - PM-UI-PROGRAM-006
-        roadmap_links: []
+        roadmap_links:
+          - WR-141
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4838,20 +4878,30 @@ tracks:
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: 6A must follow the bounded Label proof-slice contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-007 requires completed runtime-proof closeout evidence.
         acceptance_criteria:
           - Label proof records font/style intent, text layout request, structural UiFrame assertion, and runtime artifact evidence.
           - Renderer handles and GPU resources do not become UI truth.
           - Current retained UI behavior remains compatible unless a later accepted WR names a bounded replacement surface.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-007 is runtime_proven only for its bounded manifest write scope.
+          - Later PT-UI-PROGRAM milestones still require separate WRs, plans, validation, and closeout evidence.
+          - No crate creation, MaterialProgram implementation, or shared foundation/meta extraction is authorized by this closeout.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md
       - id: PM-UI-PROGRAM-008
         title: 6B Button Route Event Host Command Proof
         kind: implementation
-        state: designing
+        state: completed
         goal: Prove Button route/event/host-command behavior through stable route contracts and explicit host command mapping.
         outcome: Button emits UiEventPacket evidence with RouteId, RouteSchemaVersion, RouteCapability, HostRouteMapVersion, HostCommand, optional DomainCommand, and no hidden route-string behavior.
         dependencies:
           - PM-UI-PROGRAM-007
-        roadmap_links: []
+        roadmap_links:
+          - WR-142
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4865,20 +4915,30 @@ tracks:
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: 6B must follow the bounded Button route/event proof-slice contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-008 requires completed runtime-proof closeout evidence.
         acceptance_criteria:
           - Button proof records UiEventPacket, RouteId, RouteSchemaVersion, RouteCapability, HostRouteMapVersion, HostCommand, and optional DomainCommand evidence.
           - No giant UiSemanticEvent enum or hidden route-string behavior is introduced.
           - Hosts map UI events to commands through explicit, inspectable route maps.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-008 is runtime_proven only for its bounded manifest write scope.
+          - Later PT-UI-PROGRAM milestones still require separate WRs, plans, validation, and closeout evidence.
+          - No crate creation, MaterialProgram implementation, or shared foundation/meta extraction is authorized by this closeout.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md
       - id: PM-UI-PROGRAM-009
         title: 6C InspectorField Binding State Proof
         kind: implementation
-        state: designing
+        state: completed
         goal: Prove InspectorField binding and state behavior through UiSchemaValue, value snapshots, dirty propagation, preview state, committed state, diagnostics, and authorization checks.
         outcome: InspectorField demonstrates read/write binding and state transitions without UI reaching into private editor/provider state.
         dependencies:
           - PM-UI-PROGRAM-008
-        roadmap_links: []
+        roadmap_links:
+          - WR-143
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4892,20 +4952,30 @@ tracks:
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: 6C must follow the bounded InspectorField proof-slice contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-009 requires completed runtime-proof closeout evidence.
         acceptance_criteria:
           - InspectorField proof records read model, write model, UiSchemaValue, value snapshot, dirty propagation, preview state, committed state, and runtime artifact evidence.
           - Binding failure diagnostics and authorization/capability denial are explicit and source-mapped where source context exists.
           - UI does not directly mutate editor, provider, project, game, world, or renderer truth.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-009 is runtime_proven only for its bounded manifest write scope.
+          - Later PT-UI-PROGRAM milestones still require separate WRs, plans, validation, and closeout evidence.
+          - No crate creation, MaterialProgram implementation, or shared foundation/meta extraction is authorized by this closeout.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md
       - id: PM-UI-PROGRAM-010
         title: 6D ColorPicker ControlPackage Proof
         kind: implementation
-        state: designing
+        state: completed
         goal: Prove the first rich ControlPackage through a wheel-plus-triangle ColorPicker while deferring RGB cube projection.
         outcome: ColorPicker demonstrates package, control kind, property schema, state schema, event payload schema, layout kernel, interaction kernel, visual kernel, fixture, diagnostic, migration, and runtime artifact evidence.
         dependencies:
           - PM-UI-PROGRAM-009
-        roadmap_links: []
+        roadmap_links:
+          - WR-144
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4919,21 +4989,31 @@ tracks:
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: 6D must follow the bounded ColorPicker proof-slice contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-010 requires completed runtime-proof closeout evidence.
         acceptance_criteria:
           - ColorPicker proof uses wheel-plus-triangle as the first rich custom control.
           - RGB cube projection remains deferred and is not required for first proof completion.
           - Package/control/schema/kernel/capability/fixture/diagnostic IDs are stable and collision-checked.
           - No shared foundation/meta package, schema, fixture, diagnostic, or artifact framework is extracted.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-010 is runtime_proven only for its bounded manifest write scope.
+          - Later PT-UI-PROGRAM milestones still require separate WRs, plans, validation, and closeout evidence.
+          - No crate creation, MaterialProgram implementation, or shared foundation/meta extraction is authorized by this closeout.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md
       - id: PM-UI-PROGRAM-011
         title: 6E World Space Host Boundary Proof
         kind: implementation
-        state: designing
+        state: completed
         goal: Prove a world-space anchored prompt through projection, lifetime, visibility, and data-feed host integration without ECS-owned UI semantics.
         outcome: World-space prompt evidence demonstrates the ECS/host boundary while keeping UI meaning inside the UI program evaluator and host contracts.
         dependencies:
           - PM-UI-PROGRAM-010
-        roadmap_links: []
+        roadmap_links:
+          - WR-145
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -4947,20 +5027,30 @@ tracks:
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: 6E must follow the bounded world-space prompt proof-slice contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-011 requires completed runtime-proof closeout evidence.
         acceptance_criteria:
           - World-space prompt proof records anchor, projection, lifetime, visibility input, data feed, host profile, and runtime artifact evidence.
           - ECS may host identity, anchor, lifetime, visibility input, and data feed only.
           - ECS does not own UI semantics, route behavior, binding truth, or renderer/product truth.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-011 is runtime_proven only for its bounded manifest write scope.
+          - Later PT-UI-PROGRAM milestones still require separate WRs, plans, validation, and closeout evidence.
+          - No crate creation, MaterialProgram implementation, or shared foundation/meta extraction is authorized by this closeout.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md
       - id: PM-UI-PROGRAM-012
         title: 6F Headless Fixture Diagnostics Source Map Proof
         kind: hardening
-        state: designing
+        state: active
         goal: Prove deterministic headless fixture evaluation, diagnostics, source maps, migration evidence, runtime artifact manifests/tables, and reproducibility by aggregating accepted 6A through 6E evidence.
         outcome: Headless proof validates the completed UI proof-slice evidence without implementing missing behavior from prior milestones.
         dependencies:
           - PM-UI-PROGRAM-011
-        roadmap_links: []
+        roadmap_links:
+          - WR-146
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md

@@ -372,7 +372,7 @@ def validate_manifest_backed_tracks(
 ) -> list[str]:
     # Import locally to avoid a module import cycle: the manifest workflow also
     # imports production state models for its standalone CLI.
-    from track_execution_manifest import audit_manifest, load_track_execution_manifest
+    from track_execution_manifest import audit_manifest, full_automation_preflight_errors, load_track_execution_manifest
 
     roadmap = load_roadmap(roadmap_path)
     errors: list[str] = []
@@ -387,7 +387,18 @@ def validate_manifest_backed_tracks(
             continue
         if loaded is None:
             continue
-        errors.extend(audit_manifest(loaded, track=track, roadmap=roadmap))
+        audit_errors = audit_manifest(loaded, track=track, roadmap=roadmap)
+        errors.extend(audit_errors)
+        if loaded.manifest.full_automation_target:
+            full_automation_errors = full_automation_preflight_errors(
+                loaded,
+                track=track,
+                roadmap=roadmap,
+                allow=None,
+            )
+            for error in full_automation_errors:
+                if error not in audit_errors:
+                    errors.append(f"{track.id}: full automation readiness blocker: {error}")
         manifest_by_milestone_id = loaded.manifest.by_milestone_id
         for milestone in track.milestones:
             entry = manifest_by_milestone_id.get(milestone.id)

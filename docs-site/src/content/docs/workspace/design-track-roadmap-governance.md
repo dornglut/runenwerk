@@ -60,8 +60,10 @@ claim a stronger truth without the stronger artifact.
 |---|---|---|
 | Code and runtime evidence | What actually exists and runs. Tests, captures, fixtures, benchmarks, and generated artifacts prove behavior. | Long-term policy by itself. If behavior changes architecture, update an ADR, design, or guideline. |
 | Closeouts and reports | Completion evidence, validation output, known gaps, migration proof, runtime proof, and audit findings. | Future implementation authority or new architecture doctrine by themselves. |
+| Track Execution Run ledgers | Machine-readable record of each successful locked full-track action, source digests before/after, files changed, validation results, evidence paths, closeout paths, and stop reason. | Architecture doctrine, WR authority, or evidence that was not recorded by the action. |
 | WR roadmap rows | Implementation eligibility, dependency legality, blocker state, write scopes, validation expectations, and completion quality for one bounded row. | Strategic product completion without production milestone evidence. |
 | Implementation plans | The bounded write contract for one WR or production milestone slice. | Permission to exceed the linked WR, skip roadmap state, or claim completion. |
+| Track Execution Locks | Digest-locked permission envelope for AI-executable full-track runs. | Implementation authority without a manifest, WR, plan, writer strategy, validation, and closeout evidence. |
 | Track Execution Manifest | Full-track sequencing, explicit next legal action, missing WR blockers, write scopes, forbidden scopes, evidence gates, and closeout paths. | WR authority, implementation permission, roadmap promotion, or closeout evidence. |
 | Production tracks | Strategic product outcomes, milestone order, production acceptance criteria, design gates, evidence gates, and target completion quality. | Code permission without WR authority. |
 | ADRs | Durable accepted architectural decisions and rejected alternatives. | Detailed implementation sequence or runtime proof. |
@@ -149,6 +151,31 @@ scopes, forbidden scopes, required contracts, validation commands, evidence
 gates, expected closeout paths, stop conditions, and next legal action.
 
 They authorize planning and sequencing only.
+
+### Track Execution Locks
+
+Track Execution Locks make locked AI execution explicit.
+
+They own `ai_executable`, lock author, lock time, manifest digest, source
+digests for planning sources and workflow runner sources, granted permissions,
+denied permissions, strategic human gates, and invalidation rules. Full-track
+execution must fail before mutation when the lock is missing, stale, grants
+less authority than requested, denies a requested permission, or lists a
+strategic human gate crossed by remaining milestones.
+
+Locks do not authorize implementation by themselves. They only allow the
+runner to use manifest, WR, implementation-plan, writer, validation, and
+closeout authority without a manual per-milestone prompt.
+
+### Track Execution Run Ledgers
+
+Track Execution Run ledgers record locked full-track execution.
+
+They own the machine-readable action history for a run: pre-action digests,
+post-action digests, milestone id, WR id, strategy used, files changed,
+validation results, evidence paths, closeout paths, next legal action, and stop
+reason. Markdown reports may summarize ledgers, but YAML ledgers are the run
+authority.
 
 ### Roadmaps And WR Rows
 
@@ -607,10 +634,19 @@ conflicts, missing manifest governance fields, docs-only milestones that
 authorize code, docs-only `runtime_proven` claims, completed milestones without
 expected closeout evidence, and completed manifest-backed milestones whose
 owning WR rows are not completed.
+Tracks marked `full_automation_target: true` must also pass full automation
+readiness validation. Remaining milestones must declare strict automation
+`execution_kind` values, required permission classes, exact scopes, validation
+commands, closeout contracts, evidence categories, and stop conditions.
+Tracks intended for locked AI full-track execution must also have
+`ai_executable: true` in the manifest and a current Track Execution Lock under
+`workspace/track-execution-locks/<track-id>.yaml`.
 
 Manifest-backed `/goal` and `production:next` commands must run the same
-manifest audit before printing normal next-action guidance. Alignment errors,
-missing gates, invalid blocked fields, invalid closeout paths, WR scope
+manifest audit before printing normal next-action guidance. When the manifest is
+a full automation target, they must also report full automation readiness and
+must not claim that gates are clear while preflight blockers remain. Alignment
+errors, missing gates, invalid blocked fields, invalid closeout paths, WR scope
 mismatches, and missing WR authority are stop conditions.
 
 `task production:run-track -- --allow auto_safe` is the accepted Manifest
@@ -640,13 +676,26 @@ create crates, modify product behavior, or extract shared `foundation/meta`.
 
 `task production:run-track -- --allow auto_safe --allow agent_design --allow
 agent_closeout --allow product_code` may run the Manifest Runner V4 product-code
-gate only for the current implementation or hardening milestone. It requires a
-concrete active WR, accepted production plan, exact write scope, explicit
-forbidden scope, validation commands, closeout path, compatibility/rollback
-plan, and stop conditions. It must fail closed for docs, design, or governance
-milestones, future or deferred WRs, missing plans, broad scopes, crate creation,
-shared `foundation/meta` extraction, MaterialProgram work, and runtime-proven
-claims without runtime/test closeout evidence.
+gate only for the current implementation or hardening milestone. Add
+`--allow product_implementation` only when Manifest Runner V5 is allowed to
+write exact product files from the active WR and accepted production plan. Both
+layers require a concrete active WR, accepted production plan, exact write
+scope, explicit forbidden scope, validation commands, closeout path,
+compatibility/rollback plan, and stop conditions. They must fail closed for
+docs, design, or governance milestones, future or deferred WRs, missing plans,
+broad scopes, unmarked new files, crate creation, shared `foundation/meta`
+extraction, and MaterialProgram implementation. Full-track runs must use
+`--mode full-track`; otherwise the runner is limited to single-step or
+bounded-segment authority and must not infer full-track intent from the
+permission set alone.
+
+`task production:run-track -- --mode full-track ...` is locked-track
+automation. It must verify the Track Execution Lock before mutation, run
+full-track preflight over every remaining milestone, execute one legal action at
+a time, recompute state after each action, append to the Track Execution Run
+ledger, and stop only for completion, failed validation, missing evidence,
+scope mismatch, ungranted permission, strategic human gate, max-actions, or a
+new architecture decision not covered by accepted design.
 
 ## Conflict Resolution
 

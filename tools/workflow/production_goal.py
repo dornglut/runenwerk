@@ -27,11 +27,18 @@ from production_state import (
 )
 from roadmap_state import ROADMAP_SOURCE, RoadmapItem, RoadmapState, WorkflowError, load_roadmap, repo_path
 from track_execution_manifest import (
+    FULL_TRACK_PERMISSION_SET,
+    TRACK_EXECUTION_LOCK_ROOT,
     TRACK_EXECUTION_MANIFEST_ROOT,
     LoadedTrackExecutionManifest,
     TrackExecutionManifestMilestone,
     audit_manifest_or_raise,
+    full_automation_preflight_errors,
+    implementation_authorization_note,
+    load_track_execution_lock,
     load_track_execution_manifest,
+    next_action_blockers,
+    track_execution_lock_errors,
 )
 
 
@@ -73,10 +80,17 @@ class ManifestGoalContext:
     loaded: LoadedTrackExecutionManifest
     current_entry: TrackExecutionManifestMilestone
     current_step: MilestoneGoalStep
+    manifest_workflow_action: str
     unmet_gates: tuple[str, ...]
     implementation_authorized: bool
     implementation_authorization_note: str
     must_stop: bool
+    full_automation_target: bool
+    full_automation_ready: bool
+    full_automation_blockers: tuple[str, ...]
+    execution_lock_path: Path | None
+    execution_lock_ready: bool
+    execution_lock_blockers: tuple[str, ...]
 
 
 def find_track(planning: ProductionPlanningState, track_id: str) -> ProductionTrack:
@@ -143,24 +157,77 @@ def build_goal_steps(
 
 
 def build_manifest_goal_context(
+    planning: ProductionPlanningState,
     roadmap: RoadmapState,
     track: ProductionTrack,
     steps: list[MilestoneGoalStep],
     loaded_manifest: LoadedTrackExecutionManifest,
+    *,
+    production_source: Path = PRODUCTION_SOURCE,
+    roadmap_source: Path = ROADMAP_SOURCE,
+    lock_source_root: Path = TRACK_EXECUTION_LOCK_ROOT,
 ) -> ManifestGoalContext:
     audit_manifest_or_raise(loaded_manifest, track=track, roadmap=roadmap)
     current_step = first_incomplete_or_evidence_step(tuple(steps)) or steps[-1]
     current_entry = loaded_manifest.manifest.by_milestone_id[current_step.milestone.id]
-    unmet_gates = tuple(manifest_unmet_gates(current_step, current_entry))
-    implementation_authorized, implementation_note = manifest_implementation_authorization(current_step, current_entry)
+    manifest_workflow_action, manifest_blockers = next_action_blockers(
+        current_entry,
+        current_step.milestone,
+        planning=planning,
+        track=track,
+        roadmap=roadmap,
+    )
+    unmet_gates = tuple(manifest_unmet_gates(current_step, current_entry) + manifest_blockers)
+    raw_implementation_note = implementation_authorization_note(
+        current_entry,
+        manifest_workflow_action,
+        manifest_blockers,
+    )
+    implementation_authorized = raw_implementation_note.startswith("yes -")
+    implementation_note = raw_implementation_note.removeprefix("yes - ").removeprefix("no - ")
+    full_automation_blockers: tuple[str, ...] = ()
+    if loaded_manifest.manifest.full_automation_target:
+        full_automation_blockers = tuple(
+            full_automation_preflight_errors(
+                loaded_manifest,
+                track=track,
+                roadmap=roadmap,
+                allow=FULL_TRACK_PERMISSION_SET,
+            )
+        )
+        if full_automation_blockers:
+            unmet_gates = (*unmet_gates, *full_automation_blockers)
+    loaded_lock = load_track_execution_lock(track.id, root=lock_source_root)
+    execution_lock_blockers: tuple[str, ...] = ()
+    if loaded_manifest.manifest.full_automation_target:
+        execution_lock_blockers = tuple(
+            track_execution_lock_errors(
+                loaded_manifest,
+                loaded_lock,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+                allow=FULL_TRACK_PERMISSION_SET,
+                deny={"crate_creation", "foundation_extraction"},
+                track=track,
+            )
+        )
+        if execution_lock_blockers:
+            unmet_gates = (*unmet_gates, *execution_lock_blockers)
     return ManifestGoalContext(
         loaded=loaded_manifest,
         current_entry=current_entry,
         current_step=current_step,
+        manifest_workflow_action=manifest_workflow_action,
         unmet_gates=unmet_gates,
         implementation_authorized=implementation_authorized,
         implementation_authorization_note=implementation_note,
         must_stop=True,
+        full_automation_target=loaded_manifest.manifest.full_automation_target,
+        full_automation_ready=loaded_manifest.manifest.full_automation_target and not full_automation_blockers,
+        full_automation_blockers=full_automation_blockers,
+        execution_lock_path=loaded_lock.path if loaded_lock is not None else None,
+        execution_lock_ready=loaded_manifest.manifest.full_automation_target and not execution_lock_blockers,
+        execution_lock_blockers=execution_lock_blockers,
     )
 
 
@@ -346,12 +413,23 @@ def render_track_goal(
     track: ProductionTrack,
     *,
     roadmap_source: Path = ROADMAP_SOURCE,
+    production_source: Path = PRODUCTION_SOURCE,
+    lock_source_root: Path = TRACK_EXECUTION_LOCK_ROOT,
     scope: GoalScope = GoalScope.full,
     manifest: LoadedTrackExecutionManifest | None = None,
 ) -> str:
     steps = build_goal_steps(planning, roadmap, track, roadmap_source=roadmap_source)
     manifest_context = (
-        build_manifest_goal_context(roadmap, track, steps, manifest)
+        build_manifest_goal_context(
+            planning,
+            roadmap,
+            track,
+            steps,
+            manifest,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            lock_source_root=lock_source_root,
+        )
         if manifest is not None
         else None
     )
@@ -486,11 +564,22 @@ def render_manifest_gate(
             f"- Authority level: {manifest.authority_level}",
             f"- Current milestone: `{entry.milestone_id}` - {entry.title}",
             f"- Manifest next legal action: {entry.next_legal_action}",
-            f"- Workflow next action: {context.current_step.next_action}",
+            f"- Workflow next action: {context.manifest_workflow_action}",
             f"- Implementation authorized now: {'yes' if context.implementation_authorized else 'no'} - {context.implementation_authorization_note}",
             f"- Must stop after this action: {'yes' if context.must_stop else 'no'}",
+            f"- Full automation target: {'yes' if context.full_automation_target else 'no'}",
+            f"- Full automation readiness: {'ready' if context.full_automation_ready else 'blocked' if context.full_automation_target else 'not requested'}",
+            f"- Execution lock: {repo_path(context.execution_lock_path) if context.execution_lock_path else 'missing'}",
+            f"- Execution lock readiness: {'ready' if context.execution_lock_ready else 'blocked' if context.full_automation_target else 'not requested'}",
+            f"- `--mode full-track` can run now: {'yes' if context.full_automation_ready and context.execution_lock_ready else 'no'}",
         ]
     )
+    if context.full_automation_blockers:
+        lines.append("- Full automation blockers:")
+        lines.extend(f"  - {blocker}" for blocker in context.full_automation_blockers)
+    if context.execution_lock_blockers:
+        lines.append("- Execution lock blockers:")
+        lines.extend(f"  - {blocker}" for blocker in context.execution_lock_blockers)
     if context.unmet_gates:
         lines.append("- Unmet gates:")
         lines.extend(f"  - {gate}" for gate in context.unmet_gates)
@@ -806,6 +895,10 @@ def goal(
         TRACK_EXECUTION_MANIFEST_ROOT,
         help="Machine-readable Track Execution Manifest source root.",
     ),
+    lock_source_root: Path = typer.Option(
+        TRACK_EXECUTION_LOCK_ROOT,
+        help="Machine-readable Track Execution Lock source root.",
+    ),
 ) -> None:
     try:
         planning = load_production_tracks(production_source)
@@ -823,7 +916,9 @@ def goal(
                 planning,
                 roadmap,
                 production_track,
+                production_source=production_source,
                 roadmap_source=roadmap_source,
+                lock_source_root=lock_source_root,
                 scope=scope,
                 manifest=manifest,
             ),

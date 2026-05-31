@@ -11,7 +11,8 @@ from __future__ import annotations
 import re
 import subprocess
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
@@ -38,7 +39,9 @@ from roadmap_state import (
     document_frontmatter_status,
     load_yaml,
     load_roadmap,
+    is_new_write_scope,
     normalize_repo_path,
+    normalize_write_scope_path,
     normalized_write_scopes_with_generated_outputs,
     path_within_scope,
     repo_path,
@@ -47,19 +50,53 @@ from roadmap_state import (
 
 
 TRACK_EXECUTION_MANIFEST_ROOT = REPO_ROOT / "docs-site/src/content/docs/workspace/track-execution-manifests"
-UI_PROGRAM_ARCHITECTURE_PATH = REPO_ROOT / "docs-site/src/content/docs/design/active/ui-program-architecture.md"
-UI_PROGRAM_CONTRACT_DESIGN_PATH = REPO_ROOT / "docs-site/src/content/docs/design/active/ui-program-contract-design.md"
-
+TRACK_EXECUTION_LOCK_ROOT = REPO_ROOT / "docs-site/src/content/docs/workspace/track-execution-locks"
+TRACK_EXECUTION_RUN_ROOT = REPO_ROOT / "docs-site/src/content/docs/reports/track-execution-runs"
+TRACK_EXECUTION_LOCKED_WORKFLOW_SOURCES = (
+    REPO_ROOT / "tools/workflow/track_execution_manifest.py",
+    REPO_ROOT / "tools/workflow/production_goal.py",
+    REPO_ROOT / "tools/workflow/production_state.py",
+    REPO_ROOT / "tools/workflow/roadmap_state.py",
+)
 ROADMAP_ID_PATTERN = re.compile(r"^WR-\d{3}$")
 FUTURE_ROADMAP_ID_PATTERN = re.compile(r"^WR-TBD-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
 GENERATED_SCOPE_PREFIXES = ("generated:", "derived:")
+CONTRACT_TEMPLATE_VERSION = "v1"
+CONTRACT_GENERATED_MARKER = "generated_by_production_complete_track_contracts"
+CONTRACT_TEMPLATE_KEYS = {
+    "docs_design": "docs/design milestone template",
+    "implementation_runtime_proof": "implementation/runtime-proof milestone template",
+    "final_handoff_closeout": "final handoff/closeout milestone template",
+}
 
 ManifestMilestoneType = Literal["docs_only", "design_only", "implementation", "hardening", "closeout"]
+ManifestExecutionKind = Literal[
+    "design_contract",
+    "implementation_proof",
+    "proof_aggregation",
+    "handoff_closeout",
+    "extraction_gate",
+]
+ImplementationWriterStrategy = Literal[
+    "no_writer",
+    "template_writer",
+    "patch_writer",
+    "agent_writer",
+    "proof_aggregation_writer",
+]
+CloseoutStrategy = Literal[
+    "bounded_contract_closeout",
+    "runtime_proven_closeout",
+    "handoff_closeout",
+    "extraction_gate_closeout",
+]
+ManifestRunMode = Literal["single-step", "bounded-segment", "full-track"]
 MANIFEST_RUNNER_PERMISSIONS = {
     "auto_safe",
     "agent_design",
     "agent_closeout",
     "product_code",
+    "product_implementation",
     "crate_creation",
     "foundation_extraction",
 }
@@ -77,6 +114,103 @@ MANIFEST_AUDIT_CATEGORY_ORDER = (
     "other manifest audit blockers",
 )
 
+PROOF_AGGREGATION_REQUIRED_EVIDENCE_CATEGORIES = {
+    "headless fixture",
+    "diagnostics",
+    "source-map proof",
+    "runtime artifact evidence",
+    "reproducibility evidence",
+}
+
+GENERIC_EVIDENCE_CATEGORIES = {
+    "runtime_test",
+    "fixture",
+    "diagnostics",
+    "source_maps",
+    "artifact",
+    "migration",
+    "reproducibility",
+    "visual",
+    "handoff",
+}
+
+GENERIC_EVIDENCE_CATEGORY_ALIASES = {
+    "runtime test": "runtime_test",
+    "runtime_test": "runtime_test",
+    "headless fixture": "fixture",
+    "fixture": "fixture",
+    "diagnostic": "diagnostics",
+    "diagnostics": "diagnostics",
+    "source-map proof": "source_maps",
+    "source maps": "source_maps",
+    "source_maps": "source_maps",
+    "runtime artifact evidence": "artifact",
+    "artifact": "artifact",
+    "migration": "migration",
+    "reproducibility evidence": "reproducibility",
+    "reproducibility": "reproducibility",
+    "visual": "visual",
+    "handoff": "handoff",
+}
+
+FULL_AUTOMATION_EXECUTION_KINDS = {
+    "design_contract",
+    "implementation_proof",
+    "proof_aggregation",
+    "handoff_closeout",
+    "extraction_gate",
+}
+
+FULL_TRACK_PERMISSION_SET = {
+    "auto_safe",
+    "agent_design",
+    "agent_closeout",
+    "product_code",
+    "product_implementation",
+}
+
+FULL_AUTOMATION_PERMISSION_GRANTS = {
+    "auto_safe": {"auto_safe"},
+    "agent_design": {"agent_design"},
+    "agent_closeout": {"agent_closeout"},
+    "product_code": {"product_code"},
+    "product_implementation": {"product_implementation"},
+    "runtime_closeout": {"agent_closeout"},
+    "handoff": {"agent_closeout"},
+    "crate_creation": {"crate_creation"},
+    "foundation_extraction": {"foundation_extraction"},
+}
+
+STRATEGIC_HUMAN_GATES = {
+    "adr_acceptance",
+    "locked_design_direction_change",
+    "foundation_meta_extraction",
+    "crate_creation_unless_pre_authorized",
+    "external_plugin_security_boundary",
+    "second_domain_extraction",
+    "release_perfectionist_verified_certification",
+}
+
+STRATEGIC_GATE_PERMISSION_MAP = {
+    "foundation_extraction": "foundation_meta_extraction",
+    "crate_creation": "crate_creation_unless_pre_authorized",
+}
+
+WRITER_STRATEGIES = {
+    "no_writer",
+    "template_writer",
+    "patch_writer",
+    "agent_writer",
+    "proof_aggregation_writer",
+}
+
+CLOSEOUT_STRATEGIES = {
+    "bounded_contract_closeout",
+    "runtime_proven_closeout",
+    "handoff_closeout",
+    "extraction_gate_closeout",
+}
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -85,6 +219,65 @@ class StrictModel(BaseModel):
 class IndentedSafeDumper(yaml.SafeDumper):
     def increase_indent(self, flow: bool = False, indentless: bool = False):
         return super().increase_indent(flow, False)
+
+
+class TrackExecutionLock(StrictModel):
+    version: int = 1
+    track_id: str
+    ai_executable: bool
+    locked_by: str
+    locked_at: str
+    manifest_digest: str
+    source_digests: dict[str, str]
+    granted_permissions: list[str]
+    denied_permissions: list[str]
+    strategic_human_gates: list[str]
+    invalidation_rules: list[str]
+
+    @field_validator("track_id", "locked_by", "locked_at", "manifest_digest")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("track execution lock text fields must not be empty")
+        return cleaned
+
+    @field_validator("granted_permissions", "strategic_human_gates", "invalidation_rules")
+    @classmethod
+    def validate_non_empty_list(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("track execution lock list fields must not be empty")
+        return cleaned
+
+    @field_validator("denied_permissions")
+    @classmethod
+    def validate_denied_permissions(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+    @field_validator("source_digests")
+    @classmethod
+    def validate_source_digests(cls, value: dict[str, str]) -> dict[str, str]:
+        cleaned = {path.strip().replace("\\", "/"): digest.strip() for path, digest in value.items() if path.strip()}
+        if not cleaned:
+            raise ValueError("track execution lock source_digests must not be empty")
+        for path, digest in cleaned.items():
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError(f"track execution lock digest for {path} must be sha256 hex")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_permissions_and_gates(self) -> TrackExecutionLock:
+        unknown_permissions = sorted((set(self.granted_permissions) | set(self.denied_permissions)) - MANIFEST_RUNNER_PERMISSIONS)
+        if unknown_permissions:
+            raise ValueError("track execution lock has unknown permissions: " + ", ".join(unknown_permissions))
+        overlaps = sorted(set(self.granted_permissions) & set(self.denied_permissions))
+        if overlaps:
+            raise ValueError("track execution lock grants and denies the same permissions: " + ", ".join(overlaps))
+        unknown_gates = sorted(set(self.strategic_human_gates) - STRATEGIC_HUMAN_GATES)
+        if unknown_gates:
+            raise ValueError("track execution lock has unknown strategic human gates: " + ", ".join(unknown_gates))
+        return self
 
 
 class ManifestDesignDependency(StrictModel):
@@ -114,6 +307,15 @@ class ManifestAgentDesignContract(StrictModel):
     required_sections: list[str]
     required_decisions: list[str]
     acceptance_checklist: list[str]
+    planning_write_scope: list[str] = Field(default_factory=list)
+    allowed_write_scopes: list[str] = Field(default_factory=list)
+    forbidden_scopes: list[str] = Field(default_factory=list)
+    expected_output_paths: list[str] = Field(default_factory=list)
+    validation_commands: list[str] = Field(default_factory=list)
+    stop_conditions: list[str] = Field(default_factory=list)
+    template_key: str | None = None
+    generated_contract_marker: str | None = None
+    generated_from_template_version: str | None = None
 
     @field_validator("source_documents")
     @classmethod
@@ -130,6 +332,391 @@ class ManifestAgentDesignContract(StrictModel):
         if not cleaned:
             raise ValueError("agent_design list fields must not be empty")
         return cleaned
+
+    @field_validator("planning_write_scope")
+    @classmethod
+    def validate_planning_write_scope(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+    @field_validator(
+        "allowed_write_scopes",
+        "forbidden_scopes",
+        "expected_output_paths",
+        "validation_commands",
+        "stop_conditions",
+    )
+    @classmethod
+    def validate_optional_lists(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+
+class ManifestAutoSafeContract(StrictModel):
+    wr_candidate_policy: str
+    wr_id_allocation_behavior: str
+    milestone_to_wr_link_behavior: str
+    manifest_wr_reference_behavior: str
+    allowed_metadata_write_scopes: list[str]
+    forbidden_scopes: list[str]
+    validation_commands: list[str]
+    stop_conditions: list[str]
+    template_key: str
+    generated_contract_marker: str
+    generated_from_template_version: str
+
+    @field_validator(
+        "wr_candidate_policy",
+        "wr_id_allocation_behavior",
+        "milestone_to_wr_link_behavior",
+        "manifest_wr_reference_behavior",
+        "template_key",
+        "generated_contract_marker",
+        "generated_from_template_version",
+    )
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("auto_safe_contract text fields must not be empty")
+        return cleaned
+
+    @field_validator("allowed_metadata_write_scopes", "forbidden_scopes", "validation_commands", "stop_conditions")
+    @classmethod
+    def validate_non_empty_list(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("auto_safe_contract list fields must not be empty")
+        return cleaned
+
+
+class ManifestProductCodeContract(StrictModel):
+    required_active_wr_state: str
+    required_accepted_implementation_plan: str
+    exact_allowed_implementation_write_scopes: list[str]
+    required_function_method_scope: list[str]
+    forbidden_implementation_scopes: list[str]
+    tests_to_add_change: list[str]
+    runtime_evidence_required: list[str]
+    validation_commands: list[str]
+    rollback_compatibility_expectations: list[str]
+    closeout_evidence: list[str]
+    stop_conditions: list[str]
+    template_key: str
+    generated_contract_marker: str
+    generated_from_template_version: str
+
+    @field_validator(
+        "required_active_wr_state",
+        "required_accepted_implementation_plan",
+        "template_key",
+        "generated_contract_marker",
+        "generated_from_template_version",
+    )
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("product_code_contract text fields must not be empty")
+        return cleaned
+
+    @field_validator(
+        "exact_allowed_implementation_write_scopes",
+        "required_function_method_scope",
+        "forbidden_implementation_scopes",
+        "tests_to_add_change",
+        "runtime_evidence_required",
+        "validation_commands",
+        "rollback_compatibility_expectations",
+        "closeout_evidence",
+        "stop_conditions",
+    )
+    @classmethod
+    def validate_non_empty_list(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("product_code_contract list fields must not be empty")
+        return cleaned
+
+
+class ManifestImplementationTemplate(StrictModel):
+    file: str
+    content: str
+
+    @field_validator("file")
+    @classmethod
+    def validate_file(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("implementation_writer template file must not be empty")
+        return cleaned
+
+
+class ManifestImplementationPatch(StrictModel):
+    file: str
+    find: str
+    replace: str
+
+    @field_validator("file", "find")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("implementation_writer patch file/find fields must not be empty")
+        return cleaned
+
+
+class ManifestImplementationWriter(StrictModel):
+    strategy: ImplementationWriterStrategy = "no_writer"
+    aggregation_only: bool = False
+    required_prior_milestones: list[str] = Field(default_factory=list)
+    required_prior_completion_quality: str | None = None
+    required_evidence_categories: list[str] = Field(default_factory=list)
+    allowed_files: list[str] = Field(default_factory=list)
+    allowed_write_scopes: list[str] = Field(default_factory=list)
+    required_outputs: list[str] = Field(default_factory=list)
+    forbidden_files: list[str] = Field(default_factory=list)
+    forbidden_scopes: list[str] = Field(default_factory=list)
+    forbidden_patterns: list[str] = Field(default_factory=list)
+    new_file_policy: str = "existing_files_only"
+    validation_commands: list[str] = Field(default_factory=list)
+    closeout_path: str | None = None
+    stop_conditions: list[str] = Field(default_factory=list)
+    templates: list[ManifestImplementationTemplate] = Field(default_factory=list)
+    patches: list[ManifestImplementationPatch] = Field(default_factory=list)
+
+    @field_validator("new_file_policy")
+    @classmethod
+    def validate_new_file_policy(cls, value: str) -> str:
+        cleaned = value.strip()
+        allowed = {"existing_files_only", "explicit_new_scope_required"}
+        if cleaned not in allowed:
+            raise ValueError(f"implementation_writer new_file_policy must be one of {sorted(allowed)}")
+        return cleaned
+
+    @field_validator(
+        "required_prior_milestones",
+        "required_evidence_categories",
+        "allowed_files",
+        "allowed_write_scopes",
+        "required_outputs",
+        "forbidden_files",
+        "forbidden_scopes",
+        "forbidden_patterns",
+        "validation_commands",
+        "stop_conditions",
+    )
+    @classmethod
+    def validate_lists(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+    @field_validator("required_prior_completion_quality", "closeout_path")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class ManifestCloseoutEvidenceRecord(StrictModel):
+    milestone_id: str
+    wr_id: str
+    completion_quality: str
+    evidence_categories: list[str]
+    validation_commands: list[str]
+    validation_results: list[str]
+    files_changed: list[str]
+    runtime_artifacts: list[str] = Field(default_factory=list)
+    diagnostics: list[str] = Field(default_factory=list)
+    source_maps: list[str] = Field(default_factory=list)
+    known_gaps: list[str]
+    closeout_path: str
+
+    @field_validator("milestone_id", "wr_id", "completion_quality", "closeout_path")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("closeout evidence record text fields must not be empty")
+        return cleaned
+
+    @field_validator(
+        "evidence_categories",
+        "validation_commands",
+        "validation_results",
+        "files_changed",
+        "runtime_artifacts",
+        "diagnostics",
+        "source_maps",
+        "known_gaps",
+    )
+    @classmethod
+    def validate_lists(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+    @model_validator(mode="after")
+    def validate_required_lists(self) -> ManifestCloseoutEvidenceRecord:
+        for field_name in (
+            "evidence_categories",
+            "validation_commands",
+            "validation_results",
+            "files_changed",
+            "known_gaps",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(f"closeout evidence record requires {field_name}")
+        return self
+
+
+class ManifestAgentCloseoutContract(StrictModel):
+    evidence_files: list[str]
+    validation_commands: list[str]
+    completion_quality_allowed: list[str]
+    closeout_path: str
+    production_roadmap_state_updates: list[str]
+    known_gap_reporting: list[str]
+    next_action_update_rules: list[str]
+    template_key: str
+    generated_contract_marker: str
+    generated_from_template_version: str
+
+    @field_validator("closeout_path", "template_key", "generated_contract_marker", "generated_from_template_version")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("agent_closeout_contract text fields must not be empty")
+        return cleaned
+
+    @field_validator(
+        "evidence_files",
+        "validation_commands",
+        "completion_quality_allowed",
+        "production_roadmap_state_updates",
+        "known_gap_reporting",
+        "next_action_update_rules",
+    )
+    @classmethod
+    def validate_non_empty_list(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("agent_closeout_contract list fields must not be empty")
+        return cleaned
+
+
+class ManifestRuntimeCloseoutContract(StrictModel):
+    runtime_test_evidence_required: list[str]
+    validation_commands: list[str]
+    completion_quality_allowed: list[str]
+    closeout_path: str
+    files_changed_report: list[str]
+    known_gap_reporting: list[str]
+    production_roadmap_state_updates: list[str]
+    next_action_update_rules: list[str]
+    evidence_manifest_path: str | None = None
+    template_key: str
+    generated_contract_marker: str
+    generated_from_template_version: str
+
+    @field_validator("closeout_path", "template_key", "generated_contract_marker", "generated_from_template_version")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("runtime_closeout_contract text fields must not be empty")
+        return cleaned
+
+    @field_validator("evidence_manifest_path")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator(
+        "runtime_test_evidence_required",
+        "validation_commands",
+        "completion_quality_allowed",
+        "files_changed_report",
+        "known_gap_reporting",
+        "production_roadmap_state_updates",
+        "next_action_update_rules",
+    )
+    @classmethod
+    def validate_non_empty_list(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("runtime_closeout_contract list fields must not be empty")
+        return cleaned
+
+
+class ManifestHandoffContract(StrictModel):
+    handoff_target: str
+    proof_path_rules: list[str]
+    forbidden_scopes: list[str]
+    validation_commands: list[str]
+    stop_conditions: list[str]
+    template_key: str
+    generated_contract_marker: str
+    generated_from_template_version: str
+
+    @field_validator("handoff_target", "template_key", "generated_contract_marker", "generated_from_template_version")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("handoff_contract text fields must not be empty")
+        return cleaned
+
+    @field_validator("proof_path_rules", "forbidden_scopes", "validation_commands", "stop_conditions")
+    @classmethod
+    def validate_non_empty_list(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("handoff_contract list fields must not be empty")
+        return cleaned
+
+
+class ManifestContractParameters(StrictModel):
+    proof_slice_id: str | None = None
+    proof_slice_title: str | None = None
+    target_control_surface: str | None = None
+    exact_allowed_implementation_write_scopes: list[str] = Field(default_factory=list)
+    required_function_method_scope: list[str] = Field(default_factory=list)
+    tests_to_add_change: list[str] = Field(default_factory=list)
+    runtime_evidence_required: list[str] = Field(default_factory=list)
+    validation_commands: list[str] = Field(default_factory=list)
+    source_documents: list[str] = Field(default_factory=list)
+    required_sections: list[str] = Field(default_factory=list)
+    required_decisions: list[str] = Field(default_factory=list)
+    acceptance_checklist: list[str] = Field(default_factory=list)
+    closeout_evidence: list[str] = Field(default_factory=list)
+    rollback_compatibility_expectations: list[str] = Field(default_factory=list)
+
+    @field_validator("proof_slice_id", "proof_slice_title", "target_control_surface")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator(
+        "exact_allowed_implementation_write_scopes",
+        "required_function_method_scope",
+        "tests_to_add_change",
+        "runtime_evidence_required",
+        "validation_commands",
+        "source_documents",
+        "required_sections",
+        "required_decisions",
+        "acceptance_checklist",
+        "closeout_evidence",
+        "rollback_compatibility_expectations",
+    )
+    @classmethod
+    def validate_optional_lists(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
 
 
 class TrackExecutionManifestMilestone(StrictModel):
@@ -152,7 +739,25 @@ class TrackExecutionManifestMilestone(StrictModel):
     may_create_code: bool
     may_create_crates: bool
     may_modify_production_behavior: bool
+    execution_kind: ManifestExecutionKind | None = None
+    milestone_kind: str | None = None
+    permission_classes_required: list[str] = Field(default_factory=list)
+    implementation_proof_kind: str | None = None
+    closeout_kind: str | None = None
+    required_evidence_categories: list[str] = Field(default_factory=list)
+    template_key: str | None = None
+    generated_contract_marker: str | None = None
+    generated_from_template_version: str | None = None
+    contract_parameters: ManifestContractParameters | None = None
+    auto_safe_contract: ManifestAutoSafeContract | None = None
     agent_design: ManifestAgentDesignContract | None = None
+    agent_design_contract: ManifestAgentDesignContract | None = None
+    product_code_contract: ManifestProductCodeContract | None = None
+    implementation_writer: ManifestImplementationWriter | None = None
+    closeout_strategy: CloseoutStrategy | None = None
+    agent_closeout_contract: ManifestAgentCloseoutContract | None = None
+    runtime_closeout_contract: ManifestRuntimeCloseoutContract | None = None
+    handoff_contract: ManifestHandoffContract | None = None
 
     @field_validator(
         "milestone_id",
@@ -210,6 +815,11 @@ class TrackExecutionManifestMilestone(StrictModel):
             raise ValueError("manifest milestones must have exactly one owning_wr or future_wr_candidate")
         return self
 
+    @field_validator("permission_classes_required", "required_evidence_categories")
+    @classmethod
+    def validate_optional_text_list(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
 
 class TrackExecutionManifest(StrictModel):
     version: int
@@ -220,6 +830,8 @@ class TrackExecutionManifest(StrictModel):
     global_validation_commands: list[str]
     global_stop_conditions: list[str]
     next_legal_action: str
+    ai_executable: bool = False
+    full_automation_target: bool = False
     milestones: list[TrackExecutionManifestMilestone]
 
     @field_validator("track_id", "authority_level", "next_legal_action")
@@ -257,7 +869,17 @@ class LoadedTrackExecutionManifest:
     path: Path
 
 
+@dataclass(frozen=True)
+class LoadedTrackExecutionLock:
+    lock: TrackExecutionLock
+    path: Path
+
+
 def manifest_source_path(track_id: str, root: Path = TRACK_EXECUTION_MANIFEST_ROOT) -> Path:
+    return root / f"{track_id.lower()}.yaml"
+
+
+def lock_source_path(track_id: str, root: Path = TRACK_EXECUTION_LOCK_ROOT) -> Path:
     return root / f"{track_id.lower()}.yaml"
 
 
@@ -317,6 +939,117 @@ def load_track_execution_manifest(
     return LoadedTrackExecutionManifest(manifest=manifest, path=path)
 
 
+def load_track_execution_lock(
+    track_id: str,
+    *,
+    root: Path = TRACK_EXECUTION_LOCK_ROOT,
+) -> LoadedTrackExecutionLock | None:
+    path = lock_source_path(track_id, root=root)
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as source:
+            data = yaml.safe_load(source)
+    except yaml.YAMLError as error:
+        raise WorkflowError(f"{repo_path(path)} contains malformed YAML: {error}") from error
+    if not isinstance(data, dict):
+        raise WorkflowError(f"{repo_path(path)} must contain a YAML mapping")
+    try:
+        lock = TrackExecutionLock.model_validate(data)
+    except ValueError as error:
+        raise WorkflowError(f"{repo_path(path)} is not a valid Track Execution Lock: {error}") from error
+    if lock.track_id != track_id:
+        raise WorkflowError(f"{repo_path(path)} declares track_id={lock.track_id}, expected {track_id}")
+    return LoadedTrackExecutionLock(lock=lock, path=path)
+
+
+def sha256_file(path: Path) -> str:
+    if not path.exists():
+        raise WorkflowError(f"cannot digest missing source file: {repo_path(path)}")
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def source_digest_paths(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+) -> list[Path]:
+    paths: list[Path] = [production_source, roadmap_source]
+    archive_source, deferred_source = split_source_paths(roadmap_source)
+    paths.extend(path for path in (archive_source, deferred_source) if path.exists())
+    paths.append(loaded.path)
+    paths.extend(TRACK_EXECUTION_LOCKED_WORKFLOW_SOURCES)
+    for dependency in loaded.manifest.accepted_design_dependencies:
+        paths.append(REPO_ROOT / dependency.path)
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = repo_path(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
+def source_digest_map(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+) -> dict[str, str]:
+    return {
+        repo_path(path): sha256_file(path)
+        for path in source_digest_paths(
+            loaded,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+        )
+    }
+
+
+def build_track_execution_lock_data(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+    locked_by: str,
+    granted_permissions: list[str],
+    denied_permissions: list[str],
+    strategic_human_gates: list[str] | None = None,
+) -> dict:
+    digests = source_digest_map(loaded, production_source=production_source, roadmap_source=roadmap_source)
+    manifest_digest = digests.get(repo_path(loaded.path), sha256_file(loaded.path))
+    return {
+        "version": 1,
+        "track_id": loaded.manifest.track_id,
+        "ai_executable": True,
+        "locked_by": locked_by,
+        "locked_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "manifest_digest": manifest_digest,
+        "source_digests": digests,
+        "granted_permissions": granted_permissions,
+        "denied_permissions": denied_permissions,
+        "strategic_human_gates": strategic_human_gates
+        or [
+            "adr_acceptance",
+            "locked_design_direction_change",
+            "foundation_meta_extraction",
+            "crate_creation_unless_pre_authorized",
+            "external_plugin_security_boundary",
+            "second_domain_extraction",
+            "release_perfectionist_verified_certification",
+        ],
+        "invalidation_rules": [
+            "invalidate when manifest_digest changes before a new full-track run starts",
+            "invalidate when production, roadmap, or accepted design source digests change before a new full-track run starts",
+            "invalidate when requested permissions exceed granted_permissions or intersect denied_permissions",
+            "invalidate when a remaining milestone crosses a listed strategic_human_gate",
+        ],
+    }
+
+
 def manifest_alignment_errors(
     loaded: LoadedTrackExecutionManifest,
     *,
@@ -368,6 +1101,7 @@ def manifest_alignment_errors(
                 errors.append(f"{entry.milestone_id}: manifest owning_wr {entry.owning_wr} is not present in roadmap")
             else:
                 errors.extend(manifest_write_scope_coverage_errors(entry, roadmap_item))
+                errors.extend(implementation_writer_write_scope_coverage_errors(entry, roadmap_item))
         if entry.future_wr_candidate and milestone.roadmap_links:
             errors.append(
                 f"{entry.milestone_id}: manifest future_wr_candidate {entry.future_wr_candidate} "
@@ -402,6 +1136,29 @@ def manifest_write_scope_coverage_errors(
     return errors
 
 
+def implementation_writer_write_scope_coverage_errors(
+    entry: TrackExecutionManifestMilestone,
+    roadmap_item: RoadmapItem,
+) -> list[str]:
+    writer = entry.implementation_writer
+    if writer is None or writer.strategy != "proof_aggregation_writer":
+        return []
+    errors: list[str] = []
+    wr_scopes = normalized_write_scopes_with_generated_outputs(roadmap_item.write_scopes)
+    for scope in implementation_writer_allowed_scopes(writer):
+        if is_generated_or_derived_scope(scope):
+            continue
+        normalized = manifest_write_scope_path(scope)
+        if normalized is None:
+            continue
+        if not any(path_within_scope(normalized, wr_scope) for wr_scope in wr_scopes):
+            errors.append(
+                f"{entry.milestone_id}: implementation_writer allowed scope {normalized} is not covered by "
+                f"owning WR {roadmap_item.id} write_scopes"
+            )
+    return errors
+
+
 def is_generated_or_derived_scope(scope: str) -> bool:
     cleaned = scope.strip().lower()
     return cleaned.startswith(GENERATED_SCOPE_PREFIXES)
@@ -413,7 +1170,7 @@ def mentions_generated_or_derived_scope(scope: str) -> bool:
 
 
 def manifest_write_scope_path(scope: str) -> str | None:
-    normalized = normalize_repo_path(scope)
+    normalized = normalize_write_scope_path(scope)
     if not normalized or normalized.startswith("blocked:") or " " in normalized:
         return None
     if "/" not in normalized:
@@ -458,6 +1215,41 @@ def manifest_type_errors(entry: TrackExecutionManifestMilestone, *, milestone_ki
     return []
 
 
+def document_frontmatter(path: Path) -> dict | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    try:
+        end = next(index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---")
+    except StopIteration:
+        return None
+    frontmatter = yaml.safe_load("\n".join(lines[1:end])) or {}
+    return frontmatter if isinstance(frontmatter, dict) else None
+
+
+def manifest_path_reference(path: str) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return candidate
+    return REPO_ROOT / normalize_repo_path(path)
+
+
+def closeout_evidence_record(path: Path) -> ManifestCloseoutEvidenceRecord | None:
+    frontmatter = document_frontmatter(path)
+    if frontmatter is None:
+        return None
+    evidence = frontmatter.get("closeout_evidence")
+    if evidence is None:
+        return None
+    if not isinstance(evidence, dict):
+        raise ValueError("closeout_evidence frontmatter must be a mapping")
+    return ManifestCloseoutEvidenceRecord.model_validate(evidence)
+
+
 def audit_manifest(
     loaded: LoadedTrackExecutionManifest,
     *,
@@ -478,6 +1270,9 @@ def audit_manifest(
             errors.append(f"{manifest.track_id}: global manifest field remains blocked: {value}")
     for entry in manifest.milestones:
         errors.extend(audit_manifest_milestone(entry))
+        milestone = next((candidate for candidate in track.milestones if candidate.id == entry.milestone_id), None)
+        if milestone is not None:
+            errors.extend(audit_manifest_action_contracts(entry, milestone, track=track, manifest=manifest))
     return errors
 
 
@@ -530,6 +1325,491 @@ def audit_manifest_or_raise(
         raise WorkflowError("\n".join(manifest_audit_blocker_lines(errors)))
 
 
+def remaining_manifest_entries(
+    manifest: TrackExecutionManifest,
+    track: ProductionTrack,
+) -> list[tuple[TrackExecutionManifestMilestone, ProductionMilestone, int]]:
+    remaining: list[tuple[TrackExecutionManifestMilestone, ProductionMilestone, int]] = []
+    manifest_by_id = manifest.by_milestone_id
+    for index, milestone in enumerate(ordered_track_milestones(track)):
+        if milestone.state == "completed":
+            continue
+        remaining.append((manifest_by_id[milestone.id], milestone, index))
+    return remaining
+
+
+def manifest_entry_execution_kind(entry: TrackExecutionManifestMilestone) -> str | None:
+    return entry.execution_kind
+
+
+def execution_kind_compatibility_errors(
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+) -> list[str]:
+    execution_kind = manifest_entry_execution_kind(entry)
+    if execution_kind is None:
+        return [f"{entry.milestone_id}: execution_kind is required for full automation"]
+    expected = {
+        "design_contract": ({"docs_only", "design_only"}, {"design"}),
+        "implementation_proof": ({"implementation"}, {"implementation"}),
+        "proof_aggregation": ({"hardening"}, {"hardening"}),
+        "handoff_closeout": ({"closeout"}, {"release"}),
+        "extraction_gate": ({"closeout", "hardening"}, {"release", "hardening"}),
+    }
+    manifest_types, production_kinds = expected[execution_kind]
+    errors: list[str] = []
+    if entry.milestone_type not in manifest_types:
+        errors.append(
+            f"{entry.milestone_id}: execution_kind {execution_kind} is incompatible with "
+            f"manifest milestone_type {entry.milestone_type}"
+        )
+    if milestone.kind not in production_kinds:
+        errors.append(
+            f"{entry.milestone_id}: execution_kind {execution_kind} is incompatible with "
+            f"production milestone kind {milestone.kind}"
+        )
+    return errors
+
+
+def full_automation_preflight_errors(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    track: ProductionTrack,
+    roadmap: RoadmapState,
+    allow: set[str] | None = None,
+) -> list[str]:
+    errors = audit_manifest(loaded, track=track, roadmap=roadmap)
+    if errors:
+        return errors
+    for entry, milestone, index in remaining_manifest_entries(loaded.manifest, track):
+        errors.extend(full_automation_entry_errors(entry, milestone, track_index=index, allow=allow))
+    return errors
+
+
+def full_automation_entry_errors(
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    *,
+    track_index: int,
+    allow: set[str] | None,
+) -> list[str]:
+    errors: list[str] = []
+    execution_kind = manifest_entry_execution_kind(entry)
+    if execution_kind not in FULL_AUTOMATION_EXECUTION_KINDS:
+        errors.append(
+            f"{entry.milestone_id}: full automation execution_kind must be one of "
+            f"{', '.join(sorted(FULL_AUTOMATION_EXECUTION_KINDS))}; got {execution_kind or 'missing'}"
+        )
+    else:
+        errors.extend(execution_kind_compatibility_errors(entry, milestone))
+
+    required_permissions = full_automation_required_permission_classes(entry)
+    declared_permissions = set(entry.permission_classes_required)
+    if not declared_permissions:
+        errors.append(f"{entry.milestone_id}: full automation requires declared permission_classes_required")
+    missing_declared = sorted(required_permissions - declared_permissions)
+    if missing_declared:
+        errors.append(
+            f"{entry.milestone_id}: permission_classes_required missing "
+            + ", ".join(missing_declared)
+        )
+    if allow is not None:
+        ungranted = sorted(
+            permission
+            for permission in required_permissions
+            if not full_automation_permission_granted(permission, allow)
+        )
+        if ungranted:
+            errors.append(
+                f"{entry.milestone_id}: full automation requires ungranted permissions "
+                + ", ".join(ungranted)
+            )
+    if "foundation_extraction" in declared_permissions:
+        errors.append(f"{entry.milestone_id}: full automation must not require foundation_extraction")
+    if entry.may_create_crates or "crate_creation" in declared_permissions:
+        errors.append(f"{entry.milestone_id}: full automation must not require crate_creation unless a separate gate allows it")
+
+    errors.extend(full_automation_contract_errors(entry, execution_kind=execution_kind or ""))
+    errors.extend(full_automation_scope_errors(entry))
+    errors.extend(
+        validation_command_errors(
+            entry.validation_commands,
+            label=f"{entry.milestone_id}: manifest validation_commands",
+            product_code_eligible=True,
+        )
+    )
+    if not entry.required_evidence_categories:
+        errors.append(f"{entry.milestone_id}: full automation requires declared evidence categories")
+    if track_index > 0 and not entry.predecessor_dependencies:
+        errors.append(f"{entry.milestone_id}: full automation requires predecessor dependencies")
+    if entry.expected_closeout_path.startswith("blocked:") or not entry.expected_closeout_path.endswith(".md"):
+        errors.append(f"{entry.milestone_id}: full automation requires a declared Markdown closeout path")
+    if milestone.kind == "release" and execution_kind == "handoff_closeout":
+        errors.extend(full_automation_handoff_errors(entry))
+    return errors
+
+
+def full_automation_required_permission_classes(entry: TrackExecutionManifestMilestone) -> set[str]:
+    required: set[str] = set()
+    if entry.future_wr_candidate:
+        required.add("auto_safe")
+    execution_kind = manifest_entry_execution_kind(entry)
+    if execution_kind == "design_contract":
+        required.update({"agent_design", "agent_closeout"})
+    elif execution_kind == "implementation_proof":
+        required.update({"agent_design", "product_code", "product_implementation", "runtime_closeout"})
+    elif execution_kind == "proof_aggregation":
+        required.update({"agent_design", "product_code", "product_implementation", "runtime_closeout"})
+    elif execution_kind == "handoff_closeout":
+        required.update({"agent_closeout", "handoff"})
+    elif execution_kind == "extraction_gate":
+        required.update({"agent_design", "agent_closeout"})
+    return required
+
+
+def full_automation_permission_granted(permission: str, allow: set[str]) -> bool:
+    grants = FULL_AUTOMATION_PERMISSION_GRANTS.get(permission, {permission})
+    return bool(grants & allow)
+
+
+def full_automation_contract_errors(
+    entry: TrackExecutionManifestMilestone,
+    *,
+    execution_kind: str,
+) -> list[str]:
+    errors: list[str] = []
+    expected_closeout_strategy = {
+        "design_contract": "bounded_contract_closeout",
+        "implementation_proof": "runtime_proven_closeout",
+        "proof_aggregation": "runtime_proven_closeout",
+        "handoff_closeout": "handoff_closeout",
+        "extraction_gate": "extraction_gate_closeout",
+    }.get(execution_kind)
+    if expected_closeout_strategy is not None:
+        if entry.closeout_strategy is None:
+            errors.append(f"{entry.milestone_id}: full automation requires manifest-declared closeout_strategy")
+        elif entry.closeout_strategy != expected_closeout_strategy:
+            errors.append(
+                f"{entry.milestone_id}: closeout_strategy {entry.closeout_strategy} "
+                f"does not match execution_kind {execution_kind}; expected {expected_closeout_strategy}"
+            )
+    if execution_kind == "design_contract":
+        if agent_design_contract_for_entry(entry) is None:
+            errors.append(f"{entry.milestone_id}: full automation design_contract requires agent_design_contract")
+        if entry.agent_closeout_contract is None:
+            errors.append(f"{entry.milestone_id}: full automation design_contract requires agent_closeout_contract")
+    elif execution_kind in {"implementation_proof", "proof_aggregation"}:
+        if agent_design_contract_for_entry(entry) is None:
+            errors.append(f"{entry.milestone_id}: full automation implementation milestone requires agent_design_contract")
+        if entry.product_code_contract is None:
+            errors.append(f"{entry.milestone_id}: full automation implementation milestone requires product_code_contract")
+        if entry.runtime_closeout_contract is None:
+            errors.append(f"{entry.milestone_id}: full automation implementation milestone requires runtime_closeout_contract")
+        if entry.implementation_writer is None:
+            errors.append(f"{entry.milestone_id}: full automation implementation milestone requires implementation_writer")
+        elif entry.implementation_writer.strategy == "no_writer":
+            errors.append(f"{entry.milestone_id}: implementation_writer.strategy must not be no_writer for full automation")
+        if execution_kind == "proof_aggregation":
+            writer = entry.implementation_writer
+            if writer is None or writer.strategy != "proof_aggregation_writer":
+                errors.append(f"{entry.milestone_id}: proof_aggregation milestone requires proof_aggregation_writer")
+    elif execution_kind == "handoff_closeout":
+        if entry.agent_closeout_contract is None:
+            errors.append(f"{entry.milestone_id}: full automation handoff_closeout requires agent_closeout_contract")
+        if entry.handoff_contract is None:
+            errors.append(f"{entry.milestone_id}: full automation handoff_closeout requires handoff_contract")
+        if entry.product_code_contract is not None or entry.implementation_writer is not None:
+            errors.append(f"{entry.milestone_id}: handoff_closeout must not declare product implementation contracts")
+    return errors
+
+
+def full_automation_scope_errors(entry: TrackExecutionManifestMilestone) -> list[str]:
+    errors: list[str] = []
+    contract = agent_design_contract_for_entry(entry)
+    if contract is not None:
+        errors.extend(
+            exact_scope_list_errors(
+                contract.allowed_write_scopes,
+                label=f"{entry.milestone_id}: agent_design_contract allowed_write_scopes",
+            )
+        )
+        errors.extend(
+            validation_command_errors(
+                contract.validation_commands,
+                label=f"{entry.milestone_id}: agent_design_contract",
+                product_code_eligible=True,
+            )
+        )
+    if entry.product_code_contract is not None:
+        product_scopes = entry.product_code_contract.exact_allowed_implementation_write_scopes
+        errors.extend(
+            exact_scope_list_errors(
+                product_scopes,
+                label=f"{entry.milestone_id}: product_code_contract exact_allowed_implementation_write_scopes",
+            )
+        )
+        errors.extend(new_file_scope_errors(entry.milestone_id, product_scopes, label="product_code_contract"))
+        errors.extend(
+            validation_command_errors(
+                entry.product_code_contract.validation_commands,
+                label=f"{entry.milestone_id}: product_code_contract",
+                product_code_eligible=True,
+            )
+        )
+        if not entry.product_code_contract.forbidden_implementation_scopes:
+            errors.append(f"{entry.milestone_id}: product_code_contract must declare forbidden implementation scopes")
+    if entry.implementation_writer is not None and entry.implementation_writer.strategy != "no_writer":
+        writer_scopes = implementation_writer_allowed_scopes(entry.implementation_writer)
+        errors.extend(
+            exact_scope_list_errors(
+                writer_scopes,
+                label=f"{entry.milestone_id}: implementation_writer allowed scope",
+            )
+        )
+        errors.extend(new_file_scope_errors(entry.milestone_id, writer_scopes, label="implementation_writer"))
+        if not implementation_writer_forbidden_scopes(entry.implementation_writer):
+            errors.append(f"{entry.milestone_id}: implementation_writer must declare forbidden scopes")
+        errors.extend(
+            validation_command_errors(
+                entry.implementation_writer.validation_commands,
+                label=f"{entry.milestone_id}: implementation_writer",
+                product_code_eligible=True,
+            )
+        )
+    if entry.runtime_closeout_contract is not None:
+        if not entry.runtime_closeout_contract.runtime_test_evidence_required:
+            errors.append(f"{entry.milestone_id}: runtime_closeout_contract must declare runtime evidence")
+        if entry.runtime_closeout_contract.closeout_path != entry.expected_closeout_path:
+            errors.append(f"{entry.milestone_id}: runtime_closeout_contract closeout_path must match expected_closeout_path")
+        errors.extend(
+            validation_command_errors(
+                entry.runtime_closeout_contract.validation_commands,
+                label=f"{entry.milestone_id}: runtime_closeout_contract",
+                product_code_eligible=True,
+            )
+        )
+    if entry.agent_closeout_contract is not None:
+        if entry.agent_closeout_contract.closeout_path != entry.expected_closeout_path:
+            errors.append(f"{entry.milestone_id}: agent_closeout_contract closeout_path must match expected_closeout_path")
+        errors.extend(
+            validation_command_errors(
+                entry.agent_closeout_contract.validation_commands,
+                label=f"{entry.milestone_id}: agent_closeout_contract",
+                product_code_eligible=True,
+            )
+        )
+    if entry.handoff_contract is not None:
+        errors.extend(
+            validation_command_errors(
+                entry.handoff_contract.validation_commands,
+                label=f"{entry.milestone_id}: handoff_contract",
+                product_code_eligible=True,
+            )
+        )
+    return errors
+
+
+def new_file_scope_errors(milestone_id: str, scopes: list[str], *, label: str) -> list[str]:
+    errors: list[str] = []
+    for scope in scopes:
+        if is_generated_or_derived_scope(scope):
+            continue
+        if is_new_write_scope(scope):
+            continue
+        cleaned = scope.strip()
+        raw_candidate = Path(cleaned)
+        if raw_candidate.is_absolute():
+            if not write_scope_path_requires_new_marker(raw_candidate):
+                continue
+            normalized = normalize_repo_path(cleaned)
+            errors.append(f"{milestone_id}: {label} new file scope must be marked with 'new:': {normalized}")
+            continue
+        normalized = manifest_write_scope_path(scope)
+        if normalized is None:
+            continue
+        path = REPO_ROOT / normalized
+        if not write_scope_path_requires_new_marker(path):
+            continue
+        errors.append(f"{milestone_id}: {label} new file scope must be marked with 'new:': {normalized}")
+    return errors
+
+
+def write_scope_path_requires_new_marker(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        return not path.exists()
+    return not git_tracks_path(path)
+
+
+def git_tracks_path(path: Path) -> bool:
+    try:
+        relative = path.resolve().relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        return path.exists()
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", relative.as_posix()],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def full_automation_handoff_errors(entry: TrackExecutionManifestMilestone) -> list[str]:
+    errors: list[str] = []
+    if entry.may_create_code or entry.may_modify_production_behavior:
+        errors.append(f"{entry.milestone_id}: handoff_closeout must not authorize product code or production behavior")
+    if entry.handoff_contract is None:
+        return errors
+    handoff_text = "\n".join(
+        [
+            entry.handoff_contract.handoff_target,
+            *entry.handoff_contract.proof_path_rules,
+            *entry.handoff_contract.forbidden_scopes,
+            *entry.handoff_contract.stop_conditions,
+        ]
+    )
+    if "implementation" not in handoff_text.lower():
+        errors.append(f"{entry.milestone_id}: handoff_contract must explicitly forbid downstream implementation")
+    if "foundation/meta" not in handoff_text:
+        errors.append(f"{entry.milestone_id}: handoff_contract must explicitly keep foundation/meta extraction blocked")
+    return errors
+
+
+def full_automation_preflight_or_raise(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    track: ProductionTrack,
+    roadmap: RoadmapState,
+    allow: set[str] | None = None,
+) -> None:
+    errors = full_automation_preflight_errors(loaded, track=track, roadmap=roadmap, allow=allow)
+    if errors:
+        raise WorkflowError("\n".join(full_automation_blocker_lines(errors)))
+
+
+def track_execution_lock_errors(
+    loaded_manifest: LoadedTrackExecutionManifest,
+    loaded_lock: LoadedTrackExecutionLock | None,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+    allow: set[str],
+    deny: set[str],
+    track: ProductionTrack | None = None,
+) -> list[str]:
+    if loaded_lock is None:
+        expected_path = lock_source_path(loaded_manifest.manifest.track_id)
+        return [f"{loaded_manifest.manifest.track_id}: full-track execution requires Track Execution Lock at {repo_path(expected_path)}"]
+    lock = loaded_lock.lock
+    errors: list[str] = []
+    if lock.track_id != loaded_manifest.manifest.track_id:
+        errors.append(
+            f"{repo_path(loaded_lock.path)}: lock track_id {lock.track_id} does not match manifest track_id {loaded_manifest.manifest.track_id}"
+        )
+    if not lock.ai_executable:
+        errors.append(f"{lock.track_id}: execution_lock.ai_executable must be true for full-track execution")
+    if not loaded_manifest.manifest.ai_executable:
+        errors.append(f"{lock.track_id}: manifest ai_executable must be true for full-track execution")
+
+    try:
+        current_digests = source_digest_map(
+            loaded_manifest,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+        )
+    except WorkflowError as error:
+        errors.append(str(error))
+        current_digests = {}
+    current_manifest_digest = current_digests.get(repo_path(loaded_manifest.path))
+    if current_manifest_digest is not None and lock.manifest_digest != current_manifest_digest:
+        errors.append(
+            f"{lock.track_id}: execution lock manifest_digest is stale "
+            f"(lock={lock.manifest_digest}, current={current_manifest_digest})"
+        )
+    for path, digest in current_digests.items():
+        locked_digest = lock.source_digests.get(path)
+        if locked_digest is None:
+            errors.append(f"{lock.track_id}: execution lock missing source digest for {path}")
+        elif locked_digest != digest:
+            errors.append(
+                f"{lock.track_id}: execution lock source digest is stale for {path} "
+                f"(lock={locked_digest}, current={digest})"
+            )
+    for path in sorted(set(lock.source_digests) - set(current_digests)):
+        errors.append(f"{lock.track_id}: execution lock references source that is no longer part of the manifest input set: {path}")
+
+    requested = set(allow)
+    ungranted = sorted(requested - set(lock.granted_permissions))
+    if ungranted:
+        errors.append(f"{lock.track_id}: requested full-track permissions exceed execution lock grants: {', '.join(ungranted)}")
+    denied_requested = sorted(requested & set(lock.denied_permissions))
+    if denied_requested:
+        errors.append(f"{lock.track_id}: requested full-track permissions are denied by execution lock: {', '.join(denied_requested)}")
+    deny_conflicts = sorted(set(deny) & set(lock.granted_permissions))
+    if deny_conflicts:
+        errors.append(f"{lock.track_id}: command denies permissions granted by execution lock: {', '.join(deny_conflicts)}")
+
+    if track is not None:
+        for entry, _milestone, _index in remaining_manifest_entries(loaded_manifest.manifest, track):
+            for permission in entry.permission_classes_required:
+                gate = STRATEGIC_GATE_PERMISSION_MAP.get(permission)
+                if gate and gate in lock.strategic_human_gates and permission not in lock.granted_permissions:
+                    errors.append(
+                        f"{entry.milestone_id}: strategic human gate {gate} blocks permission {permission}"
+                    )
+    return errors
+
+
+def track_execution_lock_or_raise(
+    loaded_manifest: LoadedTrackExecutionManifest,
+    loaded_lock: LoadedTrackExecutionLock | None,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+    allow: set[str],
+    deny: set[str],
+    track: ProductionTrack | None = None,
+) -> None:
+    errors = track_execution_lock_errors(
+        loaded_manifest,
+        loaded_lock,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
+        allow=allow,
+        deny=deny,
+        track=track,
+    )
+    if errors:
+        raise WorkflowError("\n".join(["Track Execution Lock blockers:", *[f"- {error}" for error in errors]]))
+
+
+def full_automation_blocker_lines(errors: list[str]) -> list[str]:
+    return ["Full automation readiness blockers:", *[f"- {error}" for error in errors]]
+
+
+def print_full_automation_blockers(errors: list[str]) -> None:
+    lines = full_automation_blocker_lines(errors)
+    console.print(f"[red]{lines[0]}[/red]")
+    for line in lines[1:]:
+        console.print(line)
+
+
+def should_run_full_automation_preflight(
+    *,
+    mode: ManifestRunMode,
+    preflight_only: bool,
+) -> bool:
+    if preflight_only:
+        return True
+    if mode == "full-track":
+        return True
+    return False
+
+
 def print_manifest_audit_blockers(errors: list[str]) -> None:
     lines = manifest_audit_blocker_lines(errors)
     console.print(f"[red]{lines[0]}[/red]")
@@ -555,6 +1835,280 @@ def audit_manifest_milestone(entry: TrackExecutionManifestMilestone) -> list[str
         errors.append(f"{entry.milestone_id}: expected_closeout_path remains blocked")
     if not entry.expected_closeout_path.endswith(".md"):
         errors.append(f"{entry.milestone_id}: expected_closeout_path must point at a Markdown closeout/report")
+    return errors
+
+
+def audit_manifest_action_contracts(
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    *,
+    track: ProductionTrack,
+    manifest: TrackExecutionManifest,
+) -> list[str]:
+    if milestone.state == "completed":
+        return []
+    errors: list[str] = []
+    if entry.future_wr_candidate and entry.auto_safe_contract is None:
+        errors.append(f"{entry.milestone_id}: remaining milestone needs auto_safe_contract before full-track execution")
+    if entry.milestone_type in {"docs_only", "design_only"}:
+        if agent_design_contract_for_entry(entry) is None:
+            errors.append(f"{entry.milestone_id}: remaining design milestone needs agent_design_contract")
+        if entry.agent_closeout_contract is None:
+            errors.append(f"{entry.milestone_id}: remaining design milestone needs agent_closeout_contract")
+    if entry.milestone_type in {"implementation", "hardening"}:
+        if agent_design_contract_for_entry(entry) is None:
+            errors.append(f"{entry.milestone_id}: remaining implementation milestone needs agent_design_contract")
+        if entry.product_code_contract is None:
+            errors.append(f"{entry.milestone_id}: remaining implementation milestone needs product_code_contract")
+        if entry.runtime_closeout_contract is None:
+            errors.append(f"{entry.milestone_id}: remaining implementation milestone needs runtime_closeout_contract")
+        errors.extend(implementation_writer_contract_errors(entry, track=track, manifest=manifest))
+        if entry.product_code_contract is not None:
+            contract_scope_errors = exact_scope_list_errors(
+                entry.product_code_contract.exact_allowed_implementation_write_scopes,
+                label=f"{entry.milestone_id}: product_code_contract exact_allowed_implementation_write_scopes",
+            )
+            errors.extend(contract_scope_errors)
+            errors.extend(
+                validation_command_errors(
+                    entry.product_code_contract.validation_commands,
+                    label=f"{entry.milestone_id}: product_code_contract",
+                    product_code_eligible=True,
+                )
+            )
+        if entry.runtime_closeout_contract is not None:
+            errors.extend(
+                validation_command_errors(
+                    entry.runtime_closeout_contract.validation_commands,
+                    label=f"{entry.milestone_id}: runtime_closeout_contract",
+                    product_code_eligible=True,
+                )
+            )
+    if entry.milestone_type == "closeout":
+        if entry.agent_closeout_contract is None:
+            errors.append(f"{entry.milestone_id}: remaining closeout milestone needs agent_closeout_contract")
+        if entry.handoff_contract is None:
+            errors.append(f"{entry.milestone_id}: remaining closeout milestone needs handoff_contract")
+    return errors
+
+
+def implementation_writer_contract_errors(
+    entry: TrackExecutionManifestMilestone,
+    *,
+    track: ProductionTrack,
+    manifest: TrackExecutionManifest,
+) -> list[str]:
+    errors: list[str] = []
+    writer = entry.implementation_writer
+    if writer is None or writer.strategy != "proof_aggregation_writer":
+        return errors
+    if writer.strategy == "proof_aggregation_writer":
+        if not implementation_writer_allowed_scopes(writer):
+            errors.append(f"{entry.milestone_id}: implementation_writer must declare exact allowed files or write scopes")
+        if not writer.required_outputs:
+            errors.append(f"{entry.milestone_id}: implementation_writer.required_outputs must describe proof evidence")
+        if not writer.validation_commands:
+            errors.append(f"{entry.milestone_id}: implementation_writer.validation_commands must be explicit")
+        if not writer.stop_conditions:
+            errors.append(f"{entry.milestone_id}: implementation_writer.stop_conditions must be explicit")
+        missing_writer_commands = [
+            command
+            for command in writer.validation_commands
+            if command not in product_validation_commands_for_entry(entry)
+        ]
+        if missing_writer_commands:
+            errors.append(
+                f"{entry.milestone_id}: implementation_writer validation commands are not covered by product_code_contract: "
+                + ", ".join(missing_writer_commands)
+            )
+        errors.extend(
+            exact_scope_list_errors(
+                implementation_writer_allowed_scopes(writer),
+                label=f"{entry.milestone_id}: implementation_writer allowed scope",
+            )
+        )
+        errors.extend(proof_aggregation_writer_contract_errors(entry, writer, track=track, manifest=manifest))
+    return errors
+
+
+def normalize_evidence_category(category: str) -> str:
+    cleaned = category.strip().lower().replace("-", "_").replace(" ", "_")
+    alias_key = category.strip().lower()
+    return GENERIC_EVIDENCE_CATEGORY_ALIASES.get(alias_key, GENERIC_EVIDENCE_CATEGORY_ALIASES.get(cleaned, cleaned))
+
+
+def proof_aggregation_writer_contract_errors(
+    entry: TrackExecutionManifestMilestone,
+    writer: ManifestImplementationWriter,
+    *,
+    track: ProductionTrack,
+    manifest: TrackExecutionManifest,
+) -> list[str]:
+    errors: list[str] = []
+    if not writer.aggregation_only:
+        errors.append(f"{entry.milestone_id}: proof_aggregation_writer must set aggregation_only: true")
+    if not writer.required_prior_milestones:
+        errors.append(f"{entry.milestone_id}: proof_aggregation_writer requires required_prior_milestones")
+    if writer.required_prior_completion_quality != "runtime_proven":
+        errors.append(
+            f"{entry.milestone_id}: proof_aggregation_writer requires required_prior_completion_quality: runtime_proven"
+        )
+    required_writer_categories = {normalize_evidence_category(category) for category in writer.required_evidence_categories}
+    missing_categories = sorted(
+        normalize_evidence_category(category)
+        for category in PROOF_AGGREGATION_REQUIRED_EVIDENCE_CATEGORIES
+        if normalize_evidence_category(category) not in required_writer_categories
+    )
+    if missing_categories:
+        errors.append(
+            f"{entry.milestone_id}: proof_aggregation_writer missing required evidence categories: "
+            + ", ".join(missing_categories)
+        )
+    if writer.closeout_path != entry.expected_closeout_path:
+        errors.append(
+            f"{entry.milestone_id}: proof_aggregation_writer closeout_path must match expected_closeout_path"
+        )
+    if not [*writer.forbidden_files, *writer.forbidden_scopes]:
+        errors.append(f"{entry.milestone_id}: proof_aggregation_writer must declare forbidden files or scopes")
+
+    production_by_id = {milestone.id: milestone for milestone in track.milestones}
+    aggregate_evidence_categories: set[str] = set()
+    for prior_id in writer.required_prior_milestones:
+        prior = production_by_id.get(prior_id)
+        if prior is None:
+            errors.append(f"{entry.milestone_id}: required prior milestone {prior_id} is not present")
+            continue
+        if prior.state != "completed":
+            errors.append(f"{entry.milestone_id}: required prior milestone {prior_id} is {prior.state}, expected completed")
+        if prior.completion_quality != writer.required_prior_completion_quality:
+            errors.append(
+                f"{entry.milestone_id}: required prior milestone {prior_id} has completion_quality "
+                f"{prior.completion_quality}, expected {writer.required_prior_completion_quality}"
+            )
+        if not prior.completion_audit:
+            errors.append(f"{entry.milestone_id}: required prior milestone {prior_id} has no completion_audit closeout")
+            continue
+        closeout = manifest_path_reference(prior.completion_audit)
+        if not closeout.exists():
+            errors.append(
+                f"{entry.milestone_id}: required prior milestone {prior_id} closeout is missing: {prior.completion_audit}"
+            )
+        else:
+            status = document_frontmatter_status(closeout)
+            if status is None:
+                errors.append(
+                    f"{entry.milestone_id}: required prior milestone {prior_id} closeout has no frontmatter status"
+                )
+            elif status.lower() != "completed":
+                errors.append(
+                    f"{entry.milestone_id}: required prior milestone {prior_id} closeout status {status!r}, expected completed"
+                )
+            if manifest.full_automation_target:
+                try:
+                    evidence_record = closeout_evidence_record(closeout)
+                except ValueError as error:
+                    errors.append(
+                        f"{entry.milestone_id}: required prior milestone {prior_id} closeout evidence metadata is invalid: {error}"
+                    )
+                else:
+                    if evidence_record is None:
+                        errors.append(
+                            f"{entry.milestone_id}: required prior milestone {prior_id} closeout is missing closeout_evidence metadata"
+                        )
+                    else:
+                        if evidence_record.milestone_id != prior_id:
+                            errors.append(
+                                f"{entry.milestone_id}: required prior milestone {prior_id} closeout evidence "
+                                f"has milestone_id {evidence_record.milestone_id}"
+                            )
+                        if prior.roadmap_links and evidence_record.wr_id not in prior.roadmap_links:
+                            errors.append(
+                                f"{entry.milestone_id}: required prior milestone {prior_id} closeout evidence "
+                                f"wr_id {evidence_record.wr_id} is not one of {prior.roadmap_links}"
+                            )
+                        if evidence_record.completion_quality != writer.required_prior_completion_quality:
+                            errors.append(
+                                f"{entry.milestone_id}: required prior milestone {prior_id} closeout evidence "
+                                f"completion_quality {evidence_record.completion_quality}, expected "
+                                f"{writer.required_prior_completion_quality}"
+                            )
+                        normalized_closeout = normalize_repo_path(prior.completion_audit)
+                        if normalize_repo_path(evidence_record.closeout_path) != normalized_closeout:
+                            errors.append(
+                                f"{entry.milestone_id}: required prior milestone {prior_id} closeout evidence "
+                                f"closeout_path must match {normalized_closeout}"
+                            )
+                        aggregate_evidence_categories.update(
+                            normalize_evidence_category(category)
+                            for category in evidence_record.evidence_categories
+                        )
+
+    if manifest.full_automation_target:
+        normalized_required_record_categories = {
+            normalize_evidence_category(category)
+            for category in writer.required_evidence_categories
+        }
+        missing_record_categories = sorted(
+            normalized_required_record_categories - aggregate_evidence_categories
+        )
+        if missing_record_categories:
+            errors.append(
+                f"{entry.milestone_id}: proof_aggregation_writer prior closeout evidence metadata missing categories: "
+                + ", ".join(missing_record_categories)
+            )
+
+    # Do not let aggregation writer output paths patch earlier proof-slice product files.
+    prior_product_scopes = []
+    writer_scopes = implementation_writer_output_scopes(writer)
+    for prior_id in writer.required_prior_milestones:
+        prior_entry = manifest.by_milestone_id.get(prior_id)
+        if prior_entry is not None:
+            prior_product_scopes.extend(product_implementation_scopes_for_entry(prior_entry))
+    if prior_product_scopes:
+        prior_paths = [
+            normalized
+            for normalized in (manifest_write_scope_path(scope) for scope in prior_product_scopes)
+            if normalized is not None
+        ]
+        for scope in writer_scopes:
+            writer_path = manifest_write_scope_path(scope)
+            if writer_path is None:
+                continue
+            for prior_path in prior_paths:
+                if path_within_scope(writer_path, prior_path) or path_within_scope(prior_path, writer_path):
+                    errors.append(
+                        f"{entry.milestone_id}: proof_aggregation_writer must not modify prior proof-slice product file {prior_path}"
+                    )
+    return errors
+
+
+def exact_scope_list_errors(scopes: list[str], *, label: str) -> list[str]:
+    errors: list[str] = []
+    broad_roots = {
+        ".",
+        "apps",
+        "domain",
+        "engine",
+        "foundation",
+        "src",
+        "tools",
+        "docs-site",
+        "docs-site/src",
+        "docs-site/src/content",
+        "docs-site/src/content/docs",
+    }
+    for scope in scopes:
+        if is_generated_or_derived_scope(scope):
+            continue
+        normalized = manifest_write_scope_path(scope)
+        if normalized is None:
+            errors.append(f"{label} includes ambiguous or non-path scope: {scope}")
+            continue
+        if "*" in normalized or "..." in normalized:
+            errors.append(f"{label} must not use wildcard or ellipsis scope: {scope}")
+            continue
+        if normalized in broad_roots or len(normalized.split("/")) < 3:
+            errors.append(f"{label} is too broad: {scope}")
     return errors
 
 
@@ -605,11 +2159,27 @@ def next_action_blockers(
             roadmap_item=item,
         )
     )
-    if entry.milestone_type in {"docs_only", "design_only"} and action == "design_first":
+    if entry.milestone_type in {"docs_only", "design_only", "implementation", "hardening"} and action == "design_first":
         return action, blockers
+    if (
+        entry.milestone_type in {"implementation", "hardening"}
+        and action == "write_implementation_contract"
+        and product_implementation_completed(entry)
+    ):
+        evidence_errors = runtime_evidence_errors(entry)
+        closeout_path = REPO_ROOT / normalize_repo_path(entry.expected_closeout_path)
+        if evidence_errors:
+            blockers.extend(evidence_errors)
+            return "runtime_evidence_missing", blockers
+        if not closeout_path.exists():
+            return "runtime_closeout", blockers
     if action != "write_implementation_contract":
         blockers.append(f"{item.id}: workflow action is {action} (state={item.planning_state}, blocker={item.blocker_label})")
     return action, blockers
+
+
+def product_implementation_completed(entry: TrackExecutionManifestMilestone) -> bool:
+    return "product_implementation completed" in entry.next_legal_action.lower()
 
 
 def implementation_authorization_note(
@@ -621,9 +2191,11 @@ def implementation_authorization_note(
         return "no - manifest milestone does not allow code creation"
     if blockers:
         return "no - blockers must be cleared first"
+    if workflow_action == "runtime_closeout":
+        return "no - implementation evidence exists; closeout requires run-track with --allow agent_closeout"
     if workflow_action != "write_implementation_contract":
         return f"no - workflow action is {workflow_action}"
-    return "no - task production:next is read-only; run task production:plan for the active WR contract before code"
+    return "no - task production:next is read-only; product implementation requires an explicit run-track command with --allow product_code --allow product_implementation and a valid accepted plan"
 
 
 def future_wr_candidate_for_milestone(milestone: ProductionMilestone) -> str:
@@ -733,6 +2305,542 @@ def build_manifest_scaffold(track: ProductionTrack, roadmap: RoadmapState) -> Tr
     )
 
 
+def default_contract_template_key(entry: TrackExecutionManifestMilestone) -> str:
+    if entry.milestone_type in {"implementation", "hardening"}:
+        return "implementation_runtime_proof"
+    if entry.milestone_type == "closeout":
+        return "final_handoff_closeout"
+    return "docs_design"
+
+
+def contract_template_key(entry: TrackExecutionManifestMilestone) -> str:
+    key = entry.template_key or default_contract_template_key(entry)
+    if key not in CONTRACT_TEMPLATE_KEYS:
+        raise WorkflowError(f"{entry.milestone_id}: missing contract template {key!r}")
+    return key
+
+
+def default_source_documents(manifest: TrackExecutionManifest, entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.contract_parameters and entry.contract_parameters.source_documents:
+        return list(entry.contract_parameters.source_documents)
+    return [dependency.path for dependency in manifest.accepted_design_dependencies]
+
+
+def exact_contract_implementation_scopes(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.contract_parameters and entry.contract_parameters.exact_allowed_implementation_write_scopes:
+        return list(entry.contract_parameters.exact_allowed_implementation_write_scopes)
+    exact_scopes = product_implementation_scopes_for_entry(entry)
+    if exact_scope_list_errors(exact_scopes, label=f"{entry.milestone_id}: product_code_contract exact scopes"):
+        raise WorkflowError(
+            f"{entry.milestone_id}: product_code_contract cannot be generated safely without exact implementation write scopes"
+        )
+    return exact_scopes
+
+
+def default_contract_params_list(
+    entry: TrackExecutionManifestMilestone,
+    field_name: str,
+    fallback: list[str],
+) -> list[str]:
+    params = entry.contract_parameters
+    if params is None:
+        return fallback
+    value = getattr(params, field_name)
+    return list(value) if value else fallback
+
+
+def planning_scope_for_contract(
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    *,
+    track_id: str,
+    manifest_path: Path,
+    production_source: Path,
+    roadmap_source: Path,
+) -> list[str]:
+    wr_id = entry.owning_wr or entry.future_wr_candidate or "WR-TBD"
+    _, deferred_source = split_source_paths(roadmap_source)
+    return exact_auto_safe_write_scope(
+        entry,
+        milestone,
+        track_id=track_id,
+        wr_id=wr_id,
+        production_source=production_source,
+        manifest_source=manifest_path,
+        roadmap_source=roadmap_source,
+        deferred_source=deferred_source,
+    )
+
+
+def generated_contract_fields(template_key: str) -> dict[str, str]:
+    return {
+        "template_key": template_key,
+        "generated_contract_marker": CONTRACT_GENERATED_MARKER,
+        "generated_from_template_version": CONTRACT_TEMPLATE_VERSION,
+    }
+
+
+def build_auto_safe_contract_data(
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    *,
+    track_id: str,
+    manifest_path: Path,
+    production_source: Path,
+    roadmap_source: Path,
+) -> dict:
+    template_key = contract_template_key(entry)
+    wr_candidate = entry.future_wr_candidate or entry.owning_wr or "owning WR"
+    return {
+        "wr_candidate_policy": f"Use {wr_candidate} only as manifest planning input; allocate a concrete WR id if the candidate is future-only.",
+        "wr_id_allocation_behavior": "Allocate the next numeric WR id from combined roadmap state; never reuse archived or deferred ids.",
+        "milestone_to_wr_link_behavior": "Update exactly this production milestone roadmap_links field to the allocated WR.",
+        "manifest_wr_reference_behavior": "Replace future_wr_candidate with owning_wr for this milestone and leave other milestones untouched.",
+        "allowed_metadata_write_scopes": planning_scope_for_contract(
+            entry,
+            milestone,
+            track_id=track_id,
+            manifest_path=manifest_path,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+        ),
+        "forbidden_scopes": list(entry.forbidden_scope),
+        "validation_commands": auto_safe_validation_commands(),
+        "stop_conditions": [
+            "stop if production, roadmap, or manifest alignment fails",
+            "stop if dependency milestones are incomplete",
+            "stop before plan/design/product-code work",
+        ],
+        **generated_contract_fields(template_key),
+    }
+
+
+def build_agent_design_contract_data(
+    manifest: TrackExecutionManifest,
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    *,
+    manifest_path: Path,
+    production_source: Path,
+    roadmap_source: Path,
+) -> dict:
+    template_key = contract_template_key(entry)
+    sections = default_contract_params_list(
+        entry,
+        "required_sections",
+        [
+            f"{entry.title} bounded implementation plan",
+            "Exact files/modules allowed",
+            "Forbidden scope",
+            "Tests to add/change",
+            "Validation commands",
+            "Closeout evidence",
+            "Compatibility / rollback expectations",
+            "Stop conditions",
+        ],
+    )
+    decisions = default_contract_params_list(
+        entry,
+        "required_decisions",
+        [
+            f"{entry.milestone_id} remains bounded to {entry.stage}.",
+            "No product/runtime code is changed by agent_design.",
+            "Product code remains blocked until an accepted implementation plan and explicit product_code permission exist.",
+        ],
+    )
+    acceptance = default_contract_params_list(
+        entry,
+        "acceptance_checklist",
+        [
+            "The implementation plan names exact write scopes and forbidden scopes.",
+            "The implementation plan lists validation commands, closeout evidence, rollback/compatibility expectations, and stop conditions.",
+            "No product code, crates, downstream implementation, or foundation/meta extraction occurs.",
+        ],
+    )
+    expected_outputs = [
+        implementation_plan_path(entry.owning_wr or entry.future_wr_candidate or "WR-TBD", milestone),
+    ]
+    return {
+        "source_documents": default_source_documents(manifest, entry),
+        "required_sections": sections,
+        "required_decisions": decisions,
+        "acceptance_checklist": acceptance,
+        "planning_write_scope": planning_scope_for_contract(
+            entry,
+            milestone,
+            track_id=manifest.track_id,
+            manifest_path=manifest_path,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+        ),
+        "allowed_write_scopes": planning_scope_for_contract(
+            entry,
+            milestone,
+            track_id=manifest.track_id,
+            manifest_path=manifest_path,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+        ),
+        "forbidden_scopes": list(entry.forbidden_scope),
+        "expected_output_paths": expected_outputs,
+        "validation_commands": default_contract_params_list(
+            entry,
+            "validation_commands",
+            list(entry.validation_commands),
+        ),
+        "stop_conditions": [
+            "stop before product/runtime code",
+            "stop if exact implementation write scopes are missing or ambiguous",
+            "stop if validation fails",
+        ],
+        **generated_contract_fields(template_key),
+    }
+
+
+def build_product_code_contract_data(entry: TrackExecutionManifestMilestone) -> dict:
+    template_key = contract_template_key(entry)
+    exact_scopes = exact_contract_implementation_scopes(entry)
+    return {
+        "required_active_wr_state": "owning WR must be current_candidate with blocker B2 or lower",
+        "required_accepted_implementation_plan": "accepted implementation plan must exist at the owning WR plan path with active/accepted/completed frontmatter status",
+        "exact_allowed_implementation_write_scopes": exact_scopes,
+        "required_function_method_scope": default_contract_params_list(
+            entry,
+            "required_function_method_scope",
+            [f"bounded {entry.title} functions/methods named by the accepted implementation plan"],
+        ),
+        "forbidden_implementation_scopes": list(entry.forbidden_scope),
+        "tests_to_add_change": default_contract_params_list(
+            entry,
+            "tests_to_add_change",
+            [f"focused {entry.stage} tests named by the accepted implementation plan"],
+        ),
+        "runtime_evidence_required": default_contract_params_list(
+            entry,
+            "runtime_evidence_required",
+            [f"{entry.stage} runtime/test evidence for {entry.title}"],
+        ),
+        "validation_commands": default_contract_params_list(
+            entry,
+            "validation_commands",
+            list(entry.validation_commands),
+        ),
+        "rollback_compatibility_expectations": default_contract_params_list(
+            entry,
+            "rollback_compatibility_expectations",
+            ["Rollback is limited to the exact allowed implementation write scopes."],
+        ),
+        "closeout_evidence": default_contract_params_list(
+            entry,
+            "closeout_evidence",
+            [entry.expected_closeout_path],
+        ),
+        "stop_conditions": [
+            "stop if product_code permission is not explicitly granted",
+            "stop if the active WR or accepted implementation plan is missing",
+            "stop if validation fails",
+            "stop after one implementation WR unless the runner recomputes and all closeout gates pass",
+        ],
+        **generated_contract_fields(template_key),
+    }
+
+
+def build_runtime_closeout_contract_data(entry: TrackExecutionManifestMilestone) -> dict:
+    template_key = contract_template_key(entry)
+    return {
+        "runtime_test_evidence_required": default_contract_params_list(
+            entry,
+            "runtime_evidence_required",
+            [f"{entry.stage} runtime/test validation evidence"],
+        ),
+        "validation_commands": default_contract_params_list(
+            entry,
+            "validation_commands",
+            list(entry.validation_commands),
+        ),
+        "completion_quality_allowed": ["runtime_proven"],
+        "closeout_path": entry.expected_closeout_path,
+        "files_changed_report": product_implementation_scopes_for_entry(entry),
+        "known_gap_reporting": [
+            f"{entry.milestone_id} is runtime_proven only for its bounded manifest and product_code_contract scopes.",
+            "Later milestones require their own WRs, plans, validation, and closeout evidence.",
+        ],
+        "production_roadmap_state_updates": [
+            "set production milestone state to completed",
+            "archive owning WR as completed",
+            "record completion_quality runtime_proven",
+            "record closeout path as completion audit/evidence",
+        ],
+        "next_action_update_rules": [
+            "advance manifest next legal action to the next milestone",
+            "do not authorize crate creation, downstream implementation, or foundation/meta extraction",
+        ],
+        **generated_contract_fields(template_key),
+    }
+
+
+def build_agent_closeout_contract_data(entry: TrackExecutionManifestMilestone) -> dict:
+    template_key = contract_template_key(entry)
+    quality = "runtime_proven" if entry.milestone_type == "closeout" else "bounded_contract"
+    return {
+        "evidence_files": default_contract_params_list(
+            entry,
+            "closeout_evidence",
+            [entry.expected_closeout_path],
+        ),
+        "validation_commands": list(entry.validation_commands),
+        "completion_quality_allowed": [quality],
+        "closeout_path": entry.expected_closeout_path,
+        "production_roadmap_state_updates": [
+            "set production milestone state to completed only after evidence is valid",
+            "archive or update owning WR only through the closeout workflow",
+            f"record completion_quality {quality}",
+        ],
+        "known_gap_reporting": [
+            "closeout must report unresolved gaps honestly",
+            "deferred work must not be described as completed",
+        ],
+        "next_action_update_rules": [
+            "advance manifest next legal action to the next legal milestone action",
+            "do not authorize product code from closeout metadata alone",
+        ],
+        **generated_contract_fields(template_key),
+    }
+
+
+def build_handoff_contract_data(entry: TrackExecutionManifestMilestone) -> dict:
+    template_key = contract_template_key(entry)
+    return {
+        "handoff_target": f"{entry.title} handoff target",
+        "proof_path_rules": [
+            "create or link the next proof planning path only after this track proof is closed",
+            "do not start downstream implementation from this handoff closeout",
+            "do not substitute a different proof path without a separately accepted design or ADR",
+        ],
+        "forbidden_scopes": list(entry.forbidden_scope),
+        "validation_commands": list(entry.validation_commands),
+        "stop_conditions": [
+            "stop if any required proof evidence is missing",
+            "stop if handoff would imply shared foundation/meta extraction",
+            "stop if handoff would start downstream implementation",
+        ],
+        **generated_contract_fields(template_key),
+    }
+
+
+def contract_permission_classes(entry: TrackExecutionManifestMilestone) -> list[str]:
+    permissions: list[str] = []
+    if entry.future_wr_candidate:
+        permissions.append("auto_safe")
+    if entry.milestone_type in {"docs_only", "design_only", "implementation", "hardening"}:
+        permissions.append("agent_design")
+    if entry.milestone_type in {"docs_only", "design_only", "closeout"}:
+        permissions.append("agent_closeout")
+    if entry.milestone_type in {"implementation", "hardening"}:
+        permissions.extend(["product_code", "product_implementation", "runtime_closeout"])
+    if entry.milestone_type == "closeout":
+        permissions.append("handoff")
+    return list(dict.fromkeys(permissions))
+
+
+def default_execution_kind_for_milestone(
+    milestone: ProductionMilestone,
+    entry: TrackExecutionManifestMilestone,
+) -> ManifestExecutionKind | None:
+    if milestone.kind == "design":
+        return "design_contract"
+    if milestone.kind == "implementation":
+        return "implementation_proof"
+    if milestone.kind == "hardening":
+        return "proof_aggregation" if entry.implementation_writer and entry.implementation_writer.strategy == "proof_aggregation_writer" else "implementation_proof"
+    if milestone.kind == "release":
+        return "handoff_closeout"
+    return None
+
+
+def default_closeout_strategy_for_execution_kind(execution_kind: str | None) -> CloseoutStrategy | None:
+    if execution_kind == "design_contract":
+        return "bounded_contract_closeout"
+    if execution_kind in {"implementation_proof", "proof_aggregation"}:
+        return "runtime_proven_closeout"
+    if execution_kind == "handoff_closeout":
+        return "handoff_closeout"
+    if execution_kind == "extraction_gate":
+        return "extraction_gate_closeout"
+    return None
+
+
+def complete_contracts_for_manifest_data(
+    context: ManifestCommandContext,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+) -> tuple[dict, list[str], list[str]]:
+    base_errors = manifest_alignment_errors(
+        context.loaded,
+        track=context.track,
+        roadmap=context.roadmap,
+        ordered_milestone_ids=[milestone.id for milestone in ordered_track_milestones(context.track)],
+    )
+    if base_errors:
+        raise WorkflowError("\n".join(manifest_audit_blocker_lines(base_errors)))
+
+    data = context.loaded.manifest.model_dump(exclude_none=True, mode="json")
+    production_by_id = {milestone.id: milestone for milestone in context.track.milestones}
+    changed_milestones: list[str] = []
+    blockers: list[str] = []
+    manifest = context.loaded.manifest
+    for milestone_data in data["milestones"]:
+        milestone_id = milestone_data["milestone_id"]
+        milestone = production_by_id[milestone_id]
+        if milestone.state == "completed":
+            continue
+        entry = TrackExecutionManifestMilestone.model_validate(milestone_data)
+        try:
+            template_key = contract_template_key(entry)
+        except WorkflowError as error:
+            blockers.append(str(error))
+            continue
+        changed = False
+        milestone_data["milestone_kind"] = milestone.kind
+        execution_kind = entry.execution_kind or default_execution_kind_for_milestone(milestone, entry)
+        if execution_kind is not None:
+            milestone_data["execution_kind"] = execution_kind
+        closeout_strategy = entry.closeout_strategy or default_closeout_strategy_for_execution_kind(execution_kind)
+        if closeout_strategy is not None:
+            milestone_data["closeout_strategy"] = closeout_strategy
+        milestone_data["permission_classes_required"] = contract_permission_classes(entry)
+        milestone_data["template_key"] = template_key
+        milestone_data["generated_contract_marker"] = CONTRACT_GENERATED_MARKER
+        milestone_data["generated_from_template_version"] = CONTRACT_TEMPLATE_VERSION
+        milestone_data["required_evidence_categories"] = (
+            ["runtime_test", "diagnostics", "source_maps", "artifact", "closeout"]
+            if entry.milestone_type in {"implementation", "hardening"}
+            else ["design_evidence", "closeout"]
+        )
+        if entry.milestone_type in {"implementation", "hardening"}:
+            milestone_data["implementation_proof_kind"] = entry.implementation_proof_kind or slugify(entry.title)
+            milestone_data["closeout_kind"] = "runtime_proven"
+        elif entry.milestone_type == "closeout":
+            milestone_data["closeout_kind"] = "final_handoff"
+        else:
+            milestone_data["closeout_kind"] = "bounded_contract"
+
+        if entry.future_wr_candidate and not milestone_data.get("auto_safe_contract"):
+            milestone_data["auto_safe_contract"] = build_auto_safe_contract_data(
+                entry,
+                milestone,
+                track_id=context.track.id,
+                manifest_path=context.loaded.path,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+            )
+            changed = True
+        if entry.milestone_type in {"docs_only", "design_only", "implementation", "hardening"} and not (
+            milestone_data.get("agent_design_contract") or milestone_data.get("agent_design")
+        ):
+            milestone_data["agent_design_contract"] = build_agent_design_contract_data(
+                manifest,
+                entry,
+                milestone,
+                manifest_path=context.loaded.path,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+            )
+            changed = True
+        if entry.milestone_type in {"implementation", "hardening"}:
+            try:
+                if not milestone_data.get("product_code_contract"):
+                    milestone_data["product_code_contract"] = build_product_code_contract_data(entry)
+                    changed = True
+                if not milestone_data.get("runtime_closeout_contract"):
+                    milestone_data["runtime_closeout_contract"] = build_runtime_closeout_contract_data(entry)
+                    changed = True
+            except WorkflowError as error:
+                blockers.append(str(error))
+                continue
+        if entry.milestone_type in {"docs_only", "design_only", "closeout"} and not milestone_data.get("agent_closeout_contract"):
+            milestone_data["agent_closeout_contract"] = build_agent_closeout_contract_data(entry)
+            changed = True
+        if entry.milestone_type == "closeout" and not milestone_data.get("handoff_contract"):
+            milestone_data["handoff_contract"] = build_handoff_contract_data(entry)
+            changed = True
+        if changed:
+            changed_milestones.append(milestone_id)
+    return data, changed_milestones, blockers
+
+
+def update_manifest_report_after_contract_completion(
+    path: Path,
+    *,
+    completed_milestones: list[str],
+    blockers: list[str],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+    else:
+        text = "---\ntitle: Track Execution Manifest Report\nstatus: active\n---\n\n# Track Execution Manifest Report\n"
+    completed_lines = "\n".join(f"- `{milestone_id}`" for milestone_id in completed_milestones) or "- No contract blocks changed."
+    blocker_lines = "\n".join(f"- {blocker}" for blocker in blockers) or "- No remaining contract blockers."
+    section = "\n".join(
+        [
+            "## Track Contract Completion",
+            "",
+            f"Last contract completion pass: {date.today().isoformat()}.",
+            "",
+            "This section mirrors machine-readable contract completion. The YAML manifest remains execution authority.",
+            "",
+            "Completed or refreshed milestone contracts:",
+            "",
+            completed_lines,
+            "",
+            "Remaining blockers:",
+            "",
+            blocker_lines,
+        ]
+    )
+    path.write_text(upsert_markdown_section(text, heading="## Track Contract Completion", section=section, before_heading="## Milestone Details"), encoding="utf-8", newline="\n")
+
+
+def complete_track_contracts(
+    context: ManifestCommandContext,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+    run_validations: bool = True,
+) -> ContractCompletionResult:
+    manifest_data, completed_milestones, blockers = complete_contracts_for_manifest_data(
+        context,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
+    )
+    if blockers:
+        return ContractCompletionResult(
+            track_id=context.track.id,
+            manifest_path=context.loaded.path,
+            manifest_report_path=REPO_ROOT / manifest_report_path(context.track.id),
+            completed_milestones=tuple(completed_milestones),
+            validation_commands=(),
+            remaining_blockers=tuple(blockers),
+        )
+    manifest = TrackExecutionManifest.model_validate(manifest_data)
+    loaded = LoadedTrackExecutionManifest(manifest=manifest, path=context.loaded.path)
+    audit_manifest_or_raise(loaded, track=context.track, roadmap=context.roadmap)
+    write_yaml_mapping(context.loaded.path, manifest_data)
+    report_path = REPO_ROOT / manifest_report_path(context.track.id)
+    update_manifest_report_after_contract_completion(report_path, completed_milestones=completed_milestones, blockers=[])
+    validation_results = run_validation_commands(auto_safe_validation_commands()) if run_validations else ()
+    return ContractCompletionResult(
+        track_id=context.track.id,
+        manifest_path=context.loaded.path,
+        manifest_report_path=report_path,
+        completed_milestones=tuple(completed_milestones),
+        validation_commands=validation_results,
+        remaining_blockers=(),
+    )
+
+
 def slugify(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return cleaned or "track-execution-manifest"
@@ -811,6 +2919,186 @@ class ProductCodeResult:
     next_legal_action: str
 
 
+@dataclass(frozen=True)
+class ProductImplementationResult:
+    track_id: str
+    milestone_id: str
+    wr_id: str
+    plan_path: Path
+    manifest_path: Path
+    written_paths: tuple[Path, ...]
+    validation_commands: tuple[str, ...]
+    next_legal_action: str
+
+
+@dataclass(frozen=True)
+class StopBeforeProductCodeResult:
+    track_id: str
+    milestone_id: str
+    wr_id: str
+    plan_path: Path
+    manifest_path: Path
+    validation_commands: tuple[str, ...]
+    next_legal_action: str
+
+
+@dataclass(frozen=True)
+class StopAtManifestGateResult:
+    track_id: str
+    milestone_id: str
+    manifest_path: Path
+    reason: str
+    validation_commands: tuple[str, ...]
+    next_legal_action: str
+
+
+@dataclass(frozen=True)
+class RuntimeCloseoutResult:
+    track_id: str
+    milestone_id: str
+    wr_id: str
+    closeout_path: Path
+    manifest_path: Path
+    production_source: Path
+    roadmap_archive_source: Path
+    roadmap_deferred_source: Path
+    validation_commands: tuple[str, ...]
+    next_legal_action: str
+
+
+@dataclass(frozen=True)
+class ContractCompletionResult:
+    track_id: str
+    manifest_path: Path
+    manifest_report_path: Path
+    completed_milestones: tuple[str, ...]
+    validation_commands: tuple[str, ...]
+    remaining_blockers: tuple[str, ...]
+
+
+def track_execution_run_path(track_id: str, run_id: str, root: Path = TRACK_EXECUTION_RUN_ROOT) -> Path:
+    return root / track_id.lower() / f"{run_id}.yaml"
+
+
+def new_track_execution_run_id(track_id: str, root: Path = TRACK_EXECUTION_RUN_ROOT) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    base = f"{timestamp}-{slugify(track_id)}"
+    candidate = base
+    index = 1
+    while track_execution_run_path(track_id, candidate, root=root).exists():
+        index += 1
+        candidate = f"{base}-{index}"
+    return candidate
+
+
+def workflow_result_action_kind(result: object) -> str:
+    if isinstance(result, AutoSafeExpansionResult):
+        return "auto_safe"
+    if isinstance(result, AgentDesignResult):
+        return "agent_design"
+    if isinstance(result, AgentCloseoutResult):
+        return "agent_closeout"
+    if isinstance(result, ProductCodeResult):
+        return "product_code"
+    if isinstance(result, ProductImplementationResult):
+        return "product_implementation"
+    if isinstance(result, RuntimeCloseoutResult):
+        return "runtime_closeout"
+    if isinstance(result, StopBeforeProductCodeResult):
+        return "stop_before_product_code"
+    if isinstance(result, StopAtManifestGateResult):
+        return "stop_at_manifest_gate"
+    return result.__class__.__name__
+
+
+def workflow_result_changed_files(result: object) -> list[str]:
+    paths: list[Path] = []
+    if isinstance(result, AutoSafeExpansionResult):
+        paths = [result.manifest_path, result.production_source, result.roadmap_deferred_source]
+    elif isinstance(result, AgentDesignResult):
+        paths = [result.manifest_path, result.plan_path, *result.design_paths]
+    elif isinstance(result, AgentCloseoutResult):
+        paths = [
+            result.manifest_path,
+            result.production_source,
+            result.roadmap_archive_source,
+            result.roadmap_deferred_source,
+            result.closeout_path,
+        ]
+    elif isinstance(result, ProductImplementationResult):
+        paths = [result.manifest_path, *result.written_paths]
+    elif isinstance(result, RuntimeCloseoutResult):
+        paths = [
+            result.manifest_path,
+            result.production_source,
+            result.roadmap_archive_source,
+            result.roadmap_deferred_source,
+            result.closeout_path,
+        ]
+    return [repo_path(path) for path in paths]
+
+
+def workflow_result_closeout_paths(result: object) -> list[str]:
+    if isinstance(result, (AgentCloseoutResult, RuntimeCloseoutResult)):
+        return [repo_path(result.closeout_path)]
+    return []
+
+
+def workflow_result_wr_id(result: object) -> str | None:
+    value = getattr(result, "wr_id", None)
+    return str(value) if value is not None else None
+
+
+def append_track_execution_run_action(
+    *,
+    track_id: str,
+    run_id: str,
+    run_root: Path,
+    entry: TrackExecutionManifestMilestone,
+    result: object,
+    before_digests: dict[str, str],
+    after_digests: dict[str, str],
+) -> Path:
+    path = track_execution_run_path(track_id, run_id, root=run_root)
+    if path.exists():
+        data = load_yaml(path)
+        if not isinstance(data, dict):
+            raise WorkflowError(f"{repo_path(path)} must contain a YAML mapping")
+    else:
+        data = {
+            "version": 1,
+            "track_id": track_id,
+            "run_id": run_id,
+            "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            "actions": [],
+        }
+    strategy = entry.closeout_strategy or entry.execution_kind or entry.milestone_type
+    if isinstance(result, ProductImplementationResult) and entry.implementation_writer is not None:
+        strategy = entry.implementation_writer.strategy
+    data.setdefault("actions", []).append(
+        {
+            "action_index": len(data.get("actions", [])) + 1,
+            "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            "action_kind": workflow_result_action_kind(result),
+            "milestone_id": entry.milestone_id,
+            "wr_id": workflow_result_wr_id(result),
+            "strategy": strategy,
+            "pre_action_digests": before_digests,
+            "post_action_digests": after_digests,
+            "files_changed": workflow_result_changed_files(result),
+            "validation_results": list(getattr(result, "validation_commands", ())),
+            "evidence_paths": workflow_result_closeout_paths(result),
+            "closeout_paths": workflow_result_closeout_paths(result),
+            "next_legal_action": getattr(result, "next_legal_action", ""),
+            "stop_reason": getattr(result, "next_legal_action", "") if workflow_result_action_kind(result).startswith("stop_") else "",
+        }
+    )
+    data["last_action_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    data["last_next_legal_action"] = getattr(result, "next_legal_action", "")
+    write_yaml_mapping(path, data)
+    return path
+
+
 def resolve_manifest_command_context(
     track_id: str,
     *,
@@ -860,11 +3148,14 @@ def exact_auto_safe_write_scope(
     *,
     track_id: str,
     wr_id: str,
+    production_source: Path | None = None,
     manifest_source: Path | None = None,
+    roadmap_source: Path | None = None,
     deferred_source: Path | None = None,
 ) -> list[str]:
     scopes = [
         "docs-site/src/content/docs/workspace/production-tracks.yaml",
+        "docs-site/src/content/docs/workspace/roadmap-archive.yaml",
         "docs-site/src/content/docs/workspace/roadmap-deferred.yaml",
         f"docs-site/src/content/docs/workspace/track-execution-manifests/{track_id.lower()}.yaml",
         manifest_report_path(track_id),
@@ -872,15 +3163,15 @@ def exact_auto_safe_write_scope(
         entry.expected_closeout_path,
         *production_generated_scopes(),
     ]
-    if entry.milestone_type in {"docs_only", "design_only"}:
-        scopes.extend(
-            [
-                repo_path(UI_PROGRAM_ARCHITECTURE_PATH),
-                repo_path(UI_PROGRAM_CONTRACT_DESIGN_PATH),
-            ]
-        )
+    if entry.milestone_type in {"implementation", "hardening"}:
+        scopes.append("docs-site/src/content/docs/workspace/roadmap-items.yaml")
+        scopes.extend(manifest_write_scopes_for_entry(entry))
+    if production_source is not None:
+        scopes.append(repo_path(production_source))
     if manifest_source is not None:
         scopes.append(repo_path(manifest_source))
+    if roadmap_source is not None:
+        scopes.append(repo_path(roadmap_source))
     if deferred_source is not None:
         scopes.append(repo_path(deferred_source))
     return list(dict.fromkeys(scopes))
@@ -919,15 +3210,19 @@ def roadmap_row_for_auto_safe_expansion(
     *,
     track: ProductionTrack,
     wr_id: str,
+    production_source: Path | None = None,
     manifest_source: Path | None = None,
     deferred_source: Path | None = None,
+    roadmap_source: Path | None = None,
 ) -> dict:
     write_scope = exact_auto_safe_write_scope(
         entry,
         milestone,
         track_id=track.id,
         wr_id=wr_id,
+        production_source=production_source,
         manifest_source=manifest_source,
+        roadmap_source=roadmap_source,
         deferred_source=deferred_source,
     )
     return {
@@ -937,7 +3232,7 @@ def roadmap_row_for_auto_safe_expansion(
         "alias": wr_id.replace("-", ""),
         "lane": "Product planning",
         "dependency_level": "L4",
-        "gate": "Design-only Track Expansion gate" if entry.milestone_type in {"docs_only", "design_only"} else "Track Expansion gate",
+        "gate": "Design-only Track Expansion gate" if entry.milestone_type in {"docs_only", "design_only"} else "Implementation plan Track Expansion gate",
         "planning_state": "blocked_deferred",
         "priority": "P2",
         "value": 4,
@@ -958,11 +3253,11 @@ def roadmap_row_for_auto_safe_expansion(
         ),
         "current_decision": (
             f"Auto-safe Track Expansion created this deferred WR from {track.id} manifest data only; "
-            "it authorizes planning metadata, not design authoring or implementation."
+            "it authorizes planning metadata, not product code."
         ),
         "current_call": (
             f"Run task production:plan -- --milestone {entry.milestone_id} --roadmap {wr_id}; "
-            "stop before design content or code until that contract is accepted."
+            "stop before product code until the bounded contract is accepted."
         ),
         "first_move": f"Run task production:plan -- --milestone {entry.milestone_id} --roadmap {wr_id}.",
         "main_blocker": "Dedicated production plan and closeout evidence are still missing.",
@@ -997,13 +3292,12 @@ def assert_auto_safe_expansion_allowed(
         raise WorkflowError(f"{entry.milestone_id}: production milestone already links WR rows {milestone.roadmap_links}")
     if not entry.future_wr_candidate:
         raise WorkflowError(f"{entry.milestone_id}: no future WR candidate is available for Track Expansion")
-    if entry.may_create_code or entry.may_create_crates or entry.may_modify_production_behavior:
+    if entry.may_create_crates:
         raise WorkflowError(
-            f"{entry.milestone_id}: auto_safe cannot expand milestones that allow code, crate creation, "
-            "or production behavior changes"
+            f"{entry.milestone_id}: auto_safe cannot expand milestones that require crate creation"
         )
-    if entry.milestone_type not in {"docs_only", "design_only"}:
-        raise WorkflowError(f"{entry.milestone_id}: auto_safe expansion only supports docs-only or design-only milestones in V1")
+    if entry.milestone_type not in {"docs_only", "design_only", "implementation", "hardening"}:
+        raise WorkflowError(f"{entry.milestone_id}: auto_safe expansion supports docs, design, implementation, or hardening milestones only")
     if roadmap.by_id.get(entry.future_wr_candidate):
         raise WorkflowError(f"{entry.future_wr_candidate}: future WR candidate unexpectedly exists as a concrete WR")
 
@@ -1036,6 +3330,8 @@ def updated_manifest_data_with_wr(
     entry: TrackExecutionManifestMilestone,
     milestone: ProductionMilestone,
     wr_id: str,
+    production_source: Path | None = None,
+    roadmap_source: Path | None = None,
     deferred_source: Path | None = None,
 ) -> dict:
     data = loaded.manifest.model_dump(exclude_none=True, mode="json")
@@ -1045,17 +3341,37 @@ def updated_manifest_data_with_wr(
             continue
         milestone_data.pop("future_wr_candidate", None)
         milestone_data["owning_wr"] = wr_id
-        milestone_data["write_scope"] = exact_auto_safe_write_scope(
-            entry,
-            milestone,
-            track_id=loaded.manifest.track_id,
-            wr_id=wr_id,
-            manifest_source=loaded.path,
-            deferred_source=deferred_source,
-        )
+        if entry.milestone_type in {"docs_only", "design_only"}:
+            milestone_data["write_scope"] = exact_auto_safe_write_scope(
+                entry,
+                milestone,
+                track_id=loaded.manifest.track_id,
+                wr_id=wr_id,
+                production_source=production_source,
+                manifest_source=loaded.path,
+                roadmap_source=roadmap_source,
+                deferred_source=deferred_source,
+            )
+        if entry.milestone_type in {"implementation", "hardening"} and (
+            milestone_data.get("agent_design") or milestone_data.get("agent_design_contract")
+        ):
+            planning_scope = exact_auto_safe_write_scope(
+                entry,
+                milestone,
+                track_id=loaded.manifest.track_id,
+                wr_id=wr_id,
+                production_source=production_source,
+                manifest_source=loaded.path,
+                roadmap_source=roadmap_source,
+                deferred_source=deferred_source,
+            )
+            if milestone_data.get("agent_design"):
+                milestone_data["agent_design"]["planning_write_scope"] = planning_scope
+            if milestone_data.get("agent_design_contract"):
+                milestone_data["agent_design_contract"]["planning_write_scope"] = planning_scope
         milestone_data["next_legal_action"] = (
             f"Run task production:plan -- --milestone {entry.milestone_id} --roadmap {wr_id}; "
-            "stop before design authoring or implementation until that contract is accepted."
+            "stop before product code until that contract is accepted."
         )
         changed = True
         break
@@ -1063,7 +3379,7 @@ def updated_manifest_data_with_wr(
         raise WorkflowError(f"{entry.milestone_id}: not found in manifest {repo_path(loaded.path)}")
     data["next_legal_action"] = (
         f"Run task production:plan -- --milestone {entry.milestone_id} --roadmap {wr_id}; "
-        "do not skip to PM-UI-PROGRAM-007 / 6A."
+        "do not run product_code until the bounded plan is accepted."
     )
     return data
 
@@ -1076,6 +3392,7 @@ def updated_deferred_roadmap_data(
     milestone: ProductionMilestone,
     track: ProductionTrack,
     wr_id: str,
+    production_source: Path,
     manifest_source: Path,
 ) -> tuple[Path, dict]:
     active_data = load_yaml(roadmap_source)
@@ -1094,7 +3411,9 @@ def updated_deferred_roadmap_data(
             milestone,
             track=track,
             wr_id=wr_id,
+            production_source=production_source,
             manifest_source=manifest_source,
+            roadmap_source=roadmap_source,
             deferred_source=deferred_source,
         )
     )
@@ -1202,6 +3521,7 @@ def apply_auto_safe_track_expansion(
         milestone=milestone,
         track=context.track,
         wr_id=wr_id,
+        production_source=production_source,
         manifest_source=context.loaded.path,
     )
     manifest_data = updated_manifest_data_with_wr(
@@ -1209,6 +3529,8 @@ def apply_auto_safe_track_expansion(
         entry=entry,
         milestone=milestone,
         wr_id=wr_id,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
         deferred_source=deferred_source,
     )
     active_data = load_yaml(roadmap_source)
@@ -1247,11 +3569,83 @@ def apply_auto_safe_track_expansion(
 
 
 def manifest_write_scopes_for_entry(entry: TrackExecutionManifestMilestone) -> list[str]:
+    scopes = product_implementation_scopes_for_entry(entry) if entry.milestone_type in {"implementation", "hardening"} else entry.write_scope
     return [
         normalized
-        for normalized in (manifest_write_scope_path(scope) for scope in entry.write_scope)
+        for normalized in (manifest_write_scope_path(scope) for scope in scopes)
         if normalized is not None
     ]
+
+
+def agent_design_contract_for_entry(entry: TrackExecutionManifestMilestone) -> ManifestAgentDesignContract | None:
+    return entry.agent_design or entry.agent_design_contract
+
+
+def product_implementation_scopes_for_entry(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.exact_allowed_implementation_write_scopes)
+    if entry.contract_parameters and entry.contract_parameters.exact_allowed_implementation_write_scopes:
+        return list(entry.contract_parameters.exact_allowed_implementation_write_scopes)
+    return list(entry.write_scope)
+
+
+def product_validation_commands_for_entry(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.validation_commands)
+    if entry.contract_parameters and entry.contract_parameters.validation_commands:
+        return list(entry.contract_parameters.validation_commands)
+    return list(entry.validation_commands)
+
+
+def runtime_closeout_validation_commands_for_entry(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.runtime_closeout_contract is not None:
+        return list(entry.runtime_closeout_contract.validation_commands)
+    return product_validation_commands_for_entry(entry)
+
+
+NON_EXECUTABLE_VALIDATION_MARKERS = (
+    "focused tests named",
+    "named by the owning production plan",
+    "run relevant tests",
+    "relevant tests",
+    "tbd",
+    "to be decided",
+    "validate manually",
+    "manual validation",
+)
+
+EXECUTABLE_VALIDATION_PREFIXES = (
+    "cargo ",
+    "task ",
+    "uv run ",
+    "python ",
+    "pytest",
+    "npm ",
+    "pnpm ",
+    "bun ",
+    "npx ",
+    "git ",
+)
+
+
+def validation_command_errors(
+    commands: list[str],
+    *,
+    label: str,
+    product_code_eligible: bool,
+) -> list[str]:
+    errors: list[str] = []
+    for command in commands:
+        normalized = command.strip().lower()
+        if not normalized:
+            errors.append(f"{label}: validation command must not be empty")
+            continue
+        if any(marker in normalized for marker in NON_EXECUTABLE_VALIDATION_MARKERS):
+            errors.append(f"{label}: validation command is a non-executable placeholder: {command}")
+            continue
+        if product_code_eligible and not normalized.startswith(EXECUTABLE_VALIDATION_PREFIXES):
+            errors.append(f"{label}: product_code validation command is not executable: {command}")
+    return errors
 
 
 def path_is_covered_by_scope(path: str, scopes: list[str]) -> bool:
@@ -1263,8 +3657,29 @@ def assert_agent_design_write_scope(
     *,
     entry: TrackExecutionManifestMilestone,
     roadmap_item: RoadmapItem,
+    contract: ManifestAgentDesignContract,
     write_paths: list[str],
 ) -> None:
+    if entry.milestone_type in {"implementation", "hardening"}:
+        manifest_scopes = [
+            normalized
+            for normalized in (manifest_write_scope_path(scope) for scope in contract.planning_write_scope)
+            if normalized is not None
+        ]
+        wr_scopes = normalized_write_scopes_with_generated_outputs(roadmap_item.write_scopes)
+        missing_manifest = [path for path in write_paths if not path_is_covered_by_scope(path, manifest_scopes)]
+        missing_wr = [path for path in write_paths if not path_is_covered_by_scope(path, wr_scopes)]
+        if missing_manifest:
+            raise WorkflowError(
+                f"{entry.milestone_id}: agent_design write paths are not covered by agent_design planning_write_scope: "
+                + ", ".join(missing_manifest)
+            )
+        if missing_wr:
+            raise WorkflowError(
+                f"{entry.milestone_id}: agent_design write paths are not covered by owning WR {roadmap_item.id} write_scopes: "
+                + ", ".join(missing_wr)
+            )
+        return
     assert_runner_write_scope(
         entry=entry,
         roadmap_item=roadmap_item,
@@ -1308,38 +3723,161 @@ PRODUCT_CODE_REQUIRED_PLAN_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def exact_product_write_scope_errors(entry: TrackExecutionManifestMilestone) -> list[str]:
+STALE_SLICE_TERMS_BY_CURRENT_SLICE: dict[str, tuple[str, ...]] = {
+    "6B": (
+        "label text output",
+        "font/style intent",
+        "text layout request",
+        "structural uiframe text",
+        "6a label",
+        "6a implementation",
+        "6a closeout",
+    ),
+    "6C": (
+        "button route/event/host-command",
+        "6b button",
+        "6b implementation",
+        "colorpicker",
+        "6d colorpicker",
+    ),
+    "6D": (
+        "inspectorfield binding",
+        "6c inspectorfield",
+        "world-space prompt",
+        "6e world",
+    ),
+}
+
+
+def implementation_plan_consistency_errors_from_text(
+    entry: TrackExecutionManifestMilestone,
+    *,
+    roadmap_item: RoadmapItem,
+    text: str,
+    plan_path: Path,
+) -> list[str]:
     errors: list[str] = []
-    broad_roots = {
-        ".",
-        "apps",
-        "domain",
-        "engine",
-        "foundation",
-        "src",
-        "tools",
-        "docs-site",
-        "docs-site/src",
-        "docs-site/src/content",
-        "docs-site/src/content/docs",
-    }
-    for scope in entry.write_scope:
+    normalized = text.lower()
+    proof_slice_id = proof_slice_id_for_entry(entry)
+    proof_slice_title = proof_slice_title_for_entry(entry)
+    target_surface = target_control_surface_for_entry(entry)
+    implementation_proof_kind = entry.implementation_proof_kind or proof_slice_id.lower()
+    required_terms = [
+        entry.milestone_id,
+        roadmap_item.id,
+        entry.title,
+        proof_slice_id,
+        proof_slice_title,
+        target_surface,
+        implementation_proof_kind,
+    ]
+    for term in required_terms:
+        if term and term.lower() not in normalized:
+            errors.append(f"{entry.milestone_id}: generated implementation plan is missing current proof term {term!r}")
+    for scope in product_implementation_scopes_for_entry(entry):
+        scope_path = manifest_write_scope_path(scope)
+        scope_terms = [scope.lower()]
+        if scope_path is not None:
+            scope_terms.append(scope_path.lower())
+        if not any(term in normalized for term in scope_terms):
+            errors.append(f"{entry.milestone_id}: generated implementation plan is missing exact write scope {scope}")
+    for command in implementation_plan_validation_commands(entry):
+        if command.lower() not in normalized:
+            errors.append(f"{entry.milestone_id}: generated implementation plan is missing validation command {command!r}")
+    errors.extend(
+        validation_command_errors(
+            implementation_plan_validation_commands(entry),
+            label=f"{entry.milestone_id}: product_code plan",
+            product_code_eligible=True,
+        )
+    )
+    for stale_term in STALE_SLICE_TERMS_BY_CURRENT_SLICE.get(proof_slice_id.upper(), ()):
+        if stale_term in normalized:
+            errors.append(
+                f"{entry.milestone_id}: generated implementation plan contains stale slice term {stale_term!r}"
+            )
+    if f"stop before {entry.milestone_id.lower()}" in normalized:
+        errors.append(f"{entry.milestone_id}: generated implementation plan says to stop before the current milestone")
+    current_slice_stop = f"stop before {proof_slice_id.lower()}"
+    if current_slice_stop in normalized:
+        errors.append(f"{entry.milestone_id}: generated implementation plan says to stop before the current proof slice")
+    if entry.expected_closeout_path.lower() not in normalized:
+        errors.append(
+            f"{entry.milestone_id}: generated implementation plan is missing current closeout path {entry.expected_closeout_path}"
+        )
+    if plan_path.suffix.lower() != ".md":
+        errors.append(f"{entry.milestone_id}: generated implementation plan path must be markdown: {repo_path(plan_path)}")
+    return errors
+
+
+def exact_product_write_scope_errors(entry: TrackExecutionManifestMilestone) -> list[str]:
+    errors = exact_scope_list_errors(
+        product_implementation_scopes_for_entry(entry),
+        label=f"{entry.milestone_id}: product_code write_scope",
+    )
+    for scope in product_implementation_scopes_for_entry(entry):
+        normalized = manifest_write_scope_path(scope)
+        if normalized is not None and normalized.endswith("/"):
+            errors.append(f"{entry.milestone_id}: product_code write_scope must be an exact file or module path: {scope}")
+    return errors
+
+
+RUNTIME_EVIDENCE_COMMAND_PREFIXES = (
+    "cargo test",
+    "cargo nextest",
+    "cargo llvm-cov",
+    "uv run pytest",
+    "pytest",
+    "task test",
+)
+
+
+def command_is_runtime_evidence(command: str) -> bool:
+    normalized = command.strip().lower()
+    return any(normalized.startswith(prefix) for prefix in RUNTIME_EVIDENCE_COMMAND_PREFIXES)
+
+
+def existing_scope_path(normalized: str) -> Path | None:
+    repo_candidate = REPO_ROOT / normalized
+    if repo_candidate.exists():
+        return repo_candidate
+    absolute_candidate = Path("/" + normalized)
+    if absolute_candidate.exists():
+        return absolute_candidate
+    return None
+
+
+def runtime_evidence_errors(entry: TrackExecutionManifestMilestone) -> list[str]:
+    errors: list[str] = []
+    commands = runtime_closeout_validation_commands_for_entry(entry)
+    if not any(command_is_runtime_evidence(command) for command in commands):
+        errors.append(
+            f"{entry.milestone_id}: runtime closeout requires at least one runtime/test validation command"
+        )
+    errors.extend(
+        validation_command_errors(
+            commands,
+            label=f"{entry.milestone_id}: runtime_closeout",
+            product_code_eligible=True,
+        )
+    )
+    missing_paths = []
+    expected_closeout = normalize_repo_path(entry.expected_closeout_path)
+    for scope in product_implementation_scopes_for_entry(entry):
         if is_generated_or_derived_scope(scope):
             continue
         normalized = manifest_write_scope_path(scope)
         if normalized is None:
-            errors.append(f"{entry.milestone_id}: product_code write_scope is ambiguous or non-path: {scope}")
             continue
-        if "*" in normalized or "..." in normalized:
-            errors.append(f"{entry.milestone_id}: product_code write_scope must not use wildcard or ellipsis scope: {scope}")
+        if normalized == expected_closeout:
             continue
-        parts = normalized.split("/")
-        if normalized in broad_roots or len(parts) < 3:
-            errors.append(f"{entry.milestone_id}: product_code write_scope is too broad: {scope}")
-            continue
-        if normalized.endswith("/"):
-            errors.append(f"{entry.milestone_id}: product_code write_scope must be an exact file or module path: {scope}")
-            continue
+        if existing_scope_path(normalized) is None:
+            missing_paths.append(normalized)
+    if missing_paths:
+        errors.append(
+            f"{entry.milestone_id}: runtime closeout requires scoped runtime evidence paths to exist: "
+            + ", ".join(missing_paths)
+        )
     return errors
 
 
@@ -1363,14 +3901,22 @@ def product_plan_contract_errors(
     for label, markers in PRODUCT_CODE_REQUIRED_PLAN_MARKERS:
         if not any(marker in plan_text for marker in markers):
             errors.append(f"{entry.milestone_id}: accepted production plan is missing {label}")
-    for scope in entry.write_scope:
+    for scope in product_implementation_scopes_for_entry(entry):
         normalized = manifest_write_scope_path(scope)
         if normalized is None or is_generated_or_derived_scope(scope):
             continue
         if normalized.lower() not in plan_text:
             errors.append(
-                f"{entry.milestone_id}: accepted production plan does not name manifest write_scope {normalized}"
+                f"{entry.milestone_id}: accepted production plan does not name product_code write_scope {normalized}"
             )
+    errors.extend(
+        implementation_plan_consistency_errors_from_text(
+            entry,
+            roadmap_item=roadmap_item,
+            text=plan_path.read_text(encoding="utf-8"),
+            plan_path=plan_path,
+        )
+    )
     if roadmap_item.completion_quality == "runtime_proven":
         errors.append(
             f"{entry.milestone_id}: product_code cannot claim runtime_proven before closeout runtime/test evidence exists"
@@ -1416,11 +3962,11 @@ def assert_product_code_allowed(
         errors.append(f"{entry.milestone_id}: product_code requires B2 or lower implementation blocker; {roadmap_item.id} is {roadmap_item.blocker_label}")
     if not entry.forbidden_scope:
         errors.append(f"{entry.milestone_id}: product_code requires explicit forbidden scope")
-    if not entry.validation_commands:
+    if not product_validation_commands_for_entry(entry):
         errors.append(f"{entry.milestone_id}: product_code requires validation commands")
     if not entry.expected_closeout_path or entry.expected_closeout_path.startswith("blocked:"):
         errors.append(f"{entry.milestone_id}: product_code requires an expected closeout path")
-    if any("foundation/meta" in scope.lower() for scope in entry.write_scope):
+    if any("foundation/meta" in scope.lower() for scope in product_implementation_scopes_for_entry(entry)):
         errors.append(f"{entry.milestone_id}: product_code cannot authorize shared foundation/meta extraction")
     errors.extend(exact_product_write_scope_errors(entry))
     errors.extend(product_plan_contract_errors(entry=entry, roadmap_item=roadmap_item, plan_path=plan_path))
@@ -1453,7 +3999,7 @@ def apply_product_code(
         raise WorkflowError(f"{entry.milestone_id}: owning WR {entry.owning_wr} is not present in roadmap")
     plan_path = default_contract_path(roadmap_item)
     assert_product_code_allowed(entry, milestone, roadmap_item, plan_path=plan_path, allow=allow)
-    validation_results = run_validation_commands(entry.validation_commands) if run_validations else ()
+    validation_results = run_validation_commands(product_validation_commands_for_entry(entry)) if run_validations else ()
     return ProductCodeResult(
         track_id=context.track.id,
         milestone_id=entry.milestone_id,
@@ -1466,6 +4012,340 @@ def apply_product_code(
             "stop after this implementation WR and close out with runtime/test evidence before continuing."
         ),
     )
+
+
+def apply_product_implementation(
+    context: ManifestCommandContext,
+    *,
+    allow: set[str],
+    roadmap_source: Path = ROADMAP_SOURCE,
+    run_validations: bool = True,
+) -> ProductImplementationResult:
+    audit_manifest_or_raise(context.loaded, track=context.track, roadmap=context.roadmap)
+    entry, milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
+    workflow_action, blockers = next_action_blockers(
+        entry,
+        milestone,
+        planning=context.planning,
+        track=context.track,
+        roadmap=context.roadmap,
+    )
+    if blockers:
+        raise WorkflowError("\n".join(blockers))
+    if workflow_action != "write_implementation_contract":
+        raise WorkflowError(f"{entry.milestone_id}: next legal action is {workflow_action}, not product_implementation")
+    assert entry.owning_wr is not None
+    roadmap_item = context.roadmap.by_id.get(entry.owning_wr)
+    if roadmap_item is None:
+        raise WorkflowError(f"{entry.milestone_id}: owning WR {entry.owning_wr} is not present in roadmap")
+    plan_path = default_contract_path(roadmap_item)
+    assert_product_code_allowed(entry, milestone, roadmap_item, plan_path=plan_path, allow=allow)
+    files = product_implementation_files(entry)
+    assert_product_implementation_allowed(entry, roadmap_item, files=files, allow=allow)
+    for path, content in files.items():
+        if not path.parent.exists():
+            raise WorkflowError(
+                f"{entry.milestone_id}: product_implementation cannot create placeholder folders for {repo_path(path)}"
+            )
+        path.write_text(content, encoding="utf-8", newline="\n")
+    validation_results = run_validation_commands(product_validation_commands_for_entry(entry)) if run_validations else ()
+    manifest_data = updated_manifest_data_after_product_implementation(context.loaded, entry=entry)
+    write_yaml_mapping(context.loaded.path, manifest_data)
+    roadmap_data = updated_roadmap_data_after_product_implementation(
+        roadmap_source,
+        track_id=context.track.id,
+        wr_id=entry.owning_wr,
+        entry=entry,
+    )
+    write_yaml_mapping(roadmap_source, roadmap_data, indent_sequences=False)
+    return ProductImplementationResult(
+        track_id=context.track.id,
+        milestone_id=entry.milestone_id,
+        wr_id=entry.owning_wr,
+        plan_path=plan_path,
+        manifest_path=context.loaded.path,
+        written_paths=tuple(files.keys()),
+        validation_commands=validation_results,
+        next_legal_action=(
+            f"{entry.milestone_id} product_implementation wrote bounded files for {entry.owning_wr}; "
+            "rerun with agent_closeout to close only after runtime/test evidence remains valid."
+        ),
+    )
+
+
+def updated_manifest_data_after_product_implementation(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    entry: TrackExecutionManifestMilestone,
+) -> dict:
+    data = load_yaml(loaded.path)
+    next_action = (
+        f"{entry.milestone_id} product_implementation completed; runtime closeout is the next legal action "
+        "after validation evidence remains valid."
+    )
+    data["next_legal_action"] = next_action
+    for milestone_data in data.get("milestones", []):
+        if milestone_data.get("milestone_id") == entry.milestone_id:
+            milestone_data["next_legal_action"] = next_action
+            stop_conditions = milestone_data.setdefault("stop_conditions", [])
+            marker = "product_implementation completed; stop before runtime closeout unless agent_closeout is explicitly allowed"
+            if marker not in stop_conditions:
+                stop_conditions.append(marker)
+            break
+    return data
+
+
+def updated_roadmap_data_after_product_implementation(
+    roadmap_source: Path,
+    *,
+    track_id: str,
+    wr_id: str,
+    entry: TrackExecutionManifestMilestone,
+) -> dict:
+    data = load_yaml(roadmap_source)
+    changed = False
+    for item in data.get("items", []):
+        if item.get("id") != wr_id:
+            continue
+        item["next_evidence"] = (
+            f"{entry.milestone_id} product_implementation completed under the accepted plan; "
+            "runtime closeout evidence is now the next legal action."
+        )
+        item["current_decision"] = (
+            f"Manifest Runner V5 wrote bounded product implementation for {entry.stage}. "
+            "The WR remains active until runtime_proven closeout completes."
+        )
+        item["current_call"] = (
+            "Next legal command, only for closeout: "
+            f"task production:run-track -- --track {track_id} --allow agent_closeout --max-actions 1"
+        )
+        item["first_move"] = "Run runtime closeout only after validation evidence remains valid."
+        item["main_blocker"] = "Runtime closeout evidence is missing; product implementation is present."
+        item["why_not_ready"] = (
+            f"{entry.stage} product implementation exists, but {entry.milestone_id} has not closed as runtime_proven."
+        )
+        item["diagram_call"] = ["product implementation complete", "runtime closeout next"]
+        changed = True
+        break
+    if not changed:
+        raise WorkflowError(f"{wr_id}: not present in active roadmap source")
+    return data
+
+
+def assert_product_implementation_allowed(
+    entry: TrackExecutionManifestMilestone,
+    roadmap_item: RoadmapItem,
+    *,
+    files: dict[Path, str],
+    allow: set[str],
+) -> None:
+    errors: list[str] = []
+    writer = entry.implementation_writer
+    if "product_code" not in allow:
+        errors.append("Manifest Runner V5 requires --allow product_code before product_implementation")
+    if "product_implementation" not in allow:
+        errors.append("Manifest Runner V5 requires --allow product_implementation to write product/runtime files")
+    if entry.milestone_type not in {"implementation", "hardening"}:
+        errors.append(f"{entry.milestone_id}: product_implementation supports implementation/runtime-proof milestones only")
+    if writer is None:
+        errors.append(f"{entry.milestone_id}: product_implementation requires implementation_writer config")
+    elif writer.strategy == "no_writer":
+        errors.append(f"{entry.milestone_id}: implementation_writer strategy is no_writer")
+    elif not implementation_writer_allowed_scopes(writer):
+        errors.append(f"{entry.milestone_id}: implementation_writer.allowed_files or allowed_write_scopes must be exact and non-empty")
+    elif not writer.required_outputs:
+        errors.append(f"{entry.milestone_id}: implementation_writer.required_outputs must describe proof evidence")
+    elif not writer.validation_commands:
+        errors.append(f"{entry.milestone_id}: implementation_writer.validation_commands must be explicit")
+    elif not writer.stop_conditions:
+        errors.append(f"{entry.milestone_id}: implementation_writer.stop_conditions must be explicit")
+    if not files and not (writer is not None and writer.strategy == "proof_aggregation_writer" and writer.aggregation_only):
+        errors.append(f"{entry.milestone_id}: product_implementation has no bounded writer for this milestone")
+    write_paths = [repo_path(path) for path in files]
+    if writer is not None:
+        allowed_paths = {
+            normalize_write_scope_path(scope)
+            for scope in implementation_writer_allowed_scopes(writer)
+            if normalize_write_scope_path(scope) is not None
+        }
+        for path in write_paths:
+            normalized_path = normalize_repo_path(path)
+            if normalized_path not in allowed_paths:
+                errors.append(
+                    f"{entry.milestone_id}: product_implementation writer output {normalized_path} is not declared in implementation_writer.allowed_files"
+                )
+        missing_writer_commands = [
+            command
+            for command in writer.validation_commands
+            if command not in product_validation_commands_for_entry(entry)
+        ]
+        if missing_writer_commands:
+            errors.append(
+                f"{entry.milestone_id}: implementation_writer validation commands are not covered by product_code_contract: "
+                + ", ".join(missing_writer_commands)
+            )
+    try:
+        assert_runner_write_scope(
+            entry=entry,
+            roadmap_item=roadmap_item,
+            write_paths=write_paths,
+            action_label="product_implementation",
+        )
+    except WorkflowError as error:
+        errors.extend(str(error).splitlines())
+    wr_scopes = list(roadmap_item.write_scopes)
+    product_scopes = product_implementation_scopes_for_entry(entry)
+    new_scope_sources = [*wr_scopes, *product_scopes]
+    for path in files:
+        normalized = repo_path(path)
+        if not write_scope_path_requires_new_marker(path):
+            continue
+        if writer is not None and writer.new_file_policy == "existing_files_only":
+            errors.append(
+                f"{entry.milestone_id}: implementation_writer new_file_policy forbids creating {normalized}"
+            )
+            continue
+        if not new_scope_is_marked(normalized, new_scope_sources):
+            errors.append(
+                f"{entry.milestone_id}: new product file {normalized} must be marked with 'new:' in the owning WR or product_code_contract write scope"
+            )
+    if writer is not None:
+        for forbidden in implementation_writer_forbidden_scopes(writer):
+            forbidden_path = manifest_write_scope_path(forbidden)
+            if forbidden_path is None:
+                continue
+            for path in write_paths:
+                normalized_path = normalize_repo_path(path)
+                if path_within_scope(normalized_path, forbidden_path) or path_within_scope(forbidden_path, normalized_path):
+                    errors.append(
+                        f"{entry.milestone_id}: product_implementation would touch implementation_writer forbidden file {forbidden_path}"
+                    )
+        for pattern in writer.forbidden_patterns:
+            try:
+                compiled = re.compile(pattern)
+            except re.error as error:
+                errors.append(f"{entry.milestone_id}: invalid implementation_writer forbidden pattern {pattern!r}: {error}")
+                continue
+            for path, content in files.items():
+                searchable = f"{repo_path(path)}\n{content}"
+                if compiled.search(searchable):
+                    errors.append(
+                        f"{entry.milestone_id}: product_implementation output matches forbidden pattern {pattern!r}"
+                    )
+    for forbidden in product_forbidden_scopes_for_entry(entry):
+        forbidden_path = manifest_write_scope_path(forbidden)
+        if forbidden_path is None:
+            continue
+        for path in write_paths:
+            normalized_path = normalize_repo_path(path)
+            if path_within_scope(normalized_path, forbidden_path) or path_within_scope(forbidden_path, normalized_path):
+                errors.append(f"{entry.milestone_id}: product_implementation would touch forbidden scope {forbidden_path}")
+    if errors:
+        raise WorkflowError("\n".join(errors))
+
+
+def new_scope_is_marked(path: str, scopes: list[str]) -> bool:
+    normalized = normalize_repo_path(path)
+    return any(is_new_write_scope(scope) and normalize_write_scope_path(scope) == normalized for scope in scopes)
+
+
+def product_forbidden_scopes_for_entry(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return [*entry.forbidden_scope, *entry.product_code_contract.forbidden_implementation_scopes]
+    return list(entry.forbidden_scope)
+
+
+def implementation_writer_allowed_scopes(writer: ManifestImplementationWriter) -> list[str]:
+    return [*writer.allowed_files, *writer.allowed_write_scopes]
+
+
+def implementation_writer_forbidden_scopes(writer: ManifestImplementationWriter) -> list[str]:
+    return [*writer.forbidden_files, *writer.forbidden_scopes]
+
+
+def implementation_writer_output_scopes(writer: ManifestImplementationWriter) -> list[str]:
+    outputs = [*writer.allowed_files, *writer.allowed_write_scopes]
+    outputs.extend(template.file for template in writer.templates)
+    outputs.extend(patch.file for patch in writer.patches)
+    return outputs
+
+
+def product_implementation_files(entry: TrackExecutionManifestMilestone) -> dict[Path, str]:
+    writer = entry.implementation_writer
+    if writer is None or writer.strategy == "no_writer":
+        raise WorkflowError(f"{entry.milestone_id}: implementation_writer strategy is no_writer")
+    if writer.strategy == "template_writer":
+        return template_writer_files(entry, writer)
+    if writer.strategy == "patch_writer":
+        return patch_writer_files(entry, writer)
+    if writer.strategy == "agent_writer":
+        raise WorkflowError(
+            f"{entry.milestone_id}: agent_writer is reserved until a real agent diff protocol exists; "
+            "use template_writer, patch_writer, or proof_aggregation_writer"
+        )
+    if writer.strategy == "proof_aggregation_writer":
+        return proof_aggregation_writer_files(entry, writer)
+    raise WorkflowError(f"{entry.milestone_id}: unsupported implementation_writer strategy {writer.strategy!r}")
+
+
+def proof_aggregation_writer_files(
+    entry: TrackExecutionManifestMilestone,
+    writer: ManifestImplementationWriter,
+) -> dict[Path, str]:
+    if writer.templates and writer.patches:
+        raise WorkflowError(f"{entry.milestone_id}: proof_aggregation_writer cannot mix templates and patches")
+    if writer.templates:
+        return template_writer_files(entry, writer)
+    if writer.patches:
+        return patch_writer_files(entry, writer)
+    return {}
+
+
+def template_writer_files(
+    entry: TrackExecutionManifestMilestone,
+    writer: ManifestImplementationWriter,
+) -> dict[Path, str]:
+    if not writer.templates:
+        raise WorkflowError(f"{entry.milestone_id}: template_writer requires at least one declared template")
+    return {
+        implementation_writer_path(template.file): template.content
+        for template in writer.templates
+    }
+
+
+def patch_writer_files(
+    entry: TrackExecutionManifestMilestone,
+    writer: ManifestImplementationWriter,
+) -> dict[Path, str]:
+    if not writer.patches:
+        raise WorkflowError(f"{entry.milestone_id}: {writer.strategy} requires declared bounded patches")
+    outputs: dict[Path, str] = {}
+    errors: list[str] = []
+    for patch in writer.patches:
+        path = implementation_writer_path(patch.file)
+        if path in outputs:
+            current = outputs[path]
+        elif path.exists():
+            current = path.read_text(encoding="utf-8")
+        else:
+            current = ""
+        if patch.find not in current:
+            if patch.replace in current:
+                outputs[path] = current
+                continue
+            errors.append(f"{entry.milestone_id}: patch find text not found in {patch.file}")
+            continue
+        outputs[path] = current.replace(patch.find, patch.replace, 1)
+    if errors:
+        raise WorkflowError("\n".join(errors))
+    return outputs
+
+
+def implementation_writer_path(path: str) -> Path:
+    candidate = Path(path.strip())
+    if candidate.is_absolute():
+        return candidate
+    return REPO_ROOT / normalize_repo_path(path)
 
 
 def assert_agent_design_source_documents(contract: ManifestAgentDesignContract) -> None:
@@ -1483,13 +4363,9 @@ def assert_agent_design_allowed(
 ) -> ManifestAgentDesignContract:
     if "agent_design" not in allow:
         raise WorkflowError("Manifest Runner V2 requires --allow agent_design for design/planning document mutation")
-    if "product_code" in allow:
-        raise WorkflowError("agent_design cannot run when product_code is allowed")
-    if "product_code" not in deny:
-        raise WorkflowError("agent_design requires --deny product_code")
-    if entry.may_create_code or entry.may_create_crates or entry.may_modify_production_behavior:
+    if entry.may_create_crates:
         raise WorkflowError(
-            f"{entry.milestone_id}: agent_design cannot run for milestones that allow product code, crates, or production behavior changes"
+            f"{entry.milestone_id}: agent_design cannot run for milestones that require crate creation"
         )
     if milestone.state == "completed":
         raise WorkflowError(f"{entry.milestone_id}: agent_design cannot mutate completed milestones")
@@ -1497,14 +4373,15 @@ def assert_agent_design_allowed(
         raise WorkflowError(
             f"{entry.milestone_id}: agent_design output already exists; rerun with --allow agent_closeout for closeout"
         )
-    if entry.milestone_type not in {"docs_only", "design_only"}:
-        raise WorkflowError(f"{entry.milestone_id}: agent_design supports docs-only or design-only milestones only")
+    if entry.milestone_type not in {"docs_only", "design_only", "implementation", "hardening"}:
+        raise WorkflowError(f"{entry.milestone_id}: agent_design supports docs, design, implementation, or hardening milestones only")
     if not entry.owning_wr:
         raise WorkflowError(f"{entry.milestone_id}: agent_design requires an owning WR")
-    if entry.agent_design is None:
+    contract = agent_design_contract_for_entry(entry)
+    if contract is None:
         raise WorkflowError(f"{entry.milestone_id}: manifest milestone is missing agent_design contract")
-    assert_agent_design_source_documents(entry.agent_design)
-    return entry.agent_design
+    assert_agent_design_source_documents(contract)
+    return contract
 
 
 def agent_design_plan_content(
@@ -1514,19 +4391,30 @@ def agent_design_plan_content(
     contract: ManifestAgentDesignContract,
     plan_path: Path,
 ) -> str:
+    if entry.milestone_type in {"implementation", "hardening"}:
+        return agent_design_implementation_plan_content(
+            plan_context,
+            entry=entry,
+            contract=contract,
+            plan_path=plan_path,
+        )
     readiness = render_readiness_report(plan_context, classify_plan_action(plan_context), plan_path)
+    stage_label = entry.stage
+    required_sections_heading = "Required Design Sections"
     source_lines = "\n".join(f"- `{path}`" for path in contract.source_documents)
+    related_design_lines = "\n".join(f"  - ../../../{path.removeprefix('docs-site/src/content/docs/')}" for path in contract.source_documents)
     section_lines = "\n".join(f"- {section}" for section in contract.required_sections)
     decision_lines = "\n".join(f"- {decision}" for decision in contract.required_decisions)
     acceptance_lines = "\n".join(f"- {item}" for item in contract.acceptance_checklist)
-    write_scope_lines = "\n".join(f"- `{scope}`" for scope in entry.write_scope)
+    implementation_scopes = product_implementation_scopes_for_entry(entry)
+    write_scope_lines = "\n".join(f"- `{scope}`" for scope in implementation_scopes)
     forbidden_lines = "\n".join(f"- {scope}" for scope in entry.forbidden_scope)
     validation_lines = "\n".join(f"- `{command}`" for command in entry.validation_commands)
     stop_lines = "\n".join(f"- {condition}" for condition in entry.stop_conditions)
     return "\n".join(
         [
             "---",
-            f"title: {plan_context.roadmap_item.id} UI Program Contract Design Plan",
+            f"title: {plan_context.roadmap_item.id} {entry.title} Plan",
             f"description: Design/planning contract for {entry.milestone_id} under {plan_context.roadmap_item.id}.",
             "status: active",
             "owner: ui",
@@ -1536,20 +4424,20 @@ def agent_design_plan_content(
             "related:",
             "  - ../../../workspace/production-tracks.yaml",
             "  - ../../../workspace/roadmap-deferred.yaml",
-            "  - ../../../workspace/track-execution-manifests/pt-ui-program.yaml",
+            f"  - ../../../workspace/track-execution-manifests/{plan_context.track.id.lower()}.yaml",
             "related_designs:",
-            "  - ../../../design/active/runenwerk-domain-workbench-north-star.md",
-            "  - ../../../design/active/ui-program-architecture.md",
+            related_design_lines or "  - ../../../workspace/track-execution-manifest.md",
             "---",
             "",
-            f"# {plan_context.roadmap_item.id} UI Program Contract Design Plan",
+            f"# {plan_context.roadmap_item.id} {entry.title} Plan",
             "",
             "## Status And Authority",
             "",
             f"- Production milestone: `{entry.milestone_id}` - {entry.title}",
+            f"- Stage: {stage_label}",
             f"- Roadmap item: `{plan_context.roadmap_item.id}` - {plan_context.roadmap_item.title}",
             "- Authority: design/planning only.",
-            "- This plan does not authorize product/runtime code, crate creation, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, or shared foundation/meta extraction.",
+            "- This plan does not authorize product/runtime code, crate creation, placeholder future folders, runtime proof work, downstream implementation, or shared foundation/meta extraction.",
             "- This plan does not close the milestone. Closeout requires separate manual evidence or an explicit `agent_closeout` automation run.",
             "",
             "## Production Planning Output",
@@ -1560,7 +4448,7 @@ def agent_design_plan_content(
             "",
             source_lines,
             "",
-            "## Required Stage 1 Sections",
+            f"## {required_sections_heading}",
             "",
             section_lines,
             "",
@@ -1593,192 +4481,239 @@ def agent_design_plan_content(
             "## Closeout Expectation",
             "",
             f"- Expected closeout path: `{entry.expected_closeout_path}`",
-            "- Closeout must prove the Stage 1 design sections exist, answer or explicitly block open questions, and preserve all forbidden-scope constraints.",
+            f"- Closeout must prove the {stage_label} design sections exist, answer or explicitly block open questions, and preserve all forbidden-scope constraints.",
             "",
+            agent_design_contract_section(entry, contract),
         ]
     )
 
 
-def pm002_contract_section() -> str:
-    return """## PM-UI-PROGRAM-002 Stage 1 Contract
+def proof_slice_id_for_entry(entry: TrackExecutionManifestMilestone) -> str:
+    if entry.contract_parameters and entry.contract_parameters.proof_slice_id:
+        return entry.contract_parameters.proof_slice_id
+    stage_match = re.search(r"stage\s+([0-9]+[a-z])", entry.stage.lower())
+    if stage_match:
+        return stage_match.group(1).upper()
+    proof_kind = entry.implementation_proof_kind or entry.closeout_kind or entry.milestone_id
+    proof_match = re.search(r"([0-9]+[a-z])", proof_kind.lower())
+    if proof_match:
+        return proof_match.group(1).upper()
+    return entry.milestone_id
 
-This section is the bounded Stage 1 contract produced for `PM-UI-PROGRAM-002`.
-It tightens the design-level contracts only. It does not authorize code,
-crates, placeholder folders, Stage 6 proof work, MaterialProgram work, or
-shared `foundation/meta` extraction.
 
-### Graph Ownership Contract
+def proof_slice_title_for_entry(entry: TrackExecutionManifestMilestone) -> str:
+    if entry.contract_parameters and entry.contract_parameters.proof_slice_title:
+        return entry.contract_parameters.proof_slice_title
+    return entry.title
 
-`UiProgram` owns the durable UI program contract. The graph list is closed for
-Stage 1 and contains `ControlGraph`, `LayoutGraph`, `StateGraph`,
-`StyleGraph`, `InteractionGraph`, `BindingGraph`, `VisualGraph`,
-`AccessibilityGraph`, and `InspectionGraph`.
 
-Each graph owns one class of UI truth and may reference other graphs only by
-stable IDs, source-map spans, and explicit dependency edges. None of these
-graphs are generic node soup:
+def target_control_surface_for_entry(entry: TrackExecutionManifestMilestone) -> str:
+    if entry.contract_parameters and entry.contract_parameters.target_control_surface:
+        return entry.contract_parameters.target_control_surface
+    title = re.sub(r"^\s*[0-9]+[A-Za-z]\s+", "", entry.title).strip()
+    title = re.sub(r"\s+Proof\s*$", "", title).strip()
+    return title or entry.title
 
-- `ControlGraph` owns control identity, package/control kind, hierarchy, and
-  capability requirements.
-- `LayoutGraph` owns measurement, constraints, placement, and layout kernel
-  dependencies.
-- `StateGraph` owns structural state declarations and dependencies.
-- `StyleGraph` owns UI-domain style intent and state variants.
-- `InteractionGraph` owns focus, capture, gestures, route slots, and event
-  packet emission.
-- `BindingGraph` owns read/write host data contracts and binding dependency
-  flow.
-- `VisualGraph` owns UI visual intent before renderer-facing output exists.
-- `AccessibilityGraph` owns semantic roles, names, focus order, and assistive
-  metadata.
-- `InspectionGraph` owns provenance, source-map links, diagnostics, and
-  runtime inspection references.
 
-### UiSchemaValue Contract
+def bullet_lines(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items)
 
-`UiSchemaValue` is UI-owned until the Second-Domain Extraction Gate. It supports
-null, booleans, signed integers, unsigned integers, finite floats, strings,
-stable ID references, route references, opaque host references, object values,
-list values, and schema-declared optional values.
 
-Opaque host references are handles to host-provided data that UI may compare,
-route, inspect, and diagnose, but never dereference into hidden app behavior.
-Route references identify stable `RouteId` contracts and never replace
-`UiEventPacket`.
+def code_bullet_lines(items: list[str]) -> str:
+    return "\n".join(f"- `{item}`" for item in items)
 
-Every schema-bound value is validated against a schema ID and schema version.
-Unknown fields are rejected unless the schema explicitly marks them as
-preserved debug/fixture data. Breaking schema changes require a new version and
-a migration report. Validation failures attach schema ID, schema version,
-source-map span, diagnostic ID, and the graph/artifact location that observed
-the failure.
 
-### Stable ID Policy
+def implementation_plan_validation_commands(entry: TrackExecutionManifestMilestone) -> list[str]:
+    return product_validation_commands_for_entry(entry)
 
-Stable IDs are namespaced and versioned. Stage 1 applies the policy to control
-kind IDs, package IDs, schema IDs, event payload schema IDs, kernel IDs,
-capability IDs, route IDs, artifact IDs, fixture IDs, and diagnostic IDs.
 
-IDs are never silently repurposed. Collisions fail validation. Deprecation
-requires a replacement or explicit no-replacement reason plus migration
-diagnostics. Breaking shape changes require a new version. Artifact manifests
-record the exact IDs and versions used for compile, evaluation, diagnostics,
-source maps, and fixtures.
+def implementation_plan_forbidden_scopes(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.forbidden_implementation_scopes)
+    return list(entry.forbidden_scope)
 
-### StateGraph And UiStateModel Contract
 
-`StateGraph` owns structural state requirements: declarations, state class,
-dependencies, package state schemas, persistence eligibility, source-map spans,
-and artifact layout inputs.
+def implementation_plan_tests(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.tests_to_add_change)
+    return default_contract_params_list(entry, "tests_to_add_change", [f"Focused {entry.stage} tests in scoped modules only."])
 
-`UiStateModel` owns runtime state contracts: transient state, preview state,
-committed state, focus state, hover state, pressed/captured state, drag state,
-animation state, host-fed state, and package-owned state. Compiled state tables
-belong to `UiRuntimeArtifactTables`. Evaluation-time transitions belong to
-`UiEvaluator`. Host-fed state enters only through explicit binding or host
-contracts and cannot become hidden UI semantics.
 
-### BindingGraph Contract
+def implementation_plan_runtime_evidence(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.runtime_evidence_required)
+    return default_contract_params_list(entry, "runtime_evidence_required", [f"{entry.stage} runtime/test evidence."])
 
-`BindingGraph` owns read model declarations, write model declarations, value
-snapshots, collection diffs, dirty propagation, host data contracts,
-authorization policy, capability checks, binding diagnostics, and source-map
-attachments.
 
-Reads consume host-provided snapshots. Writes produce route/event payloads or
-domain-owned mutation requests; UI never mutates host/domain state directly.
-Collection diffs identify insert, remove, move, replace, selection, and
-expansion changes with stable item IDs when available. Binding failure is
-diagnostic output, not silent fallback.
+def implementation_plan_rollback(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.rollback_compatibility_expectations)
+    return default_contract_params_list(
+        entry,
+        "rollback_compatibility_expectations",
+        ["Rollback is limited to the exact allowed implementation write scopes."],
+    )
 
-### VisualGraph And UiFrame Boundary
 
-`VisualGraph` is UI-owned visual intent. It describes draw order, shapes, text
-operators, image slots, clips, overlays, control visual kernels, invalidation
-dependencies, and source maps.
+def implementation_plan_method_scope(entry: TrackExecutionManifestMilestone) -> list[str]:
+    if entry.product_code_contract is not None:
+        return list(entry.product_code_contract.required_function_method_scope)
+    return default_contract_params_list(
+        entry,
+        "required_function_method_scope",
+        [f"Bounded {proof_slice_title_for_entry(entry)} functions/methods only."],
+    )
 
-`UiFrame` is derived renderer-facing structural output. It may contain resolved
-visual commands, text layout requests/results, clipping, z-order, accessibility
-links, source-map references, diagnostics, and render-handoff metadata. It is
-not product truth. The renderer owns backend execution and resource residency,
-not UI meaning.
 
-### Text / Render Boundary
-
-UI owns font/style intent, text value bindings, text layout requests, wrapping,
-overflow policy, semantic role, accessibility labels, source maps, DPI/scale
-intent, and fallback policy requirements.
-
-The text backend owns shaping, fallback font resolution, glyph identity keys,
-atlas preparation keys, glyph metrics, text layout metrics, cache preparation,
-and invalidation policy for font, DPI, scale, locale, and text-policy changes.
-
-The renderer owns GPU atlas residency, upload handles, eviction implementation,
-backend resource lifetime, batching, and draw execution. Renderer handles are
-not UI truth and must not be stored as semantic UI data.
-
-### Event Packet And Payload Contract
-
-`UiEventPacket` is semantic UI output. It carries `RouteId`,
-`RouteSchemaVersion`, source control ID, interaction phase, payload schema ID,
-`UiSchemaValue` payload, source-map attachment, capability context, and
-diagnostic context.
-
-There is no giant `UiSemanticEvent` enum. Event payloads are schema-based and
-route-based. Unknown routes, unsupported route schema versions, missing
-capabilities, invalid payloads, and missing host route-map entries produce
-diagnostics and do not execute hidden behavior.
-
-### Route / HostCommand / DomainCommand Boundary
-
-`RouteId` is a stable namespaced ID. `RouteSchemaVersion` versions the route
-payload and route contract shape. `RouteCapability` names the capability needed
-to emit or consume the route. `HostRouteMapVersion` versions the host-owned map
-from `UiEventPacket` to `HostCommand` and optional `DomainCommand`.
-
-`HostCommand` is environment-specific. `DomainCommand` is domain-owned mutation
-authority. Hosts map UI events into commands only through inspectable route-map
-policy and capability checks. Routes must not become hidden app behavior or
-free-form strings.
-
-### Source-Map Attachment Points
-
-Source-map attachments are required on control nodes, graph edges, schema
-values, package properties, state declarations, bindings, routes, event
-payloads, visual operators, text layout requests, artifact manifest entries,
-artifact tables, diagnostics, fixtures, migrations, and host route-map entries.
-
-Every runtime diagnostic and fixture assertion must be able to point back to
-the authored source when source context exists. Generated or synthesized nodes
-must record generated provenance and the source span or rule that produced
-them.
-
-### Diagnostics Attachment Points
-
-Diagnostics attach to schema validation, ID collision, deprecated ID use,
-package registration, missing kernels, capability denial, invalid bindings,
-collection diff mismatch, route validation, host route-map mismatch, text
-fallback failure, source-map loss, artifact invalidation, migration failure,
-fixture mismatch, and renderer-boundary misuse.
-
-Diagnostic IDs are stable IDs. Diagnostics must include severity, source-map
-span when available, owning graph/artifact, schema or route context when
-available, suggested migration or fix when known, and whether evaluation may
-continue.
-
-### Open Questions And Blocked Decisions
-
-- Final graph serialization format remains deferred until Stage 6 evidence
-  proves the minimum artifact and fixture shape.
-- Exact future module paths remain target responsibilities, not immediate file
-  creation instructions.
-- Shared `foundation/meta` extraction remains blocked until UI and
-  `MaterialProgram` prove the same primitive and a separate extraction design
-  accepts it.
-- Stage 6 proof work remains blocked until Stages 1 through 5 close with
-  evidence.
-
-"""
+def agent_design_implementation_plan_content(
+    plan_context: ProductionPlanContext,
+    *,
+    entry: TrackExecutionManifestMilestone,
+    contract: ManifestAgentDesignContract,
+    plan_path: Path,
+) -> str:
+    readiness = "\n".join(
+        [
+            f"- Production track: `{plan_context.track.id}` - {plan_context.track.title}",
+            f"- Production milestone: `{entry.milestone_id}` - {entry.title}",
+            "- Production milestone state after plan acceptance: `active`",
+            f"- Roadmap item: `{plan_context.roadmap_item.id}` - {plan_context.roadmap_item.title}",
+            "- Roadmap planning state after plan acceptance: `current_candidate`",
+            "- Roadmap blocker after plan acceptance: `B2`",
+            f"- Contract target: `{repo_path(plan_path)}`",
+            "- Post-plan transition: Manifest Runner V2 records the milestone as `active` and the WR as `current_candidate`/`B2`.",
+            "- Next action after this plan is accepted: stop before product/runtime code unless rerun with explicit `--allow product_code --allow product_implementation` and all V5 gates pass.",
+        ]
+    )
+    source_lines = "\n".join(f"- `{path}`" for path in contract.source_documents)
+    related_design_lines = "\n".join(f"  - ../../../{path.removeprefix('docs-site/src/content/docs/')}" for path in contract.source_documents)
+    write_scope_lines = "\n".join(f"- `{scope}`" for scope in product_implementation_scopes_for_entry(entry))
+    forbidden_lines = bullet_lines(implementation_plan_forbidden_scopes(entry))
+    validation_lines = code_bullet_lines(implementation_plan_validation_commands(entry))
+    section_lines = "\n".join(f"- {section}" for section in contract.required_sections)
+    decision_lines = "\n".join(f"- {decision}" for decision in contract.required_decisions)
+    acceptance_lines = "\n".join(f"- {item}" for item in contract.acceptance_checklist)
+    stop_conditions = (
+        list(entry.product_code_contract.stop_conditions)
+        if entry.product_code_contract is not None
+        else list(entry.stop_conditions)
+    )
+    stop_lines = bullet_lines(stop_conditions)
+    method_scope_lines = bullet_lines(implementation_plan_method_scope(entry))
+    test_lines = bullet_lines(implementation_plan_tests(entry))
+    runtime_evidence_lines = bullet_lines(implementation_plan_runtime_evidence(entry))
+    rollback_lines = bullet_lines(implementation_plan_rollback(entry))
+    proof_slice_id = proof_slice_id_for_entry(entry)
+    proof_slice_title = proof_slice_title_for_entry(entry)
+    target_surface = target_control_surface_for_entry(entry)
+    implementation_proof_kind = entry.implementation_proof_kind or proof_slice_id.lower()
+    content = "\n".join(
+        [
+            "---",
+            f"title: {plan_context.roadmap_item.id} {entry.title} Implementation Plan",
+            f"description: Product-code implementation planning contract for {entry.milestone_id} under {plan_context.roadmap_item.id}.",
+            "status: active",
+            "owner: ui",
+            "layer: domain/ui",
+            "canonical: false",
+            f"last_reviewed: {plan_context.planning.production.last_reviewed}",
+            "related:",
+            "  - ../../../workspace/production-tracks.yaml",
+            "  - ../../../workspace/roadmap-items.yaml",
+            f"  - ../../../workspace/track-execution-manifests/{plan_context.track.id.lower()}.yaml",
+            "related_designs:",
+            related_design_lines or "  - ../../../workspace/track-execution-manifest.md",
+            "---",
+            "",
+            f"# {plan_context.roadmap_item.id} {entry.title} Implementation Plan",
+            "",
+            "## Status And Authority",
+            "",
+            f"- Production milestone: `{entry.milestone_id}` - {entry.title}",
+            f"- Stage: {entry.stage}",
+            f"- Roadmap item: `{plan_context.roadmap_item.id}` - {plan_context.roadmap_item.title}",
+            f"- Proof slice id: `{proof_slice_id}`",
+            f"- Proof slice title: {proof_slice_title}",
+            f"- Target control/surface: {target_surface}",
+            f"- Implementation proof kind: `{implementation_proof_kind}`",
+            "- Authority: implementation planning only.",
+            "- This plan is the accepted production plan required before Manifest Runner V5 may run with `--allow product_code --allow product_implementation`.",
+            "- This plan does not execute product/runtime code and does not close the milestone.",
+            "- This plan does not authorize crate creation, placeholder future folders, downstream implementation outside the active WR, broad retained rewrites, or shared `foundation/meta` extraction.",
+            "",
+            "## Production Planning Output",
+            "",
+            readiness,
+            "",
+            "## Source Documents",
+            "",
+            source_lines,
+            "",
+            "## Exact Files/Modules Expected To Change",
+            "",
+            write_scope_lines,
+            "",
+            "## Expected Methods/Functions",
+            "",
+            method_scope_lines,
+            "",
+            "## Required Implementation Scope",
+            "",
+            section_lines,
+            "",
+            "## Required Decisions",
+            "",
+            decision_lines,
+            "",
+            "## Forbidden Files/Modules",
+            "",
+            forbidden_lines,
+            "",
+            "## Tests To Add/Change",
+            "",
+            test_lines,
+            "- Do not create new test folders, new crates, placeholder future modules, or broad fixture frameworks.",
+            "",
+            "## Validation Commands",
+            "",
+            validation_lines,
+            "",
+            "## Closeout Requirements",
+            "",
+            f"- Expected closeout path: `{entry.expected_closeout_path}`",
+            "- Closeout evidence must include:",
+            runtime_evidence_lines,
+            "- Closeout must explicitly state that no out-of-scope domain semantics, downstream implementation, crates, placeholder folders, or `foundation/meta` extraction occurred.",
+            "",
+            "## Compatibility / Rollback Plan",
+            "",
+            rollback_lines,
+            "",
+            "## Acceptance Checklist",
+            "",
+            acceptance_lines,
+            "",
+            "## Stop Conditions",
+            "",
+            stop_lines,
+            "- Stop before product/runtime code unless the command is rerun with `--allow product_code --allow product_implementation` and all V5 gates pass.",
+            "- Stop before the next milestone until this milestone has runtime/test closeout evidence.",
+            "",
+            "## Next Command If Product Code Is Permitted",
+            "",
+            f"`task production:run-track -- --track {plan_context.track.id} --allow product_code --allow product_implementation --max-actions 1`",
+            "",
+        ]
+    )
+    errors = implementation_plan_consistency_errors_from_text(
+        entry,
+        roadmap_item=plan_context.roadmap_item,
+        text=content,
+        plan_path=plan_path,
+    )
+    if errors:
+        raise WorkflowError("\n".join(errors))
+    return content
 
 
 def upsert_markdown_section(text: str, *, heading: str, section: str, before_heading: str) -> str:
@@ -1793,12 +4728,64 @@ def upsert_markdown_section(text: str, *, heading: str, section: str, before_hea
     return text[:before] + section.rstrip() + "\n\n" + text[before:]
 
 
-def update_ui_program_architecture(path: Path) -> None:
+def generic_agent_design_contract_section(
+    entry: TrackExecutionManifestMilestone,
+    contract: ManifestAgentDesignContract,
+) -> str:
+    section_lines = "\n".join(f"- {section}" for section in contract.required_sections)
+    decision_lines = "\n".join(f"- {decision}" for decision in contract.required_decisions)
+    acceptance_lines = "\n".join(f"- {item}" for item in contract.acceptance_checklist)
+    return "\n".join(
+        [
+            f"## {entry.milestone_id} {entry.stage} Contract",
+            "",
+            f"This section is the bounded {entry.stage} contract produced for `{entry.milestone_id}`.",
+            "It tightens design-level contracts only. It does not authorize code,",
+            "crates, placeholder folders, runtime proof work, downstream implementation, or",
+            "shared `foundation/meta` extraction.",
+            "",
+            "### Required Design Coverage",
+            "",
+            section_lines,
+            "",
+            "### Required Decisions",
+            "",
+            decision_lines,
+            "",
+            "### Acceptance Checklist",
+            "",
+            acceptance_lines,
+            "",
+            "### Remaining Authority Boundary",
+            "",
+            "- This bounded design evidence may close only as `bounded_contract`.",
+            "- It must not claim `runtime_proven` evidence.",
+            "- It must not start any product-code slice.",
+            "- Later milestones still require their own WR, plan, validation, and closeout evidence.",
+            "",
+        ]
+    )
+
+
+def agent_design_contract_section(
+    entry: TrackExecutionManifestMilestone,
+    contract: ManifestAgentDesignContract,
+) -> str:
+    return generic_agent_design_contract_section(entry, contract)
+
+
+def update_ui_program_architecture(
+    path: Path,
+    *,
+    entry: TrackExecutionManifestMilestone,
+    contract: ManifestAgentDesignContract,
+) -> None:
     original = path.read_text(encoding="utf-8")
+    heading = f"## {entry.milestone_id} {entry.stage} Contract"
     updated = upsert_markdown_section(
         original,
-        heading="## PM-UI-PROGRAM-002 Stage 1 Contract",
-        section=pm002_contract_section(),
+        heading=heading,
+        section=agent_design_contract_section(entry, contract),
         before_heading="## 13. Staged Implementation Plan",
     )
     path.write_text(updated, encoding="utf-8", newline="\n")
@@ -1810,18 +4797,29 @@ def updated_manifest_data_after_agent_design(
     entry: TrackExecutionManifestMilestone,
 ) -> dict:
     data = loaded.manifest.model_dump(exclude_none=True, mode="json")
-    next_action = (
-        f"{entry.milestone_id} agent_design completed design/planning writes; "
-        "stop for closeout; rerun with --allow agent_closeout after evidence is valid."
-    )
+    if entry.milestone_type in {"implementation", "hardening"}:
+        next_action = (
+            f"{entry.milestone_id} implementation plan exists; stop before product_code. "
+            f"Rerun `task production:run-track -- --track {loaded.manifest.track_id} --allow product_code --allow product_implementation --max-actions 1` only if product/runtime code is permitted."
+        )
+    else:
+        next_action = (
+            f"{entry.milestone_id} agent_design completed design/planning writes; "
+            "stop for closeout; rerun with --allow agent_closeout after evidence is valid."
+        )
     data["next_legal_action"] = next_action
     for milestone_data in data["milestones"]:
         if milestone_data["milestone_id"] != entry.milestone_id:
             continue
         milestone_data["next_legal_action"] = next_action
-        closeout_stop = "stop before closeout unless agent_closeout is explicitly allowed and evidence is valid"
-        if closeout_stop not in milestone_data["stop_conditions"]:
-            milestone_data["stop_conditions"].append(closeout_stop)
+        if entry.milestone_type in {"implementation", "hardening"}:
+            product_stop = "implementation plan exists; stop before product_code unless explicitly allowed and V5 product_implementation gates pass"
+            if product_stop not in milestone_data["stop_conditions"]:
+                milestone_data["stop_conditions"].append(product_stop)
+        else:
+            closeout_stop = "stop before closeout unless agent_closeout is explicitly allowed and evidence is valid"
+            if closeout_stop not in milestone_data["stop_conditions"]:
+                milestone_data["stop_conditions"].append(closeout_stop)
     return data
 
 
@@ -1839,24 +4837,150 @@ def updated_deferred_roadmap_data_after_agent_design(
         if item.get("id") != wr_id:
             continue
         item["next_evidence"] = (
-            f"{entry.milestone_id} design/planning output exists at {repo_path(plan_path)} and "
-            f"docs-site/src/content/docs/design/active/ui-program-architecture.md; closeout evidence is still required."
+            f"{entry.milestone_id} design/planning output exists at {repo_path(plan_path)}; "
+            "closeout evidence is still required."
         )
         item["current_decision"] = (
-            "Manifest Runner V2 agent_design wrote the Stage 1 UI Program Contract Design plan and architecture sections. "
+            f"Manifest Runner V2 agent_design wrote the {entry.stage} {entry.title} plan and architecture sections. "
             "This remains design/planning evidence only."
         )
         item["current_call"] = (
-            "Stop before closeout unless agent_closeout is explicitly allowed and evidence is valid. No product code, crates, 6A, MaterialProgram, "
+            "Stop before closeout unless agent_closeout is explicitly allowed and evidence is valid. No product code, crates, runtime proof work, downstream implementation, "
             "or foundation/meta work is authorized."
         )
         item["main_blocker"] = "Closeout evidence is missing; rerun with agent_closeout only after evidence and validation are valid."
-        item["why_not_ready"] = "Design/planning content exists, but PM-002 has not been closed with evidence."
+        item["why_not_ready"] = f"Design/planning content exists, but {entry.milestone_id} has not been closed with evidence."
         changed = True
         break
     if not changed:
         raise WorkflowError(f"{wr_id}: not present in deferred roadmap source")
     return deferred_source, deferred_data
+
+
+def implementation_roadmap_item_after_agent_design(
+    item: dict,
+    *,
+    entry: TrackExecutionManifestMilestone,
+    plan_path: Path,
+    track_id: str,
+    production_source: Path,
+    roadmap_source: Path,
+    manifest_source: Path,
+) -> dict:
+    updated = dict(item)
+    updated["planning_state"] = "current_candidate"
+    updated["gate"] = "Implementation plan accepted"
+    updated["blocker"] = 2
+    planning_scopes = []
+    contract = agent_design_contract_for_entry(entry)
+    if contract is not None:
+        planning_scopes = [
+            normalized
+            for normalized in (
+                manifest_write_scope_path(scope)
+                for scope in contract.planning_write_scope
+                if not is_generated_or_derived_scope(scope)
+            )
+            if normalized is not None and normalized != normalize_repo_path(entry.expected_closeout_path)
+        ]
+    product_scopes = [
+        roadmap_write_scope_for_product_scope(normalized)
+        for normalized in (manifest_write_scope_path(scope) for scope in product_implementation_scopes_for_entry(entry))
+        if normalized is not None
+    ]
+    updated["write_scopes"] = list(dict.fromkeys([*planning_scopes, *product_scopes]))
+    updated["validations"] = product_validation_commands_for_entry(entry)
+    updated["next_evidence"] = (
+        f"{entry.milestone_id} accepted implementation plan exists at {repo_path(plan_path)}; "
+        "product_code has not run."
+    )
+    updated["current_decision"] = (
+        f"Manifest Runner V2 agent_design created the accepted {entry.stage} implementation plan. "
+        "This authorizes only the next V5 product_implementation gate when explicitly allowed."
+    )
+    updated["current_call"] = (
+        f"Next legal command, only when product/runtime code is permitted: "
+        f"task production:run-track -- --track {track_id} --allow product_code --allow product_implementation --max-actions 1"
+    )
+    updated["first_move"] = f"Run task production:run-track -- --track {track_id} --allow product_code --allow product_implementation --max-actions 1."
+    updated["main_blocker"] = "Product_code has not run; runtime/test evidence and closeout are still missing."
+    updated["why_not_ready"] = (
+        f"Accepted implementation plan exists, but {entry.stage} product_code and closeout evidence have not started."
+    )
+    updated["completion_quality"] = "not_applicable"
+    updated["known_quality_gaps"] = []
+    updated["completion_audit"] = ""
+    updated["diagram_call"] = ["current candidate", "implementation plan only"]
+    return updated
+
+
+def roadmap_write_scope_for_product_scope(normalized: str) -> str:
+    scope_path = REPO_ROOT / normalized
+    if not scope_path.exists() and scope_path.parent.exists():
+        return f"new: {normalized}"
+    return normalized
+
+
+def updated_production_data_after_agent_design(
+    production_source: Path,
+    *,
+    track_id: str,
+    entry: TrackExecutionManifestMilestone,
+) -> dict:
+    data = load_yaml(production_source)
+    changed = False
+    for track_data in data.get("tracks", []):
+        if track_data.get("id") != track_id:
+            continue
+        for milestone_data in track_data.get("milestones", []):
+            if milestone_data.get("id") != entry.milestone_id:
+                continue
+            if entry.milestone_type in {"implementation", "hardening"} and milestone_data.get("state") == "designing":
+                milestone_data["state"] = "active"
+            changed = True
+            break
+    if not changed:
+        raise WorkflowError(f"{entry.milestone_id}: not found in production source {repo_path(production_source)}")
+    return data
+
+
+def updated_implementation_roadmap_sources_after_agent_design(
+    roadmap_source: Path,
+    *,
+    wr_id: str,
+    entry: TrackExecutionManifestMilestone,
+    plan_path: Path,
+    track_id: str,
+    production_source: Path,
+    manifest_source: Path,
+) -> tuple[Path, dict, Path, dict]:
+    active_data = load_yaml(roadmap_source)
+    _, deferred_source = split_source_paths(roadmap_source)
+    deferred_data = load_yaml(deferred_source)
+    item_data: dict | None = None
+    for index, candidate in enumerate(list(deferred_data.get("items", []))):
+        if candidate.get("id") == wr_id:
+            item_data = deferred_data["items"].pop(index)
+            break
+    if item_data is None:
+        for index, candidate in enumerate(list(active_data.get("items", []))):
+            if candidate.get("id") == wr_id:
+                item_data = active_data["items"].pop(index)
+                break
+    if item_data is None:
+        raise WorkflowError(f"{wr_id}: not present in active or deferred roadmap source")
+    active_data.setdefault("items", []).append(
+        implementation_roadmap_item_after_agent_design(
+            item_data,
+            entry=entry,
+            plan_path=plan_path,
+            track_id=track_id,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            manifest_source=manifest_source,
+        )
+    )
+    return roadmap_source, active_data, deferred_source, deferred_data
 
 
 def apply_agent_design(
@@ -1867,6 +4991,7 @@ def apply_agent_design(
     allow: set[str],
     deny: set[str],
     run_validations: bool = True,
+    allow_regenerate_invalid_implementation_plan: bool = False,
 ) -> AgentDesignResult:
     audit_manifest_or_raise(context.loaded, track=context.track, roadmap=context.roadmap)
     entry, milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
@@ -1879,7 +5004,11 @@ def apply_agent_design(
     )
     if blockers:
         raise WorkflowError("\n".join(blockers))
-    if workflow_action != "design_first":
+    if workflow_action != "design_first" and not (
+        allow_regenerate_invalid_implementation_plan
+        and workflow_action == "write_implementation_contract"
+        and entry.milestone_type in {"implementation", "hardening"}
+    ):
         raise WorkflowError(f"{entry.milestone_id}: next legal action is {workflow_action}, not agent_design")
     contract = assert_agent_design_allowed(entry, milestone, allow=allow, deny=deny)
     assert entry.owning_wr is not None
@@ -1894,7 +5023,7 @@ def apply_agent_design(
         roadmap_source=roadmap_source,
     )
     plan_path = default_contract_path(plan_context.roadmap_item)
-    design_paths = (UI_PROGRAM_ARCHITECTURE_PATH,)
+    design_paths: tuple[Path, ...] = ()
     _, deferred_source = split_source_paths(roadmap_source)
     write_paths = [
         repo_path(plan_path),
@@ -1902,7 +5031,10 @@ def apply_agent_design(
         repo_path(deferred_source),
         *(repo_path(path) for path in design_paths),
     ]
-    assert_agent_design_write_scope(entry=entry, roadmap_item=roadmap_item, write_paths=write_paths)
+    if entry.milestone_type in {"implementation", "hardening"}:
+        write_paths.append(repo_path(production_source))
+        write_paths.append(repo_path(roadmap_source))
+    assert_agent_design_write_scope(entry=entry, roadmap_item=roadmap_item, contract=contract, write_paths=write_paths)
 
     plan_path.parent.mkdir(parents=True, exist_ok=True)
     plan_path.write_text(
@@ -1911,22 +5043,48 @@ def apply_agent_design(
         newline="\n",
     )
     for design_path in design_paths:
-        update_ui_program_architecture(design_path)
+        update_ui_program_architecture(design_path, entry=entry, contract=contract)
 
     manifest_data = updated_manifest_data_after_agent_design(context.loaded, entry=entry)
     write_yaml_mapping(context.loaded.path, manifest_data)
-    deferred_source, deferred_data = updated_deferred_roadmap_data_after_agent_design(
-        roadmap_source,
-        wr_id=entry.owning_wr,
-        entry=entry,
-        plan_path=plan_path,
-    )
-    write_yaml_mapping(deferred_source, deferred_data, indent_sequences=False)
+    if entry.milestone_type in {"implementation", "hardening"}:
+        production_data = updated_production_data_after_agent_design(
+            production_source,
+            track_id=context.track.id,
+            entry=entry,
+        )
+        active_source, active_data, deferred_source, deferred_data = updated_implementation_roadmap_sources_after_agent_design(
+            roadmap_source,
+            wr_id=entry.owning_wr,
+            entry=entry,
+            plan_path=plan_path,
+            track_id=context.track.id,
+            production_source=production_source,
+            manifest_source=context.loaded.path,
+        )
+        write_yaml_mapping(production_source, production_data)
+        write_yaml_mapping(active_source, active_data, indent_sequences=False)
+        write_yaml_mapping(deferred_source, deferred_data, indent_sequences=False)
+    else:
+        deferred_source, deferred_data = updated_deferred_roadmap_data_after_agent_design(
+            roadmap_source,
+            wr_id=entry.owning_wr,
+            entry=entry,
+            plan_path=plan_path,
+        )
+        write_yaml_mapping(deferred_source, deferred_data, indent_sequences=False)
 
     validation_results = run_validation_commands(auto_safe_validation_commands()) if run_validations else ()
-    next_legal_action = (
-        f"{entry.milestone_id} design/planning output exists; stop for closeout and rerun with --allow agent_closeout after evidence is valid."
-    )
+    if entry.milestone_type in {"implementation", "hardening"}:
+        next_legal_action = (
+            f"{entry.milestone_id} implementation plan exists; stop before product_code. "
+            f"Next permitted command, only with explicit authorization: "
+            f"task production:run-track -- --track {context.track.id} --allow product_code --allow product_implementation --max-actions 1"
+        )
+    else:
+        next_legal_action = (
+            f"{entry.milestone_id} design/planning output exists; stop for closeout and rerun with --allow agent_closeout after evidence is valid."
+        )
     return AgentDesignResult(
         track_id=context.track.id,
         milestone_id=entry.milestone_id,
@@ -1952,10 +5110,6 @@ def assert_agent_closeout_allowed(
 ) -> None:
     if "agent_closeout" not in allow:
         raise WorkflowError("Manifest Runner V3 requires --allow agent_closeout for closeout mutation")
-    if "product_code" in allow:
-        raise WorkflowError("agent_closeout cannot run when product_code is allowed")
-    if "product_code" not in deny:
-        raise WorkflowError("agent_closeout requires --deny product_code")
     if entry.may_create_code or entry.may_create_crates or entry.may_modify_production_behavior:
         raise WorkflowError(
             f"{entry.milestone_id}: agent_closeout supports docs, design, or governance milestones only; "
@@ -1975,22 +5129,14 @@ def assert_agent_closeout_allowed(
         )
 
 
-def required_pm002_stage_headings() -> list[str]:
-    return [
-        "## PM-UI-PROGRAM-002 Stage 1 Contract",
-        "### Graph Ownership Contract",
-        "### UiSchemaValue Contract",
-        "### Stable ID Policy",
-        "### StateGraph And UiStateModel Contract",
-        "### BindingGraph Contract",
-        "### VisualGraph And UiFrame Boundary",
-        "### Text / Render Boundary",
-        "### Event Packet And Payload Contract",
-        "### Route / HostCommand / DomainCommand Boundary",
-        "### Source-Map Attachment Points",
-        "### Diagnostics Attachment Points",
-        "### Open Questions And Blocked Decisions",
-    ]
+def required_agent_design_evidence_markers(entry: TrackExecutionManifestMilestone) -> list[str]:
+    markers = [f"## {entry.milestone_id} {entry.stage} Contract"]
+    contract = agent_design_contract_for_entry(entry)
+    if contract is not None:
+        markers.extend(contract.required_sections)
+        markers.extend(contract.required_decisions)
+        markers.extend(contract.acceptance_checklist)
+    return markers
 
 
 def agent_closeout_evidence_paths(
@@ -2003,31 +5149,22 @@ def agent_closeout_evidence_paths(
     errors: list[str] = []
     if not plan_path.exists():
         errors.append(f"{entry.milestone_id}: required production plan evidence is missing: {repo_path(plan_path)}")
-
-    architecture_scope = repo_path(UI_PROGRAM_ARCHITECTURE_PATH)
-    if path_is_covered_by_scope(architecture_scope, manifest_write_scopes_for_entry(entry)) or path_is_covered_by_scope(
-        architecture_scope,
-        normalized_write_scopes_with_generated_outputs(roadmap_item.write_scopes),
-    ):
-        evidence_paths.append(UI_PROGRAM_ARCHITECTURE_PATH)
-        if not UI_PROGRAM_ARCHITECTURE_PATH.exists():
-            errors.append(f"{entry.milestone_id}: required design evidence is missing: {architecture_scope}")
-        else:
-            design_text = UI_PROGRAM_ARCHITECTURE_PATH.read_text(encoding="utf-8")
-            missing_headings = [heading for heading in required_pm002_stage_headings() if heading not in design_text]
-            if missing_headings:
-                errors.append(
-                    f"{entry.milestone_id}: UI Program Architecture is missing Stage 1 closeout headings: "
-                    + ", ".join(missing_headings)
-                )
+    elif entry.milestone_type in {"docs_only", "design_only"}:
+        plan_text = plan_path.read_text(encoding="utf-8")
+        missing_markers = [marker for marker in required_agent_design_evidence_markers(entry) if marker not in plan_text]
+        if missing_markers:
+            errors.append(
+                f"{entry.milestone_id}: implementation/design plan is missing closeout evidence markers: "
+                + ", ".join(missing_markers)
+            )
     return evidence_paths, errors
 
 
 def bounded_contract_known_gaps(entry: TrackExecutionManifestMilestone) -> list[str]:
     return [
         f"{entry.milestone_id} is a bounded design/governance closeout, not runtime_proven evidence.",
-        "No product/runtime code, crates, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, or shared foundation/meta extraction was performed.",
-        "Later PT-UI-PROGRAM milestones still require their own WRs, production plans, validation, and closeout evidence.",
+        "No product/runtime code, crates, placeholder future folders, downstream implementation, or shared foundation/meta extraction was performed.",
+        "Later production-track milestones still require their own WRs, production plans, validation, and closeout evidence.",
     ]
 
 
@@ -2057,11 +5194,11 @@ def closeout_report_content(
             f"last_reviewed: {date.today().isoformat()}",
             "related_reports:",
             f"  - ../../implementation-plans/{roadmap_item.id.lower()}-{slugify(roadmap_item.title)}/plan.md",
-            "  - ../../track-execution-manifests/pt-ui-program/manifest.md",
+            f"  - ../../track-execution-manifests/{track_id.lower()}/manifest.md",
             "related_roadmaps:",
             "  - ../../../workspace/production-tracks.yaml",
             "  - ../../../workspace/roadmap-archive.yaml",
-            "  - ../../../workspace/track-execution-manifests/pt-ui-program.yaml",
+            f"  - ../../../workspace/track-execution-manifests/{track_id.lower()}.yaml",
             "---",
             "",
             f"# {entry.milestone_id} {entry.title} Closeout",
@@ -2070,7 +5207,7 @@ def closeout_report_content(
             "",
             f"`{entry.milestone_id}` / `{roadmap_item.id}` is closed as `bounded_contract` design/governance evidence for `{track_id}`.",
             "",
-            "This closeout does not authorize product/runtime code, crate creation, placeholder future folders, Stage 6 proof work, MaterialProgram implementation, RenderPlan substitution, or shared `foundation/meta` extraction.",
+            "This closeout does not authorize product/runtime code, crate creation, placeholder future folders, downstream implementation, or shared `foundation/meta` extraction.",
             "",
             "## Authority",
             "",
@@ -2096,7 +5233,7 @@ def closeout_report_content(
             "",
             forbidden_lines,
             "",
-            "No product/runtime source files, crates, placeholder folders, 6A proof work, MaterialProgram implementation, or shared foundation/meta extraction were created or modified by this closeout.",
+            "No product/runtime source files, crates, placeholder folders, downstream implementation, or shared foundation/meta extraction were created or modified by this closeout.",
             "",
             "## Known Gaps",
             "",
@@ -2151,6 +5288,7 @@ def updated_production_data_after_agent_closeout(
 def updated_roadmap_sources_after_agent_closeout(
     roadmap_source: Path,
     *,
+    track_id: str,
     wr_id: str,
     entry: TrackExecutionManifestMilestone,
     closeout_path: Path,
@@ -2178,6 +5316,9 @@ def updated_roadmap_sources_after_agent_closeout(
         raise WorkflowError(f"{wr_id}: not present in active or deferred roadmap source")
 
     closeout_repo_path = repo_path(closeout_path)
+    write_scopes = item_data.setdefault("write_scopes", [])
+    if closeout_repo_path not in write_scopes:
+        write_scopes.append(closeout_repo_path)
     item_data["gate"] = "Completed"
     item_data["planning_state"] = "completed"
     item_data["next_evidence"] = f"Completed through {closeout_repo_path}."
@@ -2186,9 +5327,9 @@ def updated_roadmap_sources_after_agent_closeout(
         "This is design/governance evidence only."
     )
     item_data["current_call"] = (
-        "Complete. Preserve as bounded-contract design evidence; continue PT-UI-PROGRAM only through the next manifest legal action."
+        f"Complete. Preserve as bounded-contract design evidence; continue {track_id} only through the next manifest legal action."
     )
-    item_data["first_move"] = "Completed; run task ai:goal -- --track PT-UI-PROGRAM for the next legal milestone."
+    item_data["first_move"] = f"Completed; run task ai:goal -- --track {track_id} for the next legal milestone."
     item_data["main_blocker"] = "Complete; later milestones require separate WRs, plans, validation, and closeout evidence."
     item_data["why_not_ready"] = ""
     item_data["completion_quality"] = "bounded_contract"
@@ -2245,23 +5386,22 @@ def update_manifest_report_after_agent_closeout(path: Path) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    replacements = {
-        "Current blockers after Stage 1 design/planning output:": "Current blockers after Stage 1 closeout:",
-        "- `PM-UI-PROGRAM-002` / Stage 1 is still the current legal milestone and is\n  blocked on design closeout evidence because `agent_closeout` is not\n  implemented.": "- `PM-UI-PROGRAM-002` / Stage 1 is completed as bounded-contract design evidence.\n- `PM-UI-PROGRAM-003` / Stage 2 is the next legal milestone and is blocked on Track Expansion creating or linking its owning WR.",
-        "| Current next legal action | `PM-UI-PROGRAM-002` design/planning output exists; stop for closeout because `agent_closeout` is not implemented |": "| Current next legal action | Create or link the design WR for `PM-UI-PROGRAM-003` Control Package Proof Design; stop before Stage 2 design authoring until that WR and plan exist |",
-        "| Current next legal action | `PM-UI-PROGRAM-002` design/planning output exists; stop for closeout; rerun with `--allow agent_closeout` after evidence is valid |": "| Current next legal action | Create or link the design WR for `PM-UI-PROGRAM-003` Control Package Proof Design; stop before Stage 2 design authoring until that WR and plan exist |",
-        "| 2 | `PM-UI-PROGRAM-002` UI Program Contract Design | Stage 1 | `WR-136` | PM-001 | Stop for design closeout; `agent_closeout` is not implemented. |": "| 2 | `PM-UI-PROGRAM-002` UI Program Contract Design | Stage 1 | `WR-136` | PM-001 | Completed bounded-contract closeout. |",
-        "| Stop conditions | design/planning output exists; stop before closeout because `agent_closeout` is not implemented |": "| Stop conditions | completed; no further PM-002 action is legal through this milestone |",
-        "- `production:next`: reports `PM-UI-PROGRAM-002` / Stage 1 as the current legal\n  milestone and blocks on closeout because `agent_closeout` is not implemented.": "- `production:next`: reports `PM-UI-PROGRAM-003` / Stage 2 as the current legal\n  milestone and points to Track Expansion for the future WR candidate.",
-        "- `PM-UI-PROGRAM-002` / Stage 1 now owns deferred WR `WR-136`, created by\n  Manifest Runner V1 `auto_safe` Track Expansion.": "- `WR-136` is archived as completed bounded-contract Stage 1 evidence after\n  Manifest Runner V3 `agent_closeout` closeout.",
-        "- `production:run-track -- --allow auto_safe --allow agent_design --deny\n  product_code`: created the `WR-136` design/planning plan, updated the bounded\n  Stage 1 contract in the UI Program Architecture design, updated planning\n  metadata, and stopped before closeout.": "- `production:run-track -- --allow auto_safe --allow agent_design --deny\n  product_code`: created the `WR-136` design/planning plan, updated the bounded\n  Stage 1 contract in the UI Program Architecture design, updated planning\n  metadata, and stopped before closeout.\n- `production:run-track -- --allow auto_safe --allow agent_design --allow\n  agent_closeout --deny product_code`: closed `PM-UI-PROGRAM-002` / `WR-136`\n  as `bounded_contract`, archived the WR, and stopped before Stage 2 authoring.",
-        "- `production:audit-track`: sees the full staged path and the PM-002 WR link,\n  but still blocks implementation until PM-002 closeout gates pass.": "- `production:audit-track`: sees the full staged path and completed PM-002\n  closeout evidence; it still blocks before Stage 2 authoring until Track\n  Expansion creates or links the PM-003 WR.",
-        "PM-UI-PROGRAM-002 design/planning output exists. Stop for closeout because\n`agent_closeout` is not implemented.": "PM-UI-PROGRAM-002 is closed as bounded-contract design evidence. The next legal action is PM-UI-PROGRAM-003 Track Expansion; stop before Stage 2 design authoring.",
-    }
-    updated = text
-    for old, new in replacements.items():
-        updated = updated.replace(old, new)
-    path.write_text(updated, encoding="utf-8", newline="\n")
+    marker = "## Agent Closeout Update"
+    section = "\n".join(
+        [
+            marker,
+            "",
+            f"Last agent closeout update: {date.today().isoformat()}.",
+            "",
+            "The machine-readable manifest remains execution authority.",
+            "",
+        ]
+    )
+    path.write_text(
+        upsert_markdown_section(text, heading=marker, section=section, before_heading="## Milestone Details"),
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def validate_agent_closeout_data(
@@ -2362,6 +5502,7 @@ def apply_agent_closeout(
     archive_source, archive_data, deferred_source, deferred_data, active_source, active_data = (
         updated_roadmap_sources_after_agent_closeout(
             roadmap_source,
+            track_id=context.track.id,
             wr_id=entry.owning_wr,
             entry=entry,
             closeout_path=closeout_path,
@@ -2402,6 +5543,421 @@ def apply_agent_closeout(
     )
 
 
+def runtime_proven_known_gaps(entry: TrackExecutionManifestMilestone) -> list[str]:
+    return [
+        f"{entry.milestone_id} is runtime_proven only for its bounded manifest write scope.",
+        "Later milestones in this production track still require separate WRs, plans, validation, and closeout evidence.",
+        "No crate creation or shared foundation/meta extraction is authorized by this closeout.",
+    ]
+
+
+def runtime_closeout_report_content(
+    *,
+    track_id: str,
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    roadmap_item: RoadmapItem,
+    closeout_path: Path,
+    plan_path: Path,
+    product_validation_results: tuple[str, ...],
+) -> str:
+    scoped_files = [
+        normalized
+        for normalized in (manifest_write_scope_path(scope) for scope in entry.write_scope)
+        if normalized is not None
+    ]
+    evidence_categories = sorted(
+        {
+            normalized
+            for normalized in (normalize_evidence_category(category) for category in entry.required_evidence_categories)
+            if normalized in GENERIC_EVIDENCE_CATEGORIES
+        }
+    )
+    if not evidence_categories:
+        evidence_categories = ["runtime_test"]
+    frontmatter = {
+        "title": f"{entry.milestone_id} {entry.title} Runtime Closeout",
+        "description": f"Runtime-proof closeout for {entry.milestone_id} / {roadmap_item.id}.",
+        "status": "completed",
+        "owner": roadmap_item.ddd_owner,
+        "layer": "production-track",
+        "canonical": False,
+        "last_reviewed": date.today().isoformat(),
+        "closeout_evidence": {
+            "milestone_id": entry.milestone_id,
+            "wr_id": roadmap_item.id,
+            "completion_quality": "runtime_proven",
+            "evidence_categories": evidence_categories,
+            "validation_commands": product_validation_commands_for_entry(entry),
+            "validation_results": list(product_validation_results),
+            "files_changed": scoped_files or ["No scoped runtime files were declared."],
+            "runtime_artifacts": [category for category in evidence_categories if category == "artifact"],
+            "diagnostics": [category for category in evidence_categories if category == "diagnostics"],
+            "source_maps": [category for category in evidence_categories if category == "source_maps"],
+            "known_gaps": runtime_proven_known_gaps(entry),
+            "closeout_path": repo_path(closeout_path),
+        },
+        "related_reports": [
+            f"../../implementation-plans/{roadmap_item.id.lower()}-{slugify(roadmap_item.title)}/plan.md",
+            f"../../track-execution-manifests/{track_id.lower()}/manifest.md",
+        ],
+        "related_roadmaps": [
+            "../../../workspace/production-tracks.yaml",
+            "../../../workspace/roadmap-archive.yaml",
+            f"../../../workspace/track-execution-manifests/{track_id.lower()}.yaml",
+        ],
+    }
+    frontmatter_text = yaml.safe_dump(frontmatter, sort_keys=False, allow_unicode=False).strip()
+    scoped_file_lines = "\n".join(f"- `{path}`" for path in scoped_files)
+    validation_lines = "\n".join(f"- `{result}`" for result in product_validation_results)
+    forbidden_lines = "\n".join(f"- {scope}" for scope in entry.forbidden_scope)
+    gap_lines = "\n".join(f"- {gap}" for gap in runtime_proven_known_gaps(entry))
+    next_action = f"After this closeout, rerun `task ai:goal -- --track {track_id}` and continue only to the next manifest legal action."
+    return "\n".join(
+        [
+            "---",
+            frontmatter_text,
+            "---",
+            "",
+            f"# {entry.milestone_id} {entry.title} Runtime Closeout",
+            "",
+            "## Summary",
+            "",
+            f"`{entry.milestone_id}` / `{roadmap_item.id}` is closed as `runtime_proven` evidence for `{track_id}`.",
+            "",
+            "This closeout records runtime/test validation evidence for the bounded manifest scope only. It does not authorize crate creation, unrelated downstream implementation, or shared `foundation/meta` extraction.",
+            "",
+            "## Authority",
+            "",
+            f"- Milestone id: `{entry.milestone_id}`",
+            f"- WR id: `{roadmap_item.id}`",
+            f"- Authority level: `{entry.authority_level}`",
+            f"- Milestone type: `{entry.milestone_type}`",
+            f"- Production milestone kind/state before closeout: `{milestone.kind}` / `{milestone.state}`",
+            "- Completion quality: `runtime_proven`",
+            "",
+            "## Files Changed / Scoped Evidence",
+            "",
+            scoped_file_lines or "- No scoped runtime files were declared.",
+            f"- Closeout report: `{repo_path(closeout_path)}`",
+            f"- Accepted plan: `{repo_path(plan_path)}`",
+            "",
+            "## Tests Run",
+            "",
+            validation_lines,
+            "",
+            "## Evidence",
+            "",
+            "- Product/runtime validation commands completed successfully.",
+            "- Every exact manifest runtime evidence path existed before closeout.",
+            f"- Closeout evidence is recorded at `{repo_path(closeout_path)}`.",
+            "",
+            "## Forbidden Scope Preserved",
+            "",
+            forbidden_lines,
+            "",
+            "## Known Gaps",
+            "",
+            gap_lines,
+            "",
+            "## Next Legal Action",
+            "",
+            next_action,
+            "",
+        ]
+    )
+
+
+def assert_runtime_closeout_allowed(
+    entry: TrackExecutionManifestMilestone,
+    milestone: ProductionMilestone,
+    roadmap_item: RoadmapItem,
+    *,
+    closeout_path: Path,
+    product_validation_results: tuple[str, ...],
+    allow: set[str],
+) -> None:
+    errors: list[str] = []
+    if "agent_closeout" not in allow:
+        errors.append("runtime closeout requires --allow agent_closeout")
+    if entry.milestone_type not in {"implementation", "hardening"}:
+        errors.append(f"{entry.milestone_id}: runtime closeout supports implementation or hardening milestones only")
+    if milestone.kind not in {"implementation", "hardening"}:
+        errors.append(f"{entry.milestone_id}: production milestone kind {milestone.kind!r} cannot close as runtime proof")
+    if entry.may_create_crates:
+        errors.append(f"{entry.milestone_id}: runtime closeout cannot close milestones requiring crate creation")
+    if not product_validation_results:
+        errors.append(f"{entry.milestone_id}: runtime closeout requires product/runtime validation results")
+    if closeout_path.suffix != ".md":
+        errors.append(f"{entry.milestone_id}: runtime closeout path must be Markdown")
+    if any("foundation/meta" in scope.lower() for scope in product_implementation_scopes_for_entry(entry)):
+        errors.append(f"{entry.milestone_id}: runtime closeout cannot authorize shared foundation/meta extraction")
+    errors.extend(runtime_evidence_errors(entry))
+    wr_scopes = normalized_write_scopes_with_generated_outputs(roadmap_item.write_scopes)
+    expected_closeout = normalize_repo_path(entry.expected_closeout_path)
+    product_paths = [
+        normalized
+        for normalized in (manifest_write_scope_path(scope) for scope in product_implementation_scopes_for_entry(entry))
+        if normalized is not None and normalized != expected_closeout
+    ]
+    missing_wr = [path for path in product_paths if not path_is_covered_by_scope(path, wr_scopes)]
+    if missing_wr:
+        errors.append(
+            f"{entry.milestone_id}: runtime closeout product evidence paths are not covered by owning WR {roadmap_item.id} write_scopes: "
+            + ", ".join(missing_wr)
+        )
+    if errors:
+        raise WorkflowError("\n".join(errors))
+
+
+def updated_production_data_after_runtime_closeout(
+    production_source: Path,
+    *,
+    milestone_id: str,
+    closeout_path: Path,
+    entry: TrackExecutionManifestMilestone,
+) -> dict:
+    data = load_yaml(production_source)
+    changed = False
+    closeout_repo_path = repo_path(closeout_path)
+    for track_data in data.get("tracks", []):
+        for milestone_data in track_data.get("milestones", []):
+            if milestone_data.get("id") != milestone_id:
+                continue
+            milestone_data["state"] = "completed"
+            milestone_data["completion_quality"] = "runtime_proven"
+            milestone_data["known_quality_gaps"] = runtime_proven_known_gaps(entry)
+            milestone_data["completion_audit"] = closeout_repo_path
+            evidence_gates = milestone_data.setdefault("evidence_gates", [])
+            if not any(gate.get("path") == closeout_repo_path for gate in evidence_gates):
+                evidence_gates.append(
+                    {
+                        "path": closeout_repo_path,
+                        "required_status": "completed",
+                        "reason": f"{milestone_id} requires completed runtime-proof closeout evidence.",
+                    }
+                )
+            changed = True
+            break
+        if changed:
+            break
+    if not changed:
+        raise WorkflowError(f"{milestone_id}: not found in production source")
+    return data
+
+
+def updated_roadmap_sources_after_runtime_closeout(
+    roadmap_source: Path,
+    *,
+    track_id: str,
+    wr_id: str,
+    entry: TrackExecutionManifestMilestone,
+    closeout_path: Path,
+) -> tuple[Path, dict, Path, dict, Path, dict | None]:
+    active_data = load_yaml(roadmap_source)
+    archive_source, deferred_source = split_source_paths(roadmap_source)
+    archive_data = load_yaml(archive_source) if archive_source.exists() else empty_split_source_like(active_data)
+    deferred_data = load_yaml(deferred_source) if deferred_source.exists() else empty_split_source_like(active_data)
+    if any(item.get("id") == wr_id for item in archive_data.get("items", [])):
+        raise WorkflowError(f"{wr_id}: already present in archive roadmap source")
+
+    item_data: dict | None = None
+    active_changed = False
+    active_items = active_data.get("items", [])
+    deferred_items = deferred_data.get("items", [])
+    for source_name, source_items in (("active", active_items), ("deferred", deferred_items)):
+        for index, candidate in enumerate(list(source_items)):
+            if candidate.get("id") == wr_id:
+                item_data = source_items.pop(index)
+                active_changed = source_name == "active"
+                break
+        if item_data is not None:
+            break
+    if item_data is None:
+        raise WorkflowError(f"{wr_id}: not present in active or deferred roadmap source")
+
+    closeout_repo_path = repo_path(closeout_path)
+    write_scopes = item_data.setdefault("write_scopes", [])
+    if closeout_repo_path not in write_scopes:
+        write_scopes.append(closeout_repo_path)
+    item_data["gate"] = "Completed"
+    item_data["planning_state"] = "completed"
+    item_data["next_evidence"] = f"Runtime proof completed through {closeout_repo_path}."
+    item_data["current_decision"] = (
+        f"Completed at runtime_proven by Manifest Runner runtime closeout for {entry.milestone_id}."
+    )
+    item_data["current_call"] = (
+        f"Complete. Preserve as bounded runtime proof evidence; continue {track_id} only through the next manifest legal action."
+    )
+    item_data["first_move"] = f"Completed; run task ai:goal -- --track {track_id} for the next legal milestone."
+    item_data["main_blocker"] = "Complete; later milestones require separate WRs, plans, validation, and closeout evidence."
+    item_data["why_not_ready"] = ""
+    item_data["completion_quality"] = "runtime_proven"
+    item_data["known_quality_gaps"] = runtime_proven_known_gaps(entry)
+    item_data["completion_audit"] = closeout_repo_path
+    item_data["diagram_call"] = ["runtime proven", "bounded proof"]
+    archive_data.setdefault("items", []).append(item_data)
+    return archive_source, archive_data, deferred_source, deferred_data, roadmap_source, active_data if active_changed else None
+
+
+def updated_manifest_data_after_runtime_closeout(
+    loaded: LoadedTrackExecutionManifest,
+    *,
+    entry: TrackExecutionManifestMilestone,
+) -> dict:
+    data = loaded.manifest.model_dump(exclude_none=True, mode="json")
+    milestones = data["milestones"]
+    current_index = next(
+        index for index, milestone_data in enumerate(milestones) if milestone_data["milestone_id"] == entry.milestone_id
+    )
+    next_milestone = milestones[current_index + 1] if current_index + 1 < len(milestones) else None
+    if next_milestone is None:
+        next_action = f"{entry.milestone_id} is complete; all manifest milestones are complete."
+    elif next_milestone.get("owning_wr"):
+        next_action = (
+            f"Continue to {next_milestone['milestone_id']} {next_milestone['title']} only through its owning WR "
+            f"{next_milestone['owning_wr']} and bounded plan."
+        )
+    else:
+        next_action = (
+            f"Create or link the WR for {next_milestone['milestone_id']} {next_milestone['title']}; "
+            "stop before implementation until that WR and plan exist."
+        )
+    data["next_legal_action"] = next_action
+    for milestone_data in milestones:
+        if milestone_data["milestone_id"] == entry.milestone_id:
+            milestone_data["next_legal_action"] = (
+                f"{entry.milestone_id} completed by runtime closeout as runtime_proven; "
+                "continue only to the next manifest legal action."
+            )
+            milestone_data["stop_conditions"] = [
+                condition
+                for condition in milestone_data["stop_conditions"]
+                if "stop before product_code" not in condition
+                and "product_code unless explicitly allowed" not in condition
+            ]
+            milestone_data["stop_conditions"].append("completed by runtime closeout as runtime_proven")
+        elif next_milestone is not None and milestone_data["milestone_id"] == next_milestone["milestone_id"]:
+            milestone_data["next_legal_action"] = next_action
+    return data
+
+
+def validate_runtime_closeout_data(
+    *,
+    production_data: dict,
+    manifest_data: dict,
+    active_roadmap_data: dict,
+    archive_roadmap_data: dict,
+    deferred_roadmap_data: dict,
+    roadmap_source: Path,
+    manifest_path: Path,
+    track_id: str,
+) -> None:
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(
+        combine_roadmap_data(
+            active_roadmap_data,
+            roadmap_source,
+            archive_data=archive_roadmap_data,
+            deferred_data=deferred_roadmap_data,
+        )
+    )
+    manifest = TrackExecutionManifest.model_validate(manifest_data)
+    loaded = LoadedTrackExecutionManifest(manifest=manifest, path=manifest_path)
+    track = find_track(planning, track_id)
+    audit_manifest_or_raise(loaded, track=track, roadmap=roadmap)
+
+
+def apply_runtime_closeout(
+    context: ManifestCommandContext,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+    product_validation_results: tuple[str, ...],
+    allow: set[str],
+    run_validations: bool = True,
+) -> RuntimeCloseoutResult:
+    audit_manifest_or_raise(context.loaded, track=context.track, roadmap=context.roadmap)
+    entry, milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
+    assert entry.owning_wr is not None
+    roadmap_item = context.roadmap.by_id.get(entry.owning_wr)
+    if roadmap_item is None:
+        raise WorkflowError(f"{entry.milestone_id}: owning WR {entry.owning_wr} is not present in roadmap")
+    plan_path = default_contract_path(roadmap_item)
+    closeout_path = REPO_ROOT / entry.expected_closeout_path
+    archive_source, deferred_source = split_source_paths(roadmap_source)
+    assert_runtime_closeout_allowed(
+        entry,
+        milestone,
+        roadmap_item,
+        closeout_path=closeout_path,
+        product_validation_results=product_validation_results,
+        allow=allow,
+    )
+
+    closeout_path.parent.mkdir(parents=True, exist_ok=True)
+    closeout_path.write_text(
+        runtime_closeout_report_content(
+            track_id=context.track.id,
+            entry=entry,
+            milestone=milestone,
+            roadmap_item=roadmap_item,
+            closeout_path=closeout_path,
+            plan_path=plan_path,
+            product_validation_results=product_validation_results,
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    production_data = updated_production_data_after_runtime_closeout(
+        production_source,
+        milestone_id=entry.milestone_id,
+        closeout_path=closeout_path,
+        entry=entry,
+    )
+    archive_source, archive_data, deferred_source, deferred_data, active_source, active_data = (
+        updated_roadmap_sources_after_runtime_closeout(
+            roadmap_source,
+            track_id=context.track.id,
+            wr_id=entry.owning_wr,
+            entry=entry,
+            closeout_path=closeout_path,
+        )
+    )
+    manifest_data = updated_manifest_data_after_runtime_closeout(context.loaded, entry=entry)
+    validate_runtime_closeout_data(
+        production_data=production_data,
+        manifest_data=manifest_data,
+        active_roadmap_data=active_data if active_data is not None else load_yaml(roadmap_source),
+        archive_roadmap_data=archive_data,
+        deferred_roadmap_data=deferred_data,
+        roadmap_source=roadmap_source,
+        manifest_path=context.loaded.path,
+        track_id=context.track.id,
+    )
+
+    write_yaml_mapping(production_source, production_data)
+    if active_data is not None:
+        write_yaml_mapping(active_source, active_data, indent_sequences=False)
+    write_yaml_mapping(archive_source, archive_data, indent_sequences=False)
+    write_yaml_mapping(deferred_source, deferred_data, indent_sequences=False)
+    write_yaml_mapping(context.loaded.path, manifest_data)
+    validation_results = run_validation_commands(auto_safe_validation_commands()) if run_validations else ()
+    next_legal_action = str(manifest_data["next_legal_action"])
+    return RuntimeCloseoutResult(
+        track_id=context.track.id,
+        milestone_id=entry.milestone_id,
+        wr_id=entry.owning_wr,
+        closeout_path=closeout_path,
+        manifest_path=context.loaded.path,
+        production_source=production_source,
+        roadmap_archive_source=archive_source,
+        roadmap_deferred_source=deferred_source,
+        validation_commands=validation_results,
+        next_legal_action=next_legal_action,
+    )
+
+
 def print_errors(title: str, errors: list[str]) -> None:
     console.print(f"[red]{title}[/red]")
     for error in errors:
@@ -2410,7 +5966,7 @@ def print_errors(title: str, errors: list[str]) -> None:
 
 @app.command("plan-track")
 def plan_track(
-    track: str = typer.Option(..., "--track", help="Production track id, for example PT-UI-PROGRAM."),
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
     manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
@@ -2446,7 +6002,7 @@ def plan_track(
 
 @app.command("expand-track")
 def expand_track(
-    track: str = typer.Option(..., "--track", help="Production track id, for example PT-UI-PROGRAM."),
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
     manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
@@ -2475,13 +6031,119 @@ def expand_track(
         raise typer.Exit(1) from error
 
 
+@app.command("complete-track-contracts")
+def complete_track_contracts_command(
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
+    production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
+    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
+    manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
+) -> None:
+    try:
+        context = resolve_manifest_command_context(
+            track,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            manifest_source_root=manifest_source_root,
+        )
+        result = complete_track_contracts(
+            context,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            run_validations=True,
+        )
+        console.print("[green]Track contract completion finished.[/green]")
+        console.print(f"Manifest: {repo_path(result.manifest_path)}")
+        console.print(f"Manifest report: {repo_path(result.manifest_report_path)}")
+        if result.completed_milestones:
+            console.print("Completed contract blocks:")
+            for milestone_id in result.completed_milestones:
+                console.print(f"- {milestone_id}")
+        else:
+            console.print("Completed contract blocks: none")
+        if result.remaining_blockers:
+            console.print("[red]Remaining contract blockers:[/red]")
+            for blocker in result.remaining_blockers:
+                console.print(f"- {blocker}")
+            raise typer.Exit(1)
+        if result.validation_commands:
+            console.print("Validation commands:")
+            for command_result in result.validation_commands:
+                console.print(f"- {command_result}")
+        console.print("No implementation authority is created by this command.")
+    except WorkflowError as error:
+        console.print("[red]production:complete-track-contracts failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+
+
+@app.command("lock-track")
+def lock_track(
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
+    locked_by: str = typer.Option("human", "--locked-by", help="Identity or role that locked the track for AI execution."),
+    allow: list[str] = typer.Option(
+        list(FULL_TRACK_PERMISSION_SET),
+        "--allow",
+        help="Permission tier to grant in the execution lock.",
+    ),
+    deny: list[str] = typer.Option(
+        ["crate_creation", "foundation_extraction"],
+        "--deny",
+        help="Permission tier to deny in the execution lock.",
+    ),
+    production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
+    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
+    manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
+    lock_source_root: Path = typer.Option(TRACK_EXECUTION_LOCK_ROOT, help="Track Execution Lock source root."),
+) -> None:
+    try:
+        allow_set = set(allow)
+        deny_set = set(deny)
+        unknown_permissions = sorted((allow_set | deny_set) - MANIFEST_RUNNER_PERMISSIONS)
+        if unknown_permissions:
+            raise WorkflowError(f"unknown Track Execution Lock permissions: {', '.join(unknown_permissions)}")
+        if allow_set & deny_set:
+            raise WorkflowError("the same permission cannot be both granted and denied by a Track Execution Lock")
+        context = resolve_manifest_command_context(
+            track,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            manifest_source_root=manifest_source_root,
+        )
+        full_automation_preflight_or_raise(
+            context.loaded,
+            track=context.track,
+            roadmap=context.roadmap,
+            allow=allow_set,
+        )
+        data = build_track_execution_lock_data(
+            context.loaded,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            locked_by=locked_by,
+            granted_permissions=sorted(allow_set),
+            denied_permissions=sorted(deny_set),
+        )
+        lock = TrackExecutionLock.model_validate(data)
+        path = lock_source_path(track, root=lock_source_root)
+        write_yaml_mapping(path, lock.model_dump(mode="json"))
+        console.print(f"[green]Track Execution Lock written.[/green]")
+        console.print(f"Lock: {repo_path(path)}")
+        console.print("The lock grants full-track execution only while source digests remain unchanged.")
+    except WorkflowError as error:
+        console.print("[red]production:lock-track failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+
+
 @app.command("run-track")
 def run_track(
-    track: str = typer.Option(..., "--track", help="Production track id, for example PT-UI-PROGRAM."),
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
     allow: list[str] = typer.Option(
         [],
         "--allow",
-        help="Permission tier to allow. Supported: auto_safe, agent_design, agent_closeout, product_code.",
+        help="Permission tier to allow. Supported: auto_safe, agent_design, agent_closeout, product_code, product_implementation.",
     ),
     deny: list[str] = typer.Option(
         [],
@@ -2489,13 +6151,27 @@ def run_track(
         help="Permission tier to deny explicitly, for example product_code.",
     ),
     max_actions: int = typer.Option(1, "--max-actions", min=1, help="Maximum mechanical actions before stopping."),
+    mode: str = typer.Option(
+        "bounded-segment",
+        "--mode",
+        help="Automation mode: single-step, bounded-segment, or full-track.",
+    ),
+    preflight_only: bool = typer.Option(
+        False,
+        "--preflight-only",
+        help="Run full automation readiness preflight for the remaining track and exit without mutation.",
+    ),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
     manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
+    lock_source_root: Path = typer.Option(TRACK_EXECUTION_LOCK_ROOT, help="Track Execution Lock source root."),
+    run_ledger_root: Path = typer.Option(TRACK_EXECUTION_RUN_ROOT, help="Track Execution Run ledger root."),
 ) -> None:
     try:
         allow_set = set(allow)
         deny_set = set(deny)
+        if mode not in {"single-step", "bounded-segment", "full-track"}:
+            raise WorkflowError("--mode must be one of single-step, bounded-segment, full-track")
         unknown_permissions = sorted((allow_set | deny_set) - MANIFEST_RUNNER_PERMISSIONS)
         if unknown_permissions:
             raise WorkflowError(f"unknown Manifest Runner permissions: {', '.join(unknown_permissions)}")
@@ -2503,13 +6179,120 @@ def run_track(
             raise WorkflowError("the same Manifest Runner permission cannot be both allowed and denied")
         if not allow_set:
             raise WorkflowError("Manifest Runner requires at least one --allow permission")
-        unsupported_allowed = sorted(allow_set - {"auto_safe", "agent_design", "agent_closeout", "product_code"})
+        if "product_implementation" in allow_set and "product_code" not in allow_set:
+            raise WorkflowError("product_implementation requires product_code")
+        if mode == "single-step" and max_actions != 1:
+            raise WorkflowError("--mode single-step requires --max-actions 1")
+        if (
+            mode != "full-track"
+            and max_actions > 1
+            and FULL_TRACK_PERMISSION_SET.issubset(allow_set)
+        ):
+            raise WorkflowError(
+                "full-track permission set with --max-actions > 1 requires explicit --mode full-track"
+            )
+        unsupported_allowed = sorted(
+            allow_set - {"auto_safe", "agent_design", "agent_closeout", "product_code", "product_implementation"}
+        )
         if unsupported_allowed:
             raise WorkflowError(
                 "Manifest Runner does not implement allowed permissions: " + ", ".join(unsupported_allowed)
             )
 
-        actions: list[AutoSafeExpansionResult | AgentDesignResult | AgentCloseoutResult | ProductCodeResult] = []
+        if should_run_full_automation_preflight(
+            mode=mode,
+            preflight_only=preflight_only,
+        ):
+            context = resolve_manifest_command_context(
+                track,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+                manifest_source_root=manifest_source_root,
+            )
+            preflight_errors = full_automation_preflight_errors(
+                context.loaded,
+                track=context.track,
+                roadmap=context.roadmap,
+                allow=allow_set,
+            )
+            loaded_lock: LoadedTrackExecutionLock | None = None
+            lock_errors: list[str] = []
+            if mode == "full-track":
+                loaded_lock = load_track_execution_lock(track, root=lock_source_root)
+                lock_errors = track_execution_lock_errors(
+                    context.loaded,
+                    loaded_lock,
+                    production_source=production_source,
+                    roadmap_source=roadmap_source,
+                    allow=allow_set,
+                    deny=deny_set,
+                    track=context.track,
+                )
+            if preflight_errors or lock_errors:
+                lines: list[str] = []
+                if preflight_errors:
+                    lines.extend(full_automation_blocker_lines(preflight_errors))
+                if lock_errors:
+                    if lines:
+                        lines.append("")
+                    lines.extend(["Track Execution Lock blockers:", *[f"- {error}" for error in lock_errors]])
+                raise WorkflowError("\n".join(lines))
+            if preflight_only:
+                remaining = remaining_manifest_entries(context.loaded.manifest, context.track)
+                console.print("[green]full automation readiness preflight passed[/green]")
+                console.print(f"Manifest: {repo_path(context.loaded.path)}")
+                if loaded_lock is not None:
+                    console.print(f"Execution lock: {repo_path(loaded_lock.path)}")
+                    console.print("Execution lock status: current")
+                console.print(f"Remaining milestones inspected: {len(remaining)}")
+                for entry, _milestone, _index in remaining:
+                    console.print(f"- {entry.milestone_id}: {entry.execution_kind}")
+                return
+
+        actions: list[
+            AutoSafeExpansionResult
+            | AgentDesignResult
+            | AgentCloseoutResult
+            | ProductCodeResult
+            | ProductImplementationResult
+            | StopBeforeProductCodeResult
+            | StopAtManifestGateResult
+            | RuntimeCloseoutResult
+        ] = []
+        action_entries: list[TrackExecutionManifestMilestone] = []
+        run_id = new_track_execution_run_id(track, root=run_ledger_root) if mode == "full-track" else ""
+        run_ledger_path: Path | None = None
+
+        def record_result(
+            action_entry: TrackExecutionManifestMilestone,
+            result: object,
+            before_digests: dict[str, str],
+        ) -> None:
+            nonlocal run_ledger_path
+            if not run_id:
+                return
+            after_context = resolve_manifest_command_context(
+                track,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+                manifest_source_root=manifest_source_root,
+            )
+            after_digests = source_digest_map(
+                after_context.loaded,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+            )
+            run_ledger_path = append_track_execution_run_action(
+                track_id=track,
+                run_id=run_id,
+                run_root=run_ledger_root,
+                entry=action_entry,
+                result=result,
+                before_digests=before_digests,
+                after_digests=after_digests,
+            )
+
+        track_complete = False
         while len(actions) < max_actions:
             context = resolve_manifest_command_context(
                 track,
@@ -2518,7 +6301,19 @@ def run_track(
                 manifest_source_root=manifest_source_root,
             )
             audit_manifest_or_raise(context.loaded, track=context.track, roadmap=context.roadmap)
+            if all(milestone.state == "completed" for milestone in context.track.milestones):
+                track_complete = True
+                break
             entry, milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
+            before_digests = (
+                source_digest_map(
+                    context.loaded,
+                    production_source=production_source,
+                    roadmap_source=roadmap_source,
+                )
+                if run_id
+                else {}
+            )
             workflow_action, blockers = next_action_blockers(
                 entry,
                 milestone,
@@ -2526,11 +6321,12 @@ def run_track(
                 track=context.track,
                 roadmap=context.roadmap,
             )
-            if "product_code" in allow_set and entry.milestone_type in {"docs_only", "design_only", "closeout"}:
-                raise WorkflowError(
-                    f"{entry.milestone_id}: product_code cannot run for docs, design, or governance milestones"
-                )
             if workflow_action == "track_expansion_required":
+                if "auto_safe" not in allow_set:
+                    raise WorkflowError(
+                        f"{entry.milestone_id}: Track Expansion must create or link {entry.future_wr_candidate}; "
+                        "rerun with --allow auto_safe"
+                    )
                 result = apply_auto_safe_track_expansion(
                     context,
                     production_source=production_source,
@@ -2539,11 +6335,15 @@ def run_track(
                     run_validations=True,
                 )
                 actions.append(result)
+                action_entries.append(entry)
+                record_result(entry, result, before_digests)
                 if "agent_design" not in allow_set:
                     break
                 continue
             if workflow_action == "design_first" and agent_closeout_pending(entry):
                 if "agent_closeout" not in allow_set:
+                    if actions:
+                        break
                     raise WorkflowError(
                         f"{entry.milestone_id}: closeout is the next legal action; rerun with --allow agent_closeout"
                     )
@@ -2556,8 +6356,26 @@ def run_track(
                     run_validations=True,
                 )
                 actions.append(result)
-                break
+                action_entries.append(entry)
+                record_result(entry, result, before_digests)
+                continue
             if workflow_action == "design_first" and "agent_design" in allow_set:
+                if agent_design_contract_for_entry(entry) is None:
+                    result = StopAtManifestGateResult(
+                        track_id=context.track.id,
+                        milestone_id=entry.milestone_id,
+                        manifest_path=context.loaded.path,
+                        reason=f"{entry.milestone_id}: manifest milestone is missing agent_design contract",
+                        validation_commands=(),
+                        next_legal_action=(
+                            f"{entry.milestone_id} requires a bounded agent_design contract before the runner "
+                            "can create an implementation plan or run product_code."
+                        ),
+                    )
+                    actions.append(result)
+                    action_entries.append(entry)
+                    record_result(entry, result, before_digests)
+                    break
                 result = apply_agent_design(
                     context,
                     production_source=production_source,
@@ -2567,23 +6385,110 @@ def run_track(
                     run_validations=True,
                 )
                 actions.append(result)
-                break
+                action_entries.append(entry)
+                record_result(entry, result, before_digests)
+                continue
             if workflow_action == "write_implementation_contract":
                 if "product_code" not in allow_set:
-                    raise WorkflowError(f"{entry.milestone_id}: product_code is the next legal action; rerun with --allow product_code")
-                result = apply_product_code(
+                    if actions:
+                        break
+                    assert entry.owning_wr is not None
+                    roadmap_item = context.roadmap.by_id.get(entry.owning_wr)
+                    if roadmap_item is None:
+                        raise WorkflowError(f"{entry.milestone_id}: owning WR {entry.owning_wr} is not present in roadmap")
+                    plan_path = default_contract_path(roadmap_item)
+                    plan_errors = product_plan_contract_errors(
+                        entry=entry,
+                        roadmap_item=roadmap_item,
+                        plan_path=plan_path,
+                    )
+                    if plan_errors and "agent_design" in allow_set:
+                        result = apply_agent_design(
+                            context,
+                            production_source=production_source,
+                            roadmap_source=roadmap_source,
+                            allow=allow_set,
+                            deny=deny_set,
+                            run_validations=True,
+                            allow_regenerate_invalid_implementation_plan=True,
+                        )
+                        actions.append(result)
+                        action_entries.append(entry)
+                        record_result(entry, result, before_digests)
+                        continue
+                    if not plan_path.exists():
+                        raise WorkflowError(
+                            f"{entry.milestone_id}: product_code is the next legal action but the implementation plan is missing at {repo_path(plan_path)}"
+                        )
+                    if plan_errors:
+                        raise WorkflowError("\n".join(plan_errors))
+                    result = StopBeforeProductCodeResult(
+                        track_id=context.track.id,
+                        milestone_id=entry.milestone_id,
+                        wr_id=entry.owning_wr,
+                        plan_path=plan_path,
+                        manifest_path=context.loaded.path,
+                        validation_commands=(),
+                        next_legal_action=(
+                            f"{entry.milestone_id} implementation plan exists; product_code is denied. "
+                            f"Rerun `task production:run-track -- --track {context.track.id} --allow product_code --allow product_implementation --max-actions 1` "
+                            "only if product/runtime code is permitted."
+                        ),
+                    )
+                    actions.append(result)
+                    action_entries.append(entry)
+                    record_result(entry, result, before_digests)
+                    break
+                if "product_implementation" in allow_set:
+                    result = apply_product_implementation(
+                        context,
+                        allow=allow_set,
+                        roadmap_source=roadmap_source,
+                        run_validations=True,
+                    )
+                else:
+                    result = apply_product_code(
+                        context,
+                        allow=allow_set,
+                        run_validations=True,
+                    )
+                actions.append(result)
+                action_entries.append(entry)
+                record_result(entry, result, before_digests)
+                if "agent_closeout" not in allow_set or len(actions) >= max_actions:
+                    break
+                continue
+            if workflow_action == "runtime_closeout":
+                if "agent_closeout" not in allow_set:
+                    if actions:
+                        break
+                    raise WorkflowError(
+                        f"{entry.milestone_id}: runtime closeout is the next legal action; rerun with --allow agent_closeout"
+                    )
+                product_validation_results = run_validation_commands(product_validation_commands_for_entry(entry))
+                runtime_closeout = apply_runtime_closeout(
                     context,
+                    production_source=production_source,
+                    roadmap_source=roadmap_source,
+                    product_validation_results=product_validation_results,
                     allow=allow_set,
                     run_validations=True,
                 )
-                actions.append(result)
-                break
+                actions.append(runtime_closeout)
+                action_entries.append(entry)
+                record_result(entry, runtime_closeout, before_digests)
+                continue
             if blockers:
                 raise WorkflowError("\n".join(blockers))
-            raise WorkflowError(f"{entry.milestone_id}: no permitted runner action for workflow action {workflow_action}")
+            raise WorkflowError(f"{entry.milestone_id}: workflow action is {workflow_action}; no permitted runner action")
 
         if not actions:
+            if track_complete:
+                console.print(f"[green]Track {track} is complete.[/green]")
+                return
             raise WorkflowError("Manifest Runner did not apply any action")
+        if run_ledger_path is not None:
+            console.print(f"Run ledger: {repo_path(run_ledger_path)}")
         for result in actions:
             if isinstance(result, AutoSafeExpansionResult):
                 console.print("[green]Manifest Runner V1 applied one auto_safe Track Expansion action.[/green]")
@@ -2610,6 +6515,35 @@ def run_track(
                 console.print(f"Production source: {repo_path(result.production_source)}")
                 console.print(f"Roadmap archive source: {repo_path(result.roadmap_archive_source)}")
                 console.print(f"Roadmap deferred source: {repo_path(result.roadmap_deferred_source)}")
+            elif isinstance(result, StopBeforeProductCodeResult):
+                console.print("[yellow]Manifest Runner stopped before product_code.[/yellow]")
+                console.print(f"Manifest: {repo_path(result.manifest_path)}")
+                console.print(f"Milestone: {result.milestone_id}")
+                console.print(f"Owning WR: {result.wr_id}")
+                console.print(f"Plan path: {repo_path(result.plan_path)}")
+            elif isinstance(result, StopAtManifestGateResult):
+                console.print("[yellow]Manifest Runner stopped at a manifest gate.[/yellow]")
+                console.print(f"Manifest: {repo_path(result.manifest_path)}")
+                console.print(f"Milestone: {result.milestone_id}")
+                console.print(f"Reason: {result.reason}")
+            elif isinstance(result, RuntimeCloseoutResult):
+                console.print("[green]Manifest Runner runtime closeout completed one implementation milestone.[/green]")
+                console.print(f"Manifest: {repo_path(result.manifest_path)}")
+                console.print(f"Milestone: {result.milestone_id}")
+                console.print(f"Closed WR: {result.wr_id}")
+                console.print(f"Closeout path: {repo_path(result.closeout_path)}")
+                console.print(f"Production source: {repo_path(result.production_source)}")
+                console.print(f"Roadmap archive source: {repo_path(result.roadmap_archive_source)}")
+                console.print(f"Roadmap deferred source: {repo_path(result.roadmap_deferred_source)}")
+            elif isinstance(result, ProductImplementationResult):
+                console.print("[green]Manifest Runner V5 wrote one bounded product_implementation slice.[/green]")
+                console.print(f"Manifest: {repo_path(result.manifest_path)}")
+                console.print(f"Milestone: {result.milestone_id}")
+                console.print(f"Owning WR: {result.wr_id}")
+                console.print(f"Plan path: {repo_path(result.plan_path)}")
+                console.print("Written product files:")
+                for written_path in result.written_paths:
+                    console.print(f"- {repo_path(written_path)}")
             else:
                 console.print("[green]Manifest Runner V4 verified one product_code implementation gate.[/green]")
                 console.print(f"Manifest: {repo_path(result.manifest_path)}")
@@ -2631,10 +6565,11 @@ def run_track(
 
 @app.command("next")
 def next_action(
-    track: str = typer.Option(..., "--track", help="Production track id, for example PT-UI-PROGRAM."),
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
     manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
+    lock_source_root: Path = typer.Option(TRACK_EXECUTION_LOCK_ROOT, help="Track Execution Lock source root."),
 ) -> None:
     try:
         context = resolve_manifest_command_context(
@@ -2647,6 +6582,24 @@ def next_action(
         if audit_errors:
             print_manifest_audit_blockers(audit_errors)
             raise typer.Exit(1)
+        full_automation_errors: list[str] = []
+        if context.loaded.manifest.full_automation_target:
+            full_automation_errors = full_automation_preflight_errors(
+                context.loaded,
+                track=context.track,
+                roadmap=context.roadmap,
+                allow=None,
+            )
+        loaded_lock = load_track_execution_lock(track, root=lock_source_root)
+        lock_errors = track_execution_lock_errors(
+            context.loaded,
+            loaded_lock,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            allow=FULL_TRACK_PERMISSION_SET,
+            deny={"crate_creation", "foundation_extraction"},
+            track=context.track,
+        ) if context.loaded.manifest.full_automation_target else []
         entry, milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
         workflow_action, blockers = next_action_blockers(
             entry,
@@ -2661,6 +6614,27 @@ def next_action(
         console.print(f"Workflow action: {workflow_action}")
         console.print(f"Implementation authorized now: {implementation_authorization_note(entry, workflow_action, blockers)}")
         console.print("Must stop after this action: yes")
+        if context.loaded.manifest.full_automation_target:
+            console.print(
+                "Full automation readiness: "
+                + ("ready" if not full_automation_errors else "blocked")
+            )
+            console.print(
+                "Execution lock: "
+                + (repo_path(loaded_lock.path) if loaded_lock is not None else "missing")
+            )
+            console.print(
+                "`--mode full-track` can run now: "
+                + ("yes" if not full_automation_errors and not lock_errors else "no")
+            )
+            if full_automation_errors:
+                print_full_automation_blockers(full_automation_errors)
+                raise typer.Exit(1)
+            if lock_errors:
+                console.print("[red]Track Execution Lock blockers:[/red]")
+                for error in lock_errors:
+                    console.print(f"- {error}")
+                raise typer.Exit(1)
         if blockers:
             console.print("Unmet gates:")
             for blocker in blockers:
@@ -2678,10 +6652,21 @@ def next_action(
 
 @app.command("audit-track")
 def audit_track(
-    track: str = typer.Option(..., "--track", help="Production track id, for example PT-UI-PROGRAM."),
+    track: str = typer.Option(..., "--track", help="Production track id, for example PT-TEST."),
+    full_automation: bool = typer.Option(
+        False,
+        "--full-automation",
+        help="Audit every remaining milestone for full automation readiness without mutation.",
+    ),
+    require_lock: bool = typer.Option(
+        False,
+        "--require-lock",
+        help="Require a current Track Execution Lock for full-track AI execution.",
+    ),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
     manifest_source_root: Path = typer.Option(TRACK_EXECUTION_MANIFEST_ROOT, help="Track Execution Manifest source root."),
+    lock_source_root: Path = typer.Option(TRACK_EXECUTION_LOCK_ROOT, help="Track Execution Lock source root."),
 ) -> None:
     try:
         context = resolve_manifest_command_context(
@@ -2696,6 +6681,42 @@ def audit_track(
             print_manifest_audit_blockers(errors)
             raise typer.Exit(1)
         console.print("[green]manifest audit passed[/green]")
+        if full_automation:
+            preflight_errors = full_automation_preflight_errors(
+                context.loaded,
+                track=context.track,
+                roadmap=context.roadmap,
+                allow=None,
+            )
+            lock_errors: list[str] = []
+            if require_lock:
+                loaded_lock = load_track_execution_lock(track, root=lock_source_root)
+                lock_errors = track_execution_lock_errors(
+                    context.loaded,
+                    loaded_lock,
+                    production_source=production_source,
+                    roadmap_source=roadmap_source,
+                    allow=FULL_TRACK_PERMISSION_SET,
+                    deny={"crate_creation", "foundation_extraction"},
+                    track=context.track,
+                )
+            if preflight_errors:
+                print_full_automation_blockers(preflight_errors)
+            if lock_errors:
+                console.print("[red]Track Execution Lock blockers:[/red]")
+                for error in lock_errors:
+                    console.print(f"- {error}")
+            if preflight_errors or lock_errors:
+                raise typer.Exit(1)
+            if require_lock:
+                assert loaded_lock is not None
+                console.print(f"[green]track execution lock passed[/green]")
+                console.print(f"Execution lock: {repo_path(loaded_lock.path)}")
+            remaining = remaining_manifest_entries(context.loaded.manifest, context.track)
+            console.print("[green]full automation readiness preflight passed[/green]")
+            console.print(f"Remaining milestones inspected: {len(remaining)}")
+            for entry, _milestone, _index in remaining:
+                console.print(f"- {entry.milestone_id}: {entry.execution_kind}")
     except WorkflowError as error:
         console.print("[red]production:audit-track failed[/red]")
         for line in str(error).splitlines():
@@ -2706,7 +6727,7 @@ def audit_track(
 @app.command("_commands", hidden=True)
 def commands() -> None:
     """Keep Typer in multi-command mode so public subcommands are stable."""
-    console.print("plan-track expand-track run-track next audit-track")
+    console.print("plan-track expand-track complete-track-contracts lock-track run-track next audit-track")
 
 
 if __name__ == "__main__":

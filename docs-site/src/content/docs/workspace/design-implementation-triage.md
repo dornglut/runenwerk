@@ -110,6 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
+| WR-146 | 6F Headless Fixture Diagnostics Source Map Proof | P2 | V4 | B2 | 1.0 | Next legal command, only when product/runtime code is permitted: task production:run-track -- --track PT-UI-PROGRAM --allow product_code --allow product_implementation --max-actions 1 | Run task production:run-track -- --track PT-UI-PROGRAM --allow product_code --allow product_implementation --max-actions 1. |
 
 ## Support Only
 

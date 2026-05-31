@@ -45,6 +45,7 @@ COMPLETION_EVIDENCE_ROOTS = (
     "docs-site/src/content/docs/reports/batches/",
 )
 COMPLETED_BATCH_INTEGRATION_STATUSES = {"merged", "integrated"}
+NEW_WRITE_SCOPE_PREFIXES = ("new:", "create:")
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanningState = Literal["current_candidate", "support_only", "ready_next", "completed", "blocked_deferred"]
@@ -731,7 +732,7 @@ def validate_write_scopes(items: list[RoadmapItem] | list[BatchItem]) -> list[st
     seen: list[tuple[str, str]] = []
     for item in items:
         for scope in item.write_scopes:
-            normalized = normalize_repo_path(scope)
+            normalized = normalize_write_scope_path(scope)
             for other_item_id, other_scope in seen:
                 if scope_overlaps(normalized, other_scope):
                     conflicts.append(f"{item.id}:{normalized} overlaps {other_item_id}:{other_scope}")
@@ -743,7 +744,12 @@ def validate_existing_write_scope_paths(items: list[RoadmapItem] | list[BatchIte
     errors: list[str] = []
     for item in items:
         for scope in item.write_scopes:
-            normalized = normalize_repo_path(scope)
+            normalized = normalize_write_scope_path(scope)
+            if is_new_write_scope(scope):
+                parent = (REPO_ROOT / normalized).parent
+                if not parent.exists():
+                    errors.append(f"{item.id}:{normalized} parent does not exist for new write scope")
+                continue
             if not (REPO_ROOT / normalized).exists():
                 errors.append(f"{item.id}:{normalized} does not exist")
     return errors
@@ -836,7 +842,7 @@ def validate_completion_evidence(items: list[RoadmapItem], repo_root: Path = REP
                 errors.append(evidence_error)
             else:
                 accepted_paths.append(path)
-        write_scope_paths = {normalize_repo_path(scope) for scope in item.write_scopes}
+        write_scope_paths = {normalize_write_scope_path(scope) for scope in item.write_scopes}
         if accepted_paths and not any(path in write_scope_paths for path in accepted_paths):
             errors.append(
                 f"{item.id}: completed items must include a completed closeout or batch evidence path in write_scopes"
@@ -967,7 +973,7 @@ def validate_completed_items_not_current_in_docs(
 
 
 def normalized_write_scopes_with_generated_outputs(scopes: list[str]) -> list[str]:
-    normalized_scopes = [normalize_repo_path(scope) for scope in scopes]
+    normalized_scopes = [normalize_write_scope_path(scope) for scope in scopes]
     roadmap_source_scope = normalize_repo_path(str(ROADMAP_SOURCE.relative_to(REPO_ROOT)))
     if roadmap_source_scope in normalized_scopes:
         normalized_scopes.extend(
@@ -1108,6 +1114,19 @@ def repo_path(path: Path) -> str:
 
 def normalize_repo_path(path: str) -> str:
     return path.replace("\\", "/").strip().strip("/")
+
+
+def is_new_write_scope(scope: str) -> bool:
+    return scope.strip().lower().startswith(NEW_WRITE_SCOPE_PREFIXES)
+
+
+def normalize_write_scope_path(scope: str) -> str:
+    cleaned = scope.strip()
+    lowered = cleaned.lower()
+    for prefix in NEW_WRITE_SCOPE_PREFIXES:
+        if lowered.startswith(prefix):
+            return normalize_repo_path(cleaned[len(prefix) :])
+    return normalize_repo_path(cleaned)
 
 
 def slash_path(path: Path) -> str:

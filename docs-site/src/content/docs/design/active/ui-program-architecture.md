@@ -1406,6 +1406,181 @@ continue.
 - Stage 6 proof work remains blocked until Stages 1 through 5 close with
   evidence.
 
+## PM-UI-PROGRAM-003 Stage 2 Contract
+
+This section is the bounded Stage 2 contract produced for `PM-UI-PROGRAM-003`.
+It tightens design-level contracts only. It does not authorize code,
+crates, placeholder folders, Stage 6 proof work, MaterialProgram work, or
+shared `foundation/meta` extraction.
+
+### Required Design Coverage
+
+- ColorPicker ControlPackage proof design
+- wheel-plus-triangle first
+- RGB cube deferred
+- property schema
+- state schema
+- event payload schema
+- visual operators
+- accessibility
+- fixtures
+- diagnostics
+- migration behavior
+- explicit package registry input and snapshot behavior
+- route-based event packets, not central event enum variants
+- binding-heavy proof surface choice uses InspectorField
+
+### Required Decisions
+
+- The first rich ControlPackage proof is ColorPicker using wheel-plus-triangle; RGB cube projection is deferred.
+- ControlPackage definitions must name package ID, control kind ID, property schema, state schema, event payload schema, layout kernel ID, interaction kernel ID, visual kernel ID, fixture IDs, diagnostic IDs, and migration behavior.
+- Package registries are explicit UI-owned inputs and compiled snapshots, never hidden global state.
+- ControlPackage events emit route-based UiEventPacket payloads, not giant central enum variants.
+- The binding-heavy proof surface for the later runtime proof path is InspectorField.
+
+### Acceptance Checklist
+
+- Stage 2 design evidence names ColorPicker as the rich package proof and InspectorField as the binding-heavy proof surface.
+- Stage 2 design evidence defines package registry input and snapshot behavior.
+- Stage 2 design evidence keeps all package/schema/kernel/fixture/diagnostic IDs namespaced and versioned.
+- Stage 2 design evidence preserves no product code, no crates, no placeholder folders, no Stage 6 work, no MaterialProgram implementation, and no foundation/meta extraction.
+
+### Remaining Authority Boundary
+
+- This bounded design evidence may close only as `bounded_contract`.
+- It must not claim `runtime_proven` evidence.
+- It must not start PM-UI-PROGRAM-007 / 6A or any product-code slice.
+- Later milestones still require their own WR, plan, validation, and closeout evidence.
+
+## PM-UI-PROGRAM-004 Stage 3 Contract
+
+This section is the bounded Stage 3 contract produced for `PM-UI-PROGRAM-004`.
+It tightens design-level contracts only. It does not authorize code,
+crates, placeholder folders, Stage 6 proof work, MaterialProgram work, or
+shared `foundation/meta` extraction.
+
+### Required Design Coverage
+
+- UiCompiler inputs and outputs
+- UiRuntimeArtifactManifest
+- UiRuntimeArtifactTables
+- cache keys and invalidation
+- host target profiles
+- compiler/evaluator timing
+- hot-path artifact boundary
+- state layout tables
+- binding snapshot tables
+- collection diff plans
+- text layout request tables
+
+### Required Decisions
+
+- UiCompiler consumes UiProgram, packages, themes, host profile, binding shape, route maps, source inputs, and schema versions.
+- UiCompiler outputs an inspectable UiRuntimeArtifactManifest plus optimized UiRuntimeArtifactTables.
+- Cache keys include source IDs, package IDs, schema IDs, route map versions, theme versions, host target profile, text policy, and compiler version.
+- UiEvaluator runs after compilation against runtime artifact tables; hot paths must not interpret generic graphs by default.
+- Runtime artifact tables include state layout, binding snapshots, collection diff plans, interaction routing, visual output, accessibility, inspection, and text layout request tables.
+
+### Acceptance Checklist
+
+- Stage 3 design evidence separates durable manifest metadata from optimized in-memory tables.
+- Stage 3 design evidence defines invalidation and cache key behavior.
+- Stage 3 design evidence preserves the compiler/evaluator timing boundary and hot-path artifact rule.
+- Stage 3 design evidence preserves no product code, no crates, no placeholder folders, no Stage 6 work, no MaterialProgram implementation, and no foundation/meta extraction.
+
+### Remaining Authority Boundary
+
+- This bounded design evidence may close only as `bounded_contract`.
+- It must not claim `runtime_proven` evidence.
+- It must not start PM-UI-PROGRAM-007 / 6A or any product-code slice.
+- Later milestones still require their own WR, plan, validation, and closeout evidence.
+
+## PM-UI-PROGRAM-005 Stage 4 Contract
+
+This section is the bounded Stage 4 contract produced for `PM-UI-PROGRAM-005`.
+It tightens design-level contracts only. It does not authorize code,
+crates, placeholder folders, Stage 6 proof work, MaterialProgram work, or
+shared `foundation/meta` extraction.
+
+### Required Design Coverage
+
+- UiEvaluator
+- editor host contract
+- game host contract
+- world-space host contract
+- headless host contract
+- host consumption of UiEventPacket
+- frame submission boundary
+- UiEventPacket HostCommand DomainCommand mapping rules
+- editor inspector proof scenario
+- game HUD proof scenario
+- world-space entity prompt proof scenario
+- headless fixture proof scenario
+
+### Required Decisions
+
+- UiEvaluator consumes UiRuntimeArtifactTables plus host snapshots and produces UiOutput without owning editor, game, world, or renderer truth.
+- EditorHost owns editor integration and maps UiEventPacket to editor HostCommand and optional DomainCommand.
+- GameHost owns HUD/game integration and maps route packets to game commands through inspectable host route maps.
+- WorldSpaceHost owns projection, anchor, lifetime, visibility, and data feed inputs while ECS does not own UI semantics.
+- HeadlessHost owns deterministic fixture evaluation, diagnostics, source-map checks, and artifact reproducibility evidence.
+- Frame submission is a structural UiFrame or equivalent render-data boundary; renderer resources are not UI truth.
+
+### Acceptance Checklist
+
+- Stage 4 design evidence defines all four host contracts and proof scenarios.
+- Stage 4 design evidence defines UiEventPacket to HostCommand and optional DomainCommand mapping rules.
+- Stage 4 design evidence preserves ECS and renderer boundaries.
+- Stage 4 design evidence preserves no product code, no crates, no placeholder folders, no Stage 6 work, no MaterialProgram implementation, and no foundation/meta extraction.
+
+### Remaining Authority Boundary
+
+- This bounded design evidence may close only as `bounded_contract`.
+- It must not claim `runtime_proven` evidence.
+- It must not start PM-UI-PROGRAM-007 / 6A or any product-code slice.
+- Later milestones still require their own WR, plan, validation, and closeout evidence.
+
+## PM-UI-PROGRAM-006 Stage 5 Contract
+
+This section is the bounded Stage 5 contract produced for `PM-UI-PROGRAM-006`.
+It tightens design-level contracts only. It does not authorize code,
+crates, placeholder folders, Stage 6 proof work, MaterialProgram work, or
+shared `foundation/meta` extraction.
+
+### Required Design Coverage
+
+- migration from retained UI to UiProgram path
+- current retained UI compatibility
+- dual lowering or strangler strategy
+- retained runtime compatibility adapters
+- exact boundary for old ui_runtime compatibility
+- rules for when old paths can be deleted
+- proof prerequisites before replacement
+- no broad retained UI rewrite
+
+### Required Decisions
+
+- Retained/current UI remains compatible until a bounded proof slice intentionally replaces a named surface.
+- Authored UI definitions may dual-lower to retained UI and UiProgram during migration.
+- Old ui_runtime compatibility becomes strangler infrastructure and must not remain the future semantic core.
+- Compatibility adapters may bridge retained rendering/input only where a WR names the bounded surface and rollback path.
+- Old paths may be deleted only after replacement proof, diagnostics parity, fixture evidence, compatibility closeout, and explicit deletion WR authority.
+- Broad retained UI rewrite is forbidden; migration proceeds by bounded proof surfaces.
+
+### Acceptance Checklist
+
+- Stage 5 design evidence defines the dual-lowering or strangler path and rollback expectations.
+- Stage 5 design evidence names the exact old ui_runtime compatibility boundary.
+- Stage 5 design evidence defines deletion prerequisites for old retained UI paths.
+- Stage 5 design evidence preserves no product code, no crates, no placeholder folders, no Stage 6 work, no MaterialProgram implementation, and no foundation/meta extraction.
+
+### Remaining Authority Boundary
+
+- This bounded design evidence may close only as `bounded_contract`.
+- It must not claim `runtime_proven` evidence.
+- It must not start PM-UI-PROGRAM-007 / 6A or any product-code slice.
+- Later milestones still require their own WR, plan, validation, and closeout evidence.
+
 ## 13. Staged Implementation Plan
 
 This plan describes sequencing only. It does not authorize code.

@@ -68,6 +68,16 @@ tasks:
     cmds:
       - uv run python tools/workflow/track_execution_manifest.py expand-track {{.CLI_ARGS}}
 
+  production:complete-track-contracts:
+    desc: Complete missing machine-readable contracts for a manifest-backed production track.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py complete-track-contracts {{.CLI_ARGS}}
+
+  production:lock-track:
+    desc: Create a digest-locked AI execution lock for a manifest-backed production track.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py lock-track {{.CLI_ARGS}}
+
   production:run-track:
     desc: Run one permission-gated manifest-backed production-track action.
     cmds:

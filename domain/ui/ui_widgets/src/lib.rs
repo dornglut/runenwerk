@@ -5,6 +5,7 @@
 pub use ::ui_tree::*;
 
 mod button;
+mod color_picker;
 mod divider;
 mod image;
 mod label;
@@ -27,6 +28,13 @@ mod vector_input;
 mod viewport_surface_embed;
 
 pub use button::{button, button_selected};
+pub use color_picker::{
+    ColorPickerControl, ColorPickerControlPackage, ColorPickerDeferredFeature,
+    ColorPickerDiagnostic, ColorPickerEventPacket, ColorPickerEventPayload, ColorPickerProperties,
+    ColorPickerSchema, ColorPickerState, ColorPickerTrianglePoint, color_picker,
+    color_picker_committed_packet, color_picker_control_package, color_picker_diagnostics,
+    color_picker_fixture, color_picker_preview_changed_packet, color_picker_rgb_cube_status,
+};
 pub use divider::{divider, hdivider, vdivider};
 pub use image::image;
 pub use label::label;

@@ -154,7 +154,7 @@ task production:expand-track -- --track PT-SDF-OW
 task production:run-track -- --track PT-SDF-OW --allow auto_safe --max-actions 1
 task production:run-track -- --track PT-SDF-OW --allow auto_safe --allow agent_design --deny product_code --max-actions 2
 task production:run-track -- --track PT-SDF-OW --allow auto_safe --allow agent_design --allow agent_closeout --deny product_code --max-actions 10
-task production:run-track -- --track PT-SDF-OW --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --max-actions 10
+task production:run-track -- --track PT-SDF-OW --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions 10
 task production:next -- --track PT-SDF-OW
 task production:audit-track -- --track PT-SDF-OW
 task production:plan -- --milestone PM-SDF-OW-001 --roadmap WR-019

@@ -15,3 +15,18 @@ pub struct UiSourceLocation {
 pub struct UiSourceMap {
     pub locations_by_path: BTreeMap<AuthoredUiNodePath, UiSourceLocation>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorldSpacePromptSourceEvidence {
+    pub route_id: String,
+    pub source_location: Option<UiSourceLocation>,
+}
+
+impl WorldSpacePromptSourceEvidence {
+    pub fn new(route_id: impl Into<String>, source_location: Option<UiSourceLocation>) -> Self {
+        Self {
+            route_id: route_id.into(),
+            source_location,
+        }
+    }
+}
