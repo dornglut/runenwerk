@@ -1,0 +1,619 @@
+version: 1
+track_id: PT-UI-PROGRAM
+authority_level: planning_and_sequencing_only
+accepted_design_dependencies:
+  - path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+    required_status: active
+    reason: PT-UI-PROGRAM must preserve the accepted Domain Workbench north-star direction.
+  - path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    required_status: active
+    reason: PT-UI-PROGRAM must follow the accepted UiProgram proving-domain architecture.
+  - path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
+    required_status: active
+    reason: Stage 6 proof work must follow the bounded proof-slice plan.
+  - path: docs-site/src/content/docs/reports/implementation-plans/wr-135-ui-program-platform-proof-track-governance-and-activation/plan.md
+    required_status: active
+    reason: PM-UI-PROGRAM-001 must remain governed by the docs/governance-only WR-135 contract.
+global_forbidden_scope:
+  - no product code from this manifest alone
+  - no new crates
+  - no crate renames
+  - no placeholder future folders
+  - no UI runtime implementation before the owning implementation milestone
+  - no shared foundation/meta extraction
+  - no MaterialProgram implementation
+  - no RenderPlan substitution for MaterialProgram as the second-domain proof
+global_validation_commands:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+global_stop_conditions:
+  - stop if manifest data conflicts with production track or roadmap state
+  - stop if a milestone lacks an owning WR or future WR candidate
+  - stop if a dependency is incomplete
+  - stop if validation fails
+  - stop after one legal milestone action and rerun task ai:goal
+  - stop before code unless a dedicated active WR and production plan authorize the bounded slice
+next_legal_action: Run task production:plan -- --milestone PM-UI-PROGRAM-003 --roadmap WR-137; do not skip to PM-UI-PROGRAM-007 / 6A.
+milestones:
+  - milestone_id: PM-UI-PROGRAM-001
+    title: ADR / Design Promotion
+    stage: Stage 0
+    authority_level: docs_governance_only
+    milestone_type: docs_only
+    owning_wr: WR-135
+    predecessor_dependencies: []
+    write_scope:
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - 'generated: production docs from task production:render'
+      - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+      - docs-site/src/content/docs/reports/implementation-plans/wr-135-ui-program-platform-proof-track-governance-and-activation/plan.md
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+      - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-001-adr-design-promotion/closeout.md
+    forbidden_scope:
+      - no product code from this manifest alone
+      - no new crates
+      - no crate renames
+      - no placeholder future folders
+      - no UI runtime implementation before the owning implementation milestone
+      - no shared foundation/meta extraction
+      - no MaterialProgram implementation
+      - no RenderPlan substitution for MaterialProgram as the second-domain proof
+    required_contracts:
+      - WR-135 governance contract
+      - Track Execution Manifest source
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed PM-UI-PROGRAM-001 governance closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-001-adr-design-promotion/closeout.md
+    stop_conditions:
+      - stop if WR-135 remains blocked without governance closeout evidence
+      - stop if PM-UI-PROGRAM-001 would authorize product code or runtime implementation
+      - stop after closing PM-UI-PROGRAM-001 and rerun task ai:goal
+    next_legal_action: PM-UI-PROGRAM-001 is closed; rerun task ai:goal and continue only to PM-UI-PROGRAM-002 Track Expansion.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false
+  - milestone_id: PM-UI-PROGRAM-002
+    title: UI Program Contract Design
+    stage: Stage 1
+    authority_level: design_only
+    milestone_type: design_only
+    owning_wr: WR-136
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-001
+    write_scope:
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+      - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+      - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
+      - docs-site/src/content/docs/reports/implementation-plans/wr-136-ui-program-contract-design/plan.md
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-002-ui-program-contract-design/closeout.md
+      - 'generated: production docs from task production:render'
+      - 'generated: roadmap docs from task roadmap:render'
+      - docs-site/src/content/docs/design/active/ui-program-architecture.md
+      - docs-site/src/content/docs/design/active/ui-program-contract-design.md
+    forbidden_scope:
+      - no product code from this manifest alone
+      - no new crates
+      - no crate renames
+      - no placeholder future folders
+      - no UI runtime implementation before the owning implementation milestone
+      - no shared foundation/meta extraction
+      - no MaterialProgram implementation
+      - no RenderPlan substitution for MaterialProgram as the second-domain proof
+    required_contracts:
+      - UI Program Contract Design implementation plan
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed UI Program Contract Design closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-002-ui-program-contract-design/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-001 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop if graph ownership, schema/event/route boundary, or stable ID policy remains undecided
+      - completed by agent_closeout as bounded_contract
+    next_legal_action: PM-UI-PROGRAM-002 completed by agent_closeout as bounded_contract; continue only to the next manifest legal action.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false
+    agent_design:
+      source_documents:
+        - docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+        - docs-site/src/content/docs/design/active/ui-program-architecture.md
+        - docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
+        - docs-site/src/content/docs/workspace/track-execution-manifest.md
+        - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+      required_sections:
+        - UiProgram graph ownership and graph list
+        - UiSchemaValue primitive/object/list/optional/route/opaque-host-reference model
+        - Schema versioning and validation rules
+        - Stable ID namespace/version/collision/deprecation/migration policy
+        - StateGraph and UiStateModel ownership split
+        - BindingGraph read/write/snapshot/dirty/collection/authorization contract
+        - VisualGraph and structural UiFrame renderer boundary
+        - Text/render boundary for shaping, glyph identity, atlas keys, invalidation, and renderer residency
+        - UiEventPacket and schema-based payload contract
+        - RouteId, RouteSchemaVersion, RouteCapability, and HostRouteMapVersion
+        - HostCommand and DomainCommand mapping rules
+        - Source-map attachment points
+        - Diagnostics attachment points
+        - Open questions and blocked decisions
+      required_decisions:
+        - UiProgram owns typed UI graph truth and remains domain/ui-owned during the proof.
+        - UiSchemaValue remains UI-owned until the Second-Domain Extraction Gate.
+        - Routes are stable IDs with schema versions and capability requirements, not magic strings.
+        - UiEventPacket uses schema-based payloads and never grows into a giant UiSemanticEvent enum.
+        - Renderer handles are derived execution resources and never UI truth.
+        - Stage 6 runtime proof work remains blocked until Stages 1 through 5 close.
+      acceptance_checklist:
+        - Design sections exist and are internally consistent.
+        - No product/runtime code, crate, placeholder folder, 6A, MaterialProgram, or foundation/meta scope is touched.
+        - PM-002 open questions are answered or explicitly blocked.
+        - The implementation/design plan exists at the linked WR-136 plan path.
+        - Docs, production, roadmap, manifest, and planning validation pass.
+        - agent_design output stops before closeout; agent_closeout handles bounded-contract closeout separately.
+  - milestone_id: PM-UI-PROGRAM-003
+    title: Control Package Proof Design
+    stage: Stage 2
+    authority_level: design_only
+    milestone_type: design_only
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-002
+    write_scope:
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+      - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
+      - docs-site/src/content/docs/reports/implementation-plans/wr-137-control-package-proof-design/plan.md
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-003-control-package-proof-design/closeout.md
+      - 'generated: production docs from task production:render'
+      - 'generated: roadmap docs from task roadmap:render'
+      - docs-site/src/content/docs/design/active/ui-program-architecture.md
+      - docs-site/src/content/docs/design/active/ui-program-contract-design.md
+    forbidden_scope:
+      - no product code from this manifest alone
+      - no new crates
+      - no crate renames
+      - no placeholder future folders
+      - no UI runtime implementation before the owning implementation milestone
+      - no shared foundation/meta extraction
+      - no MaterialProgram implementation
+      - no RenderPlan substitution for MaterialProgram as the second-domain proof
+    required_contracts:
+      - Control Package Proof Design implementation plan
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed Control Package Proof Design closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-003-control-package-proof-design/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-002 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop if package registry, IDs, schemas, kernels, fixtures, diagnostics, or migration policy remain implicit
+    next_legal_action: Run task production:plan -- --milestone PM-UI-PROGRAM-003 --roadmap WR-137; stop before design authoring or implementation until that contract is accepted.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false
+    owning_wr: WR-137
+  - milestone_id: PM-UI-PROGRAM-004
+    title: Compiler / Runtime Artifact Design
+    stage: Stage 3
+    authority_level: design_only
+    milestone_type: design_only
+    future_wr_candidate: WR-TBD-UI-PROGRAM-004
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-003
+    write_scope:
+      - active design docs
+      - implementation-plan report
+      - roadmap and production metadata
+      - generated planning docs
+      - closeout report
+    forbidden_scope:
+      - no product code from this manifest alone
+      - no new crates
+      - no crate renames
+      - no placeholder future folders
+      - no UI runtime implementation before the owning implementation milestone
+      - no shared foundation/meta extraction
+      - no MaterialProgram implementation
+      - no RenderPlan substitution for MaterialProgram as the second-domain proof
+    required_contracts:
+      - Compiler / Runtime Artifact Design implementation plan
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed Compiler / Runtime Artifact Design closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-004-compiler-runtime-artifact-design/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-003 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop if manifest/table split, artifact IDs, source maps, cache invalidation, or hot-path artifact strategy remains undecided
+    next_legal_action: After PM-UI-PROGRAM-003, create or link the design WR for Compiler / Runtime Artifact Design.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false
+  - milestone_id: PM-UI-PROGRAM-005
+    title: Evaluator / Host Design
+    stage: Stage 4
+    authority_level: design_only
+    milestone_type: design_only
+    future_wr_candidate: WR-TBD-UI-PROGRAM-005
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-004
+    write_scope:
+      - active design docs
+      - implementation-plan report
+      - roadmap and production metadata
+      - generated planning docs
+      - closeout report
+    forbidden_scope:
+      - no product code from this manifest alone
+      - no new crates
+      - no crate renames
+      - no placeholder future folders
+      - no UI runtime implementation before the owning implementation milestone
+      - no shared foundation/meta extraction
+      - no MaterialProgram implementation
+      - no RenderPlan substitution for MaterialProgram as the second-domain proof
+    required_contracts:
+      - Evaluator / Host Design implementation plan
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed Evaluator / Host Design closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-005-evaluator-host-design/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-004 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop if host, event, route, command, capability, or headless boundaries remain implicit
+    next_legal_action: After PM-UI-PROGRAM-004, create or link the design WR for Evaluator / Host Design.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false
+  - milestone_id: PM-UI-PROGRAM-006
+    title: Retained UI Migration Design
+    stage: Stage 5
+    authority_level: design_only
+    milestone_type: design_only
+    future_wr_candidate: WR-TBD-UI-PROGRAM-006
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-005
+    write_scope:
+      - active design docs
+      - implementation-plan report
+      - roadmap and production metadata
+      - generated planning docs
+      - closeout report
+    forbidden_scope:
+      - no product code from this manifest alone
+      - no new crates
+      - no crate renames
+      - no placeholder future folders
+      - no UI runtime implementation before the owning implementation milestone
+      - no shared foundation/meta extraction
+      - no MaterialProgram implementation
+      - no RenderPlan substitution for MaterialProgram as the second-domain proof
+    required_contracts:
+      - Retained UI Migration Design implementation plan
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed Retained UI Migration Design closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-006-retained-ui-migration-design/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-005 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop if compatibility, dual-lowering, rollback, replacement, or drift guard policy remains undecided
+    next_legal_action: After PM-UI-PROGRAM-005, create or link the design WR for Retained UI Migration Design.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false
+  - milestone_id: PM-UI-PROGRAM-007
+    title: 6A Label Structural UiFrame Text Proof
+    stage: Stage 6A
+    authority_level: implementation_slice_only_after_active_wr_and_production_plan
+    milestone_type: implementation
+    future_wr_candidate: WR-TBD-UI-PROGRAM-007
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-006
+    write_scope:
+      - bounded Label proof surface
+      - text/render boundary contracts
+      - structural UiFrame artifact evidence
+      - focused fixtures, diagnostics, tests, docs, and closeout paths named by the 6A contract
+    forbidden_scope:
+      - unrelated UI runtime implementation
+      - broad retained UI replacement
+      - new crates
+      - shared foundation/meta extraction
+      - renderer-owned UI truth
+    required_contracts:
+      - 6A production implementation contract
+    validation_commands:
+      - focused 6A tests named by the owning production plan
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed 6A closeout with runtime/artifact proof
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-006 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop until task production:plan creates the bounded 6A contract
+      - stop if text/render ownership, structural UiFrame evidence, or retained compatibility cannot be proven
+    next_legal_action: After PM-UI-PROGRAM-006, create or link the 6A WR and production implementation contract.
+    may_create_code: true
+    may_create_crates: false
+    may_modify_production_behavior: true
+  - milestone_id: PM-UI-PROGRAM-008
+    title: 6B Button Route Event Host Command Proof
+    stage: Stage 6B
+    authority_level: implementation_slice_only_after_active_wr_and_production_plan
+    milestone_type: implementation
+    future_wr_candidate: WR-TBD-UI-PROGRAM-008
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-007
+    write_scope:
+      - bounded Button proof surface
+      - route/event/host-command contracts
+      - focused fixtures, diagnostics, tests, docs, and closeout paths named by the 6B contract
+    forbidden_scope:
+      - giant UiSemanticEvent enum
+      - hidden route-string behavior
+      - broad host rewrite
+      - new crates
+      - shared foundation/meta extraction
+    required_contracts:
+      - 6B production implementation contract
+    validation_commands:
+      - focused 6B tests named by the owning production plan
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed 6B closeout with event/route/host-command proof
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-007 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop until task production:plan creates the bounded 6B contract
+      - stop if route IDs, route schema versions, route capabilities, or host route maps remain implicit
+    next_legal_action: After PM-UI-PROGRAM-007, create or link the 6B WR and production implementation contract.
+    may_create_code: true
+    may_create_crates: false
+    may_modify_production_behavior: true
+  - milestone_id: PM-UI-PROGRAM-009
+    title: 6C InspectorField Binding State Proof
+    stage: Stage 6C
+    authority_level: implementation_slice_only_after_active_wr_and_production_plan
+    milestone_type: implementation
+    future_wr_candidate: WR-TBD-UI-PROGRAM-009
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-008
+    write_scope:
+      - bounded InspectorField proof surface
+      - binding/state contracts
+      - focused fixtures, diagnostics, tests, docs, and closeout paths named by the 6C contract
+    forbidden_scope:
+      - direct editor/provider mutation
+      - broad binding rewrite
+      - new crates
+      - shared foundation/meta extraction
+    required_contracts:
+      - 6C production implementation contract
+    validation_commands:
+      - focused 6C tests named by the owning production plan
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed 6C closeout with binding/state proof
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-008 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop until task production:plan creates the bounded 6C contract
+      - stop if read/write model, UiSchemaValue, dirty propagation, preview/committed state, or authorization policy remains implicit
+    next_legal_action: After PM-UI-PROGRAM-008, create or link the 6C WR and production implementation contract.
+    may_create_code: true
+    may_create_crates: false
+    may_modify_production_behavior: true
+  - milestone_id: PM-UI-PROGRAM-010
+    title: 6D ColorPicker ControlPackage Proof
+    stage: Stage 6D
+    authority_level: implementation_slice_only_after_active_wr_and_production_plan
+    milestone_type: implementation
+    future_wr_candidate: WR-TBD-UI-PROGRAM-010
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-009
+    write_scope:
+      - bounded wheel-plus-triangle ColorPicker proof surface
+      - ControlPackage schemas and kernels
+      - focused fixtures, diagnostics, tests, docs, and closeout paths named by the 6D contract
+    forbidden_scope:
+      - RGB cube projection
+      - broad package framework
+      - new crates
+      - shared foundation/meta extraction
+    required_contracts:
+      - 6D production implementation contract
+    validation_commands:
+      - focused 6D tests named by the owning production plan
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed 6D closeout with rich ControlPackage proof
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-009 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop until task production:plan creates the bounded 6D contract
+      - stop if package/control/schema/kernel/fixture/diagnostic IDs or migration story remain implicit
+    next_legal_action: After PM-UI-PROGRAM-009, create or link the 6D WR and production implementation contract.
+    may_create_code: true
+    may_create_crates: false
+    may_modify_production_behavior: true
+  - milestone_id: PM-UI-PROGRAM-011
+    title: 6E World Space Host Boundary Proof
+    stage: Stage 6E
+    authority_level: implementation_slice_only_after_active_wr_and_production_plan
+    milestone_type: implementation
+    future_wr_candidate: WR-TBD-UI-PROGRAM-011
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-010
+    write_scope:
+      - bounded world-space prompt proof surface
+      - host boundary fixture and diagnostics
+      - focused tests, docs, and closeout paths named by the 6E contract
+    forbidden_scope:
+      - ECS-owned UI semantics
+      - broad world UI framework
+      - new crates
+      - shared foundation/meta extraction
+    required_contracts:
+      - 6E production implementation contract
+    validation_commands:
+      - focused 6E tests named by the owning production plan
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed 6E closeout with world-space host boundary proof
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-010 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop until task production:plan creates the bounded 6E contract
+      - stop if anchor, projection, lifetime, visibility, or data-feed ownership remains ambiguous
+    next_legal_action: After PM-UI-PROGRAM-010, create or link the 6E WR and production implementation contract.
+    may_create_code: true
+    may_create_crates: false
+    may_modify_production_behavior: true
+  - milestone_id: PM-UI-PROGRAM-012
+    title: 6F Headless Fixture Diagnostics Source Map Proof
+    stage: Stage 6F
+    authority_level: hardening_slice_only_after_active_wr_and_production_plan
+    milestone_type: hardening
+    future_wr_candidate: WR-TBD-UI-PROGRAM-012
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-011
+    write_scope:
+      - bounded headless fixture pack
+      - diagnostics, source maps, artifact reproducibility, and migration evidence
+      - focused tests, docs, and closeout paths named by the 6F contract
+    forbidden_scope:
+      - implementing missing 6A-6E behavior
+      - broad fixture framework
+      - new crates
+      - shared foundation/meta extraction
+    required_contracts:
+      - 6F production hardening contract
+    validation_commands:
+      - focused 6F tests named by the owning production plan
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed 6F closeout with aggregate accepted 6A-6E proof
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-011 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop until task production:plan creates the bounded 6F contract
+      - stop if prior slice behavior is missing; return missing behavior to the owning milestone
+    next_legal_action: After PM-UI-PROGRAM-011, create or link the 6F WR and production hardening contract.
+    may_create_code: true
+    may_create_crates: false
+    may_modify_production_behavior: true
+  - milestone_id: PM-UI-PROGRAM-013
+    title: Runtime Proven Closeout And MaterialProgram Handoff
+    stage: Stage 7
+    authority_level: closeout_only
+    milestone_type: closeout
+    future_wr_candidate: WR-TBD-UI-PROGRAM-013
+    predecessor_dependencies:
+      - PM-UI-PROGRAM-012
+    write_scope:
+      - runtime-proven closeout reports
+      - roadmap and production metadata
+      - generated planning docs
+      - MaterialProgram proof-path link
+    forbidden_scope:
+      - new implementation
+      - MaterialProgram implementation
+      - shared foundation/meta extraction
+      - new crates
+    required_contracts:
+      - runtime-proven closeout and MaterialProgram handoff contract
+    validation_commands:
+      - task production:render
+      - task production:validate
+      - task production:check
+      - task roadmap:render
+      - task roadmap:validate
+      - task roadmap:check
+      - task docs:validate
+      - task planning:validate
+    evidence_gates:
+      - completed Stage 6A through 6F closeouts
+      - completed runtime-proven closeout
+    expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+    stop_conditions:
+      - stop until PM-UI-PROGRAM-012 is completed
+      - stop until Track Expansion creates or links the owning WR
+      - stop if any Stage 6 evidence is missing
+      - stop if MaterialProgram implementation would start
+      - stop if shared extraction is implied
+    next_legal_action: After PM-UI-PROGRAM-012, create or link the runtime-proven closeout and MaterialProgram handoff WR.
+    may_create_code: false
+    may_create_crates: false
+    may_modify_production_behavior: false

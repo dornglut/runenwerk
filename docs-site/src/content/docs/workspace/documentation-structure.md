@@ -12,6 +12,8 @@ related_adrs:
   - ../adr/accepted/0003-ratification-is-domain-specific.md
   - ../adr/accepted/0004-separate-description-from-execution.md
   - ../adr/accepted/0005-projections-are-derived-state.md
+related_docs:
+  - ./design-track-roadmap-governance.md
 ---
 
 # Documentation Structure
@@ -60,6 +62,11 @@ Root markdown files are entrypoints and summaries.
 The docs-site tree is the canonical location for detailed documentation.
 
 When a root document and a docs-site document overlap, update the docs-site document first, then align the root summary.
+
+For authority conflicts between designs, ADRs, production tracks, Track
+Execution Manifests, WR roadmap rows, implementation plans, closeouts,
+generated registers, and current architecture docs, use
+[`design-track-roadmap-governance.md`](design-track-roadmap-governance.md).
 
 ## Repository Root Documents
 

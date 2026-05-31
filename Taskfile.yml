@@ -58,6 +58,31 @@ tasks:
     cmds:
       - uv run python tools/workflow/production_plan.py plan {{.CLI_ARGS}}
 
+  production:plan-track:
+    desc: Create or audit a machine-readable Track Execution Manifest.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py plan-track {{.CLI_ARGS}}
+
+  production:expand-track:
+    desc: Print Track Expansion candidates without mutating WR rows.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py expand-track {{.CLI_ARGS}}
+
+  production:run-track:
+    desc: Run one permission-gated manifest-backed production-track action.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py run-track {{.CLI_ARGS}}
+
+  production:next:
+    desc: Print one manifest-backed next legal production-track action.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py next {{.CLI_ARGS}}
+
+  production:audit-track:
+    desc: Audit a Track Execution Manifest against production and roadmap state.
+    cmds:
+      - uv run python tools/workflow/track_execution_manifest.py audit-track {{.CLI_ARGS}}
+
   planning:validate:
     desc: Validate roadmap, production tracks, generated docs, and docs-site links.
     cmds:

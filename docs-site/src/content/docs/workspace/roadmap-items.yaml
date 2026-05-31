@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-29'
+  last_reviewed: '2026-05-31'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md

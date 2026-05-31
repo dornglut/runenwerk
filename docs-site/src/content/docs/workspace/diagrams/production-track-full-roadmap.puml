@@ -359,6 +359,35 @@ package "PT-UI-DESIGNER-EVIDENCE-CORRECTION UI Designer Workbench Runtime Eviden
 
 }
 
+package "PT-UI-PROGRAM UI Program Platform Proof" {
+  component "PM-UI-PROGRAM-001 ADR / Design Promotion\nkind=design\nstate=completed\nWR=WR-135" as PM_UI_PROGRAM_001 <<completed>>
+
+  component "PM-UI-PROGRAM-002 UI Program Contract Design\nkind=design\nstate=completed\nWR=WR-136" as PM_UI_PROGRAM_002 <<completed>>
+
+  component "PM-UI-PROGRAM-003 Control Package Proof Design\nkind=design\nstate=designing\nWR=WR-137" as PM_UI_PROGRAM_003 <<designing>>
+
+  component "PM-UI-PROGRAM-004 Compiler / Runtime Artifact Design\nkind=design\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_004 <<designing>>
+
+  component "PM-UI-PROGRAM-005 Evaluator / Host Design\nkind=design\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_005 <<designing>>
+
+  component "PM-UI-PROGRAM-006 Retained UI Migration Design\nkind=design\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_006 <<designing>>
+
+  component "PM-UI-PROGRAM-007 6A Label Structural UiFrame Text Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_007 <<designing>>
+
+  component "PM-UI-PROGRAM-008 6B Button Route Event Host Command Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_008 <<designing>>
+
+  component "PM-UI-PROGRAM-009 6C InspectorField Binding State Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_009 <<designing>>
+
+  component "PM-UI-PROGRAM-010 6D ColorPicker ControlPackage Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_010 <<designing>>
+
+  component "PM-UI-PROGRAM-011 6E World Space Host Boundary Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_011 <<designing>>
+
+  component "PM-UI-PROGRAM-012 6F Headless Fixture Diagnostics Source Map Proof\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_012 <<designing>>
+
+  component "PM-UI-PROGRAM-013 Runtime Proven Closeout And MaterialProgram Handoff\nkind=release\nstate=designing\nWR=N/A" as PM_UI_PROGRAM_013 <<designing>>
+
+}
+
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
   component "PM-GAME-RUNTIME-UI-001 Governance Owner Boundary And Code Truth Matrix\nkind=design\nstate=designing\nWR=WR-104" as PM_GAME_RUNTIME_UI_001 <<designing>>
 
@@ -571,6 +600,18 @@ PM_UI_DESIGNER_WB_V1_CLOSURE_003 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_004 : prod
 PM_UI_DESIGNER_WB_V1_CLOSURE_004 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_005 : production prerequisite
 PM_UI_DESIGNER_WB_V1_CLOSURE_005 -down-> PM_UI_DESIGNER_WB_V1_CLOSURE_006 : production prerequisite
 PM_UI_DESIGNER_WB_V1_CLOSURE_006 -down-> PM_UI_DESIGNER_EVIDENCE_CORRECTION_001 : production prerequisite
+PM_UI_PROGRAM_001 -down-> PM_UI_PROGRAM_002 : production prerequisite
+PM_UI_PROGRAM_002 -down-> PM_UI_PROGRAM_003 : production prerequisite
+PM_UI_PROGRAM_003 -down-> PM_UI_PROGRAM_004 : production prerequisite
+PM_UI_PROGRAM_004 -down-> PM_UI_PROGRAM_005 : production prerequisite
+PM_UI_PROGRAM_005 -down-> PM_UI_PROGRAM_006 : production prerequisite
+PM_UI_PROGRAM_006 -down-> PM_UI_PROGRAM_007 : production prerequisite
+PM_UI_PROGRAM_007 -down-> PM_UI_PROGRAM_008 : production prerequisite
+PM_UI_PROGRAM_008 -down-> PM_UI_PROGRAM_009 : production prerequisite
+PM_UI_PROGRAM_009 -down-> PM_UI_PROGRAM_010 : production prerequisite
+PM_UI_PROGRAM_010 -down-> PM_UI_PROGRAM_011 : production prerequisite
+PM_UI_PROGRAM_011 -down-> PM_UI_PROGRAM_012 : production prerequisite
+PM_UI_PROGRAM_012 -down-> PM_UI_PROGRAM_013 : production prerequisite
 PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

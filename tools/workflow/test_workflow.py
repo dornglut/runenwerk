@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import copy
 import tempfile
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -33,8 +35,11 @@ from parallel_batch import (
 )
 from production_state import (
     ProductionPlanningState,
+    app as production_state_app,
+    load_production_tracks,
     validate_completion_quality as validate_production_completion_quality,
     validate_design_gates,
+    validate_manifest_backed_tracks,
     validate_roadmap_links,
 )
 from production_plan import (
@@ -53,6 +58,13 @@ from production_goal import (
     render_stack_goal,
     render_track_goal,
 )
+from track_execution_manifest import (
+    apply_auto_safe_track_expansion,
+    audit_manifest,
+    load_track_execution_manifest,
+    resolve_manifest_command_context,
+)
+from track_execution_manifest import app as track_manifest_app
 from roadmap_state import (
     REPO_ROOT,
     BatchManifest,
@@ -276,6 +288,379 @@ def production_milestone(
         "evidence_gates": [],
         "acceptance_criteria": ["Acceptance criterion."],
     }
+
+
+def valid_track_manifest_state() -> dict:
+    return {
+        "version": 1,
+        "track_id": "PT-TEST",
+        "authority_level": "planning_and_sequencing_only",
+        "accepted_design_dependencies": [
+            {
+                "path": "docs-site/src/content/docs/workspace/track-execution-manifest.md",
+                "required_status": "active",
+                "reason": "Test manifest dependency.",
+            }
+        ],
+        "global_forbidden_scope": ["no product code from this manifest alone"],
+        "global_validation_commands": ["task planning:validate"],
+        "global_stop_conditions": ["stop after one legal action"],
+        "next_legal_action": "Execute PM-TEST-001.",
+        "milestones": [
+            manifest_milestone("PM-TEST-001", owning_wr="WR-001"),
+            manifest_milestone(
+                "PM-TEST-002",
+                milestone_type="docs_only",
+                owning_wr="WR-002",
+                predecessor_dependencies=["PM-TEST-001"],
+                write_scope=["docs-site"],
+                may_create_code=False,
+                next_legal_action="Wait for PM-TEST-001.",
+            ),
+        ],
+    }
+
+
+def valid_track_expansion_state() -> tuple[dict, dict, dict]:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["state"] = "completed"
+    production_data["tracks"][0]["milestones"][0]["completion_quality"] = "bounded_contract"
+    production_data["tracks"][0]["milestones"][1]["state"] = "designing"
+    production_data["tracks"][0]["milestones"][1]["roadmap_links"] = []
+
+    manifest_data = valid_track_manifest_state()
+    second_milestone = manifest_data["milestones"][1]
+    second_milestone.pop("owning_wr")
+    second_milestone["future_wr_candidate"] = "WR-TBD-TEST-002"
+    second_milestone["milestone_type"] = "design_only"
+    second_milestone["write_scope"] = [
+        "active design docs",
+        "implementation-plan report",
+        "roadmap and production metadata",
+        "generated planning docs",
+        "closeout report",
+    ]
+    second_milestone["may_create_code"] = False
+    second_milestone["may_create_crates"] = False
+    second_milestone["may_modify_production_behavior"] = False
+    second_milestone["next_legal_action"] = "Create or link the design WR for PM-TEST-002."
+    manifest_data["next_legal_action"] = "After PM-TEST-001, create or link the design WR for PM-TEST-002."
+
+    roadmap_data = valid_state()
+    return production_data, roadmap_data, manifest_data
+
+
+def valid_agent_design_state(
+    *,
+    production_path: Path,
+    plan_path: Path,
+    design_path: Path,
+    manifest_path: Path,
+    manifest_report: Path,
+    archive_path: Path,
+    deferred_path: Path,
+    closeout_path: Path,
+) -> tuple[dict, dict, dict, dict]:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["state"] = "completed"
+    production_data["tracks"][0]["milestones"][0]["completion_quality"] = "bounded_contract"
+    production_data["tracks"][0]["milestones"][1]["state"] = "designing"
+    production_data["tracks"][0]["milestones"].append(
+        production_milestone(
+            "PM-TEST-003",
+            kind="design",
+            state="designing",
+            dependencies=["PM-TEST-002"],
+            roadmap_links=[],
+        )
+    )
+
+    active_roadmap = copy.deepcopy(valid_state())
+    deferred_item = active_roadmap["items"].pop(1)
+    deferred_item["planning_state"] = "blocked_deferred"
+    deferred_item["blocker"] = 5
+    deferred_item["write_scopes"] = [
+        repo_path(production_path),
+        repo_path(plan_path),
+        repo_path(design_path),
+        repo_path(manifest_path),
+        repo_path(manifest_report),
+        repo_path(archive_path),
+        repo_path(deferred_path),
+        repo_path(closeout_path),
+    ]
+    deferred_item["validations"] = ["task docs:validate", "task planning:validate"]
+    deferred_roadmap = {
+        "version": active_roadmap["version"],
+        "roadmap": active_roadmap["roadmap"],
+        "items": [deferred_item],
+    }
+
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["milestone_type"] = "implementation"
+    manifest_data["milestones"][0]["may_create_code"] = True
+    manifest_data["milestones"][0]["may_modify_production_behavior"] = True
+    manifest_data["milestones"][1]["milestone_type"] = "design_only"
+    manifest_data["milestones"][1]["write_scope"] = [
+        repo_path(production_path),
+        repo_path(plan_path),
+        repo_path(design_path),
+        repo_path(manifest_path),
+        repo_path(manifest_report),
+        repo_path(archive_path),
+        repo_path(deferred_path),
+        repo_path(closeout_path),
+    ]
+    manifest_data["milestones"][1]["expected_closeout_path"] = repo_path(closeout_path)
+    manifest_data["milestones"][1]["may_create_code"] = False
+    manifest_data["milestones"][1]["may_create_crates"] = False
+    manifest_data["milestones"][1]["may_modify_production_behavior"] = False
+    manifest_data["milestones"][1]["next_legal_action"] = "Run agent_design for PM-TEST-002."
+    manifest_data["milestones"][1]["agent_design"] = {
+        "source_documents": ["docs-site/src/content/docs/workspace/track-execution-manifest.md"],
+        "required_sections": ["UiProgram graph ownership", "UiSchemaValue contract"],
+        "required_decisions": ["UiProgram remains UI-owned."],
+        "acceptance_checklist": ["Design plan and architecture section exist."],
+    }
+    manifest_data["milestones"].append(
+        manifest_milestone(
+            "PM-TEST-003",
+            milestone_type="design_only",
+            future_wr_candidate="WR-TBD-TEST-003",
+            predecessor_dependencies=["PM-TEST-002"],
+            write_scope=["active design docs", "implementation-plan report", "closeout report"],
+            may_create_code=False,
+            next_legal_action="After PM-TEST-002, create or link the design WR for PM-TEST-003.",
+        )
+    )
+    manifest_data["next_legal_action"] = "Run agent_design for PM-TEST-002."
+    return production_data, active_roadmap, deferred_roadmap, manifest_data
+
+
+def write_agent_design_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    mutate: Callable[[dict, dict, dict, dict], None] | None = None,
+) -> tuple[Path, Path, Path, Path, Path]:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    archive_path = tmp_path / "roadmap-archive.yaml"
+    deferred_path = tmp_path / "roadmap-deferred.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_path = manifest_root / "pt-test.yaml"
+    manifest_report = REPO_ROOT / "docs-site/src/content/docs/reports/track-execution-manifests/pt-test/manifest.md"
+    plan_path = tmp_path / "plans" / "wr-002-ui-program-contract-design" / "plan.md"
+    closeout_path = tmp_path / "closeouts" / "pm-test-002" / "closeout.md"
+    design_path = tmp_path / "ui-program-architecture.md"
+    design_path.write_text(
+        "---\ntitle: UI Program Architecture\nstatus: active\n---\n\n# UI Program Architecture\n\n## 13. Staged Implementation Plan\n\nExisting plan.\n",
+        encoding="utf-8",
+    )
+    production_data, active_roadmap, deferred_roadmap, manifest_data = valid_agent_design_state(
+        production_path=production_path,
+        plan_path=plan_path,
+        design_path=design_path,
+        manifest_path=manifest_path,
+        manifest_report=manifest_report,
+        archive_path=archive_path,
+        deferred_path=deferred_path,
+        closeout_path=closeout_path,
+    )
+    if mutate is not None:
+        mutate(production_data, active_roadmap, deferred_roadmap, manifest_data)
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, active_roadmap)
+    write_yaml(deferred_path, deferred_roadmap)
+    write_yaml(manifest_path, manifest_data)
+    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
+    monkeypatch.setattr("track_execution_manifest.implementation_plan_path", lambda wr_id, milestone: repo_path(plan_path))
+    monkeypatch.setattr("track_execution_manifest.UI_PROGRAM_ARCHITECTURE_PATH", design_path)
+    monkeypatch.setattr(
+        "track_execution_manifest.run_validation_commands",
+        lambda commands: tuple(f"{command}: exit 0" for command in commands),
+    )
+    return production_path, roadmap_path, manifest_root, plan_path, design_path
+
+
+def valid_product_code_state(
+    *,
+    plan_path: Path,
+    closeout_path: Path,
+    implementation_path: Path,
+    test_path: Path,
+) -> tuple[dict, dict, dict]:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][0]["state"] = "completed"
+    production_data["tracks"][0]["milestones"][0]["completion_quality"] = "bounded_contract"
+    production_data["tracks"][0]["milestones"][1]["kind"] = "implementation"
+    production_data["tracks"][0]["milestones"][1]["state"] = "active"
+    production_data["tracks"][0]["milestones"][1]["roadmap_links"] = ["WR-002"]
+
+    roadmap_data = valid_state()
+    roadmap_data["items"][1]["planning_state"] = "current_candidate"
+    roadmap_data["items"][1]["blocker"] = 2
+    roadmap_data["items"][1]["gate"] = "Implementation-ready"
+    roadmap_data["items"][1]["write_scopes"] = [
+        repo_path(implementation_path),
+        repo_path(test_path),
+        repo_path(closeout_path),
+    ]
+    roadmap_data["items"][1]["validations"] = ["task docs:validate"]
+
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["milestone_type"] = "implementation"
+    manifest_data["milestones"][0]["may_create_code"] = True
+    manifest_data["milestones"][0]["may_modify_production_behavior"] = True
+    manifest_data["milestones"][1]["milestone_type"] = "implementation"
+    manifest_data["milestones"][1]["write_scope"] = [
+        repo_path(implementation_path),
+        repo_path(test_path),
+        repo_path(closeout_path),
+    ]
+    manifest_data["milestones"][1]["validation_commands"] = ["task docs:validate"]
+    manifest_data["milestones"][1]["expected_closeout_path"] = repo_path(closeout_path)
+    manifest_data["milestones"][1]["may_create_code"] = True
+    manifest_data["milestones"][1]["may_create_crates"] = False
+    manifest_data["milestones"][1]["may_modify_production_behavior"] = True
+    manifest_data["milestones"][1]["next_legal_action"] = "Run product_code for PM-TEST-002."
+    manifest_data["next_legal_action"] = "Run product_code for PM-TEST-002."
+    return production_data, roadmap_data, manifest_data
+
+
+def product_code_plan_text(implementation_path: Path, test_path: Path, closeout_path: Path) -> str:
+    implementation_scope = repo_path(implementation_path)
+    test_scope = repo_path(test_path)
+    closeout_scope = repo_path(closeout_path)
+    return f"""---
+title: WR-002 Product Code Contract
+description: Synthetic active implementation contract.
+status: active
+owner: test
+layer: test
+canonical: false
+---
+
+# WR-002 Product Code Contract
+
+## Implementation Scope
+
+Expected implementation files:
+
+- `{implementation_scope}`
+- `{test_scope}`
+- `{closeout_scope}`
+
+Expected methods/functions:
+
+- `run_product_code_fixture`
+
+## Forbidden Scope
+
+- Files/modules forbidden: anything outside the exact files/modules above.
+- No crate creation.
+- No foundation/meta extraction.
+
+## Tests To Add Or Change
+
+- Update focused tests in `{test_scope}`.
+
+## Validation
+
+- `task docs:validate`
+
+## Closeout Requirements
+
+- Closeout evidence: `{closeout_scope}` with runtime/test evidence.
+
+## Compatibility / Rollback Plan
+
+- Compatibility is preserved by limiting changes to the exact fixture files.
+- Rollback is the direct revert of those exact files.
+
+## Stop Conditions
+
+- Stop after one implementation WR.
+"""
+
+
+def write_product_code_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    write_plan: bool = True,
+    mutate: Callable[[dict, dict, dict], None] | None = None,
+) -> tuple[Path, Path, Path, Path, Path, Path]:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    plan_path = tmp_path / "plans" / "wr-002-product-code" / "plan.md"
+    implementation_path = tmp_path / "product" / "src" / "lib.rs"
+    test_path = tmp_path / "product" / "tests" / "product_code.rs"
+    closeout_path = tmp_path / "closeouts" / "pm-test-002" / "closeout.md"
+    implementation_path.parent.mkdir(parents=True)
+    test_path.parent.mkdir(parents=True)
+    implementation_path.write_text("// implementation fixture\n", encoding="utf-8")
+    test_path.write_text("// test fixture\n", encoding="utf-8")
+    if write_plan:
+        plan_path.parent.mkdir(parents=True)
+        plan_path.write_text(product_code_plan_text(implementation_path, test_path, closeout_path), encoding="utf-8")
+    production_data, roadmap_data, manifest_data = valid_product_code_state(
+        plan_path=plan_path,
+        closeout_path=closeout_path,
+        implementation_path=implementation_path,
+        test_path=test_path,
+    )
+    if mutate is not None:
+        mutate(production_data, roadmap_data, manifest_data)
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
+    monkeypatch.setattr(
+        "track_execution_manifest.run_validation_commands",
+        lambda commands: tuple(f"{command}: exit 0" for command in commands),
+    )
+    return production_path, roadmap_path, manifest_root, plan_path, implementation_path, closeout_path
+
+
+def manifest_milestone(
+    milestone_id: str,
+    *,
+    milestone_type: str = "implementation",
+    owning_wr: str | None = None,
+    future_wr_candidate: str | None = None,
+    predecessor_dependencies: list[str] | None = None,
+    write_scope: list[str] | None = None,
+    may_create_code: bool = True,
+    next_legal_action: str = "Execute the bounded milestone action.",
+) -> dict:
+    entry = {
+        "milestone_id": milestone_id,
+        "title": f"{milestone_id} title",
+        "stage": "Stage test",
+        "authority_level": "test_authority",
+        "milestone_type": milestone_type,
+        "predecessor_dependencies": predecessor_dependencies or [],
+        "write_scope": write_scope or ["tools/workflow"],
+        "forbidden_scope": ["adjacent work"],
+        "required_contracts": ["test contract"],
+        "validation_commands": ["cargo test -p test"],
+        "evidence_gates": ["test closeout"],
+        "expected_closeout_path": f"docs-site/src/content/docs/reports/closeouts/{milestone_id.lower()}/closeout.md",
+        "stop_conditions": ["stop after one action"],
+        "next_legal_action": next_legal_action,
+        "may_create_code": may_create_code,
+        "may_create_crates": False,
+        "may_modify_production_behavior": may_create_code,
+    }
+    if owning_wr:
+        entry["owning_wr"] = owning_wr
+    if future_wr_candidate:
+        entry["future_wr_candidate"] = future_wr_candidate
+    return entry
 
 
 def production_design_gate(path: str, required_status: str = "accepted") -> dict:
@@ -735,6 +1120,1883 @@ def test_production_goal_renders_active_track_with_wr_links() -> None:
     assert "Ready-to-paste /goal Prompt" in rendered
 
 
+def test_production_goal_renders_manifest_gate_when_source_is_present(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+    loaded_manifest = load_track_execution_manifest("PT-TEST", root=manifest_root)
+    assert loaded_manifest is not None
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track, manifest=loaded_manifest)
+
+    assert "## Track Execution Manifest Gate" in rendered
+    assert f"Manifest source: `{repo_path(manifest_root / 'pt-test.yaml')}`" in rendered
+    assert "- Current milestone: `PM-TEST-001` - PM-TEST-001 title" in rendered
+    assert "- Manifest next legal action: Execute the bounded milestone action." in rendered
+    assert "Implementation authorized now: no" in rendered
+    assert "Stop after the current legal action and rerun this command" in rendered
+
+
+def test_production_goal_manifest_conflict_fails_closed(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["owning_wr"] = "WR-999"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Track Execution Manifest audit blockers" in result.stdout
+    assert "alignment errors:" in result.stdout
+    assert "manifest owning_wr WR-999" in result.stdout
+    assert "roadmap_links ['WR-001']" in result.stdout
+    assert "Ready-to-paste /goal Prompt" not in result.stdout
+
+
+def test_production_goal_rejects_audit_blocked_manifest(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["required_contracts"] = ["blocked: define contract"]
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Track Execution Manifest audit blockers" in result.stdout
+    assert "invalid blocked fields:" in result.stdout
+    assert "required_contracts remains blocked" in result.stdout
+    assert "Ready-to-paste /goal Prompt" not in result.stdout
+
+
+def test_production_goal_warns_when_long_track_has_no_manifest() -> None:
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"] = [
+        production_milestone(f"PM-TEST-{index:03}", dependencies=[] if index == 1 else [f"PM-TEST-{index - 1:03}"])
+        for index in range(1, 7)
+    ]
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(valid_state())
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track)
+
+    assert "Manifest source: not found" in rendered
+    assert "long production track" in rendered
+
+
+def test_production_goal_cli_keeps_non_manifest_fallback(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"] = [
+        production_milestone(f"PM-TEST-{index:03}", dependencies=[] if index == 1 else [f"PM-TEST-{index - 1:03}"])
+        for index in range(1, 7)
+    ]
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest source: not found" in result.stdout
+    assert "long production track" in result.stdout
+    assert "Ready-to-paste /goal Prompt" in result.stdout
+
+
+def test_track_manifest_plan_track_creates_scaffold(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "plan-track",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (manifest_root / "pt-test.yaml").exists()
+    assert "No implementation authority is created" in result.stdout
+
+
+def test_track_manifest_next_prints_single_action(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Current milestone: PM-TEST-001 - PM-TEST-001 title" in result.stdout
+    assert "Next legal action: Execute the bounded milestone action." in result.stdout
+    assert "Implementation authorized now: no - task production:next is read-only" in result.stdout
+
+
+def test_track_manifest_next_fails_when_manifest_missing(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "production:next failed" in result.stdout
+    assert "no Track Execution Manifest source" in result.stdout
+    assert "Current milestone:" not in result.stdout
+    assert "Next legal action:" not in result.stdout
+
+
+def test_track_manifest_next_rejects_malformed_manifest_yaml(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    (manifest_root / "pt-test.yaml").write_text("version: [\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "production:next failed" in result.stdout
+    assert "while parsing" in result.stdout
+    assert "Current milestone:" not in result.stdout
+    assert "Next legal action:" not in result.stdout
+
+
+def test_track_manifest_next_rejects_invalid_manifest_model(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", {"version": 1, "track_id": "PT-TEST"})
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "production:next failed" in result.stdout
+    assert "validation errors for" in result.stdout
+    assert "Field required" in result.stdout
+    assert "Current milestone:" not in result.stdout
+    assert "Next legal action:" not in result.stdout
+
+
+def test_track_manifest_next_rejects_audit_blocked_manifest(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["required_contracts"] = ["blocked: define contract"]
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Track Execution Manifest audit blockers" in result.stdout
+    assert "invalid blocked fields:" in result.stdout
+    assert "required_contracts remains blocked" in result.stdout
+    assert "Current milestone:" not in result.stdout
+    assert "Next legal action:" not in result.stdout
+
+
+def test_track_manifest_next_rejects_invalid_closeout_path(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["expected_closeout_path"] = "docs-site/src/content/docs/reports/closeouts/pm-test-001/closeout.txt"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Track Execution Manifest audit blockers" in result.stdout
+    assert "invalid closeout path:" in result.stdout
+    assert "expected_closeout_path must point at a Markdown closeout/report" in result.stdout
+    assert "Current milestone:" not in result.stdout
+    assert "Next legal action:" not in result.stdout
+
+
+def test_track_manifest_audit_passes_valid_manifest(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "audit-track",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "manifest audit passed" in result.stdout
+
+
+def test_track_manifest_audit_fails_when_manifest_missing(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "audit-track",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "production:audit-track failed" in result.stdout
+    assert "no Track Execution Manifest source" in result.stdout
+    assert "manifest audit passed" not in result.stdout
+
+
+def test_track_manifest_expand_track_is_read_only(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][1].pop("owning_wr")
+    manifest_data["milestones"][1]["future_wr_candidate"] = "WR-TBD-TEST-002"
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][1]["roadmap_links"] = []
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "expand-track",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "WR-TBD-TEST-002" in result.stdout
+    assert "read-only" in result.stdout
+    assert not (tmp_path / "roadmap-deferred.yaml").exists()
+
+
+def test_manifest_runner_auto_safe_creates_and_links_deferred_wr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    monkeypatch.setattr(
+        "track_execution_manifest.run_validation_commands",
+        lambda commands: tuple(f"{command}: exit 0" for command in commands),
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--max-actions",
+            "10",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
+    assert "Created/linked WR: WR-003" in result.stdout
+    updated_production = load_yaml(production_path)
+    updated_manifest = load_yaml(manifest_root / "pt-test.yaml")
+    updated_deferred = load_yaml(tmp_path / "roadmap-deferred.yaml")
+    second_production_milestone = updated_production["tracks"][0]["milestones"][1]
+    second_manifest_milestone = updated_manifest["milestones"][1]
+    deferred_wr = updated_deferred["items"][0]
+    assert second_production_milestone["roadmap_links"] == ["WR-003"]
+    assert second_manifest_milestone["owning_wr"] == "WR-003"
+    assert "future_wr_candidate" not in second_manifest_milestone
+    assert deferred_wr["id"] == "WR-003"
+    assert deferred_wr["planning_state"] == "blocked_deferred"
+    assert deferred_wr["completion_quality"] == "not_applicable"
+    assert "docs-site/src/content/docs/design/active/ui-program-contract-design.md" in deferred_wr["write_scopes"]
+    assert "docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md" in deferred_wr["write_scopes"]
+    assert "No implementation" not in result.stdout
+
+
+def test_manifest_runner_auto_safe_refuses_unsupported_permissions(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "crate_creation",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "does not implement allowed permissions: crate_creation" in result.stdout
+    assert not (tmp_path / "roadmap-deferred.yaml").exists()
+
+
+def test_manifest_runner_auto_safe_refuses_code_permissions(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    manifest_data["milestones"][1]["may_create_code"] = True
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "cannot expand milestones that allow code" in result.stdout
+    assert not (tmp_path / "roadmap-deferred.yaml").exists()
+
+
+def test_manifest_runner_auto_safe_refuses_completed_current_milestone(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    production_data["tracks"][0]["milestones"][1]["state"] = "completed"
+    production_data["tracks"][0]["milestones"][1]["completion_quality"] = "bounded_contract"
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "completed milestones must not be mutated" in result.stdout
+    assert not (tmp_path / "roadmap-deferred.yaml").exists()
+
+
+def test_manifest_runner_auto_safe_refuses_existing_wr_link(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    production_data["tracks"][0]["milestones"][1]["roadmap_links"] = ["WR-002"]
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "conflicts with" in result.stdout
+    assert "production roadmap_links ['WR-002']" in result.stdout
+    assert not (tmp_path / "roadmap-deferred.yaml").exists()
+
+
+def test_manifest_runner_auto_safe_refuses_wr_collision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    context = resolve_manifest_command_context(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_source_root=manifest_root,
+    )
+    monkeypatch.setattr("track_execution_manifest.allocate_next_wr_id", lambda roadmap: "WR-001")
+
+    with pytest.raises(WorkflowError, match="WR-001: already present"):
+        apply_auto_safe_track_expansion(
+            context,
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            allow={"auto_safe"},
+            run_validations=False,
+        )
+
+    assert not (tmp_path / "roadmap-deferred.yaml").exists()
+
+
+def test_manifest_runner_next_after_expansion_points_to_design_plan_not_implementation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    monkeypatch.setattr(
+        "track_execution_manifest.run_validation_commands",
+        lambda commands: tuple(f"{command}: exit 0" for command in commands),
+    )
+
+    run_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+    assert run_result.exit_code == 0, run_result.output
+
+    next_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert next_result.exit_code == 0, next_result.output
+    assert "Current milestone: PM-TEST-002 - PM-TEST-002 title" in next_result.stdout
+    assert "task production:plan" in next_result.stdout
+    assert "PM-TEST-002" in next_result.stdout
+    assert "WR-003" in next_result.stdout
+    assert "Workflow action: design_first" in next_result.stdout
+    assert "PM-TEST-007" not in next_result.stdout
+
+
+def test_manifest_runner_agent_design_requires_permission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "no permitted runner action for workflow action design_first" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_agent_design_requires_product_code_denial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "agent_design requires --deny product_code" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_agent_design_rejects_product_code_permission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "product_code cannot run for docs, design, or governance" in result.stdout
+    assert "milestones" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_agent_design_allows_closeout_permission_without_closing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
+    assert plan_path.exists()
+
+
+def test_manifest_runner_agent_design_rejects_missing_source_documents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _active: dict, _deferred: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["agent_design"]["source_documents"] = ["docs-site/src/content/docs/missing-agent-design-source.md"]
+
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "agent_design source documents are missing" in result.stdout
+    assert "missing-agent-design-source.md" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_agent_design_rejects_uncovered_write_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _active: dict, _deferred: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["write_scope"] = [
+            scope for scope in manifest["milestones"][1]["write_scope"] if "ui-program-architecture.md" not in scope
+        ]
+
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "agent_design write paths are not covered by manifest write_scope" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_agent_design_writes_plan_and_stage_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, design_path = write_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
+    assert "Plan path:" in result.stdout
+    assert "stop for closeout" in result.stdout
+    assert "--allow agent_closeout" in result.stdout
+    assert plan_path.exists()
+    plan_text = plan_path.read_text(encoding="utf-8")
+    assert "## Required Stage 1 Sections" in plan_text
+    assert "## Forbidden Scope" in plan_text
+    assert "does not authorize product/runtime code" in plan_text
+    design_text = design_path.read_text(encoding="utf-8")
+    assert "## PM-UI-PROGRAM-002 Stage 1 Contract" in design_text
+    assert "### UiSchemaValue Contract" in design_text
+    updated_manifest = load_yaml(manifest_root / "pt-test.yaml")
+    assert "agent_design completed design/planning writes" in updated_manifest["next_legal_action"]
+    updated_deferred = load_yaml(tmp_path / "roadmap-deferred.yaml")
+    assert "agent_design wrote the Stage 1 UI Program Contract Design plan" in updated_deferred["items"][0]["current_decision"]
+
+    repeat_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+    assert repeat_result.exit_code == 1
+    assert "closeout is the next legal action" in repeat_result.stdout
+    assert "agent_closeout" in repeat_result.stdout
+
+
+def run_agent_design_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, Path, Path]:
+    production_path, roadmap_path, manifest_root, plan_path, design_path = write_agent_design_fixture(tmp_path, monkeypatch)
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    return production_path, roadmap_path, manifest_root, plan_path, design_path
+
+
+def test_manifest_runner_agent_closeout_requires_permission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "closeout is the next legal action" in result.stdout
+    assert "agent_closeout" in result.stdout
+
+
+def test_manifest_runner_agent_closeout_closes_design_milestone_as_bounded_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V3 applied one agent_closeout action." in result.stdout
+    updated_production = load_yaml(production_path)
+    milestone = updated_production["tracks"][0]["milestones"][1]
+    assert milestone["state"] == "completed"
+    assert milestone["completion_quality"] == "bounded_contract"
+    assert milestone["completion_audit"].endswith("closeout.md")
+    assert milestone["evidence_gates"][0]["required_status"] == "completed"
+    updated_deferred = load_yaml(tmp_path / "roadmap-deferred.yaml")
+    assert updated_deferred["items"] == []
+    updated_archive = load_yaml(tmp_path / "roadmap-archive.yaml")
+    archived_wr = updated_archive["items"][0]
+    assert archived_wr["id"] == "WR-002"
+    assert archived_wr["planning_state"] == "completed"
+    assert archived_wr["completion_quality"] == "bounded_contract"
+    updated_manifest = load_yaml(manifest_root / "pt-test.yaml")
+    assert "create or link the design wr" in updated_manifest["next_legal_action"].lower()
+    assert "agent_closeout as bounded_contract" in updated_manifest["milestones"][1]["next_legal_action"]
+
+
+def test_manifest_runner_agent_closeout_rejects_runtime_proven_design_milestone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(production: dict, _active: dict, _deferred: dict, _manifest: dict) -> None:
+        production["tracks"][0]["milestones"][1]["completion_quality"] = "runtime_proven"
+
+    production_path, roadmap_path, manifest_root, _plan_path, _design_path = write_agent_design_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+    design_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+    assert design_result.exit_code == 0, design_result.output
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "docs or design milestones cannot close as runtime_proven" in result.stdout
+
+
+def test_manifest_runner_agent_closeout_blocks_missing_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _design_path = write_agent_design_fixture(tmp_path, monkeypatch)
+    manifest_data = load_yaml(manifest_root / "pt-test.yaml")
+    manifest_data["next_legal_action"] = "PM-TEST-002 agent_design completed design/planning writes; stop for closeout."
+    manifest_data["milestones"][1]["next_legal_action"] = manifest_data["next_legal_action"]
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "required production plan evidence is missing" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_agent_closeout_blocks_failed_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "track_execution_manifest.run_validation_commands",
+        lambda commands: (_ for _ in ()).throw(WorkflowError("validation command failed: task docs:validate")),
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "validation command failed: task docs:validate" in result.stdout
+
+
+def test_manifest_runner_agent_closeout_rejects_product_code_milestone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _active: dict, _deferred: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["may_create_code"] = True
+
+    production_path, roadmap_path, manifest_root, _plan_path, _design_path = write_agent_design_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+    manifest_data = load_yaml(manifest_root / "pt-test.yaml")
+    manifest_data["next_legal_action"] = "PM-TEST-002 agent_design completed design/planning writes; stop for closeout."
+    manifest_data["milestones"][1]["next_legal_action"] = manifest_data["next_legal_action"]
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "supports docs, design, or governance milestones" in result.stdout
+    assert "only" in result.stdout
+
+
+def test_manifest_runner_agent_closeout_stops_before_next_design_authoring(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
+    closeout_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_closeout",
+            "--deny",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+    assert closeout_result.exit_code == 0, closeout_result.output
+
+    next_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert next_result.exit_code == 0, next_result.output
+    assert "Current milestone: PM-TEST-003 - PM-TEST-003 title" in next_result.stdout
+    assert "Workflow action: track_expansion_required" in next_result.stdout
+    assert "PM-TEST-007" not in next_result.stdout
+
+
+def test_manifest_runner_auto_safe_and_agent_design_stop_before_next_milestone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    deferred_path = tmp_path / "roadmap-deferred.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_path = manifest_root / "pt-test.yaml"
+    plan_path = tmp_path / "plans" / "wr-003-ui-program-contract-design" / "plan.md"
+    design_path = tmp_path / "ui-program-architecture.md"
+    design_path.write_text(
+        "---\ntitle: UI Program Architecture\nstatus: active\n---\n\n# UI Program Architecture\n\n## 13. Staged Implementation Plan\n\nExisting plan.\n",
+        encoding="utf-8",
+    )
+    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
+    manifest_data["milestones"][1]["agent_design"] = {
+        "source_documents": ["docs-site/src/content/docs/workspace/track-execution-manifest.md"],
+        "required_sections": ["UiProgram graph ownership"],
+        "required_decisions": ["UiProgram remains UI-owned."],
+        "acceptance_checklist": ["Design plan and architecture section exist."],
+    }
+    write_yaml(production_path, production_data)
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_path, manifest_data)
+    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
+    monkeypatch.setattr("track_execution_manifest.implementation_plan_path", lambda wr_id, milestone: repo_path(plan_path))
+    monkeypatch.setattr("track_execution_manifest.UI_PROGRAM_ARCHITECTURE_PATH", design_path)
+    monkeypatch.setattr(
+        "track_execution_manifest.run_validation_commands",
+        lambda commands: tuple(f"{command}: exit 0" for command in commands),
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--max-actions",
+            "10",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
+    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
+    assert plan_path.exists()
+    assert not deferred_path.exists() or load_yaml(deferred_path)["items"][0]["id"] == "WR-003"
+    next_result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+    assert next_result.exit_code == 0, next_result.output
+    assert "Current milestone: PM-TEST-002 - PM-TEST-002 title" in next_result.stdout
+    assert "stop for closeout" in next_result.stdout
+    assert "PM-TEST-007" not in next_result.stdout
+
+
+def test_manifest_runner_product_code_denied_for_design_only_milestone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "product_code cannot run for docs, design, or governance" in result.stdout
+    assert "milestones" in result.stdout
+    assert not plan_path.exists()
+
+
+def test_manifest_runner_product_code_denied_without_active_wr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, roadmap: dict, _manifest: dict) -> None:
+        roadmap["items"][1]["planning_state"] = "blocked_deferred"
+        roadmap["items"][1]["blocker"] = 5
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "workflow action is design_first" in result.stdout
+
+
+def test_manifest_runner_product_code_denied_without_production_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        write_plan=False,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "accepted production plan is missing" in result.stdout
+    assert plan_path.name in result.stdout
+
+
+def test_manifest_runner_product_code_denied_without_exact_write_scopes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
+        roadmap["items"][1]["write_scopes"] = ["domain"]
+        manifest["milestones"][1]["write_scope"] = ["domain"]
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "product_code write_scope is ambiguous or non-path: domain" in result.stdout
+
+
+def test_manifest_runner_product_code_denied_without_validation_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["validation_commands"] = ["blocked: define validation commands"]
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "validation_commands remains blocked" in result.stdout
+
+
+def test_manifest_runner_product_code_denied_if_crate_creation_needed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["may_create_crates"] = True
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "crate_creation is required" in result.stdout
+
+
+def test_manifest_runner_product_code_denied_if_foundation_extraction_requested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
+        roadmap["items"][1]["write_scopes"].append("foundation/meta/src/lib.rs")
+        manifest["milestones"][1]["write_scope"].append("foundation/meta/src/lib.rs")
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "shared foundation/meta extraction" in result.stdout
+
+
+def test_manifest_runner_product_code_allowed_for_synthetic_implementation_milestone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--max-actions",
+            "10",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
+    assert "Validation commands:" in result.stdout
+    updated_production = load_yaml(production_path)
+    assert updated_production["tracks"][0]["milestones"][1]["state"] == "active"
+
+
+def test_manifest_runner_product_code_stops_after_one_implementation_wr_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--max-actions",
+            "10",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.count("Manifest Runner V4 verified one product_code implementation gate.") == 1
+    assert "Must stop after this action: yes" in result.stdout
+
+
+def test_manifest_runner_product_code_rejects_runtime_proven_claim_without_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, roadmap: dict, _manifest: dict) -> None:
+        roadmap["items"][1]["completion_quality"] = "runtime_proven"
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "cannot claim runtime_proven before closeout" in result.stdout
+    assert "runtime/test evidence exists" in result.stdout
+
+
+def test_manifest_runner_product_code_pt_ui_program_blocks_before_6a() -> None:
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-UI-PROGRAM",
+            "--allow",
+            "product_code",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "PM-UI-PROGRAM-003" in result.stdout
+    assert "product_code cannot run for docs, design, or governance" in result.stdout
+    assert "milestones" in result.stdout
+    assert "PM-UI-PROGRAM-007" not in result.stdout
+
+
+def test_manifest_backed_production_validation_passes_valid_manifest(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    assert validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root) == []
+
+
+def test_manifest_backed_validation_accepts_generated_scope_marker(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["write_scope"] = [
+        "tools/workflow",
+        "generated: production docs from task production:render",
+    ]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    assert validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root) == []
+
+
+def test_manifest_backed_validation_rejects_uncovered_wr_write_scope(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["write_scope"] = ["docs-site/src/content/docs/workspace/track-execution-manifest.md"]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("manifest write_scope docs-site/src/content/docs/workspace/track-execution-manifest.md" in error for error in errors)
+    assert any("owning WR WR-001 write_scopes" in error for error in errors)
+
+
+def test_manifest_backed_validation_requires_generated_scope_marker(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][0]["write_scope"] = ["generated production docs from task production:render"]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("must use 'generated:' or 'derived:'" in error for error in errors)
+
+
+def test_pt_ui_program_manifest_write_scope_is_wr_covered() -> None:
+    planning = load_production_tracks()
+    roadmap = load_roadmap()
+    track = find_track(planning, "PT-UI-PROGRAM")
+    loaded_manifest = load_track_execution_manifest("PT-UI-PROGRAM")
+    assert loaded_manifest is not None
+
+    errors = audit_manifest(loaded_manifest, track=track, roadmap=roadmap)
+
+    assert [error for error in errors if "manifest write_scope" in error] == []
+
+
+def test_manifest_backed_production_validation_rejects_docs_only_code_permission(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][1]["may_create_code"] = True
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert "PM-TEST-002: docs-only manifest milestones cannot authorize code" in errors[0]
+
+
+def test_production_validate_cli_checks_manifest_backed_tracks(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][1]["may_create_code"] = True
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    result = CliRunner().invoke(
+        production_state_app,
+        [
+            "validate",
+            "--source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "docs-only manifest milestones cannot authorize code" in result.stdout
+
+
+def test_manifest_backed_production_validation_rejects_runtime_proven_docs_only(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][1]["completion_quality"] = "runtime_proven"
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert "PM-TEST-002: runtime_proven milestones cannot be docs-only" in errors[0]
+
+
+def test_manifest_backed_completed_milestone_requires_closeout_and_completed_wr(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    milestone = production_data["tracks"][0]["milestones"][0]
+    milestone["state"] = "completed"
+    milestone["completion_quality"] = "bounded_contract"
+    milestone["evidence_gates"] = [
+        {
+            "path": "docs-site/src/content/docs/reports/closeouts/wrong/closeout.md",
+            "required_status": "completed",
+            "reason": "Wrong closeout.",
+        }
+    ]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("completed manifest-backed milestone must reference expected closeout" in error for error in errors)
+    assert any("WR-001" in error and "expected 'completed'" in error for error in errors)
+
+
 def test_production_goal_full_scope_keeps_complete_track_prompt() -> None:
     planning = ProductionPlanningState.model_validate(valid_production_state())
     roadmap = RoadmapState.model_validate(valid_state())
@@ -1134,13 +3396,14 @@ def test_batch_kickoff_defaults_to_current_candidates() -> None:
     ]
 
 
-def test_current_repository_next_batch_selects_wr089() -> None:
+def test_current_repository_next_batch_has_no_current_candidate_after_wr089_closeout() -> None:
     roadmap = load_roadmap()
     selected = select_batch_candidates(roadmap)
     dependency_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml").read_text(encoding="utf-8")
     candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
 
-    assert [item.id for item in selected] == ["WR-089"]
+    assert [item.id for item in selected] == []
+    assert roadmap.by_id["WR-089"].planning_state == "completed"
     assert roadmap.by_id["WR-029"].planning_state == "ready_next"
     assert "state=completed" not in dependency_puml
     assert "state=completed" not in candidates_puml

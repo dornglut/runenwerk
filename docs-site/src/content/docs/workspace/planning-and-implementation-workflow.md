@@ -9,6 +9,7 @@ last_reviewed: 2026-05-17
 related_docs:
   - ./agents.md
   - ./architecture-governance-review.md
+  - ./design-track-roadmap-governance.md
   - ./parallel-roadmap-batch-automation.md
   - ./documentation-structure.md
   - ./routines/README.md
@@ -24,7 +25,7 @@ related_docs:
 
 Use this guide to choose the right shape for AI-assisted repository work before code or documentation changes start.
 
-This guide routes existing rules. It does not override `AGENTS.md`, `AI_GUIDE.md`, architecture doctrine, dependency rules, domain ownership, routines, or prompt templates.
+This guide routes existing rules. It does not override `AGENTS.md`, `AI_GUIDE.md`, architecture doctrine, dependency rules, domain ownership, routines, prompt templates, or the [`design-track-roadmap-governance.md`](design-track-roadmap-governance.md) authority model.
 
 ## Automation
 
@@ -34,6 +35,14 @@ Use the workflow kickoff helper when starting a new AI-assisted task:
 task --list
 task batch:kickoff -- --next
 task roadmap:intake -- --idea "<design or change idea>"
+task production:plan-track -- --track "<PT-ID>"
+task production:expand-track -- --track "<PT-ID>"   # read-only candidate listing
+task production:run-track -- --track "<PT-ID>" --allow auto_safe --max-actions 1
+task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --deny product_code --max-actions 2
+task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --allow agent_closeout --deny product_code --max-actions 10
+task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --max-actions 10
+task production:next -- --track "<PT-ID>"
+task production:audit-track -- --track "<PT-ID>"
 task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
 task ai:goal -- --track "<PT-ID>"
 task ai:goal -- --track "<PT-ID>" --scope non-deferred
@@ -71,16 +80,71 @@ Validation commands execute checks:
   and PUML.
 - `task production:validate` checks `production-tracks.yaml` structure,
   milestone dependencies, design gates, evidence gates, WR links, and
-  production completion-quality claims.
+  production completion-quality claims. For tracks with a machine-readable
+  Track Execution Manifest, it also audits manifest milestone authority, WR
+  ownership or future WR candidates, write/forbidden scope, required contracts,
+  validation commands, evidence gates, expected closeout paths, stop
+  conditions, permissions, and production/roadmap alignment.
 - `task production:check` rejects stale generated production Markdown,
   PUML, and JSON Schema.
+- `task production:plan-track -- --track <PT-ID>` creates a conservative
+  machine-readable Track Execution Manifest scaffold when one is missing, or
+  audits an existing manifest without overwriting it by default. It does not
+  authorize implementation.
+- `task production:expand-track -- --track <PT-ID>` prints deferred WR
+  candidates from a manifest. It is read-only and must not authorize
+  implementation.
+- `task production:run-track -- --track <PT-ID> --allow auto_safe --max-actions
+  1` runs the Manifest Runner V1 Track Expansion layer. It audits the manifest,
+  applies at most one mechanical Track Expansion action, creates/links deferred
+  WR metadata, regenerates production/roadmap docs, runs validation, and stops
+  before design authoring, closeout, code, crates, runtime behavior changes, or
+  extraction.
+- `task production:run-track -- --track <PT-ID> --allow auto_safe --allow
+  agent_design --deny product_code --max-actions 2` may additionally run the
+  Manifest Runner V2 design/planning layer for the current docs-only or design-only
+  milestone. It may create/update the implementation/design plan and bounded
+  design sections inside the manifest and WR write scope. It cannot close the
+  milestone, authorize implementation, create crates, modify product behavior,
+  or extract shared `foundation/meta`.
+- `task production:run-track -- --track <PT-ID> --allow auto_safe --allow
+  agent_design --allow agent_closeout --deny product_code --max-actions 10` may
+  additionally run the Manifest Runner V3 closeout layer for docs, design, or
+  governance milestones. It can close only as `bounded_contract` after evidence
+  and validation pass. It cannot close runtime proof milestones, mark
+  `runtime_proven`, authorize implementation, create crates, modify product
+  behavior, start the next milestone's design work, or extract shared
+  `foundation/meta`.
+- `task production:run-track -- --track <PT-ID> --allow auto_safe --allow
+  agent_design --allow agent_closeout --allow product_code --max-actions 10`
+  may run the Manifest Runner V4 product-code gate for the current
+  implementation or hardening milestone only. It requires an active
+  `current_candidate` WR, accepted production plan, exact write scopes,
+  forbidden scopes, validation commands, closeout path, rollback/compatibility
+  plan, and stop conditions. It must stop after one implementation WR and cannot
+  create crates, extract shared `foundation/meta`, start MaterialProgram, run
+  for docs, design, or governance milestones, or claim `runtime_proven` without
+  runtime/test closeout evidence.
+- `task production:next -- --track <PT-ID>` audits the machine-readable
+  manifest when present, then prints exactly one next legal production-track
+  action. It fails closed on alignment errors, missing gates, invalid blocked
+  fields, invalid closeout paths, WR scope mismatches, or missing WR authority.
+- `task production:audit-track -- --track <PT-ID>` checks that every milestone
+  has WR ownership or explicit expansion blockers, dependencies, validation,
+  evidence gates, closeout paths, and stop conditions before `/goal` proceeds.
 - `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` prints a
   readiness report and reusable implementation-contract prompt for one
   production milestone and WR row.
 - `task ai:goal -- --track <PT-ID>` prints a production-track scoped Codex
-  `/goal` coordinator prompt. Add `--scope non-deferred` when blocked or
-  deferred milestones should remain explicit out-of-scope gaps. It is read-only
-  and must coordinate one legal milestone or WR slice at a time.
+  `/goal` coordinator prompt. When a machine-readable Track Execution Manifest
+  exists, the command reads it, prints the manifest source path, current
+  milestone, next legal action, unmet gates, implementation authority, and stop
+  requirement. It runs the full manifest audit before emitting normal guidance
+  and fails closed on alignment errors, missing gates, invalid blocked fields,
+  invalid closeout paths, WR scope mismatches, or missing WR authority. Add
+  `--scope non-deferred` when blocked or deferred milestones should remain
+  explicit out-of-scope gaps. It is read-only and must coordinate one legal
+  milestone or WR slice at a time.
 - `task ai:goal -- --track <PT-ID> --stack` prints a dependency-stack
   coordinator prompt. Use it when the target track is an end-state audit or
   perfection track whose milestones wait on prerequisite production tracks.
@@ -139,10 +203,38 @@ validated.
 
 Production tracks are the long-term sequencing layer. Review
 `production-tracks.yaml` before choosing roadmap rows for broad product work.
+For full-track execution, first create or update a Track Execution Manifest.
+The machine-readable manifest source lives under
+`docs-site/src/content/docs/workspace/track-execution-manifests/<track-id>.yaml`
+and records accepted design dependencies, milestone sequence, owning WRs or
+explicit expansion blockers, write scopes, forbidden scopes, validation,
+expected closeout paths, and the next legal action. The production track guides
+direction; the manifest makes the legal sequence explicit; the WR roadmap still
+governs implementation eligibility. Human-readable manifest reports under
+`docs-site/src/content/docs/reports/track-execution-manifests/` are mirrors, not
+execution authority.
+
+The full-track production workflow is:
+
+```text
+Track Definition
+-> Track Execution Manifest
+-> Track Expansion
+-> Track Readiness Audit
+-> Slice Contracting
+-> Slice Implementation
+-> Slice Closeout
+-> Track Closeout
+```
+
+The manifest authorizes planning and sequencing only. It does not authorize
+implementation by itself. Each implementation slice still requires its own
+active WR row or accepted roadmap action, `task production:plan`, validation,
+and closeout evidence.
+
 If the relevant production milestone is `designing`, do the design or ADR work
-first. If it is `ready_next` or `active`, use its WR links to inspect the legal
-roadmap execution rows. The production track guides direction; the WR roadmap
-still governs implementation eligibility.
+first. If it is `ready_next` or `active`, use its WR links and manifest entry to
+inspect the legal roadmap execution row.
 Use `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` as the
 normal bridge from production intent to a durable implementation contract. The
 command is read-only unless `--write-scaffold` is explicitly passed.
@@ -179,12 +271,14 @@ For full product-track persistence, use `task ai:goal -- --track <PT-ID>` to
 generate the coordinator prompt. For bounded track execution that must keep
 blocked or deferred milestones out of scope, use
 `task ai:goal -- --track <PT-ID> --scope non-deferred`. The generated `/goal`
-must follow the finite milestone list in `production-tracks.yaml`, use linked
-WR rows from the active roadmap source, stop at unmet design or evidence gates,
-and rerun after each bounded milestone or WR slice. A production track may only
-be completed after every milestone has completed evidence, linked WR rows
-satisfy completion-quality rules across active, archive, and deferred roadmap
-sources, and production plus roadmap render/validate/check gates pass.
+must follow the finite milestone list in `production-tracks.yaml`, consult the
+Track Execution Manifest when one exists, use linked WR rows from the active
+roadmap source, stop at unmet design or evidence gates, and rerun after each
+bounded milestone or WR slice. The manifest must never let `/goal` invent WR
+authority or closeout evidence. A production track may only be completed after
+every milestone has completed evidence, linked WR rows satisfy
+completion-quality rules across active, archive, and deferred roadmap sources,
+and production plus roadmap render/validate/check gates pass.
 
 For a final audit or perfection track that intentionally depends on other
 production tracks, use `task ai:goal -- --track <PT-ID> --stack`. Stack mode
@@ -255,8 +349,9 @@ Preserve unrelated dirty work. If a dirty file is relevant, inspect its current 
 | Task shape | Use when | Primary docs |
 |---|---|---|
 | Investigation | The goal is to understand current state, find gaps, or compare options without editing. | `AGENTS.md`, owning docs, current code/tests |
-| Planning or design | The goal is to decide architecture, ownership, API shape, phase sequence, or whether a refactor is justified. | `docs-site/src/content/docs/design/`, `docs-site/src/content/docs/workspace/documentation-structure.md`, prompt templates |
+| Planning or design | The goal is to decide architecture, ownership, API shape, phase sequence, or whether a refactor is justified. | `docs-site/src/content/docs/design`, `docs-site/src/content/docs/workspace/documentation-structure.md`, prompt templates |
 | Production track planning | The goal is to choose or update long-term product outcomes before selecting WR execution rows. | `docs-site/src/content/docs/workspace/production-track-planning-model.md`, `docs-site/src/content/docs/workspace/production-tracks.yaml` |
+| Track Execution Manifest | The goal is to make full-track `/goal` execution legal and drift-resistant before slice implementation. | `docs-site/src/content/docs/workspace/track-execution-manifest.md`, `docs-site/src/content/docs/workspace/track-execution-manifests/<track-id>.yaml`, `docs-site/src/content/docs/reports/track-execution-manifests/<track-id>/manifest.md` |
 | Production implementation contract | The goal is to turn one production milestone and WR row into a reviewed work package before code changes. | `docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md`, `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>` |
 | Bounded implementation | The goal is to make a scoped code/docs change and verify it. | `docs-site/src/content/docs/workspace/prompt-templates/implementation-batch.md`, relevant routine docs |
 | Roadmap milestone | The goal is to implement a named phase from an accepted roadmap or design. | `docs-site/src/content/docs/workspace/prompt-templates/roadmap-milestone-kickoff.md`, owning roadmap/design |

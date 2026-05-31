@@ -33,6 +33,7 @@ from roadmap_state import (
 
 PRODUCTION_SOURCE = REPO_ROOT / "docs-site/src/content/docs/workspace/production-tracks.yaml"
 PRODUCTION_SCHEMA = SCHEMA_DIR / "production-tracks.schema.json"
+TRACK_EXECUTION_MANIFEST_ROOT = REPO_ROOT / "docs-site/src/content/docs/workspace/track-execution-manifests"
 
 TRACK_ID_PATTERN = re.compile(r"^PT-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
 MILESTONE_ID_PATTERN = re.compile(r"^PM-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d{3}$")
@@ -363,6 +364,98 @@ def validate_completion_quality(
     return errors
 
 
+def validate_manifest_backed_tracks(
+    state: ProductionPlanningState,
+    *,
+    roadmap_path: Path = ROADMAP_SOURCE,
+    manifest_root: Path = TRACK_EXECUTION_MANIFEST_ROOT,
+) -> list[str]:
+    # Import locally to avoid a module import cycle: the manifest workflow also
+    # imports production state models for its standalone CLI.
+    from track_execution_manifest import audit_manifest, load_track_execution_manifest
+
+    roadmap = load_roadmap(roadmap_path)
+    errors: list[str] = []
+    for track in state.tracks:
+        manifest_path = manifest_root / f"{track.id.lower()}.yaml"
+        if not manifest_path.exists():
+            continue
+        try:
+            loaded = load_track_execution_manifest(track.id, root=manifest_root)
+        except WorkflowError as error:
+            errors.append(str(error))
+            continue
+        if loaded is None:
+            continue
+        errors.extend(audit_manifest(loaded, track=track, roadmap=roadmap))
+        manifest_by_milestone_id = loaded.manifest.by_milestone_id
+        for milestone in track.milestones:
+            entry = manifest_by_milestone_id.get(milestone.id)
+            if entry is None:
+                errors.append(f"{track.id}: manifest missing milestone {milestone.id}")
+                continue
+            errors.extend(validate_manifest_backed_milestone(track.id, milestone, entry, roadmap))
+        if track.state == "completed":
+            for entry in loaded.manifest.milestones:
+                if entry.future_wr_candidate:
+                    errors.append(
+                        f"{track.id}: completed manifest-backed tracks must not retain future WR candidate "
+                        f"{entry.future_wr_candidate} for {entry.milestone_id}"
+                    )
+    return errors
+
+
+def validate_manifest_backed_milestone(
+    track_id: str,
+    milestone: ProductionMilestone,
+    entry: object,
+    roadmap,
+) -> list[str]:
+    errors: list[str] = []
+    milestone_type = getattr(entry, "milestone_type")
+    if milestone_type == "docs_only" and (
+        getattr(entry, "may_create_code")
+        or getattr(entry, "may_create_crates")
+        or getattr(entry, "may_modify_production_behavior")
+    ):
+        errors.append(f"{milestone.id}: docs-only manifest milestones cannot authorize code, crates, or production behavior")
+    if milestone.completion_quality == "runtime_proven" and milestone_type == "docs_only":
+        errors.append(f"{milestone.id}: runtime_proven milestones cannot be docs-only in a Track Execution Manifest")
+    if milestone.state == "completed":
+        expected_closeout_path = getattr(entry, "expected_closeout_path")
+        evidence_paths = {gate.path for gate in milestone.evidence_gates}
+        if expected_closeout_path not in evidence_paths and milestone.completion_audit != expected_closeout_path:
+            errors.append(
+                f"{milestone.id}: completed manifest-backed milestone must reference expected closeout "
+                f"{expected_closeout_path}"
+            )
+        if milestone.completion_quality == "not_applicable":
+            errors.append(f"{milestone.id}: completed manifest-backed milestone must set completion_quality")
+        owning_wr = getattr(entry, "owning_wr")
+        if owning_wr:
+            roadmap_item = roadmap.by_id.get(owning_wr)
+            if roadmap_item is None:
+                errors.append(f"{milestone.id}: owning WR {owning_wr} is missing from roadmap state")
+            elif roadmap_item.planning_state != "completed":
+                errors.append(
+                    f"{milestone.id}: completed manifest-backed milestone owns {owning_wr} "
+                    f"with planning_state={roadmap_item.planning_state!r}, expected 'completed'"
+                )
+    if milestone.state in {"ready_next", "active", "completed"} and milestone.kind in {
+        "implementation",
+        "hardening",
+        "release",
+    }:
+        if getattr(entry, "future_wr_candidate"):
+            errors.append(
+                f"{milestone.id}: execution-ready manifest-backed milestone must link an owning WR, "
+                f"not future candidate {getattr(entry, 'future_wr_candidate')}"
+            )
+    if track_id and getattr(entry, "evidence_gates", None) == []:
+        errors.append(f"{milestone.id}: manifest-backed milestones must declare evidence gates")
+    return errors
+
+
 def gate_status_errors(
     owner_id: str,
     kind: str,
@@ -399,16 +492,30 @@ def write_production_schema_files(check: bool = False) -> list[str]:
 
 
 @app.command()
-def validate(source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source.")) -> None:
+def validate(
+    source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
+    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    manifest_source_root: Path = typer.Option(
+        TRACK_EXECUTION_MANIFEST_ROOT,
+        help="Track Execution Manifest source root.",
+    ),
+) -> None:
     try:
         validate_production_tracks_with_json_schema(source)
         state = load_production_tracks(source)
         errors = []
         errors.extend(validate_milestone_dependency_graph(state))
-        errors.extend(validate_roadmap_links(state))
+        errors.extend(validate_roadmap_links(state, roadmap_path=roadmap_source))
         errors.extend(validate_design_gates(state))
         errors.extend(validate_evidence_gates(state))
-        errors.extend(validate_completion_quality(state))
+        errors.extend(validate_completion_quality(state, roadmap_path=roadmap_source))
+        errors.extend(
+            validate_manifest_backed_tracks(
+                state,
+                roadmap_path=roadmap_source,
+                manifest_root=manifest_source_root,
+            )
+        )
     except (WorkflowError, ValueError) as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error

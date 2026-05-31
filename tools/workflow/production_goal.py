@@ -25,7 +25,14 @@ from production_state import (
     validate_completion_quality as validate_production_completion_quality,
     validate_evidence_gates,
 )
-from roadmap_state import ROADMAP_SOURCE, RoadmapItem, RoadmapState, WorkflowError, load_roadmap
+from roadmap_state import ROADMAP_SOURCE, RoadmapItem, RoadmapState, WorkflowError, load_roadmap, repo_path
+from track_execution_manifest import (
+    TRACK_EXECUTION_MANIFEST_ROOT,
+    LoadedTrackExecutionManifest,
+    TrackExecutionManifestMilestone,
+    audit_manifest_or_raise,
+    load_track_execution_manifest,
+)
 
 
 console = Console()
@@ -59,6 +66,17 @@ class TrackGoalSummary:
     track: ProductionTrack
     steps: tuple[MilestoneGoalStep, ...]
     completion_errors: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ManifestGoalContext:
+    loaded: LoadedTrackExecutionManifest
+    current_entry: TrackExecutionManifestMilestone
+    current_step: MilestoneGoalStep
+    unmet_gates: tuple[str, ...]
+    implementation_authorized: bool
+    implementation_authorization_note: str
+    must_stop: bool
 
 
 def find_track(planning: ProductionPlanningState, track_id: str) -> ProductionTrack:
@@ -122,6 +140,70 @@ def build_goal_steps(
             )
         )
     return steps
+
+
+def build_manifest_goal_context(
+    roadmap: RoadmapState,
+    track: ProductionTrack,
+    steps: list[MilestoneGoalStep],
+    loaded_manifest: LoadedTrackExecutionManifest,
+) -> ManifestGoalContext:
+    audit_manifest_or_raise(loaded_manifest, track=track, roadmap=roadmap)
+    current_step = first_incomplete_or_evidence_step(tuple(steps)) or steps[-1]
+    current_entry = loaded_manifest.manifest.by_milestone_id[current_step.milestone.id]
+    unmet_gates = tuple(manifest_unmet_gates(current_step, current_entry))
+    implementation_authorized, implementation_note = manifest_implementation_authorization(current_step, current_entry)
+    return ManifestGoalContext(
+        loaded=loaded_manifest,
+        current_entry=current_entry,
+        current_step=current_step,
+        unmet_gates=unmet_gates,
+        implementation_authorized=implementation_authorized,
+        implementation_authorization_note=implementation_note,
+        must_stop=True,
+    )
+
+
+def manifest_unmet_gates(
+    step: MilestoneGoalStep,
+    entry: TrackExecutionManifestMilestone,
+) -> list[str]:
+    unmet: list[str] = []
+    for dependency_state in step.dependency_states:
+        if not dependency_state.endswith(":completed"):
+            unmet.append(f"{entry.milestone_id}: dependency not complete: {dependency_state}")
+    unmet.extend(step.gate_errors)
+    unmet.extend(step.evidence_errors)
+    if entry.future_wr_candidate:
+        unmet.append(f"{entry.milestone_id}: Track Expansion must create or link {entry.future_wr_candidate}")
+    for action in step.roadmap_actions:
+        if action.item is None:
+            unmet.append(f"{entry.milestone_id}: roadmap link {action.roadmap_id} is missing")
+            continue
+        if action.action != "write_implementation_contract":
+            unmet.append(
+                f"{action.item.id}: workflow action is {action.action} "
+                f"(state={action.item.planning_state}, blocker={action.item.blocker_label})"
+            )
+    return unmet
+
+
+def manifest_implementation_authorization(
+    step: MilestoneGoalStep,
+    entry: TrackExecutionManifestMilestone,
+) -> tuple[bool, str]:
+    if not entry.may_create_code:
+        return False, "manifest milestone does not allow code creation"
+    if not entry.owning_wr:
+        return False, "manifest milestone has only a future WR candidate; run Track Expansion first"
+    if step.next_action != "execute_next_wr_implementation_contract":
+        return False, f"workflow next action is {step.next_action}, not implementation-contract execution"
+    if step.gate_errors or step.evidence_errors:
+        return False, "milestone gates or completion evidence must be repaired first"
+    return (
+        False,
+        "manifest permits code only after task production:plan confirms the active WR contract; task ai:goal alone does not authorize implementation",
+    )
 
 
 def production_stack_track_order(planning: ProductionPlanningState, root_track: ProductionTrack) -> list[ProductionTrack]:
@@ -265,8 +347,14 @@ def render_track_goal(
     *,
     roadmap_source: Path = ROADMAP_SOURCE,
     scope: GoalScope = GoalScope.full,
+    manifest: LoadedTrackExecutionManifest | None = None,
 ) -> str:
     steps = build_goal_steps(planning, roadmap, track, roadmap_source=roadmap_source)
+    manifest_context = (
+        build_manifest_goal_context(roadmap, track, steps, manifest)
+        if manifest is not None
+        else None
+    )
     completion_errors = track_completion_errors(planning, roadmap_source=roadmap_source, track=track, scope=scope)
     out_of_scope = out_of_scope_milestones(track, scope)
     lines = [
@@ -281,11 +369,13 @@ def render_track_goal(
         "",
     ]
     lines.extend(f"- {criterion}" for criterion in track.success_criteria)
+    lines.extend(render_manifest_gate(track, manifest_context))
     lines.extend(["", "## Ordered Milestone Plan", ""])
     for step in steps:
-        lines.extend(render_milestone_step(step, scope=scope))
+        manifest_entry = manifest_context.loaded.manifest.by_milestone_id.get(step.milestone.id) if manifest_context else None
+        lines.extend(render_milestone_step(step, scope=scope, manifest_entry=manifest_entry))
     lines.extend(render_completion_gate(completion_errors, out_of_scope=out_of_scope, scope=scope))
-    lines.extend(render_goal_prompt(track, steps, scope=scope))
+    lines.extend(render_goal_prompt(track, steps, scope=scope, manifest_context=manifest_context))
     return "\n".join(lines)
 
 
@@ -368,7 +458,58 @@ def first_incomplete_or_evidence_step(steps: tuple[MilestoneGoalStep, ...]) -> M
     )
 
 
-def render_milestone_step(step: MilestoneGoalStep, *, scope: GoalScope = GoalScope.full) -> list[str]:
+def render_manifest_gate(
+    track: ProductionTrack,
+    context: ManifestGoalContext | None,
+) -> list[str]:
+    lines = ["", "## Track Execution Manifest Gate", ""]
+    if context is None:
+        if len(track.milestones) >= 6:
+            expected_path = TRACK_EXECUTION_MANIFEST_ROOT / f"{track.id.lower()}.yaml"
+            lines.extend(
+                [
+                    f"- Manifest source: not found at `{repo_path(expected_path)}`",
+                    "- Warning: this is a long production track. Goal generation is falling back to production and roadmap metadata only.",
+                    "- Stop condition: create a machine-readable Track Execution Manifest before relying on full-track `/goal` persistence.",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(["- Manifest source: none; fallback production/roadmap goal mode.", ""])
+        return lines
+
+    entry = context.current_entry
+    manifest = context.loaded.manifest
+    lines.extend(
+        [
+            f"- Manifest source: `{repo_path(context.loaded.path)}`",
+            f"- Authority level: {manifest.authority_level}",
+            f"- Current milestone: `{entry.milestone_id}` - {entry.title}",
+            f"- Manifest next legal action: {entry.next_legal_action}",
+            f"- Workflow next action: {context.current_step.next_action}",
+            f"- Implementation authorized now: {'yes' if context.implementation_authorized else 'no'} - {context.implementation_authorization_note}",
+            f"- Must stop after this action: {'yes' if context.must_stop else 'no'}",
+        ]
+    )
+    if context.unmet_gates:
+        lines.append("- Unmet gates:")
+        lines.extend(f"  - {gate}" for gate in context.unmet_gates)
+    else:
+        lines.append("- Unmet gates: none detected by manifest-aware workflow checks.")
+    lines.append("- Current milestone stop conditions:")
+    lines.extend(f"  - {condition}" for condition in entry.stop_conditions)
+    lines.append("- Global manifest stop conditions:")
+    lines.extend(f"  - {condition}" for condition in manifest.global_stop_conditions)
+    lines.append("")
+    return lines
+
+
+def render_milestone_step(
+    step: MilestoneGoalStep,
+    *,
+    scope: GoalScope = GoalScope.full,
+    manifest_entry: TrackExecutionManifestMilestone | None = None,
+) -> list[str]:
     milestone = step.milestone
     lines = [
         f"### {milestone.id} - {milestone.title}",
@@ -380,6 +521,17 @@ def render_milestone_step(step: MilestoneGoalStep, *, scope: GoalScope = GoalSco
         f"- Roadmap links: {', '.join(milestone.roadmap_links) or 'none'}",
         f"- Next legal action: {step.next_action}",
     ]
+    if manifest_entry is not None:
+        wr_authority = manifest_entry.owning_wr or f"future {manifest_entry.future_wr_candidate}"
+        lines.extend(
+            [
+                f"- Manifest authority: {manifest_entry.authority_level}",
+                f"- Manifest next legal action: {manifest_entry.next_legal_action}",
+                f"- Manifest WR authority: {wr_authority}",
+                f"- Manifest permissions: code={'yes' if manifest_entry.may_create_code else 'no'}, crates={'yes' if manifest_entry.may_create_crates else 'no'}, production behavior={'yes' if manifest_entry.may_modify_production_behavior else 'no'}",
+                f"- Expected closeout path: {manifest_entry.expected_closeout_path}",
+            ]
+        )
     if is_out_of_scope_milestone(milestone, scope):
         lines.append("- Bounded goal scope: preserved out of scope; do not implement for `--scope non-deferred`.")
     if milestone.design_gates:
@@ -561,7 +713,13 @@ def render_completion_gate(
     return lines
 
 
-def render_goal_prompt(track: ProductionTrack, steps: list[MilestoneGoalStep], *, scope: GoalScope) -> list[str]:
+def render_goal_prompt(
+    track: ProductionTrack,
+    steps: list[MilestoneGoalStep],
+    *,
+    scope: GoalScope,
+    manifest_context: ManifestGoalContext | None,
+) -> list[str]:
     if scope == GoalScope.non_deferred:
         goal_line = f"/goal Complete the non-deferred scope of production track {track.id} - {track.title}."
         scope_rules = [
@@ -585,12 +743,23 @@ def render_goal_prompt(track: ProductionTrack, steps: list[MilestoneGoalStep], *
         "```text",
         goal_line,
         "",
-        "Use the current production tracks, roadmap items, design docs, and task workflow.",
+        "Use the current production tracks, roadmap items, machine-readable Track Execution Manifest when present, design docs, and task workflow.",
         "Work through the finite milestone list in dependency order.",
         "For each milestone, perform exactly one legal next action, validate it, close it out, then rerun task ai:goal before continuing.",
         "Do not bypass design gates, ADR gates, WR roadmap state, write scopes, validation, closeout evidence, or completion-quality rules.",
         "",
     ]
+    if manifest_context is not None:
+        lines.extend(
+            [
+                f"Manifest source: {repo_path(manifest_context.loaded.path)}",
+                f"Current manifest milestone: {manifest_context.current_entry.milestone_id}",
+                f"Current manifest next legal action: {manifest_context.current_entry.next_legal_action}",
+                f"Implementation authorized now: {'yes' if manifest_context.implementation_authorized else 'no'} - {manifest_context.implementation_authorization_note}",
+                "Stop after the current legal action and rerun this command before crossing another milestone boundary.",
+                "",
+            ]
+        )
     lines.extend(scope_rules)
     lines.append("Milestone order and current next actions:")
     for step in steps:
@@ -633,6 +802,10 @@ def goal(
     ),
     production_source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
     roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Active roadmap YAML source."),
+    manifest_source_root: Path = typer.Option(
+        TRACK_EXECUTION_MANIFEST_ROOT,
+        help="Machine-readable Track Execution Manifest source root.",
+    ),
 ) -> None:
     try:
         planning = load_production_tracks(production_source)
@@ -644,8 +817,16 @@ def goal(
                 soft_wrap=True,
             )
             return
+        manifest = load_track_execution_manifest(track, root=manifest_source_root)
         console.print(
-            render_track_goal(planning, roadmap, production_track, roadmap_source=roadmap_source, scope=scope),
+            render_track_goal(
+                planning,
+                roadmap,
+                production_track,
+                roadmap_source=roadmap_source,
+                scope=scope,
+                manifest=manifest,
+            ),
             soft_wrap=True,
         )
     except WorkflowError as error:

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-29
+last_reviewed: 2026-05-31
 related:
   - ./planning-methods.md
   - ./design-implementation-triage.md

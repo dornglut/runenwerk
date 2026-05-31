@@ -9,6 +9,7 @@ last_reviewed: 2026-05-20
 related_docs:
   - ../planning-and-implementation-workflow.md
   - ../production-track-planning-model.md
+  - ../track-execution-manifest.md
   - ../production-tracks.yaml
   - ../roadmap-items.yaml
   - ../roadmap-archive.yaml
@@ -29,6 +30,18 @@ task ai:goal -- --track <PT-ID> --scope non-deferred
 task ai:goal -- --track <PT-ID> --stack
 ```
 
+For full-track work that spans future milestones, first inspect the Track
+Execution Manifest when one exists:
+
+```text
+docs-site/src/content/docs/reports/track-execution-manifests/<track-id>/manifest.md
+```
+
+If no manifest exists, create one before asking `/goal` to coordinate the full
+track. The manifest does not authorize implementation; it records the legal
+sequence and blockers so `/goal` does not infer missing WR rows or closeout
+evidence.
+
 Then paste the generated prompt into `/goal`.
 
 Use `--stack` for an end-state audit or perfection track that intentionally
@@ -46,7 +59,8 @@ the prompt with `--scope non-deferred` instead. That prompt completes only
 milestones that are not blocked or deferred and records preserved milestones as
 explicit deferred gaps.
 
-Use production-tracks.yaml as the production sequencing source, active
+Use production-tracks.yaml as the production sequencing source, the Track
+Execution Manifest as the explicit execution map when present, active
 roadmap-items.yaml rows as the WR execution authority, and the archive/deferred
 roadmap sources for historical links, dependencies, and evidence gates.
 
@@ -64,6 +78,10 @@ current candidate, or stop and report.
 
 Do not bypass design gates, ADR gates, WR roadmap state, write scopes,
 validation, closeout evidence, or completion-quality rules.
+
+Do not invent WR authority, implementation contracts, evidence gates, or
+closeout paths from the manifest. If the manifest says a milestone needs Track
+Expansion, run that planning step and stop before implementation.
 
 The production track is complete only when every milestone is completed with
 valid evidence gates, linked WR rows satisfy roadmap completion-quality rules,
@@ -96,7 +114,11 @@ Stop and report instead of continuing when:
 - a milestone dependency is incomplete in single-track mode, or stack mode
   cannot resolve the prerequisite track that owns it;
 - a design, ADR, WR, validation, or closeout gate is missing;
+- a Track Execution Manifest is missing for full-track work that requires
+  future WR expansion;
 - a linked WR row is not ready for its required action;
+- the manifest names a missing owning WR or expansion blocker for the current
+  milestone;
 - promotion preflight reports metadata or hard blockers that cannot be repaired
   inside the current bounded action;
 - implementation would exceed the current milestone;
