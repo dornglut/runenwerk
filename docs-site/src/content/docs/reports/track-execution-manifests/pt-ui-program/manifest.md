@@ -45,30 +45,28 @@ Stage 3: Compiler / Runtime Artifact Design
 Stage 4: Evaluator / Host Design
 Stage 5: Retained UI Migration Design
 Stage 6: Runtime proof slices 6A through 6F
-Stage 7: Runtime-proven closeout and MaterialProgram handoff
+Stage 7: Bounded proof-slice closeout and MaterialProgram handoff blocker
 ```
 
-Current blockers after Stage 5 closeout:
+Current truth after Stage 7 closeout:
 
-- `PM-UI-PROGRAM-001` is completed as docs/governance-only bounded
-  contract evidence.
-- `WR-135` is archived as completed governance activation evidence.
-- `WR-136` is archived as completed bounded-contract Stage 1 evidence after
-  Manifest Runner V3 `agent_closeout` closeout.
-- `PM-UI-PROGRAM-002` through `PM-UI-PROGRAM-006` are completed as
-  bounded-contract design evidence.
-- `WR-137`, `WR-138`, `WR-139`, and `WR-140` are archived as completed
-  design-only WR evidence for Stages 2 through 5.
-- `PM-UI-PROGRAM-007` / Stage 6A is the next legal milestone; `WR-141` is
-  linked and the accepted implementation plan exists.
-- `PM-UI-PROGRAM-007` is stopped before product code unless the runner is
-  explicitly rerun with `--allow product_code` and V4 gates pass.
-- no Stage 6 implementation is authorized.
+- `PM-UI-PROGRAM-001` through `PM-UI-PROGRAM-006` are completed as bounded
+  governance/design contract evidence.
+- `PM-UI-PROGRAM-007` through `PM-UI-PROGRAM-012` are completed as bounded
+  retained-compatible proof-slice runtime evidence.
+- `PM-UI-PROGRAM-013` is completed as bounded proof-slice closeout and
+  handoff-blocker evidence.
+- concrete `UiProgram`, `UiCompiler`, `UiEvaluator`, graph-family,
+  `UiRuntimeArtifactManifest`, and `UiRuntimeArtifactTables` architecture
+  implementation is not proven.
+- MaterialProgram proof planning remains blocked until the UiProgram
+  architecture truth claim is satisfied or a later accepted ADR changes the
+  gate.
 - no shared `foundation/meta` extraction is authorized.
 
-Conclusion: `/goal --track PT-UI-PROGRAM` can now see the full staged execution
-path, but it may execute only one legal action at a time and must stop at
-unmet gates.
+Conclusion: the machine-readable manifest now records truth claims that
+supersede overbroad historical proof language. This Markdown report remains a
+mirror; the YAML manifest is execution authority.
 
 ## Track Authority
 
@@ -77,12 +75,24 @@ unmet gates.
 | Track id | `PT-UI-PROGRAM` |
 | Title | UI Program Platform Proof |
 | Authority level | Planning and sequencing only |
-| Target completion quality | `runtime_proven` |
+| Target completion quality | `proof_slice_runtime_proven` |
 | Owner | `ui` |
-| Current next legal action | `PM-UI-PROGRAM-007` implementation plan exists; stop before `product_code` unless explicitly authorized through Manifest Runner V4 |
+| Current next legal action | Track proof slices are complete; MaterialProgram planning remains blocked by truth claims until architecture truth is resolved or a later accepted decision changes the gate |
 
 The manifest does not authorize product code, crate creation, runtime behavior,
 MaterialProgram implementation, or shared extraction.
+
+## Truth Claims
+
+- `ui-program-proof-slices`: satisfied at `proof_slice_runtime_proven`.
+  Bounded retained-compatible proof slices passed with runtime/test evidence.
+- `ui-program-architecture-implementation`: blocked at
+  `architecture_runtime_proven`. Concrete `UiProgram`, `UiCompiler`,
+  `UiEvaluator`, graph families, and runtime artifact contracts are not
+  implemented as the final architecture.
+- `materialprogram-handoff`: blocked. MaterialProgram proof planning and
+  implementation remain blocked by default until the UI architecture truth
+  claim is satisfied or a later accepted ADR changes the gate.
 
 ## Accepted Design Dependencies
 
@@ -144,13 +154,13 @@ closeout work.
 | 4 | `PM-UI-PROGRAM-004` Compiler / Runtime Artifact Design | Stage 3 | `WR-138` | PM-003 | Completed bounded-contract closeout. |
 | 5 | `PM-UI-PROGRAM-005` Evaluator / Host Design | Stage 4 | `WR-139` | PM-004 | Completed bounded-contract closeout. |
 | 6 | `PM-UI-PROGRAM-006` Retained UI Migration Design | Stage 5 | `WR-140` | PM-005 | Completed bounded-contract closeout. |
-| 7 | `PM-UI-PROGRAM-007` 6A Label Structural UiFrame Text Proof | Stage 6A | `WR-141` | PM-006 | Implementation plan accepted; stop before `product_code` unless explicitly authorized. |
-| 8 | `PM-UI-PROGRAM-008` 6B Button Route Event Host Command Proof | Stage 6B | `WR-TBD-UI-PROGRAM-008` | PM-007 | Create/link 6B WR after 6A closeout. |
-| 9 | `PM-UI-PROGRAM-009` 6C InspectorField Binding State Proof | Stage 6C | `WR-TBD-UI-PROGRAM-009` | PM-008 | Create/link 6C WR after 6B closeout. |
-| 10 | `PM-UI-PROGRAM-010` 6D ColorPicker ControlPackage Proof | Stage 6D | `WR-TBD-UI-PROGRAM-010` | PM-009 | Create/link 6D WR after 6C closeout. |
-| 11 | `PM-UI-PROGRAM-011` 6E World Space Host Boundary Proof | Stage 6E | `WR-TBD-UI-PROGRAM-011` | PM-010 | Create/link 6E WR after 6D closeout. |
-| 12 | `PM-UI-PROGRAM-012` 6F Headless Fixture Diagnostics Source Map Proof | Stage 6F | `WR-TBD-UI-PROGRAM-012` | PM-011 | Create/link 6F WR after 6E closeout. |
-| 13 | `PM-UI-PROGRAM-013` Runtime Proven Closeout And MaterialProgram Handoff | Stage 7 | `WR-TBD-UI-PROGRAM-013` | PM-012 | Create/link closeout WR after 6F closeout. |
+| 7 | `PM-UI-PROGRAM-007` 6A Label Structural UiFrame Text Proof | Stage 6A | `WR-141` | PM-006 | Completed bounded runtime proof-slice evidence. |
+| 8 | `PM-UI-PROGRAM-008` 6B Button Route Event Host Command Proof | Stage 6B | `WR-142` | PM-007 | Completed bounded runtime proof-slice evidence. |
+| 9 | `PM-UI-PROGRAM-009` 6C InspectorField Binding State Proof | Stage 6C | `WR-143` | PM-008 | Completed bounded runtime proof-slice evidence. |
+| 10 | `PM-UI-PROGRAM-010` 6D ColorPicker ControlPackage Proof | Stage 6D | `WR-144` | PM-009 | Completed bounded runtime proof-slice evidence. |
+| 11 | `PM-UI-PROGRAM-011` 6E World Space Host Boundary Proof | Stage 6E | `WR-145` | PM-010 | Completed bounded runtime proof-slice evidence. |
+| 12 | `PM-UI-PROGRAM-012` 6F Headless Fixture Diagnostics Source Map Proof | Stage 6F | `WR-146` | PM-011 | Completed bounded proof aggregation evidence. |
+| 13 | `PM-UI-PROGRAM-013` Runtime Proven Closeout And MaterialProgram Handoff | Stage 7 | `WR-147` | PM-012 | Completed proof-slice closeout; MaterialProgram planning remains blocked by truth claims. |
 
 ## Track Contract Completion
 
@@ -165,6 +175,12 @@ Completed or refreshed milestone contracts:
 Remaining blockers:
 
 - No remaining contract blockers.
+
+## Agent Closeout Update
+
+Last agent closeout update: 2026-05-31.
+
+The machine-readable manifest remains execution authority.
 
 ## Milestone Details
 

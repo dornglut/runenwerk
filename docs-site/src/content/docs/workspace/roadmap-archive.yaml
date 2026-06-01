@@ -10140,3 +10140,159 @@ items:
   adr_requirement: No new ADR unless the UiProgram contract changes accepted ownership, dependency direction, or extraction gates.
   fitness_function_requirement: Docs, production, roadmap, and planning validation before closeout.
   ownership_mode: Stream-aligned UI proving-domain planning with governance-owned sequencing.
+- id: WR-146
+  title: 6F Headless Fixture Diagnostics Source Map Proof
+  diagram_title: 6F Headless Fixture Diagnostics Source Map Proof
+  alias: WR146
+  lane: Product planning
+  dependency_level: L4
+  gate: Completed
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 2
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-145
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+  - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
+  - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/plan.md'
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - domain/ui/ui_definition/src/preview_fixture/mod.rs
+  - domain/ui/ui_definition/src/diagnostic.rs
+  - domain/ui/ui_definition/src/source.rs
+  - domain/ui/ui_runtime/src/output/build_ui_frame.rs
+  - domain/ui/ui_render_data/src/lib.rs
+  - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml'
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+  validations:
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p ui_definition diagnostic
+  - cargo test -p ui_definition source
+  - cargo test -p ui_runtime build_ui_frame
+  - cargo test -p ui_render_data
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Runtime proof completed through docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md.
+  current_decision: Completed at runtime_proven by Manifest Runner runtime closeout for PM-UI-PROGRAM-012.
+  current_call: Complete. Preserve as bounded runtime proof evidence; continue PT-UI-PROGRAM only through the next manifest legal action.
+  first_move: Completed; run task ai:goal -- --track PT-UI-PROGRAM for the next legal milestone.
+  main_blocker: Complete; later milestones require separate WRs, plans, validation, and closeout evidence.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - PM-UI-PROGRAM-012 is runtime_proven only for its bounded manifest write scope.
+  - Later milestones in this production track still require separate WRs, plans, validation, and closeout evidence.
+  - No crate creation or shared foundation/meta extraction is authorized by this closeout.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+  diagram_call:
+  - runtime proven
+  - bounded proof
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+    required_status: active
+    applies_to: discovery
+    reason: 6F must preserve the Domain Workbench Platform proof model.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    required_status: active
+    applies_to: discovery
+    reason: 6F must follow the UiProgram headless host, diagnostics, source-map, migration, and artifact contracts.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
+    required_status: active
+    applies_to: discovery
+    reason: 6F must follow the bounded headless fixture proof-slice contract.
+  ddd_owner: domain/ui owns UiProgram contract design; workspace governance coordinates production sequencing.
+  adr_requirement: No new ADR unless the UiProgram contract changes accepted ownership, dependency direction, or extraction gates.
+  fitness_function_requirement: Docs, production, roadmap, and planning validation before closeout.
+  ownership_mode: Stream-aligned UI proving-domain planning with governance-owned sequencing.
+- id: WR-147
+  title: Runtime Proven Closeout And MaterialProgram Handoff
+  diagram_title: Runtime Proven Closeout And MaterialProgram Hand
+  alias: WR147
+  lane: Product planning
+  dependency_level: L4
+  gate: Completed
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-146
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+  - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-147-runtime-proven-closeout-and-materialprogram-handoff/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Completed through docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md.
+  current_decision: Completed as bounded proof-slice closeout evidence by Manifest Runner V3 agent_closeout for PM-UI-PROGRAM-013. This is historical closeout/handoff evidence only; truth claims now block MaterialProgram planning until UiProgram architecture truth is resolved.
+  current_call: Complete. Preserve as proof_slice_runtime_proven closeout evidence; do not use this row as architecture_runtime_proven or MaterialProgram authorization.
+  first_move: Completed; run task ai:goal -- --track PT-UI-PROGRAM for the next legal milestone.
+  main_blocker: Complete.
+  why_not_ready: ''
+  completion_quality: proof_slice_runtime_proven
+  known_quality_gaps:
+  - PM-UI-PROGRAM-013 is a handoff closeout for the completed bounded proof-slice track, not authorization for downstream implementation.
+  - Concrete UiProgram architecture contracts remain unimplemented and require a separate architecture implementation track before MaterialProgram proof planning is unblocked by default.
+  - The second-domain proof path remains blocked until truth claims or a later accepted decision clear the gate.
+  - No product/runtime code, crates, placeholder future folders, downstream implementation, or shared foundation/meta extraction was performed.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+  diagram_call:
+  - proof slice runtime proven
+  - no implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+    required_status: active
+    applies_to: discovery
+    reason: Closeout must preserve the Domain Workbench Platform second-domain and extraction gates.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    required_status: active
+    applies_to: discovery
+    reason: Closeout must follow the UiProgram runtime-proven proof and MaterialProgram handoff rules.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
+    required_status: active
+    applies_to: discovery
+    reason: Closeout must verify all bounded Stage 6 proof-slice evidence.
+  ddd_owner: domain/ui owns UiProgram contract design; workspace governance coordinates production sequencing.
+  adr_requirement: No new ADR unless the UiProgram contract changes accepted ownership, dependency direction, or extraction gates.
+  fitness_function_requirement: Docs, production, roadmap, and planning validation before closeout.
+  ownership_mode: Stream-aligned UI proving-domain planning with governance-owned sequencing.

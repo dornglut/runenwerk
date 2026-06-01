@@ -1,8 +1,6 @@
 version: 1
 track_id: PT-UI-PROGRAM
 authority_level: planning_and_sequencing_only
-ai_executable: true
-full_automation_target: true
 accepted_design_dependencies:
   - path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
     required_status: active
@@ -41,7 +39,123 @@ global_stop_conditions:
   - stop if validation fails
   - stop after one legal milestone action and rerun task ai:goal
   - stop before code unless a dedicated active WR and production plan authorize the bounded slice
-next_legal_action: PM-UI-PROGRAM-012 implementation plan exists; stop before product_code. Rerun `task production:run-track -- --track PT-UI-PROGRAM --allow product_code --allow product_implementation --max-actions 1` only if product/runtime code is permitted.
+next_legal_action: PT-UI-PROGRAM is complete as proof_slice_runtime_proven; no downstream MaterialProgram planning or implementation is authorized while truth claims remain blocked.
+ai_executable: true
+full_automation_target: true
+truth_claims:
+  - claim_id: ui-program-proof-slices
+    claim_kind: proof_slice
+    claim_level: proof_slice_runtime_proven
+    claim_status: satisfied
+    claim_statement: PT-UI-PROGRAM completed bounded retained-compatible UI proof-slice evidence; it did not implement the final UiProgram architecture contract.
+    required_docs:
+      - evidence_kind: doc_frontmatter_status
+        path: docs-site/src/content/docs/design/active/ui-program-contract-design.md
+        required_status: active
+        reason: Current truth contract must exist and supersede overbroad proof wording.
+      - evidence_kind: doc_frontmatter_status
+        path: docs-site/src/content/docs/reports/audits/pt-ui-program-truth-claim-correction.md
+        required_status: completed
+        reason: Truth correction audit must record the bounded proof-slice scope and architecture gap.
+    required_code_contracts: []
+    required_validations:
+      - evidence_kind: validation_command
+        command: task production:validate
+        reason: Production validation must enforce manifest truth claims.
+      - evidence_kind: validation_command
+        command: task docs:validate
+        reason: Documentation validation must cover the current truth docs.
+    required_closeout_evidence:
+      - evidence_kind: closeout_evidence_category
+        closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+        category: runtime_test
+        reason: PM-012 carries bounded runtime proof-slice validation evidence.
+      - evidence_kind: closeout_evidence_category
+        closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+        category: diagnostics
+        reason: PM-012 carries bounded diagnostics evidence.
+      - evidence_kind: closeout_evidence_category
+        closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+        category: source_maps
+        reason: PM-012 carries bounded source-map evidence.
+      - evidence_kind: closeout_evidence_category
+        closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+        category: artifact
+        reason: PM-012 carries bounded runtime artifact evidence.
+    known_gaps:
+      - Concrete UiProgram architecture contracts remain unimplemented.
+      - Proof aggregation covers evidence categories from 6A through 6F, not final architecture existence.
+    supersedes:
+      - Earlier PT-UI-PROGRAM wording that said UiProgram is proven as final architecture.
+      - Earlier PM-013 wording that implied MaterialProgram proof planning was enabled by proof slices alone.
+    blocks_downstream: []
+  - claim_id: ui-program-architecture-implementation
+    claim_kind: architecture_contract
+    claim_level: architecture_runtime_proven
+    claim_status: blocked
+    claim_statement: Concrete UiProgram architecture implementation is not proven; final UiProgram, UiCompiler, UiEvaluator, graph-family, and runtime-artifact contracts do not exist as the long-term architecture in code.
+    required_docs:
+      - evidence_kind: doc_frontmatter_status
+        path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+        required_status: active
+        reason: Architecture target remains active design input.
+    required_code_contracts:
+      - evidence_kind: module_path_exists
+        path: domain/ui/ui_program
+        reason: Future architecture proof must create the domain-owned UiProgram module/crate boundary.
+      - evidence_kind: rust_symbol_exists
+        path: domain/ui/ui_program/src/lib.rs
+        symbol: UiProgram
+        reason: Future architecture proof must expose the durable UiProgram contract.
+      - evidence_kind: rust_symbol_exists
+        path: domain/ui/ui_compiler/src/lib.rs
+        symbol: UiCompiler
+        reason: Future architecture proof must expose the compiler contract.
+      - evidence_kind: rust_symbol_exists
+        path: domain/ui/ui_evaluator/src/lib.rs
+        symbol: UiEvaluator
+        reason: Future architecture proof must expose the evaluator contract.
+      - evidence_kind: rust_symbol_exists
+        path: domain/ui/ui_artifacts/src/lib.rs
+        symbol: UiRuntimeArtifactManifest
+        reason: Future architecture proof must expose the durable runtime artifact manifest contract.
+      - evidence_kind: rust_symbol_exists
+        path: domain/ui/ui_artifacts/src/lib.rs
+        symbol: UiRuntimeArtifactTables
+        reason: Future architecture proof must expose optimized runtime artifact tables.
+    required_validations:
+      - evidence_kind: validation_command
+        command: cargo test -p ui_program architecture_contract
+        reason: Future architecture proof must have executable contract validation.
+    required_closeout_evidence: []
+    known_gaps:
+      - domain/ui/ui_program does not exist.
+      - domain/ui/ui_compiler does not exist.
+      - domain/ui/ui_evaluator does not exist.
+      - domain/ui/ui_artifacts does not exist.
+      - Final graph-family contracts remain design targets, not implemented code truth.
+    supersedes: []
+    blocks_downstream:
+      - MaterialProgram proof planning
+      - MaterialProgram implementation
+      - foundation/meta extraction
+  - claim_id: materialprogram-handoff
+    claim_kind: handoff
+    claim_level: architecture_runtime_proven
+    claim_status: blocked
+    claim_statement: MaterialProgram proof planning and implementation remain blocked by default until the UiProgram architecture truth claim is satisfied or a later accepted ADR explicitly changes the gate.
+    required_docs: []
+    required_code_contracts: []
+    required_validations: []
+    required_closeout_evidence: []
+    known_gaps:
+      - PM-013 is historical handoff evidence only; it does not authorize MaterialProgram proof planning.
+      - The long-term default next step is a concrete PT-UI-PROGRAM-ARCHITECTURE implementation track before MaterialProgram.
+    supersedes:
+      - Earlier handoff wording that treated bounded UI proof slices as sufficient to enable MaterialProgram planning.
+    blocks_downstream:
+      - MaterialProgram proof planning
+      - MaterialProgram implementation
 milestones:
   - milestone_id: PM-UI-PROGRAM-001
     title: ADR / Design Promotion
@@ -185,7 +299,8 @@ milestones:
       planning_write_scope: []
       allowed_write_scopes: []
       forbidden_scopes: []
-      expected_output_paths: []
+      expected_output_paths:
+        - docs-site/src/content/docs/design/active/ui-program-contract-design.md
       validation_commands: []
       stop_conditions: []
   - milestone_id: PM-UI-PROGRAM-003
@@ -1686,11 +1801,15 @@ milestones:
       generated_from_template_version: v1
     implementation_writer:
       strategy: patch_writer
+      aggregation_only: false
+      required_prior_milestones: []
+      required_evidence_categories: []
       allowed_files:
         - domain/ui/ui_surface/src/mount.rs
         - domain/ui/ui_surface/src/presentation.rs
         - domain/ui/ui_surface/src/observation.rs
         - domain/ui/ui_definition/src/source.rs
+      allowed_write_scopes: []
       required_outputs:
         - anchored world-space prompt host input model
         - projection, lifetime, visibility, and data-feed proof
@@ -1699,6 +1818,7 @@ milestones:
       forbidden_files:
         - foundation/meta
         - domain/material
+      forbidden_scopes: []
       forbidden_patterns:
         - UiSemanticEvent
         - MaterialProgram
@@ -1818,14 +1938,14 @@ milestones:
       - stop until Track Expansion creates or links the owning WR
       - stop until task production:plan creates the bounded 6F contract
       - stop if prior slice behavior is missing; return missing behavior to the owning milestone
-      - implementation plan exists; stop before product_code unless explicitly allowed and V5 product_implementation gates pass
-    next_legal_action: PM-UI-PROGRAM-012 implementation plan exists; stop before product_code. Rerun `task production:run-track -- --track PT-UI-PROGRAM --allow product_code --allow product_implementation --max-actions 1` only if product/runtime code is permitted.
+      - product_implementation completed; stop before runtime closeout unless agent_closeout is explicitly allowed
+      - completed by runtime closeout as runtime_proven
+    next_legal_action: PM-UI-PROGRAM-012 completed by runtime closeout as runtime_proven; continue only to the next manifest legal action.
     may_create_code: true
     may_create_crates: false
     may_modify_production_behavior: true
     execution_kind: proof_aggregation
     milestone_kind: proof_aggregation
-    closeout_strategy: runtime_proven_closeout
     permission_classes_required:
       - auto_safe
       - agent_design
@@ -1853,6 +1973,7 @@ milestones:
         - domain/ui/ui_definition/src/source.rs
         - domain/ui/ui_runtime/src/output/build_ui_frame.rs
         - domain/ui/ui_render_data/src/lib.rs
+        - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml'
       required_function_method_scope:
         - Headless fixture, diagnostics, source-map, migration evidence, artifact manifest/table reproducibility helpers only.
       tests_to_add_change:
@@ -1955,6 +2076,7 @@ milestones:
         - domain/ui/ui_definition/src/source.rs
         - domain/ui/ui_runtime/src/output/build_ui_frame.rs
         - domain/ui/ui_render_data/src/lib.rs
+        - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml'
       allowed_write_scopes:
         - docs-site/src/content/docs/workspace/production-tracks.yaml
         - docs-site/src/content/docs/workspace/roadmap-archive.yaml
@@ -1997,6 +2119,7 @@ milestones:
         - domain/ui/ui_definition/src/source.rs
         - domain/ui/ui_runtime/src/output/build_ui_frame.rs
         - domain/ui/ui_render_data/src/lib.rs
+        - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml'
       required_function_method_scope:
         - Headless fixture, diagnostics, source-map, migration evidence, artifact manifest/table reproducibility helpers only.
       forbidden_implementation_scopes:
@@ -2046,14 +2169,18 @@ milestones:
         - source-map proof
         - runtime artifact evidence
         - reproducibility evidence
+      allowed_files: []
       allowed_write_scopes:
         - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
         - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
         - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/plan.md'
+        - 'new: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml'
       required_outputs:
+        - docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml records machine-readable 6A through 6E aggregation evidence
         - aggregate accepted runtime_proven 6A through 6E closeout evidence
         - verify required headless fixture, diagnostics, source-map, runtime artifact, and reproducibility evidence categories
         - fail closed when prior evidence is missing and return gaps to the owning milestone
+      forbidden_files: []
       forbidden_scopes:
         - domain/ui/ui_widgets/src/label.rs
         - domain/ui/ui_widgets/src/button.rs
@@ -2072,7 +2199,7 @@ milestones:
         - MaterialProgram
         - foundation/meta
         - UiSemanticEvent
-      new_file_policy: existing_files_only
+      new_file_policy: explicit_new_scope_required
       validation_commands:
         - cargo test -p ui_definition preview_fixture
         - cargo test -p ui_definition diagnostic
@@ -2089,6 +2216,11 @@ milestones:
         - stop if aggregation would modify prior proof-slice product files
         - stop if validation fails
         - stop before PM-013 MaterialProgram handoff until 6F runtime closeout exists
+      templates:
+        - file: docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml
+          content: "version: 1\nartifact_kind: ui_program_6f_proof_aggregation\ntrack_id: PT-UI-PROGRAM\nmilestone_id: PM-UI-PROGRAM-012\nwr_id: WR-146\naggregation_only: true\ncompletion_quality_target: runtime_proven\nrequired_prior_completion_quality: runtime_proven\nrequired_prior_milestones:\n  - milestone_id: PM-UI-PROGRAM-007\n    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md\n    evidence_categories:\n      - text/render boundary\n      - source-map proof\n      - runtime artifact evidence\n      - reproducibility evidence\n  - milestone_id: PM-UI-PROGRAM-008\n    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md\n    evidence_categories:\n      - route event host command proof\n      - diagnostics\n      - runtime artifact evidence\n      - reproducibility evidence\n  - milestone_id: PM-UI-PROGRAM-009\n    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md\n    evidence_categories:\n      - headless fixture\n      - diagnostics\n      - runtime artifact evidence\n      - reproducibility evidence\n  - milestone_id: PM-UI-PROGRAM-010\n    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md\n    evidence_categories:\n      - control package proof\n      - diagnostics\n      - source-map proof\n      - runtime artifact evidence\n      - reproducibility evidence\n  - milestone_id: PM-UI-PROGRAM-011\n    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md\n    evidence_categories:\n      - world-space host boundary proof\n      - diagnostics\n      - source-map proof\n      - runtime artifact evidence\n      - reproducibility evidence\nrequired_evidence_categories:\n  - headless fixture\n  - diagnostics\n  - source-map proof\n  - runtime artifact evidence\n  - reproducibility evidence\ncategory_coverage:\n  headless_fixture:\n    - PM-UI-PROGRAM-009\n  diagnostics:\n    - PM-UI-PROGRAM-008\n    - PM-UI-PROGRAM-009\n    - PM-UI-PROGRAM-010\n    - PM-UI-PROGRAM-011\n  source_map_proof:\n    - PM-UI-PROGRAM-007\n    - PM-UI-PROGRAM-010\n    - PM-UI-PROGRAM-011\n  runtime_artifact_evidence:\n    - PM-UI-PROGRAM-007\n    - PM-UI-PROGRAM-008\n    - PM-UI-PROGRAM-009\n    - PM-UI-PROGRAM-010\n    - PM-UI-PROGRAM-011\n  reproducibility_evidence:\n    - PM-UI-PROGRAM-007\n    - PM-UI-PROGRAM-008\n    - PM-UI-PROGRAM-009\n    - PM-UI-PROGRAM-010\n    - PM-UI-PROGRAM-011\nvalidation_commands:\n  - cargo test -p ui_definition preview_fixture\n  - cargo test -p ui_definition diagnostic\n  - cargo test -p ui_definition source\n  - cargo test -p ui_runtime build_ui_frame\n  - cargo test -p ui_render_data\n  - task docs:validate\n  - task planning:validate\nguardrails:\n  prior_slice_product_files_modified: false\n  missing_prior_behavior_implemented_here: false\n  material_program_implementation_started: false\n  crate_creation: false\n  foundation_meta_extraction: false\n  central_event_enum_growth: false\n"
+      patches: []
+    closeout_strategy: runtime_proven_closeout
     runtime_closeout_contract:
       runtime_test_evidence_required:
         - 6F aggregates accepted 6A through 6E evidence.
@@ -2111,6 +2243,7 @@ milestones:
         - domain/ui/ui_definition/src/source.rs
         - domain/ui/ui_runtime/src/output/build_ui_frame.rs
         - domain/ui/ui_render_data/src/lib.rs
+        - docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml
       known_gap_reporting:
         - PM-UI-PROGRAM-012 is runtime_proven only for its bounded manifest and product_code_contract scopes.
         - Later milestones require their own WRs, plans, validation, and closeout evidence.
@@ -2130,14 +2263,20 @@ milestones:
     stage: Stage 7
     authority_level: closeout_only
     milestone_type: closeout
-    future_wr_candidate: WR-TBD-UI-PROGRAM-013
+    owning_wr: WR-147
     predecessor_dependencies:
       - PM-UI-PROGRAM-012
     write_scope:
-      - runtime-proven closeout reports
-      - roadmap and production metadata
-      - generated planning docs
-      - MaterialProgram proof-path link
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+      - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+      - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
+      - docs-site/src/content/docs/reports/implementation-plans/wr-147-runtime-proven-closeout-and-materialprogram-handoff/plan.md
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+      - 'generated: production docs from task production:render'
+      - 'generated: roadmap docs from task roadmap:render'
+      - docs-site/src/content/docs/workspace/roadmap-items.yaml
     forbidden_scope:
       - new implementation
       - MaterialProgram implementation
@@ -2164,13 +2303,13 @@ milestones:
       - stop if any Stage 6 evidence is missing
       - stop if MaterialProgram implementation would start
       - stop if shared extraction is implied
-    next_legal_action: After PM-UI-PROGRAM-012, create or link the runtime-proven closeout and MaterialProgram handoff WR.
+      - completed by agent_closeout as proof_slice_runtime_proven
+    next_legal_action: PM-UI-PROGRAM-013 completed by agent_closeout as proof_slice_runtime_proven; no downstream implementation is authorized.
     may_create_code: false
     may_create_crates: false
     may_modify_production_behavior: false
     execution_kind: handoff_closeout
     milestone_kind: handoff_closeout
-    closeout_strategy: handoff_closeout
     permission_classes_required:
       - auto_safe
       - agent_closeout
@@ -2194,17 +2333,17 @@ milestones:
         - docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
         - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
       required_sections:
-        - Runtime-proven UI proof synthesis.
-        - MaterialProgram second-domain proof planning handoff.
+        - Bounded proof-slice UI proof synthesis.
+        - MaterialProgram second-domain proof planning blocker.
         - Explicit no MaterialProgram implementation statement.
         - Explicit no foundation/meta extraction statement.
       required_decisions:
-        - MaterialProgram is the second-domain proof path.
+        - MaterialProgram remains the second-domain proof path, but planning is blocked until truth claims or a later accepted decision clear the gate.
         - RenderPlan follows MaterialProgram and is not a substitute.
         - Shared foundation/meta extraction remains forbidden until the Second-Domain Extraction Gate.
       acceptance_checklist:
         - Final closeout links all accepted 6A through 6F evidence.
-        - Handoff creates or links MaterialProgram proof planning only and does not start implementation.
+        - Handoff records the MaterialProgram proof planning blocker and does not start implementation.
       closeout_evidence:
         - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
       rollback_compatibility_expectations:
@@ -2246,8 +2385,17 @@ milestones:
       template_key: final_handoff_closeout
       generated_contract_marker: generated_by_production_complete_track_contracts
       generated_from_template_version: v1
+    closeout_strategy: handoff_closeout
     agent_closeout_contract:
       evidence_files:
+        - docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md
+        - docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md
+        - docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md
+        - docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md
+        - docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md
+        - docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+        - docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml
+        - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md
         - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
       validation_commands:
         - task production:render
@@ -2259,12 +2407,12 @@ milestones:
         - task docs:validate
         - task planning:validate
       completion_quality_allowed:
-        - runtime_proven
+        - proof_slice_runtime_proven
       closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
       production_roadmap_state_updates:
         - set production milestone state to completed only after evidence is valid
         - archive or update owning WR only through the closeout workflow
-        - record completion_quality runtime_proven
+        - record completion_quality proof_slice_runtime_proven
       known_gap_reporting:
         - closeout must report unresolved gaps honestly
         - deferred work must not be described as completed
@@ -2275,9 +2423,9 @@ milestones:
       generated_contract_marker: generated_by_production_complete_track_contracts
       generated_from_template_version: v1
     handoff_contract:
-      handoff_target: MaterialProgram second-domain proof planning
+      handoff_target: MaterialProgram second-domain proof planning blocker
       proof_path_rules:
-        - create or link the MaterialProgram proof planning path only after the UI proof is closed
+        - do not create or link MaterialProgram proof planning until UiProgram architecture truth is satisfied or a later accepted ADR changes the gate
         - do not start MaterialProgram implementation
         - RenderPlan follows MaterialProgram and is not a substitute second proof
       forbidden_scopes:
@@ -2296,6 +2444,7 @@ milestones:
         - task planning:validate
       stop_conditions:
         - stop if any Stage 6 proof evidence is missing
+        - stop if UiProgram architecture truth remains blocked and the action would start MaterialProgram planning
         - stop if handoff would imply shared foundation/meta extraction
         - stop if handoff would start MaterialProgram implementation
       template_key: final_handoff_closeout

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-31
+last_reviewed: 2026-06-01
 related_docs:
   - ./documentation-structure.md
   - ./planning-and-implementation-workflow.md
@@ -419,6 +419,21 @@ actual runtime path.
 
 Documentation-only completion cannot be `runtime_proven`.
 
+### `proof_slice_runtime_proven`
+
+Use for manifest-backed platform-proof tracks when bounded runtime/test proof
+slices passed but the final long-term architecture contract is not implemented.
+This level is stronger than documentation-only completion and weaker than
+architecture proof. It must be paired with manifest `truth_claims` that state
+the bounded proof and remaining architecture gaps.
+
+### `architecture_runtime_proven`
+
+Use only when the concrete architecture contract exists in docs, code, and
+executable validation. A proof-slice aggregation cannot satisfy this level
+unless the claimed architecture symbols, module paths, runtime tests, and
+closeout evidence all exist.
+
 ### `perfectionist_verified`
 
 Use only when a completed audit path exists and the known gap list is empty.
@@ -634,13 +649,20 @@ conflicts, missing manifest governance fields, docs-only milestones that
 authorize code, docs-only `runtime_proven` claims, completed milestones without
 expected closeout evidence, and completed manifest-backed milestones whose
 owning WR rows are not completed.
+It also fails when `truth_claims` are missing, when satisfied claims have
+missing docs/code/validation/evidence, when production wording claims stronger
+truth than the manifest allows, when downstream handoff is blocked by truth
+claims, or when a completed design milestone declares non-generated
+`expected_output_paths` that do not exist.
 Tracks marked `full_automation_target: true` must also pass full automation
 readiness validation. Remaining milestones must declare strict automation
 `execution_kind` values, required permission classes, exact scopes, validation
 commands, closeout contracts, evidence categories, and stop conditions.
 Tracks intended for locked AI full-track execution must also have
 `ai_executable: true` in the manifest and a current Track Execution Lock under
-`workspace/track-execution-locks/<track-id>.yaml`.
+`workspace/execution-locks/<track-id>.yaml`. The older
+`workspace/track-execution-locks/<track-id>.yaml` location is legacy input and
+is not the authority for the clean Track Execution Harness.
 
 Manifest-backed `/goal` and `production:next` commands must run the same
 manifest audit before printing normal next-action guidance. When the manifest is
@@ -684,10 +706,17 @@ scope, explicit forbidden scope, validation commands, closeout path,
 compatibility/rollback plan, and stop conditions. They must fail closed for
 docs, design, or governance milestones, future or deferred WRs, missing plans,
 broad scopes, unmarked new files, crate creation, shared `foundation/meta`
-extraction, and MaterialProgram implementation. Full-track runs must use
-`--mode full-track`; otherwise the runner is limited to single-step or
-bounded-segment authority and must not infer full-track intent from the
-permission set alone.
+extraction, and MaterialProgram implementation. `product_implementation`
+writers are strategy-driven: `template_writer`, `patch_writer`,
+`proof_aggregation_writer`, and `agent_writer` all receive authority from the
+manifest and accepted plan, not from track-specific runner branches.
+`agent_writer` must run in an isolated action workspace, import only accepted
+scoped diffs after digest checks, and record a transcript in the run ledger.
+Crate creation is legal only when `crate_creation` is explicitly granted and
+the manifest, WR, and plan name exact `new: <crate>/Cargo.toml` paths.
+Full-track runs must use `--mode full-track`; otherwise the runner is limited
+to single-step or bounded-segment authority and must not infer full-track
+intent from the permission set alone.
 
 `task production:run-track -- --mode full-track ...` is locked-track
 automation. It must verify the Track Execution Lock before mutation, run
@@ -696,6 +725,17 @@ a time, recompute state after each action, append to the Track Execution Run
 ledger, and stop only for completion, failed validation, missing evidence,
 scope mismatch, ungranted permission, strategic human gate, max-actions, or a
 new architecture decision not covered by accepted design.
+
+`task production:run-track -- --mode agent-track ...` is the generic
+agent-style orchestration path for manifest-backed tracks that are being
+prepared for locked execution. It may create/link WRs, create plans, author
+bounded design contracts, close governance/design milestones, complete
+downstream contracts, run full preflight, create or refresh the execution lock
+only after full preflight passes, and continue one legal action at a time. It
+must recompute state after every action and must stop for the same real blockers
+as full-track execution: failed validation, missing evidence, ambiguous scope,
+missing permission, stale digest, strategic human gate, max-actions, or a new
+architecture decision outside the accepted design.
 
 ## Conflict Resolution
 

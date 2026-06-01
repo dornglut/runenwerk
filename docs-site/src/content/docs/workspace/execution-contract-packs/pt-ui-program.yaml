@@ -1,0 +1,31 @@
+version: 1
+track_id: PT-UI-PROGRAM
+generated_at: '2026-06-01T08:31:11Z'
+source_digests:
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 9f0649e3b49994afdaafe082e017be97f4916fe8dcf51196e82a3e5a0dede483
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 20028817c0071e5351fd625e9dbb9e333093962f14c7ae6d117b82e4010cc9a1
+  docs-site/src/content/docs/workspace/roadmap-archive.yaml: f5fb57721a6ef3e73bbea5b6e4d47141126593ad1c936d72d49cae02bf68ae41
+  docs-site/src/content/docs/workspace/roadmap-deferred.yaml: 2d1f6aee1ec103fe02c6697374e26043869ad9043208bb0bba16b3460a0d48ae
+  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml: bbb13307d72a7752b55ace62d2da9cf1d0b04ba2382d7914bc1a3a7d5cc2d2b9
+  tools/workflow/track_execution_manifest.py: f1b873ba7eeadb576cf5d1d934503ed602f0c7a72c8758d831968e637abd7880
+  tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+  tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+  tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+  docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+  docs-site/src/content/docs/design/active/ui-program-architecture.md: cd4e50a7d7755a5904e21f3088e455589b194459801e9f7db8a21d2cdf9000af
+  docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md: 31dbd244ec71da1fd5dc1123772f36afd1c4f7968b0012958f2970e8e5959d82
+  ? docs-site/src/content/docs/reports/implementation-plans/wr-135-ui-program-platform-proof-track-governance-and-activation/plan.md
+  : 5208efed6001c6d6b95512b5b9005a6857a8eac6fae87e34b1a5e679db5734d3
+  tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+  tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+  tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+  tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+  tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+  tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+  tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+  tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+  tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+  tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+  tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+  tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+actions: []

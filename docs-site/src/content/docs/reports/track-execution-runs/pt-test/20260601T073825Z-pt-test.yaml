@@ -1,0 +1,108 @@
+version: 1
+track_id: PT-TEST
+run_id: 20260601T073825Z-pt-test
+started_at: '2026-06-01T07:38:26+00:00'
+actions:
+  - action_index: 1
+    completed_at: '2026-06-01T07:38:26+00:00'
+    action_kind: auto_safe
+    milestone_id: PM-TEST-002
+    wr_id: WR-002
+    strategy: bounded_contract_closeout
+    pre_action_digests:
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/production.yaml
+      : 8bd2c3cf8a7062793fe0a297abc3e32d65ae75db892b3681c574485dcc7c702b
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap.yaml
+      : a636ed231f2747e3c4ba291fba94ef0a40f1d12849bb7a488d8e61fe64cc8851
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap-deferred.yaml
+      : 8412f2eb12b2f13e350e86dd5526d2b12dbcbbea2f6d2a8eb153cdf3870b1f4b
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/manifests/pt-test.yaml
+      : 21875350f2652f45206f3adbb12da458775d114318d8239595479f968f098671
+      tools/workflow/track_execution_manifest.py: 8faa6ef7816ba7f4f6f6002f5d079c2704363dd959d8bde05ae0a4cf65a1f0a9
+      tools/workflow/production_goal.py: 06ecb13687019388a4482335cba6302d41ef60eb5da9ca40006f211dca78802b
+      tools/workflow/production_state.py: 829cea9e5263519863910c116c30784406fb82b8bf957e8ff519582e00ada2d6
+      tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+      docs-site/src/content/docs/workspace/track-execution-manifest.md: cd1988a352bccd195b95ff7a7d15aa683203f1d4cfc7ee1e5fcb57398c98b3ee
+    post_action_digests:
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/production.yaml
+      : 8e2628359a9afd325346ec82f59d8adce97f7ca2f096d4d7c6943341990670a4
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap.yaml
+      : a636ed231f2747e3c4ba291fba94ef0a40f1d12849bb7a488d8e61fe64cc8851
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap-deferred.yaml
+      : 06aa5188b09121d30a2abdaef5b490157893bcb2babd9f1ba277f01f6f975bd4
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/manifests/pt-test.yaml
+      : 51cf3c156b06288280b1a029e0a39adadf72d0e8d4d1f83c94643cab36b5844f
+      tools/workflow/track_execution_manifest.py: 8faa6ef7816ba7f4f6f6002f5d079c2704363dd959d8bde05ae0a4cf65a1f0a9
+      tools/workflow/production_goal.py: 06ecb13687019388a4482335cba6302d41ef60eb5da9ca40006f211dca78802b
+      tools/workflow/production_state.py: 829cea9e5263519863910c116c30784406fb82b8bf957e8ff519582e00ada2d6
+      tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+      docs-site/src/content/docs/workspace/track-execution-manifest.md: cd1988a352bccd195b95ff7a7d15aa683203f1d4cfc7ee1e5fcb57398c98b3ee
+    files_changed:
+      - /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/manifests/pt-test.yaml
+      - /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/production.yaml
+      - /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap-deferred.yaml
+    validation_results:
+      - 'task production:render: exit 0'
+      - 'task roadmap:render: exit 0'
+      - 'task production:validate: exit 0'
+      - 'task roadmap:validate: exit 0'
+      - 'task production:check: exit 0'
+      - 'task roadmap:check: exit 0'
+      - 'task docs:validate: exit 0'
+      - 'task planning:validate: exit 0'
+    evidence_paths: []
+    closeout_paths: []
+    next_legal_action: Run task production:plan -- --milestone PM-TEST-002 --roadmap WR-002; do not start design authoring until that plan is accepted.
+    stop_reason: ''
+  - action_index: 2
+    completed_at: '2026-06-01T07:38:26+00:00'
+    action_kind: agent_design
+    milestone_id: PM-TEST-002
+    wr_id: WR-002
+    strategy: bounded_contract_closeout
+    pre_action_digests:
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/production.yaml
+      : 8e2628359a9afd325346ec82f59d8adce97f7ca2f096d4d7c6943341990670a4
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap.yaml
+      : a636ed231f2747e3c4ba291fba94ef0a40f1d12849bb7a488d8e61fe64cc8851
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap-deferred.yaml
+      : 06aa5188b09121d30a2abdaef5b490157893bcb2babd9f1ba277f01f6f975bd4
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/manifests/pt-test.yaml
+      : 51cf3c156b06288280b1a029e0a39adadf72d0e8d4d1f83c94643cab36b5844f
+      tools/workflow/track_execution_manifest.py: 8faa6ef7816ba7f4f6f6002f5d079c2704363dd959d8bde05ae0a4cf65a1f0a9
+      tools/workflow/production_goal.py: 06ecb13687019388a4482335cba6302d41ef60eb5da9ca40006f211dca78802b
+      tools/workflow/production_state.py: 829cea9e5263519863910c116c30784406fb82b8bf957e8ff519582e00ada2d6
+      tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+      docs-site/src/content/docs/workspace/track-execution-manifest.md: cd1988a352bccd195b95ff7a7d15aa683203f1d4cfc7ee1e5fcb57398c98b3ee
+    post_action_digests:
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/production.yaml
+      : b43d9a8f51b2d21e5a34140620252a19f3c0b5f77eb11fea9305cf45210c924c
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap.yaml
+      : a460aa666cbd0de3bdc6f445a14c4dd391f339d05fc910dcc3c3c82cb1b31d8b
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/roadmap-deferred.yaml
+      : 8412f2eb12b2f13e350e86dd5526d2b12dbcbbea2f6d2a8eb153cdf3870b1f4b
+      ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/manifests/pt-test.yaml
+      : fe159dd07c22e6d35b0abfbc0340ba3140f8b318eb588a4b01d6d6cd6a5df743
+      tools/workflow/track_execution_manifest.py: 8faa6ef7816ba7f4f6f6002f5d079c2704363dd959d8bde05ae0a4cf65a1f0a9
+      tools/workflow/production_goal.py: 06ecb13687019388a4482335cba6302d41ef60eb5da9ca40006f211dca78802b
+      tools/workflow/production_state.py: 829cea9e5263519863910c116c30784406fb82b8bf957e8ff519582e00ada2d6
+      tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+      docs-site/src/content/docs/workspace/track-execution-manifest.md: cd1988a352bccd195b95ff7a7d15aa683203f1d4cfc7ee1e5fcb57398c98b3ee
+    files_changed:
+      - /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/manifests/pt-test.yaml
+      - /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-172/test_agent_track_creates_missi0/plans/wr-003-6a-label-structural-uiframe-text-proof/plan.md
+    validation_results:
+      - 'task production:render: exit 0'
+      - 'task roadmap:render: exit 0'
+      - 'task production:validate: exit 0'
+      - 'task roadmap:validate: exit 0'
+      - 'task production:check: exit 0'
+      - 'task roadmap:check: exit 0'
+      - 'task docs:validate: exit 0'
+      - 'task planning:validate: exit 0'
+    evidence_paths: []
+    closeout_paths: []
+    next_legal_action: 'PM-TEST-002 implementation plan exists; stop before product_code. Next permitted command, only with explicit authorization: task production:run-track -- --track PT-TEST --allow product_code --allow product_implementation --max-actions 1'
+    stop_reason: ''
+last_action_at: '2026-06-01T07:38:26+00:00'
+last_next_legal_action: 'PM-TEST-002 implementation plan exists; stop before product_code. Next permitted command, only with explicit authorization: task production:run-track -- --track PT-TEST --allow product_code --allow product_implementation --max-actions 1'

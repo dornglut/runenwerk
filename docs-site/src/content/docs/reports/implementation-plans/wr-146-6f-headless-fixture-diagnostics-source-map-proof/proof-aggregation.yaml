@@ -1,0 +1,91 @@
+version: 1
+artifact_kind: ui_program_6f_proof_aggregation
+track_id: PT-UI-PROGRAM
+milestone_id: PM-UI-PROGRAM-012
+wr_id: WR-146
+aggregation_only: true
+completion_quality_target: runtime_proven
+required_prior_completion_quality: runtime_proven
+required_prior_milestones:
+  - milestone_id: PM-UI-PROGRAM-007
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md
+    evidence_categories:
+      - text/render boundary
+      - source-map proof
+      - runtime artifact evidence
+      - reproducibility evidence
+  - milestone_id: PM-UI-PROGRAM-008
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md
+    evidence_categories:
+      - route event host command proof
+      - diagnostics
+      - runtime artifact evidence
+      - reproducibility evidence
+  - milestone_id: PM-UI-PROGRAM-009
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md
+    evidence_categories:
+      - headless fixture
+      - diagnostics
+      - runtime artifact evidence
+      - reproducibility evidence
+  - milestone_id: PM-UI-PROGRAM-010
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md
+    evidence_categories:
+      - control package proof
+      - diagnostics
+      - source-map proof
+      - runtime artifact evidence
+      - reproducibility evidence
+  - milestone_id: PM-UI-PROGRAM-011
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md
+    evidence_categories:
+      - world-space host boundary proof
+      - diagnostics
+      - source-map proof
+      - runtime artifact evidence
+      - reproducibility evidence
+required_evidence_categories:
+  - headless fixture
+  - diagnostics
+  - source-map proof
+  - runtime artifact evidence
+  - reproducibility evidence
+category_coverage:
+  headless_fixture:
+    - PM-UI-PROGRAM-009
+  diagnostics:
+    - PM-UI-PROGRAM-008
+    - PM-UI-PROGRAM-009
+    - PM-UI-PROGRAM-010
+    - PM-UI-PROGRAM-011
+  source_map_proof:
+    - PM-UI-PROGRAM-007
+    - PM-UI-PROGRAM-010
+    - PM-UI-PROGRAM-011
+  runtime_artifact_evidence:
+    - PM-UI-PROGRAM-007
+    - PM-UI-PROGRAM-008
+    - PM-UI-PROGRAM-009
+    - PM-UI-PROGRAM-010
+    - PM-UI-PROGRAM-011
+  reproducibility_evidence:
+    - PM-UI-PROGRAM-007
+    - PM-UI-PROGRAM-008
+    - PM-UI-PROGRAM-009
+    - PM-UI-PROGRAM-010
+    - PM-UI-PROGRAM-011
+validation_commands:
+  - cargo test -p ui_definition preview_fixture
+  - cargo test -p ui_definition diagnostic
+  - cargo test -p ui_definition source
+  - cargo test -p ui_runtime build_ui_frame
+  - cargo test -p ui_render_data
+  - task docs:validate
+  - task planning:validate
+guardrails:
+  prior_slice_product_files_modified: false
+  missing_prior_behavior_implemented_here: false
+  material_program_implementation_started: false
+  crate_creation: false
+  foundation_meta_extraction: false
+  central_event_enum_growth: false

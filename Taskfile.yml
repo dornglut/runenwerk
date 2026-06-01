@@ -93,6 +93,31 @@ tasks:
     cmds:
       - uv run python tools/workflow/track_execution_manifest.py audit-track {{.CLI_ARGS}}
 
+  execution:compile:
+    desc: Compile a manifest-backed production track into an Execution Contract Pack.
+    cmds:
+      - uv run python tools/workflow/execution/cli.py compile {{.CLI_ARGS}}
+
+  execution:preflight:
+    desc: Preflight an Execution Contract Pack before locking or running.
+    cmds:
+      - uv run python tools/workflow/execution/cli.py preflight {{.CLI_ARGS}}
+
+  execution:lock:
+    desc: Create a digest lock for an Execution Contract Pack.
+    cmds:
+      - uv run python tools/workflow/execution/cli.py lock {{.CLI_ARGS}}
+
+  execution:run:
+    desc: Run the clean Track Execution Harness against a locked Contract Pack.
+    cmds:
+      - uv run python tools/workflow/execution/cli.py run {{.CLI_ARGS}}
+
+  execution:next:
+    desc: Print the next ActionContract from an Execution Contract Pack.
+    cmds:
+      - uv run python tools/workflow/execution/cli.py next {{.CLI_ARGS}}
+
   planning:validate:
     desc: Validate roadmap, production tracks, generated docs, and docs-site links.
     cmds:

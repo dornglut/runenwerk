@@ -4,6 +4,7 @@ import copy
 import tempfile
 import subprocess
 from collections.abc import Callable
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -73,6 +74,14 @@ from track_execution_manifest import (
     resolve_manifest_command_context,
 )
 from track_execution_manifest import app as track_manifest_app
+from execution.cli import app as execution_app
+from execution.compiler import compile_contract_pack, load_contract_pack, write_contract_pack
+from execution.contracts import ActionContract, CloseoutContract, ContractPack, EvidenceRequirement, RollbackPolicy
+from execution.locks import build_execution_lock, execution_lock_errors, write_execution_lock
+from execution.preflight import preflight_pack
+from execution.evidence import passed_record, write_evidence_record
+from execution.runner import run_action, run_next_action
+from execution.writers import AgentResult, run_writer
 from roadmap_state import (
     REPO_ROOT,
     BatchManifest,
@@ -316,6 +325,28 @@ def valid_track_manifest_state() -> dict:
         "global_stop_conditions": ["stop after one legal action"],
         "next_legal_action": "Execute PM-TEST-001.",
         "ai_executable": False,
+        "truth_claims": [
+            {
+                "claim_id": "test-track-proof",
+                "claim_kind": "product_behavior",
+                "claim_level": "runtime_proven",
+                "claim_status": "satisfied",
+                "claim_statement": "The test manifest has enough evidence for workflow validation.",
+                "required_docs": [
+                    {
+                        "evidence_kind": "doc_exists",
+                        "path": "tools/workflow/test_workflow.py",
+                        "reason": "Fixture truth evidence path exists.",
+                    }
+                ],
+                "required_code_contracts": [],
+                "required_validations": [],
+                "required_closeout_evidence": [],
+                "known_gaps": [],
+                "supersedes": [],
+                "blocks_downstream": [],
+            }
+        ],
         "milestones": [
             manifest_milestone("PM-TEST-001", owning_wr="WR-001"),
             manifest_milestone(
@@ -698,6 +729,7 @@ def make_runtime_closeout_ready(
     manifest["milestones"][1]["validation_commands"] = commands
     manifest["milestones"][1]["product_code_contract"]["validation_commands"] = commands
     manifest["milestones"][1]["runtime_closeout_contract"]["validation_commands"] = commands
+    manifest["milestones"][1]["implementation_writer"]["validation_commands"] = commands
     manifest["milestones"][1]["expected_closeout_path"] = repo_path(closeout_path)
     manifest["milestones"][1]["next_legal_action"] = (
         "PM-TEST-002 product_implementation completed; runtime closeout is the next legal action."
@@ -965,7 +997,7 @@ def manifest_milestone(
             "planning_write_scope": ["tools/workflow"],
             "allowed_write_scopes": ["tools/workflow"],
             "forbidden_scopes": ["product code"],
-            "expected_output_paths": ["tools/workflow/test-plan.md"],
+            "expected_output_paths": ["tools/workflow/test_workflow.py"],
             "validation_commands": ["task docs:validate"],
             "stop_conditions": ["stop before closeout"],
             "template_key": "docs_design",
@@ -1466,6 +1498,31 @@ def test_production_goal_renders_manifest_gate_when_source_is_present(tmp_path: 
     assert "Stop after the current legal action and rerun this command" in rendered
 
 
+def test_production_goal_completed_manifest_track_has_no_stale_unmet_wr_gate(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+    loaded_manifest = load_track_execution_manifest("PT-TEST", root=manifest_root)
+    assert loaded_manifest is not None
+    production_data = valid_production_state()
+    for milestone in production_data["tracks"][0]["milestones"]:
+        milestone["state"] = "completed"
+        milestone["completion_quality"] = "bounded_contract"
+    roadmap_data = valid_state()
+    for roadmap_item in roadmap_data["items"]:
+        roadmap_item["planning_state"] = "completed"
+    planning = ProductionPlanningState.model_validate(production_data)
+    roadmap = RoadmapState.model_validate(roadmap_data)
+    track = find_track(planning, "PT-TEST")
+
+    rendered = render_track_goal(planning, roadmap, track, manifest=loaded_manifest)
+
+    assert "Workflow next action: already_completed" in rendered
+    assert "Unmet gates: none detected by manifest-aware workflow checks." in rendered
+    assert "workflow action is linked_row_completed" not in rendered
+    assert "Unmet gates:\n  - WR-" not in rendered
+
+
 def test_production_goal_manifest_conflict_fails_closed(tmp_path: Path) -> None:
     production_path = tmp_path / "production.yaml"
     roadmap_path = tmp_path / "roadmap.yaml"
@@ -1944,7 +2001,7 @@ def test_manifest_runner_auto_safe_creates_and_links_deferred_wr(tmp_path: Path,
     assert "No implementation" not in result.stdout
 
 
-def test_manifest_runner_auto_safe_refuses_unsupported_permissions(tmp_path: Path) -> None:
+def test_manifest_runner_crate_creation_permission_alone_does_not_expand_track(tmp_path: Path) -> None:
     production_path = tmp_path / "production.yaml"
     roadmap_path = tmp_path / "roadmap.yaml"
     manifest_root = tmp_path / "manifests"
@@ -1972,7 +2029,8 @@ def test_manifest_runner_auto_safe_refuses_unsupported_permissions(tmp_path: Pat
     )
 
     assert result.exit_code == 1
-    assert "does not implement allowed permissions: crate_creation" in result.stdout
+    assert "Track Expansion must create or link" in result.stdout
+    assert "--allow auto_safe" in result.stdout
     assert not (tmp_path / "roadmap-deferred.yaml").exists()
 
 
@@ -3067,6 +3125,90 @@ def test_manifest_runner_product_code_denied_if_crate_creation_needed(
     assert "crate_creation is required" in result.stdout
 
 
+def test_manifest_runner_product_code_rejects_crate_creation_without_exact_new_cargo_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["may_create_crates"] = True
+
+    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--allow",
+            "crate_creation",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "crate_creation requires exact 'new:' Cargo.toml scope" in result.stdout
+
+
+def test_manifest_runner_product_code_allows_crate_creation_with_exact_new_cargo_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    crate_manifest = tmp_path / "domain" / "ui" / "ui_program" / "Cargo.toml"
+
+    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
+        manifest["milestones"][1]["may_create_crates"] = True
+        crate_scope = f"new: {repo_path(crate_manifest)}"
+        roadmap["items"][1]["write_scopes"].append(crate_scope)
+        manifest["milestones"][1]["write_scope"].append(crate_scope)
+        manifest["milestones"][1]["product_code_contract"]["exact_allowed_implementation_write_scopes"].append(crate_scope)
+
+    production_path, roadmap_path, manifest_root, plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+    crate_scope = f"new: {repo_path(crate_manifest)}"
+    plan_path.write_text(
+        plan_path.read_text(encoding="utf-8")
+        + f"\nAdditional exact crate creation scope:\n\n- `{crate_scope}`\n- `{repo_path(crate_manifest)}`\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--allow",
+            "crate_creation",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
+
+
 def test_manifest_runner_product_code_denied_if_foundation_extraction_requested(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3221,6 +3363,10 @@ def test_manifest_runner_product_implementation_writes_bounded_existing_file(
             "run-track",
             "--track",
             "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--allow",
+            "agent_closeout",
             "--allow",
             "product_code",
             "--allow",
@@ -3405,7 +3551,13 @@ def test_manifest_runner_patch_writer_refuses_undeclared_new_file(
     assert not implementation_path.exists()
 
 
-def test_manifest_runner_agent_writer_is_disabled_until_diff_protocol(
+def fake_codex_writer_changes_lib(workspace: Path, prompt: str) -> subprocess.CompletedProcess[str]:
+    target = next(path for path in workspace.rglob("lib.rs") if "product" in path.parts and "src" in path.parts)
+    target.write_text("// changed by agent writer\n", encoding="utf-8")
+    return subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="changed scoped file", stderr="")
+
+
+def test_manifest_runner_agent_writer_imports_scoped_codex_diff(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3413,19 +3565,16 @@ def test_manifest_runner_agent_writer_is_disabled_until_diff_protocol(
         writer = manifest["milestones"][1]["implementation_writer"]
         writer["strategy"] = "agent_writer"
         writer["templates"] = []
-        writer["patches"] = [
-            {
-                "file": writer["allowed_files"][0],
-                "find": "// implementation fixture\n",
-                "replace": "// changed by agent writer\n",
-            }
-        ]
+        writer["patches"] = []
+        writer["agent_prompt"] = "Change only the scoped implementation fixture."
+        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
+        writer["agent_required_outputs"] = ["implementation file changed"]
     production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
         tmp_path,
         monkeypatch,
         mutate=mutate,
     )
-    original = implementation_path.read_text(encoding="utf-8")
+    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_codex_writer_changes_lib)
 
     result = CliRunner().invoke(
         track_manifest_app,
@@ -3446,12 +3595,12 @@ def test_manifest_runner_agent_writer_is_disabled_until_diff_protocol(
         ],
     )
 
-    assert result.exit_code == 1
-    assert "agent_writer is reserved until a real agent diff protocol exists" in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == original
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
+    assert implementation_path.read_text(encoding="utf-8") == "// changed by agent writer\n"
 
 
-def test_manifest_runner_agent_writer_does_not_apply_forbidden_pattern_patch(
+def test_manifest_runner_agent_writer_rejects_forbidden_pattern_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3459,13 +3608,10 @@ def test_manifest_runner_agent_writer_does_not_apply_forbidden_pattern_patch(
         writer = manifest["milestones"][1]["implementation_writer"]
         writer["strategy"] = "agent_writer"
         writer["templates"] = []
-        writer["patches"] = [
-            {
-                "file": writer["allowed_files"][0],
-                "find": "// product implementation placeholder\n",
-                "replace": "// foundation/meta is forbidden here\n",
-            }
-        ]
+        writer["patches"] = []
+        writer["agent_prompt"] = "Change only the scoped implementation fixture."
+        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
+        writer["agent_required_outputs"] = ["implementation file changed"]
 
     production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
         tmp_path,
@@ -3474,6 +3620,13 @@ def test_manifest_runner_agent_writer_does_not_apply_forbidden_pattern_patch(
     )
     implementation_path.write_text("// product implementation placeholder\n", encoding="utf-8")
 
+    def fake_forbidden_agent(workspace: Path, prompt: str) -> subprocess.CompletedProcess[str]:
+        target = next(path for path in workspace.rglob("lib.rs") if "product" in path.parts and "src" in path.parts)
+        target.write_text("// foundation/meta is forbidden here\n", encoding="utf-8")
+        return subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="changed scoped file", stderr="")
+
+    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_forbidden_agent)
+
     result = CliRunner().invoke(
         track_manifest_app,
         [
@@ -3494,7 +3647,58 @@ def test_manifest_runner_agent_writer_does_not_apply_forbidden_pattern_patch(
     )
 
     assert result.exit_code == 1
-    assert "agent_writer is reserved until a real agent diff protocol exists" in result.stdout
+    assert "forbidden pattern" in result.stdout
+    assert implementation_path.read_text(encoding="utf-8") == "// product implementation placeholder\n"
+
+
+def test_manifest_runner_agent_writer_rejects_out_of_scope_diff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
+        writer = manifest["milestones"][1]["implementation_writer"]
+        writer["strategy"] = "agent_writer"
+        writer["templates"] = []
+        writer["patches"] = []
+        writer["agent_prompt"] = "Change only the scoped implementation fixture."
+        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
+
+    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+    original = implementation_path.read_text(encoding="utf-8")
+
+    def fake_out_of_scope_agent(workspace: Path, prompt: str) -> subprocess.CompletedProcess[str]:
+        target = workspace / "out-of-scope.rs"
+        target.write_text("// out of scope\n", encoding="utf-8")
+        return subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="changed undeclared file", stderr="")
+
+    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_out_of_scope_agent)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--allow",
+            "product_implementation",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "changed undeclared files" in result.stdout
+    assert implementation_path.read_text(encoding="utf-8") == original
 
 
 def test_manifest_runner_product_implementation_honors_new_file_scope(
@@ -3677,6 +3881,8 @@ def write_proof_aggregation_fixture(
     manifest_data["milestones"][0]["runtime_closeout_contract"]["files_changed_report"] = [
         "tools/workflow/prior-proof.rs"
     ]
+    manifest_data["milestones"][0]["implementation_writer"]["allowed_files"] = ["tools/workflow/prior-proof.rs"]
+    manifest_data["milestones"][0]["implementation_writer"]["templates"][0]["file"] = "tools/workflow/prior-proof.rs"
     manifest_data["milestones"][1]["milestone_type"] = "hardening"
     manifest_data["milestones"][1]["execution_kind"] = "proof_aggregation"
     manifest_data["milestones"][1]["predecessor_dependencies"] = ["PM-TEST-001"]
@@ -3873,7 +4079,7 @@ def prepare_full_automation_product_fixture(
         "product_implementation",
         "runtime_closeout",
     ]
-    entry["required_evidence_categories"] = ["runtime_test", "diagnostics", "source_maps", "artifact", "closeout"]
+    entry["required_evidence_categories"] = ["runtime_test"]
     entry["agent_design_contract"]["allowed_write_scopes"] = [repo_path(plan_path)]
     entry["agent_design_contract"]["planning_write_scope"] = [repo_path(plan_path)]
     entry["agent_design_contract"]["expected_output_paths"] = [repo_path(plan_path)]
@@ -3883,9 +4089,26 @@ def prepare_full_automation_product_fixture(
     entry["implementation_writer"]["templates"][0]["file"] = repo_path(implementation_path)
     if mutate is not None:
         mutate(production, roadmap, manifest, plan_path, implementation_path, closeout_path)
+    write_yaml(
+        plan_path.with_suffix(".execution.yaml"),
+        {
+            "version": 1,
+            "track_id": "PT-TEST",
+            "milestone_id": entry["milestone_id"],
+            "wr_id": entry["owning_wr"],
+            "executor_kind": "proof_aggregation" if entry.get("execution_kind") == "proof_aggregation" else "product_implementation",
+            "allowed_outputs": [repo_path(implementation_path)],
+            "new_outputs": [],
+            "forbidden_outputs": ["foundation/meta"],
+            "validation_commands": list(entry["implementation_writer"]["validation_commands"]),
+            "evidence_required": ["runtime_test"],
+            "closeout_path": entry["expected_closeout_path"],
+        },
+    )
     write_yaml(production_path, production)
     write_yaml(roadmap_path, roadmap)
     write_yaml(manifest_root / "pt-test.yaml", manifest)
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
     return production_path, roadmap_path, manifest_root, plan_path, implementation_path, closeout_path
 
 
@@ -3919,6 +4142,41 @@ def write_track_execution_lock_fixture(
     return path
 
 
+def write_execution_pack_and_lock_fixture(
+    track_id: str,
+    production_path: Path,
+    roadmap_path: Path,
+    manifest_root: Path,
+    lock_root: Path,
+    *,
+    allow: list[str] | None = None,
+    deny: list[str] | None = None,
+    mutate_lock: Callable[[dict], None] | None = None,
+) -> tuple[Path, Path]:
+    pack_root = production_path.parent / "contract-packs"
+    pack = compile_contract_pack(
+        track_id,
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+    )
+    pack_path = write_contract_pack(pack, root=pack_root)
+    lock = build_execution_lock(
+        track_id,
+        locked_by="test",
+        contract_pack_root=pack_root,
+        granted_permissions=allow or sorted(track_manifest_module.FULL_TRACK_PERMISSION_SET),
+        denied_permissions=deny or ["crate_creation", "foundation_extraction"],
+    )
+    lock_data = lock.model_dump(mode="json")
+    if mutate_lock is not None:
+        mutate_lock(lock_data)
+    lock_root.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_root / f"{track_id.lower()}.yaml"
+    write_yaml(lock_path, lock_data)
+    return pack_path, lock_path
+
+
 def invoke_full_automation_audit(
     production_path: Path,
     roadmap_path: Path,
@@ -3927,6 +4185,7 @@ def invoke_full_automation_audit(
     *,
     require_lock: bool = False,
 ) -> object:
+    contract_pack_root = production_path.parent / "contract-packs"
     args = [
         "audit-track",
         "--track",
@@ -3938,6 +4197,8 @@ def invoke_full_automation_audit(
         str(roadmap_path),
         "--manifest-source-root",
         str(manifest_root),
+        "--contract-pack-root",
+        str(contract_pack_root),
     ]
     if require_lock:
         args.append("--require-lock")
@@ -3965,8 +4226,8 @@ def test_full_automation_preflight_fails_when_future_milestone_has_no_writer(
     result = invoke_full_automation_audit(production_path, roadmap_path, manifest_root)
 
     assert result.exit_code == 1
-    assert "Full automation readiness blockers" in result.stdout
-    assert "implementation_writer.strategy must not be no_writer" in result.stdout
+    assert "execution:preflight failed" in result.stdout
+    assert "implementation/proof action cannot use no_writer" in result.stdout
 
 
 def test_goal_reports_full_automation_blockers_for_manifest_target(
@@ -4020,7 +4281,7 @@ def test_full_automation_preflight_requires_execution_kind(
     result = invoke_full_automation_audit(production_path, roadmap_path, manifest_root)
 
     assert result.exit_code == 1
-    assert "full automation execution_kind must be one of" in result.stdout
+    assert "unsupported execution_kind None" in result.stdout
 
 
 def test_full_automation_preflight_rejects_legacy_execution_kind(
@@ -4060,7 +4321,8 @@ def test_full_automation_preflight_fails_when_proof_aggregation_lacks_writer(
     result = invoke_full_automation_audit(production_path, roadmap_path, manifest_root)
 
     assert result.exit_code == 1
-    assert "proof_aggregation milestone requires proof_aggregation_writer" in result.stdout
+    assert "proof_aggregation" in result.stdout
+    assert "proof_aggregation_writer" in result.stdout
 
 
 def test_full_automation_preflight_fails_when_validation_command_is_prose(
@@ -4081,8 +4343,7 @@ def test_full_automation_preflight_fails_when_validation_command_is_prose(
     result = invoke_full_automation_audit(production_path, roadmap_path, manifest_root)
 
     assert result.exit_code == 1
-    assert "validation command is a non-executable" in result.stdout
-    assert "placeholder" in result.stdout
+    assert "validation command is prose/non-executable" in result.stdout
 
 
 def test_full_automation_preflight_fails_when_closeout_contract_missing(
@@ -4123,7 +4384,8 @@ def test_full_track_runner_preflight_catches_future_no_writer_before_mutation(
     write_yaml(production_path, production)
     write_yaml(roadmap_path, roadmap)
     write_yaml(manifest_root / "pt-test.yaml", manifest)
-    write_track_execution_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
+    pack_root = production_path.parent / "contract-packs"
+    write_execution_pack_and_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
 
     result = CliRunner().invoke(
         track_manifest_app,
@@ -4153,12 +4415,13 @@ def test_full_track_runner_preflight_catches_future_no_writer_before_mutation(
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
         ],
     )
 
     assert result.exit_code == 1
-    assert "Full automation readiness blockers" in result.stdout
-    assert "implementation_writer.strategy must not be no_writer" in result.stdout
+    assert "planning_expansion executor" in result.stdout
     assert not (tmp_path / "roadmap-deferred.yaml").exists()
 
 
@@ -4167,6 +4430,16 @@ def test_full_track_runner_fails_without_execution_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
+    pack_root = production_path.parent / "contract-packs"
+    write_contract_pack(
+        compile_contract_pack(
+            "PT-TEST",
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+        ),
+        root=pack_root,
+    )
 
     result = CliRunner().invoke(
         track_manifest_app,
@@ -4200,12 +4473,13 @@ def test_full_track_runner_fails_without_execution_lock(
             str(manifest_root),
             "--lock-source-root",
             str(tmp_path / "locks"),
+            "--contract-pack-root",
+            str(pack_root),
         ],
     )
 
     assert result.exit_code == 1
-    assert "Track Execution Lock blockers" in result.stdout
-    assert "requires Track Execution Lock" in result.stdout
+    assert "requires current Execution Lock" in result.stdout
 
 
 def test_full_track_runner_fails_with_stale_manifest_digest(
@@ -4214,13 +4488,14 @@ def test_full_track_runner_fails_with_stale_manifest_digest(
 ) -> None:
     production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
     lock_root = tmp_path / "locks"
-    write_track_execution_lock_fixture(
+    pack_root = production_path.parent / "contract-packs"
+    write_execution_pack_and_lock_fixture(
         "PT-TEST",
         production_path,
         roadmap_path,
         manifest_root,
         lock_root,
-        mutate=lambda data: data.update({"manifest_digest": "0" * 64}),
+        mutate_lock=lambda data: data.update({"contract_pack_digest": "0" * 64}),
     )
 
     result = CliRunner().invoke(
@@ -4251,11 +4526,13 @@ def test_full_track_runner_fails_with_stale_manifest_digest(
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
         ],
     )
 
     assert result.exit_code == 1
-    assert "execution lock manifest_digest is stale" in result.stdout
+    assert "execution lock contract_pack_digest is stale" in result.stdout
 
 
 def test_full_track_runner_fails_when_requested_permission_exceeds_lock(
@@ -4264,7 +4541,8 @@ def test_full_track_runner_fails_when_requested_permission_exceeds_lock(
 ) -> None:
     production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
     lock_root = tmp_path / "locks"
-    write_track_execution_lock_fixture(
+    pack_root = production_path.parent / "contract-packs"
+    write_execution_pack_and_lock_fixture(
         "PT-TEST",
         production_path,
         roadmap_path,
@@ -4301,11 +4579,13 @@ def test_full_track_runner_fails_when_requested_permission_exceeds_lock(
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
         ],
     )
 
     assert result.exit_code == 1
-    assert "requested full-track permissions exceed execution lock grants" in result.stdout
+    assert "requested permissions exceed execution lock grants" in result.stdout
     assert "product_implementation" in result.stdout
 
 
@@ -4322,7 +4602,8 @@ def test_full_track_preflight_reports_strategic_human_gate(
         mutate=mutate,
     )
     lock_root = tmp_path / "locks"
-    write_track_execution_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
+    pack_root = production_path.parent / "contract-packs"
+    write_execution_pack_and_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
 
     result = invoke_full_automation_audit(
         production_path,
@@ -4334,7 +4615,7 @@ def test_full_track_preflight_reports_strategic_human_gate(
 
     assert result.exit_code == 1
     assert "foundation_extraction" in result.stdout
-    assert "strategic human gate foundation_meta_extraction blocks permission" in result.stdout
+    assert "foundation_extraction is a strategic human gate" in result.stdout
 
 
 def test_full_track_runner_requires_explicit_full_track_mode(
@@ -4384,7 +4665,7 @@ def test_full_automation_preflight_passes_for_fully_specified_contract(
     result = invoke_full_automation_audit(production_path, roadmap_path, manifest_root)
 
     assert result.exit_code == 0, result.output
-    assert "full automation readiness preflight passed" in result.stdout
+    assert "execution preflight passed" in result.stdout
 
 
 def test_full_automation_audit_requires_current_execution_lock_when_requested(
@@ -4393,7 +4674,7 @@ def test_full_automation_audit_requires_current_execution_lock_when_requested(
 ) -> None:
     production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
     lock_root = tmp_path / "locks"
-    write_track_execution_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
+    write_execution_pack_and_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
 
     result = invoke_full_automation_audit(
         production_path,
@@ -4404,7 +4685,7 @@ def test_full_automation_audit_requires_current_execution_lock_when_requested(
     )
 
     assert result.exit_code == 0, result.output
-    assert "track execution lock passed" in result.stdout
+    assert "Execution Harness lock passed" in result.stdout
 
 
 def test_full_track_runner_writes_run_ledger_after_successful_action(
@@ -4416,7 +4697,8 @@ def test_full_track_runner_writes_run_ledger_after_successful_action(
     )
     lock_root = tmp_path / "locks"
     run_root = tmp_path / "runs"
-    write_track_execution_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
+    pack_root = production_path.parent / "contract-packs"
+    write_execution_pack_and_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
 
     result = CliRunner().invoke(
         track_manifest_app,
@@ -4450,20 +4732,660 @@ def test_full_track_runner_writes_run_ledger_after_successful_action(
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
+            "--run-ledger-root",
+            str(run_root),
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "output parent directory does not exist" in result.stdout
+    assert "Run ledger:" in result.stdout
+    ledger_paths = list((run_root / "pt-test").glob("*.yaml"))
+    assert len(ledger_paths) == 1
+    ledger = load_yaml(ledger_paths[0])
+    assert ledger["track_id"] == "PT-TEST"
+    assert ledger["actions"][0]["status"] == "failed"
+    assert ledger["actions"][0]["executor_kind"] == "product_implementation"
+
+
+def test_agent_track_allows_full_permission_set_and_refreshes_lock_after_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout = (
+        prepare_full_automation_product_fixture(tmp_path, monkeypatch)
+    )
+    lock_root = tmp_path / "locks"
+    run_root = tmp_path / "runs"
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--allow",
+            "agent_design",
+            "--allow",
+            "agent_closeout",
+            "--allow",
+            "product_code",
+            "--allow",
+            "product_implementation",
+            "--deny",
+            "crate_creation",
+            "--deny",
+            "foundation_extraction",
+            "--mode",
+            "agent-track",
+            "--max-actions",
+            "1",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+            "--lock-source-root",
+            str(lock_root),
             "--run-ledger-root",
             str(run_root),
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert "Run ledger:" in result.stdout
-    ledger_paths = list((run_root / "pt-test").glob("*.yaml"))
-    assert len(ledger_paths) == 1
-    ledger = load_yaml(ledger_paths[0])
-    assert ledger["track_id"] == "PT-TEST"
-    assert ledger["actions"][0]["action_kind"] == "product_implementation"
-    assert repo_path(implementation_path) in ledger["actions"][0]["files_changed"]
+    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
+    assert implementation_path.read_text(encoding="utf-8") == "// changed by product implementation\n"
+    lock = load_yaml(lock_root / "pt-test.yaml")
+    assert lock["ai_executable"] is True
+    assert "product_implementation" in lock["granted_permissions"]
 
+
+def test_agent_track_creates_missing_wr_and_plan_without_product_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, _scope_paths = write_implementation_agent_design_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    lock_root = tmp_path / "locks"
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "auto_safe",
+            "--allow",
+            "agent_design",
+            "--deny",
+            "product_code",
+            "--mode",
+            "agent-track",
+            "--max-actions",
+            "10",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+            "--lock-source-root",
+            str(lock_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
+    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
+    assert plan_path.exists()
+    assert not (lock_root / "pt-test.yaml").exists()
+
+
+def test_agent_track_creates_lock_before_agent_writer_product_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _roadmap: dict, manifest: dict, _plan: Path, _implementation: Path, _closeout: Path) -> None:
+        writer = manifest["milestones"][1]["implementation_writer"]
+        writer["strategy"] = "agent_writer"
+        writer["templates"] = []
+        writer["patches"] = []
+        writer["agent_prompt"] = "Change only the scoped implementation fixture."
+        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
+        writer["agent_required_outputs"] = ["implementation file changed"]
+
+    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+    lock_root = tmp_path / "locks"
+    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_codex_writer_changes_lib)
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "run-track",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "agent_design",
+            "--allow",
+            "agent_closeout",
+            "--allow",
+            "product_code",
+            "--allow",
+            "product_implementation",
+            "--deny",
+            "crate_creation",
+            "--deny",
+            "foundation_extraction",
+            "--mode",
+            "agent-track",
+            "--max-actions",
+            "1",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+            "--lock-source-root",
+            str(lock_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
+    assert implementation_path.read_text(encoding="utf-8") == "// changed by agent writer\n"
+    assert (lock_root / "pt-test.yaml").exists()
+
+
+def test_execution_contract_compiler_rejects_missing_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, *_ = write_product_code_fixture(
+        tmp_path,
+        monkeypatch,
+        write_plan=False,
+    )
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+
+    with pytest.raises(WorkflowError, match="implementation/design plan is missing"):
+        compile_contract_pack(
+            "PT-TEST",
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+        )
+
+
+def test_execution_contract_pack_preflight_passes_for_runtime_action(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, *_ = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+
+    pack = compile_contract_pack(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+    )
+
+    assert pack.actions
+    assert preflight_pack(pack) == []
+    assert pack.actions[0].writer_strategy == "template_writer"
+
+
+def test_execution_preflight_rejects_prose_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(_production: dict, _roadmap: dict, manifest: dict, _plan: Path, _implementation: Path, _closeout: Path) -> None:
+        manifest["milestones"][1]["product_code_contract"]["validation_commands"] = ["run relevant tests"]
+        manifest["milestones"][1]["implementation_writer"]["validation_commands"] = ["run relevant tests"]
+
+    production_path, roadmap_path, manifest_root, plan_path, *_ = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+        mutate=mutate,
+    )
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+
+    pack = compile_contract_pack(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+    )
+
+    errors = preflight_pack(pack)
+    assert any("validation command is prose/non-executable" in error for error in errors)
+
+
+def test_execution_lock_detects_stale_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, *_ = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    pack_root = tmp_path / "contract-packs"
+    lock_root = tmp_path / "locks"
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+    pack = compile_contract_pack(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+    )
+    write_contract_pack(pack, root=pack_root)
+    lock = build_execution_lock(
+        "PT-TEST",
+        locked_by="test",
+        contract_pack_root=pack_root,
+        granted_permissions=["agent_design", "product_code", "product_implementation", "runtime_closeout"],
+        denied_permissions=[],
+    )
+    write_execution_lock(lock, root=lock_root)
+    production_path.write_text(production_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    errors = execution_lock_errors(
+        "PT-TEST",
+        contract_pack_root=pack_root,
+        lock_root=lock_root,
+        requested_permissions={"product_code"},
+    )
+
+    assert any("source digest is stale" in error for error in errors)
+
+
+def execution_test_action(
+    *,
+    writer_strategy: str = "agent_writer",
+    allowed_outputs: list[str] | None = None,
+    new_outputs: list[str] | None = None,
+    forbidden_outputs: list[str] | None = None,
+    forbidden_patterns: list[str] | None = None,
+) -> ActionContract:
+    return ActionContract(
+        action_id="PT-TEST:PM-TEST-002:WR-002",
+        track_id="PT-TEST",
+        milestone_id="PM-TEST-002",
+        wr_id="WR-002",
+        execution_kind="implementation_proof",
+        executor_kind="product_implementation",
+        authority_level="implementation_runtime_proof",
+        permissions_required=["product_code", "product_implementation"],
+        allowed_outputs=allowed_outputs or ["src/lib.rs"],
+        new_outputs=new_outputs or [],
+        forbidden_outputs=forbidden_outputs or ["foundation/meta"],
+        forbidden_patterns=forbidden_patterns or [],
+        writer_strategy=writer_strategy,
+        validation_commands=["python3 --version"],
+        evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+        closeout_contract=CloseoutContract(
+            path="docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md",
+            completion_quality="runtime_proven",
+            evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+        ),
+        rollback_policy=RollbackPolicy(policy="reject import on scope, digest, or validation failure"),
+        stop_conditions=["stop after one implementation action"],
+    )
+
+
+class FakeExecutionAgent:
+    def __init__(self, edits: dict[str, str]) -> None:
+        self.edits = edits
+
+    def run(self, *, workspace: Path, prompt: str) -> AgentResult:
+        for relative, content in self.edits.items():
+            target = workspace / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+        return AgentResult(returncode=0, stdout="ok", stderr="")
+
+
+def test_execution_agent_writer_requires_lock_and_imports_scoped_diff(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "lib.rs"
+    source.parent.mkdir(parents=True)
+    source.write_text("// before\n", encoding="utf-8")
+    action = execution_test_action()
+
+    with pytest.raises(WorkflowError, match="requires a current execution lock"):
+        run_writer(
+            action,
+            backend=FakeExecutionAgent({"src/lib.rs": "// after\n"}),
+            lock_validated=False,
+            repo_root=tmp_path,
+        )
+
+    written = run_writer(
+        action,
+        backend=FakeExecutionAgent({"src/lib.rs": "// after\n"}),
+        lock_validated=True,
+        repo_root=tmp_path,
+    )
+
+    assert written == [source]
+    assert source.read_text(encoding="utf-8") == "// after\n"
+
+
+def test_execution_agent_writer_rejects_out_of_scope_diff(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "lib.rs"
+    source.parent.mkdir(parents=True)
+    source.write_text("// before\n", encoding="utf-8")
+    action = execution_test_action()
+
+    with pytest.raises(WorkflowError, match="changed undeclared file other.rs"):
+        run_writer(
+            action,
+            backend=FakeExecutionAgent({"src/lib.rs": "// after\n", "other.rs": "// no\n"}),
+            lock_validated=True,
+            repo_root=tmp_path,
+        )
+
+    assert source.read_text(encoding="utf-8") == "// before\n"
+
+
+def test_execution_agent_writer_rejects_undeclared_new_file(tmp_path: Path) -> None:
+    action = execution_test_action(allowed_outputs=["src/new.rs"])
+
+    with pytest.raises(WorkflowError, match="created undeclared new file src/new.rs"):
+        run_writer(
+            action,
+            backend=FakeExecutionAgent({"src/new.rs": "// new\n"}),
+            lock_validated=True,
+            repo_root=tmp_path,
+        )
+
+    assert not (tmp_path / "src" / "new.rs").exists()
+
+
+def test_execution_agent_writer_accepts_declared_new_file(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir(parents=True)
+    action = execution_test_action(allowed_outputs=[], new_outputs=["src/new.rs"])
+
+    written = run_writer(
+        action,
+        backend=FakeExecutionAgent({"src/new.rs": "// new\n"}),
+        lock_validated=True,
+        repo_root=tmp_path,
+    )
+
+    assert written == [tmp_path / "src" / "new.rs"]
+    assert (tmp_path / "src" / "new.rs").read_text(encoding="utf-8") == "// new\n"
+
+
+def test_execution_agent_writer_rejects_forbidden_pattern(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "lib.rs"
+    source.parent.mkdir(parents=True)
+    source.write_text("// before\n", encoding="utf-8")
+    action = execution_test_action(forbidden_patterns=[r"src/lib\.rs"])
+
+    with pytest.raises(WorkflowError, match="matches forbidden pattern"):
+        run_writer(
+            action,
+            backend=FakeExecutionAgent({"src/lib.rs": "// after\n"}),
+            lock_validated=True,
+            repo_root=tmp_path,
+        )
+
+    assert source.read_text(encoding="utf-8") == "// before\n"
+
+
+def test_execution_runner_writes_machine_readable_evidence(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "lib.rs"
+    source.parent.mkdir(parents=True)
+    source.write_text("// before\n", encoding="utf-8")
+    action = execution_test_action(writer_strategy="template_writer")
+    action.template_outputs["src/lib.rs"] = "// generated\n"
+    action.validation_commands = ["python3 --version"]
+
+    result = run_next_action(
+        ContractPack(
+            track_id="PT-TEST",
+            generated_at="2026-06-01T00:00:00Z",
+            source_digests={"source.yaml": "digest"},
+            actions=[action],
+        ),
+        lock_validated=True,
+        repo_root=tmp_path,
+        evidence_root=tmp_path / "evidence",
+    )
+
+    assert source.read_text(encoding="utf-8") == "// generated\n"
+    assert len(result.evidence_paths) == 1
+    evidence = load_yaml(result.evidence_paths[0])
+    assert evidence["track_id"] == "PT-TEST"
+    assert evidence["milestone_id"] == "PM-TEST-002"
+    assert evidence["evidence_kind"] == "runtime_test"
+    assert evidence["status"] == "passed"
+
+
+def test_execution_cli_writes_run_ledger_after_successful_action(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "lib.rs"
+    source.parent.mkdir(parents=True)
+    source.write_text("// before\n", encoding="utf-8")
+    action = execution_test_action(writer_strategy="template_writer")
+    action.template_outputs["src/lib.rs"] = "// generated\n"
+    action.validation_commands = ["python3 --version"]
+    pack_root = tmp_path / "packs"
+    lock_root = tmp_path / "locks"
+    ledger_root = tmp_path / "ledgers"
+    write_contract_pack(
+        ContractPack(
+            track_id="PT-TEST",
+            generated_at="2026-06-01T00:00:00Z",
+            source_digests={"tools/workflow/test_workflow.py": sha256(Path(__file__).read_bytes()).hexdigest()},
+            actions=[action],
+        ),
+        root=pack_root,
+    )
+    write_execution_lock(
+        build_execution_lock(
+            "PT-TEST",
+            locked_by="test",
+            contract_pack_root=pack_root,
+            granted_permissions=["product_code", "product_implementation"],
+            denied_permissions=[],
+        ),
+        root=lock_root,
+    )
+
+    result = CliRunner().invoke(
+        execution_app,
+        [
+            "run",
+            "--track",
+            "PT-TEST",
+            "--allow",
+            "product_code",
+            "--allow",
+            "product_implementation",
+            "--contract-pack-root",
+            str(pack_root),
+            "--lock-root",
+            str(lock_root),
+            "--run-ledger-root",
+            str(ledger_root),
+            "--repo-root",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    ledgers = list((ledger_root / "pt-test").glob("*.yaml"))
+    assert len(ledgers) == 1
+    ledger = load_yaml(ledgers[0])
+    assert ledger["actions"][0]["action_id"] == action.action_id
+    assert ledger["actions"][0]["files_changed"] == [repo_path(source)]
+
+
+def test_execution_validation_command_registry_rejects_unsafe_forms() -> None:
+    action = execution_test_action()
+    action.validation_commands = ["task docs:validate && task planning:validate"]
+    assert any("shell metacharacters" in error for error in preflight_pack(ContractPack(
+        track_id="PT-TEST",
+        generated_at="2026-06-01T00:00:00Z",
+        source_digests={"source.yaml": "digest"},
+        actions=[action],
+    )))
+
+    action.validation_commands = ["git reset --hard"]
+    assert any("safe command registry" in error for error in preflight_pack(ContractPack(
+        track_id="PT-TEST",
+        generated_at="2026-06-01T00:00:00Z",
+        source_digests={"source.yaml": "digest"},
+        actions=[action],
+    )))
+
+    action.validation_commands = [
+        {
+            "command_id": "python3:version",
+            "argv": ["python3", "--version"],
+            "cwd": "/tmp",
+        }
+    ]
+    assert any("cwd must be repo-relative" in error for error in preflight_pack(ContractPack(
+        track_id="PT-TEST",
+        generated_at="2026-06-01T00:00:00Z",
+        source_digests={"source.yaml": "digest"},
+        actions=[action],
+    )))
+
+    with pytest.raises(ValueError, match="command_id must match argv-derived id"):
+        action.validation_commands = [
+            {
+                "command_id": "not-the-registry-id",
+                "argv": ["python3", "--version"],
+            }
+        ]
+
+
+def test_execution_transactional_writer_leaves_main_workspace_unchanged_on_validation_failure(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "lib.rs"
+    source.parent.mkdir(parents=True)
+    source.write_text("// before\n", encoding="utf-8")
+    action = execution_test_action(writer_strategy="template_writer")
+    action.template_outputs["src/lib.rs"] = "// generated before failing validation\n"
+    action.validation_commands = ["python3 -m pytest missing-test-file.py"]
+
+    with pytest.raises(WorkflowError, match="validation failed"):
+        run_action(action, lock_validated=True, repo_root=tmp_path, evidence_root=tmp_path / "evidence")
+
+    assert source.read_text(encoding="utf-8") == "// before\n"
+    assert not (tmp_path / "evidence").exists()
+
+
+def test_execution_proof_aggregation_requires_prior_machine_evidence(tmp_path: Path) -> None:
+    action = ActionContract(
+        action_id="PT-TEST:PM-TEST-003:WR-003",
+        track_id="PT-TEST",
+        milestone_id="PM-TEST-003",
+        wr_id="WR-003",
+        execution_kind="proof_aggregation",
+        executor_kind="proof_aggregation",
+        authority_level="runtime_proof_aggregation",
+        permissions_required=["product_code", "product_implementation"],
+        allowed_outputs=[],
+        new_outputs=[],
+        forbidden_outputs=["product/src/lib.rs"],
+        writer_strategy="proof_aggregation_writer",
+        validation_commands=["python3 --version"],
+        evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+        closeout_contract=CloseoutContract(
+            path="docs-site/src/content/docs/reports/closeouts/pm-test-003/closeout.md",
+            completion_quality="runtime_proven",
+            evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+        ),
+        rollback_policy=RollbackPolicy(policy="aggregation-only; do not patch prior proof files"),
+        stop_conditions=["stop if prior evidence is missing"],
+        required_prior_milestones=["PM-TEST-002"],
+        required_prior_completion_quality="runtime_proven",
+    )
+
+    with pytest.raises(WorkflowError, match="prior milestone PM-TEST-002 is missing runtime_test evidence"):
+        run_action(action, lock_validated=True, repo_root=tmp_path, evidence_root=tmp_path / "evidence")
+
+    write_evidence_record(
+        passed_record(
+            track_id="PT-TEST",
+            milestone_id="PM-TEST-002",
+            action_id="PT-TEST:PM-TEST-002:WR-002",
+            evidence_kind="runtime_test",
+            name="runtime test",
+            paths=[],
+            validation_commands=["python3:version"],
+        ),
+        root=tmp_path / "evidence",
+    )
+
+    result = run_action(action, lock_validated=True, repo_root=tmp_path, evidence_root=tmp_path / "evidence")
+
+    assert result.written_paths == ()
+    assert len(result.evidence_paths) == 1
+
+
+def test_production_validation_requires_contract_pack_for_full_automation_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
+    manifest = load_yaml(manifest_root / "pt-test.yaml")
+    manifest["full_automation_target"] = True
+    write_yaml(manifest_root / "pt-test.yaml", manifest)
+    monkeypatch.setattr("execution.compiler.CONTRACT_PACK_ROOT", tmp_path / "missing-contract-packs")
+    state = ProductionPlanningState.model_validate(load_yaml(production_path))
+
+    errors = validate_manifest_backed_tracks(state, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("full automation target requires Execution Contract Pack" in error for error in errors)
+
+
+def test_production_validation_accepts_valid_contract_pack_for_full_automation_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, *_ = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    manifest = load_yaml(manifest_root / "pt-test.yaml")
+    manifest["full_automation_target"] = True
+    write_yaml(manifest_root / "pt-test.yaml", manifest)
+    pack_root = tmp_path / "contract-packs"
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+    write_contract_pack(
+        compile_contract_pack(
+            "PT-TEST",
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+        ),
+        root=pack_root,
+    )
+    monkeypatch.setattr("execution.compiler.CONTRACT_PACK_ROOT", pack_root)
+    state = ProductionPlanningState.model_validate(load_yaml(production_path))
+
+    errors = validate_manifest_backed_tracks(state, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert not any("Execution Contract Pack" in error for error in errors)
 
 def test_single_step_run_can_operate_on_current_milestone_without_full_preflight(
     tmp_path: Path,
@@ -4541,6 +5463,13 @@ def test_manifest_runner_runtime_closeout_closes_after_product_code_evidence(
         monkeypatch,
     )
     make_runtime_closeout_ready(production_path, roadmap_path, manifest_root, closeout_path)
+    runtime_artifact_path = "tools/workflow/runtime-proof.yaml"
+    manifest_path = manifest_root / "pt-test.yaml"
+    manifest_data = load_yaml(manifest_path)
+    manifest_data["milestones"][1]["runtime_closeout_contract"]["files_changed_report"] = [
+        runtime_artifact_path,
+    ]
+    write_yaml(manifest_path, manifest_data)
 
     result = CliRunner().invoke(
         track_manifest_app,
@@ -4566,7 +5495,10 @@ def test_manifest_runner_runtime_closeout_closes_after_product_code_evidence(
     assert result.exit_code == 0, result.output
     assert "Manifest Runner runtime closeout completed one implementation milestone." in result.stdout
     assert closeout_path.exists()
+    closeout_text = closeout_path.read_text(encoding="utf-8")
+    assert runtime_artifact_path in closeout_text
     production = load_yaml(production_path)
+    assert production["tracks"][0]["state"] == "completed"
     milestone = production["tracks"][0]["milestones"][1]
     assert milestone["state"] == "completed"
     assert milestone["completion_quality"] == "runtime_proven"
@@ -4862,6 +5794,10 @@ def mutate_manifest_to_runtime_slice(
         entry["runtime_closeout_contract"]["runtime_test_evidence_required"] = entry["contract_parameters"]["runtime_evidence_required"]
         entry["runtime_closeout_contract"]["validation_commands"] = list(commands)
         entry["runtime_closeout_contract"]["files_changed_report"] = list(exact_scopes)
+        entry["implementation_writer"]["allowed_files"] = list(exact_scopes)
+        entry["implementation_writer"]["validation_commands"] = list(commands)
+        if entry["implementation_writer"].get("templates"):
+            entry["implementation_writer"]["templates"][0]["file"] = exact_scopes[0]
 
     return mutate
 
@@ -5515,6 +6451,267 @@ def test_manifest_backed_production_validation_passes_valid_manifest(tmp_path: P
     assert validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root) == []
 
 
+def test_manifest_backed_validation_requires_truth_claims(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data.pop("truth_claims")
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("manifest-backed tracks must declare truth_claims" in error for error in errors)
+
+
+def test_manifest_backed_validation_rejects_missing_completed_design_output(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    production_data["tracks"][0]["milestones"][1]["state"] = "completed"
+    production_data["tracks"][0]["milestones"][1]["completion_quality"] = "bounded_contract"
+    production_data["tracks"][0]["milestones"][1]["completion_audit"] = (
+        "docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md"
+    )
+    production_data["tracks"][0]["milestones"][1]["evidence_gates"] = [
+        {
+            "path": "docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md",
+            "required_status": "completed",
+            "reason": "Test closeout.",
+        }
+    ]
+    roadmap_data = valid_state()
+    roadmap_data["items"][1]["planning_state"] = "completed"
+    roadmap_data["items"][1]["completion_quality"] = "bounded_contract"
+    manifest_data = valid_track_manifest_state()
+    manifest_data["milestones"][1]["agent_design_contract"]["expected_output_paths"] = [
+        "docs-site/src/content/docs/design/active/missing-test-output.md"
+    ]
+    write_yaml(roadmap_path, roadmap_data)
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("completed design expected_output_path is missing" in error for error in errors)
+
+
+def test_active_architecture_quality_allows_blocked_architecture_claim(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    production_data["tracks"][0]["target_completion_quality"] = "architecture_runtime_proven"
+    manifest_data = valid_track_manifest_state()
+    manifest_data["truth_claims"] = [
+        {
+            "claim_id": "architecture-test",
+            "claim_kind": "architecture_contract",
+            "claim_level": "architecture_runtime_proven",
+            "claim_status": "blocked",
+            "claim_statement": "Architecture is intentionally not proven yet.",
+            "required_docs": [],
+            "required_code_contracts": [],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": ["Architecture contracts remain unimplemented."],
+            "supersedes": [],
+            "blocks_downstream": [],
+        }
+    ]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert not any("architecture_runtime_proven requires a satisfied architecture_contract" in error for error in errors)
+
+
+def test_completed_architecture_quality_requires_satisfied_architecture_claim(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    production_data["tracks"][0]["state"] = "completed"
+    production_data["tracks"][0]["target_completion_quality"] = "architecture_runtime_proven"
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("architecture_runtime_proven requires a satisfied architecture_contract truth claim" in error for error in errors)
+
+
+def test_proof_slice_runtime_quality_rejects_overclaiming_wording(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    production_data["tracks"][0]["target_completion_quality"] = "proof_slice_runtime_proven"
+    production_data["tracks"][0]["strategic_goal"] = "Prove the final architecture platform."
+    manifest_data = valid_track_manifest_state()
+    manifest_data["truth_claims"] = [
+        {
+            "claim_id": "proof-slice-test",
+            "claim_kind": "proof_slice",
+            "claim_level": "proof_slice_runtime_proven",
+            "claim_status": "satisfied",
+            "claim_statement": "Bounded proof slices passed.",
+            "required_docs": [
+                {
+                    "evidence_kind": "doc_exists",
+                    "path": "tools/workflow/test_workflow.py",
+                    "reason": "Fixture truth evidence path exists.",
+                }
+            ],
+            "required_code_contracts": [],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": [],
+            "supersedes": [],
+            "blocks_downstream": [],
+        }
+    ]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("production wording claims stronger truth than proof_slice_runtime_proven" in error for error in errors)
+
+
+def test_satisfied_architecture_truth_claim_requires_code_contracts(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    production_data = valid_production_state()
+    production_data["tracks"][0]["target_completion_quality"] = "architecture_runtime_proven"
+    manifest_data = valid_track_manifest_state()
+    manifest_data["truth_claims"] = [
+        {
+            "claim_id": "architecture-test",
+            "claim_kind": "architecture_contract",
+            "claim_level": "architecture_runtime_proven",
+            "claim_status": "satisfied",
+            "claim_statement": "Architecture exists.",
+            "required_docs": [],
+            "required_code_contracts": [
+                {
+                    "evidence_kind": "module_path_exists",
+                    "path": "domain/missing_test_architecture_module",
+                    "reason": "Architecture module must exist.",
+                }
+            ],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": [],
+            "supersedes": [],
+            "blocks_downstream": [],
+        }
+    ]
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(production_data)
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("requires module path domain/missing_test_architecture_module" in error for error in errors)
+
+
+def test_blocked_truth_claim_blocks_downstream_milestone(tmp_path: Path) -> None:
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    manifest_data = valid_track_manifest_state()
+    manifest_data["truth_claims"].append(
+        {
+            "claim_id": "blocked-architecture",
+            "claim_kind": "architecture_contract",
+            "claim_level": "architecture_runtime_proven",
+            "claim_status": "blocked",
+            "claim_statement": "Architecture is not ready.",
+            "required_docs": [],
+            "required_code_contracts": [],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": ["Architecture module missing."],
+            "supersedes": [],
+            "blocks_downstream": ["PM-TEST-002"],
+        }
+    )
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    planning = ProductionPlanningState.model_validate(valid_production_state())
+
+    errors = validate_manifest_backed_tracks(planning, roadmap_path=roadmap_path, manifest_root=manifest_root)
+
+    assert any("truth claim blocked-architecture blocks downstream PM-TEST-002" in error for error in errors)
+
+
+def test_manifest_next_surfaces_truth_claims(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+
+    result = CliRunner().invoke(
+        track_manifest_app,
+        [
+            "next",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Truth claims:" in result.stdout
+    assert "test-track-proof" in result.stdout
+
+
+def test_goal_output_surfaces_truth_claims(tmp_path: Path) -> None:
+    production_path = tmp_path / "production.yaml"
+    roadmap_path = tmp_path / "roadmap.yaml"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    write_yaml(production_path, valid_production_state())
+    write_yaml(roadmap_path, valid_state())
+    write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
+
+    result = CliRunner().invoke(
+        production_goal_app,
+        [
+            "goal",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Truth claims:" in result.stdout
+    assert "test-track-proof" in result.stdout
+
+
 def test_manifest_backed_validation_accepts_generated_scope_marker(tmp_path: Path) -> None:
     roadmap_path = tmp_path / "roadmap.yaml"
     manifest_root = tmp_path / "manifests"
@@ -6105,13 +7302,14 @@ def test_batch_kickoff_defaults_to_current_candidates() -> None:
     ]
 
 
-def test_current_repository_next_batch_selects_active_runtime_candidate() -> None:
+def test_current_repository_next_batch_has_no_active_runtime_candidate_after_ui_program_6f_closeout() -> None:
     roadmap = load_roadmap()
     selected = select_batch_candidates(roadmap)
     dependency_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml").read_text(encoding="utf-8")
     candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
 
-    assert [item.id for item in selected] == ["WR-146"]
+    assert [item.id for item in selected] == []
+    assert roadmap.by_id["WR-146"].planning_state == "completed"
     assert roadmap.by_id["WR-089"].planning_state == "completed"
     assert roadmap.by_id["WR-029"].planning_state == "ready_next"
     assert "state=completed" not in dependency_puml

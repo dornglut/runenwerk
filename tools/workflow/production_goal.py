@@ -39,6 +39,7 @@ from track_execution_manifest import (
     load_track_execution_manifest,
     next_action_blockers,
     track_execution_lock_errors,
+    truth_claim_summary_lines,
 )
 
 
@@ -170,14 +171,22 @@ def build_manifest_goal_context(
     audit_manifest_or_raise(loaded_manifest, track=track, roadmap=roadmap)
     current_step = first_incomplete_or_evidence_step(tuple(steps)) or steps[-1]
     current_entry = loaded_manifest.manifest.by_milestone_id[current_step.milestone.id]
-    manifest_workflow_action, manifest_blockers = next_action_blockers(
-        current_entry,
-        current_step.milestone,
-        planning=planning,
-        track=track,
-        roadmap=roadmap,
-    )
-    unmet_gates = tuple(manifest_unmet_gates(current_step, current_entry) + manifest_blockers)
+    track_completed = all(milestone.state == "completed" for milestone in track.milestones)
+    if track_completed:
+        manifest_workflow_action = "already_completed"
+        manifest_blockers: list[str] = []
+    else:
+        manifest_workflow_action, manifest_blockers = next_action_blockers(
+            current_entry,
+            current_step.milestone,
+            planning=planning,
+            track=track,
+            roadmap=roadmap,
+        )
+    if track_completed:
+        unmet_gates = ()
+    else:
+        unmet_gates = tuple(manifest_unmet_gates(current_step, current_entry) + manifest_blockers)
     raw_implementation_note = implementation_authorization_note(
         current_entry,
         manifest_workflow_action,
@@ -186,31 +195,38 @@ def build_manifest_goal_context(
     implementation_authorized = raw_implementation_note.startswith("yes -")
     implementation_note = raw_implementation_note.removeprefix("yes - ").removeprefix("no - ")
     full_automation_blockers: tuple[str, ...] = ()
-    if loaded_manifest.manifest.full_automation_target:
-        full_automation_blockers = tuple(
-            full_automation_preflight_errors(
-                loaded_manifest,
-                track=track,
-                roadmap=roadmap,
-                allow=FULL_TRACK_PERMISSION_SET,
-            )
-        )
-        if full_automation_blockers:
-            unmet_gates = (*unmet_gates, *full_automation_blockers)
-    loaded_lock = load_track_execution_lock(track.id, root=lock_source_root)
+    execution_lock_path: Path | None = None
     execution_lock_blockers: tuple[str, ...] = ()
     if loaded_manifest.manifest.full_automation_target:
-        execution_lock_blockers = tuple(
-            track_execution_lock_errors(
-                loaded_manifest,
-                loaded_lock,
-                production_source=production_source,
-                roadmap_source=roadmap_source,
-                allow=FULL_TRACK_PERMISSION_SET,
-                deny={"crate_creation", "foundation_extraction"},
-                track=track,
+        harness_context = harness_manifest_goal_gate(track.id)
+        if harness_context is not None:
+            full_automation_blockers = tuple(harness_context["preflight_errors"])
+            execution_lock_path = harness_context["lock_path"]
+            execution_lock_blockers = tuple(harness_context["lock_errors"])
+        else:
+            full_automation_blockers = tuple(
+                full_automation_preflight_errors(
+                    loaded_manifest,
+                    track=track,
+                    roadmap=roadmap,
+                    allow=FULL_TRACK_PERMISSION_SET,
+                )
             )
-        )
+            loaded_lock = load_track_execution_lock(track.id, root=lock_source_root)
+            execution_lock_path = loaded_lock.path if loaded_lock is not None else None
+            execution_lock_blockers = tuple(
+                track_execution_lock_errors(
+                    loaded_manifest,
+                    loaded_lock,
+                    production_source=production_source,
+                    roadmap_source=roadmap_source,
+                    allow=FULL_TRACK_PERMISSION_SET,
+                    deny={"crate_creation", "foundation_extraction"},
+                    track=track,
+                )
+            )
+        if full_automation_blockers:
+            unmet_gates = (*unmet_gates, *full_automation_blockers)
         if execution_lock_blockers:
             unmet_gates = (*unmet_gates, *execution_lock_blockers)
     return ManifestGoalContext(
@@ -225,10 +241,35 @@ def build_manifest_goal_context(
         full_automation_target=loaded_manifest.manifest.full_automation_target,
         full_automation_ready=loaded_manifest.manifest.full_automation_target and not full_automation_blockers,
         full_automation_blockers=full_automation_blockers,
-        execution_lock_path=loaded_lock.path if loaded_lock is not None else None,
+        execution_lock_path=execution_lock_path,
         execution_lock_ready=loaded_manifest.manifest.full_automation_target and not execution_lock_blockers,
         execution_lock_blockers=execution_lock_blockers,
     )
+
+
+def harness_manifest_goal_gate(track_id: str) -> dict | None:
+    try:
+        from execution.compiler import load_contract_pack
+        from execution.locks import contract_pack_freshness_errors, execution_lock_errors, load_execution_lock
+        from execution.preflight import preflight_pack
+    except Exception:
+        return None
+    pack = load_contract_pack(track_id)
+    if pack is None:
+        return None
+    lock = load_execution_lock(track_id)
+    preflight_errors = [
+        *contract_pack_freshness_errors(pack),
+        *preflight_pack(pack, allow=FULL_TRACK_PERMISSION_SET),
+    ]
+    return {
+        "preflight_errors": preflight_errors,
+        "lock_path": lock.path if lock is not None else None,
+        "lock_errors": execution_lock_errors(
+            track_id,
+            requested_permissions=FULL_TRACK_PERMISSION_SET,
+        ),
+    }
 
 
 def manifest_unmet_gates(
@@ -558,22 +599,33 @@ def render_manifest_gate(
 
     entry = context.current_entry
     manifest = context.loaded.manifest
+    contract_pack_line = execution_contract_pack_line(track.id)
     lines.extend(
         [
             f"- Manifest source: `{repo_path(context.loaded.path)}`",
+            contract_pack_line,
             f"- Authority level: {manifest.authority_level}",
             f"- Current milestone: `{entry.milestone_id}` - {entry.title}",
             f"- Manifest next legal action: {entry.next_legal_action}",
             f"- Workflow next action: {context.manifest_workflow_action}",
             f"- Implementation authorized now: {'yes' if context.implementation_authorized else 'no'} - {context.implementation_authorization_note}",
             f"- Must stop after this action: {'yes' if context.must_stop else 'no'}",
+            "- Agent-track preparation-ready: yes",
+            f"- AI executable declared: {'yes' if manifest.ai_executable else 'no'}",
             f"- Full automation target: {'yes' if context.full_automation_target else 'no'}",
             f"- Full automation readiness: {'ready' if context.full_automation_ready else 'blocked' if context.full_automation_target else 'not requested'}",
             f"- Execution lock: {repo_path(context.execution_lock_path) if context.execution_lock_path else 'missing'}",
             f"- Execution lock readiness: {'ready' if context.execution_lock_ready else 'blocked' if context.full_automation_target else 'not requested'}",
             f"- `--mode full-track` can run now: {'yes' if context.full_automation_ready and context.execution_lock_ready else 'no'}",
+            f"- Locked-and-executable: {'yes' if context.full_automation_ready and context.execution_lock_ready and manifest.ai_executable else 'no'}",
         ]
     )
+    truth_lines = truth_claim_summary_lines(manifest)
+    lines.append("- Truth claims:")
+    if len(truth_lines) == 1:
+        lines.append(f"  - {truth_lines[0]}")
+    else:
+        lines.extend(f"  {line}" for line in truth_lines[1:])
     if context.full_automation_blockers:
         lines.append("- Full automation blockers:")
         lines.extend(f"  - {blocker}" for blocker in context.full_automation_blockers)
@@ -591,6 +643,23 @@ def render_manifest_gate(
     lines.extend(f"  - {condition}" for condition in manifest.global_stop_conditions)
     lines.append("")
     return lines
+
+
+def execution_contract_pack_line(track_id: str) -> str:
+    try:
+        from execution.compiler import contract_pack_path, load_contract_pack
+        from execution.locks import contract_pack_freshness_errors
+
+        pack_path = contract_pack_path(track_id)
+        pack = load_contract_pack(track_id)
+    except WorkflowError as error:
+        return f"- Execution Contract Pack: invalid ({error})"
+    if pack is None:
+        return "- Execution Contract Pack: missing; executable locked tracks cannot use legacy execution."
+    freshness_errors = contract_pack_freshness_errors(pack)
+    if freshness_errors:
+        return f"- Execution Contract Pack: `{repo_path(pack_path)}` stale ({len(freshness_errors)} source digest blocker(s))"
+    return f"- Execution Contract Pack: `{repo_path(pack_path)}` ({len(pack.actions)} remaining actions)"
 
 
 def render_milestone_step(
@@ -845,6 +914,7 @@ def render_goal_prompt(
                 f"Current manifest milestone: {manifest_context.current_entry.milestone_id}",
                 f"Current manifest next legal action: {manifest_context.current_entry.next_legal_action}",
                 f"Implementation authorized now: {'yes' if manifest_context.implementation_authorized else 'no'} - {manifest_context.implementation_authorization_note}",
+                f"Agent-track preparation-ready: yes; full-automation-ready: {'yes' if manifest_context.full_automation_ready else 'no'}; locked-and-executable: {'yes' if manifest_context.full_automation_ready and manifest_context.execution_lock_ready and manifest_context.loaded.manifest.ai_executable else 'no'}",
                 "Stop after the current legal action and rerun this command before crossing another milestone boundary.",
                 "",
             ]

@@ -4610,19 +4610,19 @@ tracks:
         completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md
   - id: PT-UI-PROGRAM
     title: UI Program Platform Proof
-    state: active
+    state: completed
     owner: ui
-    target_completion_quality: runtime_proven
-    strategic_goal: Prove UiProgram as the first concrete Runenwerk Domain Workbench Platform proving domain through domain-owned UI contracts, runtime artifacts, host boundaries, fixtures, diagnostics, source maps, and migration evidence.
+    target_completion_quality: proof_slice_runtime_proven
+    strategic_goal: Record bounded UiProgram proof-slice evidence as the first UI-domain check of the Domain Workbench Platform direction, while keeping concrete UiProgram architecture implementation blocked until a separate architecture track proves it.
     success_criteria:
-      - UiProgram is proven through the full Stage 0 through Stage 7 path, not only the Stage 6 runtime proof slices.
+      - Bounded UiProgram proof-slice evidence is completed through the full Stage 0 through Stage 7 path; this does not mean concrete UiProgram architecture contracts exist in code.
       - Stages 0 through 5 complete ADR/design promotion, UI Program contract design, ControlPackage proof design, compiler/runtime artifact design, evaluator/host design, and retained UI migration design.
-      - 6A through 6F complete with real runtime, headless, artifact, diagnostic, and source-map evidence rather than documentation-only completion.
-      - Stage 7 records runtime-proven closeout and prepares MaterialProgram as the second-domain proof path without starting MaterialProgram implementation.
+      - 6A through 6F complete bounded retained-compatible runtime, headless, artifact, diagnostic, and source-map proof-slice evidence rather than documentation-only completion.
+      - Stage 7 records historical proof-slice closeout evidence only; MaterialProgram proof planning remains blocked until truth claims or a later accepted decision clears the gate.
       - Retained/current UI remains compatible until a bounded proof slice intentionally replaces a named surface.
       - No ECS-owned UI semantics, renderer-owned product truth, generic node soup, or giant UiSemanticEvent enum is introduced.
-      - Completing PT-UI-PROGRAM does not authorize shared foundation/meta extraction; it only proves the UI domain and enables the MaterialProgram second-domain proof handoff.
-      - MaterialProgram is the second platform proof; RenderPlan follows after MaterialProgram and cannot substitute for it.
+      - Completing PT-UI-PROGRAM does not authorize shared foundation/meta extraction; it records bounded UI-domain proof-slice evidence only.
+      - MaterialProgram remains the required second platform proof, but it is not started or made ready by this corrected track state; RenderPlan follows after MaterialProgram and cannot substitute for it.
     milestones:
       - id: PM-UI-PROGRAM-001
         title: ADR / Design Promotion
@@ -5044,7 +5044,7 @@ tracks:
       - id: PM-UI-PROGRAM-012
         title: 6F Headless Fixture Diagnostics Source Map Proof
         kind: hardening
-        state: active
+        state: completed
         goal: Prove deterministic headless fixture evaluation, diagnostics, source maps, migration evidence, runtime artifact manifests/tables, and reproducibility by aggregating accepted 6A through 6E evidence.
         outcome: Headless proof validates the completed UI proof-slice evidence without implementing missing behavior from prior milestones.
         dependencies:
@@ -5064,20 +5064,31 @@ tracks:
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: 6F must follow the bounded headless fixture proof-slice contract.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-012 requires completed runtime-proof closeout evidence.
         acceptance_criteria:
           - 6F may aggregate evidence from accepted 6A through 6E slices.
           - 6F must not implement missing behavior from prior slices; missing behavior returns to the owning milestone.
-          - Headless fixture/debug serialization is deterministic and records source-map, diagnostics, migration, UiRuntimeArtifactManifest, UiRuntimeArtifactTables, and reproducibility evidence.
+          - Headless fixture/debug serialization is deterministic and records source-map, diagnostics, migration, runtime artifact, and reproducibility proof-slice evidence.
+        completion_quality: runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-012 is runtime_proven only for its bounded manifest write scope and proof-slice aggregation contract.
+          - PM-UI-PROGRAM-012 does not prove concrete UiProgram, UiCompiler, UiEvaluator, UiRuntimeArtifactManifest, or UiRuntimeArtifactTables architecture implementation.
+          - Later truth-claim correction metadata supersedes any wording that implied architecture_runtime_proven completion.
+          - No crate creation or shared foundation/meta extraction is authorized by this closeout.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md
       - id: PM-UI-PROGRAM-013
         title: Runtime Proven Closeout And MaterialProgram Handoff
         kind: release
-        state: designing
-        goal: Close the UiProgram platform proof at runtime_proven quality and create or link the MaterialProgram second-domain proof path.
-        outcome: The UI proof result is recorded with honest known gaps and a MaterialProgram handoff path, without starting MaterialProgram implementation or authorizing shared extraction.
+        state: completed
+        goal: Close the bounded UiProgram proof-slice track and record the MaterialProgram handoff blocker without claiming concrete architecture implementation.
+        outcome: The UI proof-slice result is recorded with honest known gaps; MaterialProgram proof planning and implementation remain blocked until the UI architecture truth gap is resolved or a later accepted decision changes the gate.
         dependencies:
           - PM-UI-PROGRAM-012
-        roadmap_links: []
+        roadmap_links:
+          - WR-147
         design_gates:
           - kind: design
             path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
@@ -5086,17 +5097,288 @@ tracks:
           - kind: design
             path: docs-site/src/content/docs/design/active/ui-program-architecture.md
             required_status: active
-            reason: Closeout must follow the UiProgram runtime-proven proof and MaterialProgram handoff rules.
+            reason: Closeout must follow the bounded UiProgram proof-slice and MaterialProgram handoff-blocker rules.
           - kind: design
             path: docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md
             required_status: active
             reason: Closeout must verify all bounded Stage 6 proof-slice evidence.
-        evidence_gates: []
+        evidence_gates:
+          - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+            required_status: completed
+            reason: PM-UI-PROGRAM-013 requires completed bounded proof-slice closeout evidence.
         acceptance_criteria:
           - Runtime-proven closeout links completed 6A through 6F evidence, diagnostics, source maps, runtime artifact evidence, docs, roadmap, and production validation.
-          - The milestone records the UI proof result and creates or links the MaterialProgram second-domain proof path.
+          - The milestone records the bounded UI proof-slice result and the blocked MaterialProgram second-domain proof path.
           - MaterialProgram implementation is not started by this milestone.
           - Shared foundation/meta extraction remains forbidden until UI and MaterialProgram both prove the same primitive and a separate extraction design accepts it.
+        completion_quality: proof_slice_runtime_proven
+        known_quality_gaps:
+          - PM-UI-PROGRAM-013 is a handoff closeout for the completed bounded proof-slice track, not authorization for downstream implementation.
+          - Concrete UiProgram architecture contracts remain unimplemented and require a separate architecture implementation track before MaterialProgram proof planning is unblocked by default.
+          - The second-domain proof path remains blocked until truth claims or a later accepted decision clear the gate.
+          - No product/runtime code, crates, placeholder future folders, downstream implementation, or shared foundation/meta extraction was performed.
+        completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+  - id: PT-UI-PROGRAM-ARCHITECTURE
+    title: UI Program Architecture Implementation
+    state: active
+    owner: ui
+    target_completion_quality: architecture_runtime_proven
+    strategic_goal: Implement the concrete domain-owned UiProgram architecture contracts that remain blocked after the bounded PT-UI-PROGRAM proof-slice track.
+    success_criteria:
+      - The final UI owner map is accepted as the architecture target, but owner crates or folders are created only when an active WR and production plan explicitly authorize the exact boundary.
+      - Concrete `UiProgram`, graph-family, `UiSchemaValue`, `ControlPackage`, compiler, artifact, evaluator, host, diagnostics, source-map, fixture, migration, and visual/render boundary contracts are implemented and validated before architecture truth can be satisfied.
+      - Current retained UI code through `ui_definition`, `ui_tree`, `ui_widgets`, `ui_runtime`, and `ui_render_data` remains compatible until a bounded migration bridge proves replacement or adapter behavior.
+      - '`ui_layout`, `ui_math`, and `ui_surface` are reconciled explicitly against the final owner map before any rename, replacement, or deletion is authorized.'
+      - MaterialProgram proof planning remains blocked until the UiProgram architecture implementation truth claim is satisfied or a later accepted ADR changes the gate.
+      - Shared `foundation/meta` extraction remains blocked until UI and MaterialProgram both prove the same domain-agnostic primitive and a separate extraction design accepts it.
+      - No renderer-owned UI product truth, ECS-owned UI semantics, generic node soup, or giant semantic event enum is introduced.
+    milestones:
+      - id: PM-UI-PROGRAM-ARCH-001
+        title: Governance And Truth Claim Activation
+        kind: design
+        state: active
+        goal: Create the architecture implementation production track, manifest, current-truth audit, and blocked truth claims without product implementation.
+        outcome: PT-UI-PROGRAM-ARCHITECTURE exists as manifest-backed governance and sequencing authority only; implementation remains gated by future WRs and production plans.
+        dependencies: []
+        roadmap_links:
+          - WR-148
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+            required_status: active
+            reason: Architecture implementation must preserve the Domain Workbench Platform north-star and extraction gates.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Architecture implementation must follow the active UiProgram architecture target.
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-contract-design.md
+            required_status: active
+            reason: Track activation must preserve the corrected proof-slice versus architecture-truth distinction.
+          - kind: doc
+            path: docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md
+            required_status: completed
+            reason: Track activation must record current code truth before future implementation begins.
+        evidence_gates: []
+        acceptance_criteria:
+          - Production metadata records the full PM-001 through PM-010 architecture implementation sequence.
+          - A machine-readable Track Execution Manifest exists for PT-UI-PROGRAM-ARCHITECTURE.
+          - Truth claims are blocked honestly until concrete architecture contracts exist.
+          - Full-track automation is not enabled before future WRs, plans, writer strategies, evidence contracts, validation commands, and closeout contracts are complete.
+          - No product code, crates, placeholder future folders, MaterialProgram work, or shared foundation/meta extraction is authorized.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - PM-001 is governance-only and does not implement architecture contracts.
+          - PM-002 through PM-010 still need their own WR authority, production plans, validation, and closeout evidence.
+          - MaterialProgram remains blocked while UiProgram architecture truth is blocked.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-002
+        title: UiProgram Contract And Graph Model
+        kind: design
+        state: deferred
+        goal: Define the durable UiProgram contract, graph-family model, stable IDs, diagnostics attachment, source maps, versioning, dependency DAG, and crate/module boundary authority.
+        outcome: The final UI owner map is reconciled with current retained crates before implementation milestones create or migrate architecture owners.
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-001
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Contract work must remain aligned with the accepted UI architecture target.
+        evidence_gates: []
+        acceptance_criteria:
+          - '`UiProgram`, ControlGraph, LayoutGraph, StateGraph, StyleGraph, InteractionGraph, BindingGraph, VisualGraph, AccessibilityGraph, and InspectionGraph responsibilities are decision-complete.'
+          - '`ui_tree`, `ui_widgets`, `ui_runtime`, `ui_layout`, and `ui_math` compatibility or migration ownership is explicit.'
+          - Crate creation remains forbidden unless this milestone and a later implementation WR explicitly authorize exact crate boundaries.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - No architecture code is implemented until this design closes and an implementation WR authorizes it.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-003
+        title: Schema Route Event Capability Contracts
+        kind: implementation
+        state: deferred
+        goal: Implement UI-owned schema, value, route, event-payload, capability, and validation contracts under exact WR scope.
+        outcome: '`UiSchemaValue`, schema versions, event payload schemas, route IDs, route schema versions, route capabilities, and validation diagnostics exist as concrete UI-owned contracts.'
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-002
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Schema and route implementation must follow the accepted UI-owned schema/event boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - UI-owned schema contracts exist without moving authority to foundation/meta.
+          - Event payloads remain schema-based and route-based rather than central enum variants.
+          - Capability validation is explicit and diagnostic-bearing.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Implementation requires a future active WR and accepted production plan.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-004
+        title: Compiler And Runtime Artifact Contracts
+        kind: implementation
+        state: deferred
+        goal: Implement compiler and runtime artifact contracts for lowering UiProgram into durable manifests and optimized runtime tables.
+        outcome: '`UiCompiler`, `UiRuntimeArtifactManifest`, `UiRuntimeArtifactTables`, package resolution, cache keys, source maps, and artifact diagnostics exist under UI ownership.'
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-003
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Compiler and artifact implementation must preserve the hot-path artifact boundary.
+        evidence_gates: []
+        acceptance_criteria:
+          - Hot paths consume runtime artifacts rather than generic graph interpretation by default.
+          - Artifact manifest metadata is durable and inspectable.
+          - Table layout is optimized runtime implementation detail, not external product truth.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Implementation requires a future active WR and accepted production plan.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-005
+        title: Evaluator And State Execution
+        kind: implementation
+        state: deferred
+        goal: Implement deterministic evaluator, state, and binding execution contracts over runtime artifacts.
+        outcome: '`UiEvaluator`, state contracts, binding snapshots, dirty propagation, collection diffs, and `UiOutput` generation are concrete and validated.'
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-004
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Evaluator implementation must preserve state, binding, and host boundary decisions.
+        evidence_gates: []
+        acceptance_criteria:
+          - Transient, preview, committed, focus, hover, drag, animation, host-fed, and package-owned state boundaries are implemented.
+          - Binding reads, writes, snapshots, dirty propagation, collection diffs, diagnostics, and authorization checks are implemented.
+          - Evaluator output does not own editor, game, world, ECS, or renderer truth.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Implementation requires a future active WR and accepted production plan.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-006
+        title: Host Boundary Implementations
+        kind: implementation
+        state: deferred
+        goal: Implement editor, game, world-space, and headless host contracts while keeping concrete app/editor/game integration outside domain/ui.
+        outcome: UI host contracts consume `UiOutput`, `UiEventPacket`, diagnostics, source maps, and surface facts without owning product truth.
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-005
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Host boundaries must remain pure contracts inside domain/ui.
+        evidence_gates: []
+        acceptance_criteria:
+          - '`ui_hosts` contains host contracts only.'
+          - Concrete editor, game, world, and app integration remains outside domain/ui.
+          - World-space contracts keep ECS limited to identity, anchor, lifetime, visibility input, and data feed.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Implementation requires a future active WR and accepted production plan.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-007
+        title: Retained UI Migration Bridge
+        kind: implementation
+        state: deferred
+        goal: Implement the compatibility bridge from retained UI paths into the new UiProgram architecture without a broad retained UI rewrite.
+        outcome: Current `ui_tree`, `ui_widgets`, `ui_runtime`, `ui_layout`, and `ui_math` paths have explicit adapter, migration, or deprecation gates.
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-006
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Migration work must preserve retained/current UI compatibility.
+        evidence_gates: []
+        acceptance_criteria:
+          - Current retained UI remains compatible until each surface is intentionally migrated.
+          - Deletion or retirement of old paths requires proof evidence and rollback rules.
+          - No broad retained UI rewrite is authorized by this milestone alone.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Implementation requires a future active WR and accepted production plan.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-008
+        title: Runtime Proof Fixtures And Diagnostics
+        kind: hardening
+        state: deferred
+        goal: Prove architecture runtime behavior with fixtures, diagnostics, source maps, migration evidence, artifact reproducibility, and structural assertions.
+        outcome: '`ui_testing` and associated proof harnesses demonstrate architecture runtime truth rather than prose-only completion.'
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-007
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+            required_status: active
+            reason: Runtime proof must follow the accepted diagnostics, fixtures, and source-map model.
+        evidence_gates: []
+        acceptance_criteria:
+          - Headless fixtures validate compiler, artifact, evaluator, diagnostics, source-map, and migration behavior.
+          - Runtime artifact reproducibility is machine-readable and validation-backed.
+          - Visual/render boundary proof uses renderer-facing data without renderer-owned UI truth.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Hardening requires future runtime evidence from prior implementation milestones.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-009
+        title: Architecture Runtime Proven Closeout
+        kind: release
+        state: deferred
+        goal: Close the UiProgram architecture implementation truth claim only after concrete code, tests, diagnostics, source maps, fixtures, migration evidence, and retained compatibility are proven.
+        outcome: The `ui-program-architecture-implementation` truth claim becomes satisfied only if architecture runtime evidence is complete.
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-008
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/ui-program-contract-design.md
+            required_status: active
+            reason: Closeout must preserve the corrected architecture-truth gate.
+        evidence_gates: []
+        acceptance_criteria:
+          - Concrete architecture contracts exist in code and pass executable validations.
+          - Retained compatibility, diagnostics, source maps, migration, fixtures, artifacts, and visual/render boundary evidence are linked.
+          - Completion updates truth claims without authorizing MaterialProgram implementation or foundation/meta extraction.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - Closeout remains blocked until all implementation and hardening evidence exists.
+        completion_audit: ''
+      - id: PM-UI-PROGRAM-ARCH-010
+        title: MaterialProgram Planning Gate Decision
+        kind: release
+        state: deferred
+        goal: Decide whether UiProgram architecture truth is sufficient to unblock MaterialProgram proof planning while keeping implementation and extraction gates closed.
+        outcome: MaterialProgram remains blocked or receives a separate planning path; this milestone does not start MaterialProgram implementation.
+        dependencies:
+          - PM-UI-PROGRAM-ARCH-009
+        roadmap_links: []
+        design_gates:
+          - kind: design
+            path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+            required_status: active
+            reason: MaterialProgram handoff must preserve second-domain and extraction gates.
+        evidence_gates: []
+        acceptance_criteria:
+          - The decision references satisfied UiProgram architecture truth or records why MaterialProgram remains blocked.
+          - MaterialProgram implementation is not started.
+          - Shared foundation/meta extraction remains blocked until a separate extraction design accepts it.
+        completion_quality: not_applicable
+        known_quality_gaps:
+          - MaterialProgram remains blocked unless this decision and a later WR explicitly authorize planning.
+        completion_audit: ''
   - id: PT-GAME-RUNTIME-UI
     title: Game Runtime UI Projection And HUD Platform
     state: active

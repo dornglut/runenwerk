@@ -56,7 +56,14 @@ BatchItemStatus = Literal["proposed", "approved", "running", "slice_completed", 
 RoadmapOutcome = Literal["unknown", "roadmap_completed", "slice_landed_item_still_current", "deferred_followup_required"]
 DecisionGateKind = Literal["adr", "design", "roadmap", "doc"]
 DecisionGateAppliesTo = Literal["implementation", "discovery"]
-CompletionQuality = Literal["not_applicable", "bounded_contract", "runtime_proven", "perfectionist_verified"]
+CompletionQuality = Literal[
+    "not_applicable",
+    "bounded_contract",
+    "runtime_proven",
+    "proof_slice_runtime_proven",
+    "architecture_runtime_proven",
+    "perfectionist_verified",
+]
 
 
 class WorkflowError(ValueError):

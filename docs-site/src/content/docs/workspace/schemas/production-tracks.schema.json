@@ -80,6 +80,8 @@
             "not_applicable",
             "bounded_contract",
             "runtime_proven",
+            "proof_slice_runtime_proven",
+            "architecture_runtime_proven",
             "perfectionist_verified"
           ],
           "title": "Completion Quality",
@@ -268,6 +270,8 @@
             "not_applicable",
             "bounded_contract",
             "runtime_proven",
+            "proof_slice_runtime_proven",
+            "architecture_runtime_proven",
             "perfectionist_verified"
           ],
           "title": "Target Completion Quality",

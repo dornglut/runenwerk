@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-06-01
 related_docs:
   - ./agents.md
   - ./architecture-governance-review.md
@@ -43,9 +43,15 @@ task production:run-track -- --track "<PT-ID>" --allow auto_safe --max-actions 1
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --deny product_code --max-actions 2
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --allow agent_closeout --deny product_code --max-actions 10
 task production:run-track -- --track "<PT-ID>" --mode full-track --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions 10
+task production:run-track -- --track "<PT-ID>" --mode agent-track --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions 10
 task production:audit-track -- --track "<PT-ID>" --full-automation --require-lock
 task production:next -- --track "<PT-ID>"
 task production:audit-track -- --track "<PT-ID>"
+task execution:compile -- --track "<PT-ID>"
+task execution:preflight -- --track "<PT-ID>"
+task execution:lock -- --track "<PT-ID>" --locked-by "<identity>"
+task execution:next -- --track "<PT-ID>"
+task execution:run -- --track "<PT-ID>" --mode full-track
 task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
 task ai:goal -- --track "<PT-ID>"
 task ai:goal -- --track "<PT-ID>" --scope non-deferred
@@ -141,18 +147,44 @@ Validation commands execute checks:
   product implementation writes, or claim runtime closeout evidence by itself.
 - Add `--allow product_implementation` only when the active implementation WR
   and accepted plan authorize exact product files. Manifest Runner V5 may write
-  those bounded files, including `new:` files, then must validate and stop
-  before closeout unless `agent_closeout` is also explicitly allowed. It cannot
-  run for docs, design, or governance milestones, or claim `runtime_proven`
-  without runtime/test closeout evidence.
+  those bounded files, including `new:` files, through declared writer
+  strategies. `agent_writer` uses an isolated scoped-diff workspace, target
+  digest checks, forbidden-pattern checks, accepted patch import, validation,
+  and run-ledger transcript capture. It cannot run for docs, design, or
+  governance milestones, or claim `runtime_proven` without runtime/test
+  closeout evidence.
+- Add `--allow crate_creation` only when the active manifest, WR, and accepted
+  plan name exact `new: <crate>/Cargo.toml` crate paths and validation
+  commands. This permission alone does not authorize placeholder owner folders
+  or broad crate creation.
 - Add `--mode full-track` only when the intent is end-to-end track automation.
   Full-track mode requires a current Track Execution Lock, runs full automation
   readiness preflight before mutation, appends a Track Execution Run ledger
   after each successful action, and requires every remaining milestone to
   declare a strict `execution_kind`, required permissions, contracts, evidence
   categories, validation commands, and closeout path.
+- Add `--mode agent-track` when the intent is agent-style orchestration for a
+  locked production track. Agent-track may create/link WRs, create plans, author
+  bounded design contracts, close governance/design milestones, run full
+  preflight, create or refresh the execution lock after preflight passes, and
+  continue one legal action at a time. It is not looser than full-track:
+  product implementation still requires exact WR/plan/writer/validation
+  authority and stops on stale digests, scope ambiguity, missing evidence,
+  ungranted permissions, validation failure, strategic human gates, or max
+  actions.
+- `task execution:compile`, `task execution:preflight`, `task execution:lock`,
+  `task execution:next`, and `task execution:run` are the clean Track Execution
+  Harness entrypoints. They use a typed Execution Contract Pack under
+  `workspace/execution-contract-packs/` as execution authority. Public
+  `production:*` and `ai:goal` workflow commands remain the compatibility
+  surface, but locked executable tracks delegate full-track execution,
+  full-track audit, and next-action inspection to the harness when a valid
+  Contract Pack is present. Tracks without a Contract Pack must report their
+  legacy fallback or blocker state instead of silently interpreting loose
+  manifest fields as locked execution authority.
 - `task production:next -- --track <PT-ID>` audits the machine-readable
-  manifest when present, then prints exactly one next legal production-track
+  manifest when present, including truth-claim status, then prints exactly one
+  next legal production-track
   action. It fails closed on alignment errors, missing gates, invalid blocked
   fields, invalid closeout paths, WR scope mismatches, or missing WR authority.
 - `task production:audit-track -- --track <PT-ID>` checks that every milestone
@@ -164,8 +196,8 @@ Validation commands execute checks:
 - `task ai:goal -- --track <PT-ID>` prints a production-track scoped Codex
   `/goal` coordinator prompt. When a machine-readable Track Execution Manifest
   exists, the command reads it, prints the manifest source path, current
-  milestone, next legal action, unmet gates, implementation authority, and stop
-  requirement. It runs the full manifest audit before emitting normal guidance
+  milestone, truth claims, next legal action, unmet gates, implementation
+  authority, and stop requirement. It runs the full manifest audit before emitting normal guidance
   and fails closed on alignment errors, missing gates, invalid blocked fields,
   invalid closeout paths, WR scope mismatches, or missing WR authority. Add
   `--scope non-deferred` when blocked or deferred milestones should remain
@@ -507,6 +539,10 @@ The audit must classify the row or milestone:
   long-term product still has known deferred scope or quality gaps;
 - `runtime_proven` when the accepted product chain has runtime or GPU evidence,
   but architecture, UI, module-structure, or future product gaps remain;
+- `proof_slice_runtime_proven` when bounded manifest proof slices have runtime
+  or test evidence but the final architecture is still a known gap;
+- `architecture_runtime_proven` when concrete docs, code contracts, and
+  executable validations prove the architecture itself;
 - `perfectionist_verified` only when a completed audit path exists and
   `known_quality_gaps` is empty.
 

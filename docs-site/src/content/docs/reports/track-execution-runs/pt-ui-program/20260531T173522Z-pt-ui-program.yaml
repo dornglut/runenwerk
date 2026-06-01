@@ -1,0 +1,64 @@
+version: 1
+track_id: PT-UI-PROGRAM
+run_id: 20260531T173522Z-pt-ui-program
+started_at: '2026-05-31T17:35:39+00:00'
+actions:
+  - action_index: 1
+    completed_at: '2026-05-31T17:35:39+00:00'
+    action_kind: agent_closeout
+    milestone_id: PM-UI-PROGRAM-013
+    wr_id: WR-147
+    strategy: handoff_closeout
+    pre_action_digests:
+      docs-site/src/content/docs/workspace/production-tracks.yaml: 148a0480d037b03dc89e4d83674746c34dcff851a6d3daa0fa32d659d31a0c5d
+      docs-site/src/content/docs/workspace/roadmap-items.yaml: 20028817c0071e5351fd625e9dbb9e333093962f14c7ae6d117b82e4010cc9a1
+      docs-site/src/content/docs/workspace/roadmap-archive.yaml: b0f9528624a9fc9730097a01928ee771f98a05bce764e644daf517b6832c5ec0
+      docs-site/src/content/docs/workspace/roadmap-deferred.yaml: 151aee7a956d1e146bf27affaa26631fab44f991e0296a444b4f666f91b72b3f
+      docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml: 20b680d08366b3bad58737d709464c314d0171e217d72cf6b8e55a31b759e9c1
+      tools/workflow/track_execution_manifest.py: 86eda384b3efdd91bf308d5825d23424cbe062ae43ce225240f17fb6b2ccf995
+      tools/workflow/production_goal.py: acf0f4643d841a9be4cb7d8f63c9567f2bbc4ab47efe165613f5a020d4ea7789
+      tools/workflow/production_state.py: 916c72517b09d2e778433d005c859becf3392b21aae74a73af0a4bfb3f2030c6
+      tools/workflow/roadmap_state.py: 3da906fce51b7cf1fce83acaa6d36384546655067ed51a85b45baaf0e2d333c1
+      docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+      docs-site/src/content/docs/design/active/ui-program-architecture.md: cd4e50a7d7755a5904e21f3088e455589b194459801e9f7db8a21d2cdf9000af
+      docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md: 31dbd244ec71da1fd5dc1123772f36afd1c4f7968b0012958f2970e8e5959d82
+      ? docs-site/src/content/docs/reports/implementation-plans/wr-135-ui-program-platform-proof-track-governance-and-activation/plan.md
+      : 5208efed6001c6d6b95512b5b9005a6857a8eac6fae87e34b1a5e679db5734d3
+    post_action_digests:
+      docs-site/src/content/docs/workspace/production-tracks.yaml: 7d8d3c947ef8eaac8e3e2b8dbcd1149b80b664dbd8e0a3f47459978849b4b25a
+      docs-site/src/content/docs/workspace/roadmap-items.yaml: 20028817c0071e5351fd625e9dbb9e333093962f14c7ae6d117b82e4010cc9a1
+      docs-site/src/content/docs/workspace/roadmap-archive.yaml: 21a0eb1d1f6a369a2d7e6cb062f80b4fe35182f288abd9d7891b2496f3e9860b
+      docs-site/src/content/docs/workspace/roadmap-deferred.yaml: 5702fb7d936e81ffaf4eb1b7e98d17c12b864a9a76ea9470b93f375fb84513e5
+      docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml: 15cbc29186fbafd75bdff78bc9a2ff1bd95849a4cf45ffe0af43d5fce128844c
+      tools/workflow/track_execution_manifest.py: 86eda384b3efdd91bf308d5825d23424cbe062ae43ce225240f17fb6b2ccf995
+      tools/workflow/production_goal.py: acf0f4643d841a9be4cb7d8f63c9567f2bbc4ab47efe165613f5a020d4ea7789
+      tools/workflow/production_state.py: 916c72517b09d2e778433d005c859becf3392b21aae74a73af0a4bfb3f2030c6
+      tools/workflow/roadmap_state.py: 3da906fce51b7cf1fce83acaa6d36384546655067ed51a85b45baaf0e2d333c1
+      docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+      docs-site/src/content/docs/design/active/ui-program-architecture.md: cd4e50a7d7755a5904e21f3088e455589b194459801e9f7db8a21d2cdf9000af
+      docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md: 31dbd244ec71da1fd5dc1123772f36afd1c4f7968b0012958f2970e8e5959d82
+      ? docs-site/src/content/docs/reports/implementation-plans/wr-135-ui-program-platform-proof-track-governance-and-activation/plan.md
+      : 5208efed6001c6d6b95512b5b9005a6857a8eac6fae87e34b1a5e679db5734d3
+    files_changed:
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+      - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+    validation_results:
+      - 'task production:render: exit 0'
+      - 'task roadmap:render: exit 0'
+      - 'task production:validate: exit 0'
+      - 'task roadmap:validate: exit 0'
+      - 'task production:check: exit 0'
+      - 'task roadmap:check: exit 0'
+      - 'task docs:validate: exit 0'
+      - 'task planning:validate: exit 0'
+    evidence_paths:
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+    closeout_paths:
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md
+    next_legal_action: PM-UI-PROGRAM-013 is complete; run track closeout if all milestones are complete.
+    stop_reason: ''
+last_action_at: '2026-05-31T17:35:39+00:00'
+last_next_legal_action: PM-UI-PROGRAM-013 is complete; run track closeout if all milestones are complete.

@@ -1,0 +1,239 @@
+version: 1
+track_id: PT-TEST
+run_id: pt-test-20260601-082646z
+started_at: '2026-06-01T08:26:46Z'
+actions:
+- status: failed
+  action_id: null
+  milestone_id: null
+  wr_id: null
+  execution_kind: null
+  executor_kind: null
+  writer_strategy: null
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  pre_action_digests: {}
+  post_action_digests:
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_preflig0/production.yaml
+    : be5b4cf8931dfaad9066266bbbd114a2d8bc7f750052fc605cb5a28cf8221f92
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_preflig0/roadmap.yaml
+    : 7c4154bd96f1d57b810ec2f503370be9e48c17a1694945e2605fe91b3a5c388b
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_preflig0/manifests/pt-test.yaml
+    : 3bae6a6c81e4a90c40dfa9a903018481c80a75b51de0b08f166bb10b4aef5cc2
+    tools/workflow/track_execution_manifest.py: 11f4faf7189308b6303f9d425242aef28c56b081850d5a77b53b383e9b5b6b47
+    tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+    tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+    tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: bb4eb88a85f1760d44f97eda9950c6fe4359de0b34b01be411505b8fe1ae0436
+    tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+    tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+    tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+    tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+    tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+    tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+    tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+    tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: 'PT-TEST:PM-TEST-002:WR-TBD-TEST-002: planning_expansion executor is not implemented in the clean harness yet'
+- status: failed
+  action_id: null
+  milestone_id: null
+  wr_id: null
+  execution_kind: null
+  executor_kind: null
+  writer_strategy: null
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  pre_action_digests: {}
+  post_action_digests:
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w0/production.yaml
+    : 4036814c5305402ae01c2637eceb154ab7992591938a5ad9af50a99e35674bf3
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w0/roadmap.yaml
+    : 8d52b003dabd7b0e1aa99e3fcd1d36f5622ae43303d38f95d3ea6abeb849472b
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w0/manifests/pt-test.yaml
+    : 86783b6b7fd6b70d5301e7c57be2525e18dc6c5cc75835d66ff27865027e0641
+    tools/workflow/track_execution_manifest.py: 11f4faf7189308b6303f9d425242aef28c56b081850d5a77b53b383e9b5b6b47
+    tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+    tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+    tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: bb4eb88a85f1760d44f97eda9950c6fe4359de0b34b01be411505b8fe1ae0436
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w0/plans/wr-002-product-code/plan.execution.yaml
+    : 54cafb161ec0ca8d32b3b6d128fe30e549c0233ccee5f70e618e0a4088b9b0ef
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w0/plans/wr-002-product-code/plan.md
+    : 94d1203f6087ce4c0ac0e53296066c7fbf3edf0c7ba11be6e85ff4836c486e3d
+    tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+    tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+    tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+    tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+    tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+    tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+    tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+    tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: 'PT-TEST: requires current Execution Lock'
+- status: failed
+  action_id: null
+  milestone_id: null
+  wr_id: null
+  execution_kind: null
+  executor_kind: null
+  writer_strategy: null
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  pre_action_digests: {}
+  post_action_digests:
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w1/production.yaml
+    : 4036814c5305402ae01c2637eceb154ab7992591938a5ad9af50a99e35674bf3
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w1/roadmap.yaml
+    : 107c7ca61a2a25c1ae371d7fccfa2efca47d688241ae965e80db1db0b6b86415
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w1/manifests/pt-test.yaml
+    : 4f6fbbacb7ce592965342a52da917c7f9d9efeb3f390b77caaf531b4ee4ed759
+    tools/workflow/track_execution_manifest.py: 11f4faf7189308b6303f9d425242aef28c56b081850d5a77b53b383e9b5b6b47
+    tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+    tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+    tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: bb4eb88a85f1760d44f97eda9950c6fe4359de0b34b01be411505b8fe1ae0436
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w1/plans/wr-002-product-code/plan.execution.yaml
+    : 4ae739efff998602e32cc68f3067a8b8ca3ac43c92ca74b6d9d0b79a4b29a55a
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w1/plans/wr-002-product-code/plan.md
+    : f7af59aa1905219f21e7bf81e8ea246b5d81dd2b5b3f76c402093c708a611093
+    tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+    tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+    tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+    tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+    tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+    tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+    tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+    tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: 'PT-TEST: execution lock contract_pack_digest is stale'
+- status: failed
+  action_id: null
+  milestone_id: null
+  wr_id: null
+  execution_kind: null
+  executor_kind: null
+  writer_strategy: null
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  pre_action_digests: {}
+  post_action_digests:
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w2/production.yaml
+    : 4036814c5305402ae01c2637eceb154ab7992591938a5ad9af50a99e35674bf3
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w2/roadmap.yaml
+    : 261189eb7c757bf244a7122417e22c652b2e8129b97782552af5dcbffcdbd48c
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w2/manifests/pt-test.yaml
+    : 3b0c71f0ee9b6ef55f71e0109f018d4a9e28fe1a01b6a5cc783c6674b77fa2e0
+    tools/workflow/track_execution_manifest.py: 11f4faf7189308b6303f9d425242aef28c56b081850d5a77b53b383e9b5b6b47
+    tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+    tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+    tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: bb4eb88a85f1760d44f97eda9950c6fe4359de0b34b01be411505b8fe1ae0436
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w2/plans/wr-002-product-code/plan.execution.yaml
+    : 919a7436535d2005cde019991ad86918ba1670d50862a766857b11bf7b27a5b7
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_fails_w2/plans/wr-002-product-code/plan.md
+    : 9fe1b17655155a85611a328999677bc7ce8ffaa54c0020a0377595fdc4b21f7a
+    tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+    tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+    tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+    tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+    tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+    tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+    tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+    tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: 'PT-TEST: requested permissions exceed execution lock grants: product_implementation'
+- status: failed
+  action_id: PT-TEST:PM-TEST-002:WR-002
+  milestone_id: PM-TEST-002
+  wr_id: WR-002
+  execution_kind: implementation_proof
+  executor_kind: product_implementation
+  writer_strategy: template_writer
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  pre_action_digests:
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/production.yaml
+    : 4036814c5305402ae01c2637eceb154ab7992591938a5ad9af50a99e35674bf3
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/roadmap.yaml
+    : 054fb8219418c91a5e22a50f4c2c75cf41838492ee535547def0972a97977ca6
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/manifests/pt-test.yaml
+    : dc2a8d741c8cd69b12a0cc2e85e1c617727b680853999d0a666169eac90ef633
+    tools/workflow/track_execution_manifest.py: 11f4faf7189308b6303f9d425242aef28c56b081850d5a77b53b383e9b5b6b47
+    tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+    tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+    tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: bb4eb88a85f1760d44f97eda9950c6fe4359de0b34b01be411505b8fe1ae0436
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/plans/wr-002-product-code/plan.execution.yaml
+    : 3bd186d3d7d90da9c08600b3f163c6f867e496655bf78d7038f88b8bc19b4379
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/plans/wr-002-product-code/plan.md
+    : 552c58dec242da934f37233f10ae1f5262c2b5cee88ab16640c578ba0a831ae4
+    tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+    tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+    tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+    tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+    tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+    tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+    tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+    tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+  post_action_digests:
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/production.yaml
+    : 4036814c5305402ae01c2637eceb154ab7992591938a5ad9af50a99e35674bf3
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/roadmap.yaml
+    : 054fb8219418c91a5e22a50f4c2c75cf41838492ee535547def0972a97977ca6
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/manifests/pt-test.yaml
+    : dc2a8d741c8cd69b12a0cc2e85e1c617727b680853999d0a666169eac90ef633
+    tools/workflow/track_execution_manifest.py: 11f4faf7189308b6303f9d425242aef28c56b081850d5a77b53b383e9b5b6b47
+    tools/workflow/production_goal.py: 75c5c36e0ddf4d8551d9aafe72cfde45233f982d37d76f42e424377ac86b4f51
+    tools/workflow/production_state.py: 2a776376ace8640f21156266392bfdabec78a2cc923d7fca1091f9aa776c1361
+    tools/workflow/roadmap_state.py: da5bd1231f6db1467efe361bc495a00c077b918ba025620e3506768c9b4cffa6
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: bb4eb88a85f1760d44f97eda9950c6fe4359de0b34b01be411505b8fe1ae0436
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/plans/wr-002-product-code/plan.execution.yaml
+    : 3bd186d3d7d90da9c08600b3f163c6f867e496655bf78d7038f88b8bc19b4379
+    ? /private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/plans/wr-002-product-code/plan.md
+    : 552c58dec242da934f37233f10ae1f5262c2b5cee88ab16640c578ba0a831ae4
+    tools/workflow/execution/__init__.py: 0ebad3807b39987fc63eb7d96fe0b519f7a17ba94abe4e517320da141f025666
+    tools/workflow/execution/cli.py: 74568678b8ba64a0878dfaef3433e5dae4d39846ca4dadf5c3e657dc491fd6a6
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/compiler.py: df6df69b64504a4d2c976a8aec9c7daccffe011021a8455d6a92b73b0302bc77
+    tools/workflow/execution/contracts.py: 89b7f091bc9a76bee719c091d6e6a02c70c63a336451ab35870bb7f92193f68a
+    tools/workflow/execution/evidence.py: 278ad600c3c51bd49c35d3c6a5066e70567f14738984f3cff927cfa7d6064fa0
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 6ae6f6d05a342f79a8810cdb3eb7d1b48a860b5ed9bd6a2b00a8b18bf136718b
+    tools/workflow/execution/preflight.py: e900e6f17e302c1fdc21cdd109741f76f95e9c04cef468c42edb843f1ca7eba8
+    tools/workflow/execution/runner.py: c9ba985805fbb14f1c7ef01dfe4cd40fa5402a18b7dc5242c8a1f1c863cf7e4b
+    tools/workflow/execution/workspace.py: 37279fb7e9951f298327802b2a29bf1495dd72ca962333ccb46af1282e0a07dd
+    tools/workflow/execution/writers.py: ae2fc79e72ba12e649c38e0cef2c4e73e5cd85915e2ed3a4dd4dddc9bec1df7d
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: 'PT-TEST:PM-TEST-002:WR-002: output parent directory does not exist: /var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/execution-pm-test-002-2ar2_d6h/workspace/private/var/folders/00/rm35mxj161d4wmzc7lzz2nmw0000gn/T/pytest-of-joshua/pytest-184/test_full_track_runner_writes_0/product/src'
+updated_at: '2026-06-01T08:26:51Z'

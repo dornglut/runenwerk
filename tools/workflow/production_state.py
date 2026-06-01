@@ -43,7 +43,14 @@ ProductionMilestoneState = Literal["designing", "ready_next", "active", "complet
 ProductionMilestoneKind = Literal["design", "implementation", "hardening", "release"]
 ProductionTrackState = Literal["active", "paused", "completed", "deferred"]
 ProductionGateKind = Literal["adr", "design", "roadmap", "doc"]
-ProductionCompletionQuality = Literal["not_applicable", "bounded_contract", "runtime_proven", "perfectionist_verified"]
+ProductionCompletionQuality = Literal[
+    "not_applicable",
+    "bounded_contract",
+    "runtime_proven",
+    "proof_slice_runtime_proven",
+    "architecture_runtime_proven",
+    "perfectionist_verified",
+]
 
 
 class StrictModel(BaseModel):
@@ -372,6 +379,9 @@ def validate_manifest_backed_tracks(
 ) -> list[str]:
     # Import locally to avoid a module import cycle: the manifest workflow also
     # imports production state models for its standalone CLI.
+    from execution.compiler import CONTRACT_PACK_ROOT, contract_pack_path, load_contract_pack
+    from execution.locks import contract_pack_freshness_errors
+    from execution.preflight import preflight_pack
     from track_execution_manifest import audit_manifest, full_automation_preflight_errors, load_track_execution_manifest
 
     roadmap = load_roadmap(roadmap_path)
@@ -390,6 +400,19 @@ def validate_manifest_backed_tracks(
         audit_errors = audit_manifest(loaded, track=track, roadmap=roadmap)
         errors.extend(audit_errors)
         if loaded.manifest.full_automation_target:
+            pack = load_contract_pack(track.id, root=CONTRACT_PACK_ROOT)
+            if pack is None:
+                errors.append(
+                    f"{track.id}: full automation target requires Execution Contract Pack at "
+                    f"{repo_path(contract_pack_path(track.id, root=CONTRACT_PACK_ROOT))}"
+                )
+            else:
+                for error in contract_pack_freshness_errors(pack):
+                    if error not in audit_errors:
+                        errors.append(f"{track.id}: execution contract pack blocker: {error}")
+                for error in preflight_pack(pack):
+                    if error not in audit_errors:
+                        errors.append(f"{track.id}: execution contract pack blocker: {error}")
             full_automation_errors = full_automation_preflight_errors(
                 loaded,
                 track=track,

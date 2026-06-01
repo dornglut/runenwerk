@@ -57,6 +57,7 @@ related_designs:
 - `domain/ui/ui_definition/src/source.rs`
 - `domain/ui/ui_runtime/src/output/build_ui_frame.rs`
 - `domain/ui/ui_render_data/src/lib.rs`
+- `docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml`
 
 ## Expected Methods/Functions
 
@@ -92,10 +93,13 @@ related_designs:
   - source-map proof
   - runtime artifact evidence
   - reproducibility evidence
+- Required machine-readable aggregation artifact:
+  - `docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml`
 - Writer allowed scopes:
   - `docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml`
   - `docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program/manifest.md`
   - `docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/plan.md`
+  - `docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml`
 - Writer forbidden scopes:
   - prior 6A through 6E product implementation files
   - missing prior-slice behavior
@@ -104,6 +108,7 @@ related_designs:
   - shared `foundation/meta` extraction
 - Writer closeout path: `docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md`
 - The closeout path is not a writer output. It is reserved for the later runtime closeout action after product evidence exists.
+- The writer must write the machine-readable aggregation artifact before PM-012 can close.
 - The writer contract makes PM-012 eligible for the manifest runner gate, but this plan does not run `product_code` or write 6F implementation artifacts.
 
 ## Forbidden Files/Modules
@@ -134,6 +139,7 @@ related_designs:
 
 - Expected closeout path: `docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md`
 - Closeout evidence must include:
+- The machine-readable aggregation artifact at `docs-site/src/content/docs/reports/implementation-plans/wr-146-6f-headless-fixture-diagnostics-source-map-proof/proof-aggregation.yaml`.
 - 6F aggregates accepted 6A through 6E evidence.
 - 6F proves deterministic fixture/debug serialization, diagnostics, source maps, migration evidence, UiRuntimeArtifactManifest, UiRuntimeArtifactTables, and reproducibility.
 - Missing behavior must return to the owning milestone.
