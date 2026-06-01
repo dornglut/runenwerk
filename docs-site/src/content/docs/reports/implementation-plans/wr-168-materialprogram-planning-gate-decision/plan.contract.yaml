@@ -1,0 +1,46 @@
+version: 1
+wr_id: WR-168
+milestone_id: PM-UI-PROGRAM-ARCH-010
+execution_kind: handoff_closeout
+executor_kind: handoff_closeout
+authority_level: handoff_decision_only
+permissions_required:
+- agent_closeout
+writer_strategy: verification_writer
+allowed_outputs:
+- docs-site/src/content/docs/workspace/production-tracks.yaml
+- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision/closeout.md
+new_outputs:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-010/handoff-handoff.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-010/artifact-architecture_contract.yaml
+forbidden_outputs: []
+forbidden_patterns: []
+validation_commands:
+- task production:render
+- task production:validate
+- task production:check
+- task roadmap:render
+- task roadmap:validate
+- task roadmap:check
+- task docs:validate
+- task planning:validate
+evidence_required: &id001
+- kind: handoff
+  name: handoff
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-010/handoff-handoff.yaml
+- kind: artifact
+  name: architecture_contract
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-010/artifact-architecture_contract.yaml
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision/closeout.md
+  completion_quality: bounded_contract
+  evidence_required: *id001
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop until PM-009 is completed
+- stop if MaterialProgram implementation would start
+- stop if foundation/meta extraction would start
+- stop if validation fails

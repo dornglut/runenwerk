@@ -1,0 +1,65 @@
+version: 1
+wr_id: WR-164
+milestone_id: PM-UI-PROGRAM-ARCH-006
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: implementation_runtime_proof
+permissions_required:
+- product_code
+- product_implementation
+- crate_creation
+writer_strategy: verification_writer
+allowed_outputs:
+- domain/ui/ui_surface/src/lib.rs
+- Cargo.toml
+- docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-006-host-boundary-implementations/plan.md
+- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-006-host-boundary-implementations/closeout.md
+new_outputs:
+- domain/ui/ui_hosts/src/lib.rs
+- domain/ui/ui_hosts/Cargo.toml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-006/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-006/diagnostics-diagnostics.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-006/artifact-surface.yaml
+forbidden_outputs: []
+forbidden_patterns:
+- foundation/meta
+- UiSemanticEvent
+- renderer-owned UI truth
+- ECS-owned UI semantics
+validation_commands:
+- cargo test -p ui_hosts host_contract
+- cargo test -p ui_surface mount
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-006/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - cargo:test
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-006/diagnostics-diagnostics.yaml
+  subject_paths: &id001
+  - domain/ui/ui_surface/src/lib.rs
+  - Cargo.toml
+  - domain/ui/ui_hosts/src/lib.rs
+  - domain/ui/ui_hosts/Cargo.toml
+- kind: artifact
+  name: surface
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-006/artifact-surface.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-006-host-boundary-implementations/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop until PM-005 is completed
+- stop if concrete editor/game/world integration moves into domain/ui
+- stop if validation fails

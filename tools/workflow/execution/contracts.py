@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shlex
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -44,6 +44,7 @@ WriterStrategy = Literal[
     "patch_writer",
     "proof_aggregation_writer",
     "agent_writer",
+    "verification_writer",
 ]
 
 EvidenceKind = Literal[
@@ -105,16 +106,30 @@ class EvidenceRequirement(StrictModel):
     name: str
     required: bool = True
     paths: list[str] = Field(default_factory=list)
+    subject_paths: list[str] = Field(default_factory=list)
+    validation_command_ids: list[str] = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
         return clean_text(value)
 
-    @field_validator("paths")
+    @field_validator("paths", "subject_paths", "validation_command_ids")
     @classmethod
     def validate_paths(cls, value: list[str]) -> list[str]:
         return [item.strip() for item in value if item.strip()]
+
+    @model_validator(mode="after")
+    def validate_resolver_contract(self) -> EvidenceRequirement:
+        if not self.paths:
+            raise ValueError(f"{self.name}: evidence requirement must declare an output record path")
+        if self.kind == "runtime_test":
+            if not self.validation_command_ids:
+                raise ValueError(f"{self.name}: runtime_test evidence requires validation_command_ids")
+            return self
+        if not self.subject_paths:
+            raise ValueError(f"{self.name}: {self.kind} evidence requires subject_paths")
+        return self
 
 
 class CloseoutContract(StrictModel):
@@ -271,6 +286,16 @@ def coerce_validation_command(value) -> dict | ValidationCommand:
     return blocked_validation_command(str(value), "validation command must be a string or mapping")
 
 
+def coerce_evidence_requirement(value) -> dict | EvidenceRequirement:
+    if isinstance(value, EvidenceRequirement):
+        return value
+    if isinstance(value, str):
+        return {"kind": value, "name": value}
+    if isinstance(value, dict):
+        return value
+    return {"kind": "runtime_test", "name": str(value)}
+
+
 class ActionContract(StrictModel):
     action_id: str
     track_id: str
@@ -294,6 +319,10 @@ class ActionContract(StrictModel):
     stop_conditions: list[str]
     required_prior_milestones: list[str] = Field(default_factory=list)
     required_prior_completion_quality: CompletionQuality | None = None
+    truth_claim_updates: list[dict[str, Any]] = Field(default_factory=list)
+    production_source_path: str = "docs-site/src/content/docs/workspace/production-tracks.yaml"
+    roadmap_source_path: str = "docs-site/src/content/docs/workspace/roadmap-items.yaml"
+    manifest_source_path: str = ""
 
     @field_validator(
         "action_id",
@@ -318,12 +347,24 @@ class ActionContract(StrictModel):
     def validate_text_lists(cls, value: list[str]) -> list[str]:
         return [item.strip() for item in value if item.strip()]
 
+    @field_validator("production_source_path", "roadmap_source_path", "manifest_source_path")
+    @classmethod
+    def validate_optional_source_path(cls, value: str) -> str:
+        return value.strip()
+
     @field_validator("validation_commands", mode="before")
     @classmethod
     def validate_validation_commands(cls, value) -> list[dict | ValidationCommand]:
         if not isinstance(value, list):
             return [blocked_validation_command(str(value), "validation_commands must be a list")]
         return [coerce_validation_command(item) for item in value]
+
+    @field_validator("evidence_required", mode="before")
+    @classmethod
+    def validate_evidence_requirements(cls, value) -> list[dict | EvidenceRequirement]:
+        if not isinstance(value, list):
+            return [{"kind": "runtime_test", "name": str(value)}]
+        return [coerce_evidence_requirement(item) for item in value]
 
     @model_validator(mode="after")
     def validate_action_contract(self) -> ActionContract:

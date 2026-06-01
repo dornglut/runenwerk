@@ -10296,3 +10296,1187 @@ items:
   adr_requirement: No new ADR unless the UiProgram contract changes accepted ownership, dependency direction, or extraction gates.
   fitness_function_requirement: Docs, production, roadmap, and planning validation before closeout.
   ownership_mode: Stream-aligned UI proving-domain planning with governance-owned sequencing.
+- id: WR-149
+  title: Harness Governance And Baseline
+  diagram_title: Harness Governance And Baseline
+  alias: WR149
+  lane: Product planning
+  dependency_level: L4
+  gate: Completed
+  planning_state: completed
+  priority: P1
+  value: 5
+  blocker: 5
+  tc: 3
+  rr_oe: 3
+  du: 3
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.4
+  rice: N/A
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+  - docs-site/src/content/docs/reports/track-execution-manifests/pt-track-execution-harness/manifest.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Completed through docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md.
+  current_decision: PM-TRACK-HARNESS-001 closed as bounded_contract governance evidence; it activates the harness track but does not authorize workflow implementation by itself.
+  current_call: Complete. Preserve as bounded_contract governance evidence and continue only to PM-TRACK-HARNESS-002 through its own WR, plan, validation, and closeout gates.
+  first_move: Continue PT-TRACK-EXECUTION-HARNESS only by creating or linking the PM-TRACK-HARNESS-002 WR and implementation contract.
+  main_blocker: Complete; later harness milestones require separate WRs, plans, validation, evidence, and closeout.
+  why_not_ready: Complete for PM-TRACK-HARNESS-001 governance scope only.
+  completion_quality: bounded_contract
+  known_quality_gaps:
+  - Harness implementation remains blocked until PM-TRACK-HARNESS-002 receives its own active WR and accepted plan.
+  - Runtime and architecture truth remain blocked until later harness milestones close.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates:
+  - kind: doc
+    path: docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_status: active
+    applies_to: discovery
+    reason: Harness completion must follow the execution-manifest governance model.
+  - kind: doc
+    path: docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_status: active
+    applies_to: discovery
+    reason: Truth and authority claims must remain aligned with repository governance.
+  ddd_owner: Workspace governance owns the execution harness workflow; product domains consume it through locked contracts.
+  adr_requirement: ADR required before changing strategic authority boundaries, lock requirements, or allowing foundation/meta extraction through harness automation.
+  fitness_function_requirement: Docs, production, roadmap, planning, and workflow tests before closeout.
+  ownership_mode: Platform-enabling workflow infrastructure with governance-owned sequencing.
+- id: WR-150
+  title: Kernel Source Model Closure
+  diagram_title: Kernel Source Model Closure
+  alias: WR150
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-149
+  write_scopes:
+  - tools/workflow/production_goal.py
+  - tools/workflow/production_state.py
+  - tools/workflow/test_workflow.py
+  - tools/workflow/track_sources
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-002 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-002 --roadmap WR-150.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-002 --roadmap WR-150.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-151
+  title: Contract Pack And Plan Sidecar Authority
+  diagram_title: Contract Pack And Plan Sidecar Authority
+  alias: WR151
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-150
+  write_scopes:
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  - tools/workflow/execution/compiler.py
+  - tools/workflow/execution/contracts.py
+  - tools/workflow/test_workflow.py
+  - tools/workflow/track_sources/plan_metadata.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-003 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-003 --roadmap WR-151.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-003 --roadmap WR-151.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-152
+  title: Typed Validation Command Registry
+  diagram_title: Typed Validation Command Registry
+  alias: WR152
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-151
+  write_scopes:
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  - tools/workflow/execution/contracts.py
+  - tools/workflow/execution/runner.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-004 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-004 --roadmap WR-152.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-004 --roadmap WR-152.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-153
+  title: Transactional Executor Parity
+  diagram_title: Transactional Executor Parity
+  alias: WR153
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-152
+  write_scopes:
+  - 'new: tools/workflow/execution/planning.py'
+  - tools/workflow/execution/runner.py
+  - tools/workflow/execution/workspace.py
+  - tools/workflow/execution/writers.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-005 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-005 --roadmap WR-153.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-005 --roadmap WR-153.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-154
+  title: Semantic Evidence Resolver Model
+  diagram_title: Semantic Evidence Resolver Model
+  alias: WR154
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-153
+  write_scopes:
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  - tools/workflow/execution/closeout_claims.py
+  - tools/workflow/execution/evidence.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-006 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-006 --roadmap WR-154.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-006 --roadmap WR-154.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-155
+  title: Runtime Closeout And Truth Claim State Machine
+  diagram_title: Runtime Closeout And Truth Claim State Machine
+  alias: WR155
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-154
+  write_scopes:
+  - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+  - tools/workflow/execution/closeout_claims.py
+  - tools/workflow/execution/runner.py
+  - tools/workflow/production_state.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-007 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-007 --roadmap WR-155.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-007 --roadmap WR-155.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-156
+  title: Agent Writer Scoped Diff Protocol
+  diagram_title: Agent Writer Scoped Diff Protocol
+  alias: WR156
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-155
+  write_scopes:
+  - tools/workflow/execution/ledger.py
+  - tools/workflow/execution/workspace.py
+  - tools/workflow/execution/writers.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-008 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-008 --roadmap WR-156.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-008 --roadmap WR-156.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-157
+  title: Agent-Track Orchestrator
+  diagram_title: Agent-Track Orchestrator
+  alias: WR157
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-156
+  write_scopes:
+  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  - 'new: tools/workflow/production_track_cli.py'
+  - tools/workflow/execution/cli.py
+  - tools/workflow/production_goal.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-009 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-009 --roadmap WR-157.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-009 --roadmap WR-157.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-158
+  title: Public Command Cutover And Legacy Runner Retirement
+  diagram_title: Public Command Cutover And Legacy Runner Retirem
+  alias: WR158
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-157
+  write_scopes:
+  - Taskfile.yml
+  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  - 'new: tools/workflow/production_track_cli.py'
+  - tools/workflow/production_goal.py
+  - tools/workflow/production_state.py
+  - tools/workflow/test_workflow.py
+  - tools/workflow/track_execution_manifest.py
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-010 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-010 --roadmap WR-158.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-010 --roadmap WR-158.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-159
+  title: Harness Runtime Proven Closeout
+  diagram_title: Harness Runtime Proven Closeout
+  alias: WR159
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-158
+  write_scopes:
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-011/handoff-handoff.yaml'
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - 'new: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md'
+  validations:
+  - task production:render
+  - task production:validate
+  - task roadmap:render
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-TRACK-HARNESS-011 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-TRACK-HARNESS-011 --roadmap WR-159.
+  first_move: Run task production:plan -- --milestone PM-TRACK-HARNESS-011 --roadmap WR-159.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: architecture_runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-148
+  title: Governance And Truth Claim Activation
+  diagram_title: Governance And Truth Claim Activation
+  alias: WR148
+  lane: Product planning
+  dependency_level: L4
+  gate: Design-only Track Expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-program-architecture/manifest.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-148-governance-and-truth-claim-activation/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-001-governance-and-truth-claim-activation/closeout.md
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-001/artifact-governance.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-001/artifact-truth_claims.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-001 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-001-governance-and-truth-claim-activation/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-001 --roadmap WR-148; stop before product code until the bounded contract is accepted.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-001 --roadmap WR-148.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: bounded_contract
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-001-governance-and-truth-claim-activation/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md
+    required_status: active
+    applies_to: discovery
+    reason: Architecture implementation must preserve the Domain Workbench Platform north-star and extraction gates.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    required_status: active
+    applies_to: discovery
+    reason: Architecture implementation must follow the active UiProgram architecture target.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-contract-design.md
+    required_status: active
+    applies_to: discovery
+    reason: Track activation must preserve the corrected proof-slice versus architecture-truth distinction.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md
+    required_status: completed
+    applies_to: discovery
+    reason: Track activation must record current code truth before future implementation begins.
+  ddd_owner: domain/ui owns UiProgram contract design; workspace governance coordinates production sequencing.
+  adr_requirement: No new ADR unless the UiProgram contract changes accepted ownership, dependency direction, or extraction gates.
+  fitness_function_requirement: Docs, production, roadmap, and planning validation before closeout.
+  ownership_mode: Stream-aligned UI proving-domain planning with governance-owned sequencing.
+- id: WR-160
+  title: UiProgram Contract And Graph Model
+  diagram_title: UiProgram Contract And Graph Model
+  alias: WR160
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-148
+  write_scopes:
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-002-uiprogram-contract-and-graph-model/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-002-uiprogram-contract-and-graph-model/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-002 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-002-uiprogram-contract-and-graph-model/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-002 --roadmap WR-160.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-002 --roadmap WR-160.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: bounded_contract
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-002-uiprogram-contract-and-graph-model/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-161
+  title: Schema Route Event Capability Contracts
+  diagram_title: Schema Route Event Capability Contracts
+  alias: WR161
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-160
+  write_scopes:
+  - Cargo.toml
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-003-schema-route-event-capability-contracts/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-003-schema-route-event-capability-contracts/plan.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: domain/ui/ui_program/Cargo.toml'
+  - 'new: domain/ui/ui_program/src/events/mod.rs'
+  - 'new: domain/ui/ui_program/src/events/payload.rs'
+  - 'new: domain/ui/ui_program/src/events/route.rs'
+  - 'new: domain/ui/ui_program/src/lib.rs'
+  - 'new: domain/ui/ui_schema/Cargo.toml'
+  - 'new: domain/ui/ui_schema/src/lib.rs'
+  - 'new: domain/ui/ui_schema/src/schema.rs'
+  - 'new: domain/ui/ui_schema/src/value.rs'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-003 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-003-schema-route-event-capability-contracts/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-003 --roadmap WR-161.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-003 --roadmap WR-161.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-003-schema-route-event-capability-contracts/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-162
+  title: Compiler And Runtime Artifact Contracts
+  diagram_title: Compiler And Runtime Artifact Contracts
+  alias: WR162
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-161
+  write_scopes:
+  - Cargo.toml
+  - 'new: domain/ui/ui_program/src/lib.rs'
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-004-compiler-and-runtime-artifact-contracts/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-004-compiler-and-runtime-artifact-contracts/plan.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: domain/ui/ui_artifacts/Cargo.toml'
+  - 'new: domain/ui/ui_artifacts/src/lib.rs'
+  - 'new: domain/ui/ui_compiler/Cargo.toml'
+  - 'new: domain/ui/ui_compiler/src/lib.rs'
+  - 'new: domain/ui/ui_program/src/graphs/mod.rs'
+  - 'new: domain/ui/ui_program/src/program.rs'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-004 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-004-compiler-and-runtime-artifact-contracts/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-004 --roadmap WR-162.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-004 --roadmap WR-162.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-004-compiler-and-runtime-artifact-contracts/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-163
+  title: Evaluator And State Execution
+  diagram_title: Evaluator And State Execution
+  alias: WR163
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-162
+  write_scopes:
+  - Cargo.toml
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-005-evaluator-and-state-execution/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-005-evaluator-and-state-execution/plan.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: domain/ui/ui_binding/Cargo.toml'
+  - 'new: domain/ui/ui_binding/src/lib.rs'
+  - 'new: domain/ui/ui_evaluator/Cargo.toml'
+  - 'new: domain/ui/ui_evaluator/src/lib.rs'
+  - 'new: domain/ui/ui_state/Cargo.toml'
+  - 'new: domain/ui/ui_state/src/lib.rs'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-005 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-005-evaluator-and-state-execution/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-005 --roadmap WR-163.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-005 --roadmap WR-163.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-005-evaluator-and-state-execution/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-164
+  title: Host Boundary Implementations
+  diagram_title: Host Boundary Implementations
+  alias: WR164
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-163
+  write_scopes:
+  - Cargo.toml
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-006-host-boundary-implementations/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-006-host-boundary-implementations/plan.md
+  - domain/ui/ui_surface/src/lib.rs
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: domain/ui/ui_hosts/Cargo.toml'
+  - 'new: domain/ui/ui_hosts/src/lib.rs'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-006 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-006-host-boundary-implementations/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-006 --roadmap WR-164.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-006 --roadmap WR-164.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-006-host-boundary-implementations/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-165
+  title: Retained UI Migration Bridge
+  diagram_title: Retained UI Migration Bridge
+  alias: WR165
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-164
+  write_scopes:
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-007-retained-ui-migration-bridge/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-007-retained-ui-migration-bridge/plan.md
+  - domain/ui/ui_definition/src/lib.rs
+  - domain/ui/ui_layout/src/lib.rs
+  - domain/ui/ui_math/src/lib.rs
+  - domain/ui/ui_runtime/src/lib.rs
+  - domain/ui/ui_tree/src/lib.rs
+  - domain/ui/ui_widgets/src/lib.rs
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-007 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-007-retained-ui-migration-bridge/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-007 --roadmap WR-165.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-007 --roadmap WR-165.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-007-retained-ui-migration-bridge/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-166
+  title: Runtime Proof Fixtures And Diagnostics
+  diagram_title: Runtime Proof Fixtures And Diagnostics
+  alias: WR166
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-165
+  write_scopes:
+  - Cargo.toml
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/plan.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: domain/ui/ui_testing/Cargo.toml'
+  - 'new: domain/ui/ui_testing/src/lib.rs'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-008 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-008 --roadmap WR-166.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-008 --roadmap WR-166.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-167
+  title: Architecture Runtime Proven Closeout
+  diagram_title: Architecture Runtime Proven Closeout
+  alias: WR167
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-166
+  write_scopes:
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-009 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-009 --roadmap WR-167.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-009 --roadmap WR-167.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: architecture_runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-168
+  title: MaterialProgram Planning Gate Decision
+  diagram_title: MaterialProgram Planning Gate Decision
+  alias: WR168
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-167
+  write_scopes:
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-PROGRAM-ARCH-010 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-010 --roadmap WR-168.
+  first_move: Run task production:plan -- --milestone PM-UI-PROGRAM-ARCH-010 --roadmap WR-168.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: bounded_contract
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.

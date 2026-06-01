@@ -1,0 +1,9 @@
+[package]
+name = "ui_compiler"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ui_artifacts.workspace = true
+ui_program.workspace = true

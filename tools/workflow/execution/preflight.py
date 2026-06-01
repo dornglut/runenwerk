@@ -68,8 +68,6 @@ def writer_errors(action: ActionContract) -> list[str]:
         errors.append(f"{action.action_id}: {action.executor_kind} requires exact allowed/new outputs")
     if action.executor_kind == "planning_expansion" and action.writer_strategy != "no_writer":
         errors.append(f"{action.action_id}: planning_expansion must not run a product/design writer")
-    if action.executor_kind == "planning_expansion":
-        errors.append(f"{action.action_id}: planning_expansion executor is not implemented in the clean harness yet")
     if (
         action.executor_kind != "planning_expansion"
         and action.execution_kind in {"implementation_proof", "proof_aggregation"}
@@ -108,7 +106,7 @@ def forbidden_pattern_errors(action: ActionContract) -> list[str]:
 def evidence_errors(action: ActionContract) -> list[str]:
     errors: list[str] = []
     if (
-        action.executor_kind != "planning_expansion"
+        action.executor_kind in {"product_implementation", "proof_aggregation"}
         and action.execution_kind in {"implementation_proof", "proof_aggregation"}
         and not action.evidence_required
     ):
@@ -121,10 +119,13 @@ def evidence_errors(action: ActionContract) -> list[str]:
         if not action.closeout_contract.evidence_required:
             errors.append(f"{action.action_id}: runtime/architecture closeout requires evidence metadata")
     for requirement in action.evidence_required:
-        if requirement.kind != "runtime_test" and not requirement.paths:
-            errors.append(
-                f"{action.action_id}: {requirement.kind} evidence requires explicit artifact paths"
-            )
+        if not requirement.paths:
+            errors.append(f"{action.action_id}: {requirement.kind} evidence requires declared evidence output path")
+        for path in requirement.paths:
+            if path not in action.allowed_outputs and path not in action.new_outputs:
+                errors.append(f"{action.action_id}: evidence output is not declared in action outputs: {path}")
+        if requirement.kind == "runtime_test" and not requirement.validation_command_ids:
+            errors.append(f"{action.action_id}: runtime_test evidence requires validation_command_ids")
     return errors
 
 
@@ -143,14 +144,26 @@ def preflight_action(action: ActionContract) -> list[str]:
     return errors
 
 
-def preflight_pack(pack: ContractPack, *, allow: set[str] | None = None) -> list[str]:
+def preflight_actions(pack: ContractPack, *, actions: list[ActionContract], allow: set[str] | None = None) -> list[str]:
     errors: list[str] = []
     if not pack.source_digests:
         errors.append(f"{pack.track_id}: Contract Pack source_digests must not be empty")
-    for action in pack.actions:
+    for action in actions:
         errors.extend(preflight_action(action))
         if allow is not None:
             missing = sorted(set(action.permissions_required) - allow)
             if missing:
                 errors.append(f"{action.action_id}: ungranted permissions: {', '.join(missing)}")
     return errors
+
+
+def preflight_pack(pack: ContractPack, *, allow: set[str] | None = None) -> list[str]:
+    return preflight_actions(pack, actions=list(pack.actions), allow=allow)
+
+
+def preflight_for_mode(pack: ContractPack, *, mode: str, allow: set[str] | None = None) -> list[str]:
+    if mode == "full-track":
+        return preflight_pack(pack, allow=allow)
+    if mode == "single-action":
+        return preflight_actions(pack, actions=list(pack.actions[:1]), allow=allow)
+    return [f"{pack.track_id}: unsupported execution mode for preflight: {mode}"]

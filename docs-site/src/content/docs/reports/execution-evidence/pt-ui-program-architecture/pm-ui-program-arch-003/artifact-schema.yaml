@@ -1,0 +1,28 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-003
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-003:WR-161
+evidence_kind: artifact
+name: schema
+status: passed
+produced_at: '2026-06-01T15:04:14Z'
+paths:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-003/artifact-schema.yaml
+validation_commands:
+- cargo:test (cargo test -p ui_schema schema_value) -> exit 0
+- cargo:test (cargo test -p ui_program route_contract) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+subject_paths:
+- Cargo.toml
+- domain/ui/ui_program/src/events/mod.rs
+- domain/ui/ui_program/src/lib.rs
+- domain/ui/ui_program/Cargo.toml
+- domain/ui/ui_schema/Cargo.toml
+- domain/ui/ui_schema/src/lib.rs
+- domain/ui/ui_schema/src/value.rs
+- domain/ui/ui_schema/src/schema.rs
+- domain/ui/ui_program/src/events/route.rs
+- domain/ui/ui_program/src/events/payload.rs

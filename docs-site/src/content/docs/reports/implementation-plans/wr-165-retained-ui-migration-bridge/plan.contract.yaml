@@ -1,0 +1,71 @@
+version: 1
+wr_id: WR-165
+milestone_id: PM-UI-PROGRAM-ARCH-007
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: implementation_runtime_proof
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- domain/ui/ui_definition/src/lib.rs
+- domain/ui/ui_tree/src/lib.rs
+- domain/ui/ui_widgets/src/lib.rs
+- domain/ui/ui_runtime/src/lib.rs
+- domain/ui/ui_layout/src/lib.rs
+- domain/ui/ui_math/src/lib.rs
+- docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-007-retained-ui-migration-bridge/plan.md
+- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-007-retained-ui-migration-bridge/closeout.md
+new_outputs:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-007/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-007/migration-migration.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-007/reproducibility-reproducibility.yaml
+forbidden_outputs: []
+forbidden_patterns:
+- foundation/meta
+- UiSemanticEvent
+- renderer-owned UI truth
+- ECS-owned UI semantics
+validation_commands:
+- cargo test -p ui_definition preview_fixture
+- cargo test -p ui_runtime build_ui_frame
+- cargo test -p ui_widgets color_picker
+- cargo test -p ui_layout
+- cargo test -p ui_math
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-007/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - cargo:test
+- kind: migration
+  name: migration
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-007/migration-migration.yaml
+  subject_paths: &id001
+  - domain/ui/ui_definition/src/lib.rs
+  - domain/ui/ui_tree/src/lib.rs
+  - domain/ui/ui_widgets/src/lib.rs
+  - domain/ui/ui_runtime/src/lib.rs
+  - domain/ui/ui_layout/src/lib.rs
+  - domain/ui/ui_math/src/lib.rs
+- kind: reproducibility
+  name: reproducibility
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-007/reproducibility-reproducibility.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-007-retained-ui-migration-bridge/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop until PM-006 is completed
+- stop if migration becomes a broad retained UI rewrite
+- stop if validation fails

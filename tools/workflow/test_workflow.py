@@ -3,15 +3,16 @@ from __future__ import annotations
 import copy
 import tempfile
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
 from typer.testing import CliRunner
 
-import track_execution_manifest as track_manifest_module
+import track_sources.audit as track_source_audit_module
 from generate_roadmap_docs import render_current_candidates_roadmap, render_dependency_roadmap, render_outputs
 from generate_production_docs import stale_outputs as stale_production_outputs
 from parallel_batch import (
@@ -60,26 +61,16 @@ from production_goal import (
     render_stack_goal,
     render_track_goal,
 )
-from track_execution_manifest import (
-    apply_auto_safe_track_expansion,
-    assert_auto_safe_expansion_allowed,
-    audit_manifest,
-    build_track_execution_lock_data,
-    first_current_manifest_entry,
-    implementation_plan_consistency_errors_from_text,
-    load_track_execution_lock,
-    load_track_execution_manifest,
-    new_file_scope_errors,
-    product_plan_contract_errors,
-    resolve_manifest_command_context,
-)
-from track_execution_manifest import app as track_manifest_app
+from production_track_cli import app as production_track_cli_app
+from track_sources.audit import audit_manifest, first_current_manifest_entry, new_file_scope_errors
+from track_sources.manifest import FULL_TRACK_PERMISSION_SET, load_track_execution_manifest
 from execution.cli import app as execution_app
-from execution.compiler import compile_contract_pack, load_contract_pack, write_contract_pack
+from execution.compiler import compile_contract_pack, harness_source_digest_map, load_contract_pack, write_contract_pack
 from execution.contracts import ActionContract, CloseoutContract, ContractPack, EvidenceRequirement, RollbackPolicy
 from execution.locks import build_execution_lock, execution_lock_errors, write_execution_lock
 from execution.preflight import preflight_pack
 from execution.evidence import passed_record, write_evidence_record
+from execution.closeout_claims import closeout_claim_errors
 from execution.runner import run_action, run_next_action
 from execution.writers import AgentResult, run_writer
 from roadmap_state import (
@@ -121,6 +112,54 @@ from roadmap_intake import (
     validate_intake_item_scopes,
     write_intake_proposal,
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def preserve_repo_test_artifacts() -> Iterator[None]:
+    roots = (
+        REPO_ROOT / "docs-site/src/content/docs/reports/execution-evidence/pt-test",
+        REPO_ROOT / "docs-site/src/content/docs/reports/track-execution-runs/pt-test",
+    )
+    isolated_files = (
+        REPO_ROOT / "docs-site/src/content/docs/workspace/execution-contract-packs/pt-test.yaml",
+        REPO_ROOT / "docs-site/src/content/docs/workspace/execution-locks/pt-test.yaml",
+    )
+    snapshots: dict[Path, bytes] = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if path.is_file():
+                snapshots[path] = path.read_bytes()
+    isolated_snapshots = {path: path.read_bytes() for path in isolated_files if path.exists()}
+    for path in isolated_files:
+        if path.exists():
+            path.unlink()
+
+    yield
+
+    for path in isolated_files:
+        if path.exists():
+            path.unlink()
+        if path in isolated_snapshots:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(isolated_snapshots[path])
+    for root in roots:
+        if root.exists():
+            for path in sorted((candidate for candidate in root.rglob("*") if candidate.is_file()), reverse=True):
+                if path not in snapshots:
+                    path.unlink()
+        for path, content in snapshots.items():
+            if path.is_relative_to(root):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if not path.exists() or path.read_bytes() != content:
+                    path.write_bytes(content)
+        if root.exists():
+            for directory in sorted((candidate for candidate in root.rglob("*") if candidate.is_dir()), reverse=True):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
 
 
 def valid_state() -> dict:
@@ -516,12 +555,7 @@ def write_agent_design_fixture(
     write_yaml(roadmap_path, active_roadmap)
     write_yaml(deferred_path, deferred_roadmap)
     write_yaml(manifest_path, manifest_data)
-    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
-    monkeypatch.setattr("track_execution_manifest.implementation_plan_path", lambda wr_id, milestone: repo_path(plan_path))
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
-    )
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
     return production_path, roadmap_path, manifest_root, plan_path, design_path
 
 
@@ -555,6 +589,7 @@ def valid_product_code_state(
     manifest_data["milestones"][0]["may_create_code"] = True
     manifest_data["milestones"][0]["may_modify_production_behavior"] = True
     manifest_data["milestones"][1]["milestone_type"] = "implementation"
+    manifest_data["milestones"][1]["required_evidence_categories"] = ["runtime_test"]
     manifest_data["milestones"][1]["execution_kind"] = "implementation_proof"
     manifest_data["milestones"][1]["closeout_strategy"] = "runtime_proven_closeout"
     manifest_data["milestones"][1]["write_scope"] = [
@@ -680,11 +715,7 @@ def write_product_code_fixture(
     write_yaml(production_path, production_data)
     write_yaml(roadmap_path, roadmap_data)
     write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
-    )
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
     return production_path, roadmap_path, manifest_root, plan_path, implementation_path, closeout_path
 
 
@@ -791,9 +822,12 @@ def write_implementation_agent_design_fixture(
 
     manifest_data = valid_track_manifest_state()
     manifest_data["track_id"] = track_id
+    manifest_data["ai_executable"] = True
+    manifest_data["full_automation_target"] = True
     manifest_data["milestones"][1]["milestone_id"] = milestone_id
     manifest_data["milestones"][1]["title"] = "6A Label Structural UiFrame Text Proof"
     manifest_data["milestones"][1]["milestone_type"] = "implementation"
+    manifest_data["milestones"][1]["required_evidence_categories"] = ["runtime_test"]
     manifest_data["milestones"][1].pop("owning_wr", None)
     manifest_data["milestones"][1]["future_wr_candidate"] = "WR-TBD-TEST-002"
     manifest_data["milestones"][1]["write_scope"] = [repo_path(path) for path in scope_paths]
@@ -840,12 +874,7 @@ def write_implementation_agent_design_fixture(
     write_yaml(roadmap_path, active_roadmap)
     write_yaml(deferred_path, deferred_roadmap)
     write_yaml(manifest_path, manifest_data)
-    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
-    monkeypatch.setattr("track_execution_manifest.implementation_plan_path", lambda wr_id, milestone: repo_path(plan_path))
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
-    )
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
     return production_path, roadmap_path, manifest_root, plan_path, scope_paths
 
 
@@ -1647,7 +1676,7 @@ def test_track_manifest_plan_track_creates_scaffold(tmp_path: Path) -> None:
     write_yaml(roadmap_path, valid_state())
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "plan-track",
             "--track",
@@ -1676,7 +1705,7 @@ def test_track_manifest_next_prints_single_action(tmp_path: Path) -> None:
     write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -1704,7 +1733,7 @@ def test_track_manifest_next_fails_when_manifest_missing(tmp_path: Path) -> None
     write_yaml(roadmap_path, valid_state())
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -1720,7 +1749,7 @@ def test_track_manifest_next_fails_when_manifest_missing(tmp_path: Path) -> None
 
     assert result.exit_code == 1
     assert "production:next failed" in result.stdout
-    assert "no Track Execution Manifest source" in result.stdout
+    assert "missing Track Execution Manifest" in result.stdout
     assert "Current milestone:" not in result.stdout
     assert "Next legal action:" not in result.stdout
 
@@ -1735,7 +1764,7 @@ def test_track_manifest_next_rejects_malformed_manifest_yaml(tmp_path: Path) -> 
     (manifest_root / "pt-test.yaml").write_text("version: [\n", encoding="utf-8")
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -1766,7 +1795,7 @@ def test_track_manifest_next_rejects_invalid_manifest_model(tmp_path: Path) -> N
     write_yaml(manifest_root / "pt-test.yaml", {"version": 1, "track_id": "PT-TEST"})
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -1800,7 +1829,7 @@ def test_track_manifest_next_rejects_audit_blocked_manifest(tmp_path: Path) -> N
     write_yaml(manifest_root / "pt-test.yaml", manifest_data)
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -1834,7 +1863,7 @@ def test_track_manifest_next_rejects_invalid_closeout_path(tmp_path: Path) -> No
     write_yaml(manifest_root / "pt-test.yaml", manifest_data)
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -1851,7 +1880,7 @@ def test_track_manifest_next_rejects_invalid_closeout_path(tmp_path: Path) -> No
     assert result.exit_code == 1
     assert "Track Execution Manifest audit blockers" in result.stdout
     assert "invalid closeout path:" in result.stdout
-    assert "expected_closeout_path must point at a Markdown closeout/report" in result.stdout
+    assert "expected_closeout_path must be a Markdown closeout/report path" in result.stdout
     assert "Current milestone:" not in result.stdout
     assert "Next legal action:" not in result.stdout
 
@@ -1866,7 +1895,7 @@ def test_track_manifest_audit_passes_valid_manifest(tmp_path: Path) -> None:
     write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "audit-track",
             "--track",
@@ -1892,7 +1921,7 @@ def test_track_manifest_audit_fails_when_manifest_missing(tmp_path: Path) -> Non
     write_yaml(roadmap_path, valid_state())
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "audit-track",
             "--track",
@@ -1908,7 +1937,7 @@ def test_track_manifest_audit_fails_when_manifest_missing(tmp_path: Path) -> Non
 
     assert result.exit_code == 1
     assert "production:audit-track failed" in result.stdout
-    assert "no Track Execution Manifest source" in result.stdout
+    assert "missing Track Execution Manifest" in result.stdout
     assert "manifest audit passed" not in result.stdout
 
 
@@ -1928,7 +1957,7 @@ def test_track_manifest_expand_track_is_read_only(tmp_path: Path) -> None:
     write_yaml(manifest_root / "pt-test.yaml", manifest_data)
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "expand-track",
             "--track",
@@ -1948,42 +1977,34 @@ def test_track_manifest_expand_track_is_read_only(tmp_path: Path) -> None:
     assert not (tmp_path / "roadmap-deferred.yaml").exists()
 
 
-def test_manifest_runner_auto_safe_creates_and_links_deferred_wr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_execution_planning_expansion_creates_and_links_deferred_wr(tmp_path: Path) -> None:
     production_path = tmp_path / "production.yaml"
     roadmap_path = tmp_path / "roadmap.yaml"
     manifest_root = tmp_path / "manifests"
+    pack_root = tmp_path / "contract-packs"
     manifest_root.mkdir()
     production_data, roadmap_data, manifest_data = valid_track_expansion_state()
     write_yaml(production_path, production_data)
     write_yaml(roadmap_path, roadmap_data)
     write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
+    pack = compile_contract_pack(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+        contract_pack_root=pack_root,
+    )
+    write_contract_pack(pack, root=pack_root)
+
+    result = run_next_action(
+        pack,
+        lock_validated=True,
+        repo_root=tmp_path,
+        run_validations=False,
+        contract_pack_root=pack_root,
     )
 
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
-    assert "Created/linked WR: WR-003" in result.stdout
+    assert result.action_id == "PT-TEST:PM-TEST-002:WR-TBD-TEST-002"
     updated_production = load_yaml(production_path)
     updated_manifest = load_yaml(manifest_root / "pt-test.yaml")
     updated_deferred = load_yaml(tmp_path / "roadmap-deferred.yaml")
@@ -1998,1782 +2019,13 @@ def test_manifest_runner_auto_safe_creates_and_links_deferred_wr(tmp_path: Path,
     assert deferred_wr["completion_quality"] == "not_applicable"
     assert "docs-site/src/content/docs/reports/implementation-plans/wr-003-pm-test-002-title/plan.md" in deferred_wr["write_scopes"]
     assert "docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md" in deferred_wr["write_scopes"]
-    assert "No implementation" not in result.stdout
-
-
-def test_manifest_runner_crate_creation_permission_alone_does_not_expand_track(tmp_path: Path) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "crate_creation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "Track Expansion must create or link" in result.stdout
-    assert "--allow auto_safe" in result.stdout
-    assert not (tmp_path / "roadmap-deferred.yaml").exists()
-
-
-def test_manifest_runner_auto_safe_expands_implementation_milestone_without_code_authority(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    production_data["tracks"][0]["milestones"][1]["kind"] = "implementation"
-    manifest_data["milestones"][1]["milestone_type"] = "implementation"
-    manifest_data["milestones"][1]["write_scope"] = ["tools/workflow/test_workflow.py"]
-    manifest_data["milestones"][1]["may_create_code"] = True
-    add_test_auto_safe_contract(manifest_data["milestones"][1])
-    add_test_implementation_contracts(manifest_data["milestones"][1])
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
-    assert "Created/linked WR: WR-003" in result.stdout
-    assert "product_code" not in result.stdout
-
-
-def test_manifest_runner_auto_safe_refuses_completed_current_milestone(tmp_path: Path) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    production_data["tracks"][0]["milestones"][1]["state"] = "completed"
-    production_data["tracks"][0]["milestones"][1]["completion_quality"] = "bounded_contract"
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-
-    context = resolve_manifest_command_context(
-        "PT-TEST",
-        production_source=production_path,
-        roadmap_source=roadmap_path,
-        manifest_source_root=manifest_root,
-    )
-    with pytest.raises(WorkflowError, match="completed milestones must not be mutated"):
-        assert_auto_safe_expansion_allowed(
-            context.loaded.manifest.milestones[1],
-            context.track.milestones[1],
-            roadmap=context.roadmap,
-            allow={"auto_safe"},
-        )
-    assert not (tmp_path / "roadmap-deferred.yaml").exists()
-
-
-def test_manifest_runner_auto_safe_refuses_existing_wr_link(tmp_path: Path) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    production_data["tracks"][0]["milestones"][1]["roadmap_links"] = ["WR-002"]
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "conflicts with" in result.stdout
-    assert "production roadmap_links ['WR-002']" in result.stdout
-    assert not (tmp_path / "roadmap-deferred.yaml").exists()
-
-
-def test_manifest_runner_auto_safe_refuses_wr_collision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-    context = resolve_manifest_command_context(
-        "PT-TEST",
-        production_source=production_path,
-        roadmap_source=roadmap_path,
-        manifest_source_root=manifest_root,
-    )
-    monkeypatch.setattr("track_execution_manifest.allocate_next_wr_id", lambda roadmap: "WR-001")
-
-    with pytest.raises(WorkflowError, match="WR-001: already present"):
-        apply_auto_safe_track_expansion(
-            context,
-            production_source=production_path,
-            roadmap_source=roadmap_path,
-            allow={"auto_safe"},
-            run_validations=False,
-        )
-
-    assert not (tmp_path / "roadmap-deferred.yaml").exists()
-
-
-def test_manifest_runner_next_after_expansion_points_to_design_plan_not_implementation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
-    )
-
-    run_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert run_result.exit_code == 0, run_result.output
-
-    next_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "next",
-            "--track",
-            "PT-TEST",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert next_result.exit_code == 0, next_result.output
-    assert "Current milestone: PM-TEST-002 - PM-TEST-002 title" in next_result.stdout
-    assert "task production:plan" in next_result.stdout
-    assert "PM-TEST-002" in next_result.stdout
-    assert "WR-003" in next_result.stdout
-    assert "Workflow action: design_first" in next_result.stdout
-    assert "PM-TEST-007" not in next_result.stdout
-
-
-def test_manifest_runner_agent_design_requires_permission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "workflow action is design_first" in result.stdout
-    assert not plan_path.exists()
-
-
-def test_manifest_runner_agent_design_does_not_require_product_code_denial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
-    assert "Manifest Runner V4" not in result.stdout
-    assert plan_path.exists()
-
-
-def test_manifest_runner_agent_design_ignores_product_code_permission_until_runtime_action(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
-    assert "Manifest Runner V4" not in result.stdout
-    assert plan_path.exists()
-
-
-def test_manifest_runner_agent_design_allows_closeout_permission_without_closing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
-    assert plan_path.exists()
-
-
-def test_manifest_runner_agent_design_rejects_missing_source_documents(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _active: dict, _deferred: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["agent_design"]["source_documents"] = ["docs-site/src/content/docs/missing-agent-design-source.md"]
-
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "agent_design source documents are missing" in result.stdout
-    assert "missing-agent-design-source.md" in result.stdout
-    assert not plan_path.exists()
-
-
-def test_manifest_runner_agent_design_rejects_uncovered_write_scope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _active: dict, _deferred: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["write_scope"] = [
-            scope for scope in manifest["milestones"][1]["write_scope"] if not scope.endswith("/plan.md")
-        ]
-
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "agent_design write paths are not covered by manifest write_scope" in result.stdout
-    assert not plan_path.exists()
-
-
-def test_manifest_runner_agent_design_writes_plan_and_stage_contract(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, design_path = write_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
-    assert "Plan path:" in result.stdout
-    assert "stop for closeout" in result.stdout
-    assert "--allow agent_closeout" in result.stdout
-    assert plan_path.exists()
-    plan_text = plan_path.read_text(encoding="utf-8")
-    assert "## Required Design Sections" in plan_text
-    assert "## Forbidden Scope" in plan_text
-    assert "## PM-TEST-002 Stage test Contract" in plan_text
-    assert "does not authorize product/runtime code" in plan_text
-    assert "UiSchemaValue contract" in plan_text
-    design_text = design_path.read_text(encoding="utf-8")
-    assert "## PM-TEST-002 Stage test Contract" not in design_text
-    updated_manifest = load_yaml(manifest_root / "pt-test.yaml")
-    assert "agent_design completed design/planning writes" in updated_manifest["next_legal_action"]
-    updated_deferred = load_yaml(tmp_path / "roadmap-deferred.yaml")
-    assert "agent_design wrote the Stage test PM-TEST-002 title plan" in updated_deferred["items"][0]["current_decision"]
-
-    repeat_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert repeat_result.exit_code == 1
-    assert "closeout is the next legal action" in repeat_result.stdout
-    assert "agent_closeout" in repeat_result.stdout
-
-
-def run_agent_design_fixture(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> tuple[Path, Path, Path, Path, Path]:
-    production_path, roadmap_path, manifest_root, plan_path, design_path = write_agent_design_fixture(tmp_path, monkeypatch)
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    return production_path, roadmap_path, manifest_root, plan_path, design_path
-
-
-def test_manifest_runner_agent_closeout_requires_permission(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "closeout is the next legal action" in result.stdout
-    assert "agent_closeout" in result.stdout
-
-
-def test_manifest_runner_agent_closeout_closes_design_milestone_as_bounded_contract(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V3 applied one agent_closeout action." in result.stdout
-    updated_production = load_yaml(production_path)
-    milestone = updated_production["tracks"][0]["milestones"][1]
-    assert milestone["state"] == "completed"
-    assert milestone["completion_quality"] == "bounded_contract"
-    assert milestone["completion_audit"].endswith("closeout.md")
-    assert milestone["evidence_gates"][0]["required_status"] == "completed"
-    updated_deferred = load_yaml(tmp_path / "roadmap-deferred.yaml")
-    assert updated_deferred["items"] == []
-    updated_archive = load_yaml(tmp_path / "roadmap-archive.yaml")
-    archived_wr = updated_archive["items"][0]
-    assert archived_wr["id"] == "WR-002"
-    assert archived_wr["planning_state"] == "completed"
-    assert archived_wr["completion_quality"] == "bounded_contract"
-    updated_manifest = load_yaml(manifest_root / "pt-test.yaml")
-    assert "create or link the design wr" in updated_manifest["next_legal_action"].lower()
-    assert "agent_closeout as bounded_contract" in updated_manifest["milestones"][1]["next_legal_action"]
-
-
-def test_manifest_runner_agent_closeout_rejects_runtime_proven_design_milestone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(production: dict, _active: dict, _deferred: dict, _manifest: dict) -> None:
-        production["tracks"][0]["milestones"][1]["completion_quality"] = "runtime_proven"
-
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = write_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    design_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert design_result.exit_code == 0, design_result.output
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "docs or design milestones cannot close as runtime_proven" in result.stdout
-
-
-def test_manifest_runner_agent_closeout_blocks_missing_evidence(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _design_path = write_agent_design_fixture(tmp_path, monkeypatch)
-    manifest_data = load_yaml(manifest_root / "pt-test.yaml")
-    manifest_data["next_legal_action"] = "PM-TEST-002 agent_design completed design/planning writes; stop for closeout."
-    manifest_data["milestones"][1]["next_legal_action"] = manifest_data["next_legal_action"]
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "required production plan evidence is missing" in result.stdout
-    assert not plan_path.exists()
-
-
-def test_manifest_runner_agent_closeout_blocks_failed_validation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: (_ for _ in ()).throw(WorkflowError("validation command failed: task docs:validate")),
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "validation command failed: task docs:validate" in result.stdout
-
-
-def test_manifest_runner_agent_closeout_rejects_product_code_milestone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _active: dict, _deferred: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["may_create_code"] = True
-
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = write_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    manifest_data = load_yaml(manifest_root / "pt-test.yaml")
-    manifest_data["next_legal_action"] = "PM-TEST-002 agent_design completed design/planning writes; stop for closeout."
-    manifest_data["milestones"][1]["next_legal_action"] = manifest_data["next_legal_action"]
-    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "supports docs, design, or governance milestones" in result.stdout
-    assert "only" in result.stdout
-
-
-def test_manifest_runner_agent_closeout_stops_before_next_design_authoring(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
-    closeout_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_closeout",
-            "--deny",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert closeout_result.exit_code == 0, closeout_result.output
-
-    next_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "next",
-            "--track",
-            "PT-TEST",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert next_result.exit_code == 0, next_result.output
-    assert "Current milestone: PM-TEST-003 - PM-TEST-003 title" in next_result.stdout
-    assert "Workflow action: track_expansion_required" in next_result.stdout
-    assert "PM-TEST-007" not in next_result.stdout
-
-
-def test_manifest_runner_full_track_continues_across_closeout_and_next_expansion(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _design_path = run_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--deny",
-            "crate_creation",
-            "--deny",
-            "foundation_extraction",
-            "--max-actions",
-            "2",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V3 applied one agent_closeout action." in result.stdout
-    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
-    production = load_yaml(production_path)
-    assert production["tracks"][0]["milestones"][1]["state"] == "completed"
-    assert production["tracks"][0]["milestones"][2]["roadmap_links"]
-
-
-def test_manifest_runner_auto_safe_and_agent_design_stop_before_next_milestone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path = tmp_path / "production.yaml"
-    roadmap_path = tmp_path / "roadmap.yaml"
-    deferred_path = tmp_path / "roadmap-deferred.yaml"
-    manifest_root = tmp_path / "manifests"
-    manifest_root.mkdir()
-    manifest_path = manifest_root / "pt-test.yaml"
-    plan_path = tmp_path / "plans" / "wr-003-ui-program-contract-design" / "plan.md"
-    design_path = tmp_path / "ui-program-architecture.md"
-    design_path.write_text(
-        "---\ntitle: UI Program Architecture\nstatus: active\n---\n\n# UI Program Architecture\n\n## 13. Staged Implementation Plan\n\nExisting plan.\n",
-        encoding="utf-8",
-    )
-    production_data, roadmap_data, manifest_data = valid_track_expansion_state()
-    manifest_data["milestones"][1]["agent_design"] = {
-        "source_documents": ["docs-site/src/content/docs/workspace/track-execution-manifest.md"],
-        "required_sections": ["UiProgram graph ownership"],
-        "required_decisions": ["UiProgram remains UI-owned."],
-        "acceptance_checklist": ["Design plan and architecture section exist."],
-    }
-    write_yaml(production_path, production_data)
-    write_yaml(roadmap_path, roadmap_data)
-    write_yaml(manifest_path, manifest_data)
-    monkeypatch.setattr("track_execution_manifest.default_contract_path", lambda item: plan_path)
-    monkeypatch.setattr("track_execution_manifest.implementation_plan_path", lambda wr_id, milestone: repo_path(plan_path))
-    monkeypatch.setattr(
-        "track_execution_manifest.run_validation_commands",
-        lambda commands: tuple(f"{command}: exit 0" for command in commands),
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
-    assert plan_path.exists()
-    assert not deferred_path.exists() or load_yaml(deferred_path)["items"][0]["id"] == "WR-003"
-    next_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "next",
-            "--track",
-            "PT-TEST",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert next_result.exit_code == 0, next_result.output
-    assert "Current milestone: PM-TEST-002 - PM-TEST-002 title" in next_result.stdout
-    assert "stop for closeout" in next_result.stdout
-    assert "PM-TEST-007" not in next_result.stdout
-
-
-def test_manifest_runner_product_code_denied_for_design_only_milestone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _ = write_agent_design_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "workflow action is design_first" in result.stdout
-    assert "no permitted runner action" in result.stdout
-    assert not plan_path.exists()
-
-
-def test_manifest_runner_product_code_denied_without_active_wr(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, roadmap: dict, _manifest: dict) -> None:
-        roadmap["items"][1]["planning_state"] = "blocked_deferred"
-        roadmap["items"][1]["blocker"] = 5
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "workflow action is design_first" in result.stdout
-
-
-def test_manifest_runner_product_code_denied_without_production_plan(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        write_plan=False,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "accepted production plan is missing" in result.stdout
-    assert plan_path.name in result.stdout
-
-
-def test_manifest_runner_product_code_denied_without_exact_write_scopes(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
-        roadmap["items"][1]["write_scopes"] = ["domain"]
-        manifest["milestones"][1]["write_scope"] = ["domain"]
-        manifest["milestones"][1]["product_code_contract"]["exact_allowed_implementation_write_scopes"] = ["domain"]
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "product_code_contract exact_allowed_implementation_write_scopes" in result.stdout
-    assert "ambiguous or non-path scope: domain" in result.stdout
-
-
-def test_manifest_runner_product_code_denied_without_validation_commands(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["validation_commands"] = ["blocked: define validation commands"]
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "validation_commands remains blocked" in result.stdout
-
-
-def test_manifest_runner_product_code_denied_if_crate_creation_needed(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["may_create_crates"] = True
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "crate_creation is required" in result.stdout
-
-
-def test_manifest_runner_product_code_rejects_crate_creation_without_exact_new_cargo_scope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["may_create_crates"] = True
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "crate_creation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "crate_creation requires exact 'new:' Cargo.toml scope" in result.stdout
-
-
-def test_manifest_runner_product_code_allows_crate_creation_with_exact_new_cargo_scope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    crate_manifest = tmp_path / "domain" / "ui" / "ui_program" / "Cargo.toml"
-
-    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["may_create_crates"] = True
-        crate_scope = f"new: {repo_path(crate_manifest)}"
-        roadmap["items"][1]["write_scopes"].append(crate_scope)
-        manifest["milestones"][1]["write_scope"].append(crate_scope)
-        manifest["milestones"][1]["product_code_contract"]["exact_allowed_implementation_write_scopes"].append(crate_scope)
-
-    production_path, roadmap_path, manifest_root, plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    crate_scope = f"new: {repo_path(crate_manifest)}"
-    plan_path.write_text(
-        plan_path.read_text(encoding="utf-8")
-        + f"\nAdditional exact crate creation scope:\n\n- `{crate_scope}`\n- `{repo_path(crate_manifest)}`\n",
-        encoding="utf-8",
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "crate_creation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
-
-
-def test_manifest_runner_product_code_denied_if_foundation_extraction_requested(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
-        roadmap["items"][1]["write_scopes"].append("foundation/meta/src/lib.rs")
-        manifest["milestones"][1]["write_scope"].append("foundation/meta/src/lib.rs")
-        manifest["milestones"][1]["product_code_contract"]["exact_allowed_implementation_write_scopes"].append(
-            "foundation/meta/src/lib.rs"
-        )
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "shared foundation/meta extraction" in result.stdout
-
-
-def test_manifest_runner_product_code_allowed_for_synthetic_implementation_milestone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
-    assert "Validation commands:" in result.stdout
-    updated_production = load_yaml(production_path)
-    assert updated_production["tracks"][0]["milestones"][1]["state"] == "active"
-
-
-def test_manifest_runner_product_implementation_requires_product_code(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "product_implementation requires product_code" in result.stdout
-
-
-def test_manifest_runner_product_code_alone_does_not_write_product_files(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    original = implementation_path.read_text(encoding="utf-8")
-    monkeypatch.setattr(
-        "track_execution_manifest.product_implementation_files",
-        lambda _entry: {implementation_path: "// changed by product implementation\n"},
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == original
-
-
-def test_manifest_runner_product_implementation_writes_bounded_existing_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == "// changed by product implementation\n"
-
-
-def test_manifest_runner_product_implementation_defaults_to_no_writer(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        manifest["milestones"][1].pop("implementation_writer")
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    original = implementation_path.read_text(encoding="utf-8")
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "implementation_writer strategy is no_writer" in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == original
-
-
-def test_manifest_runner_template_writer_rejects_undeclared_output_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        manifest["milestones"][1]["implementation_writer"]["templates"][0]["file"] = "tools/workflow/not-in-scope.rs"
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "implementation_writer.allowed_files" in result.stdout
-
-
-def test_manifest_runner_patch_writer_updates_declared_existing_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        writer = manifest["milestones"][1]["implementation_writer"]
-        writer["strategy"] = "patch_writer"
-        writer["templates"] = []
-        writer["patches"] = [
-            {
-                "file": writer["allowed_files"][0],
-                "find": "// implementation fixture\n",
-                "replace": "// changed by patch writer\n",
-            }
-        ]
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert implementation_path.read_text(encoding="utf-8").strip() == "// changed by patch writer"
-
-
-def test_manifest_runner_patch_writer_refuses_undeclared_new_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        writer = manifest["milestones"][1]["implementation_writer"]
-        writer["strategy"] = "patch_writer"
-        writer["templates"] = []
-        writer["patches"] = [
-            {
-                "file": writer["allowed_files"][0],
-                "find": "// implementation fixture\n",
-                "replace": "// changed by patch writer\n",
-            }
-        ]
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    implementation_path.unlink()
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "patch find text not found" in result.stdout
-    assert not implementation_path.exists()
+    assert all(path.is_relative_to(tmp_path) for path in result.written_paths)
 
 
 def fake_codex_writer_changes_lib(workspace: Path, prompt: str) -> subprocess.CompletedProcess[str]:
     target = next(path for path in workspace.rglob("lib.rs") if "product" in path.parts and "src" in path.parts)
     target.write_text("// changed by agent writer\n", encoding="utf-8")
     return subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="changed scoped file", stderr="")
-
-
-def test_manifest_runner_agent_writer_imports_scoped_codex_diff(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        writer = manifest["milestones"][1]["implementation_writer"]
-        writer["strategy"] = "agent_writer"
-        writer["templates"] = []
-        writer["patches"] = []
-        writer["agent_prompt"] = "Change only the scoped implementation fixture."
-        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
-        writer["agent_required_outputs"] = ["implementation file changed"]
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_codex_writer_changes_lib)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == "// changed by agent writer\n"
-
-
-def test_manifest_runner_agent_writer_rejects_forbidden_pattern_output(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        writer = manifest["milestones"][1]["implementation_writer"]
-        writer["strategy"] = "agent_writer"
-        writer["templates"] = []
-        writer["patches"] = []
-        writer["agent_prompt"] = "Change only the scoped implementation fixture."
-        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
-        writer["agent_required_outputs"] = ["implementation file changed"]
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    implementation_path.write_text("// product implementation placeholder\n", encoding="utf-8")
-
-    def fake_forbidden_agent(workspace: Path, prompt: str) -> subprocess.CompletedProcess[str]:
-        target = next(path for path in workspace.rglob("lib.rs") if "product" in path.parts and "src" in path.parts)
-        target.write_text("// foundation/meta is forbidden here\n", encoding="utf-8")
-        return subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="changed scoped file", stderr="")
-
-    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_forbidden_agent)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "forbidden pattern" in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == "// product implementation placeholder\n"
-
-
-def test_manifest_runner_agent_writer_rejects_out_of_scope_diff(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        writer = manifest["milestones"][1]["implementation_writer"]
-        writer["strategy"] = "agent_writer"
-        writer["templates"] = []
-        writer["patches"] = []
-        writer["agent_prompt"] = "Change only the scoped implementation fixture."
-        writer["agent_diff_protocol_version"] = "scoped-diff-v1"
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    original = implementation_path.read_text(encoding="utf-8")
-
-    def fake_out_of_scope_agent(workspace: Path, prompt: str) -> subprocess.CompletedProcess[str]:
-        target = workspace / "out-of-scope.rs"
-        target.write_text("// out of scope\n", encoding="utf-8")
-        return subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="changed undeclared file", stderr="")
-
-    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_out_of_scope_agent)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "changed undeclared files" in result.stdout
-    assert implementation_path.read_text(encoding="utf-8") == original
-
-
-def test_manifest_runner_product_implementation_honors_new_file_scope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, roadmap: dict, manifest: dict) -> None:
-        roadmap["items"][1]["write_scopes"][0] = f"new: {roadmap['items'][1]['write_scopes'][0]}"
-        manifest["milestones"][1]["product_code_contract"]["exact_allowed_implementation_write_scopes"][0] = (
-            f"new: {manifest['milestones'][1]['product_code_contract']['exact_allowed_implementation_write_scopes'][0]}"
-        )
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-    implementation_path.unlink()
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert implementation_path.read_text(encoding="utf-8") == "// changed by product implementation\n"
-
-
-def test_manifest_runner_product_implementation_rejects_unmarked_new_file(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    implementation_path.unlink()
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "must be marked" in result.stdout
-    assert "new:" in result.stdout
-    assert not implementation_path.exists()
 
 
 def test_new_file_scope_errors_reject_untracked_existing_repo_file(
@@ -3783,8 +2035,8 @@ def test_new_file_scope_errors_reject_untracked_existing_repo_file(
     candidate = tmp_path / "domain/ui/ui_widgets/src/untracked_existing.rs"
     candidate.parent.mkdir(parents=True)
     candidate.write_text("// existing but untracked\n", encoding="utf-8")
-    monkeypatch.setattr(track_manifest_module, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(track_manifest_module, "git_tracks_path", lambda _path: False)
+    monkeypatch.setattr(track_source_audit_module, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(track_source_audit_module, "git_tracks_path", lambda _path: False)
 
     errors = new_file_scope_errors(
         "PM-TEST-NEW",
@@ -3796,43 +2048,6 @@ def test_new_file_scope_errors_reject_untracked_existing_repo_file(
         "PM-TEST-NEW: product_code_contract new file scope must be marked with 'new:': "
         "domain/ui/ui_widgets/src/untracked_existing.rs"
     ]
-
-
-def test_manifest_runner_product_implementation_rejects_forbidden_scope(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        implementation_scope = manifest["milestones"][1]["product_code_contract"]["exact_allowed_implementation_write_scopes"][0]
-        manifest["milestones"][1]["forbidden_scope"].append(implementation_scope)
-
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "would touch forbidden scope" in result.stdout
 
 
 def write_proof_aggregation_fixture(
@@ -4066,6 +2281,9 @@ def prepare_full_automation_product_fixture(
         tmp_path,
         monkeypatch,
     )
+    workflow_test_path = tmp_path / "tools/workflow/test_workflow.py"
+    workflow_test_path.parent.mkdir(parents=True, exist_ok=True)
+    workflow_test_path.write_text("def test_fixture_validation_passes():\n    assert True\n", encoding="utf-8")
     production = load_yaml(production_path)
     roadmap = load_yaml(roadmap_path)
     manifest = load_yaml(manifest_root / "pt-test.yaml")
@@ -4080,29 +2298,76 @@ def prepare_full_automation_product_fixture(
         "runtime_closeout",
     ]
     entry["required_evidence_categories"] = ["runtime_test"]
-    entry["agent_design_contract"]["allowed_write_scopes"] = [repo_path(plan_path)]
-    entry["agent_design_contract"]["planning_write_scope"] = [repo_path(plan_path)]
-    entry["agent_design_contract"]["expected_output_paths"] = [repo_path(plan_path)]
-    entry["product_code_contract"]["exact_allowed_implementation_write_scopes"] = [repo_path(implementation_path)]
-    entry["runtime_closeout_contract"]["files_changed_report"] = [repo_path(implementation_path)]
-    entry["implementation_writer"]["allowed_files"] = [repo_path(implementation_path)]
-    entry["implementation_writer"]["templates"][0]["file"] = repo_path(implementation_path)
+    plan_scope = plan_path.relative_to(tmp_path).as_posix()
+    implementation_scope = implementation_path.relative_to(tmp_path).as_posix()
+    entry["agent_design_contract"]["allowed_write_scopes"] = [plan_scope]
+    entry["agent_design_contract"]["planning_write_scope"] = [plan_scope]
+    entry["agent_design_contract"]["expected_output_paths"] = [plan_scope]
+    entry["product_code_contract"]["exact_allowed_implementation_write_scopes"] = [implementation_scope]
+    entry["runtime_closeout_contract"]["files_changed_report"] = [implementation_scope]
+    entry["implementation_writer"]["allowed_files"] = [implementation_scope]
+    entry["implementation_writer"]["templates"][0]["file"] = implementation_scope
+    evidence_output = "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002/runtime_test-runtime-test.yaml"
+    (tmp_path / evidence_output).parent.mkdir(parents=True, exist_ok=True)
+    entry["write_scope"] = [implementation_scope, evidence_output]
+    entry["product_code_contract"]["exact_allowed_implementation_write_scopes"].append(evidence_output)
+    entry["runtime_closeout_contract"]["files_changed_report"].append(evidence_output)
+    entry["implementation_writer"]["allowed_files"].append(evidence_output)
+    for item in roadmap.get("items", []):
+        if item.get("id") == entry.get("owning_wr"):
+            item["write_scopes"] = [
+                implementation_scope,
+                evidence_output,
+            ]
+    if plan_path.exists():
+        plan_path.write_text(
+            plan_path.read_text(encoding="utf-8") + f"\n- Execution evidence output: `{evidence_output}`\n",
+            encoding="utf-8",
+        )
     if mutate is not None:
         mutate(production, roadmap, manifest, plan_path, implementation_path, closeout_path)
+    sidecar_execution_kind = entry.get("execution_kind")
     write_yaml(
-        plan_path.with_suffix(".execution.yaml"),
+        plan_path.parent / "plan.contract.yaml",
         {
             "version": 1,
-            "track_id": "PT-TEST",
             "milestone_id": entry["milestone_id"],
             "wr_id": entry["owning_wr"],
-            "executor_kind": "proof_aggregation" if entry.get("execution_kind") == "proof_aggregation" else "product_implementation",
-            "allowed_outputs": [repo_path(implementation_path)],
-            "new_outputs": [],
+            "execution_kind": sidecar_execution_kind,
+            "executor_kind": "proof_aggregation" if sidecar_execution_kind == "proof_aggregation" else "product_implementation",
+            "authority_level": entry["authority_level"],
+            "permissions_required": ["product_code", "product_implementation"],
+            "writer_strategy": entry["implementation_writer"]["strategy"],
+            "allowed_outputs": [implementation_scope],
+            "new_outputs": [evidence_output],
             "forbidden_outputs": ["foundation/meta"],
+            "forbidden_patterns": [],
+            "template_outputs": {
+                implementation_scope: "// changed by product implementation\n",
+            },
             "validation_commands": list(entry["implementation_writer"]["validation_commands"]),
-            "evidence_required": ["runtime_test"],
-            "closeout_path": entry["expected_closeout_path"],
+            "evidence_required": [
+                {
+                    "kind": "runtime_test",
+                    "name": "runtime test",
+                    "paths": [evidence_output],
+                    "validation_command_ids": ["uv:pytest"],
+                }
+            ],
+            "closeout_contract": {
+                "path": entry["expected_closeout_path"],
+                "completion_quality": "runtime_proven",
+                "evidence_required": [
+                    {
+                        "kind": "runtime_test",
+                        "name": "runtime test",
+                        "paths": [evidence_output],
+                        "validation_command_ids": ["uv:pytest"],
+                    }
+                ],
+            },
+            "rollback_policy": "reject import and leave repository unchanged on validation, scope, or digest failure",
+            "stop_conditions": list(entry["implementation_writer"]["stop_conditions"]),
         },
     )
     write_yaml(production_path, production)
@@ -4110,36 +2375,6 @@ def prepare_full_automation_product_fixture(
     write_yaml(manifest_root / "pt-test.yaml", manifest)
     monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
     return production_path, roadmap_path, manifest_root, plan_path, implementation_path, closeout_path
-
-
-def write_track_execution_lock_fixture(
-    track_id: str,
-    production_path: Path,
-    roadmap_path: Path,
-    manifest_root: Path,
-    lock_root: Path,
-    *,
-    allow: list[str] | None = None,
-    deny: list[str] | None = None,
-    mutate: Callable[[dict], None] | None = None,
-) -> Path:
-    loaded = load_track_execution_manifest(track_id, root=manifest_root)
-    assert loaded is not None
-    data = build_track_execution_lock_data(
-        loaded,
-        production_source=production_path,
-        roadmap_source=roadmap_path,
-        locked_by="test",
-        granted_permissions=allow or sorted(track_manifest_module.FULL_TRACK_PERMISSION_SET),
-        denied_permissions=deny or ["crate_creation", "foundation_extraction"],
-    )
-    if mutate is not None:
-        mutate(data)
-    data = track_manifest_module.TrackExecutionLock.model_validate(data).model_dump(mode="json")
-    lock_root.mkdir(parents=True, exist_ok=True)
-    path = lock_root / f"{track_id.lower()}.yaml"
-    write_yaml(path, data)
-    return path
 
 
 def write_execution_pack_and_lock_fixture(
@@ -4159,13 +2394,14 @@ def write_execution_pack_and_lock_fixture(
         production_source=production_path,
         roadmap_source=roadmap_path,
         manifest_root=manifest_root,
+        contract_pack_root=pack_root,
     )
     pack_path = write_contract_pack(pack, root=pack_root)
     lock = build_execution_lock(
         track_id,
         locked_by="test",
         contract_pack_root=pack_root,
-        granted_permissions=allow or sorted(track_manifest_module.FULL_TRACK_PERMISSION_SET),
+        granted_permissions=allow or sorted(FULL_TRACK_PERMISSION_SET),
         denied_permissions=deny or ["crate_creation", "foundation_extraction"],
     )
     lock_data = lock.model_dump(mode="json")
@@ -4186,6 +2422,24 @@ def invoke_full_automation_audit(
     require_lock: bool = False,
 ) -> object:
     contract_pack_root = production_path.parent / "contract-packs"
+    compile_result = CliRunner().invoke(
+        production_track_cli_app,
+        [
+            "complete-track-contracts",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+            "--contract-pack-root",
+            str(contract_pack_root),
+        ],
+    )
+    if compile_result.exit_code != 0:
+        return compile_result
     args = [
         "audit-track",
         "--track",
@@ -4205,7 +2459,7 @@ def invoke_full_automation_audit(
     if lock_root is not None:
         args.extend(["--lock-source-root", str(lock_root)])
     return CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         args,
     )
 
@@ -4333,6 +2587,7 @@ def test_full_automation_preflight_fails_when_validation_command_is_prose(
         entry = manifest["milestones"][1]
         entry["validation_commands"] = ["focused tests named by the owning production plan"]
         entry["product_code_contract"]["validation_commands"] = ["focused tests named by the owning production plan"]
+        entry["implementation_writer"]["validation_commands"] = ["focused tests named by the owning production plan"]
 
     production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(
         tmp_path,
@@ -4388,11 +2643,13 @@ def test_full_track_runner_preflight_catches_future_no_writer_before_mutation(
     write_execution_pack_and_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "run-track",
             "--track",
             "PT-TEST",
+            "--mode",
+            "agent-track",
             "--allow",
             "auto_safe",
             "--allow",
@@ -4421,172 +2678,9 @@ def test_full_track_runner_preflight_catches_future_no_writer_before_mutation(
     )
 
     assert result.exit_code == 1
-    assert "planning_expansion executor" in result.stdout
+    assert "Track Execution Manifest full-automation blockers" in result.stdout
+    assert load_yaml(production_path)["tracks"][0]["milestones"][1].get("roadmap_links", []) == []
     assert not (tmp_path / "roadmap-deferred.yaml").exists()
-
-
-def test_full_track_runner_fails_without_execution_lock(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
-    pack_root = production_path.parent / "contract-packs"
-    write_contract_pack(
-        compile_contract_pack(
-            "PT-TEST",
-            production_source=production_path,
-            roadmap_source=roadmap_path,
-            manifest_root=manifest_root,
-        ),
-        root=pack_root,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--deny",
-            "crate_creation",
-            "--deny",
-            "foundation_extraction",
-            "--mode",
-            "full-track",
-            "--max-actions",
-            "999",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-            "--lock-source-root",
-            str(tmp_path / "locks"),
-            "--contract-pack-root",
-            str(pack_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "requires current Execution Lock" in result.stdout
-
-
-def test_full_track_runner_fails_with_stale_manifest_digest(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
-    lock_root = tmp_path / "locks"
-    pack_root = production_path.parent / "contract-packs"
-    write_execution_pack_and_lock_fixture(
-        "PT-TEST",
-        production_path,
-        roadmap_path,
-        manifest_root,
-        lock_root,
-        mutate_lock=lambda data: data.update({"contract_pack_digest": "0" * 64}),
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--mode",
-            "full-track",
-            "--max-actions",
-            "999",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-            "--lock-source-root",
-            str(lock_root),
-            "--contract-pack-root",
-            str(pack_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "execution lock contract_pack_digest is stale" in result.stdout
-
-
-def test_full_track_runner_fails_when_requested_permission_exceeds_lock(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
-    lock_root = tmp_path / "locks"
-    pack_root = production_path.parent / "contract-packs"
-    write_execution_pack_and_lock_fixture(
-        "PT-TEST",
-        production_path,
-        roadmap_path,
-        manifest_root,
-        lock_root,
-        allow=["auto_safe", "agent_design", "agent_closeout", "product_code"],
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--mode",
-            "full-track",
-            "--max-actions",
-            "999",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-            "--lock-source-root",
-            str(lock_root),
-            "--contract-pack-root",
-            str(pack_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "requested permissions exceed execution lock grants" in result.stdout
-    assert "product_implementation" in result.stdout
 
 
 def test_full_track_preflight_reports_strategic_human_gate(
@@ -4618,44 +2712,6 @@ def test_full_track_preflight_reports_strategic_human_gate(
     assert "foundation_extraction is a strategic human gate" in result.stdout
 
 
-def test_full_track_runner_requires_explicit_full_track_mode(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--max-actions",
-            "999",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "requires explicit --mode" in result.stdout
-    assert "full-track" in result.stdout
-
-
 def test_full_automation_preflight_passes_for_fully_specified_contract(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -4666,6 +2722,108 @@ def test_full_automation_preflight_passes_for_fully_specified_contract(
 
     assert result.exit_code == 0, result.output
     assert "execution preflight passed" in result.stdout
+
+
+def test_public_full_automation_audit_is_read_only_without_contract_pack(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
+    pack_path = production_path.parent / "contract-packs" / "pt-test.yaml"
+    before = {
+        "production": sha256(production_path.read_bytes()).hexdigest(),
+        "roadmap": sha256(roadmap_path.read_bytes()).hexdigest(),
+        "manifest": sha256((manifest_root / "pt-test.yaml").read_bytes()).hexdigest(),
+    }
+
+    result = CliRunner().invoke(
+        production_track_cli_app,
+        [
+            "audit-track",
+            "--track",
+            "PT-TEST",
+            "--full-automation",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+            "--contract-pack-root",
+            str(production_path.parent / "contract-packs"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Execution Contract Pack" in result.stdout
+    assert "execution:compile explicitly" in result.stdout
+    assert not pack_path.exists()
+    assert before == {
+        "production": sha256(production_path.read_bytes()).hexdigest(),
+        "roadmap": sha256(roadmap_path.read_bytes()).hexdigest(),
+        "manifest": sha256((manifest_root / "pt-test.yaml").read_bytes()).hexdigest(),
+    }
+
+
+def test_public_complete_track_contracts_compiles_contract_pack(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, *_ = prepare_full_automation_product_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+    pack_root = production_path.parent / "contract-packs"
+
+    result = CliRunner().invoke(
+        production_track_cli_app,
+        [
+            "complete-track-contracts",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+            "--contract-pack-root",
+            str(pack_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert (pack_root / "pt-test.yaml").exists()
+    assert "Execution Contract Pack written" in result.stdout
+
+
+def test_public_plan_track_scaffolds_missing_manifest_through_source_layer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, *_ = write_product_code_fixture(tmp_path, monkeypatch)
+    manifest_path = manifest_root / "pt-test.yaml"
+    manifest_path.unlink()
+
+    result = CliRunner().invoke(
+        production_track_cli_app,
+        [
+            "plan-track",
+            "--track",
+            "PT-TEST",
+            "--production-source",
+            str(production_path),
+            "--roadmap-source",
+            str(roadmap_path),
+            "--manifest-source-root",
+            str(manifest_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "Track Execution Manifest scaffold written" in result.stdout
+    scaffold = load_yaml(manifest_path)
+    assert scaffold["track_id"] == "PT-TEST"
+    assert scaffold["milestones"][0]["milestone_id"] == "PM-TEST-001"
+    assert scaffold["truth_claims"][0]["claim_status"] == "blocked"
 
 
 def test_full_automation_audit_requires_current_execution_lock_when_requested(
@@ -4688,84 +2846,27 @@ def test_full_automation_audit_requires_current_execution_lock_when_requested(
     assert "Execution Harness lock passed" in result.stdout
 
 
-def test_full_track_runner_writes_run_ledger_after_successful_action(
+def test_public_agent_track_mode_prepares_lock_and_runs_one_clean_kernel_action(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout = (
-        prepare_full_automation_product_fixture(tmp_path, monkeypatch)
+    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
     )
     lock_root = tmp_path / "locks"
-    run_root = tmp_path / "runs"
-    pack_root = production_path.parent / "contract-packs"
-    write_execution_pack_and_lock_fixture("PT-TEST", production_path, roadmap_path, manifest_root, lock_root)
+    pack_root = tmp_path / "contract-packs"
+    ledger_root = tmp_path / "runs"
+    evidence_root = tmp_path / "docs-site/src/content/docs/reports/execution-evidence"
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "run-track",
             "--track",
             "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--allow",
-            "product_implementation",
-            "--deny",
-            "crate_creation",
-            "--deny",
-            "foundation_extraction",
             "--mode",
-            "full-track",
-            "--max-actions",
-            "1",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-            "--lock-source-root",
-            str(lock_root),
-            "--contract-pack-root",
-            str(pack_root),
-            "--run-ledger-root",
-            str(run_root),
-        ],
-    )
-
-    assert result.exit_code == 1, result.output
-    assert "output parent directory does not exist" in result.stdout
-    assert "Run ledger:" in result.stdout
-    ledger_paths = list((run_root / "pt-test").glob("*.yaml"))
-    assert len(ledger_paths) == 1
-    ledger = load_yaml(ledger_paths[0])
-    assert ledger["track_id"] == "PT-TEST"
-    assert ledger["actions"][0]["status"] == "failed"
-    assert ledger["actions"][0]["executor_kind"] == "product_implementation"
-
-
-def test_agent_track_allows_full_permission_set_and_refreshes_lock_after_preflight(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, implementation_path, _closeout = (
-        prepare_full_automation_product_fixture(tmp_path, monkeypatch)
-    )
-    lock_root = tmp_path / "locks"
-    run_root = tmp_path / "runs"
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
+            "agent-track",
             "--allow",
             "auto_safe",
             "--allow",
@@ -4792,17 +2893,21 @@ def test_agent_track_allows_full_permission_set_and_refreshes_lock_after_preflig
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
             "--run-ledger-root",
-            str(run_root),
+            str(ledger_root),
+            "--evidence-root",
+            str(evidence_root),
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
+    assert "Execution Contract Pack prepared." in result.stdout
+    assert "Execution Lock written." in result.stdout
+    assert "Execution Harness ran one ActionContract." in result.stdout
     assert implementation_path.read_text(encoding="utf-8") == "// changed by product implementation\n"
-    lock = load_yaml(lock_root / "pt-test.yaml")
-    assert lock["ai_executable"] is True
-    assert "product_implementation" in lock["granted_permissions"]
+    assert (lock_root / "pt-test.yaml").exists()
 
 
 def test_agent_track_creates_missing_wr_and_plan_without_product_code(
@@ -4813,10 +2918,19 @@ def test_agent_track_creates_missing_wr_and_plan_without_product_code(
         tmp_path,
         monkeypatch,
     )
+    (tmp_path / "Taskfile.yml").write_text(
+        'version: "3"\n\ntasks:\n'
+        '  docs:validate:\n    cmds:\n      - "true"\n'
+        '  planning:validate:\n    cmds:\n      - "true"\n'
+        '  production:validate:\n    cmds:\n      - "true"\n'
+        '  roadmap:validate:\n    cmds:\n      - "true"\n',
+        encoding="utf-8",
+    )
     lock_root = tmp_path / "locks"
+    pack_root = tmp_path / "contract-packs"
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "run-track",
             "--track",
@@ -4839,14 +2953,16 @@ def test_agent_track_creates_missing_wr_and_plan_without_product_code(
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
         ],
     )
 
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
+    assert result.exit_code == 1
+    assert "completed but did not advance" in result.stdout
+    assert "Contract Pack state" in result.stdout
     assert plan_path.exists()
-    assert not (lock_root / "pt-test.yaml").exists()
+    assert (lock_root / "pt-test.yaml").exists()
 
 
 def test_agent_track_creates_lock_before_agent_writer_product_import(
@@ -4868,10 +2984,21 @@ def test_agent_track_creates_lock_before_agent_writer_product_import(
         mutate=mutate,
     )
     lock_root = tmp_path / "locks"
-    monkeypatch.setattr("track_execution_manifest.run_codex_agent", fake_codex_writer_changes_lib)
+    pack_root = tmp_path / "contract-packs"
+    ledger_root = tmp_path / "runs"
+    evidence_root = tmp_path / "docs-site/src/content/docs/reports/execution-evidence"
+
+    from execution.writers import AgentResult, CodexExecBackend
+
+    def fake_agent_run(self, *, workspace: Path, prompt: str) -> AgentResult:
+        target = workspace / implementation_path.relative_to(tmp_path)
+        target.write_text("// changed by agent writer\n", encoding="utf-8")
+        return AgentResult(returncode=0, stdout="changed", stderr="")
+
+    monkeypatch.setattr(CodexExecBackend, "run", fake_agent_run)
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "run-track",
             "--track",
@@ -4900,16 +3027,22 @@ def test_agent_track_creates_lock_before_agent_writer_product_import(
             str(manifest_root),
             "--lock-source-root",
             str(lock_root),
+            "--contract-pack-root",
+            str(pack_root),
+            "--run-ledger-root",
+            str(ledger_root),
+            "--evidence-root",
+            str(evidence_root),
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert "Manifest Runner V5 wrote one bounded product_implementation slice." in result.stdout
+    assert "Execution Lock written." in result.stdout
     assert implementation_path.read_text(encoding="utf-8") == "// changed by agent writer\n"
     assert (lock_root / "pt-test.yaml").exists()
 
 
-def test_execution_contract_compiler_rejects_missing_plan(
+def test_execution_contract_compiler_compiles_missing_plan_to_design_authoring(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4920,13 +3053,22 @@ def test_execution_contract_compiler_rejects_missing_plan(
     )
     monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
 
-    with pytest.raises(WorkflowError, match="implementation/design plan is missing"):
-        compile_contract_pack(
-            "PT-TEST",
-            production_source=production_path,
-            roadmap_source=roadmap_path,
-            manifest_root=manifest_root,
-        )
+    pack = compile_contract_pack(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+    )
+
+    assert pack.actions
+    action = pack.actions[0]
+    assert action.executor_kind == "design_authoring"
+    assert action.writer_strategy == "template_writer"
+    assert action.permissions_required == ["agent_design"]
+    assert plan_path.relative_to(tmp_path).as_posix() in action.new_outputs
+    assert (plan_path.parent / "plan.contract.yaml").relative_to(tmp_path).as_posix() in action.new_outputs
+    assert "product_code" not in action.permissions_required
+    assert "product_implementation" not in action.permissions_required
 
 
 def test_execution_contract_pack_preflight_passes_for_runtime_action(
@@ -4949,6 +3091,64 @@ def test_execution_contract_pack_preflight_passes_for_runtime_action(
     assert pack.actions
     assert preflight_pack(pack) == []
     assert pack.actions[0].writer_strategy == "template_writer"
+
+
+def test_execution_contract_compiler_requires_plan_sidecar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, *_ = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    (plan_path.parent / "plan.contract.yaml").unlink()
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+
+    with pytest.raises(WorkflowError, match="structured implementation-plan authority is missing"):
+        compile_contract_pack(
+            "PT-TEST",
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+        )
+
+
+def test_execution_contract_compiler_uses_sidecar_executable_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    production_path, roadmap_path, manifest_root, plan_path, implementation_path, *_ = prepare_full_automation_product_fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    evidence_output = "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002/runtime_test-runtime-test.yaml"
+    sidecar = load_yaml(plan_path.parent / "plan.contract.yaml")
+    sidecar["writer_strategy"] = "patch_writer"
+    sidecar["template_outputs"] = {}
+    sidecar["patches"] = [
+        {
+            "file": implementation_path.relative_to(tmp_path).as_posix(),
+            "find": "// implementation fixture\n",
+            "replace": "// patched by sidecar authority\n",
+        }
+    ]
+    sidecar["allowed_outputs"] = [implementation_path.relative_to(tmp_path).as_posix()]
+    sidecar["new_outputs"] = [evidence_output]
+    write_yaml(plan_path.parent / "plan.contract.yaml", sidecar)
+    monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+
+    pack = compile_contract_pack(
+        "PT-TEST",
+        production_source=production_path,
+        roadmap_source=roadmap_path,
+        manifest_root=manifest_root,
+    )
+
+    action = pack.actions[0]
+    assert action.writer_strategy == "patch_writer"
+    assert action.template_outputs == {}
+    assert len(action.patches) == 1
+    assert action.patches[0].replace == "// patched by sidecar authority\n"
 
 
 def test_execution_preflight_rejects_prose_validation(
@@ -5023,6 +3223,8 @@ def execution_test_action(
     forbidden_outputs: list[str] | None = None,
     forbidden_patterns: list[str] | None = None,
 ) -> ActionContract:
+    evidence_output = "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002/runtime_test-runtime-test.yaml"
+    resolved_new_outputs = list(new_outputs) if new_outputs is not None else [evidence_output]
     return ActionContract(
         action_id="PT-TEST:PM-TEST-002:WR-002",
         track_id="PT-TEST",
@@ -5033,16 +3235,30 @@ def execution_test_action(
         authority_level="implementation_runtime_proof",
         permissions_required=["product_code", "product_implementation"],
         allowed_outputs=allowed_outputs or ["src/lib.rs"],
-        new_outputs=new_outputs or [],
+        new_outputs=resolved_new_outputs,
         forbidden_outputs=forbidden_outputs or ["foundation/meta"],
         forbidden_patterns=forbidden_patterns or [],
         writer_strategy=writer_strategy,
         validation_commands=["python3 --version"],
-        evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+        evidence_required=[
+            EvidenceRequirement(
+                kind="runtime_test",
+                name="runtime test",
+                paths=[evidence_output],
+                validation_command_ids=["python3:version"],
+            )
+        ],
         closeout_contract=CloseoutContract(
             path="docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md",
             completion_quality="runtime_proven",
-            evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+            evidence_required=[
+                EvidenceRequirement(
+                    kind="runtime_test",
+                    name="runtime test",
+                    paths=[evidence_output],
+                    validation_command_ids=["python3:version"],
+                )
+            ],
         ),
         rollback_policy=RollbackPolicy(policy="reject import on scope, digest, or validation failure"),
         stop_conditions=["stop after one implementation action"],
@@ -5152,6 +3368,7 @@ def test_execution_agent_writer_rejects_forbidden_pattern(tmp_path: Path) -> Non
 def test_execution_runner_writes_machine_readable_evidence(tmp_path: Path) -> None:
     source = tmp_path / "src" / "lib.rs"
     source.parent.mkdir(parents=True)
+    (tmp_path / "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002").mkdir(parents=True)
     source.write_text("// before\n", encoding="utf-8")
     action = execution_test_action(writer_strategy="template_writer")
     action.template_outputs["src/lib.rs"] = "// generated\n"
@@ -5178,9 +3395,91 @@ def test_execution_runner_writes_machine_readable_evidence(tmp_path: Path) -> No
     assert evidence["status"] == "passed"
 
 
+def test_non_runtime_evidence_requires_exact_subject_paths(tmp_path: Path) -> None:
+    evidence_output = "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002/artifact-contract.yaml"
+
+    with pytest.raises(ValueError, match="artifact evidence requires subject_paths"):
+        EvidenceRequirement(
+            kind="artifact",
+            name="contract",
+            paths=[evidence_output],
+        )
+
+
+def test_closeout_claim_rejects_non_runtime_evidence_without_subject_paths(tmp_path: Path) -> None:
+    evidence_root = tmp_path / "docs-site/src/content/docs/reports/execution-evidence"
+    evidence_output = "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002/artifact-contract.yaml"
+    subject = tmp_path / "src" / "lib.rs"
+    subject.parent.mkdir(parents=True)
+    subject.write_text("// proof subject\n", encoding="utf-8")
+    action = ActionContract(
+        action_id="PT-TEST:PM-TEST-002:WR-002",
+        track_id="PT-TEST",
+        milestone_id="PM-TEST-002",
+        wr_id="WR-002",
+        execution_kind="implementation_proof",
+        executor_kind="runtime_closeout",
+        authority_level="implementation_runtime_proof",
+        permissions_required=["agent_closeout"],
+        allowed_outputs=[],
+        new_outputs=[],
+        forbidden_outputs=[],
+        writer_strategy="verification_writer",
+        validation_commands=["python3 --version"],
+        evidence_required=[],
+        closeout_contract=CloseoutContract(
+            path="docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md",
+            completion_quality="runtime_proven",
+            evidence_required=[
+                EvidenceRequirement(
+                    kind="artifact",
+                    name="contract",
+                    paths=[evidence_output],
+                    subject_paths=["src/lib.rs"],
+                )
+            ],
+        ),
+        rollback_policy=RollbackPolicy(policy="reject import on scope, digest, or validation failure"),
+        stop_conditions=["stop after closeout"],
+    )
+    write_evidence_record(
+        passed_record(
+            track_id="PT-TEST",
+            milestone_id="PM-TEST-002",
+            action_id=action.action_id,
+            evidence_kind="artifact",
+            name="contract",
+            paths=[evidence_output],
+            validation_commands=["python3:version"],
+        ),
+        root=evidence_root,
+    )
+
+    errors = closeout_claim_errors(action, evidence_root=evidence_root)
+
+    assert any("has no subject_paths" in error for error in errors)
+
+    write_evidence_record(
+        passed_record(
+            track_id="PT-TEST",
+            milestone_id="PM-TEST-002",
+            action_id=action.action_id,
+            evidence_kind="artifact",
+            name="contract",
+            paths=[evidence_output],
+            subject_paths=["src/lib.rs"],
+            validation_commands=["python3:version"],
+        ),
+        root=evidence_root,
+    )
+
+    assert closeout_claim_errors(action, evidence_root=evidence_root) == []
+
+
 def test_execution_cli_writes_run_ledger_after_successful_action(tmp_path: Path) -> None:
     source = tmp_path / "src" / "lib.rs"
     source.parent.mkdir(parents=True)
+    (tmp_path / "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-002").mkdir(parents=True)
     source.write_text("// before\n", encoding="utf-8")
     action = execution_test_action(writer_strategy="template_writer")
     action.template_outputs["src/lib.rs"] = "// generated\n"
@@ -5234,7 +3533,7 @@ def test_execution_cli_writes_run_ledger_after_successful_action(tmp_path: Path)
     assert len(ledgers) == 1
     ledger = load_yaml(ledgers[0])
     assert ledger["actions"][0]["action_id"] == action.action_id
-    assert ledger["actions"][0]["files_changed"] == [repo_path(source)]
+    assert repo_path(source) in ledger["actions"][0]["files_changed"]
 
 
 def test_execution_validation_command_registry_rejects_unsafe_forms() -> None:
@@ -5293,7 +3592,58 @@ def test_execution_transactional_writer_leaves_main_workspace_unchanged_on_valid
     assert not (tmp_path / "evidence").exists()
 
 
+def test_execution_compiler_uses_source_models_instead_of_legacy_runner() -> None:
+    compiler_source = (REPO_ROOT / "tools/workflow/execution/compiler.py").read_text(encoding="utf-8")
+    cli_source = (REPO_ROOT / "tools/workflow/execution/cli.py").read_text(encoding="utf-8")
+
+    assert "from track_sources.manifest import" in compiler_source
+    assert "from track_sources.manifest import" in cli_source
+    assert "from track_execution_manifest import" not in compiler_source
+    assert "from track_execution_manifest import" not in cli_source
+
+
+def test_authority_paths_do_not_import_legacy_manifest_runner() -> None:
+    authority_paths = [
+        REPO_ROOT / "tools/workflow/production_goal.py",
+        REPO_ROOT / "tools/workflow/production_state.py",
+        REPO_ROOT / "tools/workflow/production_track_cli.py",
+        *sorted((REPO_ROOT / "tools/workflow/execution").glob("*.py")),
+        *sorted((REPO_ROOT / "tools/workflow/track_sources").glob("*.py")),
+    ]
+
+    offenders = [
+        repo_path(path)
+        for path in authority_paths
+        if "from track_execution_manifest import" in path.read_text(encoding="utf-8")
+        or "import track_execution_manifest" in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == []
+
+
+def test_public_production_tasks_use_track_cli_adapter() -> None:
+    taskfile = (REPO_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+
+    assert "uv run python tools/workflow/production_track_cli.py run-track" in taskfile
+    assert "uv run python tools/workflow/production_track_cli.py next" in taskfile
+    assert "uv run python tools/workflow/production_track_cli.py audit-track" in taskfile
+    assert "uv run python tools/workflow/track_execution_manifest.py run-track" not in taskfile
+    assert "uv run python tools/workflow/track_execution_manifest.py next" not in taskfile
+    assert "uv run python tools/workflow/track_execution_manifest.py audit-track" not in taskfile
+
+
+def test_contract_pack_source_digests_include_public_command_adapters() -> None:
+    digests = harness_source_digest_map()
+
+    assert "tools/workflow/production_track_cli.py" in digests
+    assert "tools/workflow/production_goal.py" in digests
+    assert "tools/workflow/production_state.py" in digests
+    assert "tools/workflow/roadmap_state.py" in digests
+
+
 def test_execution_proof_aggregation_requires_prior_machine_evidence(tmp_path: Path) -> None:
+    evidence_output = "docs-site/src/content/docs/reports/execution-evidence/pt-test/pm-test-003/runtime_test-runtime-test.yaml"
+    (tmp_path / evidence_output).parent.mkdir(parents=True)
     action = ActionContract(
         action_id="PT-TEST:PM-TEST-003:WR-003",
         track_id="PT-TEST",
@@ -5304,15 +3654,29 @@ def test_execution_proof_aggregation_requires_prior_machine_evidence(tmp_path: P
         authority_level="runtime_proof_aggregation",
         permissions_required=["product_code", "product_implementation"],
         allowed_outputs=[],
-        new_outputs=[],
+        new_outputs=[evidence_output],
         forbidden_outputs=["product/src/lib.rs"],
         writer_strategy="proof_aggregation_writer",
         validation_commands=["python3 --version"],
-        evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+        evidence_required=[
+            EvidenceRequirement(
+                kind="runtime_test",
+                name="runtime test",
+                paths=[evidence_output],
+                validation_command_ids=["python3:version"],
+            )
+        ],
         closeout_contract=CloseoutContract(
             path="docs-site/src/content/docs/reports/closeouts/pm-test-003/closeout.md",
             completion_quality="runtime_proven",
-            evidence_required=[EvidenceRequirement(kind="runtime_test", name="runtime test")],
+            evidence_required=[
+                EvidenceRequirement(
+                    kind="runtime_test",
+                    name="runtime test",
+                    paths=[evidence_output],
+                    validation_command_ids=["python3:version"],
+                )
+            ],
         ),
         rollback_policy=RollbackPolicy(policy="aggregation-only; do not patch prior proof files"),
         stop_conditions=["stop if prior evidence is missing"],
@@ -5338,7 +3702,7 @@ def test_execution_proof_aggregation_requires_prior_machine_evidence(tmp_path: P
 
     result = run_action(action, lock_validated=True, repo_root=tmp_path, evidence_root=tmp_path / "evidence")
 
-    assert result.written_paths == ()
+    assert result.written_paths == (tmp_path / evidence_output,)
     assert len(result.evidence_paths) == 1
 
 
@@ -5387,43 +3751,6 @@ def test_production_validation_accepts_valid_contract_pack_for_full_automation_t
 
     assert not any("Execution Contract Pack" in error for error in errors)
 
-def test_single_step_run_can_operate_on_current_milestone_without_full_preflight(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, _roadmap: dict, manifest: dict, _plan: Path, _implementation: Path, _closeout: Path) -> None:
-        manifest["milestones"][1]["milestone_kind"] = "legacy-generic-kind"
-        manifest["milestones"][1].pop("execution_kind", None)
-
-    production_path, roadmap_path, manifest_root, *_ = prepare_full_automation_product_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--max-actions",
-            "1",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
-
-
 def test_current_pm012_proof_aggregation_writer_contract_validates() -> None:
     planning = load_production_tracks()
     track = next(candidate for candidate in planning.tracks if candidate.id == "PT-UI-PROGRAM")
@@ -5452,291 +3779,6 @@ def test_current_pm012_does_not_start_materialprogram_and_pm013_is_handoff_only(
     assert pm013.milestone_type == "closeout"
     assert not pm013.may_create_code
     assert pm013.product_code_contract is None
-
-
-def test_manifest_runner_runtime_closeout_closes_after_product_code_evidence(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    make_runtime_closeout_ready(production_path, roadmap_path, manifest_root, closeout_path)
-    runtime_artifact_path = "tools/workflow/runtime-proof.yaml"
-    manifest_path = manifest_root / "pt-test.yaml"
-    manifest_data = load_yaml(manifest_path)
-    manifest_data["milestones"][1]["runtime_closeout_contract"]["files_changed_report"] = [
-        runtime_artifact_path,
-    ]
-    write_yaml(manifest_path, manifest_data)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "agent_closeout",
-            "--max-actions",
-            "2",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner runtime closeout completed one implementation milestone." in result.stdout
-    assert closeout_path.exists()
-    closeout_text = closeout_path.read_text(encoding="utf-8")
-    assert runtime_artifact_path in closeout_text
-    production = load_yaml(production_path)
-    assert production["tracks"][0]["state"] == "completed"
-    milestone = production["tracks"][0]["milestones"][1]
-    assert milestone["state"] == "completed"
-    assert milestone["completion_quality"] == "runtime_proven"
-    archive = load_yaml(roadmap_path.with_name("roadmap-archive.yaml"))
-    archived = next(item for item in archive["items"] if item["id"] == "WR-002")
-    assert archived["completion_quality"] == "runtime_proven"
-
-
-def test_manifest_runner_runtime_closeout_stops_at_missing_runtime_evidence(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    make_runtime_closeout_ready(
-        production_path,
-        roadmap_path,
-        manifest_root,
-        closeout_path,
-        validation_commands=["task docs:validate"],
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "agent_closeout",
-            "--max-actions",
-            "2",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "runtime closeout requires at least one runtime/test validation" in result.stdout
-    assert "command" in result.stdout
-    assert not closeout_path.exists()
-
-
-def test_manifest_runner_runtime_closeout_stops_at_failed_validation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    make_runtime_closeout_ready(production_path, roadmap_path, manifest_root, closeout_path)
-
-    def fail_validation(commands: list[str]) -> tuple[str, ...]:
-        raise WorkflowError(f"validation command failed: {commands[0]}")
-
-    monkeypatch.setattr("track_execution_manifest.run_validation_commands", fail_validation)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--allow",
-            "agent_closeout",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "validation command failed:" in result.stdout
-    assert not closeout_path.exists()
-
-
-def test_manifest_runner_product_code_stops_after_one_implementation_wr_by_default(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert result.stdout.count("Manifest Runner V4 verified one product_code implementation gate.") == 1
-    assert "Must stop after this action: yes" in result.stdout
-
-
-def test_manifest_runner_product_code_rejects_runtime_proven_claim_without_evidence(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def mutate(_production: dict, roadmap: dict, _manifest: dict) -> None:
-        roadmap["items"][1]["completion_quality"] = "runtime_proven"
-
-    production_path, roadmap_path, manifest_root, _plan_path, _implementation_path, _closeout_path = write_product_code_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "cannot claim runtime_proven before closeout" in result.stdout
-    assert "runtime/test evidence exists" in result.stdout
-
-
-def test_manifest_runner_agent_design_creates_implementation_plan_without_product_code(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Manifest Runner V1 applied one auto_safe Track Expansion action." in result.stdout
-    assert "Manifest Runner V2 applied one agent_design action." in result.stdout
-    assert "Manifest Runner V4" not in result.stdout
-    assert plan_path.exists()
-    plan_text = plan_path.read_text(encoding="utf-8")
-    assert "## Exact Files/Modules Expected To Change" in plan_text
-    assert "## Expected Methods/Functions" in plan_text
-    assert "## Tests To Add/Change" in plan_text
-    assert "## Compatibility / Rollback Plan" in plan_text
-    assert "Post-plan transition: Manifest Runner V2 records the milestone as `active`" in plan_text
-    for path in scope_paths:
-        assert repo_path(path) in plan_text
-    production = load_yaml(production_path)
-    assert production["tracks"][0]["milestones"][1]["state"] == "active"
-    active_roadmap = load_yaml(roadmap_path)
-    wr_item = next(item for item in active_roadmap["items"] if item["id"] != "WR-001")
-    assert wr_item["planning_state"] == "current_candidate"
-    assert wr_item["blocker"] == 2
-    for path in scope_paths:
-        assert normalize_repo_path(repo_path(path)) in wr_item["write_scopes"]
-    assert normalize_repo_path(repo_path(plan_path)) in wr_item["write_scopes"]
-
-    rerun = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert rerun.exit_code == 0, rerun.output
-    assert "Manifest Runner stopped before product_code." in rerun.stdout
-    assert "Manifest Runner V4" not in rerun.stdout
 
 
 def mutate_manifest_to_runtime_slice(
@@ -5806,29 +3848,53 @@ def run_agent_design_for_fixture(
     production_path: Path,
     roadmap_path: Path,
     manifest_root: Path,
-) -> CliRunner:
-    return CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
+) -> SimpleNamespace:
+    pack_root = production_path.parent / "contract-packs"
+    try:
+        pack = compile_contract_pack(
             "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+            contract_pack_root=pack_root,
+        )
+        write_contract_pack(pack, root=pack_root)
+        first = run_next_action(
+            pack,
+            lock_validated=True,
+            repo_root=production_path.parent,
+            run_validations=False,
+            contract_pack_root=pack_root,
+        )
+        pack = compile_contract_pack(
+            "PT-TEST",
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+            contract_pack_root=pack_root,
+        )
+        write_contract_pack(pack, root=pack_root)
+        second = run_next_action(
+            pack,
+            lock_validated=True,
+            repo_root=production_path.parent,
+            run_validations=False,
+            contract_pack_root=pack_root,
+        )
+        pack = compile_contract_pack(
+            "PT-TEST",
+            production_source=production_path,
+            roadmap_source=roadmap_path,
+            manifest_root=manifest_root,
+            contract_pack_root=pack_root,
+        )
+        errors = preflight_pack(pack)
+        if errors:
+            raise WorkflowError("\n".join(errors))
+    except WorkflowError as error:
+        return SimpleNamespace(exit_code=1, output=str(error), stdout=str(error))
+    output = "\n".join([first.next_action, second.next_action])
+    return SimpleNamespace(exit_code=0, output=output, stdout=output)
 
 
 def test_generated_6b_plan_does_not_contain_6a_label_stale_text(
@@ -5858,47 +3924,6 @@ def test_generated_6b_plan_does_not_contain_6a_label_stale_text(
     assert "Stop before PM-TEST-008" not in plan_text
 
 
-def test_generated_plan_consistency_rejects_wrong_milestone_reference(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate_manifest_to_runtime_slice(
-            milestone_id="PM-TEST-008",
-            title="6B Button Route Event Host Command Proof",
-            stage="Stage 6B",
-            proof_kind="6b-button-route-event-host-command-proof",
-            target="Button",
-        ),
-    )
-    result = run_agent_design_for_fixture(production_path, roadmap_path, manifest_root)
-    assert result.exit_code == 0, result.output
-    context = resolve_manifest_command_context(
-        "PT-TEST",
-        production_source=production_path,
-        roadmap_source=roadmap_path,
-        manifest_source_root=manifest_root,
-    )
-    entry, _milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
-    assert entry.owning_wr is not None
-    roadmap_item = context.roadmap.by_id[entry.owning_wr]
-    broken_text = plan_path.read_text(encoding="utf-8").replace(
-        "6B Button Route Event Host Command Proof",
-        "6B Wrong Proof",
-    )
-
-    errors = implementation_plan_consistency_errors_from_text(
-        entry,
-        roadmap_item=roadmap_item,
-        text=broken_text,
-        plan_path=plan_path,
-    )
-
-    assert any("missing current proof term" in error and "Button Route Event Host" in error for error in errors)
-
-
 def test_generated_plan_consistency_rejects_prose_validation_command(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -5919,125 +3944,8 @@ def test_generated_plan_consistency_rejects_prose_validation_command(
     result = run_agent_design_for_fixture(production_path, roadmap_path, manifest_root)
 
     assert result.exit_code == 1
-    assert "non-executable placeholder" in result.stdout
-
-
-def test_generated_plan_consistency_rejects_stale_closeout_evidence_terms(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate_manifest_to_runtime_slice(
-            milestone_id="PM-TEST-008",
-            title="6B Button Route Event Host Command Proof",
-            stage="Stage 6B",
-            proof_kind="6b-button-route-event-host-command-proof",
-            target="Button",
-        ),
-    )
-    result = run_agent_design_for_fixture(production_path, roadmap_path, manifest_root)
-    assert result.exit_code == 0, result.output
-    context = resolve_manifest_command_context(
-        "PT-TEST",
-        production_source=production_path,
-        roadmap_source=roadmap_path,
-        manifest_source_root=manifest_root,
-    )
-    entry, _milestone = first_current_manifest_entry(context.loaded.manifest, context.track)
-    assert entry.owning_wr is not None
-    roadmap_item = context.roadmap.by_id[entry.owning_wr]
-    broken_text = plan_path.read_text(encoding="utf-8") + "\n- Closeout evidence must include Label text output.\n"
-
-    errors = implementation_plan_consistency_errors_from_text(
-        entry,
-        roadmap_item=roadmap_item,
-        text=broken_text,
-        plan_path=plan_path,
-    )
-
-    assert any("stale slice term 'label text output'" in error for error in errors)
-
-
-def test_product_code_gate_refuses_unsafe_generated_plan(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate_manifest_to_runtime_slice(
-            milestone_id="PM-TEST-008",
-            title="6B Button Route Event Host Command Proof",
-            stage="Stage 6B",
-            proof_kind="6b-button-route-event-host-command-proof",
-            target="Button",
-        ),
-    )
-    result = run_agent_design_for_fixture(production_path, roadmap_path, manifest_root)
-    assert result.exit_code == 0, result.output
-    plan_path.write_text(plan_path.read_text(encoding="utf-8") + "\n- Label text output stale evidence.\n", encoding="utf-8")
-
-    product_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert product_result.exit_code == 1
-    assert "stale slice term" in product_result.stdout
-    assert "label" in product_result.stdout
-
-
-def test_product_code_gate_permits_corrected_pm008_plan_after_validation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=mutate_manifest_to_runtime_slice(
-            milestone_id="PM-TEST-008",
-            title="6B Button Route Event Host Command Proof",
-            stage="Stage 6B",
-            proof_kind="6b-button-route-event-host-command-proof",
-            target="Button",
-        ),
-    )
-    result = run_agent_design_for_fixture(production_path, roadmap_path, manifest_root)
-    assert result.exit_code == 0, result.output
-
-    product_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert product_result.exit_code == 0, product_result.output
-    assert "Manifest Runner V4 verified one product_code implementation gate." in product_result.stdout
+    assert "validation command is prose/non-executable" in result.stdout
+    assert "validation command is blocked" in result.stdout
 
 
 def test_generated_plan_for_6c_and_6d_uses_stage_specific_terms(
@@ -6069,119 +3977,7 @@ def test_generated_plan_for_6c_and_6d_uses_stage_specific_terms(
         assert "Label text output" not in plan_text
 
 
-def test_manifest_runner_product_code_remains_blocked_until_implementation_plan_exists(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    expansion = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--max-actions",
-            "1",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert expansion.exit_code == 0, expansion.output
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "workflow action is design_first" in result.stdout
-
-
-def test_manifest_runner_stops_cleanly_when_agent_design_contract_is_missing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    expansion = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--max-actions",
-            "1",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert expansion.exit_code == 0, expansion.output
-    manifest_path = manifest_root / "pt-test.yaml"
-    manifest_data = load_yaml(manifest_path)
-    manifest_data["milestones"][1].pop("agent_design")
-    manifest_data["milestones"][1].pop("agent_design_contract", None)
-    write_yaml(manifest_path, manifest_data)
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "product_code",
-            "--deny",
-            "crate_creation",
-            "--deny",
-            "foundation_extraction",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "needs agent_design_contract" in result.stdout
-    assert "Manifest Runner V4" not in result.stdout
-
-
-def test_complete_track_contracts_fills_missing_action_contracts(
+def test_complete_track_contracts_uses_plan_sidecar_without_filling_manifest_contracts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -6198,13 +3994,9 @@ def test_complete_track_contracts_fills_missing_action_contracts(
         monkeypatch,
         mutate=remove_action_contracts,
     )
-    monkeypatch.setattr(
-        "track_execution_manifest.manifest_report_path",
-        lambda track_id: str(tmp_path / "reports" / "track-execution-manifests" / track_id.lower() / "manifest.md"),
-    )
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "complete-track-contracts",
             "--track",
@@ -6219,15 +4011,16 @@ def test_complete_track_contracts_fills_missing_action_contracts(
     )
 
     assert result.exit_code == 0, result.output
+    assert "Execution Contract Pack written." in result.stdout
     manifest = load_yaml(manifest_root / "pt-test.yaml")
     milestone = manifest["milestones"][1]
-    assert milestone["auto_safe_contract"]["generated_from_template_version"] == "v1"
-    assert milestone["agent_design_contract"]["generated_contract_marker"] == "generated_by_production_complete_track_contracts"
-    assert milestone["product_code_contract"]["exact_allowed_implementation_write_scopes"]
-    assert milestone["runtime_closeout_contract"]["completion_quality_allowed"] == ["runtime_proven"]
+    assert "auto_safe_contract" not in milestone
+    assert "agent_design_contract" not in milestone
+    assert "product_code_contract" not in milestone
+    assert "runtime_closeout_contract" not in milestone
 
 
-def test_complete_track_contracts_fails_when_template_is_missing(
+def test_complete_track_contracts_ignores_legacy_template_key_when_sidecar_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -6241,7 +4034,7 @@ def test_complete_track_contracts_fails_when_template_is_missing(
     )
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "complete-track-contracts",
             "--track",
@@ -6255,189 +4048,8 @@ def test_complete_track_contracts_fails_when_template_is_missing(
         ],
     )
 
-    assert result.exit_code == 1
-    assert "missing contract template" in result.stdout
-
-
-def test_full_track_runner_refuses_missing_required_contracts(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def remove_action_contracts(_production: dict, _roadmap: dict, manifest: dict) -> None:
-        milestone = manifest["milestones"][1]
-        milestone.pop("agent_design", None)
-        milestone.pop("agent_design_contract", None)
-        milestone.pop("product_code_contract", None)
-        milestone.pop("runtime_closeout_contract", None)
-        milestone.pop("auto_safe_contract", None)
-
-    production_path, roadmap_path, manifest_root, _plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        mutate=remove_action_contracts,
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--allow",
-            "agent_closeout",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "needs auto_safe_contract" in result.stdout
-    assert "needs agent_design_contract" in result.stdout
-    assert "needs product_code_contract" in result.stdout
-    assert "runtime_closeout_contract" in result.stdout
-
-
-def test_manifest_runner_product_code_allowed_after_agent_design_implementation_plan(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-    )
-    plan_result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-    assert plan_result.exit_code == 0, plan_result.output
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-TEST",
-            "--allow",
-            "product_code",
-            "--max-actions",
-            "1",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
     assert result.exit_code == 0, result.output
-    assert "Manifest Runner V4 verified one product_code implementation gate." in result.stdout
-
-
-def test_manifest_runner_pt_ui_program_pm007_plan_generation_without_product_code(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        track_id="PT-UI-PROGRAM",
-        milestone_id="PM-UI-PROGRAM-007",
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-UI-PROGRAM",
-            "--allow",
-            "auto_safe",
-            "--allow",
-            "agent_design",
-            "--deny",
-            "product_code",
-            "--max-actions",
-            "10",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "PM-UI-PROGRAM-007" in result.stdout
-    assert "Manifest Runner V4" not in result.stdout
-    assert plan_path.exists()
-    plan_text = plan_path.read_text(encoding="utf-8")
-    assert "6A Label Structural UiFrame Text Proof" in plan_text
-    assert "Stop before product/runtime code unless the command is rerun with `--allow product_code --allow product_implementation`" in plan_text
-    assert load_yaml(production_path)["tracks"][0]["milestones"][1]["state"] == "active"
-
-
-def test_manifest_runner_product_code_pt_ui_program_blocks_before_6a(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    production_path, roadmap_path, manifest_root, _plan_path, _scope_paths = write_implementation_agent_design_fixture(
-        tmp_path,
-        monkeypatch,
-        track_id="PT-UI-PROGRAM",
-        milestone_id="PM-UI-PROGRAM-007",
-    )
-
-    result = CliRunner().invoke(
-        track_manifest_app,
-        [
-            "run-track",
-            "--track",
-            "PT-UI-PROGRAM",
-            "--allow",
-            "product_code",
-            "--production-source",
-            str(production_path),
-            "--roadmap-source",
-            str(roadmap_path),
-            "--manifest-source-root",
-            str(manifest_root),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "PM-UI-PROGRAM-007" in result.stdout
-    assert "Track Expansion must create or link" in result.stdout
-    assert "--allow auto_safe" in result.stdout
+    assert "Execution Contract Pack written." in result.stdout
 
 
 def test_manifest_backed_production_validation_passes_valid_manifest(tmp_path: Path) -> None:
@@ -6664,7 +4276,7 @@ def test_manifest_next_surfaces_truth_claims(tmp_path: Path) -> None:
     write_yaml(manifest_root / "pt-test.yaml", valid_track_manifest_state())
 
     result = CliRunner().invoke(
-        track_manifest_app,
+        production_track_cli_app,
         [
             "next",
             "--track",
@@ -6675,6 +4287,8 @@ def test_manifest_next_surfaces_truth_claims(tmp_path: Path) -> None:
             str(roadmap_path),
             "--manifest-source-root",
             str(manifest_root),
+            "--contract-pack-root",
+            str(tmp_path / "contract-packs"),
         ],
     )
 

@@ -43,7 +43,6 @@ task production:run-track -- --track "<PT-ID>" --allow auto_safe --max-actions 1
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --deny product_code --max-actions 2
 task production:run-track -- --track "<PT-ID>" --allow auto_safe --allow agent_design --allow agent_closeout --deny product_code --max-actions 10
 task production:run-track -- --track "<PT-ID>" --mode full-track --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions 10
-task production:run-track -- --track "<PT-ID>" --mode agent-track --allow auto_safe --allow agent_design --allow agent_closeout --allow product_code --allow product_implementation --max-actions 10
 task production:audit-track -- --track "<PT-ID>" --full-automation --require-lock
 task production:next -- --track "<PT-ID>"
 task production:audit-track -- --track "<PT-ID>"
@@ -100,12 +99,12 @@ Validation commands execute checks:
   machine-readable Track Execution Manifest scaffold when one is missing, or
   audits an existing manifest without overwriting it by default. It does not
   authorize implementation.
-- `task production:complete-track-contracts -- --track <PT-ID>` fills missing
-  machine-readable action contracts for remaining manifest-backed milestones
-  from manifest templates and milestone parameters. It updates the manifest and
-  human-readable manifest report, runs validation, and does not authorize
-  implementation, crates, MaterialProgram work, or shared `foundation/meta`
-  extraction.
+- `task production:complete-track-contracts -- --track <PT-ID>` compiles the
+  typed Execution Contract Pack from reviewed machine-readable production,
+  roadmap, manifest, WR, and implementation-plan sidecar authority. It does not
+  parse prose implementation plans, does not create missing contracts from
+  templates, and does not authorize implementation, crates, MaterialProgram
+  work, or shared `foundation/meta` extraction.
 - `task production:lock-track -- --track <PT-ID> --locked-by <identity>`
   creates the digest-locked AI execution authority required for
   `--mode full-track`. It records manifest, production, roadmap, accepted
@@ -115,44 +114,21 @@ Validation commands execute checks:
 - `task production:expand-track -- --track <PT-ID>` prints deferred WR
   candidates from a manifest. It is read-only and must not authorize
   implementation.
-- `task production:run-track -- --track <PT-ID> --allow auto_safe --max-actions
-  1` runs the Manifest Runner V1 Track Expansion layer. It audits the manifest,
-  applies at most one mechanical Track Expansion action, creates/links deferred
-  WR metadata, regenerates production/roadmap docs, runs validation, and stops
-  before design authoring, closeout, code, crates, runtime behavior changes, or
-  extraction.
-- `task production:run-track -- --track <PT-ID> --allow auto_safe --allow
-  agent_design --deny product_code --max-actions 2` may additionally run the
-  Manifest Runner V2 design/planning layer for the current docs-only or design-only
-  milestone. It may create/update the implementation/design plan and bounded
-  design sections inside the manifest and WR write scope. It cannot close the
-  milestone, authorize implementation, create crates, modify product behavior,
-  or extract shared `foundation/meta`.
-- `task production:run-track -- --track <PT-ID> --allow auto_safe --allow
-  agent_design --allow agent_closeout --deny product_code --max-actions 10` may
-  additionally run the Manifest Runner V3 closeout layer for docs, design, or
-  governance milestones. It can close only as `bounded_contract` after evidence
-  and validation pass. It cannot close runtime proof milestones, mark
-  `runtime_proven`, authorize implementation, create crates, modify product
-  behavior, start the next milestone's design work, or extract shared
-  `foundation/meta`.
-- `task production:run-track -- --track <PT-ID> --allow auto_safe --allow
-  agent_design --allow agent_closeout --allow product_code --max-actions 10`
-  may run the Manifest Runner V4 product-code gate for the current
-  implementation or hardening milestone only. It requires an active
-  `current_candidate` WR, accepted production plan, exact write scopes,
-  forbidden scopes, validation commands, closeout path, rollback/compatibility
-  plan, and stop conditions. It must stop after one implementation WR and cannot
-  create crates, extract shared `foundation/meta`, start MaterialProgram, run
-  product implementation writes, or claim runtime closeout evidence by itself.
-- Add `--allow product_implementation` only when the active implementation WR
-  and accepted plan authorize exact product files. Manifest Runner V5 may write
-  those bounded files, including `new:` files, through declared writer
-  strategies. `agent_writer` uses an isolated scoped-diff workspace, target
-  digest checks, forbidden-pattern checks, accepted patch import, validation,
-  and run-ledger transcript capture. It cannot run for docs, design, or
-  governance milestones, or claim `runtime_proven` without runtime/test
-  closeout evidence.
+- `task production:run-track` is now the public adapter for the clean Track
+  Execution Harness. For executable tracks, it must use `--mode full-track`
+  with a fresh Execution Contract Pack and a current Execution Lock. It must not
+  fall back to historical Manifest Runner V1-V5 behavior or infer executable
+  authority from prose.
+- Historical auto-safe, design, closeout, product-code gate, and product
+  implementation concepts are represented in the clean kernel as typed
+  `ActionContract` executors and writer strategies. The executable authority is
+  the `plan.contract.yaml` sidecar compiled into the Contract Pack, bounded by
+  the manifest and WR scopes.
+- Add `--allow product_implementation` only when the active Contract Pack
+  action authorizes exact product files, declared `new:` outputs, validation
+  commands, evidence requirements, rollback policy, and stop conditions.
+  `agent_writer` remains privileged and must use isolated scoped-diff import,
+  validation, digest checks, and run-ledger evidence.
 - Add `--allow crate_creation` only when the active manifest, WR, and accepted
   plan name exact `new: <crate>/Cargo.toml` crate paths and validation
   commands. This permission alone does not authorize placeholder owner folders
@@ -163,25 +139,21 @@ Validation commands execute checks:
   after each successful action, and requires every remaining milestone to
   declare a strict `execution_kind`, required permissions, contracts, evidence
   categories, validation commands, and closeout path.
-- Add `--mode agent-track` when the intent is agent-style orchestration for a
-  locked production track. Agent-track may create/link WRs, create plans, author
-  bounded design contracts, close governance/design milestones, run full
-  preflight, create or refresh the execution lock after preflight passes, and
-  continue one legal action at a time. It is not looser than full-track:
-  product implementation still requires exact WR/plan/writer/validation
-  authority and stops on stale digests, scope ambiguity, missing evidence,
-  ungranted permissions, validation failure, strategic human gates, or max
-  actions.
+- `--mode agent-track` is the guarded clean-kernel preparation path for
+  manifest-declared AI-executable or full-automation tracks. It prepares or
+  refreshes Contract Pack and Execution Lock authority only when gates allow it,
+  then uses the same scoped-diff, validation, evidence, and ledger guarantees as
+  full-track execution.
 - `task execution:compile`, `task execution:preflight`, `task execution:lock`,
   `task execution:next`, and `task execution:run` are the clean Track Execution
   Harness entrypoints. They use a typed Execution Contract Pack under
   `workspace/execution-contract-packs/` as execution authority. Public
-  `production:*` and `ai:goal` workflow commands remain the compatibility
-  surface, but locked executable tracks delegate full-track execution,
-  full-track audit, and next-action inspection to the harness when a valid
-  Contract Pack is present. Tracks without a Contract Pack must report their
-  legacy fallback or blocker state instead of silently interpreting loose
-  manifest fields as locked execution authority.
+  `production:*` and `ai:goal` workflow commands remain the user-facing
+  surface through the production-track adapter, but locked executable tracks
+  delegate full-track execution, full-track audit, and next-action inspection
+  to the harness when a valid Contract Pack is present. Executable tracks
+  without a Contract Pack or current Execution Lock must fail closed instead of
+  interpreting loose manifest fields as locked execution authority.
 - `task production:next -- --track <PT-ID>` audits the machine-readable
   manifest when present, including truth-claim status, then prints exactly one
   next legal production-track

@@ -1,0 +1,133 @@
+version: 1
+track_id: PT-TRACK-EXECUTION-HARNESS
+run_id: pt-track-execution-harness-20260601-131840z
+started_at: '2026-06-01T13:19:16Z'
+actions:
+- status: passed
+  action_id: PT-TRACK-EXECUTION-HARNESS:PM-TRACK-HARNESS-002:WR-150
+  milestone_id: PM-TRACK-HARNESS-002
+  wr_id: WR-150
+  execution_kind: implementation_proof
+  executor_kind: runtime_closeout
+  writer_strategy: template_writer
+  files_changed:
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+  validation_results:
+  - command_id: task:production:render
+    argv:
+    - task
+    - production:render
+    returncode: 0
+  - command_id: task:production:validate
+    argv:
+    - task
+    - production:validate
+    returncode: 0
+  - command_id: task:production:check
+    argv:
+    - task
+    - production:check
+    returncode: 0
+  - command_id: task:roadmap:render
+    argv:
+    - task
+    - roadmap:render
+    returncode: 0
+  - command_id: task:roadmap:validate
+    argv:
+    - task
+    - roadmap:validate
+    returncode: 0
+  - command_id: task:roadmap:check
+    argv:
+    - task
+    - roadmap:check
+    returncode: 0
+  - command_id: task:docs:validate
+    argv:
+    - task
+    - docs:validate
+    returncode: 0
+  - command_id: task:planning:validate
+    argv:
+    - task
+    - planning:validate
+    returncode: 0
+  evidence_paths: []
+  pre_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml: a69bf2339f7e93f45d8fba55de8b77d74f82bd3c834fc782133350d4d6f497d8
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 002c4d4f286749efe8cc4eeaea9f3e665f0aa0717ae4fa057b2017c98d88350b
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 20028817c0071e5351fd625e9dbb9e333093962f14c7ae6d117b82e4010cc9a1
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: ef2c3cf6c7928646a360e1c0d79a30247f349b7670c7426f663d1296d4327edc
+    docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md: 678c237edfd1c0ed6423bc7274f10d3bafe14dda367c846ed1e933f261bd33e3
+    docs-site/src/content/docs/workspace/design-track-roadmap-governance.md: 6fc0603900d7a9cee1389ac671076a85647a2916516473a90929b784757a273d
+    docs-site/src/content/docs/reports/implementation-plans/wr-150-kernel-source-model-closure/plan.contract.yaml: 1b1b28e54ccc46cf157f497d0fd9965f422cbb07b241ea845ed7c3bd936841ae
+    docs-site/src/content/docs/reports/implementation-plans/wr-150-kernel-source-model-closure/plan.md: 40b8d49c0c64235b1f0f6e027bc407ede8dd8248e728bf289abcdf9ca1b1e1ee
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 3f9f1cab5af9d61c7c5c4f124621bf9e0dc627563e6a8c5d610dfb794d7341c1
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/closeouts.py: 7d240f1f3dd85015d640c478428ec97d0e48ac521ed9d5c81e7406d4768d4442
+    tools/workflow/execution/compiler.py: 8f838ebe1d3e8a37789e867715594858aed4a6719730364f9ca0e18c017b8473
+    tools/workflow/execution/contracts.py: 22fdb0193f6f54891dc729ff46f1dd270950920cff2cbe9f97ca903ee4258cbf
+    tools/workflow/execution/evidence.py: eca6e2ab2915bc214df345b04ea0ff364c54de6ab9faad9aa1a1579488822903
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: 7631d3e26c1f4abd5e330d7524f22e9e8b65a95226a62d33c3415d96c98bedba
+    tools/workflow/execution/preflight.py: a2b72a4907a81547a72a07db6b8067d0ddc53741b0b6edc48eb6c9a20e895ec6
+    tools/workflow/execution/runner.py: 6bc8057d4638c4a7eb3bf51fb9a17ec6b90ffb89c1af748d8ec4ec2cc8fab7d3
+    tools/workflow/execution/workspace.py: b576feba1026321100cabb4c2722240464791c81337652cb284b8b417c1d6c41
+    tools/workflow/execution/writers.py: 62ca00721eae75dde81121037409aa01832e3186189d66dfed3db93148b16a8e
+    tools/workflow/track_sources/__init__.py: b760223d71e23dbb70b01f6801d4bc28608507fde876aee46cec40587825b02f
+    tools/workflow/track_sources/audit.py: 0fab06cddfe6cceea5217614565b017405ad9a00094202e72755499d10c04075
+    tools/workflow/track_sources/manifest.py: adab33afe82ec5263041f68c5bff441e381a9a120bd50a6fc0793052546306d4
+    tools/workflow/track_sources/plan_metadata.py: 441ebe374b92ee7d476595aac78a1d5c05be2e2f27b02ca33a79a1c8b1af76b2
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+  post_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml: a69bf2339f7e93f45d8fba55de8b77d74f82bd3c834fc782133350d4d6f497d8
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 002c4d4f286749efe8cc4eeaea9f3e665f0aa0717ae4fa057b2017c98d88350b
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 20028817c0071e5351fd625e9dbb9e333093962f14c7ae6d117b82e4010cc9a1
+    docs-site/src/content/docs/workspace/track-execution-manifest.md: ef2c3cf6c7928646a360e1c0d79a30247f349b7670c7426f663d1296d4327edc
+    docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md: 678c237edfd1c0ed6423bc7274f10d3bafe14dda367c846ed1e933f261bd33e3
+    docs-site/src/content/docs/workspace/design-track-roadmap-governance.md: 6fc0603900d7a9cee1389ac671076a85647a2916516473a90929b784757a273d
+    docs-site/src/content/docs/reports/implementation-plans/wr-150-kernel-source-model-closure/plan.contract.yaml: 1b1b28e54ccc46cf157f497d0fd9965f422cbb07b241ea845ed7c3bd936841ae
+    docs-site/src/content/docs/reports/implementation-plans/wr-150-kernel-source-model-closure/plan.md: 40b8d49c0c64235b1f0f6e027bc407ede8dd8248e728bf289abcdf9ca1b1e1ee
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 3f9f1cab5af9d61c7c5c4f124621bf9e0dc627563e6a8c5d610dfb794d7341c1
+    tools/workflow/execution/closeout_claims.py: 1caa664cbfbc86dcd2d0b670422d5473afc1023760d22e9bd9506163716a0808
+    tools/workflow/execution/closeouts.py: 7d240f1f3dd85015d640c478428ec97d0e48ac521ed9d5c81e7406d4768d4442
+    tools/workflow/execution/compiler.py: 8f838ebe1d3e8a37789e867715594858aed4a6719730364f9ca0e18c017b8473
+    tools/workflow/execution/contracts.py: 22fdb0193f6f54891dc729ff46f1dd270950920cff2cbe9f97ca903ee4258cbf
+    tools/workflow/execution/evidence.py: eca6e2ab2915bc214df345b04ea0ff364c54de6ab9faad9aa1a1579488822903
+    tools/workflow/execution/ledger.py: ee212321163b3f12a9dff8abe1e2ae1df7cc1d1f53bdfff33fd1d913cc20421f
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: 7631d3e26c1f4abd5e330d7524f22e9e8b65a95226a62d33c3415d96c98bedba
+    tools/workflow/execution/preflight.py: a2b72a4907a81547a72a07db6b8067d0ddc53741b0b6edc48eb6c9a20e895ec6
+    tools/workflow/execution/runner.py: 6bc8057d4638c4a7eb3bf51fb9a17ec6b90ffb89c1af748d8ec4ec2cc8fab7d3
+    tools/workflow/execution/workspace.py: b576feba1026321100cabb4c2722240464791c81337652cb284b8b417c1d6c41
+    tools/workflow/execution/writers.py: 62ca00721eae75dde81121037409aa01832e3186189d66dfed3db93148b16a8e
+    tools/workflow/track_sources/__init__.py: b760223d71e23dbb70b01f6801d4bc28608507fde876aee46cec40587825b02f
+    tools/workflow/track_sources/audit.py: 0fab06cddfe6cceea5217614565b017405ad9a00094202e72755499d10c04075
+    tools/workflow/track_sources/manifest.py: adab33afe82ec5263041f68c5bff441e381a9a120bd50a6fc0793052546306d4
+    tools/workflow/track_sources/plan_metadata.py: 441ebe374b92ee7d476595aac78a1d5c05be2e2f27b02ca33a79a1c8b1af76b2
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+  next_legal_action: 'PT-TRACK-EXECUTION-HARNESS:PM-TRACK-HARNESS-002:WR-150 closed; recompute the next legal ActionContract before continuing. Changed: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md, docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml, docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml, docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml, docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml, docs-site/src/content/docs/workspace/production-milestone-register.md, docs-site/src/content/docs/workspace/production-track-index.md, docs-site/src/content/docs/workspace/production-tracks.yaml, docs-site/src/content/docs/workspace/roadmap-archive-register.md, docs-site/src/content/docs/workspace/roadmap-archive.yaml, docs-site/src/content/docs/workspace/roadmap-deferred-register.md, docs-site/src/content/docs/workspace/roadmap-deferred.yaml, docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml'
+  stop_reason: single-action complete
+updated_at: '2026-06-01T13:19:16Z'

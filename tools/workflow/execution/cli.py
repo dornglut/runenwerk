@@ -11,9 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from roadmap_state import ROADMAP_SOURCE, REPO_ROOT, WorkflowError, repo_path
 from production_state import PRODUCTION_SOURCE
-from track_execution_manifest import TRACK_EXECUTION_MANIFEST_ROOT
+from track_sources.manifest import TRACK_EXECUTION_MANIFEST_ROOT
 
 from execution.compiler import CONTRACT_PACK_ROOT, compile_contract_pack, contract_pack_path, load_contract_pack, write_contract_pack
+from execution.evidence import EVIDENCE_ROOT
 from execution.ledger import RUN_LEDGER_ROOT, append_run_action, append_run_failure, new_run_id
 from execution.locks import (
     EXECUTION_LOCK_ROOT,
@@ -23,7 +24,7 @@ from execution.locks import (
     load_execution_lock,
     write_execution_lock,
 )
-from execution.preflight import preflight_pack
+from execution.preflight import preflight_for_mode
 from execution.runner import run_next_action
 
 
@@ -33,6 +34,21 @@ app = typer.Typer(no_args_is_help=True, help="Run the clean Track Execution Harn
 
 def permission_set(values: list[str]) -> set[str]:
     return {value.strip() for value in values if value.strip()}
+
+
+def infer_repo_root_from_source(path: Path) -> Path | None:
+    parts = path.resolve().parts
+    try:
+        docs_index = parts.index("docs-site")
+    except ValueError:
+        try:
+            path.resolve().relative_to(REPO_ROOT.resolve())
+            return None
+        except ValueError:
+            return path.resolve().parent
+    if docs_index == 0:
+        return None
+    return Path(*parts[:docs_index])
 
 
 @app.command("compile")
@@ -52,6 +68,7 @@ def compile_command(
             production_source=production_source,
             roadmap_source=roadmap_source,
             manifest_root=manifest_source_root,
+            contract_pack_root=contract_pack_root,
         )
         path = write_contract_pack(pack, root=contract_pack_root)
         console.print("[green]Execution Contract Pack written.[/green]")
@@ -67,6 +84,7 @@ def compile_command(
 @app.command("preflight")
 def preflight_command(
     track: str = typer.Option(..., "--track"),
+    mode: str = typer.Option("full-track", "--mode"),
     allow: list[str] = typer.Option([], "--allow"),
     contract_pack_root: Path = typer.Option(CONTRACT_PACK_ROOT),
 ) -> None:
@@ -77,12 +95,16 @@ def preflight_command(
         freshness_errors = contract_pack_freshness_errors(pack)
         if freshness_errors:
             raise WorkflowError("\n".join(freshness_errors))
-        errors = preflight_pack(pack, allow=permission_set(allow) if allow else None)
+        if mode not in {"single-action", "full-track"}:
+            raise WorkflowError("--mode must be one of single-action, full-track")
+        errors = preflight_for_mode(pack, mode=mode, allow=permission_set(allow) if allow else None)
         if errors:
             raise WorkflowError("\n".join(errors))
         console.print("[green]execution preflight passed[/green]")
         console.print(f"Contract Pack: {repo_path(contract_pack_path(track, root=contract_pack_root))}")
-        console.print(f"Actions inspected: {len(pack.actions)}")
+        inspected = len(pack.actions) if mode == "full-track" else min(1, len(pack.actions))
+        console.print(f"Mode: {mode}")
+        console.print(f"Actions inspected: {inspected}")
     except WorkflowError as error:
         console.print("[red]execution:preflight failed[/red]")
         for line in str(error).splitlines():
@@ -94,6 +116,7 @@ def preflight_command(
 def lock_command(
     track: str = typer.Option(..., "--track"),
     locked_by: str = typer.Option(..., "--locked-by"),
+    mode: str = typer.Option("full-track", "--mode"),
     allow: list[str] = typer.Option([], "--allow"),
     deny: list[str] = typer.Option([], "--deny"),
     contract_pack_root: Path = typer.Option(CONTRACT_PACK_ROOT),
@@ -106,12 +129,15 @@ def lock_command(
         freshness_errors = contract_pack_freshness_errors(pack)
         if freshness_errors:
             raise WorkflowError("\n".join(freshness_errors))
-        errors = preflight_pack(pack, allow=permission_set(allow) if allow else None)
+        if mode not in {"single-action", "full-track"}:
+            raise WorkflowError("--mode must be one of single-action, full-track")
+        errors = preflight_for_mode(pack, mode=mode, allow=permission_set(allow) if allow else None)
         if errors:
             raise WorkflowError("\n".join(errors))
         lock = build_execution_lock(
             track,
             locked_by=locked_by,
+            lock_scope=mode,
             contract_pack_root=contract_pack_root,
             granted_permissions=sorted(permission_set(allow)),
             denied_permissions=sorted(permission_set(deny)),
@@ -119,6 +145,7 @@ def lock_command(
         path = write_execution_lock(lock, root=lock_root)
         console.print("[green]Execution Lock written.[/green]")
         console.print(f"Execution Lock: {repo_path(path)}")
+        console.print(f"Scope: {mode}")
     except WorkflowError as error:
         console.print("[red]execution:lock failed[/red]")
         for line in str(error).splitlines():
@@ -145,6 +172,7 @@ def next_command(
         action = pack.actions[0]
         console.print(f"Next action: {action.action_id}")
         console.print(f"Execution kind: {action.execution_kind}")
+        console.print(f"Executor kind: {action.executor_kind}")
         console.print(f"Writer strategy: {action.writer_strategy}")
         console.print("Validation commands:")
         for command in action.validation_commands:
@@ -169,6 +197,7 @@ def run_command(
     contract_pack_root: Path = typer.Option(CONTRACT_PACK_ROOT),
     lock_root: Path = typer.Option(EXECUTION_LOCK_ROOT),
     run_ledger_root: Path = typer.Option(RUN_LEDGER_ROOT),
+    evidence_root: Path | None = typer.Option(None, "--evidence-root"),
     repo_root: Path = typer.Option(REPO_ROOT, "--repo-root"),
 ) -> None:
     run_id = ""
@@ -184,6 +213,17 @@ def run_command(
         if allow_set & deny_set:
             raise WorkflowError("the same permission cannot be both allowed and denied")
 
+        effective_repo_root = repo_root
+        if repo_root == REPO_ROOT:
+            inferred = infer_repo_root_from_source(production_source)
+            if inferred is not None:
+                effective_repo_root = inferred
+        effective_evidence_root = evidence_root or (
+            effective_repo_root / "docs-site/src/content/docs/reports/execution-evidence"
+            if effective_repo_root != REPO_ROOT
+            else EVIDENCE_ROOT
+        )
+
         actions_run = 0
         run_id = new_run_id(track)
         while actions_run < max_actions:
@@ -196,7 +236,7 @@ def run_command(
             if not pack.actions:
                 console.print(f"[green]{track}: no remaining ActionContracts.[/green]")
                 return
-            errors = preflight_pack(pack, allow=allow_set)
+            errors = preflight_for_mode(pack, mode=mode, allow=allow_set)
             if errors:
                 raise WorkflowError("\n".join(errors))
             lock_errors = execution_lock_errors(
@@ -204,15 +244,22 @@ def run_command(
                 contract_pack_root=contract_pack_root,
                 lock_root=lock_root,
                 requested_permissions=allow_set,
+                run_mode=mode,
             )
             if lock_errors:
                 raise WorkflowError("\n".join(lock_errors))
-            before_action = pack.actions[0].action_id
             action = pack.actions[0]
+            before_action_key = (action.action_id, action.executor_kind, action.writer_strategy)
             current_action = action
             pre_action_digests = dict(pack.source_digests)
             current_pre_action_digests = pre_action_digests
-            result = run_next_action(pack, lock_validated=True, repo_root=repo_root)
+            result = run_next_action(
+                pack,
+                lock_validated=True,
+                repo_root=effective_repo_root,
+                evidence_root=effective_evidence_root,
+                contract_pack_root=contract_pack_root,
+            )
             actions_run += 1
             console.print("[green]Execution Harness ran one ActionContract.[/green]")
             console.print(f"Action: {result.action_id}")
@@ -241,6 +288,7 @@ def run_command(
                 production_source=production_source,
                 roadmap_source=roadmap_source,
                 manifest_root=manifest_source_root,
+                contract_pack_root=contract_pack_root,
             )
             write_contract_pack(next_pack, root=contract_pack_root)
             ledger_path = append_run_action(
@@ -261,6 +309,7 @@ def run_command(
                 build_execution_lock(
                     track,
                     locked_by=existing_lock.locked_by,
+                    lock_scope=existing_lock.lock_scope,
                     contract_pack_root=contract_pack_root,
                     granted_permissions=list(existing_lock.granted_permissions),
                     denied_permissions=list(existing_lock.denied_permissions),
@@ -270,9 +319,11 @@ def run_command(
             if not next_pack.actions:
                 console.print(f"[green]{track}: track actions completed.[/green]")
                 return
-            if next_pack.actions[0].action_id == before_action:
+            next_action = next_pack.actions[0]
+            next_action_key = (next_action.action_id, next_action.executor_kind, next_action.writer_strategy)
+            if next_action_key == before_action_key:
                 raise WorkflowError(
-                    f"{track}: action {before_action} completed but did not advance Contract Pack state"
+                    f"{track}: action {action.action_id} completed but did not advance Contract Pack state"
                 )
         raise WorkflowError(f"{track}: max actions reached before track completion")
     except WorkflowError as error:

@@ -1,0 +1,22 @@
+version: 1
+track_id: PT-TRACK-EXECUTION-HARNESS
+milestone_id: PM-TRACK-HARNESS-004
+action_id: PT-TRACK-EXECUTION-HARNESS:PM-TRACK-HARNESS-004:WR-152
+evidence_kind: reproducibility
+name: reproducibility
+status: passed
+produced_at: '2026-06-01T13:48:35Z'
+paths:
+- docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-004/reproducibility-reproducibility.yaml
+validation_commands:
+- uv:pytest (uv run pytest tools/workflow/test_workflow.py -q) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:production:check (task production:check) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:roadmap:check (task roadmap:check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+subject_paths:
+- tools/workflow/execution/contracts.py
+- tools/workflow/execution/runner.py
+- tools/workflow/test_workflow.py

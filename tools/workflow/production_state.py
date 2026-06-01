@@ -377,12 +377,11 @@ def validate_manifest_backed_tracks(
     roadmap_path: Path = ROADMAP_SOURCE,
     manifest_root: Path = TRACK_EXECUTION_MANIFEST_ROOT,
 ) -> list[str]:
-    # Import locally to avoid a module import cycle: the manifest workflow also
-    # imports production state models for its standalone CLI.
     from execution.compiler import CONTRACT_PACK_ROOT, contract_pack_path, load_contract_pack
     from execution.locks import contract_pack_freshness_errors
     from execution.preflight import preflight_pack
-    from track_execution_manifest import audit_manifest, full_automation_preflight_errors, load_track_execution_manifest
+    from track_sources.audit import audit_manifest, full_automation_preflight_errors
+    from track_sources.manifest import load_track_execution_manifest
 
     roadmap = load_roadmap(roadmap_path)
     errors: list[str] = []

@@ -1,0 +1,22 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-008
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-008:WR-166
+evidence_kind: migration
+name: migration
+status: passed
+produced_at: '2026-06-01T15:28:59Z'
+paths:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/migration-migration.yaml
+validation_commands:
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+- cargo:test (cargo test -p ui_testing diagnostics) -> exit 0
+- cargo:test (cargo test -p ui_testing source_maps) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+subject_paths:
+- Cargo.toml
+- domain/ui/ui_testing/src/lib.rs
+- domain/ui/ui_testing/Cargo.toml

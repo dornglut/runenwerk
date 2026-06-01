@@ -29,6 +29,15 @@ members = [
     "domain/ui/ui_surface",
     "domain/ui/ui_graph_editor",
     "domain/ui/ui_definition",
+    "domain/ui/ui_schema",
+    "domain/ui/ui_program",
+    "domain/ui/ui_artifacts",
+    "domain/ui/ui_compiler",
+    "domain/ui/ui_evaluator",
+    "domain/ui/ui_state",
+    "domain/ui/ui_binding",
+    "domain/ui/ui_hosts",
+    "domain/ui/ui_testing",
     "domain/ui/ui_tree",
     "domain/ui/ui_runtime",
     "domain/ui/ui_widgets",
@@ -87,6 +96,15 @@ ui_render_data = { path = "domain/ui/ui_render_data" }
 ui_surface = { path = "domain/ui/ui_surface" }
 ui_graph_editor = { path = "domain/ui/ui_graph_editor" }
 ui_definition = { path = "domain/ui/ui_definition" }
+ui_schema = { path = "domain/ui/ui_schema" }
+ui_program = { path = "domain/ui/ui_program" }
+ui_artifacts = { path = "domain/ui/ui_artifacts" }
+ui_compiler = { path = "domain/ui/ui_compiler" }
+ui_evaluator = { path = "domain/ui/ui_evaluator" }
+ui_state = { path = "domain/ui/ui_state" }
+ui_binding = { path = "domain/ui/ui_binding" }
+ui_hosts = { path = "domain/ui/ui_hosts" }
+ui_testing = { path = "domain/ui/ui_testing" }
 ui_tree = { path = "domain/ui/ui_tree" }
 ui_runtime = { path = "domain/ui/ui_runtime" }
 ui_widgets = { path = "domain/ui/ui_widgets" }

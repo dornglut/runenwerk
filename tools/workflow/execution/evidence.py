@@ -22,6 +22,7 @@ class EvidenceRecord(StrictModel):
     status: str
     produced_at: str
     paths: list[str] = []
+    subject_paths: list[str] = []
     validation_commands: list[str] = []
 
 
@@ -35,6 +36,16 @@ def evidence_path(
 ) -> Path:
     safe_name = name.lower().replace(" ", "-").replace("/", "-")
     return root / track_id.lower() / milestone_id.lower() / f"{evidence_kind}-{safe_name}.yaml"
+
+
+def default_evidence_output_path(
+    *,
+    track_id: str,
+    milestone_id: str,
+    evidence_kind: str,
+    name: str,
+) -> str:
+    return repo_path(evidence_path(track_id=track_id, milestone_id=milestone_id, evidence_kind=evidence_kind, name=name))
 
 
 def write_evidence_record(record: EvidenceRecord, *, root: Path = EVIDENCE_ROOT) -> Path:
@@ -84,6 +95,7 @@ def passed_record(
     evidence_kind: EvidenceKind,
     name: str,
     paths: list[str],
+    subject_paths: list[str] | None = None,
     validation_commands: list[str],
 ) -> EvidenceRecord:
     return EvidenceRecord(
@@ -95,28 +107,85 @@ def passed_record(
         status="passed",
         produced_at=now_utc_iso(),
         paths=paths,
+        subject_paths=subject_paths or [],
         validation_commands=validation_commands,
     )
 
 
-def evidence_paths_for_requirement(
+def evidence_artifact_refs_for_requirement(
     requirement,
     *,
-    written_paths: list[Path],
     repo_root: Path,
+    validation_results,
 ) -> list[str]:
-    if requirement.paths:
-        resolved: list[str] = []
-        for raw in requirement.paths:
-            path = Path(raw)
-            candidate = path if path.is_absolute() else repo_root / raw
-            if not candidate.exists():
-                raise WorkflowError(f"{requirement.name}: required evidence path is missing: {repo_path(candidate)}")
-            resolved.append(repo_path(candidate))
-        return resolved
+    if not requirement.paths:
+        raise WorkflowError(f"{requirement.name}: {requirement.kind} evidence requires declared evidence output path")
+    for raw in requirement.paths:
+        path = Path(raw)
+        if path.is_absolute():
+            raise WorkflowError(f"{requirement.name}: evidence path must be repository-relative: {raw}")
+        candidate = repo_root / raw
+        if candidate.exists() and candidate.is_dir():
+            raise WorkflowError(f"{requirement.name}: evidence path must be a file, not a directory: {raw}")
     if requirement.kind == "runtime_test":
-        return []
-    raise WorkflowError(f"{requirement.name}: {requirement.kind} evidence requires explicit artifact paths")
+        if not requirement.validation_command_ids:
+            raise WorkflowError(f"{requirement.name}: runtime_test evidence requires validation_command_ids")
+        seen = {result.command_id for result in validation_results}
+        missing = sorted(command_id for command_id in requirement.validation_command_ids if command_id not in seen)
+        if missing:
+            raise WorkflowError(f"{requirement.name}: runtime_test evidence is missing validation command results: {', '.join(missing)}")
+        return list(requirement.subject_paths)
+    if not requirement.subject_paths:
+        raise WorkflowError(f"{requirement.name}: {requirement.kind} evidence requires subject_paths")
+    for raw in requirement.subject_paths:
+        path = Path(raw)
+        if path.is_absolute():
+            raise WorkflowError(f"{requirement.name}: subject path must be repository-relative: {raw}")
+        candidate = repo_root / raw
+        if not candidate.exists():
+            raise WorkflowError(f"{requirement.name}: subject path does not exist: {raw}")
+        if not candidate.is_file():
+            raise WorkflowError(f"{requirement.name}: subject path must be an exact file, not a directory: {raw}")
+    return list(requirement.subject_paths)
+
+
+def write_resolver_evidence_records(
+    action: ActionContract,
+    *,
+    validation_results,
+    workspace_root: Path,
+) -> list[Path]:
+    validation_refs = [str(result) for result in validation_results]
+    if not validation_refs:
+        raise WorkflowError(f"{action.action_id}: evidence cannot be recorded without validation results")
+    paths: list[Path] = []
+    for requirement in action.evidence_required:
+        evidence_refs = evidence_artifact_refs_for_requirement(
+            requirement,
+            repo_root=workspace_root,
+            validation_results=validation_results,
+        )
+        record = passed_record(
+            track_id=action.track_id,
+            milestone_id=action.milestone_id,
+            action_id=action.action_id,
+            evidence_kind=requirement.kind,
+            name=requirement.name,
+            paths=evidence_refs,
+            subject_paths=evidence_refs,
+            validation_commands=validation_refs,
+        )
+        if len(requirement.paths) != 1:
+            raise WorkflowError(f"{requirement.name}: evidence requires exactly one output record path")
+        output = workspace_root / requirement.paths[0]
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            yaml.safe_dump(record.model_dump(mode="json"), sort_keys=False, width=4096),
+            encoding="utf-8",
+            newline="\n",
+        )
+        paths.append(output)
+    return paths
 
 
 def resolve_evidence_records(
@@ -127,17 +196,16 @@ def resolve_evidence_records(
     evidence_root: Path = EVIDENCE_ROOT,
     repo_root: Path = REPO_ROOT,
 ) -> list[Path]:
-    validation_refs = [str(result) for result in validation_results]
-    if not validation_refs:
-        raise WorkflowError(f"{action.action_id}: evidence cannot be recorded without validation results")
-    paths: list[Path] = []
+    """Compatibility wrapper for older direct tests.
+
+    New execution paths write evidence inside the action workspace and import it
+    as declared output. This wrapper keeps non-kernel callers honest by using a
+    temporary workspace rooted at ``repo_root`` and still requiring declared
+    evidence output paths.
+    """
+    records: list[Path] = []
     for requirement in action.evidence_required:
-        evidence_refs = evidence_paths_for_requirement(
-            requirement,
-            written_paths=written_paths,
-            repo_root=repo_root,
-        )
-        paths.append(
+        records.append(
             write_evidence_record(
                 passed_record(
                     track_id=action.track_id,
@@ -145,10 +213,15 @@ def resolve_evidence_records(
                     action_id=action.action_id,
                     evidence_kind=requirement.kind,
                     name=requirement.name,
-                    paths=evidence_refs,
-                    validation_commands=validation_refs,
+                    paths=evidence_artifact_refs_for_requirement(
+                        requirement,
+                        repo_root=repo_root,
+                        validation_results=validation_results,
+                    ),
+                    subject_paths=list(requirement.subject_paths),
+                    validation_commands=[str(result) for result in validation_results],
                 ),
                 root=evidence_root,
             )
         )
-    return paths
+    return records

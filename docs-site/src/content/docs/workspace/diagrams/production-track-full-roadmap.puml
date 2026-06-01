@@ -388,26 +388,51 @@ package "PT-UI-PROGRAM UI Program Platform Proof" {
 
 }
 
+package "PT-TRACK-EXECUTION-HARNESS Generic Track Execution Harness" {
+  component "PM-TRACK-HARNESS-001 Harness Governance And Baseline\nkind=design\nstate=completed\nWR=WR-149" as PM_TRACK_HARNESS_001 <<completed>>
+
+  component "PM-TRACK-HARNESS-002 Kernel Source Model Closure\nkind=implementation\nstate=completed\nWR=WR-150" as PM_TRACK_HARNESS_002 <<completed>>
+
+  component "PM-TRACK-HARNESS-003 Contract Pack And Plan Sidecar Authority\nkind=implementation\nstate=completed\nWR=WR-151" as PM_TRACK_HARNESS_003 <<completed>>
+
+  component "PM-TRACK-HARNESS-004 Typed Validation Command Registry\nkind=implementation\nstate=completed\nWR=WR-152" as PM_TRACK_HARNESS_004 <<completed>>
+
+  component "PM-TRACK-HARNESS-005 Transactional Executor Parity\nkind=implementation\nstate=completed\nWR=WR-153" as PM_TRACK_HARNESS_005 <<completed>>
+
+  component "PM-TRACK-HARNESS-006 Semantic Evidence Resolver Model\nkind=implementation\nstate=completed\nWR=WR-154" as PM_TRACK_HARNESS_006 <<completed>>
+
+  component "PM-TRACK-HARNESS-007 Runtime Closeout And Truth Claim State Machine\nkind=implementation\nstate=completed\nWR=WR-155" as PM_TRACK_HARNESS_007 <<completed>>
+
+  component "PM-TRACK-HARNESS-008 Agent Writer Scoped Diff Protocol\nkind=implementation\nstate=completed\nWR=WR-156" as PM_TRACK_HARNESS_008 <<completed>>
+
+  component "PM-TRACK-HARNESS-009 Agent-Track Orchestrator\nkind=hardening\nstate=completed\nWR=WR-157" as PM_TRACK_HARNESS_009 <<completed>>
+
+  component "PM-TRACK-HARNESS-010 Public Command Cutover And Legacy Runner Retirement\nkind=hardening\nstate=completed\nWR=WR-158" as PM_TRACK_HARNESS_010 <<completed>>
+
+  component "PM-TRACK-HARNESS-011 Harness Runtime Proven Closeout\nkind=release\nstate=completed\nWR=WR-159" as PM_TRACK_HARNESS_011 <<completed>>
+
+}
+
 package "PT-UI-PROGRAM-ARCHITECTURE UI Program Architecture Implementation" {
-  component "PM-UI-PROGRAM-ARCH-001 Governance And Truth Claim Activation\nkind=design\nstate=active\nWR=WR-148" as PM_UI_PROGRAM_ARCH_001 <<active>>
+  component "PM-UI-PROGRAM-ARCH-001 Governance And Truth Claim Activation\nkind=design\nstate=completed\nWR=WR-148" as PM_UI_PROGRAM_ARCH_001 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-002 UiProgram Contract And Graph Model\nkind=design\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_002 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-002 UiProgram Contract And Graph Model\nkind=design\nstate=completed\nWR=WR-160" as PM_UI_PROGRAM_ARCH_002 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-003 Schema Route Event Capability Contracts\nkind=implementation\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_003 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-003 Schema Route Event Capability Contracts\nkind=implementation\nstate=completed\nWR=WR-161" as PM_UI_PROGRAM_ARCH_003 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-004 Compiler And Runtime Artifact Contracts\nkind=implementation\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_004 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-004 Compiler And Runtime Artifact Contracts\nkind=implementation\nstate=completed\nWR=WR-162" as PM_UI_PROGRAM_ARCH_004 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-005 Evaluator And State Execution\nkind=implementation\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_005 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-005 Evaluator And State Execution\nkind=implementation\nstate=completed\nWR=WR-163" as PM_UI_PROGRAM_ARCH_005 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-006 Host Boundary Implementations\nkind=implementation\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_006 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-006 Host Boundary Implementations\nkind=implementation\nstate=completed\nWR=WR-164" as PM_UI_PROGRAM_ARCH_006 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-007 Retained UI Migration Bridge\nkind=implementation\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_007 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-007 Retained UI Migration Bridge\nkind=implementation\nstate=completed\nWR=WR-165" as PM_UI_PROGRAM_ARCH_007 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-008 Runtime Proof Fixtures And Diagnostics\nkind=hardening\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_008 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-008 Runtime Proof Fixtures And Diagnostics\nkind=hardening\nstate=completed\nWR=WR-166" as PM_UI_PROGRAM_ARCH_008 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-009 Architecture Runtime Proven Closeout\nkind=release\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_009 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-009 Architecture Runtime Proven Closeout\nkind=release\nstate=completed\nWR=WR-167" as PM_UI_PROGRAM_ARCH_009 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-010 MaterialProgram Planning Gate Decision\nkind=release\nstate=deferred\nWR=N/A" as PM_UI_PROGRAM_ARCH_010 <<deferred>>
+  component "PM-UI-PROGRAM-ARCH-010 MaterialProgram Planning Gate Decision\nkind=release\nstate=completed\nWR=WR-168" as PM_UI_PROGRAM_ARCH_010 <<completed>>
 
 }
 
@@ -635,6 +660,16 @@ PM_UI_PROGRAM_009 -down-> PM_UI_PROGRAM_010 : production prerequisite
 PM_UI_PROGRAM_010 -down-> PM_UI_PROGRAM_011 : production prerequisite
 PM_UI_PROGRAM_011 -down-> PM_UI_PROGRAM_012 : production prerequisite
 PM_UI_PROGRAM_012 -down-> PM_UI_PROGRAM_013 : production prerequisite
+PM_TRACK_HARNESS_001 -down-> PM_TRACK_HARNESS_002 : production prerequisite
+PM_TRACK_HARNESS_002 -down-> PM_TRACK_HARNESS_003 : production prerequisite
+PM_TRACK_HARNESS_003 -down-> PM_TRACK_HARNESS_004 : production prerequisite
+PM_TRACK_HARNESS_004 -down-> PM_TRACK_HARNESS_005 : production prerequisite
+PM_TRACK_HARNESS_005 -down-> PM_TRACK_HARNESS_006 : production prerequisite
+PM_TRACK_HARNESS_006 -down-> PM_TRACK_HARNESS_007 : production prerequisite
+PM_TRACK_HARNESS_007 -down-> PM_TRACK_HARNESS_008 : production prerequisite
+PM_TRACK_HARNESS_008 -down-> PM_TRACK_HARNESS_009 : production prerequisite
+PM_TRACK_HARNESS_009 -down-> PM_TRACK_HARNESS_010 : production prerequisite
+PM_TRACK_HARNESS_010 -down-> PM_TRACK_HARNESS_011 : production prerequisite
 PM_UI_PROGRAM_ARCH_001 -down-> PM_UI_PROGRAM_ARCH_002 : production prerequisite
 PM_UI_PROGRAM_ARCH_002 -down-> PM_UI_PROGRAM_ARCH_003 : production prerequisite
 PM_UI_PROGRAM_ARCH_003 -down-> PM_UI_PROGRAM_ARCH_004 : production prerequisite

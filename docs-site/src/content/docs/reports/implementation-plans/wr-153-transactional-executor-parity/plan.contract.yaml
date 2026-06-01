@@ -1,0 +1,62 @@
+version: 1
+wr_id: WR-153
+milestone_id: PM-TRACK-HARNESS-005
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: workflow_implementation
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- tools/workflow/execution/runner.py
+- tools/workflow/execution/workspace.py
+- tools/workflow/execution/writers.py
+- tools/workflow/test_workflow.py
+new_outputs:
+- tools/workflow/execution/planning.py
+- docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-005/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-005/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-005/reproducibility-reproducibility.yaml
+forbidden_outputs: []
+forbidden_patterns: []
+validation_commands:
+- uv run pytest tools/workflow/test_workflow.py -q
+- task production:validate
+- task production:check
+- task roadmap:validate
+- task roadmap:check
+- task docs:validate
+- task planning:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-005/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - uv:pytest
+- kind: artifact
+  name: artifact
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-005/artifact-artifact.yaml
+  subject_paths: &id001
+  - tools/workflow/execution/runner.py
+  - tools/workflow/execution/workspace.py
+  - tools/workflow/execution/writers.py
+  - tools/workflow/test_workflow.py
+  - tools/workflow/execution/planning.py
+- kind: reproducibility
+  name: reproducibility
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-005/reproducibility-reproducibility.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop if WR or plan authority is missing
+- stop if validation fails
+- stop if the implementation would touch forbidden scopes
+- stop if resolver-backed evidence is missing

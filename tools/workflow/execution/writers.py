@@ -34,6 +34,7 @@ class CodexExecBackend:
                     self.codex_bin,
                     "exec",
                     "--ephemeral",
+                    "--skip-git-repo-check",
                     "--sandbox",
                     "workspace-write",
                     "-C",
@@ -51,17 +52,42 @@ class CodexExecBackend:
         return AgentResult(returncode=completed.returncode, stdout=completed.stdout, stderr=completed.stderr)
 
 
-def action_prompt(action: ActionContract) -> str:
+def action_context(workspace: Path, action: ActionContract) -> str:
+    snippets: list[str] = []
+    plan_root = workspace / "docs-site/src/content/docs/reports/implementation-plans"
+    if plan_root.exists():
+        for path in sorted(plan_root.glob(f"{action.wr_id.lower()}-*/*")):
+            if path.name not in {"plan.md", "plan.contract.yaml"}:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            relative = path.relative_to(workspace).as_posix()
+            snippets.append(f"--- {relative} ---\n{text[:8000]}")
+    return "\n\n".join(snippets)
+
+
+def action_prompt(action: ActionContract, *, workspace: Path) -> str:
     allowed = "\n".join(f"- {path}" for path in [*action.allowed_outputs, *action.new_outputs])
     forbidden = "\n".join(f"- {path}" for path in action.forbidden_outputs)
     validations = "\n".join(f"- {' '.join(command.argv)}" for command in action.validation_commands)
+    evidence = "\n".join(
+        f"- {requirement.kind}: {requirement.name} ({', '.join(requirement.paths) or 'no declared path'})"
+        for requirement in action.evidence_required
+    )
+    stop_conditions = "\n".join(f"- {condition}" for condition in action.stop_conditions)
     return "\n".join(
         [
             "You are running inside an isolated Track Execution Harness workspace.",
+            "Read AGENTS.md and nearby source before editing.",
             "Modify only the allowed outputs. Do not run destructive git commands.",
+            "If the requested implementation cannot be completed within the allowed outputs, stop with a clear error instead of touching other files.",
             "",
             f"Action: {action.action_id}",
             f"Execution kind: {action.execution_kind}",
+            f"Executor kind: {action.executor_kind}",
+            f"Authority level: {action.authority_level}",
             "",
             "Allowed outputs:",
             allowed or "- none",
@@ -69,8 +95,20 @@ def action_prompt(action: ActionContract) -> str:
             "Forbidden outputs:",
             forbidden or "- none",
             "",
+            "Forbidden patterns:",
+            "\n".join(f"- {pattern}" for pattern in action.forbidden_patterns) or "- none",
+            "",
+            "Required evidence records:",
+            evidence or "- none",
+            "",
             "Validation commands after import:",
             validations or "- none",
+            "",
+            "Stop conditions:",
+            stop_conditions or "- none",
+            "",
+            "Active WR implementation-plan authority:",
+            action_context(workspace, action) or "- no implementation-plan context found",
         ]
     )
 
@@ -89,7 +127,9 @@ def run_template_writer(action: ActionContract, *, workspace_root: Path) -> list
         ensure_path_allowed(action, relative)
         target = workspace_root / relative
         if not target.parent.exists():
-            raise WorkflowError(f"{action.action_id}: output parent directory does not exist: {repo_path(target.parent)}")
+            if relative not in action.new_outputs:
+                raise WorkflowError(f"{action.action_id}: output parent directory does not exist: {repo_path(target.parent)}")
+            target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="\n")
         written.append(target)
     return written
@@ -121,9 +161,11 @@ def run_agent_writer(
 ) -> list[Path]:
     if not lock_validated:
         raise WorkflowError(f"{action.action_id}: agent_writer requires a current execution lock")
-    result = backend.run(workspace=workspace_root, prompt=action_prompt(action))
+    result = backend.run(workspace=workspace_root, prompt=action_prompt(action, workspace=workspace_root))
     if result.returncode != 0:
-        raise WorkflowError(f"{action.action_id}: agent backend failed with exit {result.returncode}")
+        details = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
+        suffix = f"\n{details[:4000]}" if details else ""
+        raise WorkflowError(f"{action.action_id}: agent backend failed with exit {result.returncode}{suffix}")
     return []
 
 
@@ -144,6 +186,8 @@ def run_writer_in_workspace(
         if backend is None:
             backend = CodexExecBackend()
         return run_agent_writer(action, backend=backend, lock_validated=lock_validated, workspace_root=workspace_root)
+    if action.writer_strategy == "verification_writer":
+        return []
     if action.writer_strategy == "proof_aggregation_writer":
         return []
     raise WorkflowError(f"{action.action_id}: unsupported writer strategy {action.writer_strategy}")

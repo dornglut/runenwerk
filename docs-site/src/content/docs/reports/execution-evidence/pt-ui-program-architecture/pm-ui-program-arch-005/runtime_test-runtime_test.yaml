@@ -1,0 +1,18 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-005
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-005:WR-163
+evidence_kind: runtime_test
+name: runtime_test
+status: passed
+produced_at: '2026-06-01T15:16:40Z'
+paths:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-005/runtime_test-runtime_test.yaml
+validation_commands:
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_state state_contract) -> exit 0
+- cargo:test (cargo test -p ui_binding binding_contract) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0

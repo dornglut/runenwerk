@@ -3695,6 +3695,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
+name = "ui_artifacts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_program",
+]
+
+[[package]]
+name = "ui_binding"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_schema",
+]
+
+[[package]]
+name = "ui_compiler"
+version = "0.1.0"
+dependencies = [
+ "ui_artifacts",
+ "ui_program",
+]
+
+[[package]]
 name = "ui_definition"
 version = "0.1.0"
 dependencies = [
@@ -3710,10 +3734,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_evaluator"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_artifacts",
+ "ui_program",
+ "ui_state",
+]
+
+[[package]]
 name = "ui_graph_editor"
 version = "0.1.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "ui_hosts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_program",
+ "ui_schema",
 ]
 
 [[package]]
@@ -3733,6 +3776,14 @@ dependencies = [
 [[package]]
 name = "ui_math"
 version = "0.1.0"
+
+[[package]]
+name = "ui_program"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_schema",
+]
 
 [[package]]
 name = "ui_render_data"
@@ -3757,11 +3808,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_schema"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ui_state"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_schema",
+]
+
+[[package]]
 name = "ui_surface"
 version = "0.1.0"
 dependencies = [
  "diagnostics",
  "ratification",
+]
+
+[[package]]
+name = "ui_testing"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_program",
 ]
 
 [[package]]

@@ -1,0 +1,24 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-009
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-009:WR-167
+evidence_kind: artifact
+name: artifact
+status: passed
+produced_at: '2026-06-01T15:33:37Z'
+paths:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/artifact-artifact.yaml
+validation_commands:
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+- task:production:render (task production:render) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:production:check (task production:check) -> exit 0
+- task:roadmap:render (task roadmap:render) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:roadmap:check (task roadmap:check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0

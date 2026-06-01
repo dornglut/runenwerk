@@ -20,6 +20,7 @@ SNAPSHOT_EXCLUDES = {
     "node_modules",
     ".cache",
     ".pytest_cache",
+    "__pycache__",
 }
 
 
@@ -35,6 +36,10 @@ def file_digests(root: Path) -> dict[str, str]:
     result: dict[str, str] = {}
     for path in root.rglob("*"):
         if not path.is_file():
+            continue
+        if any(part in SNAPSHOT_EXCLUDES for part in path.relative_to(root).parts):
+            continue
+        if path.suffix == ".pyc":
             continue
         relative = normalize_repo_path(str(path.relative_to(root)))
         result[relative] = sha256(path.read_bytes()).hexdigest()
@@ -129,7 +134,9 @@ def import_scoped_changes(
             raise WorkflowError(f"{action.action_id}: target digest drifted before import: {relative}")
         source = workspace.workspace / relative
         if not target.parent.exists():
-            raise WorkflowError(f"{action.action_id}: output parent directory does not exist: {repo_path(target.parent)}")
+            if relative not in {normalize_repo_path(path) for path in action.new_outputs}:
+                raise WorkflowError(f"{action.action_id}: output parent directory does not exist: {repo_path(target.parent)}")
+            target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(source.read_bytes())
         imported.append(target)
     return imported

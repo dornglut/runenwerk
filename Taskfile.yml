@@ -61,37 +61,37 @@ tasks:
   production:plan-track:
     desc: Create or audit a machine-readable Track Execution Manifest.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py plan-track {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py plan-track {{.CLI_ARGS}}
 
   production:expand-track:
     desc: Print Track Expansion candidates without mutating WR rows.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py expand-track {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py expand-track {{.CLI_ARGS}}
 
   production:complete-track-contracts:
-    desc: Complete missing machine-readable contracts for a manifest-backed production track.
+    desc: Compile the Execution Contract Pack for a manifest-backed production track.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py complete-track-contracts {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py complete-track-contracts {{.CLI_ARGS}}
 
   production:lock-track:
     desc: Create a digest-locked AI execution lock for a manifest-backed production track.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py lock-track {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py lock-track {{.CLI_ARGS}}
 
   production:run-track:
     desc: Run one permission-gated manifest-backed production-track action.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py run-track {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py run-track {{.CLI_ARGS}}
 
   production:next:
     desc: Print one manifest-backed next legal production-track action.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py next {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py next {{.CLI_ARGS}}
 
   production:audit-track:
     desc: Audit a Track Execution Manifest against production and roadmap state.
     cmds:
-      - uv run python tools/workflow/track_execution_manifest.py audit-track {{.CLI_ARGS}}
+      - uv run python tools/workflow/production_track_cli.py audit-track {{.CLI_ARGS}}
 
   execution:compile:
     desc: Compile a manifest-backed production track into an Execution Contract Pack.

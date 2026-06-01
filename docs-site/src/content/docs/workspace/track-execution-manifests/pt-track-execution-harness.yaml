@@ -1,0 +1,2582 @@
+version: 1
+track_id: PT-TRACK-EXECUTION-HARNESS
+authority_level: planning_and_sequencing_only
+accepted_design_dependencies:
+- path: docs-site/src/content/docs/workspace/track-execution-manifest.md
+  required_status: active
+  reason: Harness completion must follow the execution-manifest governance model.
+- path: docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+  required_status: active
+  reason: Public command behavior must stay aligned with the repository planning workflow.
+- path: docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+  required_status: active
+  reason: Truth claims, closeouts, WR authority, and generated registers must not drift.
+global_forbidden_scope:
+- no UI product implementation
+- no MaterialProgram implementation
+- no crate creation
+- no placeholder future folders
+- no shared foundation/meta extraction
+global_validation_commands:
+- task production:render
+- task production:validate
+- task production:check
+- task roadmap:render
+- task roadmap:validate
+- task roadmap:check
+- task docs:validate
+- task planning:validate
+- uv run pytest tools/workflow/test_workflow.py -q
+global_stop_conditions:
+- stop if production, roadmap, manifest, Contract Pack, lock, plan sidecar, or evidence state conflict
+- stop if a milestone lacks an owning WR or future WR candidate
+- stop if validation fails
+- stop before product-domain code, MaterialProgram, crate creation, placeholder folders, or foundation/meta extraction
+next_legal_action: PM-TRACK-HARNESS-001 completed as bounded_contract; create or link the PM-TRACK-HARNESS-002 WR and accepted implementation plan before workflow implementation begins.
+ai_executable: false
+full_automation_target: false
+truth_claims:
+- claim_id: track-execution-harness-authority
+  claim_kind: architecture_contract
+  claim_level: architecture_runtime_proven
+  claim_status: satisfied
+  claim_statement: The clean Track Execution Harness is architecture-runtime-proven for locked manifest-backed track execution through source models, Contract Packs, locks, transactional executors, resolver-backed evidence, closeouts, agent-track, public command cutover, and legacy runner retirement.
+  required_docs:
+  - evidence_kind: doc_frontmatter_status
+    path: docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_status: active
+    reason: Harness behavior must be documented as current workflow truth.
+  required_code_contracts:
+  - evidence_kind: module_path_exists
+    path: tools/workflow/track_sources
+    reason: Source model authority must exist outside legacy execution.
+  - evidence_kind: module_path_exists
+    path: tools/workflow/execution
+    reason: Execution kernel authority must exist outside legacy execution.
+  - evidence_kind: module_path_exists
+    path: tools/workflow/production_track_cli.py
+    reason: Public production-track commands must route through the clean adapter.
+  required_validations:
+  - evidence_kind: validation_command
+    command: uv run pytest tools/workflow/test_workflow.py -q
+    reason: Workflow tests must pass before harness truth can be satisfied.
+  - evidence_kind: validation_command
+    command: task planning:validate
+    reason: Roadmap, production, generated docs, and docs links must validate before closeout.
+  required_closeout_evidence:
+  - evidence_kind: closeout_evidence_category
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
+    category: handoff
+    reason: Harness authority truth requires final architecture-runtime-proven handoff closeout evidence.
+  known_gaps: []
+  supersedes: []
+  blocks_downstream: []
+milestones:
+- milestone_id: PM-TRACK-HARNESS-001
+  title: Harness Governance And Baseline
+  stage: Stage 0
+  authority_level: docs_governance_only
+  milestone_type: design_only
+  owning_wr: WR-149
+  predecessor_dependencies: []
+  write_scope:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+  - docs-site/src/content/docs/reports/track-execution-manifests/pt-track-execution-harness/manifest.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  forbidden_scope:
+  - no workflow implementation from PM-001 alone
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  required_contracts:
+  - PM-001 governance WR may only establish harness production metadata, manifest authority, generated planning docs, and closeout evidence.
+  validation_commands:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - completed PM-TRACK-HARNESS-001 governance closeout
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md
+  stop_conditions:
+  - stop after PM-001 closeout
+  - stop if PM-001 would authorize implementation, product code, crates, MaterialProgram, or foundation/meta extraction
+  - stop if validation fails
+  - completed by agent_closeout as bounded_contract
+  next_legal_action: PM-TRACK-HARNESS-001 completed as bounded_contract; continue only to PM-TRACK-HARNESS-002 through its own WR, plan, validation, and closeout gates.
+  may_create_code: false
+  may_create_crates: false
+  may_modify_production_behavior: false
+  execution_kind: design_contract
+  permission_classes_required:
+  - agent_design
+  - agent_closeout
+  required_evidence_categories:
+  - handoff
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  agent_closeout_contract:
+    evidence_files:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - bounded_contract
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md
+    production_roadmap_state_updates:
+    - set PM-TRACK-HARNESS-001 completed only after governance closeout evidence exists
+    - archive WR-149 only with completed closeout evidence
+    known_gap_reporting:
+    - harness implementation remains blocked until PM-002
+    next_action_update_rules:
+    - next legal action becomes PM-TRACK-HARNESS-002 planning
+    template_key: harness_governance_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-002
+  title: Kernel Source Model Closure
+  stage: Stage 1
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-150
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-001
+  write_scope:
+  - tools/workflow/track_sources
+  - tools/workflow/production_goal.py
+  - tools/workflow/production_state.py
+  - tools/workflow/test_workflow.py
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-002 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - active WR plan exact workflow scopes only
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: no_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes: []
+    required_outputs: []
+    forbidden_files: []
+    forbidden_scopes: []
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported executor or evidence resolver gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-003
+  title: Contract Pack And Plan Sidecar Authority
+  stage: Stage 2
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-151
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-002
+  write_scope:
+  - tools/workflow/execution/compiler.py
+  - tools/workflow/execution/contracts.py
+  - 'new: tools/workflow/track_sources/plan_metadata.py'
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-003 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/execution/compiler.py
+    - tools/workflow/execution/contracts.py
+    - 'new: tools/workflow/track_sources/plan_metadata.py'
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/execution/compiler.py
+    - tools/workflow/execution/contracts.py
+    - 'new: tools/workflow/track_sources/plan_metadata.py'
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_outputs:
+    - PM-TRACK-HARNESS-003 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported authority or sidecar gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM003-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-004
+  title: Typed Validation Command Registry
+  stage: Stage 3
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-152
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-003
+  write_scope:
+  - tools/workflow/execution/contracts.py
+  - tools/workflow/execution/runner.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-004 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/execution/contracts.py
+    - tools/workflow/execution/runner.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/execution/contracts.py
+    - tools/workflow/execution/runner.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_outputs:
+    - PM-TRACK-HARNESS-004 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported validation-command gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM004-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-005
+  title: Transactional Executor Parity
+  stage: Stage 4
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-153
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-004
+  write_scope:
+  - tools/workflow/execution/runner.py
+  - tools/workflow/execution/workspace.py
+  - 'new: tools/workflow/execution/planning.py'
+  - tools/workflow/execution/writers.py
+  - tools/workflow/test_workflow.py
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-005 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/execution/runner.py
+    - tools/workflow/execution/workspace.py
+    - 'new: tools/workflow/execution/planning.py'
+    - tools/workflow/execution/writers.py
+    - tools/workflow/test_workflow.py
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/execution/runner.py
+    - tools/workflow/execution/workspace.py
+    - 'new: tools/workflow/execution/planning.py'
+    - tools/workflow/execution/writers.py
+    - tools/workflow/test_workflow.py
+    required_outputs:
+    - PM-TRACK-HARNESS-005 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported transactional executor gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM005-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-006
+  title: Semantic Evidence Resolver Model
+  stage: Stage 5
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-154
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-005
+  write_scope:
+  - tools/workflow/execution/evidence.py
+  - tools/workflow/execution/closeout_claims.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-006 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/execution/evidence.py
+    - tools/workflow/execution/closeout_claims.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/execution/evidence.py
+    - tools/workflow/execution/closeout_claims.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_outputs:
+    - PM-TRACK-HARNESS-006 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported evidence resolver gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM006-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-007
+  title: Runtime Closeout And Truth Claim State Machine
+  stage: Stage 6
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-155
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-006
+  write_scope:
+  - tools/workflow/execution/closeout_claims.py
+  - tools/workflow/execution/runner.py
+  - tools/workflow/production_state.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-007 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/execution/closeout_claims.py
+    - tools/workflow/execution/runner.py
+    - tools/workflow/production_state.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/execution/closeout_claims.py
+    - tools/workflow/execution/runner.py
+    - tools/workflow/production_state.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_outputs:
+    - PM-TRACK-HARNESS-007 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported closeout or truth-claim state gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM007-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-008
+  title: Agent Writer Scoped Diff Protocol
+  stage: Stage 7
+  authority_level: workflow_implementation
+  milestone_type: implementation
+  owning_wr: WR-156
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-007
+  write_scope:
+  - tools/workflow/execution/writers.py
+  - tools/workflow/execution/workspace.py
+  - tools/workflow/execution/ledger.py
+  - tools/workflow/test_workflow.py
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-008 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/execution/writers.py
+    - tools/workflow/execution/workspace.py
+    - tools/workflow/execution/ledger.py
+    - tools/workflow/test_workflow.py
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/execution/writers.py
+    - tools/workflow/execution/workspace.py
+    - tools/workflow/execution/ledger.py
+    - tools/workflow/test_workflow.py
+    required_outputs:
+    - PM-TRACK-HARNESS-008 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported agent writer scoped-diff gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM008-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-009
+  title: Agent-Track Orchestrator
+  stage: Stage 8
+  authority_level: workflow_hardening
+  milestone_type: hardening
+  owning_wr: WR-157
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-008
+  write_scope:
+  - 'new: tools/workflow/production_track_cli.py'
+  - tools/workflow/execution/cli.py
+  - tools/workflow/production_goal.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-009 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - 'new: tools/workflow/production_track_cli.py'
+    - tools/workflow/execution/cli.py
+    - tools/workflow/production_goal.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - 'new: tools/workflow/production_track_cli.py'
+    - tools/workflow/execution/cli.py
+    - tools/workflow/production_goal.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_outputs:
+    - PM-TRACK-HARNESS-009 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any unsupported agent-track orchestration gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to the next harness milestone after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM009-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-010
+  title: Public Command Cutover And Legacy Runner Retirement
+  stage: Stage 9
+  authority_level: workflow_hardening
+  milestone_type: hardening
+  owning_wr: WR-158
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-009
+  write_scope:
+  - Taskfile.yml
+  - 'new: tools/workflow/production_track_cli.py'
+  - tools/workflow/production_goal.py
+  - tools/workflow/production_state.py
+  - tools/workflow/track_execution_manifest.py
+  - tools/workflow/test_workflow.py
+  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+  - docs-site/src/content/docs/workspace/track-execution-manifest.md
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - active WR
+  - accepted implementation plan
+  - structured plan.contract.yaml
+  - typed validation commands
+  - resolver-backed evidence contract
+  - closeout contract
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - resolver-backed workflow test evidence
+  - scoped diff or import evidence where mutation occurs
+  - closeout evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md
+  stop_conditions:
+  - stop if WR or plan authority is missing
+  - stop if validation fails
+  - stop if the implementation would touch forbidden scopes
+  - stop if resolver-backed evidence is missing
+  next_legal_action: PM-TRACK-HARNESS-010 closed as runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - agent_design
+  - product_code
+  - product_implementation
+  - agent_closeout
+  - auto_safe
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - reproducibility
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - preserve workflow-only scope
+    - keep product code and crate creation forbidden
+    - keep foundation/meta extraction forbidden
+    acceptance_checklist:
+    - plan authorizes governance only
+    - plan does not authorize implementation
+    - plan has validation and closeout evidence
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-149-harness-governance-and-baseline/plan.md
+    validation_commands:
+    - task production:validate
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if implementation scope is introduced
+    template_key: harness_governance_plan
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM001
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - Taskfile.yml
+    - 'new: tools/workflow/production_track_cli.py'
+    - tools/workflow/production_goal.py
+    - tools/workflow/production_state.py
+    - tools/workflow/track_execution_manifest.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_function_method_scope:
+    - active WR plan exact functions or modules
+    forbidden_implementation_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    tests_to_add_change:
+    - tools/workflow/test_workflow.py
+    runtime_evidence_required:
+    - workflow tests pass
+    - resolver-backed execution evidence exists
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - reject scoped import on validation, scope, or digest failure
+    - preserve legacy read-only compatibility until retirement milestone closes
+    closeout_evidence:
+    - files changed
+    - validation results
+    - evidence records
+    - known gaps
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    template_key: harness_product_code_contract
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PRODUCT-CODE
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones: []
+    required_evidence_categories: []
+    allowed_files: []
+    allowed_write_scopes:
+    - Taskfile.yml
+    - 'new: tools/workflow/production_track_cli.py'
+    - tools/workflow/production_goal.py
+    - tools/workflow/production_state.py
+    - tools/workflow/track_execution_manifest.py
+    - tools/workflow/test_workflow.py
+    - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    - docs-site/src/content/docs/workspace/track-execution-manifest.md
+    required_outputs:
+    - PM-TRACK-HARNESS-010 resolver-backed verification evidence and runtime closeout
+    forbidden_files: []
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    forbidden_patterns: []
+    new_file_policy: existing_files_only
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    stop_conditions:
+    - stop if WR or plan authority is missing
+    - stop if validation fails
+    - stop if the implementation would touch forbidden scopes
+    - stop if resolver-backed evidence is missing
+    templates: []
+    patches: []
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - workflow tests pass
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:validate
+    - task production:check
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md
+    files_changed_report:
+    - active WR scoped files
+    known_gap_reporting:
+    - report any remaining legacy execution authority gap
+    production_roadmap_state_updates:
+    - set owning milestone completed only after runtime evidence exists
+    - archive owning WR only after closeout evidence exists
+    next_action_update_rules:
+    - advance to final harness closeout after closeout
+    evidence_manifest_path: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness
+    template_key: harness_runtime_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-PM010-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-TRACK-HARNESS-011
+  title: Harness Runtime Proven Closeout
+  stage: Stage 10
+  authority_level: workflow_closeout
+  milestone_type: closeout
+  predecessor_dependencies:
+  - PM-TRACK-HARNESS-010
+  write_scope:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - 'new: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md'
+  - 'new: docs-site/src/content/docs/reports/execution-evidence/pt-track-execution-harness/pm-track-harness-011/handoff-handoff.yaml'
+  forbidden_scope:
+  - no UI product implementation
+  - no MaterialProgram implementation
+  - no crate creation
+  - no foundation/meta extraction
+  - no placeholder future folders
+  required_contracts:
+  - completed PM-TRACK-HARNESS-002 through PM-TRACK-HARNESS-010 closeouts
+  - resolver-backed evidence for clean-kernel authority, agent-track, public cutover, and legacy retirement
+  validation_commands:
+  - uv run pytest tools/workflow/test_workflow.py -q
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - completed harness implementation closeouts
+  - resolver-backed harness truth evidence
+  - no legacy execution authority evidence
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
+  stop_conditions:
+  - stop if any harness truth claim remains blocked
+  - stop if validation fails
+  - stop if PT-UI-PROGRAM-ARCHITECTURE would start before harness closeout
+  next_legal_action: PM-TRACK-HARNESS-011 closed as architecture_runtime_proven; recompile the Contract Pack for the next milestone.
+  may_create_code: false
+  may_create_crates: false
+  may_modify_production_behavior: false
+  execution_kind: handoff_closeout
+  permission_classes_required:
+  - agent_closeout
+  - auto_safe
+  - handoff
+  required_evidence_categories:
+  - handoff
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task roadmap:render
+    - task roadmap:validate
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after creating or linking one WR
+    - stop if generated metadata conflicts with manifest or production state
+    template_key: harness_auto_safe_expansion
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-AUTO-SAFE
+    generated_from_template_version: v1
+  closeout_strategy: handoff_closeout
+  agent_closeout_contract:
+    evidence_files:
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md
+    - docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - architecture_runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
+    production_roadmap_state_updates:
+    - satisfy harness truth claim only after all evidence exists
+    - keep PT-UI-PROGRAM-ARCHITECTURE blocked until harness closeout is complete
+    known_gap_reporting:
+    - report any remaining unsupported executor, evidence, lock, or command gap
+    next_action_update_rules:
+    - next legal action becomes PT-UI-PROGRAM-ARCHITECTURE PM-001 or PM-002 depending on current state
+    template_key: harness_final_closeout
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-FINAL-CLOSEOUT
+    generated_from_template_version: v1
+  handoff_contract:
+    handoff_target: PT-UI-PROGRAM-ARCHITECTURE
+    proof_path_rules:
+    - harness closeout must prove clean-kernel execution before UI architecture full-track execution
+    forbidden_scopes:
+    - no UI product implementation
+    - no MaterialProgram implementation
+    - no crate creation
+    - no foundation/meta extraction
+    - no placeholder future folders
+    validation_commands:
+    - uv run pytest tools/workflow/test_workflow.py -q
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop if any harness milestone remains incomplete
+    - stop if UI architecture would start without harness truth
+    template_key: harness_to_ui_architecture_handoff
+    generated_contract_marker: PT-TRACK-EXECUTION-HARNESS-HANDOFF
+    generated_from_template_version: v1
+  owning_wr: WR-159

@@ -8,8 +8,11 @@ from roadmap_state import REPO_ROOT, WorkflowError, repo_path
 
 from execution.closeout_claims import closeout_claim_errors
 from execution.compiler import first_action
+from execution.closeouts import run_runtime_closeout
 from execution.contracts import ActionContract, ContractPack, ValidationCommand
-from execution.evidence import EVIDENCE_ROOT, resolve_evidence_records
+from execution.evidence import EVIDENCE_ROOT, write_resolver_evidence_records
+from execution.planning import refresh_existing_contract_packs, run_planning_expansion
+from execution.compiler import CONTRACT_PACK_ROOT
 from execution.workspace import create_full_snapshot, dispose_workspace, import_scoped_changes
 from execution.writers import AgentBackend, run_writer_in_workspace
 
@@ -65,6 +68,31 @@ def run_validation_commands(commands: list[ValidationCommand], *, repo_root: Pat
     return tuple(results)
 
 
+def refresh_derived_contract_packs_for_action(
+    action: ActionContract,
+    *,
+    workspace_root: Path,
+    repo_root: Path,
+    contract_pack_root: Path,
+) -> None:
+    if not action.manifest_source_path:
+        return
+    production_source = workspace_root / action.production_source_path
+    roadmap_source = workspace_root / action.roadmap_source_path
+    manifest_path = workspace_root / action.manifest_source_path
+    if not production_source.exists() or not roadmap_source.exists() or not manifest_path.exists():
+        return
+    refresh_existing_contract_packs(
+        action,
+        workspace_root=workspace_root,
+        repo_root=repo_root,
+        contract_pack_root=contract_pack_root,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
+        manifest_root=manifest_path.parent,
+    )
+
+
 def run_action(
     action: ActionContract,
     *,
@@ -73,24 +101,120 @@ def run_action(
     repo_root: Path = REPO_ROOT,
     run_validations: bool = True,
     evidence_root: Path = EVIDENCE_ROOT,
+    contract_pack_root: Path = CONTRACT_PACK_ROOT,
 ) -> HarnessRunResult:
-    if action.writer_strategy == "proof_aggregation_writer":
-        claim_errors = closeout_claim_errors(action, evidence_root=evidence_root)
-        if claim_errors:
-            raise WorkflowError("\n".join(claim_errors))
-        validation_results = run_validation_commands(action.validation_commands, repo_root=repo_root) if run_validations else ()
-        evidence_paths = tuple(
-            resolve_evidence_records(
+    if action.executor_kind == "planning_expansion":
+        workspace = create_full_snapshot(action, repo_root=repo_root)
+        try:
+            run_planning_expansion(
                 action,
-                validation_results=validation_results,
-                written_paths=[],
-                evidence_root=evidence_root,
+                workspace_root=workspace.workspace,
                 repo_root=repo_root,
+                contract_pack_root=contract_pack_root,
             )
-        )
+            validation_results = run_validation_commands(action.validation_commands, repo_root=workspace.workspace) if run_validations else ()
+            workspace_evidence_paths = (
+                write_resolver_evidence_records(action, validation_results=validation_results, workspace_root=workspace.workspace)
+                if run_validations and action.evidence_required
+                else []
+            )
+            written_paths = import_scoped_changes(action, workspace, repo_root=repo_root)
+        finally:
+            dispose_workspace(workspace)
+        evidence_paths = [repo_root / path.relative_to(workspace.workspace) for path in workspace_evidence_paths]
         return HarnessRunResult(
             action_id=action.action_id,
-            written_paths=(),
+            written_paths=tuple(written_paths),
+            validation_results=validation_results,
+            evidence_paths=tuple(evidence_paths),
+            next_action=f"{action.action_id} completed; recompute the next legal ActionContract before continuing.",
+        )
+
+    if action.executor_kind == "runtime_closeout":
+        workspace = create_full_snapshot(action, repo_root=repo_root)
+        try:
+            workspace_evidence_root = workspace.workspace / "docs-site/src/content/docs/reports/execution-evidence"
+            claim_errors = closeout_claim_errors(action, evidence_root=workspace_evidence_root)
+            if claim_errors:
+                raise WorkflowError("\n".join(claim_errors))
+            run_runtime_closeout(action, workspace_root=workspace.workspace)
+            refresh_derived_contract_packs_for_action(
+                action,
+                workspace_root=workspace.workspace,
+                repo_root=repo_root,
+                contract_pack_root=contract_pack_root,
+            )
+            validation_results = run_validation_commands(action.validation_commands, repo_root=workspace.workspace) if run_validations else ()
+            written_paths = import_scoped_changes(action, workspace, repo_root=repo_root)
+        finally:
+            dispose_workspace(workspace)
+        return HarnessRunResult(
+            action_id=action.action_id,
+            written_paths=tuple(written_paths),
+            validation_results=validation_results,
+            evidence_paths=(),
+            next_action=f"{action.action_id} closed; recompute the next legal ActionContract before continuing.",
+        )
+
+    if action.executor_kind == "handoff_closeout":
+        workspace = create_full_snapshot(action, repo_root=repo_root)
+        try:
+            run_writer_in_workspace(action, workspace.workspace, backend=backend, lock_validated=lock_validated)
+            validation_results = run_validation_commands(action.validation_commands, repo_root=workspace.workspace) if run_validations else ()
+            workspace_evidence_paths = (
+                write_resolver_evidence_records(action, validation_results=validation_results, workspace_root=workspace.workspace)
+                if run_validations and action.evidence_required
+                else []
+            )
+            workspace_evidence_root = workspace.workspace / "docs-site/src/content/docs/reports/execution-evidence"
+            claim_errors = closeout_claim_errors(action, evidence_root=workspace_evidence_root)
+            if claim_errors:
+                raise WorkflowError("\n".join(claim_errors))
+            run_runtime_closeout(action, workspace_root=workspace.workspace)
+            refresh_derived_contract_packs_for_action(
+                action,
+                workspace_root=workspace.workspace,
+                repo_root=repo_root,
+                contract_pack_root=contract_pack_root,
+            )
+            validation_results = run_validation_commands(action.validation_commands, repo_root=workspace.workspace) if run_validations else ()
+            written_paths = import_scoped_changes(action, workspace, repo_root=repo_root)
+        finally:
+            dispose_workspace(workspace)
+        evidence_paths = tuple(repo_root / path.relative_to(workspace.workspace) for path in workspace_evidence_paths)
+        return HarnessRunResult(
+            action_id=action.action_id,
+            written_paths=tuple(written_paths),
+            validation_results=validation_results,
+            evidence_paths=evidence_paths,
+            next_action=f"{action.action_id} closed; recompute the next legal ActionContract before continuing.",
+        )
+
+    if action.writer_strategy == "proof_aggregation_writer":
+        workspace = create_full_snapshot(action, repo_root=repo_root)
+        try:
+            claim_errors = closeout_claim_errors(action, evidence_root=evidence_root)
+            if claim_errors:
+                raise WorkflowError("\n".join(claim_errors))
+            refresh_derived_contract_packs_for_action(
+                action,
+                workspace_root=workspace.workspace,
+                repo_root=repo_root,
+                contract_pack_root=contract_pack_root,
+            )
+            validation_results = run_validation_commands(action.validation_commands, repo_root=workspace.workspace) if run_validations else ()
+            workspace_evidence_paths = (
+                write_resolver_evidence_records(action, validation_results=validation_results, workspace_root=workspace.workspace)
+                if run_validations and action.evidence_required
+                else []
+            )
+            written_paths = import_scoped_changes(action, workspace, repo_root=repo_root)
+        finally:
+            dispose_workspace(workspace)
+        evidence_paths = tuple(repo_root / path.relative_to(workspace.workspace) for path in workspace_evidence_paths)
+        return HarnessRunResult(
+            action_id=action.action_id,
+            written_paths=tuple(written_paths),
             validation_results=validation_results,
             evidence_paths=evidence_paths,
             next_action=f"{action.action_id} completed; recompute the next legal ActionContract before continuing.",
@@ -99,19 +223,22 @@ def run_action(
     workspace = create_full_snapshot(action, repo_root=repo_root)
     try:
         run_writer_in_workspace(action, workspace.workspace, backend=backend, lock_validated=lock_validated)
+        refresh_derived_contract_packs_for_action(
+            action,
+            workspace_root=workspace.workspace,
+            repo_root=repo_root,
+            contract_pack_root=contract_pack_root,
+        )
         validation_results = run_validation_commands(action.validation_commands, repo_root=workspace.workspace) if run_validations else ()
+        workspace_evidence_paths = (
+            write_resolver_evidence_records(action, validation_results=validation_results, workspace_root=workspace.workspace)
+            if run_validations and action.evidence_required
+            else []
+        )
         written_paths = import_scoped_changes(action, workspace, repo_root=repo_root)
     finally:
         dispose_workspace(workspace)
-    evidence_paths: list[Path] = []
-    if run_validations:
-        evidence_paths = resolve_evidence_records(
-            action,
-            validation_results=validation_results,
-            written_paths=written_paths,
-            evidence_root=evidence_root,
-            repo_root=repo_root,
-        )
+    evidence_paths = [repo_root / path.relative_to(workspace.workspace) for path in workspace_evidence_paths]
     return HarnessRunResult(
         action_id=action.action_id,
         written_paths=tuple(written_paths),
@@ -129,6 +256,7 @@ def run_next_action(
     repo_root: Path = REPO_ROOT,
     run_validations: bool = True,
     evidence_root: Path = EVIDENCE_ROOT,
+    contract_pack_root: Path = CONTRACT_PACK_ROOT,
 ) -> HarnessRunResult:
     action = first_action(pack)
     if action is None:
@@ -140,6 +268,7 @@ def run_next_action(
         repo_root=repo_root,
         run_validations=run_validations,
         evidence_root=evidence_root,
+        contract_pack_root=contract_pack_root,
     )
     if result.written_paths:
         changed = ", ".join(repo_path(path) for path in result.written_paths)

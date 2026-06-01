@@ -26,19 +26,19 @@ from production_state import (
     validate_evidence_gates,
 )
 from roadmap_state import ROADMAP_SOURCE, RoadmapItem, RoadmapState, WorkflowError, load_roadmap, repo_path
-from track_execution_manifest import (
-    FULL_TRACK_PERMISSION_SET,
-    TRACK_EXECUTION_LOCK_ROOT,
-    TRACK_EXECUTION_MANIFEST_ROOT,
-    LoadedTrackExecutionManifest,
-    TrackExecutionManifestMilestone,
+from execution.locks import EXECUTION_LOCK_ROOT
+from track_sources.audit import (
     audit_manifest_or_raise,
     full_automation_preflight_errors,
     implementation_authorization_note,
-    load_track_execution_lock,
-    load_track_execution_manifest,
     next_action_blockers,
-    track_execution_lock_errors,
+)
+from track_sources.manifest import (
+    FULL_TRACK_PERMISSION_SET,
+    TRACK_EXECUTION_MANIFEST_ROOT,
+    LoadedTrackExecutionManifest,
+    TrackExecutionManifestMilestone,
+    load_track_execution_manifest,
     truth_claim_summary_lines,
 )
 
@@ -166,7 +166,7 @@ def build_manifest_goal_context(
     *,
     production_source: Path = PRODUCTION_SOURCE,
     roadmap_source: Path = ROADMAP_SOURCE,
-    lock_source_root: Path = TRACK_EXECUTION_LOCK_ROOT,
+    lock_source_root: Path = EXECUTION_LOCK_ROOT,
 ) -> ManifestGoalContext:
     audit_manifest_or_raise(loaded_manifest, track=track, roadmap=roadmap)
     current_step = first_incomplete_or_evidence_step(tuple(steps)) or steps[-1]
@@ -212,18 +212,9 @@ def build_manifest_goal_context(
                     allow=FULL_TRACK_PERMISSION_SET,
                 )
             )
-            loaded_lock = load_track_execution_lock(track.id, root=lock_source_root)
-            execution_lock_path = loaded_lock.path if loaded_lock is not None else None
-            execution_lock_blockers = tuple(
-                track_execution_lock_errors(
-                    loaded_manifest,
-                    loaded_lock,
-                    production_source=production_source,
-                    roadmap_source=roadmap_source,
-                    allow=FULL_TRACK_PERMISSION_SET,
-                    deny={"crate_creation", "foundation_extraction"},
-                    track=track,
-                )
+            execution_lock_path = lock_source_root / f"{track.id.lower()}.yaml"
+            execution_lock_blockers = (
+                f"{track.id}: full-track execution requires Execution Contract Pack before lock validation"
             )
         if full_automation_blockers:
             unmet_gates = (*unmet_gates, *full_automation_blockers)
@@ -455,7 +446,7 @@ def render_track_goal(
     *,
     roadmap_source: Path = ROADMAP_SOURCE,
     production_source: Path = PRODUCTION_SOURCE,
-    lock_source_root: Path = TRACK_EXECUTION_LOCK_ROOT,
+    lock_source_root: Path = EXECUTION_LOCK_ROOT,
     scope: GoalScope = GoalScope.full,
     manifest: LoadedTrackExecutionManifest | None = None,
 ) -> str:
@@ -610,7 +601,7 @@ def render_manifest_gate(
             f"- Workflow next action: {context.manifest_workflow_action}",
             f"- Implementation authorized now: {'yes' if context.implementation_authorized else 'no'} - {context.implementation_authorization_note}",
             f"- Must stop after this action: {'yes' if context.must_stop else 'no'}",
-            "- Agent-track preparation-ready: yes",
+            "- Agent-track mode: available only for manifest-declared AI executable/full-automation tracks with clean-kernel Contract Pack, preflight, and lock gates",
             f"- AI executable declared: {'yes' if manifest.ai_executable else 'no'}",
             f"- Full automation target: {'yes' if context.full_automation_target else 'no'}",
             f"- Full automation readiness: {'ready' if context.full_automation_ready else 'blocked' if context.full_automation_target else 'not requested'}",
@@ -914,7 +905,7 @@ def render_goal_prompt(
                 f"Current manifest milestone: {manifest_context.current_entry.milestone_id}",
                 f"Current manifest next legal action: {manifest_context.current_entry.next_legal_action}",
                 f"Implementation authorized now: {'yes' if manifest_context.implementation_authorized else 'no'} - {manifest_context.implementation_authorization_note}",
-                f"Agent-track preparation-ready: yes; full-automation-ready: {'yes' if manifest_context.full_automation_ready else 'no'}; locked-and-executable: {'yes' if manifest_context.full_automation_ready and manifest_context.execution_lock_ready and manifest_context.loaded.manifest.ai_executable else 'no'}",
+                f"Agent-track mode: blocked; full-automation-ready: {'yes' if manifest_context.full_automation_ready else 'no'}; locked-and-executable: {'yes' if manifest_context.full_automation_ready and manifest_context.execution_lock_ready and manifest_context.loaded.manifest.ai_executable else 'no'}",
                 "Stop after the current legal action and rerun this command before crossing another milestone boundary.",
                 "",
             ]
@@ -966,7 +957,7 @@ def goal(
         help="Machine-readable Track Execution Manifest source root.",
     ),
     lock_source_root: Path = typer.Option(
-        TRACK_EXECUTION_LOCK_ROOT,
+        EXECUTION_LOCK_ROOT,
         help="Machine-readable Track Execution Lock source root.",
     ),
 ) -> None:

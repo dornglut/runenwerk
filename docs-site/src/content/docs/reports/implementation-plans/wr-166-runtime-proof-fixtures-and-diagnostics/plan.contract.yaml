@@ -1,0 +1,94 @@
+version: 1
+wr_id: WR-166
+milestone_id: PM-UI-PROGRAM-ARCH-008
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: hardening_runtime_proof
+permissions_required:
+- product_code
+- product_implementation
+- crate_creation
+writer_strategy: verification_writer
+allowed_outputs:
+- docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/plan.md
+- Cargo.toml
+- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/closeout.md
+new_outputs:
+- domain/ui/ui_testing/src/lib.rs
+- domain/ui/ui_testing/Cargo.toml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/fixture-fixture.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/diagnostics-diagnostics.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/source_maps-source_maps.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/migration-migration.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/reproducibility-reproducibility.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/visual-visual.yaml
+forbidden_outputs: []
+forbidden_patterns:
+- foundation/meta
+- UiSemanticEvent
+- renderer-owned UI truth
+- ECS-owned UI semantics
+validation_commands:
+- cargo test -p ui_testing architecture_fixtures
+- cargo test -p ui_testing diagnostics
+- cargo test -p ui_testing source_maps
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - cargo:test
+- kind: fixture
+  name: fixture
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/fixture-fixture.yaml
+  subject_paths: &id001
+  - Cargo.toml
+  - domain/ui/ui_testing/src/lib.rs
+  - domain/ui/ui_testing/Cargo.toml
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/diagnostics-diagnostics.yaml
+  subject_paths: *id001
+- kind: source_maps
+  name: source_maps
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/source_maps-source_maps.yaml
+  subject_paths: *id001
+- kind: artifact
+  name: artifact
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/artifact-artifact.yaml
+  subject_paths: *id001
+- kind: migration
+  name: migration
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/migration-migration.yaml
+  subject_paths: *id001
+- kind: reproducibility
+  name: reproducibility
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/reproducibility-reproducibility.yaml
+  subject_paths: *id001
+- kind: visual
+  name: visual
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-008/visual-visual.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop until PM-007 is completed
+- stop if fixture evidence is prose-only
+- stop if validation fails

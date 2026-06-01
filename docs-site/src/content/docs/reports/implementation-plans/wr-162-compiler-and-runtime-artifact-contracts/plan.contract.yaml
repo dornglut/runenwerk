@@ -1,0 +1,80 @@
+version: 1
+wr_id: WR-162
+milestone_id: PM-UI-PROGRAM-ARCH-004
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: implementation_runtime_proof
+permissions_required:
+- product_code
+- product_implementation
+- crate_creation
+writer_strategy: verification_writer
+allowed_outputs:
+- Cargo.toml
+- docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-program-arch-004-compiler-and-runtime-artifact-contracts/plan.md
+- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-004-compiler-and-runtime-artifact-contracts/closeout.md
+new_outputs:
+- domain/ui/ui_program/src/lib.rs
+- domain/ui/ui_program/src/program.rs
+- domain/ui/ui_program/src/graphs/mod.rs
+- domain/ui/ui_artifacts/Cargo.toml
+- domain/ui/ui_compiler/Cargo.toml
+- domain/ui/ui_compiler/src/lib.rs
+- domain/ui/ui_artifacts/src/lib.rs
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/source_maps-source_maps.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/diagnostics-diagnostics.yaml
+forbidden_outputs: []
+forbidden_patterns:
+- foundation/meta
+- UiSemanticEvent
+- renderer-owned UI truth
+- ECS-owned UI semantics
+validation_commands:
+- cargo test -p ui_program architecture_contract
+- cargo test -p ui_compiler compiler_contract
+- cargo test -p ui_artifacts artifact_contract
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - cargo:test
+- kind: artifact
+  name: artifact
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/artifact-artifact.yaml
+  subject_paths: &id001
+  - Cargo.toml
+  - domain/ui/ui_program/src/lib.rs
+  - domain/ui/ui_program/src/program.rs
+  - domain/ui/ui_program/src/graphs/mod.rs
+  - domain/ui/ui_artifacts/Cargo.toml
+  - domain/ui/ui_compiler/Cargo.toml
+  - domain/ui/ui_compiler/src/lib.rs
+  - domain/ui/ui_artifacts/src/lib.rs
+- kind: source_maps
+  name: source_maps
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/source_maps-source_maps.yaml
+  subject_paths: *id001
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-004/diagnostics-diagnostics.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-004-compiler-and-runtime-artifact-contracts/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop until PM-003 is completed
+- stop if hot paths would interpret generic graphs by default
+- stop if validation fails

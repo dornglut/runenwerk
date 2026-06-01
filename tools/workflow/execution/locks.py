@@ -21,6 +21,7 @@ class ExecutionLock(StrictModel):
     track_id: str
     locked_by: str
     locked_at: str
+    lock_scope: str = "full-track"
     contract_pack_digest: str
     source_digests: dict[str, str]
     granted_permissions: list[str] = Field(default_factory=list)
@@ -39,6 +40,8 @@ class ExecutionLock(StrictModel):
         overlap = sorted(set(self.granted_permissions) & set(self.denied_permissions))
         if overlap:
             raise ValueError(f"permissions cannot be both granted and denied: {', '.join(overlap)}")
+        if self.lock_scope not in {"single-action", "full-track"}:
+            raise ValueError("lock_scope must be single-action or full-track")
         return self
 
 
@@ -63,6 +66,7 @@ def build_execution_lock(
     track_id: str,
     *,
     locked_by: str,
+    lock_scope: str = "full-track",
     contract_pack_root: Path = CONTRACT_PACK_ROOT,
     granted_permissions: list[str],
     denied_permissions: list[str],
@@ -75,6 +79,7 @@ def build_execution_lock(
         track_id=track_id,
         locked_by=locked_by,
         locked_at=datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        lock_scope=lock_scope,
         contract_pack_digest=sha256_file(pack_path),
         source_digests=pack.source_digests,
         granted_permissions=sorted(set(granted_permissions)),
@@ -128,6 +133,7 @@ def execution_lock_errors(
     contract_pack_root: Path = CONTRACT_PACK_ROOT,
     lock_root: Path = EXECUTION_LOCK_ROOT,
     requested_permissions: set[str],
+    run_mode: str = "full-track",
 ) -> list[str]:
     errors: list[str] = []
     pack_path = contract_pack_path(track_id, root=contract_pack_root)
@@ -138,6 +144,10 @@ def execution_lock_errors(
         return [f"{track_id}: missing Execution Contract Pack at {repo_path(pack_path)}"]
     if sha256_file(pack_path) != lock.contract_pack_digest:
         errors.append(f"{track_id}: execution lock contract_pack_digest is stale")
+    if lock.lock_scope == "single-action" and run_mode == "full-track":
+        errors.append(f"{track_id}: full-track run requires a full-track Execution Lock")
+    if run_mode not in {"single-action", "full-track"}:
+        errors.append(f"{track_id}: unsupported execution mode for lock validation: {run_mode}")
     pack = load_contract_pack(track_id, root=contract_pack_root)
     if pack is not None:
         errors.extend(contract_pack_freshness_errors(pack))
