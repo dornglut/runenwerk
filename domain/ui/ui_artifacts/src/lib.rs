@@ -1,92 +1,40 @@
 //! File: domain/ui/ui_artifacts/src/lib.rs
 //! Crate: ui_artifacts
 
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
-use ui_program::{UiProgram, UiProgramSourceMapEntry};
+use ui_program::{
+    AccessibilityNode, BindingEdge, BindingEndpoint, BindingEndpointId, ControlGraphNode,
+    ControlNodeId, InspectionEntry, InteractionHandler, LayoutGraphNode, StateRequirement,
+    StyleRule, UiProgram, UiProgramDiagnosticSeverity, UiProgramSourceMapAttachment,
+    UiProgramSourceMapEntry, UiProgramSourceSpan, UiSchemaRef, VisualOperator,
+};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct UiRuntimeArtifactId(String);
+pub mod artifact;
+pub mod cache;
+pub(crate) mod cache_key;
+pub mod diagnostics;
+pub mod manifest;
+pub(crate) mod runtime_capabilities;
+pub(crate) mod runtime_collections;
+pub(crate) mod runtime_packages;
+pub mod source_map;
+pub(crate) mod source_map_attachment;
+pub mod tables;
 
-impl UiRuntimeArtifactId {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UiRuntimeArtifactManifest {
-    pub artifact_id: UiRuntimeArtifactId,
-    pub program_id: String,
-    pub program_version: u32,
-    pub cache_key: String,
-    pub package_ids: Vec<String>,
-    pub schema_ids: Vec<String>,
-    pub source_map: Vec<UiProgramSourceMapEntry>,
-    pub diagnostics: Vec<String>,
-}
-
-impl UiRuntimeArtifactManifest {
-    pub fn from_program(program: &UiProgram) -> Self {
-        let program_id = program.id.as_str().to_owned();
-        let program_version = program.version.value();
-        Self {
-            artifact_id: UiRuntimeArtifactId::new(format!("{program_id}@{program_version}")),
-            program_id: program_id.clone(),
-            program_version,
-            cache_key: format!("ui-program:{program_id}:{program_version}"),
-            package_ids: Vec::new(),
-            schema_ids: Vec::new(),
-            source_map: program.source_map.clone(),
-            diagnostics: program
-                .diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.code.clone())
-                .collect(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UiRuntimeArtifactTables {
-    pub layout: Vec<String>,
-    pub state: Vec<String>,
-    pub binding: Vec<String>,
-    pub interaction: Vec<String>,
-    pub visual: Vec<String>,
-    pub accessibility: Vec<String>,
-    pub inspection: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UiRuntimeArtifact {
-    pub manifest: UiRuntimeArtifactManifest,
-    pub tables: UiRuntimeArtifactTables,
-}
-
-impl UiRuntimeArtifact {
-    pub fn new(manifest: UiRuntimeArtifactManifest, tables: UiRuntimeArtifactTables) -> Self {
-        Self { manifest, tables }
-    }
-}
+pub use artifact::*;
+pub use cache::*;
+pub(crate) use cache_key::*;
+pub use diagnostics::*;
+pub use manifest::*;
+pub(crate) use runtime_capabilities::*;
+pub(crate) use runtime_collections::*;
+pub(crate) use runtime_packages::*;
+pub use source_map::*;
+pub(crate) use source_map_attachment::*;
+pub use tables::*;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use ui_program::{UiProgram, UiProgramId, UiProgramVersion};
-
-    #[test]
-    fn artifact_contract_splits_manifest_from_tables() {
-        let program = UiProgram::new(UiProgramId::new("hud"), UiProgramVersion::new(7));
-        let manifest = UiRuntimeArtifactManifest::from_program(&program);
-        let artifact = UiRuntimeArtifact::new(manifest, UiRuntimeArtifactTables::default());
-
-        assert_eq!(artifact.manifest.program_id, "hud");
-        assert_eq!(artifact.manifest.program_version, 7);
-        assert_eq!(artifact.manifest.cache_key, "ui-program:hud:7");
-        assert!(artifact.tables.layout.is_empty());
-    }
-}
+mod tests;

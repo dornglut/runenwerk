@@ -130,6 +130,19 @@ evidence paths, closeout paths, next legal action, and stop reason. Generated
 Markdown reports may mirror these ledgers later, but the YAML ledger is the run
 authority.
 
+Agent transcripts are not execution authority and are not evidence. They are
+local debugging artifacts written under:
+
+```text
+.runenwerk/track-execution-transcripts/<track-id>/<run-id>/
+```
+
+Run ledgers may reference local transcript paths for diagnosis, but durable
+truth must come from tracked evidence records, closeouts, Contract Packs, locks,
+and truth certificates. Do not store raw agent stdout/stderr transcripts under
+`docs-site/src/content/docs` unless a later workflow explicitly promotes a
+specific transcript excerpt into a reviewed report.
+
 ## Manifest Content
 
 A manifest must include these fields for the track:

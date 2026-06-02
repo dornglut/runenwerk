@@ -94,7 +94,7 @@ tracks:
   - id: PM-SDF-OW-003
     title: Playable SDF character
     kind: design
-    state: designing
+    state: active
     goal: Define the production character contract for a controllable SDF player moving on strict world query products.
     outcome: Character body, pose, motion, collision, render, interaction emitters, and diagnostics have accepted ownership and product boundaries.
     dependencies:
@@ -597,7 +597,7 @@ tracks:
     - The design names trust boundaries, permissions, process/ABI options, diagnostics, and rollback behavior.
 - id: PT-RENDER-PG
   title: Render Product Graph Platform
-  state: completed
+  state: active
   owner: engine
   strategic_goal: Make rendering a product-driven, inspectable, graph-compiled platform without moving product truth into the renderer.
   success_criteria:
@@ -5416,14 +5416,15 @@ tracks:
   title: UI Program Architecture Implementation
   state: completed
   owner: ui
-  target_completion_quality: architecture_runtime_proven
-  strategic_goal: Implement the concrete domain-owned UiProgram architecture contracts that remain blocked after the bounded PT-UI-PROGRAM proof-slice track.
+  target_completion_quality: perfectionist_verified
+  strategic_goal: Implement and certify the concrete domain-owned UiProgram architecture contracts that remain blocked after the bounded PT-UI-PROGRAM proof-slice track.
   success_criteria:
   - The final UI owner map is accepted as the architecture target, but owner crates or folders are created only when an active WR and production plan explicitly authorize the exact boundary.
-  - Concrete `UiProgram`, graph-family, `UiSchemaValue`, `ControlPackage`, compiler, artifact, evaluator, host, diagnostics, source-map, fixture, migration, and visual/render boundary contracts are implemented and validated before architecture truth can be satisfied.
+  - Concrete `UiProgram`, graph-family, `UiSchemaValue`, `ControlPackage`, compiler, artifact, evaluator, host, diagnostics, source-map, fixture, migration, and visual/render boundary contracts must pass an independent zero-finding truth certificate before architecture truth can be satisfied.
+  - The PM-011 and PM-012 perfectionist closeouts are historical evidence only until PM-UI-PROGRAM-ARCH-013 proves requirement-by-requirement design coverage, semantic verifier coverage, complete digest closure, and durable checkpointed completion with zero findings.
   - Current retained UI code through `ui_definition`, `ui_tree`, `ui_widgets`, `ui_runtime`, and `ui_render_data` remains compatible until a bounded migration bridge proves replacement or adapter behavior.
   - '`ui_layout`, `ui_math`, and `ui_surface` are reconciled explicitly against the final owner map before any rename, replacement, or deletion is authorized.'
-  - MaterialProgram proof planning remains blocked until the UiProgram architecture implementation truth claim is satisfied or a later accepted ADR changes the gate.
+  - MaterialProgram proof planning remains blocked until the UiProgram architecture implementation truth claim is satisfied by a current truth certificate or a later accepted ADR changes the gate.
   - Shared `foundation/meta` extraction remains blocked until UI and MaterialProgram both prove the same domain-agnostic primitive and a separate extraction design accepts it.
   - No renderer-owned UI product truth, ECS-owned UI semantics, generic node soup, or giant semantic event enum is introduced.
   milestones:
@@ -5521,7 +5522,7 @@ tracks:
     - Capability validation is explicit and diagnostic-bearing.
     completion_quality: runtime_proven
     known_quality_gaps:
-    - Implementation requires a future active WR and accepted production plan.
+    - Completed evidence is bounded to this slice and does not satisfy final UiProgram architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-003-schema-route-event-capability-contracts/closeout.md
   - id: PM-UI-PROGRAM-ARCH-004
     title: Compiler And Runtime Artifact Contracts
@@ -5548,7 +5549,7 @@ tracks:
     - Table layout is optimized runtime implementation detail, not external product truth.
     completion_quality: runtime_proven
     known_quality_gaps:
-    - Implementation requires a future active WR and accepted production plan.
+    - Completed evidence is bounded to this slice and does not satisfy final UiProgram architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-004-compiler-and-runtime-artifact-contracts/closeout.md
   - id: PM-UI-PROGRAM-ARCH-005
     title: Evaluator And State Execution
@@ -5575,7 +5576,7 @@ tracks:
     - Evaluator output does not own editor, game, world, ECS, or renderer truth.
     completion_quality: runtime_proven
     known_quality_gaps:
-    - Implementation requires a future active WR and accepted production plan.
+    - Completed evidence is bounded to this slice and does not satisfy final UiProgram architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-005-evaluator-and-state-execution/closeout.md
   - id: PM-UI-PROGRAM-ARCH-006
     title: Host Boundary Implementations
@@ -5602,7 +5603,7 @@ tracks:
     - World-space contracts keep ECS limited to identity, anchor, lifetime, visibility input, and data feed.
     completion_quality: runtime_proven
     known_quality_gaps:
-    - Implementation requires a future active WR and accepted production plan.
+    - Completed evidence is bounded to this slice and does not satisfy final UiProgram architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-006-host-boundary-implementations/closeout.md
   - id: PM-UI-PROGRAM-ARCH-007
     title: Retained UI Migration Bridge
@@ -5629,7 +5630,7 @@ tracks:
     - No broad retained UI rewrite is authorized by this milestone alone.
     completion_quality: runtime_proven
     known_quality_gaps:
-    - Implementation requires a future active WR and accepted production plan.
+    - Completed evidence is bounded to this slice and does not satisfy final UiProgram architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-007-retained-ui-migration-bridge/closeout.md
   - id: PM-UI-PROGRAM-ARCH-008
     title: Runtime Proof Fixtures And Diagnostics
@@ -5656,7 +5657,7 @@ tracks:
     - Visual/render boundary proof uses renderer-facing data without renderer-owned UI truth.
     completion_quality: runtime_proven
     known_quality_gaps:
-    - Hardening requires future runtime evidence from prior implementation milestones.
+    - Hardening evidence is bounded and does not satisfy final UiProgram architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-008-runtime-proof-fixtures-and-diagnostics/closeout.md
   - id: PM-UI-PROGRAM-ARCH-009
     title: Architecture Runtime Proven Closeout
@@ -5681,9 +5682,9 @@ tracks:
     - Concrete architecture contracts exist in code and pass executable validations.
     - Retained compatibility, diagnostics, source maps, migration, fixtures, artifacts, and visual/render boundary evidence are linked.
     - Completion updates truth claims without authorizing MaterialProgram implementation or foundation/meta extraction.
-    completion_quality: architecture_runtime_proven
+    completion_quality: bounded_contract
     known_quality_gaps:
-    - Closeout remains blocked until all implementation and hardening evidence exists.
+    - Historical architecture closeout is superseded by the truth-certification correction and cannot satisfy final architecture truth without PM-UI-PROGRAM-ARCH-011 certification.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
   - id: PM-UI-PROGRAM-ARCH-010
     title: MaterialProgram Planning Gate Decision
@@ -5712,6 +5713,104 @@ tracks:
     known_quality_gaps:
     - MaterialProgram remains blocked unless this decision and a later WR explicitly authorize planning.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision/closeout.md
+  - id: PM-UI-PROGRAM-ARCH-011
+    title: Perfectionist Architecture Conformance Closure
+    kind: hardening
+    state: completed
+    goal: Repair all UiProgram architecture code-truth drift and close only when the independent truth verifier reports zero findings, gaps, risks, and drift.
+    outcome: UiProgram architecture truth is certified by code, tests, fixtures, diagnostics, source maps, migration evidence, and post-completion audit instead of generated closeout prose.
+    dependencies:
+    - PM-UI-PROGRAM-ARCH-010
+    roadmap_links:
+    - WR-169
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+      required_status: active
+      reason: Perfectionist conformance must fully satisfy the accepted UiProgram architecture target.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      required_status: active
+      reason: Final owner map closure must be verified against current code truth.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure/closeout.md
+      required_status: completed
+      reason: PM-UI-PROGRAM-ARCH-011 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - The `ui_program_architecture_conformance` verifier passes with zero findings, gaps, risks, and drift.
+    - Graph families, compiler, artifact tables, evaluator, host contracts, controls, accessibility, geometry, fixtures, diagnostics, source maps, migrations, and retained compatibility satisfy the accepted design.
+    - Evidence records point to concrete code, tests, fixtures, diagnostics, source maps, artifacts, and migration outputs rather than generated paperwork alone.
+    - MaterialProgram implementation and foundation/meta extraction remain blocked unless separate accepted gates authorize them.
+    completion_quality: perfectionist_verified
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure/closeout.md
+  - id: PM-UI-PROGRAM-ARCH-012
+    title: Perfectionist Conformance Hardening Closure
+    kind: hardening
+    state: completed
+    goal: Supersede the PM-011 completion claim until semantic truth, evidence provenance, validation-command authority, module ownership, workflow test responsibility, ledger retention, and post-completion drift audit all pass with zero findings.
+    outcome: PT-UI-PROGRAM-ARCHITECTURE is complete only when the hardened conformance verifier, resolver-backed evidence provenance, run-ledger policy, module ownership guard, and post-completion audit all agree with current code truth.
+    dependencies:
+    - PM-UI-PROGRAM-ARCH-011
+    roadmap_links:
+    - WR-170
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+      required_status: active
+      reason: PM-012 must certify the accepted UiProgram architecture target rather than generated paperwork.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      required_status: active
+      reason: PM-012 must enforce final owner-map responsibility and catch-all ownership drift.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure/closeout.md
+      required_status: completed
+      reason: PM-UI-PROGRAM-ARCH-012 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - The `ui-program-perfectionist-conformance` truth claim remains blocked until PM-012 produces a fresh zero-finding certificate.
+    - Harness authority uses `task workflow:test` as the workflow-suite validation command, not the obsolete single-file workflow guard.
+    - Evidence records include structured validation provenance that resolves to a current run ledger action or typed validation-result artifact.
+    - Semantic UI conformance dispatches registered verifier functions for graph lowering, route/schema payloads, source maps, evaluator behavior, retained compatibility, and headless reproducibility.
+    - Final UI owner crates reject catch-all helpers, utils, and misc files unless an accepted design waiver declares the exception.
+    - Workflow tests and fixtures are split by responsibility with guards against catch-all test files.
+    - Run-ledger retention keeps current successful ledgers authoritative and failed ledgers diagnostic only.
+    completion_quality: perfectionist_verified
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure/closeout.md
+  - id: PM-UI-PROGRAM-ARCH-013
+    title: Design Coverage And Semantic Truth Closure
+    kind: hardening
+    state: completed
+    goal: Close only when accepted design requirements, graph/control/package semantics, evidence provenance, truth certificates, contract packs, ledgers, and durable git checkpoint state all agree.
+    outcome: PT-UI-PROGRAM-ARCHITECTURE is complete only after requirement-by-requirement coverage, all nine graph families, ControlPackage obligations, verifier digest closure, and post-completion drift audit pass with zero findings and no repo-visible uncheckpointed authority drift.
+    dependencies:
+    - PM-UI-PROGRAM-ARCH-012
+    roadmap_links:
+    - WR-171
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+      required_status: active
+      reason: PM-013 must certify every accepted normative architecture requirement against code truth.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      required_status: active
+      reason: PM-013 must keep final owner-map responsibility and module shape aligned with code truth.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-013-design-coverage-and-semantic-truth-closure/closeout.md
+      required_status: completed
+      reason: PM-UI-PROGRAM-ARCH-013 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - Every accepted UI architecture requirement is represented in `pt-ui-program-architecture.requirements.yaml` with source, owner, code subjects, tests, evidence, semantic verifier IDs, and deferral authority when applicable.
+    - All nine graph families have typed code contracts, runtime artifact lowering, semantic tests, source-map behavior, and design coverage.
+    - ControlPackage design truth covers schemas, state, event payloads, kernels, accessibility, fixtures, diagnostics, migrations, route-based events, and explicit registry snapshots.
+    - Truth certificates digest production metadata, roadmap metadata, manifests, contract packs, closeouts, referenced run ledgers, evidence records, design docs, code subjects, tests, verifier registry, conformance specs, and verifier code.
+    - '`task track` reports `complete_uncheckpointed` instead of durable `complete` while repo-visible authority, code, evidence, certificate, ledger, or generated-report files are dirty or untracked.'
+    - MaterialProgram implementation and foundation/meta extraction remain blocked unless separate accepted gates authorize them.
+    completion_quality: perfectionist_verified
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-013-design-coverage-and-semantic-truth-closure/closeout.md
 - id: PT-GAME-RUNTIME-UI
   title: Game Runtime UI Projection And HUD Platform
   state: active

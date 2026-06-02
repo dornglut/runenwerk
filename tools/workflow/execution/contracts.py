@@ -87,6 +87,13 @@ SAFE_TASK_NAMES = {
     "roadmap:check",
     "roadmap:render",
     "roadmap:validate",
+    "workflow:test",
+}
+SAFE_TASK_NAMES_WITH_ARGS = {
+    "truth:audit",
+    "truth:certify",
+    "truth:post-completion-audit",
+    "truth:verify",
 }
 
 
@@ -163,6 +170,17 @@ class TextPatch(StrictModel):
         return clean_text(value)
 
 
+class AgentSubActionContract(StrictModel):
+    sub_action_id: str
+    title: str
+    prompt: str
+
+    @field_validator("sub_action_id", "title", "prompt")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        return clean_text(value)
+
+
 class ValidationCommand(StrictModel):
     command_id: str
     argv: list[str]
@@ -223,6 +241,10 @@ def blocked_validation_command(raw: str, reason: str) -> dict:
 
 def validation_command_id(argv: list[str]) -> str | None:
     executable = argv[0]
+    if argv == ["uv", "run", "pytest", "tools/workflow/test_workflow.py", "-q"]:
+        return None
+    if executable == "task" and len(argv) >= 2 and argv[1] in SAFE_TASK_NAMES_WITH_ARGS:
+        return truth_task_command_id(argv)
     if executable == "task" and len(argv) == 2 and argv[1] in SAFE_TASK_NAMES:
         return f"task:{argv[1]}"
     if executable == "cargo" and len(argv) >= 2 and argv[1] in {"test", "check", "clippy"}:
@@ -247,6 +269,26 @@ def validation_command_id(argv: list[str]) -> str | None:
         return f"npx:{argv[1]}"
     if executable == "git" and argv in (["git", "diff", "--check"], ["git", "status", "--short"]):
         return "git:" + ":".join(argv[1:])
+    return None
+
+
+def truth_task_command_id(argv: list[str]) -> str | None:
+    task_name = argv[1]
+    if task_name in {"truth:audit", "truth:post-completion-audit"}:
+        if len(argv) == 5 and argv[2] == "--" and argv[3] == "--track" and argv[4].strip():
+            return f"task:{task_name}"
+        return None
+    if task_name in {"truth:certify", "truth:verify"}:
+        if (
+            len(argv) == 7
+            and argv[2] == "--"
+            and argv[3] == "--track"
+            and argv[4].strip()
+            and argv[5] == "--claim"
+            and argv[6].strip()
+        ):
+            return f"task:{task_name}"
+        return None
     return None
 
 
@@ -320,6 +362,8 @@ class ActionContract(StrictModel):
     required_prior_milestones: list[str] = Field(default_factory=list)
     required_prior_completion_quality: CompletionQuality | None = None
     truth_claim_updates: list[dict[str, Any]] = Field(default_factory=list)
+    parent_action_id: str | None = None
+    agent_subaction: AgentSubActionContract | None = None
     production_source_path: str = "docs-site/src/content/docs/workspace/production-tracks.yaml"
     roadmap_source_path: str = "docs-site/src/content/docs/workspace/roadmap-items.yaml"
     manifest_source_path: str = ""
@@ -351,6 +395,11 @@ class ActionContract(StrictModel):
     @classmethod
     def validate_optional_source_path(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("parent_action_id")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        return clean_text(value) if value is not None else None
 
     @field_validator("validation_commands", mode="before")
     @classmethod

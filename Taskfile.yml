@@ -93,6 +93,31 @@ tasks:
     cmds:
       - uv run python tools/workflow/production_track_cli.py audit-track {{.CLI_ARGS}}
 
+  track:
+    desc: Show ergonomic status for the active or selected production track.
+    cmds:
+      - uv run python tools/workflow/track_control_cli.py status {{.CLI_ARGS}}
+
+  track:go:
+    desc: Continue the active or selected production track until completion or a real blocker.
+    cmds:
+      - uv run python tools/workflow/track_control_cli.py go {{.CLI_ARGS}}
+
+  track:finish:
+    desc: Alias for track:go.
+    cmds:
+      - uv run python tools/workflow/track_control_cli.py go {{.CLI_ARGS}}
+
+  track:use:
+    desc: Set the local active production track.
+    cmds:
+      - uv run python tools/workflow/track_control_cli.py use {{.CLI_ARGS}}
+
+  track:allow:
+    desc: Grant a rare strategic permission through a durable track intent lock.
+    cmds:
+      - uv run python tools/workflow/track_control_cli.py allow {{.CLI_ARGS}}
+
   execution:compile:
     desc: Compile a manifest-backed production track into an Execution Contract Pack.
     cmds:
@@ -118,13 +143,45 @@ tasks:
     cmds:
       - uv run python tools/workflow/execution/cli.py next {{.CLI_ARGS}}
 
+  truth:audit:
+    desc: Audit truth certificates for a manifest-backed production track.
+    cmds:
+      - uv run python tools/workflow/truth/cli.py audit {{.CLI_ARGS}}
+
+  truth:verify:
+    desc: Run a truth verifier for one production-track truth claim without writing a certificate.
+    cmds:
+      - uv run python tools/workflow/truth/cli.py verify {{.CLI_ARGS}}
+
+  truth:certify:
+    desc: Run a truth verifier and write a truth certificate when it passes.
+    cmds:
+      - uv run python tools/workflow/truth/cli.py certify {{.CLI_ARGS}}
+
+  truth:post-completion-audit:
+    desc: Re-audit a completed production track against truth certificates.
+    cmds:
+      - uv run python tools/workflow/truth/cli.py post-completion-audit {{.CLI_ARGS}}
+
+  prompt:validate:
+    desc: Validate generated AI prompt surfaces include the canonical quality doctrine.
+    cmds:
+      - uv run python tools/workflow/prompt_doctrine.py validate
+
+  workflow:test:
+    desc: Run focused workflow, execution, track-control, and truth-conformance tests.
+    cmds:
+      - uv run pytest tools/workflow -q
+
   planning:validate:
     desc: Validate roadmap, production tracks, generated docs, and docs-site links.
     cmds:
+      - task workflow:test
       - task roadmap:validate
       - task roadmap:check
       - task production:validate
       - task production:check
+      - task prompt:validate
       - task docs:validate
 
   roadmap:intake:
@@ -141,6 +198,11 @@ tasks:
     desc: Promote an existing roadmap item to a new planning state with evidence.
     cmds:
       - uv run python tools/workflow/roadmap_intake.py promote {{.CLI_ARGS}}
+
+  roadmap:activate-deferred:
+    desc: Move one deferred roadmap item back into the active roadmap source with evidence.
+    cmds:
+      - uv run python tools/workflow/roadmap_intake.py activate-deferred {{.CLI_ARGS}}
 
   roadmap:switch-current:
     desc: Demote one current candidate and promote another atomically with evidence.

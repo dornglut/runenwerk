@@ -1,0 +1,46 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+claim_id: ui-program-architecture-implementation
+verifier: ui_program_architecture_conformance
+status: passed
+produced_at: '2026-06-02T19:08:33Z'
+source_digests:
+  docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+  docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+  docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout: ea32ce36527006f2a9fba624e9835692c397e453bdf325ec698ea8f7899d776e
+  docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision: 2c177ec3a63e0860d9e24e1cedbdf1a66d8d1387eb40e9881854df8987c34860
+  docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure: 4d5ed26b89748728bb0d839e4d9456818fd4c28b1f116214106b00d425c23777
+  docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure: acde66cbbed1d324cb1f7cc01cc1afdcd8f46e48ce5e1894be16984ea3147ff1
+  docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture: cc4978227f8428a30e069f2fd296af0ddcb22689545e7591d136e4d8349e7146
+  ? docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  : 1fadfd28cfab49cf9aee4c1c6fc111b91fcdcf76c424d7f41e2d99f6d373902d
+  ? docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  : da307856e7b7550f6e799a4a1229a4860c0acfa96102ca694c33871bf3c451bf
+  docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml: 0366c77be6e2eb4cc52d6d33e2a836cc06a6207c2ca8161ac6c8c904db9f3e9f
+  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: 8944718b8c1fe13b881ce9d78281b08f979b2056f822054f03a3d29bed7a9c71
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 18ab5a3727e32cf59fe20aafc13a63f23dd61eb8345d285433a7a7529c9f0b9e
+  docs-site/src/content/docs/workspace/roadmap-archive.yaml: 033ea0b735a9175bed1c98f55368891bf8504a317fae1502b7ec729b2c07a380
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: addc1aab60f08310a053e3133965836029c8ec23384c1e47642820d2889e90b3
+  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 3267f3602b0df3947f85598a42868159d62f90659396d6195f5d7d661bffdb7b
+  ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  : 11da971ed59066070d4d5409f251af64ba223cc8407aa449425f42645583bb75
+  docs-site/src/content/docs/workspace/truth-verifier-registry.yaml: 176d7f50117f3164968afbee6dacae79719051a7917ee20578a34d6bb941cb79
+  domain/ui: 0adc1dcd540b82158e02bdb5f23a57c23fe7b980e946cd7f86a10fc1ee009b81
+  tools/workflow/truth: 9b3b240cf7f44016abba2f58017d39a8793f7ba1420727e8db97a84e8bf56dfe
+findings: []
+known_gaps: []
+known_risks: []
+truth_drift: []
+checks:
+- conformance spec is registered for the requested track and truth claim
+- conformance required source files exist and expose declared symbols
+- root facade modules remain facades instead of owning broad contracts
+- final UI owner map directories exist and are reconciled with design docs
+- accepted UI architecture design declares every conformance owner and boundary term
+- design requirement coverage matrix is machine-readable and bound to the conformance spec
+- verified design requirements cite concrete code subjects, tests, evidence, and semantic verifiers
+- conformance evidence records are resolver-backed and non-self-referential
+- semantic conformance checks dispatch through registered verifier functions
+- final UI owner crates do not use catch-all helpers/utils/misc files
+- domain UI code avoids forbidden ownership and extraction terms
+- zero-gap criteria are declared by the conformance spec

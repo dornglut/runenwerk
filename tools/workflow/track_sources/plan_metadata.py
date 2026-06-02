@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from pathlib import Path
 
 import yaml
@@ -9,10 +9,37 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from roadmap_state import WorkflowError, repo_path
 
 
+class AgentSubActionMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sub_action_id: str
+    title: str
+    prompt: str
+    allowed_outputs: list[str] = Field(default_factory=list)
+    new_outputs: list[str] = Field(default_factory=list)
+    validation_commands: list[str | dict[str, Any]] = Field(default_factory=list)
+    evidence_required: list[str | dict[str, Any]] = Field(default_factory=list)
+    stop_conditions: list[str] = Field(default_factory=list)
+
+    @field_validator("sub_action_id", "title", "prompt")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("agent_subactions text fields must not be empty")
+        return cleaned
+
+    @field_validator("allowed_outputs", "new_outputs", "stop_conditions")
+    @classmethod
+    def validate_text_lists(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+
 class PlanContractMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     version: int = 1
+    status: Literal["draft", "accepted"] = "accepted"
     wr_id: str
     milestone_id: str
     execution_kind: str | None = None
@@ -30,6 +57,7 @@ class PlanContractMetadata(BaseModel):
     evidence_required: list[str | dict[str, Any]] = Field(default_factory=list)
     closeout_contract: dict = Field(default_factory=dict)
     truth_claim_updates: list[dict[str, Any]] = Field(default_factory=list)
+    agent_subactions: list[AgentSubActionMetadata] = Field(default_factory=list)
     rollback_policy: str
     stop_conditions: list[str] = Field(default_factory=list)
 

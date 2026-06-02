@@ -1,52 +1,19 @@
-//! File: domain/ui/ui_program/src/program.rs
-//! Crate: ui_program
+//! Durable UiProgram contract.
 
 use serde::{Deserialize, Serialize};
 
+use crate::diagnostics::UiProgramDiagnostic;
 use crate::graphs::UiProgramGraphs;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct UiProgramId(String);
-
-impl UiProgramId {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct UiProgramVersion(u32);
-
-impl UiProgramVersion {
-    pub const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    pub const fn value(self) -> u32 {
-        self.0
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UiProgramDiagnostic {
-    pub code: String,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UiProgramSourceMapEntry {
-    pub source_id: String,
-    pub target_id: String,
-}
+use crate::ids::UiProgramId;
+use crate::source_map::{UiProgramSource, UiProgramSourceMapEntry};
+use crate::version::UiProgramVersion;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UiProgram {
     pub id: UiProgramId,
     pub version: UiProgramVersion,
+    #[serde(default)]
+    pub sources: Vec<UiProgramSource>,
     pub graphs: UiProgramGraphs,
     pub source_map: Vec<UiProgramSourceMapEntry>,
     pub diagnostics: Vec<UiProgramDiagnostic>,
@@ -57,9 +24,25 @@ impl UiProgram {
         Self {
             id,
             version,
+            sources: Vec::new(),
             graphs: UiProgramGraphs::default(),
             source_map: Vec::new(),
             diagnostics: Vec::new(),
         }
+    }
+
+    pub fn with_source(mut self, source: UiProgramSource) -> Self {
+        self.sources.push(source);
+        self
+    }
+
+    pub fn with_source_map_entry(mut self, entry: UiProgramSourceMapEntry) -> Self {
+        self.source_map.push(entry);
+        self
+    }
+
+    pub fn with_diagnostic(mut self, diagnostic: UiProgramDiagnostic) -> Self {
+        self.diagnostics.push(diagnostic);
+        self
     }
 }

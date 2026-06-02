@@ -1,0 +1,83 @@
+version: 1
+entries:
+  - verifier_id: ui_program_architecture_conformance
+    track_id: PT-UI-PROGRAM-ARCHITECTURE
+    claim_id: ui-program-architecture-implementation
+    backend: ui_program_architecture
+    conformance_spec_path: docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    source_digest_paths:
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-items.yaml
+      - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+      - docs-site/src/content/docs/design/active/ui-program-architecture.md
+      - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+      - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
+      - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+      - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+      - domain/ui
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture
+      - tools/workflow/truth
+  - verifier_id: ui_program_architecture_conformance
+    track_id: PT-UI-PROGRAM-ARCHITECTURE
+    claim_id: retained-ui-compatibility
+    backend: ui_program_architecture
+    conformance_spec_path: docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    source_digest_paths:
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-items.yaml
+      - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+      - docs-site/src/content/docs/design/active/ui-program-architecture.md
+      - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+      - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
+      - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+      - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+      - domain/ui
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture
+      - tools/workflow/truth
+  - verifier_id: ui_program_architecture_conformance
+    track_id: PT-UI-PROGRAM-ARCHITECTURE
+    claim_id: ui-program-perfectionist-conformance
+    backend: ui_program_architecture
+    conformance_spec_path: docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    source_digest_paths:
+      - docs-site/src/content/docs/workspace/production-tracks.yaml
+      - docs-site/src/content/docs/workspace/roadmap-items.yaml
+      - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+      - docs-site/src/content/docs/design/active/ui-program-architecture.md
+      - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+      - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
+      - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+      - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+      - domain/ui
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure
+      - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture
+      - tools/workflow/truth
+  - verifier_id: track_execution_harness_authority
+    track_id: PT-TRACK-EXECUTION-HARNESS
+    claim_id: track-execution-harness-authority
+    backend: track_execution_harness
+    source_digest_paths:
+      - Taskfile.yml
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml
+      - tools/workflow/track_execution_manifest.py
+      - tools/workflow/track_sources
+      - tools/workflow/execution
+      - tools/workflow/production_track_cli.py
+      - tools/workflow/production_goal.py
+      - tools/workflow/production_state.py
+      - tools/workflow/tests
+      - tools/workflow/truth

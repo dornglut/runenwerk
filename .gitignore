@@ -1,4 +1,6 @@
 /target
+.runenwerk/
+docs-site/src/content/docs/reports/agent-transcripts/
 __pycache__/
 .pytest_cache/
 *.py[cod]

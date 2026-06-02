@@ -1,0 +1,131 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-013
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+evidence_kind: migration
+name: migration
+status: passed
+produced_at: '2026-06-02T19:04:11Z'
+paths:
+- docs-site/src/content/docs/design/active/ui-program-architecture.md
+- docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+- domain/ui/ui_compiler/src/tests.rs
+subject_paths:
+- docs-site/src/content/docs/design/active/ui-program-architecture.md
+- docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+- domain/ui/ui_compiler/src/tests.rs
+subject_digests:
+  docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+  docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+  domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+validation_commands:
+- task:workflow:test (task workflow:test) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_controls control_package) -> exit 0
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+validation_provenance:
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 749782e2f391a4536e0f980ea556e5b3c93f7f26fa6180fe9d09ebc8ff24c4e9
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 36c04231b7d97c0585113a5e0202570b79c47b2cc542c809262584a06d139a22
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_controls
+  - control_package
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 9a28a157abc9213baa8a6894b3450bcee7bbb862c1a80117248f8223a1b7505e
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 61ca93eebad1ed5701b3ada18e126548473e21dc617de772cbec5faf15061d88
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: d73403e310d68942a4eae07bb1ce550ffd9778aa566fb9305582a74eb1232c46
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 94cd2c1781a7e391e7d6455f1d15190c10d111084821687b2e9a90b32b125df0
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 381f24fbfd42130409d452369c5587f43b39deac07ff040a533275a1505020be
+  subject_digests:
+    docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9

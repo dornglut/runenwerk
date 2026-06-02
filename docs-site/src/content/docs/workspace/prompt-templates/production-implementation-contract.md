@@ -28,6 +28,10 @@ task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>
 Then use the generated prompt to create or update the contract at the reported
 path.
 
+Generated production implementation prompts include the canonical quality
+doctrine marker `runenwerk-quality-doctrine-v1`; keep that marker in generated
+prompts and avoid copying the full doctrine text into local variants.
+
 ## Prompt Shape
 
 ```text

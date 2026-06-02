@@ -60,6 +60,7 @@ class ActionWorkspace:
     temp_root: Path
     workspace: Path
     baseline: dict[str, str | None]
+    baseline_content: dict[str, bytes | None]
     tree_baseline: dict[str, str]
 
 
@@ -68,12 +69,17 @@ def create_full_snapshot(action: ActionContract, *, repo_root: Path = REPO_ROOT)
     workspace = temp_root / "workspace"
     shutil.copytree(repo_root, workspace, ignore=ignore_snapshot_entries)
     initialize_snapshot_git_index(workspace)
-    outputs = [*action.allowed_outputs, *action.new_outputs]
+    outputs = importable_outputs(action)
     baseline = {output: optional_digest(repo_root / output) for output in outputs}
+    baseline_content = {
+        output: (repo_root / output).read_bytes() if (repo_root / output).exists() and (repo_root / output).is_file() else None
+        for output in outputs
+    }
     return ActionWorkspace(
         temp_root=temp_root,
         workspace=workspace,
         baseline=baseline,
+        baseline_content=baseline_content,
         tree_baseline=file_digests(workspace),
     )
 
@@ -91,18 +97,61 @@ def allowed_output_set(action: ActionContract) -> set[str]:
     return {normalize_repo_path(path) for path in [*action.allowed_outputs, *action.new_outputs]}
 
 
+def validation_output_set(action: ActionContract) -> set[str]:
+    return {
+        normalize_repo_path(path)
+        for command in action.validation_commands
+        for path in command.allowed_outputs
+    }
+
+
+def evidence_output_set(action: ActionContract) -> set[str]:
+    return {
+        normalize_repo_path(path)
+        for requirement in [*action.evidence_required, *action.closeout_contract.evidence_required]
+        for path in requirement.paths
+    }
+
+
+def importable_outputs(action: ActionContract) -> list[str]:
+    return list(
+        dict.fromkeys(
+            [
+                *[normalize_repo_path(path) for path in action.allowed_outputs],
+                *[normalize_repo_path(path) for path in action.new_outputs],
+                *sorted(validation_output_set(action)),
+                *sorted(evidence_output_set(action)),
+            ]
+        )
+    )
+
+
 def forbidden_output_set(action: ActionContract) -> set[str]:
     return {normalize_repo_path(path) for path in action.forbidden_outputs}
 
 
-def validate_changed_files(action: ActionContract, changed: list[str]) -> list[str]:
+def validate_changed_files(
+    action: ActionContract,
+    changed: list[str],
+    *,
+    allowed_paths: set[str] | None = None,
+    phase: str = "action",
+) -> list[str]:
     errors: list[str] = []
-    allowed = allowed_output_set(action)
+    allowed = allowed_paths if allowed_paths is not None else allowed_output_set(action)
     forbidden = forbidden_output_set(action)
     for path in changed:
         normalized = normalize_repo_path(path)
         if normalized not in allowed:
-            errors.append(f"{action.action_id}: changed undeclared file {normalized}")
+            if phase == "validation":
+                errors.append(
+                    f"{action.action_id}: validation command changed undeclared file {normalized}; "
+                    "declare it in validation_commands[].allowed_outputs if the tool is allowed to produce it"
+                )
+            elif phase == "evidence":
+                errors.append(f"{action.action_id}: evidence writer changed undeclared file {normalized}")
+            else:
+                errors.append(f"{action.action_id}: changed undeclared file {normalized}")
         for forbidden_path in forbidden:
             if path_within_scope(normalized, forbidden_path) or path_within_scope(forbidden_path, normalized):
                 errors.append(f"{action.action_id}: changed forbidden file {normalized}")
@@ -110,6 +159,44 @@ def validate_changed_files(action: ActionContract, changed: list[str]) -> list[s
             if re.search(pattern, normalized):
                 errors.append(f"{action.action_id}: changed file matches forbidden pattern {pattern!r}: {normalized}")
     return errors
+
+
+def validate_agent_changed_files(action: ActionContract, changed: list[str]) -> list[str]:
+    return validate_changed_files(action, changed, allowed_paths=allowed_output_set(action), phase="agent")
+
+
+def reset_validation_only_outputs(action: ActionContract, workspace: ActionWorkspace) -> tuple[str, ...]:
+    phase_only_outputs = sorted(validation_output_set(action) - allowed_output_set(action) - evidence_output_set(action))
+    reset_paths: list[str] = []
+    for relative in phase_only_outputs:
+        target = workspace.workspace / relative
+        baseline_content = workspace.baseline_content.get(relative)
+        if baseline_content is None:
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+                reset_paths.append(relative)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists() or target.read_bytes() != baseline_content:
+            target.write_bytes(baseline_content)
+            reset_paths.append(relative)
+    return tuple(reset_paths)
+
+
+def validate_validation_changed_files(action: ActionContract, command, changed: list[str]) -> list[str]:
+    return validate_changed_files(
+        action,
+        changed,
+        allowed_paths={normalize_repo_path(path) for path in command.allowed_outputs},
+        phase="validation",
+    )
+
+
+def validate_evidence_changed_files(action: ActionContract, changed: list[str]) -> list[str]:
+    return validate_changed_files(action, changed, allowed_paths=evidence_output_set(action), phase="evidence")
 
 
 def import_scoped_changes(
@@ -120,21 +207,27 @@ def import_scoped_changes(
 ) -> list[Path]:
     after = file_digests(workspace.workspace)
     changed = changed_files(workspace.tree_baseline, after)
-    errors = validate_changed_files(action, changed)
+    errors = validate_changed_files(
+        action,
+        changed,
+        allowed_paths=set(importable_outputs(action)),
+        phase="action",
+    )
     if errors:
         raise WorkflowError("\n".join(errors))
     imported: list[Path] = []
+    new_outputs = {normalize_repo_path(path) for path in action.new_outputs}
     for relative in changed:
         target = repo_root / relative
         baseline = workspace.baseline.get(relative)
         current = optional_digest(target)
-        if baseline is None and relative not in {normalize_repo_path(path) for path in action.new_outputs}:
+        if baseline is None and relative not in new_outputs:
             raise WorkflowError(f"{action.action_id}: created undeclared new file {relative}")
         if current != baseline:
             raise WorkflowError(f"{action.action_id}: target digest drifted before import: {relative}")
         source = workspace.workspace / relative
         if not target.parent.exists():
-            if relative not in {normalize_repo_path(path) for path in action.new_outputs}:
+            if relative not in new_outputs:
                 raise WorkflowError(f"{action.action_id}: output parent directory does not exist: {repo_path(target.parent)}")
             target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(source.read_bytes())

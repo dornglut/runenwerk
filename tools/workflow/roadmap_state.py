@@ -46,6 +46,7 @@ COMPLETION_EVIDENCE_ROOTS = (
 )
 COMPLETED_BATCH_INTEGRATION_STATUSES = {"merged", "integrated"}
 NEW_WRITE_SCOPE_PREFIXES = ("new:", "create:")
+DERIVED_WRITE_SCOPE_PREFIXES = ("generated:", "derived:")
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanningState = Literal["current_candidate", "support_only", "ready_next", "completed", "blocked_deferred"]
@@ -195,6 +196,23 @@ class RoadmapItem(StrictModel):
         if value not in ALLOWED_EFFORTS:
             raise ValueError("effort must be one of 1, 2, 3, 5, 8, 13")
         return value
+
+    @field_validator("write_scopes", "validations", "known_quality_gaps", "diagram_call")
+    @classmethod
+    def validate_text_lists(cls, values: list[str]) -> list[str]:
+        return [value.strip() for value in values if value.strip()]
+
+    @field_validator("write_scopes")
+    @classmethod
+    def validate_write_scopes(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value.strip()]
+        for value in cleaned:
+            if is_derived_write_scope(value):
+                continue
+            normalized = value.removeprefix("new:").removeprefix("create:").strip()
+            if normalized.startswith("/"):
+                raise ValueError("write_scopes must be repo-relative, generated, or derived; absolute paths are forbidden")
+        return cleaned
 
     @field_validator("confidence")
     @classmethod
@@ -739,6 +757,8 @@ def validate_write_scopes(items: list[RoadmapItem] | list[BatchItem]) -> list[st
     seen: list[tuple[str, str]] = []
     for item in items:
         for scope in item.write_scopes:
+            if is_derived_write_scope(scope):
+                continue
             normalized = normalize_write_scope_path(scope)
             for other_item_id, other_scope in seen:
                 if scope_overlaps(normalized, other_scope):
@@ -751,10 +771,12 @@ def validate_existing_write_scope_paths(items: list[RoadmapItem] | list[BatchIte
     errors: list[str] = []
     for item in items:
         for scope in item.write_scopes:
+            if is_derived_write_scope(scope):
+                continue
             normalized = normalize_write_scope_path(scope)
             if is_new_write_scope(scope):
                 parent = (REPO_ROOT / normalized).parent
-                if not parent.exists():
+                if not parent.exists() and not has_existing_repo_ancestor(parent):
                     errors.append(f"{item.id}:{normalized} parent does not exist for new write scope")
                 continue
             if not (REPO_ROOT / normalized).exists():
@@ -1127,6 +1149,10 @@ def is_new_write_scope(scope: str) -> bool:
     return scope.strip().lower().startswith(NEW_WRITE_SCOPE_PREFIXES)
 
 
+def is_derived_write_scope(scope: str) -> bool:
+    return scope.strip().lower().startswith(DERIVED_WRITE_SCOPE_PREFIXES)
+
+
 def normalize_write_scope_path(scope: str) -> str:
     cleaned = scope.strip()
     lowered = cleaned.lower()
@@ -1134,6 +1160,22 @@ def normalize_write_scope_path(scope: str) -> str:
         if lowered.startswith(prefix):
             return normalize_repo_path(cleaned[len(prefix) :])
     return normalize_repo_path(cleaned)
+
+
+def has_existing_repo_ancestor(path: Path) -> bool:
+    candidate = path
+    while True:
+        if candidate == REPO_ROOT:
+            return False
+        if candidate.exists():
+            try:
+                candidate.resolve().relative_to(REPO_ROOT.resolve())
+            except ValueError:
+                return False
+            return True
+        if candidate.parent == candidate:
+            return False
+        candidate = candidate.parent
 
 
 def slash_path(path: Path) -> str:

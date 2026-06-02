@@ -19,7 +19,7 @@ Executable authority lives in `plan.contract.yaml`; this prose is a human-readab
 
 ## Validation
 
-- `uv run pytest tools/workflow/test_workflow.py -q`
+- `task workflow:test`
 - `task production:validate`
 - `task production:check`
 - `task roadmap:validate`

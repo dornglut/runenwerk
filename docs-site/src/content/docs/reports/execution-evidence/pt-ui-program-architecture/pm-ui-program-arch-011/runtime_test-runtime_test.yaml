@@ -1,0 +1,20 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-011
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-011:WR-169:sub:schema-routes-program-identity
+evidence_kind: runtime_test
+name: runtime_test
+status: passed
+produced_at: '2026-06-02T08:42:08Z'
+paths:
+- domain/ui/ui_program/src/events/mod.rs
+- domain/ui/ui_schema/src/value.rs
+subject_paths:
+- domain/ui/ui_program/src/events/mod.rs
+- domain/ui/ui_schema/src/value.rs
+validation_commands:
+- cargo:test (cargo test -p ui_schema schema_value) -> exit 0
+- cargo:test (cargo test -p ui_program route_contract) -> exit 0
+subject_digests:
+  domain/ui/ui_program/src/events/mod.rs: c3396431c829c11a9b209422c4dc14fd98384e1604d82d0dbb2f05895a0c39d2
+  domain/ui/ui_schema/src/value.rs: f9de6128e325b8d02a2e86fd1e9636bac28797fe97f08f756f4ae814fce0d6dc

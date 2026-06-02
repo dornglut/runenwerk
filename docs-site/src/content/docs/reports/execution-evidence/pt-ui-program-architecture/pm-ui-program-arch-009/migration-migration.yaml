@@ -7,7 +7,11 @@ name: migration
 status: passed
 produced_at: '2026-06-01T15:33:37Z'
 paths:
-- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/migration-migration.yaml
+- domain/ui/ui_controls/src/migration.rs
+- domain/ui/ui_testing/src/lib.rs
+subject_paths:
+- domain/ui/ui_controls/src/migration.rs
+- domain/ui/ui_testing/src/lib.rs
 validation_commands:
 - cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
 - cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
@@ -22,3 +26,6 @@ validation_commands:
 - task:roadmap:check (task roadmap:check) -> exit 0
 - task:docs:validate (task docs:validate) -> exit 0
 - task:planning:validate (task planning:validate) -> exit 0
+subject_digests:
+  domain/ui/ui_controls/src/migration.rs: 0c72b714cf6ee3e6307c4e4061694da0f533fcc86e60c1d9a548e5fd9b4a6503
+  domain/ui/ui_testing/src/lib.rs: a56e7e6fd0cbd37335fe2e810fbb05771807f64e328daffa26e093ee5f437af8

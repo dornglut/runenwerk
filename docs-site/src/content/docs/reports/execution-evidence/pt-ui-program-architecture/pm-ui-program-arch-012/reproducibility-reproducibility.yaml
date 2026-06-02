@@ -1,0 +1,106 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-012
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+evidence_kind: reproducibility
+name: reproducibility
+status: passed
+produced_at: '2026-06-02T17:45:58Z'
+paths:
+- docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml
+- domain/ui/ui_testing/src/reproducibility.rs
+subject_paths:
+- docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml
+- domain/ui/ui_testing/src/reproducibility.rs
+subject_digests:
+  docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+  domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+validation_commands:
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+- task:workflow:test (task workflow:test) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: df95f4835ed19a01411e8eeb09263e2fa58160095feb8f12f8507e1a1d9563b1
+  subject_digests:
+    docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 36f8aa65e33c829be769071566bdf62a3278cde69fc8b668130fcb9551609906
+  subject_digests:
+    docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 82c6ddeed4e163b6721da4278148ce7ce888204771e864ec29083a990d515bed
+  subject_digests:
+    docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 793bcb6124fa1835ddd8b16ea5f307b401ea51a4bc94f2fc195f5c02ea705bbc
+  subject_digests:
+    docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 045fc8ec4abd5a63c10fb96b8d771284285825d46a9b1f41048137bed7cbd32a
+  subject_digests:
+    docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 8ec31ed69f92f44fb5cccf9786ffe9e7a43823aaa02d0c22a9c32f750f5caa20
+  subject_digests:
+    docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml: 371b311e7e802653edb9595ce439d70d91cb15d4f278da94389ead7100e7b1cc
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da

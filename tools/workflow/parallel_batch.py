@@ -39,6 +39,7 @@ from roadmap_state import (
     validate_changed_paths,
     validate_write_scopes,
 )
+from prompt_doctrine import quality_doctrine_block
 
 
 DEFAULT_BATCH_ROOT = REPO_ROOT / "docs-site/src/content/docs/reports/batches"
@@ -523,6 +524,10 @@ def render_worker_prompt(manifest: BatchManifest, item: RoadmapItem, batch_item:
         "",
         f"Batch: {manifest.id}",
         f"Goal: {manifest.goal}",
+        "",
+        "## Quality Doctrine",
+        "",
+        quality_doctrine_block(),
         "",
         "## Task",
         "",

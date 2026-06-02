@@ -1,0 +1,97 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+run_id: pt-ui-program-architecture-20260602-185843z
+started_at: '2026-06-02T18:59:37Z'
+actions:
+- status: failed
+  action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  milestone_id: PM-UI-PROGRAM-ARCH-013
+  wr_id: WR-171
+  execution_kind: implementation_proof
+  executor_kind: product_implementation
+  writer_strategy: verification_writer
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  transcript_paths: []
+  pre_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: a999fb087d1182e6d4d863c92ddf3fd40cc33ea6b2857f16c6e7b10c57660725
+    docs-site/src/content/docs/workspace/production-tracks.yaml: ff69e680fdc3bf4f749c3dd06545c53ea6c3ac6e79d3d0ec9d742f08edaf7c4f
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: d1faf8e7f2d94df8e3eb94069d325795730a2a743bbcc4f808dc9653abd99552
+    docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    docs-site/src/content/docs/design/active/ui-program-contract-design.md: 034194dfeb22dfc7cabc58aebd531f3dc9f3d04d48be81261c65f41d34fa12de
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md: 897913d0a88add0e6a534f7c9aa1000e91cabaab5f37b750053398760bf0e2fb
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md: 27dc98f39f74b6d5f5bc36d6a75f80851eb376207b5792054bb765129c88b05f
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-171-design-coverage-and-semantic-truth-closure/plan.contract.yaml
+    : 0fb07e5599cdce4ac9b4706e3096caaa8f1b3fdae6fc98adc8597febd3207695
+    docs-site/src/content/docs/reports/implementation-plans/wr-171-design-coverage-and-semantic-truth-closure/plan.md: 507d8476c075e0c8f62b613436c0cfdd4599a0d2e1659a3d2d3966aa6cf8dedf
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 67fa69f62199935374dd4ec43216faa9acf8969137f42dce58b3b00052546b4c
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
+    tools/workflow/execution/compiler.py: 9d6a1229d49234123ffff400072ec6d2b3fef17aefbe747ba5cc1c22768ddfad
+    tools/workflow/execution/contracts.py: dc8b88ab77b876e60fcda9ff907f60201c1753a1985766cd09e07c75ecaea5f5
+    tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
+    tools/workflow/execution/ledger.py: da31134f466d40e8aad1a47372c57e57b99425d2453545017eeda9e828f5df73
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
+    tools/workflow/execution/preflight.py: a67b7827fd8106dd63c4b69e1e53d1311ce9d2f8e9d9ee58ef0d6b0b0f74e58f
+    tools/workflow/execution/runner.py: 9d72140a846154108afeb0d92bd51881219a849cdd707e800ee53e4d654cd40b
+    tools/workflow/execution/workspace.py: 1f719dbed43e8f513e8f50acd8b908cb7f47edb2292fc2ffb1d63b6b892450a5
+    tools/workflow/execution/writers.py: 9737945f60484ed069e68bfef38a68b32210cb35347f29cb2d783f75586e464a
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 010fd3e098d74e025dbdd86a51983cdf506a6c1088c0095ed1edf51470de19e0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  post_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: a999fb087d1182e6d4d863c92ddf3fd40cc33ea6b2857f16c6e7b10c57660725
+    docs-site/src/content/docs/workspace/production-tracks.yaml: ff69e680fdc3bf4f749c3dd06545c53ea6c3ac6e79d3d0ec9d742f08edaf7c4f
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: d1faf8e7f2d94df8e3eb94069d325795730a2a743bbcc4f808dc9653abd99552
+    docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
+    docs-site/src/content/docs/design/active/ui-program-contract-design.md: 034194dfeb22dfc7cabc58aebd531f3dc9f3d04d48be81261c65f41d34fa12de
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md: 897913d0a88add0e6a534f7c9aa1000e91cabaab5f37b750053398760bf0e2fb
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md: 27dc98f39f74b6d5f5bc36d6a75f80851eb376207b5792054bb765129c88b05f
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-171-design-coverage-and-semantic-truth-closure/plan.contract.yaml
+    : 0fb07e5599cdce4ac9b4706e3096caaa8f1b3fdae6fc98adc8597febd3207695
+    docs-site/src/content/docs/reports/implementation-plans/wr-171-design-coverage-and-semantic-truth-closure/plan.md: 507d8476c075e0c8f62b613436c0cfdd4599a0d2e1659a3d2d3966aa6cf8dedf
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 67fa69f62199935374dd4ec43216faa9acf8969137f42dce58b3b00052546b4c
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
+    tools/workflow/execution/compiler.py: 9d6a1229d49234123ffff400072ec6d2b3fef17aefbe747ba5cc1c22768ddfad
+    tools/workflow/execution/contracts.py: dc8b88ab77b876e60fcda9ff907f60201c1753a1985766cd09e07c75ecaea5f5
+    tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
+    tools/workflow/execution/ledger.py: da31134f466d40e8aad1a47372c57e57b99425d2453545017eeda9e828f5df73
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
+    tools/workflow/execution/preflight.py: a67b7827fd8106dd63c4b69e1e53d1311ce9d2f8e9d9ee58ef0d6b0b0f74e58f
+    tools/workflow/execution/runner.py: 9d72140a846154108afeb0d92bd51881219a849cdd707e800ee53e4d654cd40b
+    tools/workflow/execution/workspace.py: 1f719dbed43e8f513e8f50acd8b908cb7f47edb2292fc2ffb1d63b6b892450a5
+    tools/workflow/execution/writers.py: 9737945f60484ed069e68bfef38a68b32210cb35347f29cb2d783f75586e464a
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 010fd3e098d74e025dbdd86a51983cdf506a6c1088c0095ed1edf51470de19e0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: "validation failed: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance -> exit 201\nVerifier ui_program_architecture_conformance: failed\nChecks: 12\n- conformance spec is registered for the requested track and truth claim\n- conformance required source files exist and expose declared symbols\n- root facade modules remain facades instead of owning broad contracts\n- final UI owner map directories exist and are reconciled with design docs\n- accepted UI architecture design declares every conformance owner and boundary \nterm\n- design requirement coverage matrix is machine-readable and bound to the \nconformance spec\n- verified design requirements cite concrete code subjects, tests, evidence, and\nsemantic verifiers\n- conformance evidence records are resolver-backed and non-self-referential\n- semantic conformance checks dispatch through registered verifier functions\n- final UI owner crates do not use catch-all helpers/utils/misc files\n- domain UI code avoids forbidden ownership and extraction terms\n- zero-gap criteria are declared by the conformance spec\nFindings:\n- missing-evidence-pm-ui-program-arch-013-runtime-test: Missing `runtime_test` \nevidence for PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-artifact: Missing `artifact` evidence \nfor PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-diagnostics: Missing `diagnostics` \nevidence for PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-source-maps: Missing `source_maps` \nevidence for PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-migration: Missing `migration` \nevidence for PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-reproducibility: Missing \n`reproducibility` evidence for PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-fixture: Missing `fixture` evidence \nfor PM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\n- missing-evidence-pm-ui-program-arch-013-visual: Missing `visual` evidence for \nPM-UI-PROGRAM-ARCH-013.\n  Remediation: Create resolver-backed evidence for the declared milestone and \ncategory.\n  Subjects: \ndocs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture\n/pm-ui-program-arch-013\nExpected certificate path: \ndocs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture\n/ui-program-perfectionist-conformance.yaml\ntask: [truth:verify] uv run python tools/workflow/truth/cli.py verify --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance\nwarning: `VIRTUAL_ENV=/Users/joshua/Projekte/gamedev/Runenwerk/.venv`\
+    \ does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead\ntask: Failed to run task \"truth:verify\": exit status 1"
+updated_at: '2026-06-02T18:59:37Z'

@@ -24,3 +24,11 @@ subject_paths:
 - domain/ui/ui_state/Cargo.toml
 - domain/ui/ui_evaluator/Cargo.toml
 - domain/ui/ui_binding/src/lib.rs
+subject_digests:
+  Cargo.toml: 95443df489177b3ba4fb03ec6f1f3c6765252eeb967c0c91b58e522bb7a7d4e7
+  domain/ui/ui_binding/Cargo.toml: f1112625bfc78149c663ec838701896c9effc802d7db043d71ca5ef843ea1760
+  domain/ui/ui_binding/src/lib.rs: 112f42ede4e7de59366c3905316f504c93ade4178de24ea682e154f7c1c0ecc1
+  domain/ui/ui_evaluator/Cargo.toml: 768330910a66a17295fd454d270781a27bfa1a59a6da48a20d8526a961912aa3
+  domain/ui/ui_evaluator/src/lib.rs: 2e4eea08eaee5137ab526ba03bd334c4c97309231c82f65ad5e12c7b3a6b186f
+  domain/ui/ui_state/Cargo.toml: 282b87af5b0b4b1f6b7f1a04aefbedf6bde7b04ca33a30f58673dc3f724c725d
+  domain/ui/ui_state/src/lib.rs: 7cbe40fb33a9f9d238665a17efd93a28a511b37ea77a0ba098fdbffe0e3f84ae

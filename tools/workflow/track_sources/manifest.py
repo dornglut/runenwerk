@@ -49,6 +49,7 @@ FULL_TRACK_PERMISSION_SET = {
     "agent_closeout",
     "product_code",
     "product_implementation",
+    "runtime_closeout",
 }
 FULL_AUTOMATION_PERMISSION_GRANTS = {
     "auto_safe": {"auto_safe"},
@@ -56,8 +57,8 @@ FULL_AUTOMATION_PERMISSION_GRANTS = {
     "agent_closeout": {"agent_closeout"},
     "product_code": {"product_code"},
     "product_implementation": {"product_implementation"},
-    "runtime_closeout": {"agent_closeout"},
-    "handoff": {"agent_closeout"},
+    "runtime_closeout": {"agent_closeout", "runtime_closeout"},
+    "handoff": {"agent_closeout", "handoff"},
     "crate_creation": {"crate_creation"},
     "foundation_extraction": {"foundation_extraction"},
 }
@@ -223,6 +224,8 @@ class ManifestTruthClaim(StrictModel):
     claim_level: TruthClaimLevel
     claim_status: TruthClaimStatus
     claim_statement: str
+    truth_verifier: str | None = None
+    truth_certificate_path: str | None = None
     required_docs: list[ManifestTruthEvidence] = Field(default_factory=list)
     required_code_contracts: list[ManifestTruthEvidence] = Field(default_factory=list)
     required_validations: list[ManifestTruthEvidence] = Field(default_factory=list)
@@ -238,6 +241,14 @@ class ManifestTruthClaim(StrictModel):
         if not cleaned:
             raise ValueError("truth claim text fields must not be empty")
         return cleaned
+
+    @field_validator("truth_verifier", "truth_certificate_path")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
     @field_validator("known_gaps", "supersedes", "blocks_downstream")
     @classmethod

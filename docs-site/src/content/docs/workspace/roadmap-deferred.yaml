@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap Deferred Backlog
-  last_reviewed: '2026-05-20'
+  last_reviewed: '2026-06-01'
   owner: workspace
 items:
 - id: WR-011

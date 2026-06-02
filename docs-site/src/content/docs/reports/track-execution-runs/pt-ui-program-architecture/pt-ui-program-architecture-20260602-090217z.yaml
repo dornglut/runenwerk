@@ -1,0 +1,96 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+run_id: pt-ui-program-architecture-20260602-090217z
+started_at: '2026-06-02T09:13:19Z'
+actions:
+- status: failed
+  action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-011:WR-169:sub:typed-graph-control-contracts
+  milestone_id: PM-UI-PROGRAM-ARCH-011
+  wr_id: WR-169
+  execution_kind: implementation_proof
+  executor_kind: product_implementation
+  writer_strategy: agent_writer
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  transcript_paths: []
+  pre_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 932fb2d435f07fdf2a2d21f4ad902847e79d1b37cd13966e58af92ac4722f918
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 3eb70afb11ec9c78d7ac8cc98f3a7e5569f90628fa08b2398c63d0e6bc1ccf0e
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 404204de609aee849ee790fdef60d0e3772df17fd3b9b57008ac698bd1248c01
+    docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: cd4e50a7d7755a5904e21f3088e455589b194459801e9f7db8a21d2cdf9000af
+    docs-site/src/content/docs/design/active/ui-program-contract-design.md: 034194dfeb22dfc7cabc58aebd531f3dc9f3d04d48be81261c65f41d34fa12de
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md: 897913d0a88add0e6a534f7c9aa1000e91cabaab5f37b750053398760bf0e2fb
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md: 27dc98f39f74b6d5f5bc36d6a75f80851eb376207b5792054bb765129c88b05f
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-169-perfectionist-architecture-conformance-closure/plan.contract.yaml
+    : f80cbb90efee0b1dd472d80a554092157553d6f5b2af7984dbbc64431605b91c
+    docs-site/src/content/docs/reports/implementation-plans/wr-169-perfectionist-architecture-conformance-closure/plan.md: 891deb18fd4213ba3b67f110509bfba9c8baf26857bbde45ffe086048107d8ef
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 67fa69f62199935374dd4ec43216faa9acf8969137f42dce58b3b00052546b4c
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 19b4e87c4fd5f56ff0ab7f93526c0d75497912787061eff1c6dc3eb8e1d6ca4c
+    tools/workflow/execution/compiler.py: d2d50bee5bdda224f59a441497eb7fdda6a124c42e63c151bc75ee1eff70d85a
+    tools/workflow/execution/contracts.py: 766de82990e38c1774434af6c55407be3da0a7fb36fe289c291c59f8e300a604
+    tools/workflow/execution/evidence.py: a58c33a4a23a7d2bd32ccee327df6061c3e6d24c8da0d05ee23431b18f82c1b6
+    tools/workflow/execution/ledger.py: a57f566a6efbf5db9bde807696a2adc402a1d5cd37016b42e9c47a58b6a90a4a
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
+    tools/workflow/execution/preflight.py: b4552f819389d32a87d0d0a4c5260e1629edbb098b859c0568982a7e86912eb7
+    tools/workflow/execution/runner.py: 54726e810d404c2d115b4fd2a405e40786d6fe832a601a31562a9b8f205ceb91
+    tools/workflow/execution/workspace.py: b576feba1026321100cabb4c2722240464791c81337652cb284b8b417c1d6c41
+    tools/workflow/execution/writers.py: e65d9d92e4379176e9988df0ccdd69246d354fd452055fbf2dbdc356eb04eacc
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 24fc4ead5e519d8815f306fc19a783528fa4cc369cc6bd822149e45cfce37da0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 3150b0f07abe219d9ab6716315d5be5236a216e860c4a108f1497415749e07cb
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  post_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 932fb2d435f07fdf2a2d21f4ad902847e79d1b37cd13966e58af92ac4722f918
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 3eb70afb11ec9c78d7ac8cc98f3a7e5569f90628fa08b2398c63d0e6bc1ccf0e
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 404204de609aee849ee790fdef60d0e3772df17fd3b9b57008ac698bd1248c01
+    docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
+    docs-site/src/content/docs/design/active/ui-program-architecture.md: cd4e50a7d7755a5904e21f3088e455589b194459801e9f7db8a21d2cdf9000af
+    docs-site/src/content/docs/design/active/ui-program-contract-design.md: 034194dfeb22dfc7cabc58aebd531f3dc9f3d04d48be81261c65f41d34fa12de
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md: 897913d0a88add0e6a534f7c9aa1000e91cabaab5f37b750053398760bf0e2fb
+    docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md: 27dc98f39f74b6d5f5bc36d6a75f80851eb376207b5792054bb765129c88b05f
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-169-perfectionist-architecture-conformance-closure/plan.contract.yaml
+    : f80cbb90efee0b1dd472d80a554092157553d6f5b2af7984dbbc64431605b91c
+    docs-site/src/content/docs/reports/implementation-plans/wr-169-perfectionist-architecture-conformance-closure/plan.md: 891deb18fd4213ba3b67f110509bfba9c8baf26857bbde45ffe086048107d8ef
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 67fa69f62199935374dd4ec43216faa9acf8969137f42dce58b3b00052546b4c
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 19b4e87c4fd5f56ff0ab7f93526c0d75497912787061eff1c6dc3eb8e1d6ca4c
+    tools/workflow/execution/compiler.py: d2d50bee5bdda224f59a441497eb7fdda6a124c42e63c151bc75ee1eff70d85a
+    tools/workflow/execution/contracts.py: 766de82990e38c1774434af6c55407be3da0a7fb36fe289c291c59f8e300a604
+    tools/workflow/execution/evidence.py: a58c33a4a23a7d2bd32ccee327df6061c3e6d24c8da0d05ee23431b18f82c1b6
+    tools/workflow/execution/ledger.py: a57f566a6efbf5db9bde807696a2adc402a1d5cd37016b42e9c47a58b6a90a4a
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
+    tools/workflow/execution/preflight.py: b4552f819389d32a87d0d0a4c5260e1629edbb098b859c0568982a7e86912eb7
+    tools/workflow/execution/runner.py: 54726e810d404c2d115b4fd2a405e40786d6fe832a601a31562a9b8f205ceb91
+    tools/workflow/execution/workspace.py: b576feba1026321100cabb4c2722240464791c81337652cb284b8b417c1d6c41
+    tools/workflow/execution/writers.py: e65d9d92e4379176e9988df0ccdd69246d354fd452055fbf2dbdc356eb04eacc
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 24fc4ead5e519d8815f306fc19a783528fa4cc369cc6bd822149e45cfce37da0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 3150b0f07abe219d9ab6716315d5be5236a216e860c4a108f1497415749e07cb
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: 'PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-011:WR-169:sub:typed-graph-control-contracts: changed undeclared file Cargo.lock'
+updated_at: '2026-06-02T09:13:19Z'

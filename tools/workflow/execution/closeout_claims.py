@@ -60,7 +60,12 @@ def closeout_claim_errors(action: ActionContract, *, evidence_root: Path = EVIDE
                         f"{action.action_id}: prior milestone {milestone_id} is missing {requirement.kind} evidence"
                     )
         return errors
-    if action.closeout_contract.completion_quality in {"runtime_proven", "architecture_runtime_proven"}:
+    if action.closeout_contract.completion_quality in {
+        "runtime_proven",
+        "proof_slice_runtime_proven",
+        "architecture_runtime_proven",
+        "perfectionist_verified",
+    }:
         records = load_evidence_records(action.track_id, action.milestone_id, root=evidence_root)
         valid_records = []
         for record in records:

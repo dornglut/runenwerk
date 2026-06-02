@@ -7,7 +7,11 @@ name: artifact
 status: passed
 produced_at: '2026-06-01T15:33:37Z'
 paths:
-- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/artifact-artifact.yaml
+- domain/ui/ui_artifacts/src/lib.rs
+- domain/ui/ui_compiler/src/lib.rs
+subject_paths:
+- domain/ui/ui_artifacts/src/lib.rs
+- domain/ui/ui_compiler/src/lib.rs
 validation_commands:
 - cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
 - cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
@@ -22,3 +26,6 @@ validation_commands:
 - task:roadmap:check (task roadmap:check) -> exit 0
 - task:docs:validate (task docs:validate) -> exit 0
 - task:planning:validate (task planning:validate) -> exit 0
+subject_digests:
+  domain/ui/ui_artifacts/src/lib.rs: 69098fbca59f03f2621806de3d71efebad597d49ecbc696b321deaabb5b6a977
+  domain/ui/ui_compiler/src/lib.rs: 55adc73f20cdc3a9a1cb368e8890089985b23684c71717b171279174ed67171c

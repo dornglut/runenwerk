@@ -25,6 +25,7 @@ from roadmap_state import ROADMAP_SOURCE, REPO_ROOT, WorkflowError, load_roadmap
 from track_sources.audit import audit_manifest, full_automation_preflight_errors, manifest_audit_blocker_lines
 from track_sources.manifest import TRACK_EXECUTION_MANIFEST_ROOT, load_track_execution_manifest, truth_claim_summary_lines
 from track_sources.scaffold import create_manifest_scaffold
+from truth.certificates import certificate_summary_lines
 
 
 FULL_TRACK_PERMISSION_SET = {
@@ -91,6 +92,107 @@ def run_source_full_automation_preflight(
     )
     if errors:
         raise WorkflowError("Track Execution Manifest full-automation blockers:\n" + "\n".join(errors))
+
+
+def current_pack_or_compile(
+    track: str,
+    *,
+    production_source: Path,
+    roadmap_source: Path,
+    manifest_source_root: Path,
+    contract_pack_root: Path,
+):
+    pack = load_contract_pack(track, root=contract_pack_root)
+    if pack is None or contract_pack_freshness_errors(pack):
+        pack = compile_contract_pack(
+            track,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            manifest_root=manifest_source_root,
+            contract_pack_root=contract_pack_root,
+        )
+        write_contract_pack(pack, root=contract_pack_root)
+        console.print("[green]Execution Contract Pack prepared.[/green]")
+    return pack
+
+
+def run_non_executable_preparation_action(
+    track: str,
+    *,
+    allow: list[str],
+    deny: list[str],
+    max_actions: int,
+    preflight_only: bool,
+    production_source: Path,
+    roadmap_source: Path,
+    manifest_source_root: Path,
+    lock_source_root: Path,
+    contract_pack_root: Path,
+    run_ledger_root: Path,
+    evidence_root: Path | None,
+) -> None:
+    if max_actions != 1:
+        raise WorkflowError(f"{track}: non-executable track mutation may run only one preparation action")
+    pack = current_pack_or_compile(
+        track,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
+        manifest_source_root=manifest_source_root,
+        contract_pack_root=contract_pack_root,
+    )
+    if not pack.actions:
+        console.print(f"[green]{track}: no remaining ActionContracts.[/green]")
+        return
+    action = pack.actions[0]
+    if action.executor_kind not in {"planning_expansion", "design_authoring"}:
+        raise WorkflowError(
+            f"{track}: non-executable track mutation supports only planning_expansion or design_authoring; "
+            f"next action is {action.executor_kind}"
+        )
+    if set(action.permissions_required) - {"auto_safe", "agent_design"}:
+        raise WorkflowError(f"{track}: non-executable preparation may require only auto_safe or agent_design")
+    execution_preflight_command(track=track, mode="single-action", allow=allow, contract_pack_root=contract_pack_root)
+    if preflight_only:
+        return
+    execution_lock_command(
+        track=track,
+        locked_by="planning-expansion",
+        mode="single-action",
+        allow=allow,
+        deny=deny,
+        contract_pack_root=contract_pack_root,
+        lock_root=lock_source_root,
+    )
+    execution_run_command(
+        track=track,
+        mode="single-action",
+        allow=allow,
+        deny=deny,
+        max_actions=1,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
+        manifest_source_root=manifest_source_root,
+        contract_pack_root=contract_pack_root,
+        lock_root=lock_source_root,
+        run_ledger_root=run_ledger_root,
+        evidence_root=evidence_root or EVIDENCE_ROOT,
+        repo_root=REPO_ROOT,
+    )
+
+
+def print_truth_status(track: str, *, manifest_source_root: Path) -> None:
+    loaded = load_track_execution_manifest(track, root=manifest_source_root)
+    if loaded is None:
+        return
+    truth_lines = truth_claim_summary_lines(loaded.manifest)
+    if truth_lines:
+        for line in truth_lines:
+            console.print(line)
+    certificate_lines = certificate_summary_lines(track, loaded.manifest.truth_claims)
+    if certificate_lines:
+        console.print("Truth certificates:")
+        for line in certificate_lines:
+            console.print(line)
 
 
 @app.command("plan-track")
@@ -309,7 +411,20 @@ def run_track(
             return
         if loaded.manifest.ai_executable or loaded.manifest.full_automation_target:
             raise WorkflowError(f"{track}: executable/full-automation tracks must use --mode full-track")
-        raise WorkflowError(f"{track}: non-executable track mutation is not implemented in the clean adapter")
+        run_non_executable_preparation_action(
+            track,
+            allow=allow,
+            deny=deny,
+            max_actions=max_actions,
+            preflight_only=preflight_only,
+            production_source=production_source,
+            roadmap_source=roadmap_source,
+            manifest_source_root=manifest_source_root,
+            lock_source_root=lock_source_root,
+            contract_pack_root=contract_pack_root,
+            run_ledger_root=run_ledger_root,
+            evidence_root=evidence_root,
+        )
     except WorkflowError as error:
         console.print("[red]production:run-track failed[/red]")
         for line in str(error).splitlines():
@@ -328,7 +443,10 @@ def next_action(
     try:
         pack = load_contract_pack(track, root=contract_pack_root)
         if pack is not None:
+            print_truth_status(track, manifest_source_root=manifest_source_root)
             execution_next_command(track=track, contract_pack_root=contract_pack_root)
+            console.print(f"Track status command: task track -- --track {track}")
+            console.print(f"Track continuation command: task track:go -- --track {track}")
             return
         loaded = load_manifest_or_raise(track, manifest_source_root=manifest_source_root)
         if loaded.manifest.ai_executable or loaded.manifest.full_automation_target:
@@ -357,7 +475,14 @@ def next_action(
         if truth_lines:
             for line in truth_lines:
                 console.print(line)
+        certificate_lines = certificate_summary_lines(track, loaded.manifest.truth_claims)
+        if certificate_lines:
+            console.print("Truth certificates:")
+            for line in certificate_lines:
+                console.print(line)
         console.print("Implementation authorized now: no - task production:next is read-only; Contract Pack is required for execution")
+        console.print(f"Track status command: task track -- --track {track}")
+        console.print(f"Track continuation command: task track:go -- --track {track}")
     except WorkflowError as error:
         console.print("[red]production:next failed[/red]")
         for line in str(error).splitlines():
@@ -385,6 +510,13 @@ def audit_track(
         if full_automation:
             if set(allow) & set(deny):
                 raise WorkflowError("the same permission cannot be both allowed and denied")
+            run_source_full_automation_preflight(
+                track,
+                loaded=loaded,
+                allow=allow,
+                production_source=production_source,
+                roadmap_source=roadmap_source,
+            )
             if load_contract_pack(track, root=contract_pack_root) is None:
                 raise WorkflowError(
                     f"{track}: full automation audit requires an Execution Contract Pack; "

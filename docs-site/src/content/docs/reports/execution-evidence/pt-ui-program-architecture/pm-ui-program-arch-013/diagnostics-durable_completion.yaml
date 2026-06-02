@@ -1,0 +1,111 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-013
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+evidence_kind: diagnostics
+name: durable_completion
+status: passed
+produced_at: '2026-06-02T19:04:11Z'
+paths:
+- tools/workflow/track_control_cli.py
+subject_paths:
+- tools/workflow/track_control_cli.py
+subject_digests:
+  tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+validation_commands:
+- task:workflow:test (task workflow:test) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_controls control_package) -> exit 0
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+validation_provenance:
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: a7ab5fb2b43aa064edae4a6f11cec5071f346f0261cf52f676de6a820ff6aff6
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 4e7716faddfb44e804096250b64ff5a54e725e69f3e2e02e3da51fe737578676
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_controls
+  - control_package
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: ff867765cbdc669b4fac36dfaf6eb8c9cfcbdd1524d253d4578c2c370c7a827b
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: e2bd479edc21b50c4b92e01ec420e17c3cc5a7928b272a8b802df99e81aeaadb
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 7e0b3274af87ec19485d7e465111b7e3eef75c35434c08e7a4d763a005e09ac9
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: be2e1888d01d1d482e4125fc7840f9f8f6b8b8f9223f95bc6a70aa5d9c2e9173
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: e4a13c86fc2157d1858055cb7279f199b2c5b9f591858e923d94ed55c0d509b1
+  subject_digests:
+    tools/workflow/track_control_cli.py: 35bcf7f85c057d845a7ecffc129bb85e153783cd563578a334ce444fbb894517

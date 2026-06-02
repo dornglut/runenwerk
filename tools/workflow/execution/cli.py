@@ -259,6 +259,7 @@ def run_command(
                 repo_root=effective_repo_root,
                 evidence_root=effective_evidence_root,
                 contract_pack_root=contract_pack_root,
+                run_id=run_id,
             )
             actions_run += 1
             console.print("[green]Execution Harness ran one ActionContract.[/green]")
@@ -267,6 +268,8 @@ def run_command(
                 console.print(f"- {repo_path(path)}")
             for path in result.evidence_paths:
                 console.print(f"Evidence: {repo_path(path)}")
+            for path in result.transcript_paths:
+                console.print(f"Transcript: {repo_path(path)}")
             for validation in result.validation_results:
                 console.print(f"- {validation}")
             console.print(f"Next: {result.next_action}")
@@ -340,6 +343,7 @@ def run_command(
                     error=str(error),
                     pre_action_digests=current_pre_action_digests,
                     post_action_digests=post_digests,
+                    transcript_paths=tuple(getattr(error, "transcript_paths", ())),
                     root=run_ledger_root,
                     stop_reason="workflow error",
                 )

@@ -36,6 +36,7 @@ from roadmap_state import (
     promotion_preflight,
     repo_path,
 )
+from prompt_doctrine import quality_doctrine_block
 
 
 PROMPT_TEMPLATE = REPO_ROOT / "docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md"
@@ -245,6 +246,8 @@ def render_contract_prompt(context: ProductionPlanContext, action: PlanAction, c
             "The contract must be decision-complete: scope, exact owners/modules, non-goals, gates, implementation steps, validation, stop conditions, and closeout requirements.",
             "",
             "No product code changes.",
+            "",
+            quality_doctrine_block(),
             "",
         ]
     )

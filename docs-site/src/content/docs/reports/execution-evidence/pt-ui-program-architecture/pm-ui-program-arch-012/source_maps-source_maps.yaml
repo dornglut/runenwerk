@@ -1,0 +1,113 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-012
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+evidence_kind: source_maps
+name: source_maps
+status: passed
+produced_at: '2026-06-02T17:45:58Z'
+paths:
+- docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+- domain/ui/ui_artifacts/src/source_map.rs
+subject_paths:
+- docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+- domain/ui/ui_artifacts/src/source_map.rs
+subject_digests:
+  ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+  domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+validation_commands:
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+- task:workflow:test (task workflow:test) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: a3c15244cadb26c3604ee847914216f53a220d2692bddda52555af698f6ee43f
+  subject_digests:
+    ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 8a87b2462a355a84e9c31469b5be7f38e64f03e1705d4547d3fe23ab14165b97
+  subject_digests:
+    ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: f81bf0c4db83c186a9ae40717cd7b6b860e7a1d9890a4eb9dfd0069ea5da76ae
+  subject_digests:
+    ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 229614cb87d5cd63e335709b242c1886f61fba75a3d3d9bd104cc4523283a0ff
+  subject_digests:
+    ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 1882ce6777bb0b0af30ba9cb8178ee1d64f9db527e51d66d485926b807f8cbb6
+  subject_digests:
+    ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 0241054bad73055176d86adc7255b9d68a8c0f4d60dfa64fbc92f476dfe14ab6
+  subject_digests:
+    ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    : b466439b47b2235ddc4d8b0bb1520e2601a052eed91036291dca1875a4e92f2b
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7

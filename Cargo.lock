@@ -3695,6 +3695,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
+name = "ui_accessibility"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_artifacts",
+ "ui_program",
+]
+
+[[package]]
 name = "ui_artifacts"
 version = "0.1.0"
 dependencies = [
@@ -3707,6 +3716,8 @@ name = "ui_binding"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ui_artifacts",
+ "ui_program",
  "ui_schema",
 ]
 
@@ -3716,6 +3727,15 @@ version = "0.1.0"
 dependencies = [
  "ui_artifacts",
  "ui_program",
+]
+
+[[package]]
+name = "ui_controls"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_program",
+ "ui_schema",
 ]
 
 [[package]]
@@ -3739,8 +3759,19 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "ui_artifacts",
+ "ui_binding",
  "ui_program",
+ "ui_schema",
  "ui_state",
+]
+
+[[package]]
+name = "ui_geometry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ui_artifacts",
+ "ui_program",
 ]
 
 [[package]]
@@ -3755,6 +3786,7 @@ name = "ui_hosts"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ui_evaluator",
  "ui_program",
  "ui_schema",
 ]
@@ -3819,6 +3851,7 @@ name = "ui_state"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ui_program",
  "ui_schema",
 ]
 
@@ -3835,9 +3868,16 @@ name = "ui_testing"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ui_accessibility",
  "ui_artifacts",
+ "ui_binding",
  "ui_compiler",
+ "ui_evaluator",
+ "ui_geometry",
+ "ui_hosts",
  "ui_program",
+ "ui_schema",
+ "ui_state",
 ]
 
 [[package]]

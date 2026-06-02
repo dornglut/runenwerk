@@ -1,0 +1,22 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-011
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-011:WR-169:sub:evaluator-state-binding-hosts
+evidence_kind: visual
+name: visual
+status: passed
+produced_at: '2026-06-02T11:07:24Z'
+paths:
+- domain/ui/ui_evaluator/src/lib.rs
+- domain/ui/ui_testing/src/lib.rs
+subject_paths:
+- domain/ui/ui_evaluator/src/lib.rs
+- domain/ui/ui_testing/src/lib.rs
+validation_commands:
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_state state_contract) -> exit 0
+- cargo:test (cargo test -p ui_binding binding_contract) -> exit 0
+- cargo:test (cargo test -p ui_hosts host_contract) -> exit 0
+subject_digests:
+  domain/ui/ui_evaluator/src/lib.rs: 2e4eea08eaee5137ab526ba03bd334c4c97309231c82f65ad5e12c7b3a6b186f
+  domain/ui/ui_testing/src/lib.rs: a56e7e6fd0cbd37335fe2e810fbb05771807f64e328daffa26e093ee5f437af8

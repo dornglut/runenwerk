@@ -7,5 +7,7 @@ publish = false
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 ui_artifacts.workspace = true
+ui_binding.workspace = true
 ui_program.workspace = true
+ui_schema.workspace = true
 ui_state.workspace = true

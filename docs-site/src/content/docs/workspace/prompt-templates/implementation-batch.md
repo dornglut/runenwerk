@@ -16,6 +16,10 @@ related_docs:
 
 Use this template for a bounded implementation task.
 
+Generated implementation prompts should include the canonical quality doctrine
+marker `runenwerk-quality-doctrine-v1`; use the canonical doctrine instead of
+duplicating long-term quality language in local prompt copies.
+
 ## Template
 
 ```text

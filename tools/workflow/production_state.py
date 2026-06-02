@@ -398,20 +398,20 @@ def validate_manifest_backed_tracks(
             continue
         audit_errors = audit_manifest(loaded, track=track, roadmap=roadmap)
         errors.extend(audit_errors)
+        pack = load_contract_pack(track.id, root=CONTRACT_PACK_ROOT)
+        if pack is not None:
+            for error in contract_pack_freshness_errors(pack):
+                if error not in audit_errors:
+                    errors.append(f"{track.id}: execution contract pack blocker: {error}")
+            for error in preflight_pack(pack):
+                if error not in audit_errors:
+                    errors.append(f"{track.id}: execution contract pack blocker: {error}")
         if loaded.manifest.full_automation_target:
-            pack = load_contract_pack(track.id, root=CONTRACT_PACK_ROOT)
             if pack is None:
                 errors.append(
                     f"{track.id}: full automation target requires Execution Contract Pack at "
                     f"{repo_path(contract_pack_path(track.id, root=CONTRACT_PACK_ROOT))}"
                 )
-            else:
-                for error in contract_pack_freshness_errors(pack):
-                    if error not in audit_errors:
-                        errors.append(f"{track.id}: execution contract pack blocker: {error}")
-                for error in preflight_pack(pack):
-                    if error not in audit_errors:
-                        errors.append(f"{track.id}: execution contract pack blocker: {error}")
             full_automation_errors = full_automation_preflight_errors(
                 loaded,
                 track=track,
@@ -524,15 +524,11 @@ def write_production_schema_files(check: bool = False) -> list[str]:
     return []
 
 
-@app.command()
-def validate(
-    source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
-    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
-    manifest_source_root: Path = typer.Option(
-        TRACK_EXECUTION_MANIFEST_ROOT,
-        help="Track Execution Manifest source root.",
-    ),
-) -> None:
+def production_validation_errors(
+    source: Path = PRODUCTION_SOURCE,
+    roadmap_source: Path = ROADMAP_SOURCE,
+    manifest_source_root: Path = TRACK_EXECUTION_MANIFEST_ROOT,
+) -> list[str]:
     try:
         validate_production_tracks_with_json_schema(source)
         state = load_production_tracks(source)
@@ -549,14 +545,31 @@ def validate(
                 manifest_root=manifest_source_root,
             )
         )
+        return errors
     except (WorkflowError, ValueError) as error:
-        console.print(f"[red]{error}[/red]")
-        raise typer.Exit(1) from error
+        return [str(error)]
+
+
+@app.command()
+def validate(
+    source: Path = typer.Option(PRODUCTION_SOURCE, help="Production tracks YAML source."),
+    roadmap_source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    manifest_source_root: Path = typer.Option(
+        TRACK_EXECUTION_MANIFEST_ROOT,
+        help="Track Execution Manifest source root.",
+    ),
+) -> None:
+    errors = production_validation_errors(
+        source=source,
+        roadmap_source=roadmap_source,
+        manifest_source_root=manifest_source_root,
+    )
     if errors:
         console.print("[red]production track validation failed[/red]")
         for error in errors:
             console.print(f"- {error}")
         raise typer.Exit(1)
+    state = load_production_tracks(source)
     milestone_count = sum(len(track.milestones) for track in state.tracks)
     console.print(f"[green]production track validation passed:[/green] {len(state.tracks)} tracks, {milestone_count} milestones")
 

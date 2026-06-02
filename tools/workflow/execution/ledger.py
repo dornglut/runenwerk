@@ -56,15 +56,20 @@ def append_run_action(
             "executor_kind": action.executor_kind,
             "writer_strategy": action.writer_strategy,
             "files_changed": [repo_path(path) for path in result.written_paths],
+            "agent_files_changed": [repo_path(path) for path in result.agent_files_changed],
+            "validation_files_changed": [repo_path(path) for path in result.validation_files_changed],
+            "evidence_files_changed": [repo_path(path) for path in result.evidence_files_changed],
             "validation_results": [
                 {
                     "command_id": validation.command_id,
                     "argv": list(validation.argv),
                     "returncode": validation.returncode,
+                    "files_changed": list(validation.files_changed),
                 }
                 for validation in result.validation_results
             ],
             "evidence_paths": [repo_path(path) for path in result.evidence_paths],
+            "transcript_paths": [repo_path(path) for path in result.transcript_paths],
             "pre_action_digests": pre_action_digests,
             "post_action_digests": post_action_digests,
             "next_legal_action": result.next_action,
@@ -84,8 +89,9 @@ def append_run_failure(
     error: str,
     pre_action_digests: dict[str, str],
     post_action_digests: dict[str, str],
-    root: Path = RUN_LEDGER_ROOT,
     stop_reason: str,
+    transcript_paths: tuple[Path, ...] = (),
+    root: Path = RUN_LEDGER_ROOT,
 ) -> Path:
     path = run_ledger_path(track_id, run_id, root=root)
     if path.exists():
@@ -113,6 +119,7 @@ def append_run_failure(
             "files_changed": [],
             "validation_results": [],
             "evidence_paths": [],
+            "transcript_paths": [repo_path(path) for path in transcript_paths],
             "pre_action_digests": pre_action_digests,
             "post_action_digests": post_action_digests,
             "next_legal_action": "blocked; repair the failure and rerun the harness.",

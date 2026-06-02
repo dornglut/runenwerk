@@ -256,6 +256,9 @@ def truth_claim_errors(
     track: ProductionTrack,
 ) -> list[str]:
     errors: list[str] = []
+    from truth.certificates import certificate_errors_for_claim
+
+    errors.extend(certificate_errors_for_claim(manifest.track_id, claim))
     if claim.claim_status == "satisfied":
         for evidence in (
             claim.required_docs
@@ -348,6 +351,20 @@ def production_truth_claim_alignment_errors(manifest: TrackExecutionManifest, tr
     errors: list[str] = []
     satisfied = {(claim.claim_kind, claim.claim_level) for claim in manifest.truth_claims if claim.claim_status == "satisfied"}
     blocked = {(claim.claim_kind, claim.claim_level) for claim in manifest.truth_claims if claim.claim_status == "blocked"}
+    if track.state == "completed" and track.target_completion_quality in {
+        "architecture_runtime_proven",
+        "perfectionist_verified",
+    }:
+        for claim in manifest.truth_claims:
+            if claim.claim_status == "blocked" and claim.claim_kind in {
+                "architecture_contract",
+                "product_behavior",
+                "proof_slice",
+            }:
+                errors.append(
+                    f"{track.id}: completed tracks must not retain blocked {claim.claim_kind} truth claim "
+                    f"{claim.claim_id}"
+                )
     if track.target_completion_quality == "proof_slice_runtime_proven" and (
         "proof_slice",
         "proof_slice_runtime_proven",
@@ -385,6 +402,19 @@ def production_truth_claim_alignment_errors(manifest: TrackExecutionManifest, tr
                             f"{track.id}: production wording claims architecture truth while the "
                             f"architecture_runtime_proven truth claim is blocked: {text}"
                         )
+    if track.target_completion_quality == "perfectionist_verified":
+        perfectionist_satisfied = any(level == "perfectionist_verified" for _, level in satisfied)
+        perfectionist_blocked = any(level == "perfectionist_verified" for _, level in blocked)
+        if track.state == "completed" and not perfectionist_satisfied:
+            errors.append(
+                f"{track.id}: target_completion_quality perfectionist_verified requires a satisfied "
+                "truth claim at perfectionist_verified"
+            )
+        if track.state != "completed" and not (perfectionist_satisfied or perfectionist_blocked):
+            errors.append(
+                f"{track.id}: active target_completion_quality perfectionist_verified requires a "
+                "satisfied or blocked perfectionist_verified truth claim"
+            )
     if track.target_completion_quality == "proof_slice_runtime_proven":
         for text in [track.strategic_goal, *track.success_criteria]:
             normalized = text.lower()

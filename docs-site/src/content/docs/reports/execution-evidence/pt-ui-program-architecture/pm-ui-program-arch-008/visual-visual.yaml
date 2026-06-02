@@ -20,3 +20,7 @@ subject_paths:
 - Cargo.toml
 - domain/ui/ui_testing/src/lib.rs
 - domain/ui/ui_testing/Cargo.toml
+subject_digests:
+  Cargo.toml: 95443df489177b3ba4fb03ec6f1f3c6765252eeb967c0c91b58e522bb7a7d4e7
+  domain/ui/ui_testing/Cargo.toml: ddf9bc7f9c159b8ed685e6cf19fdf77efd8529f77dcd82dc7154586670d97769
+  domain/ui/ui_testing/src/lib.rs: a56e7e6fd0cbd37335fe2e810fbb05771807f64e328daffa26e093ee5f437af8

@@ -19,3 +19,5 @@ validation_commands:
 - task:planning:validate (task planning:validate) -> exit 0
 subject_paths:
 - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+subject_digests:
+  docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f

@@ -1,0 +1,13 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+updated_at: '2026-06-02T08:30:44Z'
+granted_permissions:
+  crate_creation:
+    by: human
+    at: '2026-06-02T08:30:44Z'
+    reason: Exact crate creation is declared by WR-169 Contract Pack scope for UiProgram architecture conformance.
+denied_permissions:
+  foundation_extraction:
+    by: human
+    at: '2026-06-02T08:30:44Z'
+    reason: Default strategic gate; requires a separate accepted extraction workflow.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import yaml
@@ -7,9 +9,21 @@ import yaml
 from roadmap_state import REPO_ROOT, WorkflowError, repo_path
 
 from execution.contracts import ActionContract, EvidenceKind, StrictModel, now_utc_iso
+from truth.certificates import digest_path
 
 
 EVIDENCE_ROOT = REPO_ROOT / "docs-site/src/content/docs/reports/execution-evidence"
+RUN_LEDGER_ROOT = REPO_ROOT / "docs-site/src/content/docs/reports/track-execution-runs"
+
+
+class ValidationProvenance(StrictModel):
+    command_id: str
+    argv: list[str]
+    returncode: int
+    run_ledger_path: str
+    run_action_id: str
+    validation_result_digest: str
+    subject_digests: dict[str, str] = {}
 
 
 class EvidenceRecord(StrictModel):
@@ -23,7 +37,59 @@ class EvidenceRecord(StrictModel):
     produced_at: str
     paths: list[str] = []
     subject_paths: list[str] = []
+    subject_digests: dict[str, str] = {}
     validation_commands: list[str] = []
+    validation_provenance: list[ValidationProvenance] = []
+
+
+def run_ledger_record_path(track_id: str, run_id: str) -> str:
+    return repo_path(RUN_LEDGER_ROOT / track_id.lower() / f"{run_id}.yaml")
+
+
+def validation_result_digest(
+    *,
+    command_id: str,
+    argv: list[str] | tuple[str, ...],
+    returncode: int,
+    files_changed: list[str] | tuple[str, ...],
+    subject_digests: dict[str, str],
+) -> str:
+    payload = {
+        "argv": list(argv),
+        "command_id": command_id,
+        "files_changed": sorted(files_changed),
+        "returncode": returncode,
+        "subject_digests": {key: subject_digests[key] for key in sorted(subject_digests)},
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def validation_provenance_for_results(
+    *,
+    validation_results,
+    run_ledger_path: str,
+    run_action_id: str,
+    subject_digests: dict[str, str],
+) -> list[ValidationProvenance]:
+    return [
+        ValidationProvenance(
+            command_id=result.command_id,
+            argv=list(result.argv),
+            returncode=result.returncode,
+            run_ledger_path=run_ledger_path,
+            run_action_id=run_action_id,
+            validation_result_digest=validation_result_digest(
+                command_id=result.command_id,
+                argv=result.argv,
+                returncode=result.returncode,
+                files_changed=result.files_changed,
+                subject_digests=subject_digests,
+            ),
+            subject_digests=subject_digests,
+        )
+        for result in validation_results
+    ]
 
 
 def evidence_path(
@@ -96,7 +162,9 @@ def passed_record(
     name: str,
     paths: list[str],
     subject_paths: list[str] | None = None,
+    subject_digests: dict[str, str] | None = None,
     validation_commands: list[str],
+    validation_provenance: list[ValidationProvenance] | None = None,
 ) -> EvidenceRecord:
     return EvidenceRecord(
         track_id=track_id,
@@ -108,8 +176,17 @@ def passed_record(
         produced_at=now_utc_iso(),
         paths=paths,
         subject_paths=subject_paths or [],
+        subject_digests=subject_digests or {},
         validation_commands=validation_commands,
+        validation_provenance=validation_provenance or [],
     )
+
+
+def current_subject_digests(subject_paths: list[str], *, repo_root: Path) -> dict[str, str]:
+    return {
+        raw_path: digest_path(repo_root / raw_path)
+        for raw_path in sorted(set(subject_paths))
+    }
 
 
 def evidence_artifact_refs_for_requirement(
@@ -154,10 +231,14 @@ def write_resolver_evidence_records(
     *,
     validation_results,
     workspace_root: Path,
+    run_id: str | None = None,
 ) -> list[Path]:
     validation_refs = [str(result) for result in validation_results]
     if not validation_refs:
         raise WorkflowError(f"{action.action_id}: evidence cannot be recorded without validation results")
+    if not run_id:
+        raise WorkflowError(f"{action.action_id}: evidence requires a run_id so validation provenance can resolve to a run ledger")
+    ledger_path = run_ledger_record_path(action.track_id, run_id)
     paths: list[Path] = []
     for requirement in action.evidence_required:
         evidence_refs = evidence_artifact_refs_for_requirement(
@@ -165,6 +246,7 @@ def write_resolver_evidence_records(
             repo_root=workspace_root,
             validation_results=validation_results,
         )
+        subject_digests = current_subject_digests(evidence_refs, repo_root=workspace_root)
         record = passed_record(
             track_id=action.track_id,
             milestone_id=action.milestone_id,
@@ -173,7 +255,14 @@ def write_resolver_evidence_records(
             name=requirement.name,
             paths=evidence_refs,
             subject_paths=evidence_refs,
+            subject_digests=subject_digests,
             validation_commands=validation_refs,
+            validation_provenance=validation_provenance_for_results(
+                validation_results=validation_results,
+                run_ledger_path=ledger_path,
+                run_action_id=action.action_id,
+                subject_digests=subject_digests,
+            ),
         )
         if len(requirement.paths) != 1:
             raise WorkflowError(f"{requirement.name}: evidence requires exactly one output record path")
@@ -219,7 +308,9 @@ def resolve_evidence_records(
                         validation_results=validation_results,
                     ),
                     subject_paths=list(requirement.subject_paths),
+                    subject_digests=current_subject_digests(list(requirement.subject_paths), repo_root=repo_root),
                     validation_commands=[str(result) for result in validation_results],
+                    validation_provenance=[],
                 ),
                 root=evidence_root,
             )

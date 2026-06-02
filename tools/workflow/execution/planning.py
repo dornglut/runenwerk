@@ -88,10 +88,6 @@ def exact_planning_expansion_write_scopes(
         implementation_plan_path(wr_id, milestone_title),
         entry.expected_closeout_path,
         *production_generated_scopes(),
-        repo_path(production_source),
-        repo_path(roadmap_source),
-        repo_path(manifest_path),
-        repo_path(deferred_source),
     ]
     if entry.milestone_type in {"implementation", "hardening"}:
         scopes.extend(manifest_write_scopes_for_entry(entry))

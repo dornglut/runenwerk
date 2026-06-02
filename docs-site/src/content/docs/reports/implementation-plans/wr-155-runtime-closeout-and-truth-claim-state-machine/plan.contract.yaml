@@ -21,7 +21,7 @@ new_outputs:
 forbidden_outputs: []
 forbidden_patterns: []
 validation_commands:
-- uv run pytest tools/workflow/test_workflow.py -q
+- task workflow:test
 - task production:validate
 - task production:check
 - task roadmap:validate

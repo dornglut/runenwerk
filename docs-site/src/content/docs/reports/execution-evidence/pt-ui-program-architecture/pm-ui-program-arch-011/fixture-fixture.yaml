@@ -1,0 +1,23 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-011
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-011:WR-169:sub:testing-accessibility-geometry-migration
+evidence_kind: fixture
+name: fixture
+status: passed
+produced_at: '2026-06-02T11:36:25Z'
+paths:
+- domain/ui/ui_testing/src/lib.rs
+subject_paths:
+- domain/ui/ui_testing/src/lib.rs
+validation_commands:
+- cargo:test (cargo test -p ui_state state_contract) -> exit 0
+- cargo:test (cargo test -p ui_binding binding_contract) -> exit 0
+- cargo:test (cargo test -p ui_hosts host_contract) -> exit 0
+- cargo:test (cargo test -p ui_accessibility accessibility_contract) -> exit 0
+- cargo:test (cargo test -p ui_geometry geometry_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+- task:truth:verify (task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-architecture-implementation) -> exit 0
+- task:truth:verify (task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance) -> exit 0
+subject_digests:
+  domain/ui/ui_testing/src/lib.rs: a56e7e6fd0cbd37335fe2e810fbb05771807f64e328daffa26e093ee5f437af8

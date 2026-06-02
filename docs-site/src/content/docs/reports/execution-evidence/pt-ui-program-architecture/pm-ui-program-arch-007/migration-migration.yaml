@@ -25,3 +25,10 @@ subject_paths:
 - domain/ui/ui_runtime/src/lib.rs
 - domain/ui/ui_layout/src/lib.rs
 - domain/ui/ui_math/src/lib.rs
+subject_digests:
+  domain/ui/ui_definition/src/lib.rs: f639b5fda66cb10cc8e3780627ad5f7a99a21871e9865ca27b06e92282b5f7c7
+  domain/ui/ui_layout/src/lib.rs: d4bc4b67fac5179219c5538888240dd11db2d97d7595d88cbf388364d24c513e
+  domain/ui/ui_math/src/lib.rs: cb8ae0e026d50d72cabb0e61458182fdfed85fbfebd062e6ad84890891caf9a9
+  domain/ui/ui_runtime/src/lib.rs: f02ea044d87880e997dc6964b3c4bb0ead594970470de77f123d565a625feca8
+  domain/ui/ui_tree/src/lib.rs: 764aad68b348da0e324c19e7b770c0659cb31f3a9102d3e226cc05f1f4f1042a
+  domain/ui/ui_widgets/src/lib.rs: f06b48594c5b57449fbaf3519f422e2e04f40933a7208f1ec524468204aab620

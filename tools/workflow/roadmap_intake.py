@@ -120,6 +120,24 @@ def promote(
     console.print(f"[green]promoted roadmap item:[/green] {id} -> {state}")
 
 
+@app.command("activate-deferred")
+def activate_deferred(
+    id: str = typer.Option(..., help="Deferred roadmap item ID to move back into the active source."),
+    state: PlanningState = typer.Option("ready_next", help="Active planning_state to assign."),
+    evidence: str = typer.Option(..., help="Evidence justifying activation from the deferred source."),
+    source: Path = typer.Option(ROADMAP_SOURCE, help="Roadmap YAML source."),
+    skip_checks: bool = typer.Option(False, help="Skip roadmap and PUML checks after writing."),
+) -> None:
+    try:
+        activate_deferred_roadmap_item(id, state=state, evidence=evidence, source=source, skip_checks=skip_checks)
+    except WorkflowError as error:
+        console.print("[red]roadmap deferred activation failed[/red]")
+        for line in str(error).splitlines():
+            console.print(f"- {line}")
+        raise typer.Exit(1) from error
+    console.print(f"[green]activated deferred roadmap item:[/green] {id} -> {state}")
+
+
 @app.command("switch-current")
 def switch_current(
     from_id: str = typer.Option(..., "--from", help="Current candidate item ID to demote to ready_next."),
@@ -440,6 +458,101 @@ def switch_current_candidate(
     write_roadmap_data(source, updated_data)
     render_and_check(roadmap, skip_checks=skip_checks)
     return roadmap
+
+
+def activate_deferred_roadmap_item(
+    item_id: str,
+    *,
+    state: PlanningState = "ready_next",
+    evidence: str,
+    source: Path = ROADMAP_SOURCE,
+    skip_checks: bool = False,
+) -> RoadmapState:
+    if not ID_PATTERN.fullmatch(item_id):
+        raise WorkflowError("roadmap item id must match WR-000")
+    if state in {"blocked_deferred", "completed"}:
+        raise WorkflowError("deferred activation target state must be ready_next, support_only, or current_candidate")
+    if not evidence.strip():
+        raise WorkflowError("activation evidence is required")
+
+    active_data, archive_data, deferred_data = load_split_data_for_write(source)
+    if deferred_data is None:
+        raise WorkflowError(f"{repo_path(source.with_name('roadmap-deferred.yaml'))} is missing")
+    updated_active, updated_deferred = roadmap_data_with_deferred_activation(
+        active_data,
+        deferred_data,
+        item_id=item_id,
+        state=state,
+        evidence=evidence.strip(),
+    )
+    try:
+        roadmap = RoadmapState.model_validate(
+            combine_roadmap_data(updated_active, source, archive_data=archive_data, deferred_data=updated_deferred)
+        )
+    except ValueError as error:
+        raise WorkflowError(str(error)) from error
+
+    activated = roadmap.by_id[item_id]
+    if state == "ready_next" and not activated.can_enter_discovery_batch:
+        raise WorkflowError(f"{item_id}: activation to ready_next requires B4 or lower and no policy-deferred gate")
+    if state == "current_candidate":
+        preflight = promotion_preflight(roadmap, item_id, "current_candidate", evidence=evidence.strip())
+        if preflight.status != "promotable":
+            raise WorkflowError("\n".join(preflight.reasons))
+
+    implementation_items = [item for item in roadmap.items if item.can_enter_implementation_batch]
+    conflicts = validate_write_scopes(implementation_items)
+    missing = validate_existing_write_scope_paths(implementation_items)
+    if conflicts or missing:
+        errors = [f"write-scope conflict: {conflict}" for conflict in conflicts]
+        errors.extend(f"write-scope path missing: {error}" for error in missing)
+        raise WorkflowError("\n".join(errors))
+
+    write_roadmap_data(source, updated_active)
+    _archive_path, deferred_path = split_source_paths(source)
+    write_roadmap_data(deferred_path, updated_deferred)
+    render_and_check(roadmap, skip_checks=skip_checks)
+    return roadmap
+
+
+def roadmap_data_with_deferred_activation(
+    active_data: dict,
+    deferred_data: dict,
+    *,
+    item_id: str,
+    state: PlanningState,
+    evidence: str,
+) -> tuple[dict, dict]:
+    active_items = list(active_data.get("items", []))
+    deferred_items = list(deferred_data.get("items", []))
+    if any(item.get("id") == item_id for item in active_items):
+        raise WorkflowError(f"{item_id}: already present in active roadmap source")
+
+    activated_item: dict | None = None
+    remaining_deferred: list[dict] = []
+    for item in deferred_items:
+        if item.get("id") == item_id:
+            activated_item = dict(item)
+        else:
+            remaining_deferred.append(item)
+    if activated_item is None:
+        raise WorkflowError(f"{item_id}: not present in deferred roadmap source")
+    if activated_item.get("planning_state") != "blocked_deferred":
+        raise WorkflowError(f"{item_id}: deferred source item must be blocked_deferred")
+
+    activated_item["planning_state"] = state
+    activated_item["current_decision"] = evidence
+    activated_item["next_evidence"] = evidence
+    if state == "ready_next" and not str(activated_item.get("main_blocker", "")).strip():
+        activated_item["main_blocker"] = evidence
+
+    updated_active = dict(active_data)
+    updated_active["items"] = [*active_items, activated_item]
+    updated_active["roadmap"] = {**updated_active.get("roadmap", {}), "last_reviewed": dt.date.today().isoformat()}
+    updated_deferred = dict(deferred_data)
+    updated_deferred["items"] = remaining_deferred
+    updated_deferred["roadmap"] = {**updated_deferred.get("roadmap", {}), "last_reviewed": dt.date.today().isoformat()}
+    return updated_active, updated_deferred
 
 
 def roadmap_data_with_current_switch(

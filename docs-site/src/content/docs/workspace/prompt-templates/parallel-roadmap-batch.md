@@ -22,6 +22,10 @@ The coordinator must first propose the batch and wait for explicit user
 approval. After approval, it may spawn or coordinate workers when the current
 environment provides subagents or worktrees.
 
+Generated coordinator and worker prompts include the canonical quality doctrine
+marker `runenwerk-quality-doctrine-v1`; keep that marker in worker prompts so
+the quality bar stays centralized.
+
 ## Template
 
 ```text

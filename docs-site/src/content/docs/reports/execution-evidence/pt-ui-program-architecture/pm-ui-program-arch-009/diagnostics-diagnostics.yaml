@@ -7,7 +7,11 @@ name: diagnostics
 status: passed
 produced_at: '2026-06-01T15:33:37Z'
 paths:
-- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/diagnostics-diagnostics.yaml
+- domain/ui/ui_program/src/program.rs
+- domain/ui/ui_controls/src/diagnostics.rs
+subject_paths:
+- domain/ui/ui_program/src/program.rs
+- domain/ui/ui_controls/src/diagnostics.rs
 validation_commands:
 - cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
 - cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
@@ -22,3 +26,6 @@ validation_commands:
 - task:roadmap:check (task roadmap:check) -> exit 0
 - task:docs:validate (task docs:validate) -> exit 0
 - task:planning:validate (task planning:validate) -> exit 0
+subject_digests:
+  domain/ui/ui_controls/src/diagnostics.rs: 11e55d50601491e172002ec0e6a8982b090d8b0256e6002fcc6ec92bad524704
+  domain/ui/ui_program/src/program.rs: 62e4d628d1b514b62da6faef6388b4b990249fe4d4901018e4b0957e9b3947e4

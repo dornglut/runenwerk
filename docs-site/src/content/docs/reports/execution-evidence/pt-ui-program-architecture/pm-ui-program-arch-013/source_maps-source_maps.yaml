@@ -1,0 +1,141 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-013
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+evidence_kind: source_maps
+name: source_maps
+status: passed
+produced_at: '2026-06-02T19:04:11Z'
+paths:
+- domain/ui/ui_program/src/source_map.rs
+- domain/ui/ui_artifacts/src/source_map.rs
+- domain/ui/ui_artifacts/src/source_map_attachment.rs
+- domain/ui/ui_compiler/src/tests.rs
+subject_paths:
+- domain/ui/ui_program/src/source_map.rs
+- domain/ui/ui_artifacts/src/source_map.rs
+- domain/ui/ui_artifacts/src/source_map_attachment.rs
+- domain/ui/ui_compiler/src/tests.rs
+subject_digests:
+  domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+  domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+  domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+  domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+validation_commands:
+- task:workflow:test (task workflow:test) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_controls control_package) -> exit 0
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+validation_provenance:
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 845a8cfa889313049c81b150dd32c9096603a7989891058088ce67ac0f2955e3
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 6f8fbc126cc0b52b1f38497333bb4bf071b3f5e2fbd0cb17ad0c3dbbbe2ce17d
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_controls
+  - control_package
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 13e9169cdc3f458313b4331dfb7287458c7fed7d2c5e115d68c67da19e735883
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: f4a791448ae49f000160fda64d92d0b043ec95f8c29278b26f4b974b6d9f62ea
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 4a174ce520f5f020fe79b51330a9102563252b7f2c06b85f00a02922e2c1a2c5
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 85cbd1b04686a97e4582a90515a1aa51af757903ee0162e28ccb10ef6880f5bf
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-013:WR-171
+  validation_result_digest: 38ec7a1af3af16d49bc2ac9bffd1460fa635286ae65c572f5e4f85e30d4259ce
+  subject_digests:
+    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
+    domain/ui/ui_compiler/src/tests.rs: 94ba2e3bf10d1562f2f5a7fbf280b5487c989bb451c59cbba80864d80a1ce7d9
+    domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb

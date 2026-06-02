@@ -1,0 +1,291 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+spec_id: ui-program-architecture-implementation
+source_design_docs:
+  - docs-site/src/content/docs/design/active/ui-program-architecture.md
+  - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+requirements:
+  - requirement_id: ui-owner-map-final-dirs
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+    source_section: final owner map
+    summary: Final UI owner crates exist only as justified owners and keep current retained paths reconciled.
+    owner: domain/ui
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/Cargo.toml
+      - domain/ui/ui_controls/Cargo.toml
+      - domain/ui/ui_artifacts/Cargo.toml
+      - domain/ui/ui_testing/Cargo.toml
+    test_subjects:
+      - tools/workflow/truth/conformance/ui_program_architecture.py
+    evidence_kinds: [artifact, runtime_test]
+    semantic_check_ids: [graph_family_semantic_contracts]
+  - requirement_id: uiprogram-typed-graph-families
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: UiProgram graph families
+    summary: UiProgram owns typed graph families rather than generic node soup.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/mod.rs
+    test_subjects:
+      - domain/ui/ui_program/src/lib.rs
+    evidence_kinds: [runtime_test, source_maps]
+    semantic_check_ids: [graph_family_semantic_contracts]
+  - requirement_id: graph-control-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: ControlGraph
+    summary: ControlGraph owns package, kind, hierarchy, local state, capability, and source-map contract.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/control.rs
+    test_subjects:
+      - domain/ui/ui_program/src/lib.rs
+      - domain/ui/ui_artifacts/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, source_maps]
+    semantic_check_ids: [graph_family_semantic_contracts, graph_family_lowering_to_runtime_tables]
+  - requirement_id: graph-layout-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: LayoutGraph
+    summary: LayoutGraph owns layout constraints, measurement dependencies, kernels, source maps, and runtime table lowering.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/layout.rs
+      - domain/ui/ui_artifacts/src/tables/layout.rs
+    test_subjects:
+      - domain/ui/ui_artifacts/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, source_maps]
+    semantic_check_ids: [graph_family_semantic_contracts, graph_family_lowering_to_runtime_tables]
+  - requirement_id: graph-state-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: StateGraph
+    summary: StateGraph owns lifecycle, persistence, invalidation, schema, source-map, and runtime state rows.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/state.rs
+      - domain/ui/ui_artifacts/src/tables/state.rs
+    test_subjects:
+      - domain/ui/ui_evaluator/src/tests.rs
+    evidence_kinds: [runtime_test, artifact]
+    semantic_check_ids: [graph_family_semantic_contracts, evaluator_consumes_artifact_tables_and_state_binding]
+  - requirement_id: graph-style-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: StyleGraph
+    summary: StyleGraph owns style slots, property schemas, source maps, and style resolution runtime rows.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/style.rs
+      - domain/ui/ui_artifacts/src/tables/style.rs
+    test_subjects:
+      - domain/ui/ui_artifacts/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, source_maps]
+    semantic_check_ids: [graph_family_semantic_contracts, graph_family_lowering_to_runtime_tables]
+  - requirement_id: graph-interaction-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: InteractionGraph
+    summary: InteractionGraph owns triggers, routes, payload schemas, capabilities, source maps, and interaction dispatch rows.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/interaction.rs
+      - domain/ui/ui_artifacts/src/tables/interaction.rs
+    test_subjects:
+      - domain/ui/ui_program/src/lib.rs
+      - domain/ui/ui_artifacts/src/tests.rs
+    evidence_kinds: [runtime_test, diagnostics, source_maps]
+    semantic_check_ids: [graph_family_semantic_contracts, route_event_schema_payload_validation, graph_family_lowering_to_runtime_tables]
+  - requirement_id: graph-binding-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: BindingGraph
+    summary: BindingGraph owns UI state, control property, host-data endpoints, dirty propagation subjects, and diagnostics.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/binding.rs
+      - domain/ui/ui_artifacts/src/tables/binding_snapshot.rs
+      - domain/ui/ui_evaluator/src/state_binding.rs
+    test_subjects:
+      - domain/ui/ui_evaluator/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, diagnostics]
+    semantic_check_ids: [graph_family_semantic_contracts, evaluator_consumes_artifact_tables_and_state_binding]
+  - requirement_id: graph-visual-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: VisualGraph
+    summary: VisualGraph owns draw-neutral visual operator intent and does not transfer product truth to renderer ownership.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/visual.rs
+      - domain/ui/ui_artifacts/src/tables/visual.rs
+      - domain/ui/ui_evaluator/src/output.rs
+    test_subjects:
+      - domain/ui/ui_testing/src/tests.rs
+    evidence_kinds: [runtime_test, visual]
+    semantic_check_ids: [graph_family_semantic_contracts, graph_family_lowering_to_runtime_tables, retained_ui_compatibility_and_render_boundary]
+  - requirement_id: graph-accessibility-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: AccessibilityGraph
+    summary: AccessibilityGraph owns roles, label sources, source maps, and accessibility runtime rows.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/accessibility.rs
+      - domain/ui/ui_artifacts/src/tables/accessibility.rs
+    test_subjects:
+      - domain/ui/ui_artifacts/src/tests.rs
+      - domain/ui/ui_testing/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, fixture]
+    semantic_check_ids: [graph_family_semantic_contracts, graph_family_lowering_to_runtime_tables, headless_fixture_reproducibility]
+  - requirement_id: graph-inspection-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: InspectionGraph
+    summary: InspectionGraph owns inspection entries, display names, value schemas, bindings, provenance, and fixture coverage.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/graphs/inspection.rs
+      - domain/ui/ui_artifacts/src/tables/inspection.rs
+    test_subjects:
+      - domain/ui/ui_artifacts/src/tests.rs
+      - domain/ui/ui_testing/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, fixture]
+    semantic_check_ids: [graph_family_semantic_contracts, graph_family_lowering_to_runtime_tables, headless_fixture_reproducibility]
+  - requirement_id: schema-route-event-payload-validation
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: schema route event contracts
+    summary: Route-based event packets validate UiSchemaValue payloads and capabilities without central semantic event enum growth.
+    owner: domain/ui/ui_program
+    status: verified
+    code_subjects:
+      - domain/ui/ui_program/src/events/packet.rs
+      - domain/ui/ui_program/src/events/payload.rs
+      - domain/ui/ui_program/src/events/route.rs
+      - domain/ui/ui_schema/src/value.rs
+    test_subjects:
+      - domain/ui/ui_program/src/lib.rs
+    evidence_kinds: [runtime_test, diagnostics]
+    semantic_check_ids: [route_event_schema_payload_validation]
+  - requirement_id: controlpackage-registry-contract
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: ControlPackage registry
+    summary: ControlPackage registry is an explicit input/snapshot boundary with schemas, state, events, kernels, diagnostics, fixtures, and migrations.
+    owner: domain/ui/ui_controls
+    status: verified
+    code_subjects:
+      - domain/ui/ui_controls/src/package.rs
+      - domain/ui/ui_controls/src/registry.rs
+      - domain/ui/ui_controls/src/lib.rs
+    test_subjects:
+      - domain/ui/ui_controls/src/lib.rs
+    evidence_kinds: [runtime_test, fixture, diagnostics, migration]
+    semantic_check_ids: [control_package_design_truth]
+  - requirement_id: controlpackage-color-picker-proof
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: ColorPicker proof obligations
+    summary: ColorPicker records wheel-plus-triangle property, state, route event, diagnostics, fixture, and migration proof; RGB cube remains deferred.
+    owner: domain/ui/ui_controls
+    status: verified
+    code_subjects:
+      - domain/ui/ui_controls/src/color_picker/mod.rs
+      - domain/ui/ui_controls/src/lib.rs
+    test_subjects:
+      - domain/ui/ui_controls/src/lib.rs
+    evidence_kinds: [runtime_test, fixture, diagnostics, migration]
+    semantic_check_ids: [control_package_design_truth]
+  - requirement_id: compiler-runtime-artifact-lowering
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: compiler and runtime artifact contracts
+    summary: UiCompiler lowers UiProgram into manifests, tables, cache keys, package resolution, diagnostics, and source maps.
+    owner: domain/ui/ui_compiler
+    status: verified
+    code_subjects:
+      - domain/ui/ui_compiler/src/compiler.rs
+      - domain/ui/ui_artifacts/src/artifact.rs
+      - domain/ui/ui_artifacts/src/manifest.rs
+      - domain/ui/ui_artifacts/src/tables/mod.rs
+    test_subjects:
+      - domain/ui/ui_compiler/src/tests.rs
+      - domain/ui/ui_artifacts/src/tests.rs
+    evidence_kinds: [runtime_test, artifact, source_maps, diagnostics]
+    semantic_check_ids: [graph_family_lowering_to_runtime_tables, source_map_and_diagnostics_preservation]
+  - requirement_id: evaluator-state-binding-execution
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: evaluator and state execution
+    summary: UiEvaluator consumes artifact tables deterministically and mutates state/binding through explicit boundaries.
+    owner: domain/ui/ui_evaluator
+    status: verified
+    code_subjects:
+      - domain/ui/ui_evaluator/src/evaluator.rs
+      - domain/ui/ui_evaluator/src/passes.rs
+      - domain/ui/ui_evaluator/src/state_binding.rs
+    test_subjects:
+      - domain/ui/ui_evaluator/src/tests.rs
+    evidence_kinds: [runtime_test, artifact]
+    semantic_check_ids: [evaluator_consumes_artifact_tables_and_state_binding]
+  - requirement_id: retained-ui-compatibility
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: retained UI migration boundary
+    summary: Retained UI compatibility preserves draw-neutral output and keeps old paths valid until bounded migration proof replaces them.
+    owner: domain/ui
+    status: verified
+    code_subjects:
+      - domain/ui/ui_evaluator/src/output.rs
+      - domain/ui/ui_testing/src/architecture_fixture.rs
+    test_subjects:
+      - domain/ui/ui_testing/src/tests.rs
+    evidence_kinds: [migration, visual, runtime_test]
+    semantic_check_ids: [retained_ui_compatibility_and_render_boundary]
+  - requirement_id: fixtures-diagnostics-source-maps
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: fixtures diagnostics source maps
+    summary: Headless fixtures prove diagnostics, source-map assertions, reproducibility, and architecture readiness evidence.
+    owner: domain/ui/ui_testing
+    status: verified
+    code_subjects:
+      - domain/ui/ui_testing/src/headless_fixture.rs
+      - domain/ui/ui_testing/src/assertions.rs
+      - domain/ui/ui_testing/src/reproducibility.rs
+    test_subjects:
+      - domain/ui/ui_testing/src/tests.rs
+    evidence_kinds: [fixture, diagnostics, source_maps, reproducibility]
+    semantic_check_ids: [headless_fixture_reproducibility, source_map_and_diagnostics_preservation]
+  - requirement_id: materialprogram-blocked
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: MaterialProgram gate
+    summary: MaterialProgram remains blocked until a separate accepted gate uses current UiProgram truth.
+    owner: workspace
+    status: verified
+    code_subjects:
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+    test_subjects:
+      - tools/workflow/truth/conformance/ui_program_architecture.py
+    evidence_kinds: [artifact]
+    semantic_check_ids: [retained_ui_compatibility_and_render_boundary]
+  - requirement_id: foundation-meta-blocked
+    source_path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    source_section: foundation/meta gate
+    summary: Shared foundation/meta extraction remains blocked until separate extraction proof and accepted design authority exist.
+    owner: workspace
+    status: verified
+    code_subjects:
+      - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+    test_subjects:
+      - tools/workflow/truth/conformance/ui_program_architecture.py
+    evidence_kinds: [artifact]
+    semantic_check_ids: [graph_family_semantic_contracts]
+  - requirement_id: durable-checkpointed-completion
+    source_path: docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md
+    source_section: completion drift checks
+    summary: Durable completion requires no repo-visible authority, code, evidence, certificate, ledger, or generated-report drift.
+    owner: tools/workflow
+    status: verified
+    code_subjects:
+      - tools/workflow/track_control_cli.py
+    test_subjects:
+      - tools/workflow/tests/test_track_control.py
+    evidence_kinds: [diagnostics, reproducibility]
+    semantic_check_ids: [headless_fixture_reproducibility]

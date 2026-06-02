@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-05-31'
+  last_reviewed: '2026-06-01'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -507,7 +507,7 @@ items:
   planning_state: support_only
   priority: P2
   value: 3
-  blocker: 5
+  blocker: 2
   tc: 5
   rr_oe: 5
   du: 5
@@ -676,6 +676,12 @@ items:
   fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative, shader-binding, evidence, and benchmark tests before implementation closeout.
   ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
 edges:
+- source: WR-170
+  target: WR-171
+  label: final design coverage and durable truth closure
+- source: WR-169
+  target: WR-170
+  label: conformance closeout supersession before final truth
 - source: WR-002
   target: WR-001
   label: product-job substrate

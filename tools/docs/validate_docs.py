@@ -7,6 +7,9 @@ import urllib.parse
 
 DOCS_ROOT = Path("docs-site/src/content/docs")
 REPO_ROOT = Path(".")
+IGNORED_DOCS_SUBTREES = {
+    DOCS_ROOT / "reports" / "agent-transcripts",
+}
 DESIGN_LIFECYCLE_DIRS = {
     "active",
     "accepted",
@@ -325,6 +328,8 @@ def main() -> int:
     validate_batch_manifests(errors)
 
     for path in DOCS_ROOT.rglob("*"):
+        if any(path.is_relative_to(subtree) for subtree in IGNORED_DOCS_SUBTREES):
+            continue
         if path.is_file() and path.suffix in {".md", ".mdx"}:
             text = path.read_text(encoding="utf-8")
             validate_design_lifecycle_status(path, text, errors)

@@ -1,0 +1,611 @@
+version: 1
+status: accepted
+wr_id: WR-169
+milestone_id: PM-UI-PROGRAM-ARCH-011
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: truth_certification_and_repair_only
+permissions_required:
+- product_code
+- product_implementation
+- crate_creation
+writer_strategy: agent_writer
+allowed_outputs:
+- Cargo.toml
+- domain/ui/ui_program/Cargo.toml
+- domain/ui/ui_program/src/lib.rs
+- domain/ui/ui_program/src/program.rs
+- domain/ui/ui_program/src/graphs/mod.rs
+- domain/ui/ui_program/src/events/mod.rs
+- domain/ui/ui_program/src/events/packet.rs
+- domain/ui/ui_program/src/events/payload.rs
+- domain/ui/ui_program/src/events/route.rs
+- domain/ui/ui_schema/Cargo.toml
+- domain/ui/ui_schema/src/lib.rs
+- domain/ui/ui_schema/src/schema.rs
+- domain/ui/ui_schema/src/value.rs
+- domain/ui/ui_compiler/Cargo.toml
+- domain/ui/ui_compiler/src/lib.rs
+- domain/ui/ui_artifacts/Cargo.toml
+- domain/ui/ui_artifacts/src/lib.rs
+- domain/ui/ui_evaluator/Cargo.toml
+- domain/ui/ui_evaluator/src/lib.rs
+- domain/ui/ui_state/Cargo.toml
+- domain/ui/ui_state/src/lib.rs
+- domain/ui/ui_binding/Cargo.toml
+- domain/ui/ui_binding/src/lib.rs
+- domain/ui/ui_hosts/Cargo.toml
+- domain/ui/ui_hosts/src/lib.rs
+- domain/ui/ui_testing/Cargo.toml
+- domain/ui/ui_testing/src/lib.rs
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/artifact-architecture_contract.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/diagnostics-diagnostics.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/migration-migration.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/reproducibility-reproducibility.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/source_maps-source_maps.yaml
+new_outputs:
+- domain/ui/ui_controls/Cargo.toml
+- domain/ui/ui_controls/src/lib.rs
+- domain/ui/ui_controls/src/package.rs
+- domain/ui/ui_controls/src/registry.rs
+- domain/ui/ui_controls/src/kernel.rs
+- domain/ui/ui_controls/src/schema.rs
+- domain/ui/ui_controls/src/diagnostics.rs
+- domain/ui/ui_controls/src/migration.rs
+- domain/ui/ui_controls/src/label/mod.rs
+- domain/ui/ui_controls/src/button/mod.rs
+- domain/ui/ui_controls/src/inspector_field/mod.rs
+- domain/ui/ui_controls/src/color_picker/mod.rs
+- domain/ui/ui_controls/src/action_prompt/mod.rs
+- domain/ui/ui_controls/src/list_view/mod.rs
+- domain/ui/ui_controls/src/tree_view/mod.rs
+- domain/ui/ui_controls/src/table_view/mod.rs
+- domain/ui/ui_accessibility/Cargo.toml
+- domain/ui/ui_accessibility/src/lib.rs
+- domain/ui/ui_geometry/Cargo.toml
+- domain/ui/ui_geometry/src/lib.rs
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-architecture_contract.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/fixture-fixture.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/diagnostics-diagnostics.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/source_maps-source_maps.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/migration-migration.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/reproducibility-reproducibility.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/visual-visual.yaml
+- docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+- docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+- docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+forbidden_outputs:
+- foundation/meta
+- domain/material
+- domain/material_program
+- engine
+- apps
+- adapters
+forbidden_patterns:
+- UiSemanticEvent
+- renderer-owned UI truth
+- ECS-owned UI semantics
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo test -p ui_schema schema_value
+- cargo test -p ui_program route_contract
+- cargo test -p ui_program architecture_contract
+- cargo test -p ui_compiler compiler_contract
+- cargo test -p ui_artifacts artifact_contract
+- cargo test -p ui_evaluator evaluator_contract
+- cargo test -p ui_state state_contract
+- cargo test -p ui_binding binding_contract
+- cargo test -p ui_hosts host_contract
+- cargo test -p ui_controls control_package
+- cargo test -p ui_accessibility accessibility_contract
+- cargo test -p ui_geometry geometry_contract
+- cargo test -p ui_testing architecture_fixtures
+- command_id: task:truth:verify
+  argv: [task, truth:verify, --, --track, PT-UI-PROGRAM-ARCHITECTURE, --claim, ui-program-architecture-implementation]
+  cwd: .
+  allowed_outputs:
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  timeout_seconds: 600
+  raw: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-architecture-implementation
+- command_id: task:truth:verify
+  argv: [task, truth:verify, --, --track, PT-UI-PROGRAM-ARCHITECTURE, --claim, ui-program-perfectionist-conformance]
+  cwd: .
+  allowed_outputs:
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+  timeout_seconds: 600
+  raw: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required:
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/runtime_test-runtime_test.yaml
+  subject_paths:
+  - domain/ui/ui_program/src/graphs/mod.rs
+  - domain/ui/ui_compiler/src/lib.rs
+  - domain/ui/ui_evaluator/src/lib.rs
+  validation_command_ids:
+  - cargo:test
+- kind: artifact
+  name: architecture_contract
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-architecture_contract.yaml
+  subject_paths:
+  - domain/ui/ui_program/src/program.rs
+  - domain/ui/ui_program/src/graphs/mod.rs
+  - domain/ui/ui_controls/src/package.rs
+  - domain/ui/ui_controls/src/registry.rs
+- kind: artifact
+  name: artifact
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-artifact.yaml
+  subject_paths:
+  - domain/ui/ui_artifacts/src/lib.rs
+  - domain/ui/ui_compiler/src/lib.rs
+- kind: fixture
+  name: fixture
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/fixture-fixture.yaml
+  subject_paths:
+  - domain/ui/ui_testing/src/lib.rs
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/diagnostics-diagnostics.yaml
+  subject_paths:
+  - domain/ui/ui_program/src/program.rs
+  - domain/ui/ui_controls/src/diagnostics.rs
+- kind: source_maps
+  name: source_maps
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/source_maps-source_maps.yaml
+  subject_paths:
+  - domain/ui/ui_program/src/program.rs
+  - domain/ui/ui_compiler/src/lib.rs
+- kind: migration
+  name: migration
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/migration-migration.yaml
+  subject_paths:
+  - domain/ui/ui_controls/src/migration.rs
+  - domain/ui/ui_testing/src/lib.rs
+- kind: reproducibility
+  name: reproducibility
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/reproducibility-reproducibility.yaml
+  subject_paths:
+  - domain/ui/ui_compiler/src/lib.rs
+  - domain/ui/ui_artifacts/src/lib.rs
+  - domain/ui/ui_testing/src/lib.rs
+- kind: visual
+  name: visual
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/visual-visual.yaml
+  subject_paths:
+  - domain/ui/ui_evaluator/src/lib.rs
+  - domain/ui/ui_testing/src/lib.rs
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure/closeout.md
+  completion_quality: perfectionist_verified
+  evidence_required:
+  - kind: runtime_test
+    name: runtime_test
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/runtime_test-runtime_test.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/graphs/mod.rs
+    - domain/ui/ui_compiler/src/lib.rs
+    - domain/ui/ui_evaluator/src/lib.rs
+    validation_command_ids:
+    - cargo:test
+  - kind: artifact
+    name: architecture_contract
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-architecture_contract.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/program.rs
+    - domain/ui/ui_program/src/graphs/mod.rs
+    - domain/ui/ui_controls/src/package.rs
+    - domain/ui/ui_controls/src/registry.rs
+  - kind: artifact
+    name: artifact
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-artifact.yaml
+    subject_paths:
+    - domain/ui/ui_artifacts/src/lib.rs
+    - domain/ui/ui_compiler/src/lib.rs
+  - kind: fixture
+    name: fixture
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/fixture-fixture.yaml
+    subject_paths:
+    - domain/ui/ui_testing/src/lib.rs
+  - kind: diagnostics
+    name: diagnostics
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/diagnostics-diagnostics.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/program.rs
+    - domain/ui/ui_controls/src/diagnostics.rs
+  - kind: source_maps
+    name: source_maps
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/source_maps-source_maps.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/program.rs
+    - domain/ui/ui_compiler/src/lib.rs
+  - kind: migration
+    name: migration
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/migration-migration.yaml
+    subject_paths:
+    - domain/ui/ui_controls/src/migration.rs
+    - domain/ui/ui_testing/src/lib.rs
+  - kind: reproducibility
+    name: reproducibility
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/reproducibility-reproducibility.yaml
+    subject_paths:
+    - domain/ui/ui_compiler/src/lib.rs
+    - domain/ui/ui_artifacts/src/lib.rs
+    - domain/ui/ui_testing/src/lib.rs
+  - kind: visual
+    name: visual
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/visual-visual.yaml
+    subject_paths:
+    - domain/ui/ui_evaluator/src/lib.rs
+    - domain/ui/ui_testing/src/lib.rs
+truth_claim_updates:
+- claim_id: ui-program-architecture-implementation
+  claim_status: satisfied
+  claim_statement: Concrete UiProgram architecture implementation is certified by the independent ui_program_architecture_conformance verifier with zero findings.
+  known_gaps: []
+  blocks_downstream: []
+- claim_id: retained-ui-compatibility
+  claim_status: satisfied
+  claim_statement: Retained UI compatibility is certified by the final UiProgram architecture conformance verifier, PM-007 migration bridge closeout evidence, and PM-009 final architecture migration evidence.
+  known_gaps: []
+  blocks_downstream: []
+- claim_id: ui-program-perfectionist-conformance
+  claim_status: satisfied
+  claim_statement: UiProgram architecture conformance is perfectionist verified by current code truth, resolver-backed evidence, and zero-finding truth certificates.
+  known_gaps: []
+  blocks_downstream: []
+agent_subactions:
+- sub_action_id: schema-routes-program-identity
+  title: Schema, routes, and UiProgram identity
+  prompt: Implement only the UI schema/value contracts, UiProgram identity/version/source/diagnostic contracts, and route/event packet contracts needed by the UiProgram architecture verifier. Do not touch compiler, evaluator, controls, host, testing, MaterialProgram, or foundation/meta files.
+  allowed_outputs:
+  - Cargo.toml
+  - domain/ui/ui_program/Cargo.toml
+  - domain/ui/ui_program/src/lib.rs
+  - domain/ui/ui_program/src/program.rs
+  - domain/ui/ui_program/src/events/mod.rs
+  - domain/ui/ui_program/src/events/packet.rs
+  - domain/ui/ui_program/src/events/payload.rs
+  - domain/ui/ui_program/src/events/route.rs
+  - domain/ui/ui_schema/Cargo.toml
+  - domain/ui/ui_schema/src/lib.rs
+  - domain/ui/ui_schema/src/schema.rs
+  - domain/ui/ui_schema/src/value.rs
+  new_outputs:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/runtime_test-runtime_test.yaml
+  validation_commands:
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_schema, schema_value]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_schema schema_value
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_program, route_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_program route_contract
+  evidence_required:
+  - kind: runtime_test
+    name: runtime_test
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/runtime_test-runtime_test.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/events/mod.rs
+    - domain/ui/ui_schema/src/value.rs
+    validation_command_ids:
+    - cargo:test
+  stop_conditions:
+  - stop after schema, route, event, and UiProgram identity contracts pass their scoped validation
+  - stop if this sub-action requires compiler, evaluator, controls, MaterialProgram, or foundation/meta changes
+- sub_action_id: typed-graph-control-contracts
+  title: Typed graph families and ControlPackage contracts
+  prompt: Implement only typed UiProgram graph-family contracts and UI control package contracts, including ui_controls ownership, schemas, kernels, diagnostics, migration hooks, and control module skeletons required by the verifier. Do not implement compiler/evaluator behavior outside declared outputs.
+  allowed_outputs:
+  - Cargo.toml
+  - domain/ui/ui_program/Cargo.toml
+  - domain/ui/ui_program/src/lib.rs
+  - domain/ui/ui_program/src/program.rs
+  - domain/ui/ui_program/src/graphs/mod.rs
+  new_outputs:
+  - domain/ui/ui_controls/Cargo.toml
+  - domain/ui/ui_controls/src/lib.rs
+  - domain/ui/ui_controls/src/package.rs
+  - domain/ui/ui_controls/src/registry.rs
+  - domain/ui/ui_controls/src/kernel.rs
+  - domain/ui/ui_controls/src/schema.rs
+  - domain/ui/ui_controls/src/diagnostics.rs
+  - domain/ui/ui_controls/src/migration.rs
+  - domain/ui/ui_controls/src/label/mod.rs
+  - domain/ui/ui_controls/src/button/mod.rs
+  - domain/ui/ui_controls/src/inspector_field/mod.rs
+  - domain/ui/ui_controls/src/color_picker/mod.rs
+  - domain/ui/ui_controls/src/action_prompt/mod.rs
+  - domain/ui/ui_controls/src/list_view/mod.rs
+  - domain/ui/ui_controls/src/tree_view/mod.rs
+  - domain/ui/ui_controls/src/table_view/mod.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-architecture_contract.yaml
+  validation_commands:
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_program, architecture_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_program architecture_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_controls, control_package]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_controls control_package
+  evidence_required:
+  - kind: artifact
+    name: architecture_contract
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-architecture_contract.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/program.rs
+    - domain/ui/ui_program/src/graphs/mod.rs
+    - domain/ui/ui_controls/src/package.rs
+    - domain/ui/ui_controls/src/registry.rs
+  stop_conditions:
+  - stop after graph and ControlPackage contracts pass their scoped validation
+  - stop if this sub-action needs compiler, evaluator, host, MaterialProgram, or foundation/meta changes
+- sub_action_id: compiler-artifact-contracts
+  title: Compiler and artifact contracts
+  prompt: Implement only UiCompiler and UiRuntimeArtifact contracts, including package resolution, capability checks, cache keys, compiled source maps, manifest/tables split, and typed runtime table contracts. Do not implement evaluator, host, controls, MaterialProgram, or foundation/meta work.
+  allowed_outputs:
+  - Cargo.toml
+  - domain/ui/ui_program/Cargo.toml
+  - domain/ui/ui_program/src/lib.rs
+  - domain/ui/ui_compiler/Cargo.toml
+  - domain/ui/ui_compiler/src/lib.rs
+  - domain/ui/ui_artifacts/Cargo.toml
+  - domain/ui/ui_artifacts/src/lib.rs
+  new_outputs:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-artifact.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/source_maps-source_maps.yaml
+  validation_commands:
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_compiler, compiler_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_compiler compiler_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_artifacts, artifact_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_artifacts artifact_contract
+  evidence_required:
+  - kind: artifact
+    name: artifact
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/artifact-artifact.yaml
+    subject_paths:
+    - domain/ui/ui_artifacts/src/lib.rs
+    - domain/ui/ui_compiler/src/lib.rs
+  - kind: source_maps
+    name: source_maps
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/source_maps-source_maps.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/program.rs
+    - domain/ui/ui_compiler/src/lib.rs
+  stop_conditions:
+  - stop after compiler, artifact, cache-key, and source-map contracts pass scoped validation
+  - stop if this sub-action requires evaluator, controls, MaterialProgram, or foundation/meta changes
+- sub_action_id: evaluator-state-binding-hosts
+  title: Evaluator, state, binding, and host contracts
+  prompt: Implement only deterministic evaluator, state, binding, and host boundary contracts. Preserve renderer/product truth boundaries and do not modify controls, testing, MaterialProgram, foundation/meta, engine, apps, adapters, or unrelated retained UI files.
+  allowed_outputs:
+  - Cargo.toml
+  - domain/ui/ui_evaluator/Cargo.toml
+  - domain/ui/ui_evaluator/src/lib.rs
+  - domain/ui/ui_state/Cargo.toml
+  - domain/ui/ui_state/src/lib.rs
+  - domain/ui/ui_binding/Cargo.toml
+  - domain/ui/ui_binding/src/lib.rs
+  - domain/ui/ui_hosts/Cargo.toml
+  - domain/ui/ui_hosts/src/lib.rs
+  new_outputs:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/diagnostics-diagnostics.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/visual-visual.yaml
+  validation_commands:
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_evaluator, evaluator_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_evaluator evaluator_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_state, state_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_state state_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_binding, binding_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_binding binding_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_hosts, host_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_hosts host_contract
+  evidence_required:
+  - kind: diagnostics
+    name: diagnostics
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/diagnostics-diagnostics.yaml
+    subject_paths:
+    - domain/ui/ui_program/src/program.rs
+    - domain/ui/ui_controls/src/diagnostics.rs
+  - kind: visual
+    name: visual
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/visual-visual.yaml
+    subject_paths:
+    - domain/ui/ui_evaluator/src/lib.rs
+    - domain/ui/ui_testing/src/lib.rs
+  stop_conditions:
+  - stop after evaluator, state, binding, host, diagnostics, and visual evidence pass scoped validation
+  - stop if this sub-action requires MaterialProgram, foundation/meta, engine, apps, adapters, renderer-owned UI truth, or ECS-owned UI semantics
+- sub_action_id: testing-accessibility-geometry-migration
+  title: Testing, accessibility, geometry, migration, and certification evidence
+  prompt: Implement only UI testing, accessibility, geometry, fixture, migration, reproducibility, and truth-certificate evidence outputs required to make the independent UiProgram architecture verifier pass. Do not patch prior-slice code outside declared outputs and do not start MaterialProgram or foundation/meta extraction.
+  allowed_outputs:
+  - Cargo.toml
+  - domain/ui/ui_state/src/lib.rs
+  - domain/ui/ui_binding/src/lib.rs
+  - domain/ui/ui_hosts/src/lib.rs
+  - domain/ui/ui_testing/Cargo.toml
+  - domain/ui/ui_testing/src/lib.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/artifact-architecture_contract.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/artifact-artifact.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/diagnostics-diagnostics.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/migration-migration.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/reproducibility-reproducibility.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/runtime_test-runtime_test.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-009/source_maps-source_maps.yaml
+  new_outputs:
+  - domain/ui/ui_accessibility/Cargo.toml
+  - domain/ui/ui_accessibility/src/lib.rs
+  - domain/ui/ui_geometry/Cargo.toml
+  - domain/ui/ui_geometry/src/lib.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/fixture-fixture.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/migration-migration.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/reproducibility-reproducibility.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+  validation_commands:
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_state, state_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_state state_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_binding, binding_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_binding binding_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_hosts, host_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_hosts host_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_accessibility, accessibility_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_accessibility accessibility_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_geometry, geometry_contract]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_geometry geometry_contract
+  - command_id: cargo:test
+    argv: [cargo, test, -p, ui_testing, architecture_fixtures]
+    cwd: .
+    allowed_outputs:
+    - Cargo.lock
+    timeout_seconds: 600
+    raw: cargo test -p ui_testing architecture_fixtures
+  - command_id: task:truth:verify
+    argv: [task, truth:verify, --, --track, PT-UI-PROGRAM-ARCHITECTURE, --claim, ui-program-architecture-implementation]
+    cwd: .
+    allowed_outputs:
+    - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    timeout_seconds: 600
+    raw: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-architecture-implementation
+  - command_id: task:truth:verify
+    argv: [task, truth:verify, --, --track, PT-UI-PROGRAM-ARCHITECTURE, --claim, ui-program-perfectionist-conformance]
+    cwd: .
+    allowed_outputs:
+    - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+    timeout_seconds: 600
+    raw: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+  evidence_required:
+  - kind: fixture
+    name: fixture
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/fixture-fixture.yaml
+    subject_paths:
+    - domain/ui/ui_testing/src/lib.rs
+  - kind: migration
+    name: migration
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/migration-migration.yaml
+    subject_paths:
+    - domain/ui/ui_controls/src/migration.rs
+    - domain/ui/ui_testing/src/lib.rs
+  - kind: reproducibility
+    name: reproducibility
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-011/reproducibility-reproducibility.yaml
+    subject_paths:
+    - domain/ui/ui_compiler/src/lib.rs
+    - domain/ui/ui_artifacts/src/lib.rs
+    - domain/ui/ui_testing/src/lib.rs
+  stop_conditions:
+  - stop after testing, accessibility, geometry, migration, reproducibility, and truth verification evidence pass scoped validation
+  - stop if any truth verifier finding remains or if evidence is generated-only, self-referential, or lacks concrete subject files
+  - stop if this sub-action requires MaterialProgram, foundation/meta, engine, apps, adapters, or undeclared product files
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop if any ui_program_architecture_conformance verifier finding remains
+- stop if a declared evidence subject is missing, generated-only, self-referential, or not an exact file
+- stop if MaterialProgram implementation, foundation/meta extraction, renderer-owned UI truth, or ECS-owned UI semantics would start
+- stop if crate creation would exceed the exact new Cargo.toml and source files listed here
+- stop if validation fails

@@ -35,6 +35,10 @@ Use the workflow kickoff helper when starting a new AI-assisted task:
 task --list
 task batch:kickoff -- --next
 task roadmap:intake -- --idea "<design or change idea>"
+task track:use -- --track "<PT-ID>"
+task track
+task track:allow -- --permission crate_creation --reason "<exact scoped crate authority reason>"
+task track:go
 task production:plan-track -- --track "<PT-ID>"
 task production:complete-track-contracts -- --track "<PT-ID>"
 task production:expand-track -- --track "<PT-ID>"   # read-only candidate listing
@@ -69,6 +73,27 @@ task batch:propose -- --goal "<batch goal>" --scope "L0"
 task docs:validate
 task ci:local
 ```
+
+For manifest-backed production tracks, prefer the ergonomic Track Control Plane:
+
+- `task track` is the read-only status command for the active track or an
+  explicit `--track <PT-ID>`. It reports the next action, blockers, truth
+  status, lock readiness, and the next exact command.
+- `task track:go` is the normal continuation command. It compiles or refreshes
+  the Contract Pack, derives permissions from remaining ActionContracts,
+  refreshes the short-lived execution lock only when durable intent still
+  matches, delegates all mutation to the clean execution kernel, and runs
+  truth/post-completion checks for strong claims.
+- `task track:use -- --track <PT-ID>` stores the local active track in ignored
+  operator state under `.runenwerk/`; it is not repository truth.
+- `task track:allow` is only for rare strategic permissions such as exact
+  crate creation. It writes durable intent under
+  `workspace/track-intent-locks/` and cannot grant `foundation/meta`
+  extraction.
+
+The lower-level `production:*`, `execution:*`, and `truth:*` commands remain
+available as advanced/debug controls. Normal human and AI workflow should not
+require copying permission lists, lock modes, or runner modes.
 
 Task-shape commands such as `architecture-governance`,
 `parallel-roadmap-batch`, `implementation`, `milestone`, and `closeout` are
@@ -144,6 +169,11 @@ Validation commands execute checks:
   refreshes Contract Pack and Execution Lock authority only when gates allow it,
   then uses the same scoped-diff, validation, evidence, and ledger guarantees as
   full-track execution.
+- `agent_writer` actions that are too broad for one reliable pass must be split
+  in `plan.contract.yaml` with `agent_subactions`. Each sub-action compiles into
+  its own resumable `ActionContract`, streams transcript files, imports only its
+  declared scoped diff, writes its own evidence, and can be retried without
+  replaying already satisfied sub-action evidence.
 - `task execution:compile`, `task execution:preflight`, `task execution:lock`,
   `task execution:next`, and `task execution:run` are the clean Track Execution
   Harness entrypoints. They use a typed Execution Contract Pack under
@@ -276,6 +306,20 @@ overlapping current candidate, switch candidates explicitly:
 ```text
 task roadmap:switch-current -- --from WR-OLD --to WR-NEW --evidence "<accepted evidence>"
 ```
+
+If the intended WR is in `roadmap-deferred.yaml`, do not hand-edit it into the
+active roadmap source. Activate exactly one deferred row with evidence:
+
+```text
+task roadmap:activate-deferred -- --id WR-ID --state ready_next --evidence "<accepted evidence>"
+```
+
+Deferred activation is not implementation authority. It only moves a B4-or-lower,
+non-policy-deferred row back into active planning so normal `production:plan`,
+promotion preflight, exact WR scope, validation, and closeout gates can run.
+Activation to `current_candidate` is allowed only when the row already satisfies
+the existing B2 implementation gate, dependency, decision-gate, and write-scope
+checks.
 
 Use the five-minute gate loop for production-track coordination:
 `task ai:goal` -> `task production:plan` -> promotion preflight or
@@ -517,6 +561,12 @@ The audit must classify the row or milestone:
   executable validations prove the architecture itself;
 - `perfectionist_verified` only when a completed audit path exists and
   `known_quality_gaps` is empty.
+
+For manifest-backed production tracks, strong completion claims also require a
+current truth certificate. Closeouts, generated registers, manifests, locks, and
+evidence YAML summarize or support the claim; they do not certify it. A
+`perfectionist_verified` certificate must have zero findings, zero known gaps,
+zero known risks, and zero truth drift.
 
 The audit must explicitly check:
 

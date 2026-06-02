@@ -20,3 +20,8 @@ subject_paths:
 - Cargo.toml
 - domain/ui/ui_hosts/src/lib.rs
 - domain/ui/ui_hosts/Cargo.toml
+subject_digests:
+  Cargo.toml: 95443df489177b3ba4fb03ec6f1f3c6765252eeb967c0c91b58e522bb7a7d4e7
+  domain/ui/ui_hosts/Cargo.toml: 7bec86b0e08a6bfe032209073957b392c4ea42cb67e0ef0ef8c806b9ae14720b
+  domain/ui/ui_hosts/src/lib.rs: 0ae5e5646a01d9e8dc8d4100108dfec4830dcefda2619721ae672ec5727d2b87
+  domain/ui/ui_surface/src/lib.rs: fa4df9f72633de6229f5cb3da6df0ef9c2323e29ecb0420310e265340a6e2d8f

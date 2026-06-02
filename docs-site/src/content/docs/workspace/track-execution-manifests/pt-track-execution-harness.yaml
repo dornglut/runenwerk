@@ -26,7 +26,7 @@ global_validation_commands:
 - task roadmap:check
 - task docs:validate
 - task planning:validate
-- uv run pytest tools/workflow/test_workflow.py -q
+- task workflow:test
 global_stop_conditions:
 - stop if production, roadmap, manifest, Contract Pack, lock, plan sidecar, or evidence state conflict
 - stop if a milestone lacks an owning WR or future WR candidate
@@ -41,6 +41,8 @@ truth_claims:
   claim_level: architecture_runtime_proven
   claim_status: satisfied
   claim_statement: The clean Track Execution Harness is architecture-runtime-proven for locked manifest-backed track execution through source models, Contract Packs, locks, transactional executors, resolver-backed evidence, closeouts, agent-track, public command cutover, and legacy runner retirement.
+  truth_verifier: track_execution_harness_authority
+  truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-track-execution-harness/track-execution-harness-authority.yaml
   required_docs:
   - evidence_kind: doc_frontmatter_status
     path: docs-site/src/content/docs/workspace/track-execution-manifest.md
@@ -58,7 +60,7 @@ truth_claims:
     reason: Public production-track commands must route through the clean adapter.
   required_validations:
   - evidence_kind: validation_command
-    command: uv run pytest tools/workflow/test_workflow.py -q
+    command: task workflow:test
     reason: Workflow tests must pass before harness truth can be satisfied.
   - evidence_kind: validation_command
     command: task planning:validate
@@ -215,7 +217,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -339,7 +341,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -375,7 +377,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -397,7 +399,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -448,7 +450,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -578,7 +580,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -625,7 +627,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -648,7 +650,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -698,7 +700,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -827,7 +829,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -873,7 +875,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -896,7 +898,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -947,7 +949,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -1077,7 +1079,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1124,7 +1126,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1147,7 +1149,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1197,7 +1199,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -1326,7 +1328,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1372,7 +1374,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1395,7 +1397,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1446,7 +1448,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -1576,7 +1578,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1623,7 +1625,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1646,7 +1648,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1696,7 +1698,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -1825,7 +1827,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1871,7 +1873,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1894,7 +1896,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -1946,7 +1948,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -2077,7 +2079,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -2125,7 +2127,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -2148,7 +2150,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -2202,7 +2204,7 @@ milestones:
   - resolver-backed evidence contract
   - closeout contract
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:validate
   - task production:check
   - task roadmap:validate
@@ -2335,7 +2337,7 @@ milestones:
     - workflow tests pass
     - resolver-backed execution evidence exists
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -2385,7 +2387,7 @@ milestones:
     forbidden_patterns: []
     new_file_policy: existing_files_only
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -2408,7 +2410,7 @@ milestones:
     runtime_test_evidence_required:
     - workflow tests pass
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:validate
     - task production:check
     - task roadmap:validate
@@ -2457,7 +2459,7 @@ milestones:
   - completed PM-TRACK-HARNESS-002 through PM-TRACK-HARNESS-010 closeouts
   - resolver-backed evidence for clean-kernel authority, agent-track, public cutover, and legacy retirement
   validation_commands:
-  - uv run pytest tools/workflow/test_workflow.py -q
+  - task workflow:test
   - task production:render
   - task production:validate
   - task production:check
@@ -2531,7 +2533,7 @@ milestones:
     - docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md
     - docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:render
     - task production:validate
     - task production:check
@@ -2564,7 +2566,7 @@ milestones:
     - no foundation/meta extraction
     - no placeholder future folders
     validation_commands:
-    - uv run pytest tools/workflow/test_workflow.py -q
+    - task workflow:test
     - task production:render
     - task production:validate
     - task production:check

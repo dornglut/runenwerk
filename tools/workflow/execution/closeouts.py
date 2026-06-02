@@ -86,6 +86,8 @@ def archive_wr_item(
     found_item["planning_state"] = "completed"
     found_item["completion_quality"] = completion_quality
     found_item["completion_audit"] = closeout_path
+    if completion_quality == "perfectionist_verified":
+        found_item["known_quality_gaps"] = []
     write_scopes = list(found_item.get("write_scopes") or [])
     if closeout_path not in write_scopes:
         write_scopes.append(closeout_path)
@@ -165,6 +167,7 @@ def run_runtime_closeout(action: ActionContract, *, workspace_root: Path) -> lis
                 milestone_data["state"] = "completed"
                 milestone_data["completion_quality"] = action.closeout_contract.completion_quality
                 milestone_data["completion_audit"] = action.closeout_contract.path
+                milestone_data["known_quality_gaps"] = []
                 milestone_data["evidence_gates"] = [
                     {
                         "path": action.closeout_contract.path,

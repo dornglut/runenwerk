@@ -35,7 +35,7 @@ package "PT-SDF-OW SDF-first open-world playable vertical" {
 
   component "PM-SDF-OW-002 Open world substrate design\nkind=design\nstate=active\nWR=WR-001, WR-014, WR-015" as PM_SDF_OW_002 <<active>>
 
-  component "PM-SDF-OW-003 Playable SDF character\nkind=design\nstate=designing\nWR=WR-014, WR-015, WR-022" as PM_SDF_OW_003 <<designing>>
+  component "PM-SDF-OW-003 Playable SDF character\nkind=design\nstate=active\nWR=WR-014, WR-015, WR-022" as PM_SDF_OW_003 <<active>>
 
   component "PM-SDF-OW-004 Atmosphere and material response\nkind=design\nstate=designing\nWR=WR-014, WR-015" as PM_SDF_OW_004 <<designing>>
 

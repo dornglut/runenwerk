@@ -41,6 +41,7 @@ from track_sources.manifest import (
     load_track_execution_manifest,
     truth_claim_summary_lines,
 )
+from prompt_doctrine import quality_doctrine_block
 
 
 console = Console()
@@ -609,6 +610,8 @@ def render_manifest_gate(
             f"- Execution lock readiness: {'ready' if context.execution_lock_ready else 'blocked' if context.full_automation_target else 'not requested'}",
             f"- `--mode full-track` can run now: {'yes' if context.full_automation_ready and context.execution_lock_ready else 'no'}",
             f"- Locked-and-executable: {'yes' if context.full_automation_ready and context.execution_lock_ready and manifest.ai_executable else 'no'}",
+            f"- Track status command: `task track -- --track {track.id}`",
+            f"- Track continuation command: `task track:go -- --track {track.id}`",
         ]
     )
     truth_lines = truth_claim_summary_lines(manifest)
@@ -617,6 +620,17 @@ def render_manifest_gate(
         lines.append(f"  - {truth_lines[0]}")
     else:
         lines.extend(f"  {line}" for line in truth_lines[1:])
+    try:
+        from truth.certificates import certificate_summary_lines
+
+        certificate_lines = certificate_summary_lines(track.id, manifest.truth_claims)
+    except WorkflowError as error:
+        certificate_lines = [f"- Truth certificates: invalid ({error})"]
+    if certificate_lines:
+        lines.append("- Truth certificates:")
+        lines.extend(f"  {line}" for line in certificate_lines)
+    else:
+        lines.append("- Truth certificates: none required for current satisfied claims.")
     if context.full_automation_blockers:
         lines.append("- Full automation blockers:")
         lines.extend(f"  - {blocker}" for blocker in context.full_automation_blockers)
@@ -749,6 +763,8 @@ def render_stack_goal_prompt(
         "",
         "```text",
         f"/goal Complete the production stack ending in {root_track.id} - {root_track.title}.",
+        "",
+        quality_doctrine_block(),
         "",
         "Use the current production tracks, roadmap items, design docs, and task workflow.",
         f"Use task ai:goal -- --track {root_track.id} --stack as the stack coordinator after every bounded action.",
@@ -891,6 +907,8 @@ def render_goal_prompt(
         "",
         "```text",
         goal_line,
+        "",
+        quality_doctrine_block(),
         "",
         "Use the current production tracks, roadmap items, machine-readable Track Execution Manifest when present, design docs, and task workflow.",
         "Work through the finite milestone list in dependency order.",

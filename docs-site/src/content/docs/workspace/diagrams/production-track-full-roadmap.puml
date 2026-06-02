@@ -35,7 +35,7 @@ package "PT-SDF-OW SDF-first open-world playable vertical" {
 
   component "PM-SDF-OW-002 Open world substrate design\nkind=design\nstate=active\nWR=WR-001, WR-014, WR-015" as PM_SDF_OW_002 <<active>>
 
-  component "PM-SDF-OW-003 Playable SDF character\nkind=design\nstate=designing\nWR=WR-014, WR-015, WR-022" as PM_SDF_OW_003 <<designing>>
+  component "PM-SDF-OW-003 Playable SDF character\nkind=design\nstate=active\nWR=WR-014, WR-015, WR-022" as PM_SDF_OW_003 <<active>>
 
   component "PM-SDF-OW-004 Atmosphere and material response\nkind=design\nstate=designing\nWR=WR-014, WR-015" as PM_SDF_OW_004 <<designing>>
 
@@ -434,6 +434,12 @@ package "PT-UI-PROGRAM-ARCHITECTURE UI Program Architecture Implementation" {
 
   component "PM-UI-PROGRAM-ARCH-010 MaterialProgram Planning Gate Decision\nkind=release\nstate=completed\nWR=WR-168" as PM_UI_PROGRAM_ARCH_010 <<completed>>
 
+  component "PM-UI-PROGRAM-ARCH-011 Perfectionist Architecture Conformance Closure\nkind=hardening\nstate=completed\nWR=WR-169" as PM_UI_PROGRAM_ARCH_011 <<completed>>
+
+  component "PM-UI-PROGRAM-ARCH-012 Perfectionist Conformance Hardening Closure\nkind=hardening\nstate=completed\nWR=WR-170" as PM_UI_PROGRAM_ARCH_012 <<completed>>
+
+  component "PM-UI-PROGRAM-ARCH-013 Design Coverage And Semantic Truth Closure\nkind=hardening\nstate=completed\nWR=WR-171" as PM_UI_PROGRAM_ARCH_013 <<completed>>
+
 }
 
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
@@ -679,6 +685,9 @@ PM_UI_PROGRAM_ARCH_006 -down-> PM_UI_PROGRAM_ARCH_007 : production prerequisite
 PM_UI_PROGRAM_ARCH_007 -down-> PM_UI_PROGRAM_ARCH_008 : production prerequisite
 PM_UI_PROGRAM_ARCH_008 -down-> PM_UI_PROGRAM_ARCH_009 : production prerequisite
 PM_UI_PROGRAM_ARCH_009 -down-> PM_UI_PROGRAM_ARCH_010 : production prerequisite
+PM_UI_PROGRAM_ARCH_010 -down-> PM_UI_PROGRAM_ARCH_011 : production prerequisite
+PM_UI_PROGRAM_ARCH_011 -down-> PM_UI_PROGRAM_ARCH_012 : production prerequisite
+PM_UI_PROGRAM_ARCH_012 -down-> PM_UI_PROGRAM_ARCH_013 : production prerequisite
 PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

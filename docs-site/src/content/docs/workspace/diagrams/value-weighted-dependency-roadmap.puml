@@ -79,7 +79,7 @@ package "Level 3 - Active Domain Tracks" {
 
   component "WR-030 Model mesh renderable scene\nstate=ready_next\nscore=1.0 gate=current mesh preview pixel proof\nV4 B2\ncall=current model mesh pixel proof\nMesh Preview material pass\nWR-029 closeout prerequisite" as MESHRND <<V4>>
 
-  component "WR-040 External sandbox design\nstate=support_only\nscore=0.7 gate=policy deferred until sandbox/security design acceptance\nV3 B5\ncall=external components blocked\nsandbox decision required" as WBCAPSBOX <<support_only>>
+  component "WR-040 External sandbox design\nstate=support_only\nscore=0.7 gate=policy deferred until sandbox/security design acceptance\nV3 B2\ncall=external components blocked\nsandbox decision required" as WBCAPSBOX <<support_only>>
 
 }
 

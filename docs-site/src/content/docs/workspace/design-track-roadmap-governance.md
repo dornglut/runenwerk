@@ -59,10 +59,12 @@ claim a stronger truth without the stronger artifact.
 | Authority | Owns | Cannot claim |
 |---|---|---|
 | Code and runtime evidence | What actually exists and runs. Tests, captures, fixtures, benchmarks, and generated artifacts prove behavior. | Long-term policy by itself. If behavior changes architecture, update an ADR, design, or guideline. |
+| Truth certificates | Independent code-truth certification for strong completion claims. Certificates bind a verifier, source digests, findings, gaps, risks, drift, and conformance checks. | Execution authority, implementation scope, or evidence not inspected by the verifier. |
 | Closeouts and reports | Completion evidence, validation output, known gaps, migration proof, runtime proof, and audit findings. | Future implementation authority or new architecture doctrine by themselves. |
 | Track Execution Run ledgers | Machine-readable record of each successful locked full-track action, source digests before/after, files changed, validation results, evidence paths, closeout paths, and stop reason. | Architecture doctrine, WR authority, or evidence that was not recorded by the action. |
 | WR roadmap rows | Implementation eligibility, dependency legality, blocker state, write scopes, validation expectations, and completion quality for one bounded row. | Strategic product completion without production milestone evidence. |
 | Implementation plans | The bounded write contract for one WR or production milestone slice. | Permission to exceed the linked WR, skip roadmap state, or claim completion. |
+| Track Intent Locks | Durable human strategic grants and denials for AI execution, such as exact crate creation approval or `foundation/meta` denial. | Source freshness, implementation scope, or execution by themselves. |
 | Track Execution Locks | Digest-locked permission envelope for AI-executable full-track runs. | Implementation authority without a manifest, WR, plan, writer strategy, validation, and closeout evidence. |
 | Track Execution Manifest | Full-track sequencing, explicit next legal action, missing WR blockers, write scopes, forbidden scopes, evidence gates, and closeout paths. | WR authority, implementation permission, roadmap promotion, or closeout evidence. |
 | Production tracks | Strategic product outcomes, milestone order, production acceptance criteria, design gates, evidence gates, and target completion quality. | Code permission without WR authority. |
@@ -154,13 +156,17 @@ They authorize planning and sequencing only.
 
 ### Track Execution Locks
 
-Track Execution Locks make locked AI execution explicit.
+Track Intent Locks and Track Execution Locks make locked AI execution explicit.
 
-They own `ai_executable`, lock author, lock time, manifest digest, source
-digests for planning sources and workflow runner sources, granted permissions,
-denied permissions, strategic human gates, and invalidation rules. Full-track
-execution must fail before mutation when the lock is missing, stale, grants
-less authority than requested, denies a requested permission, or lists a
+Track Intent Locks live under `workspace/track-intent-locks/`. They own durable
+human strategic grants and denials only. They do not store source digests and
+must not become executable authority by themselves.
+
+Track Execution Locks live under `workspace/execution-locks/`. They own the
+short-lived digest snapshot for one execution run: Contract Pack digest, source
+digests, granted permissions, denied permissions, and lock scope. Full-track
+execution must fail before mutation when the execution lock is missing, stale,
+grants less authority than requested, denies a requested permission, or lists a
 strategic human gate crossed by remaining milestones.
 
 Locks do not authorize implementation by themselves. They only allow the
@@ -208,6 +214,16 @@ handoff decisions.
 
 Closeouts must not implement missing behavior or claim a stronger quality tier
 than the evidence supports.
+
+For `runtime_proven`, `architecture_runtime_proven`, and
+`perfectionist_verified` claims on manifest-backed tracks, closeouts are not
+the proof. A current truth certificate must verify code truth against design,
+evidence, metadata, and generated reports before the claim can be satisfied.
+
+`perfectionist_verified` means the certificate has zero findings, zero known
+gaps, zero known risks, and zero truth drift. Generated reports, closeout prose,
+manifest entries, locks, and evidence YAML may support the certificate, but
+they cannot replace it.
 
 ### Generated Registers
 
@@ -695,10 +711,15 @@ authority for locked tracks.
 `product_implementation` writers are strategy-driven: `template_writer`,
 `patch_writer`, `proof_aggregation_writer`, and `agent_writer` all receive
 authority from the compiled `ActionContract`, not from track-specific runner
-branches. `agent_writer` must run in an isolated action workspace, import only
-accepted scoped diffs after digest checks, and record a transcript in the run
-ledger. Crate creation is legal only when `crate_creation` is explicitly
-granted and the Contract Pack names exact `new: <crate>/Cargo.toml` paths.
+branches. `agent_writer` must run in an isolated action workspace, stream
+prompt/stdout/stderr/summary transcripts into run artifacts, import only
+accepted scoped diffs after digest checks, and record transcript paths in the
+run ledger. Large agent actions should be split through `agent_subactions` in
+`plan.contract.yaml`; the compiler turns each sub-action into a separate
+resumable `ActionContract` with its own exact outputs, validation commands,
+evidence requirements, and stop conditions. Crate creation is legal only when
+`crate_creation` is explicitly granted and the Contract Pack names exact
+`new: <crate>/Cargo.toml` paths.
 Locked-track runs must use `--mode full-track`; the runner must not infer
 full-track intent from the permission set alone.
 

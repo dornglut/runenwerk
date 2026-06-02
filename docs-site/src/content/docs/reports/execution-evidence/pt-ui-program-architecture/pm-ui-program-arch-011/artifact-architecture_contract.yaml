@@ -1,0 +1,26 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-011
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-011:WR-169:sub:typed-graph-control-contracts
+evidence_kind: artifact
+name: architecture_contract
+status: passed
+produced_at: '2026-06-02T10:22:33Z'
+paths:
+- domain/ui/ui_program/src/program.rs
+- domain/ui/ui_program/src/graphs/mod.rs
+- domain/ui/ui_controls/src/package.rs
+- domain/ui/ui_controls/src/registry.rs
+subject_paths:
+- domain/ui/ui_program/src/program.rs
+- domain/ui/ui_program/src/graphs/mod.rs
+- domain/ui/ui_controls/src/package.rs
+- domain/ui/ui_controls/src/registry.rs
+validation_commands:
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_controls control_package) -> exit 0
+subject_digests:
+  domain/ui/ui_controls/src/package.rs: 7ede9407137f8a67b58716fed25cbf9baafaa0a0e66b78bdcebbf9aebca484a7
+  domain/ui/ui_controls/src/registry.rs: 25555ed0b90d99a8b8749b7b92a84724e7ade7ab8f00fd47555ca180f1683221
+  domain/ui/ui_program/src/graphs/mod.rs: 9efe6129061d7492cd143102be709d88cf8c6da1270c5acbcc2581d713622989
+  domain/ui/ui_program/src/program.rs: 62e4d628d1b514b62da6faef6388b4b990249fe4d4901018e4b0957e9b3947e4

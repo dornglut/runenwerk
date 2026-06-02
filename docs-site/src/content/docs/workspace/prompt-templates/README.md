@@ -16,6 +16,27 @@ Prompt templates are documentation artifacts. They do not define runtime behavio
 
 Use these templates when a task benefits from a repeatable instruction shape but still needs repository inspection before editing.
 
+## Canonical Quality Doctrine
+
+Generated AI work prompts must include the canonical quality doctrine marker
+`runenwerk-quality-doctrine-v1`.
+
+The doctrine is prompt guidance, not execution authority. Validators, scoped
+contracts, evidence records, truth certificates, and closeouts remain the
+enforcement layer.
+
+Canonical doctrine:
+
+- Prefer the long-term architecture-correct solution over local patches.
+- No shortcuts, no half measures, no success-shaped placeholders.
+- Inspect current code truth before editing.
+- Do not claim completion while known gaps, drift, missing evidence, or
+  unimplemented target contracts remain.
+- If scope cannot satisfy the contract honestly, stop and report the missing
+  authority or design gap.
+- `perfectionist_verified` requires zero findings, zero known gaps, zero known
+  risks, and zero truth drift.
+
 ## Available Templates
 
 - [Architecture Audit](./architecture-audit.md)

@@ -26,3 +26,14 @@ subject_paths:
 - domain/ui/ui_schema/src/schema.rs
 - domain/ui/ui_program/src/events/route.rs
 - domain/ui/ui_program/src/events/payload.rs
+subject_digests:
+  Cargo.toml: 95443df489177b3ba4fb03ec6f1f3c6765252eeb967c0c91b58e522bb7a7d4e7
+  domain/ui/ui_program/Cargo.toml: 7ac3271fc0a6faba20bfbc710988864c5210e2d48419c9f63bef8886587df4e8
+  domain/ui/ui_program/src/events/mod.rs: c3396431c829c11a9b209422c4dc14fd98384e1604d82d0dbb2f05895a0c39d2
+  domain/ui/ui_program/src/events/payload.rs: 50fd3b5906f454ef175c02cc5b740b8a542060583cc05241c182629a2c7d1760
+  domain/ui/ui_program/src/events/route.rs: 348ad8c75ebac8129dbf858e0d27e00f1bcdac9ebf39455fe772795ccbab818d
+  domain/ui/ui_program/src/lib.rs: 963b8dc6af5cf1c39bbd682d57b47f607bed1fec7f73f5d7000f51fa89474897
+  domain/ui/ui_schema/Cargo.toml: be4a04fdd154548ea80550b644531055e4b94506e964568703d2763a6b6e062d
+  domain/ui/ui_schema/src/lib.rs: 7d32edec00c9becf6cdb89129c2ee11455ddd3728313cbaf7c3bbfb79de99768
+  domain/ui/ui_schema/src/schema.rs: a515d032a81fc5c8190aa50b488b817982c06331439256e0e1e19e2d005ca70a
+  domain/ui/ui_schema/src/value.rs: f9de6128e325b8d02a2e86fd1e9636bac28797fe97f08f756f4ae814fce0d6dc

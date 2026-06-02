@@ -44,6 +44,10 @@ evidence.
 
 Then paste the generated prompt into `/goal`.
 
+Generated `/goal` prompts include the canonical quality doctrine marker
+`runenwerk-quality-doctrine-v1`; keep that marker in the prompt so the quality
+bar stays centralized instead of duplicated in this template.
+
 Use `--stack` for an end-state audit or perfection track that intentionally
 depends on prerequisite production tracks. Stack mode resolves the prerequisite
 track order and routes dependency waits to the first incomplete prerequisite

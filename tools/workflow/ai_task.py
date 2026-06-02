@@ -12,6 +12,8 @@ import argparse
 from dataclasses import dataclass
 from textwrap import dedent
 
+from prompt_doctrine import quality_doctrine_block
+
 
 ROOT_DOCS = [
     "AGENTS.md",
@@ -517,6 +519,8 @@ def render_shape(shape: WorkflowShape, task: str, scope: str, roadmap: str) -> s
     lines.append("")
     lines.append("## Prompt")
     lines.append("```text")
+    lines.append(quality_doctrine_block())
+    lines.append("")
     lines.append(prompt)
     lines.append("```")
     lines.append("")

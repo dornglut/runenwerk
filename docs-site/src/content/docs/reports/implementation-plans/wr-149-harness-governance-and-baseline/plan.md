@@ -119,7 +119,7 @@ PM-001 does not:
 Run:
 
 ```text
-uv run pytest tools/workflow/test_workflow.py -q
+task workflow:test
 task production:render
 task production:validate
 task production:check

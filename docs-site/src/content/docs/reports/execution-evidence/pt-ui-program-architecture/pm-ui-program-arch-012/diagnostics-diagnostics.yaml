@@ -1,0 +1,106 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-012
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+evidence_kind: diagnostics
+name: diagnostics
+status: passed
+produced_at: '2026-06-02T17:45:58Z'
+paths:
+- tools/workflow/truth/conformance/evidence.py
+- tools/workflow/track_control_cli.py
+subject_paths:
+- tools/workflow/truth/conformance/evidence.py
+- tools/workflow/track_control_cli.py
+subject_digests:
+  tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+  tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1
+validation_commands:
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+- task:workflow:test (task workflow:test) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: be6432338ab11e5ea9f90f4305a595f91982ffdb330c34b72e5f45376d40d42f
+  subject_digests:
+    tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+    tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: 1d9e9bca53adaaa93ee413c68e8325831303d1e97e93ec3bcf7407465fa20724
+  subject_digests:
+    tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+    tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: d44fad3c6f3b7b5be65ce9bfa673599fa27b0d342e1d13f689706d909b497f89
+  subject_digests:
+    tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+    tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: e544830e69caee6ef14751494e2ae16f667301b40d6a1511a81852883616acc5
+  subject_digests:
+    tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+    tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: d9e16ac7f9c493410e6025f631ca70afe1e564bbc5e9879b293ec03affd307b7
+  subject_digests:
+    tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+    tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-012:WR-170
+  validation_result_digest: b66536e69aff64e364482ba24acd17536014d8c5138ac65f7a4c91492e7827da
+  subject_digests:
+    tools/workflow/track_control_cli.py: e2275f8d974d54d89d01179426d0692ee156e7f50e51176443a7a18e443606b5
+    tools/workflow/truth/conformance/evidence.py: 7bda45e75778d6a139b2aaa6731b8f68351c044bff1c8ceabe059e86c157f5f1

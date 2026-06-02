@@ -17,3 +17,4 @@ validation_commands:
 - task:roadmap:check (task roadmap:check) -> exit 0
 - task:docs:validate (task docs:validate) -> exit 0
 - task:planning:validate (task planning:validate) -> exit 0
+subject_digests: {}
