@@ -41,15 +41,15 @@ global_stop_conditions:
 - stop before product code unless a dedicated active WR and accepted production plan authorize exact scope
 - stop before crate creation unless the active WR and PM-UI-PROGRAM-ARCH-002 boundary decision authorize exact crates
 - stop before MaterialProgram planning or implementation while truth claims remain blocked
-next_legal_action: Complete PM-UI-PROGRAM-ARCH-013 / WR-171; close design coverage, semantic graph/control truth, certificate digest closure, and durable checkpoint state before any final perfectionist completion claim.
+next_legal_action: Complete PM-UI-PROGRAM-ARCH-014 / WR-172; replace symbol-heavy semantic certification with behavior-probe-backed architecture truth and extension-readiness closure before any final perfectionist completion claim.
 ai_executable: false
 full_automation_target: false
 truth_claims:
 - claim_id: ui-program-architecture-implementation
   claim_kind: architecture_contract
   claim_level: architecture_runtime_proven
-  claim_status: satisfied
-  claim_statement: UiProgram architecture implementation is current only after PM-013 requirement coverage, semantic verifier, complete digest closure, and durable checkpoint checks pass with zero findings.
+  claim_status: blocked
+  claim_statement: UiProgram architecture implementation remains blocked until PM-014 proves behavior-first semantic conformance and extension readiness with zero findings.
   truth_verifier: ui_program_architecture_conformance
   truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
   required_docs:
@@ -120,14 +120,16 @@ truth_claims:
     category: runtime_test
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
     reason: PM-009 carries architecture runtime proof evidence.
-  known_gaps: []
+  known_gaps:
+  - Current certificates were produced before semantic checks required explicit executable behavior probe bindings.
+  - PM-014 must distinguish completed platform architecture requirements from future product-feature work.
   supersedes: []
   blocks_downstream: []
 - claim_id: retained-ui-compatibility
   claim_kind: architecture_contract
   claim_level: architecture_runtime_proven
-  claim_status: satisfied
-  claim_statement: Retained UI compatibility is current only after PM-013 resolver-backed retained compatibility evidence and semantic verifier checks pass with zero findings.
+  claim_status: blocked
+  claim_statement: Retained UI compatibility remains blocked until PM-014 rechecks behavior-level retained compatibility and render-boundary probes with current evidence.
   truth_verifier: ui_program_architecture_conformance
   truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
   required_docs: []
@@ -142,14 +144,15 @@ truth_claims:
     category: migration
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
     reason: PM-009 carries final architecture migration evidence.
-  known_gaps: []
+  known_gaps:
+  - Current retained compatibility truth depends on prior certificates that must be refreshed after behavior-probe conformance hardening.
   supersedes: []
   blocks_downstream: []
 - claim_id: ui-program-perfectionist-conformance
   claim_kind: architecture_contract
   claim_level: perfectionist_verified
-  claim_status: satisfied
-  claim_statement: UiProgram perfectionist conformance is current only after PM-013 requirement coverage, semantic verifier, complete digest closure, and durable checkpoint checks pass with zero findings.
+  claim_status: blocked
+  claim_statement: UiProgram perfectionist conformance remains blocked until PM-014 closes with behavior-first semantic probes, extension-readiness checks, complete digest closure, and durable checkpoint state.
   truth_verifier: ui_program_architecture_conformance
   truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
   required_docs:
@@ -163,7 +166,9 @@ truth_claims:
     command: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-architecture-implementation
     reason: The architecture verifier must pass before perfectionist completion can be claimed.
   required_closeout_evidence: []
-  known_gaps: []
+  known_gaps:
+  - Current PM-013 conformance is historical evidence and is superseded until behavior-probe-backed certification passes.
+  - Future product features must be registered as deferrals or separate tracks rather than silently included in architecture completion.
   supersedes:
   - PM-UI-PROGRAM-ARCH-009 architecture_runtime_proven historical closeout claim
   - PM-UI-PROGRAM-ARCH-011 perfectionist_verified historical closeout claim
@@ -2956,7 +2961,9 @@ milestones:
   - tools/workflow/truth/conformance/ui_program_architecture.py
   - tools/workflow/truth/conformance/spec.py
   - tools/workflow/test_workflow.py
-  - tools/workflow/tests
+  - tools/workflow/tests/test_truth_conformance.py
+  - tools/workflow/tests/test_truth_semantic_behavior.py
+  - tools/workflow/tests/test_track_control.py
   - docs-site/src/content/docs/workspace/production-tracks.yaml
   - docs-site/src/content/docs/workspace/roadmap-items.yaml
   - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
@@ -3082,7 +3089,9 @@ milestones:
     - tools/workflow/truth/conformance/evidence.py
     - tools/workflow/truth/conformance/ui_program_architecture.py
     - tools/workflow/test_workflow.py
-    - tools/workflow/tests
+    - tools/workflow/tests/test_truth_conformance.py
+    - tools/workflow/tests/test_truth_semantic_behavior.py
+    - tools/workflow/tests/test_track_control.py
     required_function_method_scope:
     - evidence provenance validation
     - semantic verifier dispatch
@@ -3144,7 +3153,9 @@ milestones:
     - tools/workflow/truth/conformance/ui_program_architecture.py
     - tools/workflow/truth/conformance/spec.py
     - tools/workflow/test_workflow.py
-    - tools/workflow/tests
+    - tools/workflow/tests/test_truth_conformance.py
+    - tools/workflow/tests/test_truth_semantic_behavior.py
+    - tools/workflow/tests/test_track_control.py
     required_outputs:
     - structured evidence provenance enforcement
     - semantic verifier dispatch
@@ -3232,7 +3243,9 @@ milestones:
   - tools/workflow/truth/certificates.py
   - tools/workflow/truth/cli.py
   - tools/workflow/track_control_cli.py
-  - tools/workflow/tests
+  - tools/workflow/tests/test_truth_conformance.py
+  - tools/workflow/tests/test_truth_semantic_behavior.py
+  - tools/workflow/tests/test_track_control.py
   - docs-site/src/content/docs/workspace/production-tracks.yaml
   - docs-site/src/content/docs/workspace/roadmap-items.yaml
   - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
@@ -3350,7 +3363,9 @@ milestones:
     - tools/workflow/truth/certificates.py
     - tools/workflow/truth/cli.py
     - tools/workflow/track_control_cli.py
-    - tools/workflow/tests
+    - tools/workflow/tests/test_truth_conformance.py
+    - tools/workflow/tests/test_truth_semantic_behavior.py
+    - tools/workflow/tests/test_track_control.py
     - docs-site/src/content/docs/workspace/truth-verifier-registry.yaml
     - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
     - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
@@ -3404,7 +3419,9 @@ milestones:
     - tools/workflow/truth/certificates.py
     - tools/workflow/truth/cli.py
     - tools/workflow/track_control_cli.py
-    - tools/workflow/tests
+    - tools/workflow/tests/test_truth_conformance.py
+    - tools/workflow/tests/test_truth_semantic_behavior.py
+    - tools/workflow/tests/test_track_control.py
     - docs-site/src/content/docs/workspace/truth-verifier-registry.yaml
     - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
     - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
@@ -3474,3 +3491,259 @@ milestones:
     generated_contract_marker: generated_by_design_truth_closure
     generated_from_template_version: v1
   owning_wr: WR-171
+- milestone_id: PM-UI-PROGRAM-ARCH-014
+  title: Architecture Behavior Truth And Extension Readiness Closure
+  stage: PM-014
+  authority_level: active_wr_required
+  milestone_type: hardening
+  predecessor_dependencies:
+  - PM-UI-PROGRAM-ARCH-013
+  write_scope:
+  - tools/workflow/truth/conformance/spec.py
+  - tools/workflow/truth/conformance/design_coverage.py
+  - tools/workflow/truth/conformance/ui_program_architecture.py
+  - tools/workflow/track_control_cli.py
+  - tools/workflow/tests/test_truth_conformance.py
+  - tools/workflow/tests/test_truth_semantic_behavior.py
+  - tools/workflow/tests/test_track_control.py
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+  - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+  forbidden_scope:
+  - MaterialProgram implementation
+  - foundation/meta extraction
+  - placeholder future folders
+  - unrelated UI feature expansion
+  - renderer-owned UI truth
+  - ECS-owned UI semantics
+  required_contracts:
+  - WR-172 accepted implementation plan sidecar
+  - active UiProgram architecture design
+  - active UiProgram architecture owner map
+  - behavior-probe-backed semantic conformance spec
+  - design requirement coverage matrix with explicit deferral authority for future product features
+  validation_commands:
+  - task workflow:test
+  - cargo test -p ui_program architecture_contract
+  - cargo test -p ui_controls control_package
+  - cargo test -p ui_artifacts artifact_contract
+  - cargo test -p ui_compiler compiler_contract
+  - cargo test -p ui_evaluator evaluator_contract
+  - cargo test -p ui_testing architecture_fixtures
+  - task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+  - task truth:audit -- --track PT-UI-PROGRAM-ARCHITECTURE
+  - task truth:post-completion-audit -- --track PT-UI-PROGRAM-ARCHITECTURE
+  - task production:validate
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - behavior probe IDs and probe files for every semantic conformance check
+  - extension-readiness proof for future control/package registration without global semantic enums
+  - explicit future-feature deferral or future-track authority for non-architecture product features
+  - complete source digest closure for strong truth certificates
+  - durable checkpoint status with no repo-visible authority drift
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+  stop_conditions:
+  - stop if any semantic check can pass from symbols or source snippets without behavior probes
+  - stop if future product features are treated as architecture-track obligations without accepted authority
+  - stop if any strong truth certificate predates the behavior-probe conformance spec
+  - stop if task track would report complete while repo-visible authority files are dirty or untracked
+  - stop if MaterialProgram, foundation/meta, engine, app, adapter, or unrelated UI feature scope is required
+  next_legal_action: PM-UI-PROGRAM-ARCH-014 closes only after fresh zero-finding truth certificates and post-completion audit pass; otherwise keep the track active.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  milestone_kind: implementation_proof
+  permission_classes_required:
+  - product_code
+  - product_implementation
+  implementation_proof_kind: behavior_truth_closure
+  closeout_kind: perfectionist_verified
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - diagnostics
+  - source_maps
+  - migration
+  - reproducibility
+  - fixture
+  - visual
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/design/active/ui-program-architecture.md
+    - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+    - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+    required_sections:
+    - behavior-probe semantic conformance
+    - extension readiness and future-feature boundary
+    - certificate digest closure
+    - durable checkpoint completion
+    required_decisions:
+    - keep PM-013 closeout as historical evidence only
+    - keep MaterialProgram and foundation/meta blocked
+    - require current zero-finding truth certificate before final completion
+    - do not include all future product features in this architecture track
+    acceptance_checklist:
+    - plan cannot authorize MaterialProgram implementation
+    - plan cannot authorize foundation/meta extraction
+    - plan cannot authorize placeholder future folders
+    - plan must keep generated paperwork subordinate to behavior-level code truth
+    planning_write_scope:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.md
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+    allowed_write_scopes:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.md
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+    forbidden_scopes:
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    - placeholder future folders
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.md
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+    validation_commands:
+    - task workflow:test
+  product_code_contract:
+    required_active_wr_state: current_candidate
+    required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+    exact_allowed_implementation_write_scopes:
+    - tools/workflow/truth/conformance/spec.py
+    - tools/workflow/truth/conformance/design_coverage.py
+    - tools/workflow/truth/conformance/ui_program_architecture.py
+    - tools/workflow/track_control_cli.py
+    - tools/workflow/tests/test_truth_conformance.py
+    - tools/workflow/tests/test_truth_semantic_behavior.py
+    - tools/workflow/tests/test_track_control.py
+    - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014
+    required_function_method_scope:
+    - behavior-probe conformance schema
+    - semantic verifier strictness
+    - track truth-blocked status
+    - future-feature deferral boundary
+    forbidden_implementation_scopes:
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    - placeholder future folders
+    - unrelated UI feature behavior
+    tests_to_add_change:
+    - workflow tests for semantic checks requiring behavior probes
+    - workflow tests for truth_blocked track status
+    - workflow tests for future feature deferral coverage
+    runtime_evidence_required:
+    - zero-finding ui_program_architecture_conformance certificate produced after behavior-probe hardening
+    - zero-finding post-completion audit
+    validation_commands:
+    - task workflow:test
+    - task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+    rollback_compatibility_expectations:
+    - PM-013 closeout remains historical evidence only
+    - generated docs and ledgers remain subordinate to behavior-level code truth
+    closeout_evidence:
+    - behavior-probe-backed semantic verifier output
+    - explicit future-feature boundary and deferral authority
+    - complete source digest closure
+    - durable checkpoint status
+    stop_conditions:
+    - stop if any behavior-probe, evidence, certificate, or durability gap remains
+    template_key: product_implementation
+    generated_contract_marker: generated_by_behavior_truth_closure
+    generated_from_template_version: v1
+  implementation_writer:
+    strategy: verification_writer
+    aggregation_only: false
+    required_prior_milestones:
+    - PM-UI-PROGRAM-ARCH-013
+    allowed_files: []
+    allowed_write_scopes:
+    - tools/workflow/truth/conformance/spec.py
+    - tools/workflow/truth/conformance/design_coverage.py
+    - tools/workflow/truth/conformance/ui_program_architecture.py
+    - tools/workflow/track_control_cli.py
+    - tools/workflow/tests/test_truth_conformance.py
+    - tools/workflow/tests/test_truth_semantic_behavior.py
+    - tools/workflow/tests/test_track_control.py
+    - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014
+    required_outputs:
+    - behavior probe IDs and files for every semantic check
+    - future-feature boundary checks
+    - truth-blocked status until current zero-finding certificates exist
+    - complete certificate source digest closure
+    - durable checkpoint-aware completion status
+    forbidden_files:
+    - foundation/meta
+    - domain/material
+    - domain/material_program
+    forbidden_scopes:
+    - MaterialProgram implementation
+    - foundation/meta extraction
+    forbidden_patterns:
+    - UiSemanticEvent
+    - renderer-owned UI truth
+    - ECS-owned UI semantics
+    new_file_policy: explicit_new_scope_required
+    validation_commands:
+    - task workflow:test
+    - task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+    stop_conditions:
+    - stop unless WR-172 is current_candidate and plan.contract.yaml is accepted
+    - stop if any semantic conformance check lacks behavior probes
+    - stop if durable completion would be reported with repo-visible drift
+    templates: []
+    patches: []
+    agent_prompt: Close behavior truth only within WR-172 exact outputs. Do not start MaterialProgram, do not extract foundation/meta, do not add placeholder folders, and do not expand unrelated UI feature behavior.
+    agent_context_files:
+    - AGENTS.md
+    - docs-site/src/content/docs/design/active/ui-program-architecture.md
+    - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+    - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+    agent_required_outputs:
+    - behavior-probe-backed zero-finding UiProgram perfectionist conformance truth certificate
+    agent_diff_protocol_version: scoped-diff-v1
+    agent_worktree_policy: isolated_action_workspace
+  closeout_strategy: runtime_proven_closeout
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - zero-finding ui_program_architecture_conformance certificate produced after behavior-probe hardening
+    validation_commands:
+    - task truth:certify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-architecture-implementation
+    - task truth:certify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim retained-ui-compatibility
+    - task truth:certify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+    - task truth:audit -- --track PT-UI-PROGRAM-ARCHITECTURE
+    - task truth:post-completion-audit -- --track PT-UI-PROGRAM-ARCHITECTURE
+    completion_quality_allowed:
+    - perfectionist_verified
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+    files_changed_report:
+    - exact files named by WR-172 plan
+    known_gap_reporting:
+    - known gaps must be empty before closeout
+    production_roadmap_state_updates:
+    - set PM-UI-PROGRAM-ARCH-014 completed only after truth certification passes
+    - set PT-UI-PROGRAM-ARCHITECTURE completed only after post-completion audit and durable checkpoint pass
+    next_action_update_rules:
+    - MaterialProgram planning remains separate and gated
+    evidence_manifest_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+    template_key: runtime_closeout
+    generated_contract_marker: generated_by_behavior_truth_closure
+    generated_from_template_version: v1
+  owning_wr: WR-172

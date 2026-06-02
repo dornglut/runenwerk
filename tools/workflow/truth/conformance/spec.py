@@ -41,6 +41,8 @@ class SemanticCheckSpec(BaseModel):
     check_id: str
     description: str
     subject_paths: list[str] = Field(default_factory=list)
+    behavior_probe_paths: list[str] = Field(default_factory=list)
+    behavior_probe_ids: list[str] = Field(default_factory=list)
     evidence_kinds: list[str] = Field(default_factory=list)
     required_symbols: list[str] = Field(default_factory=list)
     required_validation_fragments: list[str] = Field(default_factory=list)
@@ -51,6 +53,18 @@ class SemanticCheckSpec(BaseModel):
         if not value.strip():
             raise ValueError("semantic check text fields must not be empty")
         return value
+
+    @field_validator(
+        "subject_paths",
+        "behavior_probe_paths",
+        "behavior_probe_ids",
+        "evidence_kinds",
+        "required_symbols",
+        "required_validation_fragments",
+    )
+    @classmethod
+    def validate_text_lists(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
 
 
 class DesignCoverageRequirementSpec(BaseModel):

@@ -1,0 +1,199 @@
+version: 1
+status: accepted
+wr_id: WR-172
+milestone_id: PM-UI-PROGRAM-ARCH-014
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: behavior_truth_and_extension_readiness_closure_only
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- tools/workflow/truth/conformance/spec.py
+- tools/workflow/truth/conformance/design_coverage.py
+- tools/workflow/truth/conformance/ui_program_architecture.py
+- tools/workflow/track_control_cli.py
+- tools/workflow/tests/test_truth_conformance.py
+- tools/workflow/tests/test_truth_semantic_behavior.py
+- tools/workflow/tests/test_track_control.py
+- docs-site/src/content/docs/workspace/production-tracks.yaml
+- docs-site/src/content/docs/workspace/roadmap-items.yaml
+- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+- docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+- docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+new_outputs:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/artifact-behavior_probe_conformance.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/diagnostics-truth_blocked_status.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/source_maps-source_maps.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/migration-migration.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/reproducibility-reproducibility.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/fixture-fixture.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/visual-visual.yaml
+- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+- docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+- docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+- docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+forbidden_outputs:
+- foundation/meta
+- domain/material
+- domain/material_program
+- apps
+- adapters
+- engine
+forbidden_patterns:
+- UiSemanticEvent
+- renderer-owned UI truth
+- ECS-owned UI semantics
+template_outputs: {}
+patches: []
+validation_commands:
+- command_id: task:workflow:test
+  argv: [task, workflow:test]
+  cwd: .
+  timeout_seconds: 600
+  raw: task workflow:test
+- command_id: cargo:test
+  argv: [cargo, test, -p, ui_program, architecture_contract]
+  cwd: .
+  timeout_seconds: 600
+  raw: cargo test -p ui_program architecture_contract
+- command_id: cargo:test
+  argv: [cargo, test, -p, ui_controls, control_package]
+  cwd: .
+  timeout_seconds: 600
+  raw: cargo test -p ui_controls control_package
+- command_id: cargo:test
+  argv: [cargo, test, -p, ui_artifacts, artifact_contract]
+  cwd: .
+  timeout_seconds: 600
+  raw: cargo test -p ui_artifacts artifact_contract
+- command_id: cargo:test
+  argv: [cargo, test, -p, ui_compiler, compiler_contract]
+  cwd: .
+  timeout_seconds: 600
+  raw: cargo test -p ui_compiler compiler_contract
+- command_id: cargo:test
+  argv: [cargo, test, -p, ui_evaluator, evaluator_contract]
+  cwd: .
+  timeout_seconds: 600
+  raw: cargo test -p ui_evaluator evaluator_contract
+- command_id: cargo:test
+  argv: [cargo, test, -p, ui_testing, architecture_fixtures]
+  cwd: .
+  timeout_seconds: 600
+  raw: cargo test -p ui_testing architecture_fixtures
+evidence_required:
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/runtime_test-runtime_test.yaml
+  subject_paths:
+  - tools/workflow/truth/conformance/spec.py
+  - tools/workflow/truth/conformance/ui_program_architecture.py
+  validation_command_ids:
+  - task:workflow:test
+  - cargo:test
+- kind: artifact
+  name: behavior_probe_conformance
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/artifact-behavior_probe_conformance.yaml
+  subject_paths:
+  - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+- kind: diagnostics
+  name: truth_blocked_status
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/diagnostics-truth_blocked_status.yaml
+  subject_paths:
+  - tools/workflow/track_control_cli.py
+- kind: source_maps
+  name: source_maps
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/source_maps-source_maps.yaml
+  subject_paths:
+  - domain/ui/ui_program/src/source_map.rs
+  - domain/ui/ui_artifacts/src/source_map.rs
+  - domain/ui/ui_artifacts/src/source_map_attachment.rs
+- kind: migration
+  name: migration
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/migration-migration.yaml
+  subject_paths:
+  - docs-site/src/content/docs/design/active/ui-program-architecture.md
+  - docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+- kind: reproducibility
+  name: reproducibility
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/reproducibility-reproducibility.yaml
+  subject_paths:
+  - domain/ui/ui_testing/src/reproducibility.rs
+  - domain/ui/ui_testing/src/headless_fixture.rs
+  - domain/ui/ui_testing/src/tests.rs
+- kind: fixture
+  name: fixture
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/fixture-fixture.yaml
+  subject_paths:
+  - domain/ui/ui_testing/src/architecture_fixture.rs
+  - domain/ui/ui_testing/src/program_fixture.rs
+  - domain/ui/ui_testing/src/tests.rs
+- kind: visual
+  name: visual
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/visual-visual.yaml
+  subject_paths:
+  - domain/ui/ui_program/src/graphs/visual.rs
+  - domain/ui/ui_artifacts/src/tables/visual.rs
+  - domain/ui/ui_evaluator/src/output.rs
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+  completion_quality: perfectionist_verified
+  evidence_required:
+  - kind: runtime_test
+    name: runtime_test
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/runtime_test-runtime_test.yaml
+    subject_paths:
+    - tools/workflow/truth/conformance/spec.py
+    - tools/workflow/truth/conformance/ui_program_architecture.py
+    validation_command_ids:
+    - task:workflow:test
+  - kind: artifact
+    name: behavior_probe_conformance
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/artifact-behavior_probe_conformance.yaml
+    subject_paths:
+    - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+    - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+  - kind: diagnostics
+    name: truth_blocked_status
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014/diagnostics-truth_blocked_status.yaml
+    subject_paths:
+    - tools/workflow/track_control_cli.py
+truth_claim_updates:
+- claim_id: ui-program-architecture-implementation
+  claim_status: satisfied
+  claim_statement: UiProgram architecture implementation is current only after PM-014 behavior-probe semantic conformance, extension-readiness proof, digest closure, and durable checkpoint checks pass with zero findings.
+  known_gaps: []
+  blocks_downstream: []
+- claim_id: retained-ui-compatibility
+  claim_status: satisfied
+  claim_statement: Retained UI compatibility is current only after PM-014 behavior-level retained compatibility and render-boundary probes pass with zero findings.
+  known_gaps: []
+  blocks_downstream: []
+- claim_id: ui-program-perfectionist-conformance
+  claim_status: satisfied
+  claim_statement: UiProgram perfectionist conformance is current only after PM-014 behavior-first semantic probes, extension-readiness checks, complete digest closure, and durable checkpoint checks pass with zero findings.
+  known_gaps: []
+  blocks_downstream: []
+rollback_policy: Revert only WR-172 scoped behavior-truth closure changes; do not alter historical PM-013 closeout evidence.
+stop_conditions:
+- stop if any semantic check can pass from symbols or source snippets without behavior probes
+- stop if future product features are treated as architecture-track obligations without accepted authority
+- stop if any strong truth certificate predates the behavior-probe conformance spec
+- stop if task track would report complete while repo-visible authority files are dirty or untracked
+- stop if MaterialProgram, foundation/meta, engine, app, adapter, or unrelated UI feature scope is required
+agent_subactions: []

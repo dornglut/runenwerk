@@ -440,6 +440,8 @@ package "PT-UI-PROGRAM-ARCHITECTURE UI Program Architecture Implementation" {
 
   component "PM-UI-PROGRAM-ARCH-013 Design Coverage And Semantic Truth Closure\nkind=hardening\nstate=completed\nWR=WR-171" as PM_UI_PROGRAM_ARCH_013 <<completed>>
 
+  component "PM-UI-PROGRAM-ARCH-014 Architecture Behavior Truth And Extension Readiness Closure\nkind=hardening\nstate=active\nWR=WR-172" as PM_UI_PROGRAM_ARCH_014 <<active>>
+
 }
 
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
@@ -688,6 +690,7 @@ PM_UI_PROGRAM_ARCH_009 -down-> PM_UI_PROGRAM_ARCH_010 : production prerequisite
 PM_UI_PROGRAM_ARCH_010 -down-> PM_UI_PROGRAM_ARCH_011 : production prerequisite
 PM_UI_PROGRAM_ARCH_011 -down-> PM_UI_PROGRAM_ARCH_012 : production prerequisite
 PM_UI_PROGRAM_ARCH_012 -down-> PM_UI_PROGRAM_ARCH_013 : production prerequisite
+PM_UI_PROGRAM_ARCH_013 -down-> PM_UI_PROGRAM_ARCH_014 : production prerequisite
 PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

@@ -46,6 +46,7 @@ required_design_requirement_ids:
   - fixtures-diagnostics-source-maps
   - materialprogram-blocked
   - foundation-meta-blocked
+  - ui-platform-extension-readiness-boundary
   - durable-checkpointed-completion
 required_design_docs:
   - docs-site/src/content/docs/design/active/ui-program-architecture.md
@@ -290,6 +291,13 @@ semantic_checks:
       - domain/ui/ui_artifacts/src/tables/binding_snapshot.rs
       - domain/ui/ui_artifacts/src/tables/visual.rs
       - domain/ui/ui_artifacts/src/tables/text_layout.rs
+    behavior_probe_paths:
+      - domain/ui/ui_artifacts/src/tests.rs
+      - domain/ui/ui_compiler/src/tests.rs
+    behavior_probe_ids:
+      - artifact_contract_splits_manifest_from_typed_runtime_tables
+      - artifact_contract_preserves_source_maps_routes_and_collection_diffs
+      - compiler_contract_resolves_packages_capabilities_cache_keys_and_source_maps
     evidence_kinds: [runtime_test, artifact, source_maps]
     required_symbols: [UiCompiler, UiRuntimeArtifactTables, ControlTable, LayoutPlanTable, StyleResolutionTable, StateTable, InteractionDispatchTable, BindingSnapshotTable, CollectionDiffPlan, VisualOperatorTable, TextLayoutRequestTable, AccessibilityTable, InspectionTable]
     required_validation_fragments:
@@ -307,6 +315,12 @@ semantic_checks:
       - domain/ui/ui_program/src/graphs/visual.rs
       - domain/ui/ui_program/src/graphs/accessibility.rs
       - domain/ui/ui_program/src/graphs/inspection.rs
+    behavior_probe_paths:
+      - domain/ui/ui_program/src/lib.rs
+      - domain/ui/ui_artifacts/src/tests.rs
+    behavior_probe_ids:
+      - architecture_contract_exposes_named_graph_families
+      - artifact_contract_splits_manifest_from_typed_runtime_tables
     evidence_kinds: [runtime_test, artifact, source_maps]
     required_symbols: [ControlGraph, LayoutGraph, StyleGraph, StateGraph, InteractionGraph, BindingGraph, VisualGraph, AccessibilityGraph, InspectionGraph]
     required_validation_fragments:
@@ -322,6 +336,11 @@ semantic_checks:
       - domain/ui/ui_controls/src/kernel.rs
       - domain/ui/ui_controls/src/diagnostics.rs
       - domain/ui/ui_controls/src/migration.rs
+    behavior_probe_paths:
+      - domain/ui/ui_controls/src/lib.rs
+    behavior_probe_ids:
+      - control_package_records_schemas_kernels_diagnostics_and_migrations
+      - control_package_registry_uses_explicit_snapshot
     evidence_kinds: [runtime_test, fixture, diagnostics, migration]
     required_symbols: [ControlPackageDescriptor, ControlPackageRegistry, ControlPackageRegistrySnapshot, ControlKindDescriptor, ControlFixtureId]
     required_validation_fragments:
@@ -333,6 +352,11 @@ semantic_checks:
       - domain/ui/ui_program/src/events/payload.rs
       - domain/ui/ui_program/src/events/route.rs
       - domain/ui/ui_schema/src/value.rs
+    behavior_probe_paths:
+      - domain/ui/ui_program/src/lib.rs
+    behavior_probe_ids:
+      - route_contract_uses_stable_ids_and_schema_payloads
+      - route_contract_reports_invalid_payload_schema
     evidence_kinds: [runtime_test, diagnostics]
     required_symbols: [UiEventPacket, UiEventPayload, RouteCapability, UiSchemaValue]
     required_validation_fragments:
@@ -344,6 +368,13 @@ semantic_checks:
       - domain/ui/ui_program/src/diagnostics.rs
       - domain/ui/ui_artifacts/src/source_map.rs
       - domain/ui/ui_artifacts/src/diagnostics.rs
+    behavior_probe_paths:
+      - domain/ui/ui_artifacts/src/tests.rs
+      - domain/ui/ui_compiler/src/tests.rs
+    behavior_probe_ids:
+      - artifact_contract_preserves_source_maps_routes_and_collection_diffs
+      - compiler_contract_resolves_packages_capabilities_cache_keys_and_source_maps
+      - compiler_contract_reports_missing_capability_declarations
     evidence_kinds: [source_maps, diagnostics]
     required_symbols: [UiProgramSourceMapEntry, UiProgramDiagnostic, CompiledSourceMap, UiRuntimeArtifactDiagnostic]
     required_validation_fragments:
@@ -356,6 +387,10 @@ semantic_checks:
       - domain/ui/ui_evaluator/src/state_binding.rs
       - domain/ui/ui_artifacts/src/tables/state.rs
       - domain/ui/ui_artifacts/src/tables/binding_snapshot.rs
+    behavior_probe_paths:
+      - domain/ui/ui_evaluator/src/tests.rs
+    behavior_probe_ids:
+      - evaluator_contract_projects_typed_artifact_tables_and_updates_boundary_state
     evidence_kinds: [runtime_test, artifact]
     required_symbols: [UiEvaluator, StateEvaluationPass, BindingEvaluationPass, apply_dirty_bindings_to_state]
     required_validation_fragments:
@@ -366,6 +401,10 @@ semantic_checks:
       - domain/ui/ui_evaluator/src/output.rs
       - domain/ui/ui_artifacts/src/artifact.rs
       - domain/ui/ui_compiler/src/compiler.rs
+    behavior_probe_paths:
+      - domain/ui/ui_testing/src/tests.rs
+    behavior_probe_ids:
+      - architecture_fixtures_compile_evaluate_assert_and_reproduce
     evidence_kinds: [migration, visual, runtime_test]
     required_symbols: [UiOutput, UiRuntimeArtifact, UiCompiler]
     required_validation_fragments:
@@ -377,6 +416,10 @@ semantic_checks:
       - domain/ui/ui_testing/src/architecture_fixture.rs
       - domain/ui/ui_testing/src/reproducibility.rs
       - domain/ui/ui_testing/src/assertions.rs
+    behavior_probe_paths:
+      - domain/ui/ui_testing/src/tests.rs
+    behavior_probe_ids:
+      - architecture_fixtures_compile_evaluate_assert_and_reproduce
     evidence_kinds: [fixture, reproducibility, diagnostics, source_maps]
     required_symbols: [HeadlessFixture, UiArchitectureFixture, ReproducibilityAssertion, SourceMapAssertion]
     required_validation_fragments:

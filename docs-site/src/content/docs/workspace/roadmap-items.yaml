@@ -675,7 +675,97 @@ items:
   adr_requirement: No ADR for docs-only governance. Require an ADR or accepted design update before a follow-on WR changes durable GPU ABI ownership, dependency direction, SDF source-truth authority, fallback legality, or cross-domain product contracts.
   fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative, shader-binding, evidence, and benchmark tests before implementation closeout.
   ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
+- id: WR-172
+  title: Architecture Behavior Truth And Extension Readiness Closure
+  diagram_title: Behavior truth closure
+  alias: WR172
+  lane: Product planning
+  dependency_level: L4
+  gate: Current implementation candidate
+  planning_state: current_candidate
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 3.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-171
+  write_scopes:
+  - tools/workflow/truth/conformance/spec.py
+  - tools/workflow/truth/conformance/design_coverage.py
+  - tools/workflow/truth/conformance/ui_program_architecture.py
+  - tools/workflow/track_control_cli.py
+  - tools/workflow/tests/test_truth_conformance.py
+  - tools/workflow/tests/test_truth_semantic_behavior.py
+  - tools/workflow/tests/test_track_control.py
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml
+  - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml
+  - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-172-architecture-behavior-truth-and-extension-readiness-closure/plan.contract.yaml
+  - 'new: docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture/pm-ui-program-arch-014'
+  - 'new: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md'
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  validations:
+  - task workflow:test
+  - cargo test -p ui_program architecture_contract
+  - cargo test -p ui_controls control_package
+  - cargo test -p ui_artifacts artifact_contract
+  - cargo test -p ui_compiler compiler_contract
+  - cargo test -p ui_evaluator evaluator_contract
+  - cargo test -p ui_testing architecture_fixtures
+  - task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-perfectionist-conformance
+  - task truth:audit -- --track PT-UI-PROGRAM-ARCHITECTURE
+  - task truth:post-completion-audit -- --track PT-UI-PROGRAM-ARCHITECTURE
+  - task production:validate
+  - task roadmap:validate
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Close PM-014 only after every semantic verifier is bound to executable behavior probes and future product-feature obligations are explicitly out-of-scope, deferred, or moved to future tracks.
+  current_decision: Active closure gate superseding the current PM-013 completion claim.
+  current_call: Repair behavior-truth and extension-readiness certification only; do not start MaterialProgram, foundation/meta extraction, placeholder folders, or unrelated UI product features.
+  first_move: Run the WR-172 contract, refresh the Contract Pack, and keep strong truth claims blocked until behavior-first certificates pass.
+  main_blocker: Final perfectionist completion is blocked until PM-014 closes with behavior-probe-backed zero findings and durable checkpointed state.
+  why_not_ready: ''
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - PM-014 is active and the prior completion claim is superseded until behavior-first truth certification closes.
+  completion_audit: ''
+  diagram_call:
+  - behavior probes
+  - extension readiness
+  - no drift
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-014 must certify the accepted UiProgram architecture target against behavior, not symbol presence.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+    required_status: active
+    applies_to: implementation
+    reason: PM-014 must keep the UI platform boundary separate from future product-feature tracks.
+  ddd_owner: domain/ui with workflow truth certification ownership.
+  adr_requirement: No new ADR unless PM-014 changes accepted architecture, crate-boundary policy, MaterialProgram gate, future-feature ownership, or foundation/meta extraction gate.
+  fitness_function_requirement: Behavior-probe-backed truth verification, workflow test suite, targeted UI architecture crate tests, production/roadmap/docs/planning validation, and post-completion drift audit.
+  ownership_mode: Stream-aligned UI architecture hardening with independent workflow truth certification.
 edges:
+- source: WR-171
+  target: WR-172
+  label: behavior-first truth closure after design coverage
 - source: WR-170
   target: WR-171
   label: final design coverage and durable truth closure

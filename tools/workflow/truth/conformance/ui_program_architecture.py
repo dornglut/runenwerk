@@ -46,6 +46,57 @@ def require_text(
     return findings
 
 
+def verify_behavior_probes(semantic_check, *, repo_root: Path) -> list[TruthFinding]:
+    findings: list[TruthFinding] = []
+    if not semantic_check.behavior_probe_ids:
+        return [
+            TruthFinding(
+                finding_id=f"semantic-check-missing-behavior-probes-{finding_slug(semantic_check.check_id)}",
+                message=f"Semantic check `{semantic_check.check_id}` declares no behavior_probe_ids.",
+                subject_paths=[],
+                remediation="Bind strong semantic truth to executable test/proof probe IDs instead of symbols or source snippets alone.",
+            )
+        ]
+    if not semantic_check.behavior_probe_paths:
+        return [
+            TruthFinding(
+                finding_id=f"semantic-check-missing-behavior-probe-paths-{finding_slug(semantic_check.check_id)}",
+                message=f"Semantic check `{semantic_check.check_id}` declares no behavior_probe_paths.",
+                subject_paths=[],
+                remediation="Name the test or proof files that carry the semantic behavior probes.",
+            )
+        ]
+
+    probe_text = ""
+    existing_probe_paths: list[str] = []
+    for raw_path in semantic_check.behavior_probe_paths:
+        path = repo_root / raw_path
+        if not path.exists():
+            findings.append(
+                TruthFinding(
+                    finding_id=f"semantic-check-missing-behavior-probe-path-{finding_slug(raw_path)}",
+                    message=f"Semantic check `{semantic_check.check_id}` cites missing behavior probe path {raw_path}.",
+                    subject_paths=[raw_path],
+                    remediation="Repair the probe path or update the conformance spec.",
+                )
+            )
+            continue
+        existing_probe_paths.append(raw_path)
+        probe_text += "\n" + read_text(path)
+
+    for probe_id in semantic_check.behavior_probe_ids:
+        if probe_id not in probe_text:
+            findings.append(
+                TruthFinding(
+                    finding_id=f"semantic-check-missing-behavior-probe-{finding_slug(semantic_check.check_id)}-{finding_slug(probe_id)}",
+                    message=f"Semantic check `{semantic_check.check_id}` requires behavior probe `{probe_id}`.",
+                    subject_paths=existing_probe_paths or list(semantic_check.behavior_probe_paths),
+                    remediation="Add or restore the executable behavior probe before claiming architecture truth.",
+                )
+            )
+    return findings
+
+
 def verify_graph_family_lowering_to_runtime_tables(spec, *, repo_root: Path) -> list[TruthFinding]:
     findings: list[TruthFinding] = []
     findings.extend(
@@ -517,6 +568,7 @@ def verify_semantic_checks(spec: ConformanceSpec, *, repo_root: Path) -> tuple[l
             )
         else:
             findings.extend(verifier(spec, repo_root=repo_root))
+        findings.extend(verify_behavior_probes(semantic_check, repo_root=repo_root))
         subject_text = ""
         if not semantic_check.subject_paths:
             findings.append(

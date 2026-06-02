@@ -821,9 +821,12 @@ def test_current_repository_has_no_next_batch_after_ui_program_architecture_conf
     candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
 
     current_ids = [item.id for item in selected]
+    wr172 = roadmap.by_id.get("WR-172")
     wr171 = roadmap.by_id.get("WR-171")
     wr170 = roadmap.by_id.get("WR-170")
-    if wr171 is not None and wr171.planning_state == "current_candidate":
+    if wr172 is not None and wr172.planning_state == "current_candidate":
+        assert current_ids == ["WR-172"]
+    elif wr171 is not None and wr171.planning_state == "current_candidate":
         assert current_ids == ["WR-171"]
     elif wr170 is not None and wr170.planning_state == "current_candidate":
         assert current_ids == ["WR-170"]
@@ -976,6 +979,8 @@ def test_unknown_semantic_check_requires_registered_verifier() -> None:
                     "check_id": "unknown_semantic_check",
                     "description": "Unknown semantic check must fail closed.",
                     "subject_paths": [],
+                    "behavior_probe_paths": [],
+                    "behavior_probe_ids": [],
                     "evidence_kinds": [],
                     "required_symbols": [],
                     "required_validation_fragments": [],

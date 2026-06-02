@@ -1,10 +1,10 @@
 version: 1
 track_id: PT-TRACK-EXECUTION-HARNESS
-generated_at: '2026-06-02T19:08:19Z'
+generated_at: '2026-06-02T19:46:11Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml: a1dffd603657d65a60ae4089141661c20c5ea1e8e9bc7551129f296268685ef4
-  docs-site/src/content/docs/workspace/production-tracks.yaml: 18ab5a3727e32cf59fe20aafc13a63f23dd61eb8345d285433a7a7529c9f0b9e
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: addc1aab60f08310a053e3133965836029c8ec23384c1e47642820d2889e90b3
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 43e2d75ae47bfb4e9dabb37f376443040252b533c0c01306e9f47e213b10ad17
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: ff893cfe31983659a51f55e5cfe0258d261ded8c355887d22e2bb4d072a5468b
   docs-site/src/content/docs/workspace/track-execution-manifest.md: 25f11af9d0aad25c20057dbec4864280438d2987b53adbccbd2916c037f0c659
   docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md: 0a8f10e4a075f5c7b395f7087a8d69631d9dd4a4c3a82df985c1afe8fab330d3
   docs-site/src/content/docs/workspace/design-track-roadmap-governance.md: fe3b559973965879d40bd958589e1faf36edda1c5941b6a9b41b81545e9d938a

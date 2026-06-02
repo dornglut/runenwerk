@@ -132,6 +132,45 @@ def test_track_control_status_reports_complete_uncheckpointed_for_visible_drift(
     assert "repository-visible files are not checkpointed" in "\n".join(payload["blockers"])
 
 
+def test_track_control_status_reports_truth_blocked_for_strong_claim_repair_action(tmp_path: Path) -> None:
+    pack_root = tmp_path / "packs"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    action = execution_test_action()
+    write_test_pack(tmp_path, pack_root, action=action)
+    manifest_data = valid_track_manifest_state()
+    manifest_data["truth_claims"] = [
+        {
+            "claim_id": "architecture-test",
+            "claim_kind": "architecture_contract",
+            "claim_level": "perfectionist_verified",
+            "claim_status": "blocked",
+            "claim_statement": "Architecture truth needs behavior probes.",
+            "required_docs": [],
+            "required_code_contracts": [],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": ["Semantic proof is incomplete."],
+            "supersedes": [],
+            "blocks_downstream": [],
+        }
+    ]
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+
+    payload = track_control_cli.status_payload(
+        "PT-TEST",
+        contract_pack_root=pack_root,
+        lock_root=tmp_path / "locks",
+        intent_lock_root=tmp_path / "intent",
+        manifest_source_root=manifest_root,
+        run_ledger_root=tmp_path / "ledgers",
+    )
+
+    assert payload["verdict"] == "truth_blocked"
+    assert "architecture-test" in "\n".join(payload["truth_findings"])
+    assert payload["next_command"] == "task track:go -- --track PT-TEST"
+
+
 def test_track_control_status_ignores_repaired_production_validation_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

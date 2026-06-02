@@ -110,6 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
+| WR-172 | Architecture Behavior Truth And Extension Readiness Closure | P0 | V5 | B2 | 3.0 | Repair behavior-truth and extension-readiness certification only; do not start MaterialProgram, foundation/meta extraction, placeholder folders, or unrelated UI product features. | Run the WR-172 contract, refresh the Contract Pack, and keep strong truth claims blocked until behavior-first certificates pass. |
 
 ## Support Only
 

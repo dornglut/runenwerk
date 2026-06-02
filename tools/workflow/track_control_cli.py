@@ -435,6 +435,25 @@ def truth_status(track_id: str, *, manifest_source_root: Path) -> tuple[list[str
     return truth_lines, certificate_lines
 
 
+STRONG_TRUTH_LEVELS = {"architecture_runtime_proven", "perfectionist_verified"}
+
+
+def strong_truth_blockers(track_id: str, *, manifest_source_root: Path) -> list[str]:
+    loaded = load_track_execution_manifest(track_id, root=manifest_source_root)
+    if loaded is None:
+        return []
+    blockers: list[str] = []
+    for claim in loaded.manifest.truth_claims:
+        if claim.claim_level not in STRONG_TRUTH_LEVELS:
+            continue
+        if claim.claim_status not in {"blocked", "superseded"}:
+            continue
+        blockers.append(
+            f"truth claim {claim.claim_id} is {claim.claim_status} at {claim.claim_level}: {claim.claim_statement}"
+        )
+    return blockers
+
+
 def post_completion_errors(track_id: str, *, production_source: Path, manifest_source_root: Path) -> list[str]:
     planning = load_production_tracks(production_source)
     track = next((candidate for candidate in planning.tracks if candidate.id == track_id), None)
@@ -582,6 +601,7 @@ def status_payload(
         payload["next_command"] = go_command_for(track_id)
         return payload
     payload["remaining_actions"] = len(pack.actions)
+    truth_blockers = strong_truth_blockers(track_id, manifest_source_root=manifest_source_root)
     if freshness:
         payload["verdict"] = "drift"
         payload["blockers"].extend(freshness)
@@ -612,7 +632,19 @@ def status_payload(
             )
             payload["next_command"] = repair_command_for_failure(track_id, error)
             return payload
+        if truth_blockers:
+            payload["verdict"] = "truth_blocked"
+            payload["truth_findings"] = truth_blockers
+            payload["blockers"].extend(truth_blockers)
+            payload["next_command"] = go_command_for(track_id)
+            return payload
     else:
+        if truth_blockers:
+            payload["verdict"] = "truth_blocked"
+            payload["truth_findings"] = truth_blockers
+            payload["blockers"].extend(truth_blockers)
+            payload["next_command"] = go_command_for(track_id)
+            return payload
         completion_drift = repo_visible_completion_drift()
         if completion_drift:
             payload["verdict"] = "complete_uncheckpointed"

@@ -911,7 +911,7 @@ tracks:
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md
 - id: PT-RENDER-GPU
   title: Renderer GPU Evidence And Procedural Visuals Platform
-  state: completed
+  state: active
   owner: engine
   target_completion_quality: runtime_proven
   strategic_goal: Add runtime GPU evidence, render-flow shape guards, hybrid procedural visual APIs, and canonical boids proof without moving product truth or product policy into the renderer.
@@ -5414,14 +5414,14 @@ tracks:
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
 - id: PT-UI-PROGRAM-ARCHITECTURE
   title: UI Program Architecture Implementation
-  state: completed
+  state: active
   owner: ui
   target_completion_quality: perfectionist_verified
   strategic_goal: Implement and certify the concrete domain-owned UiProgram architecture contracts that remain blocked after the bounded PT-UI-PROGRAM proof-slice track.
   success_criteria:
   - The final UI owner map is accepted as the architecture target, but owner crates or folders are created only when an active WR and production plan explicitly authorize the exact boundary.
   - Concrete `UiProgram`, graph-family, `UiSchemaValue`, `ControlPackage`, compiler, artifact, evaluator, host, diagnostics, source-map, fixture, migration, and visual/render boundary contracts must pass an independent zero-finding truth certificate before architecture truth can be satisfied.
-  - The PM-011 and PM-012 perfectionist closeouts are historical evidence only until PM-UI-PROGRAM-ARCH-013 proves requirement-by-requirement design coverage, semantic verifier coverage, complete digest closure, and durable checkpointed completion with zero findings.
+  - The PM-011 through PM-013 perfectionist closeouts are historical evidence only until PM-UI-PROGRAM-ARCH-014 proves behavior-first semantic conformance, extension readiness, complete digest closure, and durable checkpointed completion with zero findings.
   - Current retained UI code through `ui_definition`, `ui_tree`, `ui_widgets`, `ui_runtime`, and `ui_render_data` remains compatible until a bounded migration bridge proves replacement or adapter behavior.
   - '`ui_layout`, `ui_math`, and `ui_surface` are reconciled explicitly against the final owner map before any rename, replacement, or deletion is authorized.'
   - MaterialProgram proof planning remains blocked until the UiProgram architecture implementation truth claim is satisfied by a current truth certificate or a later accepted ADR changes the gate.
@@ -5811,6 +5811,40 @@ tracks:
     completion_quality: perfectionist_verified
     known_quality_gaps: []
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-013-design-coverage-and-semantic-truth-closure/closeout.md
+  - id: PM-UI-PROGRAM-ARCH-014
+    title: Architecture Behavior Truth And Extension Readiness Closure
+    kind: hardening
+    state: active
+    goal: Supersede symbol/text-heavy architecture completion with behavior-first semantic conformance, explicit future-feature boundary doctrine, extension-readiness proof, and zero-drift truth certification.
+    outcome: PT-UI-PROGRAM-ARCHITECTURE is complete only after accepted architecture requirements are behavior-proven by executable probes; future product features remain separate tracks unless accepted architecture docs make them mandatory.
+    dependencies:
+    - PM-UI-PROGRAM-ARCH-013
+    roadmap_links:
+    - WR-172
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture.md
+      required_status: active
+      reason: PM-014 must certify the accepted UiProgram architecture target against behavior, not symbols or generated paperwork.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md
+      required_status: active
+      reason: PM-014 must preserve the final owner map while treating future product features as separate tracks unless explicitly accepted.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+      required_status: completed
+      reason: PM-UI-PROGRAM-ARCH-014 requires completed behavior-first truth closure evidence.
+    acceptance_criteria:
+    - Strong UI architecture truth claims remain blocked until PM-014 produces fresh zero-finding certificates.
+    - Every semantic conformance check binds to executable behavior probe IDs and probe files; source-symbol checks are shape guards only.
+    - The design coverage matrix distinguishes mandatory accepted architecture requirements from future product-feature deferrals or future-track obligations.
+    - Extension readiness proves new controls can register schemas, event payloads, fixtures, diagnostics, migrations, and kernels without central semantic enums or hidden global registries.
+    - Host integration remains outside domain/ui; renderer and ECS remain forbidden from owning UI product truth.
+    - Durable completion requires zero findings, zero gaps, zero risks, zero drift, current certificates, and checkpoint-clean repo-visible authority/code/evidence state.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - PM-014 is active and the prior completion claim is superseded until behavior-first truth certification closes.
+    completion_audit: ''
 - id: PT-GAME-RUNTIME-UI
   title: Game Runtime UI Projection And HUD Platform
   state: active
