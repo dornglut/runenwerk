@@ -430,11 +430,7 @@ def test_ui_program_architecture_verifier_sources_include_conformance_spec() -> 
     assert "tools/workflow/truth" in sources
     assert "docs-site/src/content/docs/workspace/truth-verifier-registry.yaml" in sources
     assert "docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture" not in sources
-    assert any(
-        source.startswith("docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/")
-        and source.endswith(".yaml")
-        for source in sources
-    )
+    assert not any(source.startswith("docs-site/src/content/docs/reports/track-execution-runs/") for source in sources)
 
 
 def test_certificate_errors_require_complete_registry_digest_closure(tmp_path: Path) -> None:

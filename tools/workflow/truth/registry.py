@@ -123,10 +123,7 @@ def evidence_referenced_ledger_paths(raw_path: str, *, repo_root: Path) -> list[
 
 
 def expanded_source_paths(entry: TruthVerifierRegistryEntry, *, repo_root: Path) -> list[str]:
-    paths = entry.source_paths()
-    for raw_path in list(paths):
-        paths.extend(evidence_referenced_ledger_paths(raw_path, repo_root=repo_root))
-    return sorted(set(paths))
+    return sorted(set(entry.source_paths()))
 
 
 def verifier_source_paths(

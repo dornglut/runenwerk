@@ -48,8 +48,8 @@ truth_claims:
 - claim_id: ui-program-architecture-implementation
   claim_kind: architecture_contract
   claim_level: architecture_runtime_proven
-  claim_status: blocked
-  claim_statement: UiProgram architecture implementation remains blocked until PM-014 proves behavior-first semantic conformance and extension readiness with zero findings.
+  claim_status: satisfied
+  claim_statement: UiProgram architecture implementation is current only after PM-014 behavior-probe semantic conformance, extension-readiness proof, digest closure, and durable checkpoint checks pass with zero findings.
   truth_verifier: ui_program_architecture_conformance
   truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
   required_docs:
@@ -120,16 +120,14 @@ truth_claims:
     category: runtime_test
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
     reason: PM-009 carries architecture runtime proof evidence.
-  known_gaps:
-  - Current certificates were produced before semantic checks required explicit executable behavior probe bindings.
-  - PM-014 must distinguish completed platform architecture requirements from future product-feature work.
+  known_gaps: []
   supersedes: []
   blocks_downstream: []
 - claim_id: retained-ui-compatibility
   claim_kind: architecture_contract
   claim_level: architecture_runtime_proven
-  claim_status: blocked
-  claim_statement: Retained UI compatibility remains blocked until PM-014 rechecks behavior-level retained compatibility and render-boundary probes with current evidence.
+  claim_status: satisfied
+  claim_statement: Retained UI compatibility is current only after PM-014 behavior-level retained compatibility and render-boundary probes pass with zero findings.
   truth_verifier: ui_program_architecture_conformance
   truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
   required_docs: []
@@ -144,15 +142,14 @@ truth_claims:
     category: migration
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-009-architecture-runtime-proven-closeout/closeout.md
     reason: PM-009 carries final architecture migration evidence.
-  known_gaps:
-  - Current retained compatibility truth depends on prior certificates that must be refreshed after behavior-probe conformance hardening.
+  known_gaps: []
   supersedes: []
   blocks_downstream: []
 - claim_id: ui-program-perfectionist-conformance
   claim_kind: architecture_contract
   claim_level: perfectionist_verified
-  claim_status: blocked
-  claim_statement: UiProgram perfectionist conformance remains blocked until PM-014 closes with behavior-first semantic probes, extension-readiness checks, complete digest closure, and durable checkpoint state.
+  claim_status: satisfied
+  claim_statement: UiProgram perfectionist conformance is current only after PM-014 behavior-first semantic probes, extension-readiness checks, complete digest closure, and durable checkpoint checks pass with zero findings.
   truth_verifier: ui_program_architecture_conformance
   truth_certificate_path: docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
   required_docs:
@@ -166,9 +163,7 @@ truth_claims:
     command: task truth:verify -- --track PT-UI-PROGRAM-ARCHITECTURE --claim ui-program-architecture-implementation
     reason: The architecture verifier must pass before perfectionist completion can be claimed.
   required_closeout_evidence: []
-  known_gaps:
-  - Current PM-013 conformance is historical evidence and is superseded until behavior-probe-backed certification passes.
-  - Future product features must be registered as deferrals or separate tracks rather than silently included in architecture completion.
+  known_gaps: []
   supersedes:
   - PM-UI-PROGRAM-ARCH-009 architecture_runtime_proven historical closeout claim
   - PM-UI-PROGRAM-ARCH-011 perfectionist_verified historical closeout claim
@@ -3559,7 +3554,7 @@ milestones:
   - stop if any strong truth certificate predates the behavior-probe conformance spec
   - stop if task track would report complete while repo-visible authority files are dirty or untracked
   - stop if MaterialProgram, foundation/meta, engine, app, adapter, or unrelated UI feature scope is required
-  next_legal_action: PM-UI-PROGRAM-ARCH-014 closes only after fresh zero-finding truth certificates and post-completion audit pass; otherwise keep the track active.
+  next_legal_action: PM-UI-PROGRAM-ARCH-014 closed as perfectionist_verified; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: false
   may_modify_production_behavior: true

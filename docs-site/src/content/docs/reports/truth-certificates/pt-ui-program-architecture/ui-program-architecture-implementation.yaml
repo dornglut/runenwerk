@@ -3,7 +3,7 @@ track_id: PT-UI-PROGRAM-ARCHITECTURE
 claim_id: ui-program-architecture-implementation
 verifier: ui_program_architecture_conformance
 status: passed
-produced_at: '2026-06-02T19:08:33Z'
+produced_at: '2026-06-02T20:14:57Z'
 source_digests:
   docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
   docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
@@ -11,22 +11,18 @@ source_digests:
   docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-010-materialprogram-planning-gate-decision: 2c177ec3a63e0860d9e24e1cedbdf1a66d8d1387eb40e9881854df8987c34860
   docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-011-perfectionist-architecture-conformance-closure: 4d5ed26b89748728bb0d839e4d9456818fd4c28b1f116214106b00d425c23777
   docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure: acde66cbbed1d324cb1f7cc01cc1afdcd8f46e48ce5e1894be16984ea3147ff1
-  docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture: cc4978227f8428a30e069f2fd296af0ddcb22689545e7591d136e4d8349e7146
-  ? docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-174509z.yaml
-  : 1fadfd28cfab49cf9aee4c1c6fc111b91fcdcf76c424d7f41e2d99f6d373902d
-  ? docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-190319z.yaml
-  : da307856e7b7550f6e799a4a1229a4860c0acfa96102ca694c33871bf3c451bf
-  docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml: 0366c77be6e2eb4cc52d6d33e2a836cc06a6207c2ca8161ac6c8c904db9f3e9f
-  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: 8944718b8c1fe13b881ce9d78281b08f979b2056f822054f03a3d29bed7a9c71
-  docs-site/src/content/docs/workspace/production-tracks.yaml: 18ab5a3727e32cf59fe20aafc13a63f23dd61eb8345d285433a7a7529c9f0b9e
-  docs-site/src/content/docs/workspace/roadmap-archive.yaml: 033ea0b735a9175bed1c98f55368891bf8504a317fae1502b7ec729b2c07a380
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: addc1aab60f08310a053e3133965836029c8ec23384c1e47642820d2889e90b3
-  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 3267f3602b0df3947f85598a42868159d62f90659396d6195f5d7d661bffdb7b
+  docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture: c3e4cb75860c1248a5dc7d9522153dc1a5738fe9a9179730774d7b61cd1a7a6e
+  docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml: 2737738a387e682d058ed031bb6c8c8370f9ea05b1710b0bed79e0d2e65e2b14
+  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: 047ab39b017428145f84b838d8fea6afcb2da8934428fa0a81d6dda5116c0802
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 133f6ac3993d17e6ab65f80c0e8868f2ac92de750646aab8ab3bfa21fdb25c9f
+  docs-site/src/content/docs/workspace/roadmap-archive.yaml: fe98e5b3bb77a3868066aa3f5e3d843dcec54396d74969b5609732670c4bbfb6
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: d22e7abd0786cfdaeb668becf8cfbb60c87066619b32ecdfb43c7bb2c06ddbcb
+  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 42f31272b0db9b1a6468ebcdf051ce82ebcb80262b1c6a9f43c1779f3c22c25e
   ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
-  : 11da971ed59066070d4d5409f251af64ba223cc8407aa449425f42645583bb75
+  : 87ca47bb7a189082e6404d3225d2a4c3a8da6974ff5d7a6de1d81d51a4e68877
   docs-site/src/content/docs/workspace/truth-verifier-registry.yaml: 176d7f50117f3164968afbee6dacae79719051a7917ee20578a34d6bb941cb79
   domain/ui: 0adc1dcd540b82158e02bdb5f23a57c23fe7b980e946cd7f86a10fc1ee009b81
-  tools/workflow/truth: 9b3b240cf7f44016abba2f58017d39a8793f7ba1420727e8db97a84e8bf56dfe
+  tools/workflow/truth: 046e441f3be25c603b76fb5ac9d69e38bc7db9193626e3225d15cbe38ec45cae
 findings: []
 known_gaps: []
 known_risks: []

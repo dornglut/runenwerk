@@ -1,0 +1,131 @@
+version: 1
+track_id: PT-UI-PROGRAM-ARCHITECTURE
+milestone_id: PM-UI-PROGRAM-ARCH-014
+action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+evidence_kind: reproducibility
+name: reproducibility
+status: passed
+produced_at: '2026-06-02T20:10:31Z'
+paths:
+- domain/ui/ui_testing/src/reproducibility.rs
+- domain/ui/ui_testing/src/headless_fixture.rs
+- domain/ui/ui_testing/src/tests.rs
+subject_paths:
+- domain/ui/ui_testing/src/reproducibility.rs
+- domain/ui/ui_testing/src/headless_fixture.rs
+- domain/ui/ui_testing/src/tests.rs
+subject_digests:
+  domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+  domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+  domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+validation_commands:
+- task:workflow:test (task workflow:test) -> exit 0
+- cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
+- cargo:test (cargo test -p ui_controls control_package) -> exit 0
+- cargo:test (cargo test -p ui_artifacts artifact_contract) -> exit 0
+- cargo:test (cargo test -p ui_compiler compiler_contract) -> exit 0
+- cargo:test (cargo test -p ui_evaluator evaluator_contract) -> exit 0
+- cargo:test (cargo test -p ui_testing architecture_fixtures) -> exit 0
+validation_provenance:
+- command_id: task:workflow:test
+  argv:
+  - task
+  - workflow:test
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: 04a3282f90d6881f73df7cc9c73aeb032c2e2cd1742acf6ccd3d8285d86815ef
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_program
+  - architecture_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: 9c077ba555a0657ce57498a8daa106066aa8fed15ffa52b22188bc1535f74365
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_controls
+  - control_package
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: cf2a71b7da1e994b5a3b279e658885e8a5c4c1e599186ba5f259fc454b67a36e
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_artifacts
+  - artifact_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: cb6d915fb631afe994910083938dbab9c1aa052e2cbd96873a0d64d11a353064
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_compiler
+  - compiler_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: 4abb6ff09a8b946f13ca12554d7eed39e606b9bc30b003a88f9b685f0bdf5702
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_evaluator
+  - evaluator_contract
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: 296be6a77137cd3a7be34483cdc5dc1a29413f0713c728ce9883c1056f6b74f9
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - architecture_fixtures
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
+  run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
+  validation_result_digest: 62426a365d35f7deb259a7738558eb2561e7ded80de4c60cf29c558aa8b33cae
+  subject_digests:
+    domain/ui/ui_testing/src/headless_fixture.rs: d4ae9a0baa78ef4a807b8a72cb4727625366fd922a0b0b13959fec222d178a3d
+    domain/ui/ui_testing/src/reproducibility.rs: 879ceab6d2ef1feb0b236cf2453bba40745b8fcfbeba488f7acdcac866e0b7da
+    domain/ui/ui_testing/src/tests.rs: 85df88c39bd13ab4b8617b15db16f432f4a6bf5ca712aa0defe8d53307fb9755

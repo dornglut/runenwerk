@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "WR-172 Behavior truth closure\nstate=current_candidate\nscore=3.0 V5 B2\ncall=behavior probes\nextension readiness\nno drift" as WR172 <<candidate>>
+  component "No current_candidate items" as NO_CANDIDATES <<context>>
 
 }
 

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from workflow_fixtures import *
 from execution.compiler import evidence_requirements_satisfied
+from execution.evidence import validation_result_digest
 from truth.certificates import digest_path
 
 
@@ -104,25 +105,57 @@ def test_execution_contract_compiler_requires_plan_sidecar(
 def test_execution_compiler_rejects_stale_resolver_evidence_before_closeout(tmp_path: Path) -> None:
     subject = tmp_path / "subject.txt"
     subject.write_text("current\n", encoding="utf-8")
+    subject_digest = digest_path(subject)
+    action_id = "PT-TEST:PM-TEST-001:WR-001"
+    result_digest = validation_result_digest(
+        command_id="task:workflow:test",
+        argv=["task", "workflow:test"],
+        returncode=0,
+        files_changed=[],
+        subject_digests={"subject.txt": subject_digest},
+    )
     ledger = tmp_path / "ledger.yaml"
-    ledger.write_text("version: 1\n", encoding="utf-8")
     evidence = tmp_path / "evidence.yaml"
+    ledger.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "actions": [
+                    {
+                        "status": "passed",
+                        "action_id": action_id,
+                        "validation_results": [
+                            {
+                                "command_id": "task:workflow:test",
+                                "argv": ["task", "workflow:test"],
+                                "returncode": 0,
+                                "files_changed": [],
+                            }
+                        ],
+                        "evidence_paths": [repo_path(evidence)],
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     evidence.write_text(
         yaml.safe_dump(
             {
                 "evidence_kind": "artifact",
                 "status": "passed",
                 "subject_paths": ["subject.txt"],
-                "subject_digests": {"subject.txt": digest_path(subject)},
+                "subject_digests": {"subject.txt": subject_digest},
                 "validation_provenance": [
                     {
                         "command_id": "task:workflow:test",
                         "argv": ["task", "workflow:test"],
                         "returncode": 0,
                         "run_ledger_path": "ledger.yaml",
-                        "run_action_id": "PT-TEST:PM-TEST-001:WR-001",
-                        "validation_result_digest": "digest",
-                        "subject_digests": {"subject.txt": digest_path(subject)},
+                        "run_action_id": action_id,
+                        "validation_result_digest": result_digest,
+                        "subject_digests": {"subject.txt": subject_digest},
                     }
                 ],
             },
@@ -140,6 +173,51 @@ def test_execution_compiler_rejects_stale_resolver_evidence_before_closeout(tmp_
     assert evidence_requirements_satisfied([requirement], production_source=tmp_path / "production.yaml")
 
     subject.write_text("changed\n", encoding="utf-8")
+
+    assert not evidence_requirements_satisfied([requirement], production_source=tmp_path / "production.yaml")
+
+
+def test_execution_compiler_rejects_evidence_without_matching_ledger_action(tmp_path: Path) -> None:
+    subject = tmp_path / "subject.txt"
+    subject.write_text("current\n", encoding="utf-8")
+    subject_digest = digest_path(subject)
+    result_digest = validation_result_digest(
+        command_id="task:workflow:test",
+        argv=["task", "workflow:test"],
+        returncode=0,
+        files_changed=[],
+        subject_digests={"subject.txt": subject_digest},
+    )
+    (tmp_path / "ledger.yaml").write_text("version: 1\nactions: []\n", encoding="utf-8")
+    (tmp_path / "evidence.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "evidence_kind": "artifact",
+                "status": "passed",
+                "subject_paths": ["subject.txt"],
+                "subject_digests": {"subject.txt": subject_digest},
+                "validation_provenance": [
+                    {
+                        "command_id": "task:workflow:test",
+                        "argv": ["task", "workflow:test"],
+                        "returncode": 0,
+                        "run_ledger_path": "ledger.yaml",
+                        "run_action_id": "PT-TEST:PM-TEST-001:WR-001",
+                        "validation_result_digest": result_digest,
+                        "subject_digests": {"subject.txt": subject_digest},
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    requirement = EvidenceRequirement(
+        kind="artifact",
+        name="artifact",
+        paths=["evidence.yaml"],
+        subject_paths=["subject.txt"],
+    )
 
     assert not evidence_requirements_satisfied([requirement], production_source=tmp_path / "production.yaml")
 
@@ -253,7 +331,37 @@ def test_execution_contract_compiler_expands_agent_subactions_as_resumable_actio
 
     first_evidence = tmp_path / evidence_one
     first_evidence.parent.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "ledger.yaml").write_text("version: 1\n", encoding="utf-8")
+    evidence_result_digest = validation_result_digest(
+        command_id="python3:version",
+        argv=["python3", "--version"],
+        returncode=0,
+        files_changed=[],
+        subject_digests={},
+    )
+    (tmp_path / "ledger.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "actions": [
+                    {
+                        "status": "passed",
+                        "action_id": pack.actions[0].action_id,
+                        "validation_results": [
+                            {
+                                "command_id": "python3:version",
+                                "argv": ["python3", "--version"],
+                                "returncode": 0,
+                                "files_changed": [],
+                            }
+                        ],
+                        "evidence_paths": [repo_path(first_evidence)],
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     first_evidence.write_text(
         yaml.safe_dump(
             {
@@ -266,7 +374,7 @@ def test_execution_contract_compiler_expands_agent_subactions_as_resumable_actio
                         "returncode": 0,
                         "run_ledger_path": "ledger.yaml",
                         "run_action_id": pack.actions[0].action_id,
-                        "validation_result_digest": "digest",
+                        "validation_result_digest": evidence_result_digest,
                         "subject_digests": {},
                     }
                 ],

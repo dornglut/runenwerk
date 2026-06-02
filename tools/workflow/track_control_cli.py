@@ -237,6 +237,11 @@ def required_permissions(pack) -> set[str]:
     permissions: set[str] = set()
     for action in pack.actions:
         permissions.update(action.permissions_required)
+        if (
+            action.executor_kind in {"design_authoring", "product_implementation", "proof_aggregation"}
+            and action.closeout_contract.completion_quality != "not_applicable"
+        ):
+            permissions.add("agent_closeout")
     return permissions
 
 
@@ -278,16 +283,14 @@ def compile_or_refresh_pack(
     manifest_source_root: Path,
     contract_pack_root: Path,
 ) -> object:
-    pack, freshness = pack_status(track_id, contract_pack_root=contract_pack_root)
-    if pack is None or freshness:
-        pack = compile_contract_pack(
-            track_id,
-            production_source=production_source,
-            roadmap_source=roadmap_source,
-            manifest_root=manifest_source_root,
-            contract_pack_root=contract_pack_root,
-        )
-        write_contract_pack(pack, root=contract_pack_root)
+    pack = compile_contract_pack(
+        track_id,
+        production_source=production_source,
+        roadmap_source=roadmap_source,
+        manifest_root=manifest_source_root,
+        contract_pack_root=contract_pack_root,
+    )
+    write_contract_pack(pack, root=contract_pack_root)
     return pack
 
 

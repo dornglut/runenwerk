@@ -30,6 +30,7 @@ def test_track_control_go_delegates_to_execution_kernel(
         write_contract_pack(empty_pack, root=pack_root)
 
     monkeypatch.setattr(track_control_cli, "execution_run_command", fake_run_command)
+    monkeypatch.setattr(track_control_cli, "compile_or_refresh_pack", lambda *_args, **_kwargs: load_contract_pack("PT-TEST", root=pack_root))
     monkeypatch.setattr(track_control_cli, "post_completion_errors", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(track_control_cli, "repo_visible_completion_drift", lambda **_kwargs: [])
 
@@ -57,7 +58,7 @@ def test_track_control_go_delegates_to_execution_kernel(
     assert result.exit_code == 0
     assert calls
     assert calls[0]["mode"] == "full-track"
-    assert set(calls[0]["allow"]) == {"product_code", "product_implementation"}
+    assert set(calls[0]["allow"]) == {"agent_closeout", "product_code", "product_implementation"}
 
 
 def test_track_control_status_blocks_on_latest_current_action_failure(tmp_path: Path) -> None:

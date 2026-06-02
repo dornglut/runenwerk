@@ -1,21 +1,21 @@
 version: 1
 track_id: PT-TRACK-EXECUTION-HARNESS
-generated_at: '2026-06-02T19:46:11Z'
+generated_at: '2026-06-02T20:14:38Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml: a1dffd603657d65a60ae4089141661c20c5ea1e8e9bc7551129f296268685ef4
-  docs-site/src/content/docs/workspace/production-tracks.yaml: 43e2d75ae47bfb4e9dabb37f376443040252b533c0c01306e9f47e213b10ad17
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: ff893cfe31983659a51f55e5cfe0258d261ded8c355887d22e2bb4d072a5468b
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 133f6ac3993d17e6ab65f80c0e8868f2ac92de750646aab8ab3bfa21fdb25c9f
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: d22e7abd0786cfdaeb668becf8cfbb60c87066619b32ecdfb43c7bb2c06ddbcb
   docs-site/src/content/docs/workspace/track-execution-manifest.md: 25f11af9d0aad25c20057dbec4864280438d2987b53adbccbd2916c037f0c659
   docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md: 0a8f10e4a075f5c7b395f7087a8d69631d9dd4a4c3a82df985c1afe8fab330d3
   docs-site/src/content/docs/workspace/design-track-roadmap-governance.md: fe3b559973965879d40bd958589e1faf36edda1c5941b6a9b41b81545e9d938a
   tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
-  tools/workflow/execution/cli.py: 67fa69f62199935374dd4ec43216faa9acf8969137f42dce58b3b00052546b4c
+  tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
   tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
   tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
-  tools/workflow/execution/compiler.py: 9d6a1229d49234123ffff400072ec6d2b3fef17aefbe747ba5cc1c22768ddfad
+  tools/workflow/execution/compiler.py: b27457ceb26c5ef17539013466b485e25e32af3587a8d406e3411ae9b2c8aa68
   tools/workflow/execution/contracts.py: dc8b88ab77b876e60fcda9ff907f60201c1753a1985766cd09e07c75ecaea5f5
   tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
-  tools/workflow/execution/ledger.py: da31134f466d40e8aad1a47372c57e57b99425d2453545017eeda9e828f5df73
+  tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
   tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
   tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
   tools/workflow/execution/preflight.py: 1eedd7ed9484f7e6a8f266bc3ad85500a3917091a8f9407f766f2a0016cdf6c4

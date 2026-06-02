@@ -440,7 +440,7 @@ package "PT-UI-PROGRAM-ARCHITECTURE UI Program Architecture Implementation" {
 
   component "PM-UI-PROGRAM-ARCH-013 Design Coverage And Semantic Truth Closure\nkind=hardening\nstate=completed\nWR=WR-171" as PM_UI_PROGRAM_ARCH_013 <<completed>>
 
-  component "PM-UI-PROGRAM-ARCH-014 Architecture Behavior Truth And Extension Readiness Closure\nkind=hardening\nstate=active\nWR=WR-172" as PM_UI_PROGRAM_ARCH_014 <<active>>
+  component "PM-UI-PROGRAM-ARCH-014 Architecture Behavior Truth And Extension Readiness Closure\nkind=hardening\nstate=completed\nWR=WR-172" as PM_UI_PROGRAM_ARCH_014 <<completed>>
 
 }
 

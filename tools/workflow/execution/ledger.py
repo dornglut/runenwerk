@@ -81,6 +81,34 @@ def append_run_action(
     return path
 
 
+def update_latest_run_action_state(
+    *,
+    track_id: str,
+    run_id: str,
+    action_id: str,
+    post_action_digests: dict[str, str],
+    next_legal_action: str,
+    stop_reason: str,
+    root: Path = RUN_LEDGER_ROOT,
+) -> Path:
+    path = run_ledger_path(track_id, run_id, root=root)
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
+    if not isinstance(data, dict):
+        raise ValueError(f"{repo_path(path)} must contain a run ledger before it can be updated")
+    actions = data.get("actions")
+    if not isinstance(actions, list):
+        raise ValueError(f"{repo_path(path)} must contain an actions list")
+    for entry in reversed(actions):
+        if isinstance(entry, dict) and entry.get("status") == "passed" and entry.get("action_id") == action_id:
+            entry["post_action_digests"] = post_action_digests
+            entry["next_legal_action"] = next_legal_action
+            entry["stop_reason"] = stop_reason
+            data["updated_at"] = now_utc_iso()
+            path.write_text(yaml.safe_dump(data, sort_keys=False, width=4096), encoding="utf-8", newline="\n")
+            return path
+    raise ValueError(f"{repo_path(path)} has no passed action entry for {action_id}")
+
+
 def append_run_failure(
     *,
     track_id: str,

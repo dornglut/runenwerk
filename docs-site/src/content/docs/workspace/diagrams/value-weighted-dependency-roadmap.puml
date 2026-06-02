@@ -86,8 +86,6 @@ package "Level 3 - Active Domain Tracks" {
 package "Level 4 - Active Discovery Context" {
   component "WR-103 Sparse SDF runtime governance\nstate=ready_next\nscore=2.2 gate=governed shader-bound sparse sdf runtime track activation\nV4 B3\ncall=shader-bound runtime\ngovernance only\nno engine code" as RENDERSDFRUNTIME <<V4>>
 
-  component "WR-172 Behavior truth closure\nstate=current_candidate\nscore=3.0 gate=current implementation candidate\nV5 B2\ncall=behavior probes\nextension readiness\nno drift" as WR172 <<V5>>
-
 }
 
 ECSRUNTIME -down-> ECSPAR : ECS scheduler substrate

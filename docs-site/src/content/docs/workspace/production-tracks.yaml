@@ -5414,7 +5414,7 @@ tracks:
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md
 - id: PT-UI-PROGRAM-ARCHITECTURE
   title: UI Program Architecture Implementation
-  state: active
+  state: completed
   owner: ui
   target_completion_quality: perfectionist_verified
   strategic_goal: Implement and certify the concrete domain-owned UiProgram architecture contracts that remain blocked after the bounded PT-UI-PROGRAM proof-slice track.
@@ -5814,7 +5814,7 @@ tracks:
   - id: PM-UI-PROGRAM-ARCH-014
     title: Architecture Behavior Truth And Extension Readiness Closure
     kind: hardening
-    state: active
+    state: completed
     goal: Supersede symbol/text-heavy architecture completion with behavior-first semantic conformance, explicit future-feature boundary doctrine, extension-readiness proof, and zero-drift truth certification.
     outcome: PT-UI-PROGRAM-ARCHITECTURE is complete only after accepted architecture requirements are behavior-proven by executable probes; future product features remain separate tracks unless accepted architecture docs make them mandatory.
     dependencies:
@@ -5833,7 +5833,7 @@ tracks:
     evidence_gates:
     - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
       required_status: completed
-      reason: PM-UI-PROGRAM-ARCH-014 requires completed behavior-first truth closure evidence.
+      reason: PM-UI-PROGRAM-ARCH-014 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Strong UI architecture truth claims remain blocked until PM-014 produces fresh zero-finding certificates.
     - Every semantic conformance check binds to executable behavior probe IDs and probe files; source-symbol checks are shape guards only.
@@ -5841,10 +5841,9 @@ tracks:
     - Extension readiness proves new controls can register schemas, event payloads, fixtures, diagnostics, migrations, and kernels without central semantic enums or hidden global registries.
     - Host integration remains outside domain/ui; renderer and ECS remain forbidden from owning UI product truth.
     - Durable completion requires zero findings, zero gaps, zero risks, zero drift, current certificates, and checkpoint-clean repo-visible authority/code/evidence state.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - PM-014 is active and the prior completion claim is superseded until behavior-first truth certification closes.
-    completion_audit: ''
+    completion_quality: perfectionist_verified
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
 - id: PT-GAME-RUNTIME-UI
   title: Game Runtime UI Projection And HUD Platform
   state: active

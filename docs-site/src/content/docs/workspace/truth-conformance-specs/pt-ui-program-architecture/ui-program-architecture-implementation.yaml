@@ -253,7 +253,7 @@ root_facades:
   - path: domain/ui/ui_testing/src/lib.rs
     forbidden_patterns: ["^pub struct ", "^pub enum "]
 evidence_requirements:
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: runtime_test
     required_validation_fragments:
       - cargo test -p ui_program architecture_contract
@@ -263,19 +263,19 @@ evidence_requirements:
       - cargo test -p ui_testing architecture_fixtures
       - cargo test -p ui_controls control_package
       - task workflow:test
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: artifact
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: diagnostics
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: source_maps
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: migration
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: reproducibility
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: fixture
-  - milestone_id: PM-UI-PROGRAM-ARCH-013
+  - milestone_id: PM-UI-PROGRAM-ARCH-014
     evidence_kind: visual
 semantic_checks:
   - check_id: graph_family_lowering_to_runtime_tables

@@ -15,7 +15,7 @@ from track_sources.manifest import TRACK_EXECUTION_MANIFEST_ROOT
 
 from execution.compiler import CONTRACT_PACK_ROOT, compile_contract_pack, contract_pack_path, load_contract_pack, write_contract_pack
 from execution.evidence import EVIDENCE_ROOT
-from execution.ledger import RUN_LEDGER_ROOT, append_run_action, append_run_failure, new_run_id
+from execution.ledger import RUN_LEDGER_ROOT, append_run_action, append_run_failure, new_run_id, update_latest_run_action_state
 from execution.locks import (
     EXECUTION_LOCK_ROOT,
     build_execution_lock,
@@ -286,6 +286,17 @@ def run_command(
                 )
                 console.print(f"Run ledger: {repo_path(ledger_path)}")
                 return
+            ledger_path = append_run_action(
+                track_id=track,
+                run_id=run_id,
+                action=action,
+                result=result,
+                pre_action_digests=pre_action_digests,
+                post_action_digests=dict(pack.source_digests),
+                root=run_ledger_root,
+                stop_reason="pending full-track recompile",
+            )
+            console.print(f"Run ledger: {repo_path(ledger_path)}")
             next_pack = compile_contract_pack(
                 track,
                 production_source=production_source,
@@ -293,18 +304,17 @@ def run_command(
                 manifest_root=manifest_source_root,
                 contract_pack_root=contract_pack_root,
             )
-            write_contract_pack(next_pack, root=contract_pack_root)
-            ledger_path = append_run_action(
+            if next_pack.actions:
+                write_contract_pack(next_pack, root=contract_pack_root)
+            ledger_path = update_latest_run_action_state(
                 track_id=track,
                 run_id=run_id,
-                action=action,
-                result=result,
-                pre_action_digests=pre_action_digests,
+                action_id=action.action_id,
                 post_action_digests=dict(next_pack.source_digests),
-                root=run_ledger_root,
+                next_legal_action=result.next_action,
                 stop_reason="continuing full-track run" if next_pack.actions else "track complete",
+                root=run_ledger_root,
             )
-            console.print(f"Run ledger: {repo_path(ledger_path)}")
             existing_lock = load_execution_lock(track, root=lock_root)
             if existing_lock is None:
                 raise WorkflowError(f"{track}: execution lock disappeared during run")

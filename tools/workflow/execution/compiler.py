@@ -38,6 +38,7 @@ from execution.contracts import (
     now_utc_iso,
     validation_command_from_string,
 )
+from execution.evidence import validation_result_digest
 
 
 CONTRACT_PACK_ROOT = REPO_ROOT / "docs-site/src/content/docs/workspace/execution-contract-packs"
@@ -669,12 +670,39 @@ def evidence_record_satisfied(record_path: Path, requirement: EvidenceRequiremen
             return False
         if item.get("returncode") != 0:
             return False
-        if not item.get("command_id") or not item.get("argv") or not item.get("run_action_id"):
+        argv = item.get("argv")
+        if not item.get("command_id") or not isinstance(argv, list) or not argv or not item.get("run_action_id"):
             return False
         if not item.get("validation_result_digest"):
             return False
         ledger_path = item.get("run_ledger_path")
         if not isinstance(ledger_path, str) or not ledger_path.strip() or not (root / ledger_path).exists():
+            return False
+        ledger_data = yaml.safe_load((root / ledger_path).read_text(encoding="utf-8"))
+        if not isinstance(ledger_data, dict):
+            return False
+        matching_action = None
+        for action_data in ledger_data.get("actions", []):
+            if (
+                isinstance(action_data, dict)
+                and action_data.get("status") == "passed"
+                and action_data.get("action_id") == item.get("run_action_id")
+            ):
+                matching_action = action_data
+                break
+        if matching_action is None:
+            return False
+        matching_validation = None
+        for validation_data in matching_action.get("validation_results", []):
+            if (
+                isinstance(validation_data, dict)
+                and validation_data.get("command_id") == item.get("command_id")
+                and validation_data.get("argv") == item.get("argv")
+                and validation_data.get("returncode") == item.get("returncode")
+            ):
+                matching_validation = validation_data
+                break
+        if matching_validation is None:
             return False
         provenance_subject_digests = item.get("subject_digests") or {}
         if not isinstance(provenance_subject_digests, dict):
@@ -683,6 +711,17 @@ def evidence_record_satisfied(record_path: Path, requirement: EvidenceRequiremen
             subject_path = root / str(subject)
             if not subject_path.exists() or recorded_digest != digest_path(subject_path):
                 return False
+        expected_validation_digest = validation_result_digest(
+            command_id=str(item.get("command_id")),
+            argv=argv,
+            returncode=int(item.get("returncode")),
+            files_changed=list(matching_validation.get("files_changed") or []),
+            subject_digests=provenance_subject_digests,
+        )
+        if item.get("validation_result_digest") != expected_validation_digest:
+            return False
+        if repo_path(record_path) not in set(matching_action.get("evidence_paths") or []):
+            return False
     return True
 
 

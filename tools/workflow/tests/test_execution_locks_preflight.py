@@ -723,7 +723,10 @@ def test_track_control_allow_requires_reason_and_writes_intent_lock(tmp_path: Pa
     assert "crate_creation" in data["granted_permissions"]
     assert "foundation_extraction" in data["denied_permissions"]
 
-def test_track_control_prepare_refreshes_stale_execution_lock_when_intent_grants_match(tmp_path: Path) -> None:
+def test_track_control_prepare_refreshes_stale_execution_lock_when_intent_grants_match(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     pack_root = tmp_path / "packs"
     lock_root = tmp_path / "locks"
     intent_root = tmp_path / "intent"
@@ -762,6 +765,7 @@ def test_track_control_prepare_refreshes_stale_execution_lock_when_intent_grants
         actions=[action],
     )
     write_contract_pack(refreshed_pack, root=pack_root)
+    monkeypatch.setattr(track_control_cli, "compile_or_refresh_pack", lambda *_args, **_kwargs: load_contract_pack("PT-TEST", root=pack_root))
 
     payload = track_control_cli.prepare_execution(
         "PT-TEST",
