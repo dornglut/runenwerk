@@ -449,6 +449,8 @@ def strong_truth_blockers(track_id: str, *, manifest_source_root: Path) -> list[
     for claim in loaded.manifest.truth_claims:
         if claim.claim_level not in STRONG_TRUTH_LEVELS:
             continue
+        if claim.claim_kind in {"handoff", "extraction_gate"}:
+            continue
         if claim.claim_status not in {"blocked", "superseded"}:
             continue
         blockers.append(

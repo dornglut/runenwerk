@@ -172,6 +172,72 @@ def test_track_control_status_reports_truth_blocked_for_strong_claim_repair_acti
     assert payload["next_command"] == "task track:go -- --track PT-TEST"
 
 
+def test_track_control_status_does_not_block_completion_on_downstream_gate_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pack_root = tmp_path / "packs"
+    manifest_root = tmp_path / "manifests"
+    manifest_root.mkdir()
+    source = tmp_path / "source.yaml"
+    source.write_text("version: 1\n", encoding="utf-8")
+    write_contract_pack(
+        ContractPack(
+            track_id="PT-TEST",
+            generated_at="2026-01-01T00:00:00Z",
+            source_digests={source.as_posix(): digest_path(source)},
+            actions=[],
+        ),
+        root=pack_root,
+    )
+    manifest_data = valid_track_manifest_state()
+    manifest_data["truth_claims"] = [
+        {
+            "claim_id": "materialprogram-readiness-gate",
+            "claim_kind": "handoff",
+            "claim_level": "architecture_runtime_proven",
+            "claim_status": "blocked",
+            "claim_statement": "Downstream MaterialProgram planning remains blocked.",
+            "required_docs": [],
+            "required_code_contracts": [],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": ["Downstream handoff is intentionally blocked."],
+            "supersedes": [],
+            "blocks_downstream": ["MaterialProgram implementation"],
+        },
+        {
+            "claim_id": "foundation-meta-extraction-gate",
+            "claim_kind": "extraction_gate",
+            "claim_level": "architecture_runtime_proven",
+            "claim_status": "blocked",
+            "claim_statement": "Foundation/meta extraction remains blocked.",
+            "required_docs": [],
+            "required_code_contracts": [],
+            "required_validations": [],
+            "required_closeout_evidence": [],
+            "known_gaps": ["Extraction is intentionally blocked."],
+            "supersedes": [],
+            "blocks_downstream": ["foundation/meta extraction"],
+        },
+    ]
+    write_yaml(manifest_root / "pt-test.yaml", manifest_data)
+    monkeypatch.setattr(track_control_cli, "repo_visible_completion_drift", lambda **_kwargs: [])
+
+    payload = track_control_cli.status_payload(
+        "PT-TEST",
+        contract_pack_root=pack_root,
+        lock_root=tmp_path / "locks",
+        intent_lock_root=tmp_path / "intent",
+        manifest_source_root=manifest_root,
+        run_ledger_root=tmp_path / "ledgers",
+    )
+
+    assert payload["verdict"] == "complete"
+    assert "materialprogram-readiness-gate" in "\n".join(payload["truth_claims"])
+    assert payload["truth_findings"] == []
+
+
 def test_track_control_status_ignores_repaired_production_validation_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
