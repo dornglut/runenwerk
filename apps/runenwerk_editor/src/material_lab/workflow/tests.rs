@@ -90,6 +90,29 @@ fn material_graph_node_move_persists_source_layout() {
 }
 
 #[test]
+fn material_source_edit_records_load_failure_diagnostic() {
+    let mut app = RunenwerkEditorApp::new();
+    crate::material_lab::ensure_default_material_source_document(&mut app);
+
+    let result = app.apply_material_surface_action(MaterialSurfaceAction::MoveGraphNode {
+        node_id: graph::NodeId::new(1),
+        delta_x: 8,
+        delta_y: -4,
+    });
+
+    assert!(result.is_err());
+    assert!(
+        app.material_lab_runtime()
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains(
+                "failed to load material graph source for edit: cannot load material graph document: no asset project session"
+            )),
+        "source-backed edit load failures should preserve the concrete cause"
+    );
+}
+
+#[test]
 fn material_graph_connect_ports_mutates_source_graph() {
     let mut document = command_test_document();
 

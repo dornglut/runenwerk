@@ -139,13 +139,11 @@ impl RunenwerkEditorApp {
                 "no selected material asset for source-backed edit",
             ));
         };
-        let before = self
-            .load_material_graph_document_for_asset(asset_id)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to load material graph source for edit",
-                )
-            })?;
+        let before = self.load_material_graph_document_for_action(
+            asset_id,
+            "edit",
+            "failed to load material graph source for edit",
+        )?;
         let mut document = before.clone();
         let selected_nodes = self
             .material_lab_runtime()
@@ -224,13 +222,11 @@ impl RunenwerkEditorApp {
                 "no selected material asset for diagnostic navigation",
             ));
         };
-        let mut document = self
-            .load_material_graph_document_for_asset(asset_id)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to load material graph source for diagnostic navigation",
-                )
-            })?;
+        let mut document = self.load_material_graph_document_for_action(
+            asset_id,
+            "diagnostic navigation",
+            "failed to load material graph source for diagnostic navigation",
+        )?;
         let target_node_id = subject_node_id.or_else(|| {
             subject_port_id.and_then(|port_id| {
                 document
@@ -263,13 +259,11 @@ impl RunenwerkEditorApp {
         let Some((asset_id, previous)) = self.material_lab_runtime_mut().pop_undo_snapshot() else {
             return Ok(());
         };
-        let current = self
-            .load_material_graph_document_for_asset(asset_id)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to load material graph source before undo",
-                )
-            })?;
+        let current = self.load_material_graph_document_for_action(
+            asset_id,
+            "undo",
+            "failed to load material graph source before undo",
+        )?;
         self.write_material_graph_document_for_asset(asset_id, &previous)
             .map_err(|_| {
                 editor_core::EditorMutationError::runtime_rejected(
@@ -286,13 +280,11 @@ impl RunenwerkEditorApp {
         let Some((asset_id, next)) = self.material_lab_runtime_mut().pop_redo_snapshot() else {
             return Ok(());
         };
-        let current = self
-            .load_material_graph_document_for_asset(asset_id)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to load material graph source before redo",
-                )
-            })?;
+        let current = self.load_material_graph_document_for_action(
+            asset_id,
+            "redo",
+            "failed to load material graph source before redo",
+        )?;
         self.write_material_graph_document_for_asset(asset_id, &next)
             .map_err(|_| {
                 editor_core::EditorMutationError::runtime_rejected(
@@ -411,6 +403,25 @@ impl RunenwerkEditorApp {
         )
     }
 
+    fn load_material_graph_document_for_action(
+        &mut self,
+        asset_id: AssetId,
+        action: &'static str,
+        rejection: &'static str,
+    ) -> Result<MaterialGraphDocument, editor_core::EditorMutationError> {
+        match self.load_material_graph_document_for_asset(asset_id) {
+            Ok(document) => Ok(document),
+            Err(error) => {
+                self.record_material_workflow_diagnostics([material_source_load_diagnostic(
+                    action, &error,
+                )]);
+                Err(editor_core::EditorMutationError::runtime_rejected(
+                    rejection,
+                ))
+            }
+        }
+    }
+
     pub(super) fn record_material_workflow_diagnostics(
         &mut self,
         diagnostics: impl IntoIterator<Item = AssetDiagnosticRecord>,
@@ -423,6 +434,35 @@ impl RunenwerkEditorApp {
         self.material_lab_runtime_mut()
             .record_diagnostics(diagnostics);
     }
+}
+
+fn material_source_load_diagnostic(action: &str, error: &anyhow::Error) -> AssetDiagnosticRecord {
+    let code = if error_chain_contains(error, "failed to read material graph source") {
+        AssetDiagnosticCode::SourceMissing
+    } else {
+        AssetDiagnosticCode::RatificationRejected
+    };
+    material_diagnostic(
+        code,
+        format!(
+            "failed to load material graph source for {action}: {}",
+            error_chain_summary(error)
+        ),
+    )
+}
+
+fn error_chain_contains(error: &anyhow::Error, needle: &str) -> bool {
+    error
+        .chain()
+        .any(|cause| cause.to_string().contains(needle))
+}
+
+fn error_chain_summary(error: &anyhow::Error) -> String {
+    error
+        .chain()
+        .map(|cause| cause.to_string())
+        .collect::<Vec<_>>()
+        .join(": ")
 }
 
 pub(super) fn apply_material_document_action(
