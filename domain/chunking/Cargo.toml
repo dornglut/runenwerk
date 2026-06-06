@@ -1,8 +1,9 @@
 [package]
 name = "chunking"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 publish = false
 
 [dependencies]
+chunking_core = { package = "chunking", path = "../../../../spatial_streaming/crates/chunking" }
 spatial = { path = "../spatial" }

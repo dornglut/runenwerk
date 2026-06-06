@@ -1,8 +1,8 @@
 [package]
 name = "spatial"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 publish = false
 
 [dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
+spatial_core = { package = "spatial", path = "../../../../spatial_streaming/crates/spatial" }

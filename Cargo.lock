@@ -384,7 +384,15 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 name = "chunking"
 version = "0.1.0"
 dependencies = [
- "spatial",
+ "spatial 0.1.0",
+]
+
+[[package]]
+name = "chunking"
+version = "0.1.1"
+dependencies = [
+ "chunking 0.1.0",
+ "spatial 0.1.1",
 ]
 
 [[package]]
@@ -834,7 +842,7 @@ dependencies = [
  "glam 0.32.1",
  "graph",
  "schema",
- "spatial",
+ "spatial 0.1.1",
  "world_ops",
  "world_sdf",
 ]
@@ -927,7 +935,7 @@ dependencies = [
  "scheduler",
  "serde",
  "serde_json",
- "spatial",
+ "spatial 0.1.1",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -1357,9 +1365,9 @@ dependencies = [
 name = "godot_chunking_addon"
 version = "0.1.0"
 dependencies = [
- "chunking",
+ "chunking 0.1.1",
  "godot",
- "spatial",
+ "spatial 0.1.1",
 ]
 
 [[package]]
@@ -2421,7 +2429,7 @@ dependencies = [
  "graph",
  "product",
  "ratification",
- "spatial",
+ "spatial 0.1.1",
  "world_ops",
  "world_sdf",
 ]
@@ -2792,7 +2800,7 @@ dependencies = [
  "rustls",
  "scene",
  "serde",
- "spatial",
+ "spatial 0.1.1",
  "texture",
  "tokio",
  "ui_definition",
@@ -3242,11 +3250,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "spatial"
+version = "0.1.1"
+dependencies = [
+ "spatial 0.1.0",
+]
+
+[[package]]
 name = "spatial_index"
 version = "0.1.0"
 dependencies = [
- "geometry",
- "glam 0.31.1",
+ "spatial 0.1.0",
+]
+
+[[package]]
+name = "spatial_index"
+version = "0.1.1"
+dependencies = [
+ "spatial 0.1.1",
+ "spatial_index 0.1.0",
 ]
 
 [[package]]
@@ -4740,7 +4762,7 @@ name = "world_ops"
 version = "0.1.0"
 dependencies = [
  "serde",
- "spatial",
+ "spatial 0.1.1",
 ]
 
 [[package]]
@@ -4751,7 +4773,7 @@ dependencies = [
  "product",
  "ratification",
  "serde",
- "spatial",
+ "spatial 0.1.1",
  "world_ops",
 ]
 

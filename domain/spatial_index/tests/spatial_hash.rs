@@ -1,5 +1,4 @@
-use geometry::Aabb3;
-use glam::Vec3;
+use spatial::SpatialAabb3;
 use spatial_index::{
     AabbQuery, MutableSpatialIndex, SpatialEntry, SpatialHashConfig, SpatialHashIndex, SpatialIndex,
 };
@@ -7,11 +6,8 @@ use spatial_index::{
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct TestKey(u32);
 
-fn aabb(min: [f32; 3], max: [f32; 3]) -> Aabb3 {
-    Aabb3::new(
-        Vec3::new(min[0], min[1], min[2]),
-        Vec3::new(max[0], max[1], max[2]),
-    )
+fn aabb(min: [f32; 3], max: [f32; 3]) -> SpatialAabb3 {
+    SpatialAabb3::from_arrays(min, max)
 }
 
 #[test]

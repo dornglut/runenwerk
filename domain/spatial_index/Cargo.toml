@@ -1,9 +1,9 @@
 [package]
 name = "spatial_index"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 publish = false
 
 [dependencies]
-geometry = { path = "../geometry" }
-glam = "0.31.1"
+spatial = { path = "../spatial" }
+spatial_index_core = { package = "spatial_index", path = "../../../../spatial_streaming/crates/spatial_index" }
