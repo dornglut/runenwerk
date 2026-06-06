@@ -1874,11 +1874,20 @@ fn load_workspace_profile_layout(
         ))?;
     let workspace_layout_path = default_workspace_layout_path_for_profile(profile_id);
     let workspace_state = if workspace_layout_path.exists() {
-        let saved_workspace = read_workspace_layout_with_metadata_and_registry(
+        let saved_workspace = match read_workspace_layout_with_metadata_and_registry(
             &workspace_layout_path,
             app.workbench_host().tool_surface_registry(),
-        )
-        .map_err(|_| EditorMutationError::runtime_rejected("failed to load workspace layout"))?;
+        ) {
+            Ok(saved_workspace) => saved_workspace,
+            Err(error) => {
+                app.append_console_line(format!(
+                    "[workspace] failed to load workspace layout {}: {}",
+                    workspace_layout_path.display(),
+                    error_chain_summary(&error)
+                ));
+                return Err(workspace_layout_load_rejection(&error));
+            }
+        };
         if workspace_layout_matches_profile(&saved_workspace, &profile) {
             saved_workspace.workspace_state
         } else {
@@ -1943,6 +1952,30 @@ fn workspace_layout_matches_profile(
             .default_layout_template
             .default_graph_matches(&saved_workspace.workspace_state),
     }
+}
+
+fn workspace_layout_load_rejection(error: &anyhow::Error) -> EditorMutationError {
+    if error_chain_contains(error, "persisted workspace version") {
+        EditorMutationError::runtime_rejected(
+            "failed to load workspace layout: saved schema unsupported",
+        )
+    } else {
+        EditorMutationError::runtime_rejected("failed to load workspace layout")
+    }
+}
+
+fn error_chain_contains(error: &anyhow::Error, needle: &str) -> bool {
+    error
+        .chain()
+        .any(|cause| cause.to_string().contains(needle))
+}
+
+fn error_chain_summary(error: &anyhow::Error) -> String {
+    error
+        .chain()
+        .map(|cause| cause.to_string())
+        .collect::<Vec<_>>()
+        .join(": ")
 }
 
 fn save_workspace_layout_for_active_profile(
@@ -2402,6 +2435,20 @@ mod tests {
             app.workbench_host().tool_surface_registry(),
         );
         assert!(report.is_fully_compatible());
+    }
+
+    #[test]
+    fn workspace_layout_load_rejection_classifies_unsupported_saved_schema() {
+        let error = anyhow::anyhow!("persisted workspace version 4 is unsupported")
+            .context("failed to validate persisted workspace layout");
+
+        let rejection = workspace_layout_load_rejection(&error);
+
+        assert_eq!(
+            rejection.message,
+            "failed to load workspace layout: saved schema unsupported"
+        );
+        assert!(error_chain_summary(&error).contains("persisted workspace version 4"));
     }
 
     #[test]
