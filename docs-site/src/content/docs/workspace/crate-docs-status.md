@@ -41,6 +41,7 @@ Status labels:
 | `spatial` | `domain/spatial` | thin | [`../domain/spatial/README.md`](../domain/spatial/README.md) |
 | `spatial_index` | `domain/spatial_index` | thin | [`../domain/spatial-index/README.md`](../domain/spatial-index/README.md) |
 | `chunking` | `domain/chunking` | thin | [`../domain/chunking/README.md`](../domain/chunking/README.md) |
+| `world_streaming` | `domain/world_streaming` | current | [`../domain/world-streaming/README.md`](../domain/world-streaming/README.md) |
 | `asset` | `domain/asset` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
 | `product` | `domain/product` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
 | `sdf` | `domain/sdf` | current | [`../domain/sdf/README.md`](../domain/sdf/README.md) |

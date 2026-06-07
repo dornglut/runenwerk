@@ -7,6 +7,7 @@ members = [
     "domain/spatial",
     "domain/spatial_index",
     "domain/chunking",
+    "domain/world_streaming",
     "domain/asset",
     "domain/product",
     "domain/sdf",
@@ -89,6 +90,7 @@ product = { path = "domain/product" }
 spatial = { path = "domain/spatial" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }
+world_streaming = { path = "domain/world_streaming" }
 
 ui_math = { path = "domain/ui/ui_math" }
 ui_input = { path = "domain/ui/ui_input" }

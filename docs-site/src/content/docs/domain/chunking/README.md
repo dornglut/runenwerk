@@ -35,5 +35,7 @@ generation, ECS scheduling, render submission, or app-specific streaming UX.
 ## Related Crates
 
 - `spatial` supplies chunk coordinate contracts.
+- `world_streaming` consumes chunking output to produce payload-neutral stream
+  requests and lifecycle events.
 - `world_ops` turns edits and build results into dirty/build work.
 - `world_sdf` owns SDF payload storage for resident chunks.

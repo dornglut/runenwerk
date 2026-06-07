@@ -31,6 +31,8 @@ Use this crate when code needs stable vocabulary for:
 - `grid`: `ChunkCoord3`, `RegionCoord3`, ids, partition config, and hierarchy config.
 - `clipmap`: `ClipmapConfig`, `ClipmapLevel`, `ClipmapCoord3`, `ClipmapWindow`.
 - `ring`: `RingBufferConfig`, `RingSlot3`, `slot_for_coord`.
+- `hash`: `SpatialHashSeed`, `SpatialHashValue`, and payload-neutral integer
+  coordinate hash helpers.
 
 ## Ownership Boundary
 
@@ -42,5 +44,7 @@ payloads, rendering, or editor behavior.
 
 - `spatial_index` stores/query objects by spatial keys.
 - `chunking` decides desired chunk residency around a focus.
+- `world_streaming` turns desired residency into payload-neutral stream
+  requests and lifecycle events.
 - `world_ops` tracks edits, dirty regions, build queues, and replication deltas.
 - `world_sdf` stores chunk/page SDF payloads and collision-ready summaries.

@@ -4778,6 +4778,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "world_streaming"
+version = "0.1.0"
+dependencies = [
+ "chunking 0.1.0",
+ "spatial 0.1.0",
+]
+
+[[package]]
+name = "world_streaming"
+version = "0.1.1"
+dependencies = [
+ "chunking 0.1.1",
+ "spatial 0.1.1",
+ "world_streaming 0.1.0",
+]
+
+[[package]]
 name = "x11-dl"
 version = "2.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

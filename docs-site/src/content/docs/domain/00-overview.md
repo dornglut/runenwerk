@@ -41,7 +41,7 @@ Domain crates must not depend on:
 | Materials and textures | `domain/material_graph`, `domain/texture` | [`material-graph/README.md`](./material-graph/README.md), [`texture/README.md`](./texture/README.md) |
 | Procedural generation | `domain/procgen` | [`procgen/README.md`](./procgen/README.md) for generator documents, planning lifecycle, reservations, deterministic lowering, and product-output boundaries |
 | Drawing | `domain/drawing` | [`drawing/README.md`](./drawing/README.md) |
-| Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
+| Spatial / chunking / world data | `domain/spatial`, `domain/spatial_index`, `domain/chunking`, `domain/world_streaming`, `domain/world_ops`, `domain/world_sdf` | [`spatial/README.md`](./spatial/README.md), [`spatial-index/README.md`](./spatial-index/README.md), [`chunking/README.md`](./chunking/README.md), [`world-streaming/README.md`](./world-streaming/README.md), [`world-ops/README.md`](./world-ops/README.md), [`world-sdf/README.md`](./world-sdf/README.md) |
 | UI substrate and definitions | `domain/ui/*`, including `domain/ui/ui_definition` | [`ui/README.md`](./ui/README.md), [`ui/architecture.md`](./ui/architecture.md), [`ui/roadmap.md`](./ui/roadmap.md) |
 | Editor domains and definitions | `domain/editor/*`, including `domain/editor/editor_definition` | [`editor/README.md`](./editor/README.md) |
 
@@ -113,6 +113,7 @@ The following domain areas still need deeper crate-level usage and architecture 
 - `domain/spatial`
 - `domain/spatial_index`
 - `domain/chunking`
+- `domain/world_streaming`
 - `domain/asset`
 - `domain/product`
 - `domain/world_ops`

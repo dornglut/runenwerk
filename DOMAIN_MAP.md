@@ -49,6 +49,7 @@ Generic field-product target design -> docs-site/src/content/docs/design/accepte
 Drawing documents/strokes/brushes/paper/composition/tile lineage -> domain/drawing
 Spatial coordinates/indexing        -> domain/spatial, domain/spatial_index
 Chunk streaming policy              -> domain/chunking
+Payload-neutral chunk lifecycle requests/events -> domain/world_streaming
 Chunk/world op logs and deltas       -> domain/world_ops
 SDF world payload/collision data and current SDF field-product specialization -> domain/world_sdf
 UI substrate primitives             -> domain/ui/*

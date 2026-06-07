@@ -1,0 +1,12 @@
+[package]
+name = "world_streaming"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+world_streaming_core = { package = "world_streaming", path = "../../../../spatial_streaming/crates/world_streaming" }
+
+[dev-dependencies]
+chunking = { path = "../chunking" }
+spatial = { path = "../spatial" }
