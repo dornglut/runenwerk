@@ -72,3 +72,6 @@ See also:
 - `AGENTS.md` for agent behavior rules.
 - `domain-map.md` for crate-level ownership and dependency summary.
 - `code-patterns.md` for implementation patterns used across domains.
+- [`domain-program-architecture-pattern.md`](domain-program-architecture-pattern.md)
+  for the reusable domain-program, typed-graph, compiler/evaluator, artifact,
+  host, and extraction-gate pattern.
