@@ -1,13 +1,15 @@
 ---
 title: UI Substrate and Surface Roadmap
-description: Current implementation roadmap for Runenwerk UI substrate and surface semantics.
+description: Current implementation roadmap for Runenwerk UI substrate, UiProgram runtime artifact flow, and surface semantics.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-06-15
 related:
   - ./architecture.md
+  - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
+  - ../../design/active/ui-program-architecture.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
   - ../../design/implemented/editor-self-authoring-and-final-ui-design.md
@@ -24,9 +26,9 @@ related:
 
 ## Purpose
 
-Track implementation sequencing for UI substrate and surface work from current code truth.
+Track implementation sequencing for UI substrate, retained UI surfaces, UiProgram architecture, runtime artifacts, and the future artifact-backed rendering path from current code truth.
 
-This roadmap is intentionally execution-oriented. Target architecture belongs in active design docs.
+This roadmap is intentionally execution-oriented. Target architecture belongs in active design docs. The artifact-backed rendering roadmap is now tracked in [UI Runtime Rendering Pipeline Roadmap](../../design/active/ui-runtime-rendering-pipeline-roadmap.md).
 
 ## Current Code Truth
 
@@ -38,14 +40,23 @@ Implemented and in use:
 - retained UI node and runtime interaction support exists for reusable controls including text input, numeric input, toggle, tabs, select, table, tree, scroll, split, and viewport embed;
 - runtime viewport routing is structural-first. The normal viewport migration path is closed; one compatibility-only bootstrap seam remains in `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`, through private helpers `select_viewport_id_with_bootstrap_policy` and `bootstrap_single_viewport_id`, before first projection artifacts exist. New viewport/product work must use structural viewport binding, not bootstrap selection;
 - architecture guard tests enforce no `first_frame()` routing fallback and no `ViewportId(0)` synthesis;
-- viewport semantic slot taxonomy remains in `editor_viewport`, with opaque renderer-facing payload slots in `ui_render_data`.
-- `ui_definition` exists with authored templates, validation, normalization, retained formation, route/embed products, and checked-in editor UI fixtures; broader workspace profile catalogs/default layouts, unavailable feature representation, and custom workspace catalog behavior still need follow-up hardening.
-- ADR 0009 makes Interaction V2 the accepted architecture for popup stack, scroll ownership, focus, menu sizing, chrome slot, docking-zone, and status overflow contracts. Current runtime execution is still retained UI.
+- viewport semantic slot taxonomy remains in `editor_viewport`, with opaque renderer-facing payload slots in `ui_render_data`;
+- `ui_definition` exists with authored templates, validation, normalization, retained formation, route/embed products, and checked-in editor UI fixtures; broader workspace profile catalogs/default layouts, unavailable feature representation, and custom workspace catalog behavior still need follow-up hardening;
+- ADR 0009 makes Interaction V2 the accepted architecture for popup stack, scroll ownership, focus, menu sizing, chrome slot, docking-zone, and status overflow contracts. Current runtime execution is still retained UI;
+- UiProgram architecture crates now exist for semantic program proof slices: `ui_schema`, `ui_program`, `ui_controls`, `ui_program_lowering`, `ui_compiler`, `ui_artifacts`, `ui_accessibility`, and `ui_binding`;
+- `ui_program_lowering` exposes the registry-snapshot formation path `form_ui_program_report_from_node_with_registry_snapshot(...)`, and `UiProgramFormationReport` now carries combined diagnostics plus a mandatory catalog report;
+- runtime artifacts already split controls, layout, style, state, interaction, binding snapshots, collection diffs, visual, text layout requests, accessibility, and inspection tables;
+- current critical gap: `ui_program_lowering/src/lower.rs::lower_control_nodes` still falls back to deriving a package id from an unknown authored control-kind string. That must fail closed before render-facing claims are allowed.
 
 Evidence in code:
 
 - `domain/ui/ui_surface/src/*`
 - `domain/ui/ui_runtime/src/*`
+- `domain/ui/ui_program_lowering/src/*`
+- `domain/ui/ui_program/src/*`
+- `domain/ui/ui_controls/src/*`
+- `domain/ui/ui_compiler/src/*`
+- `domain/ui/ui_artifacts/src/*`
 - `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
 - `apps/runenwerk_editor/src/runtime/viewport/routing.rs`
 - `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`
@@ -85,8 +96,7 @@ Remaining:
 
 ### Phase 4 - Viewport/Embed/Render-Data Seam Consolidation
 
-Status: complete for normal viewport migration, guard-hardened, and active only
-for compatibility preservation.
+Status: complete for normal viewport migration, guard-hardened, and active only for compatibility preservation.
 
 Completed:
 
@@ -175,8 +185,7 @@ Milestone placement:
 
 ### Phase 8 - UI Runtime V2 Interaction Formation
 
-Status: accepted architecture as of ADR 0009 on 2026-05-15. Runtime
-implementation remains retained UI first and migrates by Strangler slices.
+Status: accepted architecture as of ADR 0009 on 2026-05-15. Runtime implementation remains retained UI first and migrates by Strangler slices.
 
 Owning design:
 
@@ -226,11 +235,65 @@ Retained UI slice catalog:
 | `IV2-dock-drop-zones` | tab reorder, split insertion, floating-host, invalid-target, and preview-only drop-zone policy with shell/controller guards | docking preview and tab-strip precedence polish |
 | `IV2-status-and-viewport-arbitration` | status overflow and viewport pointer/wheel arbitration with shell projection and app guard tests | FPS/frame-time status and compact viewport metadata polish |
 
-Phase 8 leads WR-024. Shell polish may proceed only as retained UI
-implementation after the relevant contract slice is defined, or as bounded
-compatibility evidence that names the old path, target formed contract, and
-regression guard. It must not define durable popup, scroll, focus, docking,
-chrome, status, or viewport-input policy in app or shell code.
+Phase 8 leads WR-024. Shell polish may proceed only as retained UI implementation after the relevant contract slice is defined, or as bounded compatibility evidence that names the old path, target formed contract, and regression guard. It must not define durable popup, scroll, focus, docking, chrome, status, or viewport-input policy in app or shell code.
+
+### Phase 9 - Artifact-Backed Runtime Rendering Pipeline
+
+Status: active design roadmap; implementation not authorized by this page alone.
+
+Owning design:
+
+- `docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md`
+
+Decision:
+
+- a visible button is not allowed to be a hand-written widget proof;
+- rendering may begin only after artifact-backed runtime view, layout, style, text, accessibility, and render primitive reports exist;
+- renderer/backend code consumes backend-neutral derived primitives only and must not own UI semantics.
+
+Milestone order:
+
+| ID | Milestone | Gate |
+|---|---|---|
+| M1 | Unknown control kind fail-closed | `ui.program.control.unknown_kind` fails formation and emits no contract-derived graph rows. |
+| M2 | Catalog schema/kernel completeness | broken package metadata fails catalog derivation and propagates into formation report. |
+| M3 | Authored property validation/value carry-through | valid button properties survive authored source -> UiProgram -> runtime artifact. |
+| M4 | Source-map and diagnostic completeness | every graph-family row and diagnostic is traceable. |
+| M5 | Runtime artifact snapshots | basic/selected buttons produce stable artifact snapshots. |
+| M6 | Artifact-backed runtime view model | `ButtonRuntimeView` derives from artifact + host data. |
+| M7 | Binding evaluator integration | selected/disabled state derives from host data and authorization checks. |
+| M8 | Runtime layout resolution | button receives stable layout box and layout diagnostics. |
+| M9 | Style/theme token resolution | variant/tone/density/size/state resolve through tokens, not renderer colors. |
+| M10 | Text layout request/result path | label text measurement is explicit and source-mapped. |
+| M11 | Backend-neutral render primitives | button resolves to deterministic primitive snapshots. |
+| M12 | Headless render frame snapshots | button output is proven before visible backend integration. |
+| M13 | First visible gallery button | visible output consumes the full proven pipeline. |
+| M14 | Interaction hit testing and route proposal | click/keyboard emit schema-valid route proposals. |
+| M15 | Button visual state loop | hover/pressed/focused/selected/disabled are proven. |
+| M16 | Accessibility runtime proof | rendered/runtime button is inspectable and accessible. |
+| M17-M20 | Additional control pipelines | label, inspector field, color picker, prompt/list/tree/table receive the same proof chain. |
+| M21 | UI Gallery inspector | authored source through rendered preview and interaction trace are inspectable. |
+| M22 | Production readiness evidence integration | production-ready claims require complete, fresh, owner-correct evidence. |
+
+Render permission gates:
+
+```text
+After M12: headless render output may be trusted.
+After M13: visible static button may be shown.
+After M15: interactive button may be claimed.
+After M16: accessible button may be claimed.
+After M22: production-ready UI rendering may be claimed.
+```
+
+Stop conditions:
+
+- rendering from authored `.ron` directly;
+- rendering from `ControlPackageDescriptor` alone;
+- inferring package truth from a control-kind string;
+- letting unknown control kinds or broken package metadata pass formation;
+- hardcoding visual semantics in backend renderer code;
+- mutating editor/game/domain/app truth from generic UI code;
+- creating new crates without WR/production authority.
 
 ## Current Now Tasks
 
@@ -242,17 +305,20 @@ chrome, status, or viewport-input policy in app or shell code.
 - [x] Broaden reusable control adoption in editor surfaces. Status: implemented as of 2026-05-09 for the M4E cleanup. `editor_shell` now owns shared retained surface fixture helpers, shared compact reusable-control polish, and self-authoring control-panel composition; app providers supply DTOs/actions/routes instead of direct reusable-control construction.
 - [x] Preserve and extend guard coverage for structural routing, capability gating, and seam ownership. Status: updated as of 2026-05-09; guard coverage rejects direct app-provider reusable-control construction while preserving existing `ui_definition` behavior-isolation and surface-routing checks.
 - [ ] Keep future UI execution strategies design-gated. Status: active/open; compiled-reactive UI and ECS-driven UI remain future formation targets only after a new active design or accepted ADR identifies the concrete surface, formation product, invalidation/debug model, and command/ratification boundaries. Any future target must consume normalized definitions plus formed interaction contracts.
-- [x] Migrate retained UI slices to Interaction V2 contracts. Status: complete for the named WR-025 retained-slice catalog with code-bearing slices and doctrine-repair evidence landed for `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration`. `domain/ui/ui_definition/src/interaction.rs`, `domain/ui/ui_definition/src/form.rs::form_retained_ui`, `domain/ui/ui_definition/src/validate.rs::validate_menu`, `domain/ui/ui_tree/src/tree/node.rs::PopupDismissPolicy`, `domain/ui/ui_runtime/src/layout/engine.rs::layout_popup`, `domain/ui/ui_runtime/src/input/hit_test.rs`, `domain/ui/ui_runtime/src/input/pointer.rs::dispatch_pointer_event`, `domain/ui/ui_runtime/src/runtime/ui_runtime.rs::dispatch_keyboard_event`, `domain/editor/editor_shell/src/composition/build_editor_shell.rs::build_editor_shell_frame_with_docking_visual_state`, `domain/editor/editor_shell/src/composition/build_editor_shell.rs::dock_drop_zone_interaction_model`, `domain/editor/editor_shell/src/composition/build_editor_shell.rs::viewport_surface_interaction_model`, `domain/editor/editor_shell/src/composition/build_viewport_panel.rs::viewport_status_overlay`, and `domain/editor/editor_shell/src/composition/toolbar_definition.rs::project_workspace_close_buttons` now carry the generic menu-stack, focus-return, popup-layer, Escape-dismiss, scroll-boundary ownership, menu sizing, chrome slot, dock/drop-zone invalid-target, status overflow, and viewport input-arbitration spine. Completion evidence is closed by `docs-site/src/content/docs/reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md`, including behavior tests for invalid dock/drop candidate exclusion and viewport status dispatch rejection.
+- [x] Migrate retained UI slices to Interaction V2 contracts. Status: complete for the named WR-025 retained-slice catalog with code-bearing slices and doctrine-repair evidence landed for `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration`.
 - [x] Complete the M3.5 UI definition formation framework before M3.6 and M4. Status: implemented and validated; crates, fixtures, retained formation, app fixture validation, toolbar route-slot integration, toolbar popup binding data, normal shell chrome formation, and common provider surface fixture formation exist. Provider behavior remains outside `ui_definition`.
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 - [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
-- [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; docs validation currently passes, and this page is aligned with the workspace priority checklist as of 2026-05-08.
+- [ ] Execute the artifact-backed runtime rendering roadmap in order. Status: active design roadmap; first legal implementation slice is unknown-control-kind fail-closed in `domain/ui/ui_program_lowering/src/lower.rs::lower_control_nodes`. A visible button is not a valid next milestone until headless render-frame snapshots pass.
+- [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; generated production docs must remain outputs of their source files and must not be hand-edited.
 
 ## Non-Goals for This Track
 
 - redesigning renderer architecture;
 - introducing the visual editor or user-authored document lifecycle inside M3.5;
 - collapsing surface semantics into shell or runtime substrate layers;
-- moving privileged ratification ownership into generic UI substrate code.
-- using ECS entities, runtime widget ids, or shell session ids as durable authored UI/editor identity.
+- moving privileged ratification ownership into generic UI substrate code;
+- using ECS entities, runtime widget ids, or shell session ids as durable authored UI/editor identity;
+- rendering from authored `.ron` files or package descriptors directly;
+- creating `ui_runtime_view`, `ui_render_primitives`, or backend adapter crates without explicit WR/production authority.
