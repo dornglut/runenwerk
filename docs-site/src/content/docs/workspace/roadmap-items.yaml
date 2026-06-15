@@ -675,7 +675,87 @@ items:
   adr_requirement: No ADR for docs-only governance. Require an ADR or accepted design update before a follow-on WR changes durable GPU ABI ownership, dependency direction, SDF source-truth authority, fallback legality, or cross-domain product contracts.
   fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative, shader-binding, evidence, and benchmark tests before implementation closeout.
   ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
+- id: WR-173
+  title: Artifact-Backed Static UI Gallery Runtime Rendering
+  diagram_title: UI runtime gallery
+  alias: UIRUNTIMEGALLERY
+  lane: Product workflow
+  dependency_level: L1
+  gate: Artifact-backed UI rendering slice
+  planning_state: ready_next
+  priority: P0
+  value: 4
+  blocker: 3
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.6
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-172
+  write_scopes:
+  - domain/ui/ui_runtime_view
+  - domain/ui/ui_render_primitives
+  - domain/ui/ui_headless_render_data
+  - domain/ui/ui_static_mount
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  validations:
+  - cargo test -p ui_program_lowering
+  - cargo test -p ui_compiler
+  - cargo test -p ui_artifacts
+  - cargo test -p ui_runtime_view
+  - cargo test -p ui_render_primitives
+  - cargo test -p ui_headless_render_data
+  - cargo test -p ui_static_mount
+  - cargo test -p runenwerk_editor ui_gallery
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task production:check
+  - task roadmap:validate
+  - task roadmap:check
+  next_evidence: PM-UI-RUNTIME-RENDERING-001 closeout proving the static button gallery renders through artifacts, runtime views, backend-neutral primitives, GlyphRun text, static mount, and the existing renderer UI composite pass.
+  current_decision: Implement the first visible static gallery slice without reopening completed PT-UI-PROGRAM-ARCHITECTURE and without adding a new app crate.
+  current_call: Use this row only for the static basic/selected button gallery. Interactivity, hover/pressed/focus loops, inspector UI, additional controls, and production-readiness evidence require follow-on rows.
+  first_move: Build `runenwerk_ui_gallery` in `runenwerk_editor` so checked-in gallery fixtures pass formation, compiler, runtime view, primitive generation, render-data adaptation, static mount, and UI composite submission.
+  main_blocker: Closeout evidence is still required before claiming the production milestone complete.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Interactivity and route proposal are intentionally out of scope.
+  - Hover, pressed, focus, disabled state loops are follow-on work.
+  - Gallery inspector and additional control pipelines remain future roadmap work.
+  completion_audit: ''
+  diagram_call:
+  - static artifact gallery
+  - GlyphRun labels
+  - existing UI composite
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+    required_status: active
+    applies_to: implementation
+    reason: Static gallery rendering must follow the active artifact-backed runtime rendering roadmap and stop conditions.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-173 follows completed UiProgram architecture behavior truth and must not reopen PT-UI-PROGRAM-ARCHITECTURE.
+  ddd_owner: domain/ui runtime rendering with apps/runenwerk_editor host integration
+  adr_requirement: No new ADR for the static gallery slice. Require ADR or accepted design update before changing renderer ownership, ECS ownership, host mutation authority, or adding interactive runtime semantics.
+  fitness_function_requirement: Focused UI formation/compiler/artifact/runtime-view/render-primitive/render-data/static-mount tests, gallery headless submission test, and docs/production/roadmap validators.
+  ownership_mode: Stream-aligned UI owner with app-host integration boundary.
 edges:
+- source: WR-172
+  target: WR-173
+  label: static runtime rendering follows completed architecture behavior truth
 - source: WR-171
   target: WR-172
   label: behavior-first truth closure after design coverage

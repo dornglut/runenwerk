@@ -31,6 +31,7 @@ graph_id!(ControlNodeId, "control node");
 graph_id!(ControlPackageRef, "control package");
 graph_id!(ControlKindRef, "control kind");
 graph_id!(ControlKernelRef, "control kernel");
+graph_id!(ControlPropertySnapshotId, "control property snapshot");
 graph_id!(LayoutConstraintId, "layout constraint");
 graph_id!(StateRequirementId, "state requirement");
 graph_id!(StyleRuleId, "style rule");

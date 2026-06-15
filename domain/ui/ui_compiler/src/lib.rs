@@ -3,11 +3,15 @@
 
 mod capability;
 mod compiler;
+mod graph_integrity;
 mod package_resolution;
 mod report;
 
 pub use capability::{CapabilityCheck, CapabilityCheckStatus, CapabilityCheckSubject};
 pub use compiler::UiCompiler;
+pub use graph_integrity::{
+    GraphIntegrityCheck, GraphIntegrityStatus, GraphIntegritySubject, UiGraphIntegrityReport,
+};
 pub use package_resolution::{
     KernelConsumer, PackageResolution, ResolvedPackage, UnresolvedControlKind, UnresolvedKernel,
 };

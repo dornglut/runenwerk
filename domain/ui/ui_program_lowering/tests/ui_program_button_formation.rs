@@ -2,9 +2,12 @@
 // Test: ui_gallery_button_basic_forms_control_graph_node
 // Function: load_node
 
-use std::fs;
+use std::{collections::BTreeMap, fs};
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
-use ui_definition::UiNodeDefinition;
+use ui_definition::{
+    AuthoredControlAccessibilityDefinition, AuthoredControlKindId, AuthoredRouteId,
+    UiNodeDefinition,
+};
 use ui_program::AccessibilityRole;
 use ui_program::{BindingEndpoint, InteractionTrigger, StateRequirementLifecycle};
 use ui_program_lowering::{
@@ -26,6 +29,7 @@ fn ui_gallery_button_basic_forms_control_graph_node() {
     let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
+    assert_eq!(program.graphs.properties.rows.len(), 1);
 
     let control = &program.graphs.control.nodes[0];
 
@@ -48,6 +52,97 @@ fn ui_gallery_button_basic_forms_control_graph_node() {
 }
 
 #[test]
+fn ui_gallery_button_unknown_control_kind_fails_closed() {
+    let mut node = load_node("assets/ui_gallery/button/basic.ron");
+
+    let UiNodeDefinition::Control { kind, .. } = &mut node else {
+        panic!("expected generic Control node");
+    };
+
+    *kind = AuthoredControlKindId::new("fixture.ui.controls.unknown");
+
+    let report = form_report(
+        "ui_gallery.button.basic.unknown_kind",
+        "assets.ui_gallery.button.basic",
+        &node,
+    );
+
+    assert!(!report.passed());
+    assert!(report.catalog_report.passed());
+    assert!(report.has_diagnostic("ui.program.control.unknown_kind"));
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "ui.program.control.unknown_kind"
+            && diagnostic.message.contains("button_basic")
+            && diagnostic.message.contains("fixture.ui.controls.unknown")
+            && diagnostic.source_map.is_some()
+    }));
+    assert_eq!(report.diagnostics, report.program.diagnostics);
+
+    let program = &report.program;
+
+    assert_eq!(program.graphs.control.nodes.len(), 0);
+    assert_eq!(program.graphs.properties.rows.len(), 0);
+    assert_eq!(program.graphs.layout.constraints.len(), 0);
+    assert_eq!(program.graphs.style.rules.len(), 0);
+    assert_eq!(program.graphs.state.requirements.len(), 0);
+    assert_eq!(program.graphs.interaction.handlers.len(), 0);
+    assert_eq!(program.graphs.binding.bindings.len(), 0);
+    assert_eq!(program.graphs.visual.operators.len(), 0);
+    assert_eq!(program.graphs.accessibility.nodes.len(), 0);
+    assert_eq!(program.graphs.inspection.entries.len(), 0);
+}
+
+#[test]
+fn unknown_parent_control_kind_does_not_lower_children() {
+    let node = UiNodeDefinition::Control {
+        id: "unknown_parent".into(),
+        kind: AuthoredControlKindId::new("fixture.ui.controls.unknown"),
+        properties: BTreeMap::new(),
+        bindings: BTreeMap::new(),
+        route: None,
+        accessibility: Some(AuthoredControlAccessibilityDefinition {
+            role: "button".to_owned(),
+            label: Some("Unknown parent".to_owned()),
+        }),
+        children: vec![UiNodeDefinition::Control {
+            id: "button_child".into(),
+            kind: AuthoredControlKindId::new("runenwerk.ui.controls.button"),
+            properties: BTreeMap::new(),
+            bindings: BTreeMap::new(),
+            route: Some(AuthoredRouteId::new("ui_gallery.button.child.activate")),
+            accessibility: Some(AuthoredControlAccessibilityDefinition {
+                role: "button".to_owned(),
+                label: Some("Known child".to_owned()),
+            }),
+            children: Vec::new(),
+        }],
+    };
+
+    let report = form_report(
+        "ui_gallery.button.unknown_parent",
+        "assets.ui_gallery.button.unknown_parent",
+        &node,
+    );
+
+    assert!(!report.passed());
+    assert!(report.catalog_report.passed());
+    assert!(report.has_diagnostic("ui.program.control.unknown_kind"));
+
+    let program = &report.program;
+
+    assert_eq!(program.graphs.control.nodes.len(), 0);
+    assert_eq!(program.graphs.properties.rows.len(), 0);
+    assert_eq!(program.graphs.layout.constraints.len(), 0);
+    assert_eq!(program.graphs.style.rules.len(), 0);
+    assert_eq!(program.graphs.state.requirements.len(), 0);
+    assert_eq!(program.graphs.interaction.handlers.len(), 0);
+    assert_eq!(program.graphs.binding.bindings.len(), 0);
+    assert_eq!(program.graphs.visual.operators.len(), 0);
+    assert_eq!(program.graphs.accessibility.nodes.len(), 0);
+    assert_eq!(program.graphs.inspection.entries.len(), 0);
+}
+
+#[test]
 fn ui_gallery_button_basic_route_forms_press_interaction_handler() {
     let node = load_node("assets/ui_gallery/button/basic.ron");
 
@@ -62,6 +157,7 @@ fn ui_gallery_button_basic_route_forms_press_interaction_handler() {
     let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
+    assert_eq!(program.graphs.properties.rows.len(), 1);
     assert_eq!(program.graphs.interaction.handlers.len(), 1);
 
     let control = &program.graphs.control.nodes[0];
@@ -118,6 +214,7 @@ fn ui_gallery_button_selected_binding_forms_host_fed_state_and_binding_edge() {
     let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
+    assert_eq!(program.graphs.properties.rows.len(), 1);
     assert_eq!(program.graphs.interaction.handlers.len(), 1);
     assert_eq!(program.graphs.state.requirements.len(), 1);
     assert_eq!(program.graphs.binding.bindings.len(), 1);
@@ -187,6 +284,7 @@ fn ui_gallery_button_basic_forms_layout_style_and_visual_kernels() {
     let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
+    assert_eq!(program.graphs.properties.rows.len(), 1);
     assert_eq!(program.graphs.layout.constraints.len(), 1);
     assert_eq!(program.graphs.style.rules.len(), 1);
     assert_eq!(program.graphs.visual.operators.len(), 1);
@@ -244,6 +342,7 @@ fn ui_gallery_button_basic_forms_accessibility_node() {
     let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
+    assert_eq!(program.graphs.properties.rows.len(), 1);
     assert_eq!(program.graphs.layout.constraints.len(), 1);
     assert_eq!(program.graphs.style.rules.len(), 1);
     assert_eq!(program.graphs.visual.operators.len(), 1);

@@ -49,6 +49,7 @@ fn formation_report_from_registry_snapshot_includes_catalog_derivation_diagnosti
             role: "button".to_owned(),
             label: Some("No capability".to_owned()),
         }),
+        children: Vec::new(),
     };
 
     let report = form_ui_program_report_from_node_with_registry_snapshot(

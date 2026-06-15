@@ -30,6 +30,9 @@ pub(crate) fn sorted_schema_ids(program: &UiProgram) -> Vec<RuntimeSchemaRef> {
     for requirement in &program.graphs.state.requirements {
         schemas.insert(RuntimeSchemaRef::from_schema_ref(&requirement.schema));
     }
+    for snapshot in &program.graphs.properties.rows {
+        schemas.insert(RuntimeSchemaRef::from_schema_ref(&snapshot.schema));
+    }
     for rule in &program.graphs.style.rules {
         schemas.insert(RuntimeSchemaRef::from_schema_ref(&rule.property_schema));
     }

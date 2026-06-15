@@ -38,6 +38,7 @@ fn set_ui_node_id(node: &mut UiNodeDefinition, replacement: AuthoredId) {
         | UiNodeDefinition::Spacer { id }
         | UiNodeDefinition::Separator { id, .. }
         | UiNodeDefinition::Label { id, .. }
+        | UiNodeDefinition::Control { id, .. }
         | UiNodeDefinition::Button { id, .. }
         | UiNodeDefinition::Toggle { id, .. }
         | UiNodeDefinition::TextInput { id, .. }

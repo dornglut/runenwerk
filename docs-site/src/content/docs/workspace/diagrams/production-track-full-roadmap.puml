@@ -444,6 +444,11 @@ package "PT-UI-PROGRAM-ARCHITECTURE UI Program Architecture Implementation" {
 
 }
 
+package "PT-UI-RUNTIME-RENDERING UI Runtime Rendering Pipeline" {
+  component "PM-UI-RUNTIME-RENDERING-001 Artifact-Backed Static Button Gallery\nkind=implementation\nstate=active\nWR=WR-173" as PM_UI_RUNTIME_RENDERING_001 <<active>>
+
+}
+
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
   component "PM-GAME-RUNTIME-UI-001 Governance Owner Boundary And Code Truth Matrix\nkind=design\nstate=designing\nWR=WR-104" as PM_GAME_RUNTIME_UI_001 <<designing>>
 
@@ -691,6 +696,7 @@ PM_UI_PROGRAM_ARCH_010 -down-> PM_UI_PROGRAM_ARCH_011 : production prerequisite
 PM_UI_PROGRAM_ARCH_011 -down-> PM_UI_PROGRAM_ARCH_012 : production prerequisite
 PM_UI_PROGRAM_ARCH_012 -down-> PM_UI_PROGRAM_ARCH_013 : production prerequisite
 PM_UI_PROGRAM_ARCH_013 -down-> PM_UI_PROGRAM_ARCH_014 : production prerequisite
+PM_UI_PROGRAM_ARCH_014 -down-> PM_UI_RUNTIME_RENDERING_001 : production prerequisite
 PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

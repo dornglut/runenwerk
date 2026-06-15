@@ -64,12 +64,18 @@ The pushed UI changes have moved the architecture in the right direction:
 - `UiRuntimeArtifactTables` already split controls, layout, style, state, interaction, binding snapshots, collection diffs, visual, text layout requests, accessibility, and inspection.
 - `ui_controls` already models multiple control kinds through package modules, including button, label, inspector field, color picker, action prompt, list view, tree view, and table view.
 
-Critical remaining code truth:
+Current runtime-rendering code truth:
 
-- `ui_program_lowering::lower_control_nodes` still falls back to deriving a package id from an unknown authored control-kind string. That is not fail-closed enough for a renderer-facing pipeline.
-- Catalog derivation currently checks missing activation capability, but it does not yet verify every referenced schema and kernel exists in the owning package.
-- Authored property values are schema-described, but the full authored-property validation and value carry-through path to runtime views/render primitives is not yet complete.
-- Runtime artifact rows exist, but there is not yet a complete artifact-backed `ButtonRuntimeView` and render primitive pipeline.
+- `ui_program_lowering::lower_control_nodes` now fails closed for unknown authored control kinds and emits no contract-derived graph rows.
+- Catalog derivation checks schema/kernel package completeness and propagates diagnostics into `UiProgramFormationReport`.
+- Authored button property validation and value carry-through are covered by checked-in `assets/ui_gallery/button/*.ron` fixtures.
+- `ui_runtime_view::ButtonRuntimeViewReport` derives label, route, capability, selected/disabled state, accessibility label, style axes, source-map indexes, and diagnostics from runtime artifacts plus supplied host data.
+- `ui_render_primitives` owns backend-neutral primitive generation, resolves `ThemeTokens`, shapes label text through `AtlasTextLayouter`, and emits `GlyphRunPrimitive` instead of placeholder text diagnostics.
+- `runenwerk_editor --bin runenwerk_ui_gallery` hosts the first static gallery path through the existing renderer UI composite pass.
+
+Remaining code truth:
+
+- Interactivity, hover/pressed/focus loops, gallery inspection, additional control pipelines, and production-readiness evidence are still separate roadmap work.
 
 ## Governing Invariants
 
@@ -100,6 +106,8 @@ Acceptance criteria:
 - The roadmap links to the UI domain roadmap and architecture docs.
 
 ### M1 — Unknown Control Kind Fail-Closed
+
+State: implemented.
 
 Goal: prevent unregistered authored controls from becoming plausible semantic program nodes.
 
@@ -250,6 +258,8 @@ Acceptance criteria:
 
 ### M11 — Backend-Neutral Render Primitives
 
+State: implemented for the static button gallery slice.
+
 Goal: produce render primitives without a backend dependency.
 
 Target owner:
@@ -258,7 +268,7 @@ Target owner:
 domain/ui/ui_render_primitives/
 ```
 
-Crate creation requires separate WR/production authority.
+Crate creation is authorized for the static button gallery slice by WR-173 / PM-UI-RUNTIME-RENDERING-001. Additional runtime/rendering crates or backend adapters still require separate WR/production authority.
 
 Acceptance criteria:
 
@@ -276,6 +286,8 @@ Acceptance criteria:
 - Snapshot output records primitive ordering, bounds, token ids, text runs, and accessibility correlation.
 
 ### M13 — First Visible Gallery Button
+
+State: implemented for checked-in basic and selected button fixtures.
 
 Goal: render a visible button only after artifact-backed primitive proof.
 

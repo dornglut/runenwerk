@@ -178,6 +178,8 @@ pub enum UiNodeDefinition {
         route: Option<AuthoredRouteId>,
         #[serde(default)]
         accessibility: Option<AuthoredControlAccessibilityDefinition>,
+        #[serde(default)]
+        children: Vec<UiNodeDefinition>,
     },
     Button {
         id: UiNodeId,
@@ -287,7 +289,8 @@ impl UiNodeDefinition {
             | Self::Column { children, .. }
             | Self::Stack { children, .. }
             | Self::Scroll { children, .. }
-            | Self::Split { children, .. } => children,
+            | Self::Split { children, .. }
+            | Self::Control { children, .. } => children,
             _ => &[],
         }
     }
@@ -299,7 +302,8 @@ impl UiNodeDefinition {
             | Self::Column { children, .. }
             | Self::Stack { children, .. }
             | Self::Scroll { children, .. }
-            | Self::Split { children, .. } => Some(children),
+            | Self::Split { children, .. }
+            | Self::Control { children, .. } => Some(children),
             _ => None,
         }
     }

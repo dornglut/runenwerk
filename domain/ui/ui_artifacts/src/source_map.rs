@@ -26,6 +26,14 @@ impl CompiledSourceMap {
                 node.source_map.as_ref(),
             );
         }
+        for (row, snapshot) in program.graphs.properties.rows.iter().enumerate() {
+            push_attachment_entry(
+                &mut entries,
+                RuntimeTableKind::ControlProperties,
+                row,
+                snapshot.source_map.as_ref(),
+            );
+        }
         for (row, node) in program.graphs.layout.constraints.iter().enumerate() {
             push_attachment_entry(
                 &mut entries,
@@ -147,6 +155,7 @@ impl CompiledSourceMapEntry {
 pub enum RuntimeTableKind {
     Program,
     Control,
+    ControlProperties,
     Layout,
     Style,
     State,

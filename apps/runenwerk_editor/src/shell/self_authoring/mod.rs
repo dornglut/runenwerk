@@ -2647,6 +2647,7 @@ fn ui_node_kind(node: &UiNodeDefinition) -> &'static str {
         UiNodeDefinition::Spacer { .. } => "spacer",
         UiNodeDefinition::Separator { .. } => "separator",
         UiNodeDefinition::Label { .. } => "label",
+        UiNodeDefinition::Control { .. } => "control",
         UiNodeDefinition::Button { .. } => "button",
         UiNodeDefinition::Toggle { .. } => "toggle",
         UiNodeDefinition::TextInput { .. } => "text_input",
@@ -3079,7 +3080,8 @@ fn set_ui_node_text(
         | ui_definition::UiNodeDefinition::Column { children, .. }
         | ui_definition::UiNodeDefinition::Stack { children, .. }
         | ui_definition::UiNodeDefinition::Scroll { children, .. }
-        | ui_definition::UiNodeDefinition::Split { children, .. } => {
+        | ui_definition::UiNodeDefinition::Split { children, .. }
+        | ui_definition::UiNodeDefinition::Control { children, .. } => {
             for child in children {
                 if set_ui_node_text(child, node_id, text.clone()).is_some() {
                     return Some(());

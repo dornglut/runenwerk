@@ -2,13 +2,14 @@
 
 use ui_artifacts::{ArtifactCacheKey, CompiledSourceMap, UiRuntimeArtifact};
 
-use crate::{CapabilityCheck, PackageResolution};
+use crate::{CapabilityCheck, PackageResolution, UiGraphIntegrityReport};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UiCompilerReport {
     pub artifact: UiRuntimeArtifact,
     pub package_resolution: PackageResolution,
     pub capability_checks: Vec<CapabilityCheck>,
+    pub graph_integrity: UiGraphIntegrityReport,
 }
 
 impl UiCompilerReport {
@@ -26,5 +27,6 @@ impl UiCompilerReport {
                 .capability_checks
                 .iter()
                 .all(CapabilityCheck::is_satisfied)
+            && self.graph_integrity.passed()
     }
 }

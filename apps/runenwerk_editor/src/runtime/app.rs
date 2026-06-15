@@ -8,6 +8,7 @@ use winit::keyboard::KeyCode;
 
 use crate::runtime::plugin::EditorAppPlugin;
 use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
+use crate::runtime::ui_gallery::UiGalleryPlugin;
 use crate::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
     VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, VIEWPORT_TARGET_ALIAS_OVERLAY,
@@ -26,6 +27,7 @@ pub const ACTION_EDITOR_VIEWPORT_TOOL_RADIAL: &str = "editor.viewport.tool_radia
 const EDITOR_WINDOW_TITLE: &str = "Runenwerk Editor";
 const MATERIAL_LAB_WINDOW_TITLE: &str = "Runenwerk Material Lab";
 const UI_DESIGNER_WINDOW_TITLE: &str = "Runenwerk UI Designer";
+const UI_GALLERY_WINDOW_TITLE: &str = "Runenwerk UI Gallery";
 const EDITOR_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.editor.surface.clear";
 const EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
@@ -45,6 +47,7 @@ pub enum RunenwerkRuntimeWorkbench {
     FullEditor,
     MaterialLab,
     UiDesigner,
+    UiGallery,
 }
 
 impl RunenwerkRuntimeWorkbench {
@@ -53,6 +56,7 @@ impl RunenwerkRuntimeWorkbench {
             Self::FullEditor => EDITOR_WINDOW_TITLE,
             Self::MaterialLab => MATERIAL_LAB_WINDOW_TITLE,
             Self::UiDesigner => UI_DESIGNER_WINDOW_TITLE,
+            Self::UiGallery => UI_GALLERY_WINDOW_TITLE,
         }
     }
 
@@ -61,6 +65,7 @@ impl RunenwerkRuntimeWorkbench {
             Self::FullEditor => EditorHostResource::new(),
             Self::MaterialLab => EditorHostResource::material_lab_workbench(),
             Self::UiDesigner => EditorHostResource::ui_designer_workbench(),
+            Self::UiGallery => EditorHostResource::ui_designer_workbench(),
         }
     }
 }
@@ -76,8 +81,13 @@ fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkben
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
     register_editor_render_flow(app);
-    app.insert_resource(workbench.editor_host_resource());
-    app.add_plugin(EditorAppPlugin);
+    if workbench == RunenwerkRuntimeWorkbench::UiGallery {
+        app.init_resource::<EditorViewportRenderState>();
+        app.add_plugin(UiGalleryPlugin);
+    } else {
+        app.insert_resource(workbench.editor_host_resource());
+        app.add_plugin(EditorAppPlugin);
+    }
     configure_editor_diagnostics(app);
 
     app.add_input_bindings([
@@ -199,6 +209,10 @@ pub fn build_ui_designer_workbench_headless_app() -> App {
     build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::UiDesigner)
 }
 
+pub fn build_ui_gallery_workbench_headless_app() -> App {
+    build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::UiGallery)
+}
+
 pub fn run() -> Result<()> {
     let mut app = App::new();
     configure_app(&mut app);
@@ -217,11 +231,20 @@ pub fn run_ui_designer_workbench() -> Result<()> {
     app.run()
 }
 
+pub fn run_ui_gallery_workbench() -> Result<()> {
+    let mut app = App::new();
+    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiGallery);
+    app.run()
+}
+
 #[cfg(test)]
 mod tests {
     use editor_shell::{EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID};
+    use engine::plugins::render::UiFrameSubmissionRegistryResource;
+    use ui_render_data::UiPrimitive;
 
     use crate::runtime::resources::EditorHostResource;
+    use crate::runtime::ui_gallery::UI_GALLERY_UI_PRODUCER_ID;
     use crate::shell::RunenwerkWorkbenchComposition;
 
     use super::*;
@@ -267,6 +290,54 @@ mod tests {
         assert_eq!(
             host.shell_state.open_workspace_profile_ids(),
             &[EDITOR_DESIGN_WORKSPACE_PROFILE_ID]
+        );
+    }
+
+    #[test]
+    fn ui_gallery_headless_app_installs_gallery_resource_without_editor_host() {
+        let app = build_ui_gallery_workbench_headless_app();
+
+        assert!(
+            app.world()
+                .resource::<crate::runtime::ui_gallery::UiGalleryResource>()
+                .is_ok(),
+            "UI gallery workbench should install the gallery resource"
+        );
+        assert!(
+            app.world().resource::<EditorHostResource>().is_err(),
+            "UI gallery should not submit through the editor shell host"
+        );
+    }
+
+    #[test]
+    fn ui_gallery_headless_app_submits_artifact_backed_frame() {
+        let app = build_ui_gallery_workbench_headless_app()
+            .run_for_frames(1)
+            .expect("UI gallery headless app should run");
+        let gallery = app
+            .world()
+            .resource::<crate::runtime::ui_gallery::UiGalleryResource>()
+            .expect("UI gallery resource should exist");
+        let submissions = app
+            .world()
+            .resource::<UiFrameSubmissionRegistryResource>()
+            .expect("UI frame submission registry should exist");
+        let submission = submissions
+            .get(&UI_GALLERY_UI_PRODUCER_ID)
+            .expect("UI gallery should submit a frame");
+
+        assert!(gallery.passed(), "{:?}", gallery.diagnostics());
+        assert_eq!(gallery.button_count(), 2);
+        assert!(!submission.frame.is_empty());
+        assert!(
+            submission
+                .frame
+                .surfaces
+                .iter()
+                .flat_map(|surface| surface.layers.iter())
+                .flat_map(|layer| layer.primitives.iter())
+                .any(|primitive| matches!(primitive, UiPrimitive::GlyphRun(_))),
+            "gallery frame should contain shaped label text"
         );
     }
 }

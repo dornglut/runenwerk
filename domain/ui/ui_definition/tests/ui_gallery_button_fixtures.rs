@@ -1,8 +1,9 @@
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs};
 
 use ui_controls::button::control_module;
 use ui_definition::authored_control_schema::authored_control_properties_to_schema_value;
-use ui_definition::{AuthoredControlValue, UiNodeDefinition};
+use ui_definition::{AuthoredControlKindId, AuthoredControlValue, UiNodeDefinition};
+use ui_schema::UiSchemaValue;
 
 #[test]
 fn ui_gallery_button_basic_fixture_parses_as_generic_control() {
@@ -15,6 +16,7 @@ fn ui_gallery_button_basic_fixture_parses_as_generic_control() {
         bindings,
         route,
         accessibility,
+        children,
     } = node
     else {
         panic!("expected generic Control node");
@@ -45,6 +47,7 @@ fn ui_gallery_button_basic_fixture_parses_as_generic_control() {
     );
 
     assert!(bindings.is_empty());
+    assert!(children.is_empty());
     assert_eq!(
         route.as_ref().map(|route| route.as_str()),
         Some("ui_gallery.button.basic.activate")
@@ -66,6 +69,7 @@ fn ui_gallery_button_selected_fixture_parses_selected_binding() {
         bindings,
         route,
         accessibility,
+        children,
     } = node
     else {
         panic!("expected generic Control node");
@@ -87,6 +91,7 @@ fn ui_gallery_button_selected_fixture_parses_selected_binding() {
         bindings.get("selected").map(|binding| binding.as_str()),
         Some("ui_gallery.button.selected.active")
     );
+    assert!(children.is_empty());
 
     assert_eq!(
         route.as_ref().map(|route| route.as_str()),
@@ -96,6 +101,34 @@ fn ui_gallery_button_selected_fixture_parses_selected_binding() {
     let accessibility = accessibility.expect("selected button must define accessibility intent");
     assert_eq!(accessibility.role, "button");
     assert_eq!(accessibility.label.as_deref(), Some("Selected demo button"));
+}
+
+#[test]
+fn generic_control_children_are_readable_and_mutable() {
+    let mut node = UiNodeDefinition::Control {
+        id: "control_parent".into(),
+        kind: AuthoredControlKindId::new("runenwerk.ui.controls.button"),
+        properties: BTreeMap::new(),
+        bindings: BTreeMap::new(),
+        route: None,
+        accessibility: None,
+        children: vec![UiNodeDefinition::Spacer {
+            id: "control_child_one".into(),
+        }],
+    };
+
+    assert_eq!(node.children().len(), 1);
+
+    let children = node
+        .children_mut()
+        .expect("generic Control nodes should expose mutable children");
+
+    children.push(UiNodeDefinition::Spacer {
+        id: "control_child_two".into(),
+    });
+
+    assert_eq!(node.children().len(), 2);
+    assert_eq!(node.children()[1].id().as_str(), "control_child_two");
 }
 
 #[test]
@@ -112,6 +145,11 @@ fn ui_gallery_button_basic_fixture_validates_against_button_package_schema() {
     assert_eq!(kind.as_str(), "runenwerk.ui.controls.button");
 
     let value = authored_control_properties_to_schema_value(&properties);
+    assert!(matches!(value, UiSchemaValue::Object(_)));
+    assert_eq!(
+        value.get("label").and_then(UiSchemaValue::as_str),
+        Some("Press me")
+    );
     let report = button_property_schema().validate(&value);
 
     assert!(report.is_valid(), "{:?}", report.diagnostics);
@@ -131,6 +169,11 @@ fn ui_gallery_button_selected_fixture_validates_against_button_package_schema() 
     assert_eq!(kind.as_str(), "runenwerk.ui.controls.button");
 
     let value = authored_control_properties_to_schema_value(&properties);
+    assert!(matches!(value, UiSchemaValue::Object(_)));
+    assert_eq!(
+        value.get("variant").and_then(UiSchemaValue::as_str),
+        Some("secondary")
+    );
     let report = button_property_schema().validate(&value);
 
     assert!(report.is_valid(), "{:?}", report.diagnostics);
@@ -157,6 +200,10 @@ fn ui_gallery_button_invalid_density_reports_schema_diagnostic() {
     );
 
     let value = authored_control_properties_to_schema_value(&properties);
+    assert_eq!(
+        value.get("density").and_then(UiSchemaValue::as_str),
+        Some("tiny")
+    );
     let report = button_property_schema().validate(&value);
 
     assert!(!report.is_valid());
@@ -164,6 +211,42 @@ fn ui_gallery_button_invalid_density_reports_schema_diagnostic() {
         diagnostic.field_path == ["density"]
             && diagnostic.diagnostic_id.as_str() == "ui.schema.string_value_not_allowed"
     }));
+}
+
+#[test]
+fn authored_control_property_conversion_preserves_unknown_and_nested_fields() {
+    let mut nested = BTreeMap::new();
+    nested.insert(
+        "levels".to_owned(),
+        AuthoredControlValue::List(vec![
+            AuthoredControlValue::Integer(1),
+            AuthoredControlValue::String("two".to_owned()),
+        ]),
+    );
+
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "background_color".to_owned(),
+        AuthoredControlValue::String("#ff00ff".to_owned()),
+    );
+    properties.insert("nested".to_owned(), AuthoredControlValue::Object(nested));
+
+    let value = authored_control_properties_to_schema_value(&properties);
+
+    assert_eq!(
+        value
+            .get("background_color")
+            .and_then(UiSchemaValue::as_str),
+        Some("#ff00ff")
+    );
+    assert_eq!(
+        value
+            .get("nested")
+            .and_then(|nested| nested.get("levels"))
+            .and_then(|levels| levels.get_index(1))
+            .and_then(UiSchemaValue::as_str),
+        Some("two")
+    );
 }
 
 fn load_node(relative_repo_path: &str) -> UiNodeDefinition {

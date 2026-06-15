@@ -153,6 +153,16 @@ package "PT-UI-DESIGN UI Designer And Interface Lab Platform" {
 
 }
 
+package "PT-UI-PROGRAM-ARCHITECTURE UI Program Architecture Implementation" {
+  component "PT-UI-PROGRAM-ARCHITECTURE completed prerequisites\nmilestones=1\nquality=perfectionist_verified=1" as PT_UI_PROGRAM_ARCHITECTURE_COMPLETED <<completed>>
+
+}
+
+package "PT-UI-RUNTIME-RENDERING UI Runtime Rendering Pipeline" {
+  component "PM-UI-RUNTIME-RENDERING-001 Artifact-Backed Static Button Gallery\nkind=implementation\nstate=active\nWR=WR-173" as PM_UI_RUNTIME_RENDERING_001 <<active>>
+
+}
+
 package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
   component "PM-GAME-RUNTIME-UI-001 Governance Owner Boundary And Code Truth Matrix\nkind=design\nstate=designing\nWR=WR-104" as PM_GAME_RUNTIME_UI_001 <<designing>>
 
@@ -213,6 +223,7 @@ PM_VIEWPORT_PROJECTION_001 -down-> PM_VIEWPORT_PROJECTION_003 : production prere
 PM_VIEWPORT_PROJECTION_002 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
 PM_VIEWPORT_PROJECTION_003 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
 PM_VIEWPORT_PROJECTION_004 -down-> PM_VIEWPORT_PROJECTION_005 : production prerequisite
+PT_UI_PROGRAM_ARCHITECTURE_COMPLETED -down-> PM_UI_RUNTIME_RENDERING_001 : PT-UI-PROGRAM-ARCHITECTURE completed prerequisite
 PT_UI_DESIGN_COMPLETED -down-> PM_GAME_RUNTIME_UI_001 : PT-UI-DESIGN completed prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite

@@ -6,6 +6,7 @@ mod control;
 mod inspection;
 mod interaction;
 mod layout;
+mod properties;
 mod state;
 mod style;
 mod text_layout;
@@ -17,6 +18,7 @@ pub use control::*;
 pub use inspection::*;
 pub use interaction::*;
 pub use layout::*;
+pub use properties::*;
 pub use state::*;
 pub use style::*;
 pub use text_layout::*;
@@ -25,6 +27,7 @@ pub use visual::*;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UiRuntimeArtifactTables {
     pub controls: ControlTable,
+    pub properties: ControlPropertyTable,
     pub layout: LayoutPlanTable,
     pub style: StyleResolutionTable,
     pub state: StateTable,
@@ -41,6 +44,7 @@ impl UiRuntimeArtifactTables {
     pub fn from_program(program: &UiProgram, source_map: &CompiledSourceMap) -> Self {
         Self {
             controls: ControlTable::from_program(program, source_map),
+            properties: ControlPropertyTable::from_program(program, source_map),
             layout: LayoutPlanTable::from_program(program, source_map),
             style: StyleResolutionTable::from_program(program, source_map),
             state: StateTable::from_program(program, source_map),

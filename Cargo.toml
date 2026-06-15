@@ -34,6 +34,11 @@ members = [
     "domain/ui/ui_program",
     "domain/ui/ui_controls",
     "domain/ui/ui_artifacts",
+    "domain/ui/ui_runtime_view",
+    "domain/ui/ui_render_primitives",
+    "domain/ui/ui_headless_render",
+    "domain/ui/ui_headless_render_data",
+    "domain/ui/ui_static_mount",
     "domain/ui/ui_compiler",
     "domain/ui/ui_evaluator",
     "domain/ui/ui_state",
@@ -106,6 +111,11 @@ ui_schema = { path = "domain/ui/ui_schema" }
 ui_program = { path = "domain/ui/ui_program" }
 ui_controls = { path = "domain/ui/ui_controls" }
 ui_artifacts = { path = "domain/ui/ui_artifacts" }
+ui_runtime_view = { path = "domain/ui/ui_runtime_view" }
+ui_render_primitives = { path = "domain/ui/ui_render_primitives" }
+ui_headless_render = { path = "domain/ui/ui_headless_render" }
+ui_headless_render_data = { path = "domain/ui/ui_headless_render_data" }
+ui_static_mount = { path = "domain/ui/ui_static_mount" }
 ui_compiler = { path = "domain/ui/ui_compiler" }
 ui_evaluator = { path = "domain/ui/ui_evaluator" }
 ui_state = { path = "domain/ui/ui_state" }

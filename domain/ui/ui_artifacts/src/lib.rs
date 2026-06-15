@@ -7,10 +7,12 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use ui_program::{
     AccessibilityNode, BindingEdge, BindingEndpoint, BindingEndpointId, ControlGraphNode,
-    ControlNodeId, InspectionEntry, InteractionHandler, LayoutGraphNode, StateRequirement,
-    StyleRule, UiProgram, UiProgramDiagnosticSeverity, UiProgramSourceMapAttachment,
-    UiProgramSourceMapEntry, UiProgramSourceSpan, UiSchemaRef, VisualOperator,
+    ControlNodeId, ControlPropertySnapshot, InspectionEntry, InteractionHandler, LayoutGraphNode,
+    StateRequirement, StyleRule, UiProgram, UiProgramDiagnosticSeverity,
+    UiProgramSourceMapAttachment, UiProgramSourceMapEntry, UiProgramSourceSpan, UiSchemaRef,
+    VisualOperator,
 };
+use ui_schema::UiSchemaValue;
 
 pub mod artifact;
 pub mod cache;

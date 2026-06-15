@@ -46,7 +46,10 @@ Implemented and in use:
 - UiProgram architecture crates now exist for semantic program proof slices: `ui_schema`, `ui_program`, `ui_controls`, `ui_program_lowering`, `ui_compiler`, `ui_artifacts`, `ui_accessibility`, and `ui_binding`;
 - `ui_program_lowering` exposes the registry-snapshot formation path `form_ui_program_report_from_node_with_registry_snapshot(...)`, and `UiProgramFormationReport` now carries combined diagnostics plus a mandatory catalog report;
 - runtime artifacts already split controls, layout, style, state, interaction, binding snapshots, collection diffs, visual, text layout requests, accessibility, and inspection tables;
-- current critical gap: `ui_program_lowering/src/lower.rs::lower_control_nodes` still falls back to deriving a package id from an unknown authored control-kind string. That must fail closed before render-facing claims are allowed.
+- `ui_program_lowering/src/lower.rs::lower_control_nodes` now fails closed for unknown authored control kinds and emits no package-contract-derived graph rows;
+- `ui_runtime_view` exposes artifact-backed runtime views, including a button-specific report carrying label, route, capability, selected/disabled state, accessibility label, style axes, source-map indexes, and diagnostics;
+- `ui_render_primitives` owns backend-neutral button primitive generation from runtime views, resolves theme tokens and text layout through `ThemeTokens` and `AtlasTextLayouter`, and emits `GlyphRunPrimitive` label text before a `UiFrame` reaches renderer-facing code;
+- `runenwerk_editor` now has a standalone `runenwerk_ui_gallery` host that loads checked-in button fixtures outside renderer code, submits a prepared `UiFrame` through the existing editor UI composite pass, and fails closed if formation, compiler, runtime-view, primitive generation, render-data adaptation, or static mount reports errors.
 
 Evidence in code:
 
@@ -239,7 +242,7 @@ Phase 8 leads WR-024. Shell polish may proceed only as retained UI implementatio
 
 ### Phase 9 - Artifact-Backed Runtime Rendering Pipeline
 
-Status: active design roadmap; implementation not authorized by this page alone.
+Status: active implementation slice under WR-173 / PM-UI-RUNTIME-RENDERING-001.
 
 Owning design:
 
@@ -310,7 +313,7 @@ Stop conditions:
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 - [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
-- [ ] Execute the artifact-backed runtime rendering roadmap in order. Status: active design roadmap; first legal implementation slice is unknown-control-kind fail-closed in `domain/ui/ui_program_lowering/src/lower.rs::lower_control_nodes`. A visible button is not a valid next milestone until headless render-frame snapshots pass.
+- [ ] Continue the artifact-backed runtime rendering roadmap in order. Status: WR-173 implements the first static visible gallery path for checked-in basic/selected button fixtures through `UiNodeDefinition -> UiProgramFormationReport -> UiCompilerReport -> UiRuntimeArtifact -> UiRuntimeView -> UiRenderPrimitiveReport -> UiFrame -> existing renderer UI composite`. Remaining roadmap work includes interaction hit testing, full state loop, accessibility runtime proof, broader control coverage, and production-readiness evidence.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; generated production docs must remain outputs of their source files and must not be hand-edited.
 
 ## Non-Goals for This Track
@@ -321,4 +324,4 @@ Stop conditions:
 - moving privileged ratification ownership into generic UI substrate code;
 - using ECS entities, runtime widget ids, or shell session ids as durable authored UI/editor identity;
 - rendering from authored `.ron` files or package descriptors directly;
-- creating `ui_runtime_view`, `ui_render_primitives`, or backend adapter crates without explicit WR/production authority.
+- creating additional runtime/rendering crates or backend adapters without explicit WR/production authority.

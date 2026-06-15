@@ -7,7 +7,7 @@ use ui_program::{UiProgram, UiProgramDiagnostic};
 
 use crate::catalog::UiProgramFormationCatalogReport;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UiProgramFormationReport {
     pub program: UiProgram,
     pub diagnostics: Vec<UiProgramDiagnostic>,

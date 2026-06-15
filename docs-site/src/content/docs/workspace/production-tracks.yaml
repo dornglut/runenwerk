@@ -5844,6 +5844,46 @@ tracks:
     completion_quality: perfectionist_verified
     known_quality_gaps: []
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+- id: PT-UI-RUNTIME-RENDERING
+  title: UI Runtime Rendering Pipeline
+  state: active
+  owner: ui
+  target_completion_quality: runtime_proven
+  strategic_goal: Prove artifact-backed UI runtime rendering through explicit formation, compiler, artifact, runtime-view, token/text-resolved primitive, static mount, and visible composite evidence without moving UI semantics into renderer, ECS, editor, or game code.
+  success_criteria:
+  - Checked-in gallery fixtures render only after formation, compiler, runtime-view, primitive generation, render-data adaptation, and static mount reports pass.
+  - Renderer-facing code consumes `UiFrame`/backend-neutral primitives only and does not read authored `.ron` or control-package descriptors.
+  - Text reaches the renderer as `GlyphRunPrimitive`, not placeholder diagnostics.
+  - Host integration remains in app/editor code; domain UI crates own derived runtime and primitive contracts only.
+  - Interactivity and production-readiness claims remain separate milestones after the static gallery proof.
+  milestones:
+  - id: PM-UI-RUNTIME-RENDERING-001
+    title: Artifact-Backed Static Button Gallery
+    kind: implementation
+    state: active
+    goal: Render the checked-in basic and selected button gallery fixtures through artifacts, runtime views, backend-neutral primitives, `GlyphRunPrimitive` text, static mount, and the existing editor UI composite pass.
+    outcome: A standalone `runenwerk_ui_gallery` binary opens a visible static gallery while headless tests prove the submitted frame contains shaped label text and fails closed on upstream report errors.
+    dependencies:
+    - PM-UI-PROGRAM-ARCH-014
+    roadmap_links:
+    - WR-173
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+      required_status: active
+      reason: Static button gallery rendering must follow the active artifact-backed runtime rendering roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - '`assets/ui_gallery/button/basic.ron` and `assets/ui_gallery/button/selected.ron` pass through `UiNodeDefinition -> UiProgramFormationReport -> UiCompilerReport -> UiRuntimeArtifact -> UiRuntimeView`.'
+    - '`ButtonRuntimeViewReport` carries label, route, capability, selected/disabled state, accessibility label, style axes, source-map indexes, and diagnostics.'
+    - '`ui_render_primitives` resolves button token/style/text data and emits rectangle, border, and `GlyphRunPrimitive` label primitives.'
+    - '`ui_headless_render_data` and `ui_static_mount` accept the primitive-backed `UiFrame` without placeholder text shaping diagnostics.'
+    - '`runenwerk_editor --bin runenwerk_ui_gallery` submits a prepared `UiFrame` through the existing renderer UI composite pass and does not add a new app crate.'
+    - The path fails closed if formation, compiler, runtime view, primitive generation, render-data adaptation, or static mount reports errors.
+    completion_quality: runtime_proven
+    known_quality_gaps:
+    - Interactivity, hover, pressed, focus, disabled state loops, gallery inspector, additional controls, and production-readiness hardening remain follow-on work.
+    completion_audit: ''
 - id: PT-GAME-RUNTIME-UI
   title: Game Runtime UI Projection And HUD Platform
   state: active

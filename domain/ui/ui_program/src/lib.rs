@@ -17,7 +17,7 @@ pub use graphs::*;
 pub use ids::*;
 pub use program::*;
 pub use source_map::*;
-pub use ui_schema::UiSchemaRef;
+pub use ui_schema::{UiSchemaRef, UiSchemaValue};
 pub use version::*;
 
 #[cfg(test)]
@@ -151,6 +151,15 @@ mod tests {
             .with_capability(RouteCapability::new("editor.inspector.write"))
             .with_source_map(source_map.clone()),
         );
+        program.graphs.properties.add_snapshot(
+            ControlPropertySnapshot::new(
+                ControlPropertySnapshotId::new("properties.apply_button"),
+                control_id.clone(),
+                property_schema.clone(),
+                UiSchemaValue::object([("label", UiSchemaValue::string("Apply"))]),
+            )
+            .with_source_map(source_map.clone()),
+        );
         program.graphs.layout.constraints.push(
             LayoutGraphNode::new(
                 LayoutConstraintId::new("layout.apply_button.fill_width"),
@@ -232,6 +241,15 @@ mod tests {
             "runenwerk.ui.controls.button"
         );
         assert_eq!(
+            program
+                .graphs
+                .properties
+                .snapshot_for_control(&control_id)
+                .and_then(|snapshot| snapshot.get("label"))
+                .and_then(UiSchemaValue::as_str),
+            Some("Apply")
+        );
+        assert_eq!(
             program.graphs.state.requirements[0].lifecycle,
             StateRequirementLifecycle::Preview
         );
@@ -251,5 +269,38 @@ mod tests {
             program.graphs.inspection.entries[0].display_name,
             "Apply button label"
         );
+    }
+
+    #[test]
+    fn default_graphs_include_empty_property_graph() {
+        let graphs = UiProgramGraphs::default();
+
+        assert!(graphs.properties.rows.is_empty());
+    }
+
+    #[test]
+    fn control_property_snapshot_preserves_owner_schema_value_and_source_map() {
+        let control_id = ControlNodeId::new("control.apply_button");
+        let schema = UiSchemaRef::new("ui.button.properties", 1);
+        let source_map = UiProgramSourceMapAttachment::new(UiProgramSourceMapEntry::new(
+            UiProgramSourceId::new("definition.apply_button"),
+            UiProgramTargetId::new("program.properties.apply_button"),
+        ));
+
+        let snapshot = ControlPropertySnapshot::new(
+            ControlPropertySnapshotId::new("properties.apply_button"),
+            control_id.clone(),
+            schema.clone(),
+            UiSchemaValue::object([("label", UiSchemaValue::string("Apply"))]),
+        )
+        .with_source_map(source_map.clone());
+
+        assert_eq!(snapshot.owner_control, control_id);
+        assert_eq!(snapshot.schema, schema);
+        assert_eq!(
+            snapshot.get("label").and_then(UiSchemaValue::as_str),
+            Some("Apply")
+        );
+        assert_eq!(snapshot.source_map, Some(source_map));
     }
 }

@@ -2803,11 +2803,19 @@ dependencies = [
  "spatial 0.1.1",
  "texture",
  "tokio",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_controls",
  "ui_definition",
  "ui_graph_editor",
+ "ui_headless_render_data",
  "ui_input",
  "ui_math",
+ "ui_program_lowering",
  "ui_render_data",
+ "ui_render_primitives",
+ "ui_runtime_view",
+ "ui_static_mount",
  "ui_surface",
  "ui_text",
  "ui_theme",
@@ -3731,6 +3739,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "ui_program",
+ "ui_schema",
 ]
 
 [[package]]
@@ -3811,6 +3820,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_headless_render"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_controls",
+ "ui_definition",
+ "ui_program",
+ "ui_program_lowering",
+ "ui_runtime_view",
+ "ui_schema",
+]
+
+[[package]]
+name = "ui_headless_render_data"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_controls",
+ "ui_definition",
+ "ui_headless_render",
+ "ui_math",
+ "ui_program_lowering",
+ "ui_render_data",
+ "ui_render_primitives",
+ "ui_runtime_view",
+ "ui_text",
+ "ui_theme",
+]
+
+[[package]]
 name = "ui_hosts"
 version = "0.1.0"
 dependencies = [
@@ -3854,6 +3898,7 @@ dependencies = [
  "ui_controls",
  "ui_definition",
  "ui_program",
+ "ui_schema",
 ]
 
 [[package]]
@@ -3862,6 +3907,24 @@ version = "0.1.0"
 dependencies = [
  "ui_math",
  "ui_text",
+]
+
+[[package]]
+name = "ui_render_primitives"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_controls",
+ "ui_definition",
+ "ui_math",
+ "ui_program_lowering",
+ "ui_render_data",
+ "ui_runtime_view",
+ "ui_text",
+ "ui_theme",
 ]
 
 [[package]]
@@ -3879,6 +3942,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_runtime_view"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_controls",
+ "ui_definition",
+ "ui_program",
+ "ui_program_lowering",
+ "ui_schema",
+]
+
+[[package]]
 name = "ui_schema"
 version = "0.1.0"
 dependencies = [
@@ -3892,6 +3970,26 @@ dependencies = [
  "serde",
  "ui_program",
  "ui_schema",
+]
+
+[[package]]
+name = "ui_static_mount"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "ui_artifacts",
+ "ui_compiler",
+ "ui_controls",
+ "ui_definition",
+ "ui_headless_render",
+ "ui_headless_render_data",
+ "ui_math",
+ "ui_program_lowering",
+ "ui_render_data",
+ "ui_render_primitives",
+ "ui_runtime_view",
+ "ui_text",
+ "ui_theme",
 ]
 
 [[package]]

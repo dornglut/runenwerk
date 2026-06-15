@@ -3,13 +3,15 @@ use ui_program::UiSchemaRef;
 use ui_program::{
     AccessibilityNode, AccessibilityNodeId, AccessibilityRole, BindingEdge, BindingEdgeId,
     BindingEndpoint, BindingEndpointId, ControlGraphNode, ControlKernelRef, ControlKindRef,
-    ControlNodeId, ControlPackageRef, InspectionEntry, InspectionEntryId, InteractionHandler,
-    InteractionHandlerId, InteractionTrigger, LayoutConstraintId, LayoutGraphNode, RouteCapability,
-    RouteId, StateRequirement, StateRequirementId, StateRequirementLifecycle, StyleRule,
-    StyleRuleId, StyleSlotId, UiProgram, UiProgramDiagnostic, UiProgramId, UiProgramSourceId,
+    ControlNodeId, ControlPackageRef, ControlPropertySnapshot, ControlPropertySnapshotId,
+    InspectionEntry, InspectionEntryId, InteractionHandler, InteractionHandlerId,
+    InteractionTrigger, LayoutConstraintId, LayoutGraphNode, RouteCapability, RouteId,
+    StateRequirement, StateRequirementId, StateRequirementLifecycle, StyleRule, StyleRuleId,
+    StyleSlotId, UiProgram, UiProgramDiagnostic, UiProgramId, UiProgramSourceId,
     UiProgramSourceMapAttachment, UiProgramSourceMapEntry, UiProgramTargetId, UiProgramVersion,
     VisualOperator, VisualOperatorId,
 };
+use ui_schema::UiSchemaValue;
 
 #[test]
 fn artifact_contract_splits_manifest_from_typed_runtime_tables() {
@@ -22,6 +24,7 @@ fn artifact_contract_splits_manifest_from_typed_runtime_tables() {
         ["runenwerk.ui.controls.label"]
     );
     assert_eq!(artifact.tables.controls.rows.len(), 1);
+    assert_eq!(artifact.tables.properties.rows.len(), 1);
     assert_eq!(artifact.tables.layout.rows.len(), 1);
     assert_eq!(artifact.tables.style.rows.len(), 1);
     assert_eq!(artifact.tables.state.rows.len(), 1);
@@ -72,6 +75,66 @@ fn artifact_contract_preserves_source_maps_routes_and_collection_diffs() {
     ));
 }
 
+#[test]
+fn artifact_projects_property_snapshots() {
+    let artifact = UiRuntimeArtifact::from_program(&artifact_program());
+
+    assert_eq!(artifact.tables.properties.rows.len(), 1);
+
+    let row = &artifact.tables.properties.rows[0];
+    assert_eq!(row.snapshot.snapshot_id.as_str(), "properties.title");
+    assert_eq!(row.snapshot.owner_control.as_str(), "control.title");
+    assert_eq!(row.snapshot.schema.id.as_str(), "ui.label.properties");
+    assert_eq!(
+        row.snapshot
+            .value
+            .get("label")
+            .and_then(UiSchemaValue::as_str),
+        Some("Title")
+    );
+    assert!(row.source_map_index.is_some());
+}
+
+#[test]
+fn artifact_manifest_includes_property_schema() {
+    let artifact = UiRuntimeArtifact::from_program(&artifact_program());
+
+    assert!(artifact.manifest.schema_ids.contains(&RuntimeSchemaRef {
+        schema_id: "ui.label.properties".to_owned(),
+        schema_version: 1,
+    }));
+}
+
+#[test]
+fn artifact_cache_key_changes_when_property_value_changes() {
+    let mut first = artifact_program();
+    let mut second = artifact_program();
+
+    first.graphs.properties.rows[0].value =
+        UiSchemaValue::object([("label", UiSchemaValue::string("Title"))]);
+    second.graphs.properties.rows[0].value =
+        UiSchemaValue::object([("label", UiSchemaValue::string("Renamed"))]);
+
+    let first_artifact = UiRuntimeArtifact::from_program(&first);
+    let second_artifact = UiRuntimeArtifact::from_program(&second);
+
+    assert_ne!(
+        first_artifact.manifest.cache_key,
+        second_artifact.manifest.cache_key
+    );
+}
+
+#[test]
+fn source_map_includes_property_table_entry() {
+    let artifact = UiRuntimeArtifact::from_program(&artifact_program());
+
+    assert!(artifact.manifest.source_map.entries.iter().any(|entry| {
+        entry.table == RuntimeTableKind::ControlProperties
+            && entry.source_id == "definition.title"
+            && entry.target_id == "program.properties.title"
+    }));
+}
+
 fn artifact_program() -> UiProgram {
     let control_id = ControlNodeId::new("control.title");
     let state_id = StateRequirementId::new("state.title.text");
@@ -97,6 +160,20 @@ fn artifact_program() -> UiProgram {
         )
         .with_capability(RouteCapability::new("editor.title.write"))
         .with_source_map(source_map.clone()),
+    );
+    program.graphs.properties.add_snapshot(
+        ControlPropertySnapshot::new(
+            ControlPropertySnapshotId::new("properties.title"),
+            control_id.clone(),
+            property_schema.clone(),
+            UiSchemaValue::object([("label", UiSchemaValue::string("Title"))]),
+        )
+        .with_source_map(UiProgramSourceMapAttachment::new(
+            UiProgramSourceMapEntry::new(
+                UiProgramSourceId::new("definition.title"),
+                UiProgramTargetId::new("program.properties.title"),
+            ),
+        )),
     );
     program.graphs.layout.constraints.push(
         LayoutGraphNode::new(LayoutConstraintId::new("layout.title"), control_id.clone())
