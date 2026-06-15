@@ -1,7 +1,7 @@
 //! File: domain/ui/ui_schema/src/schema.rs
 //! Crate: ui_schema
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -185,16 +185,32 @@ impl UiSchema {
             for (name, field) in &self.fields {
                 match values.get(name) {
                     Some(field_value) if field.shape.matches_value(field_value) => {}
-                    Some(field_value) => diagnostics.push(UiSchemaValidationDiagnostic::for_field(
-                        self.schema_ref.clone(),
-                        UiSchemaDiagnosticId::new("ui.schema.field_kind_mismatch"),
-                        name,
-                        format!(
-                            "expected field {name} kind {:?}, got {:?}",
-                            field.shape.expected_kind(),
-                            field_value.kind()
-                        ),
-                    )),
+                    Some(field_value) => {
+                        if let (Some(allowed_values), UiSchemaValue::String(actual_value)) =
+                            (field.shape.allowed_string_values(), field_value)
+                        {
+                            diagnostics.push(UiSchemaValidationDiagnostic::for_field(
+                                self.schema_ref.clone(),
+                                UiSchemaDiagnosticId::new("ui.schema.string_value_not_allowed"),
+                                name,
+                                format!(
+                                    "field {name} value {actual_value:?} is not one of {:?}",
+                                    allowed_values
+                                ),
+                            ));
+                        } else {
+                            diagnostics.push(UiSchemaValidationDiagnostic::for_field(
+                                self.schema_ref.clone(),
+                                UiSchemaDiagnosticId::new("ui.schema.field_kind_mismatch"),
+                                name,
+                                format!(
+                                    "expected field {name} kind {:?}, got {:?}",
+                                    field.shape.expected_kind(),
+                                    field_value.kind()
+                                ),
+                            ));
+                        }
+                    }
                     None if field.required => {
                         diagnostics.push(UiSchemaValidationDiagnostic::for_field(
                             self.schema_ref.clone(),
@@ -266,6 +282,7 @@ pub enum UiSchemaShape {
     UnsignedInteger,
     Number,
     String,
+    StringEnum(BTreeSet<String>),
     StableIdRef,
     RouteRef,
     OpaqueHostRef,
@@ -283,6 +300,18 @@ impl UiSchemaShape {
         Self::Nullable(Box::new(shape))
     }
 
+    pub fn string_enum(values: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self::StringEnum(values.into_iter().map(Into::into).collect())
+    }
+
+    pub fn allowed_string_values(&self) -> Option<&BTreeSet<String>> {
+        match self {
+            Self::StringEnum(values) => Some(values),
+            Self::Nullable(inner) => inner.allowed_string_values(),
+            _ => None,
+        }
+    }
+
     pub fn matches_value(&self, value: &UiSchemaValue) -> bool {
         match self {
             Self::Null => matches!(value, UiSchemaValue::Null),
@@ -291,6 +320,9 @@ impl UiSchemaShape {
             Self::UnsignedInteger => matches!(value, UiSchemaValue::UnsignedInteger(_)),
             Self::Number => matches!(value, UiSchemaValue::Number(number) if number.is_finite()),
             Self::String => matches!(value, UiSchemaValue::String(_)),
+            Self::StringEnum(values) => {
+                matches!(value, UiSchemaValue::String(value) if values.contains(value))
+            }
             Self::StableIdRef => matches!(value, UiSchemaValue::StableIdRef(_)),
             Self::RouteRef => matches!(value, UiSchemaValue::RouteRef(_)),
             Self::OpaqueHostRef => matches!(value, UiSchemaValue::OpaqueHostRef(_)),
@@ -316,6 +348,7 @@ impl UiSchemaShape {
             }
             Self::Number => UiSchemaExpectedKind::Single(UiSchemaValueKind::Number),
             Self::String => UiSchemaExpectedKind::Single(UiSchemaValueKind::String),
+            Self::StringEnum(_) => UiSchemaExpectedKind::Single(UiSchemaValueKind::String),
             Self::StableIdRef => UiSchemaExpectedKind::Single(UiSchemaValueKind::StableIdRef),
             Self::RouteRef => UiSchemaExpectedKind::Single(UiSchemaValueKind::RouteRef),
             Self::OpaqueHostRef => UiSchemaExpectedKind::Single(UiSchemaValueKind::OpaqueHostRef),

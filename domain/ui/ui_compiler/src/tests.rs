@@ -1,4 +1,9 @@
 use super::*;
+use std::{fs, path::PathBuf};
+use ui_definition::{
+    UiNodeDefinition, UiProgramFormationControlCatalog, UiProgramFormationControlContract,
+    form_ui_program_from_node_with_catalog,
+};
 use ui_program::UiSchemaRef;
 use ui_program::{
     AccessibilityNode, AccessibilityNodeId, AccessibilityRole, BindingEdge, BindingEdgeId,
@@ -156,4 +161,161 @@ fn compiler_program(handler_capability: RouteCapability) -> UiProgram {
         UiSchemaRef::new("ui.label.properties", 1),
     ));
     program
+}
+
+// File: domain/ui/ui_compiler/src/tests.rs
+// Test: compiler_lowers_authored_button_program_to_runtime_artifact
+
+#[test]
+fn compiler_lowers_authored_button_program_to_runtime_artifact() {
+    let node = load_authored_node("assets/ui_gallery/button/selected.ron");
+
+    let program = form_ui_program_from_node_with_catalog(
+        "ui_gallery.button.selected",
+        "assets.ui_gallery.button.selected",
+        &node,
+        &button_catalog(),
+    );
+
+    let report = UiCompiler.compile_report(&program);
+
+    assert!(
+        report.passed(),
+        "{:?}",
+        report.artifact.manifest.diagnostics
+    );
+    assert_eq!(report.artifact.manifest.diagnostics, []);
+
+    assert_eq!(report.artifact.tables.controls.rows.len(), 1);
+    assert_eq!(report.artifact.tables.layout.rows.len(), 1);
+    assert_eq!(report.artifact.tables.style.rows.len(), 1);
+    assert_eq!(report.artifact.tables.state.rows.len(), 1);
+    assert_eq!(report.artifact.tables.interaction.rows.len(), 1);
+    assert_eq!(report.artifact.tables.binding_snapshots.rows.len(), 1);
+    assert_eq!(report.artifact.tables.collection_diffs.rows.len(), 1);
+    assert_eq!(report.artifact.tables.visual.rows.len(), 1);
+    assert_eq!(report.artifact.tables.accessibility.rows.len(), 1);
+    assert_eq!(report.artifact.tables.inspection.rows.len(), 1);
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .package_ids
+            .iter()
+            .any(|package_id| package_id == "runenwerk.ui.controls")
+    );
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .control_kind_ids
+            .iter()
+            .any(|kind_id| kind_id == "runenwerk.ui.controls.button")
+    );
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .schema_ids
+            .iter()
+            .any(
+                |schema| schema.schema_id == "runenwerk.ui.controls.button.properties"
+                    && schema.schema_version == 1
+            )
+    );
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .schema_ids
+            .iter()
+            .any(
+                |schema| schema.schema_id == "runenwerk.ui.controls.button.state"
+                    && schema.schema_version == 1
+            )
+    );
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .schema_ids
+            .iter()
+            .any(
+                |schema| schema.schema_id == "runenwerk.ui.controls.button.event"
+                    && schema.schema_version == 1
+            )
+    );
+
+    assert!(report.artifact.manifest.route_ids.iter().any(|route| {
+        route.route_id == "ui_gallery.button.selected.activate"
+            && route.payload_schema.schema_id == "runenwerk.ui.controls.button.event"
+            && route.payload_schema.schema_version == 1
+    }));
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .kernel_ids
+            .iter()
+            .any(|kernel_id| kernel_id == "runenwerk.ui.controls.button.layout")
+    );
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .kernel_ids
+            .iter()
+            .any(|kernel_id| kernel_id == "runenwerk.ui.controls.button.visual")
+    );
+
+    assert!(
+        report
+            .artifact
+            .manifest
+            .capability_ids
+            .iter()
+            .any(|capability_id| capability_id == "runenwerk.ui.controls.activate")
+    );
+}
+
+fn load_authored_node(path: &str) -> UiNodeDefinition {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|path| path.parent())
+        .and_then(|path| path.parent())
+        .expect("ui_compiler should live under domain/ui/ui_compiler")
+        .to_path_buf();
+
+    let fixture_path = repo_root.join(path);
+    let source = fs::read_to_string(&fixture_path).unwrap_or_else(|error| {
+        panic!(
+            "fixture {} should be readable: {error}",
+            fixture_path.display()
+        )
+    });
+
+    ron::from_str(&source).expect("fixture should parse as UiNodeDefinition")
+}
+
+fn button_catalog() -> UiProgramFormationControlCatalog {
+    UiProgramFormationControlCatalog::new().with_control_kind(
+        UiProgramFormationControlContract::new(
+            "runenwerk.ui.controls.button",
+            "runenwerk.ui.controls",
+            "Button",
+            UiSchemaRef::new("runenwerk.ui.controls.button.properties", 1),
+            UiSchemaRef::new("runenwerk.ui.controls.button.state", 1),
+            UiSchemaRef::new("runenwerk.ui.controls.button.event", 1),
+            ControlKernelRef::new("runenwerk.ui.controls.button.layout"),
+            ControlKernelRef::new("runenwerk.ui.controls.button.visual"),
+            RouteCapability::new("runenwerk.ui.controls.activate"),
+        ),
+    )
 }

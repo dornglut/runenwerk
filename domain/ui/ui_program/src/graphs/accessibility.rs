@@ -17,6 +17,8 @@ pub struct AccessibilityNode {
     pub control_id: ControlNodeId,
     pub role: AccessibilityRole,
     #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
     pub label_source: Option<BindingEndpointId>,
     #[serde(default)]
     pub source_map: Option<UiProgramSourceMapAttachment>,
@@ -32,9 +34,15 @@ impl AccessibilityNode {
             node_id,
             control_id,
             role,
+            label: None,
             label_source: None,
             source_map: None,
         }
+    }
+
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
     }
 
     pub fn with_label_source(mut self, label_source: BindingEndpointId) -> Self {

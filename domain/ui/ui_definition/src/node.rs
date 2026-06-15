@@ -9,6 +9,7 @@ use crate::{
     value::UiValueBinding,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UiAxisDefinition {
@@ -53,6 +54,66 @@ pub struct UiTableColumnDefinition {
     pub value: UiValueBinding,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AuthoredControlKindId(String);
+
+impl AuthoredControlKindId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AuthoredRouteId(String);
+
+impl AuthoredRouteId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AuthoredBindingRef(String);
+
+impl AuthoredBindingRef {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AuthoredControlValue {
+    Null,
+    Bool(bool),
+    Integer(i64),
+    Number(f64),
+    String(String),
+    List(Vec<AuthoredControlValue>),
+    Object(BTreeMap<String, AuthoredControlValue>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthoredControlAccessibilityDefinition {
+    pub role: String,
+    #[serde(default)]
+    pub label: Option<String>,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UiNodeDefinition {
     Panel {
@@ -105,6 +166,18 @@ pub enum UiNodeDefinition {
         label: UiValueBinding,
         #[serde(default)]
         availability: Option<UiAvailabilityBinding>,
+    },
+    Control {
+        id: UiNodeId,
+        kind: AuthoredControlKindId,
+        #[serde(default)]
+        properties: BTreeMap<String, AuthoredControlValue>,
+        #[serde(default)]
+        bindings: BTreeMap<String, AuthoredBindingRef>,
+        #[serde(default)]
+        route: Option<AuthoredRouteId>,
+        #[serde(default)]
+        accessibility: Option<AuthoredControlAccessibilityDefinition>,
     },
     Button {
         id: UiNodeId,
@@ -191,6 +264,7 @@ impl UiNodeDefinition {
             | Self::Spacer { id }
             | Self::Separator { id, .. }
             | Self::Label { id, .. }
+            | Self::Control { id, .. }
             | Self::Button { id, .. }
             | Self::Toggle { id, .. }
             | Self::TextInput { id, .. }

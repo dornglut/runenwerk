@@ -1,6 +1,7 @@
 //! Crate: ui_definition
 //! Purpose: Authored UI definitions, validation, normalization, and retained UI formation.
 
+pub mod authored_control_schema;
 pub mod availability;
 pub mod component_recipe;
 pub mod diagnostic;
@@ -16,6 +17,7 @@ pub mod persistence_activation;
 pub mod prelude;
 pub mod preview_fixture;
 pub mod production_readiness;
+pub mod program_form;
 pub mod slot;
 pub mod source;
 pub mod template;
@@ -25,6 +27,7 @@ pub mod view_binding;
 pub mod visual_layout;
 pub mod workflow;
 
+pub use authored_control_schema::*;
 pub use availability::*;
 pub use component_recipe::*;
 pub use diagnostic::*;
@@ -39,6 +42,7 @@ pub use normalize::*;
 pub use persistence_activation::*;
 pub use preview_fixture::*;
 pub use production_readiness::*;
+pub use program_form::*;
 pub use slot::*;
 pub use source::*;
 pub use template::*;

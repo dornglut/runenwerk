@@ -221,6 +221,24 @@ fn form_node(
         UiNodeDefinition::Label { label: text, .. } => {
             label(widget_id, resolve_text(text, context), text_style)
         }
+        UiNodeDefinition::Control { kind, .. } => {
+            state.diagnostics.push(
+                UiDefinitionDiagnostic::error(
+                    "ui.definition.retained_form.generic_control_unsupported",
+                    format!(
+                        "generic control '{}' must be formed through UiProgram formation, not retained UiTree formation",
+                        kind.as_str()
+                    ),
+                )
+                  .at_path(path.clone()),
+            );
+
+            label(
+                widget_id,
+                format!("Unsupported control: {}", kind.as_str()),
+                small_text_style,
+            )
+        }
         UiNodeDefinition::Button {
             label,
             route,

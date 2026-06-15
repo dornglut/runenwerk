@@ -3747,7 +3747,10 @@ dependencies = [
 name = "ui_compiler"
 version = "0.1.0"
 dependencies = [
+ "ron",
  "ui_artifacts",
+ "ui_controls",
+ "ui_definition",
  "ui_program",
 ]
 
@@ -3766,9 +3769,12 @@ version = "0.1.0"
 dependencies = [
  "ron",
  "serde",
+ "ui_controls",
  "ui_layout",
  "ui_math",
+ "ui_program",
  "ui_render_data",
+ "ui_schema",
  "ui_text",
  "ui_theme",
  "ui_tree",

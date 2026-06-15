@@ -78,4 +78,27 @@ mod tests {
             .is_err()
         );
     }
+
+    #[test]
+    fn schema_value_validates_string_enum_fields() {
+        let schema = UiSchema::object("ui.button.properties", 1).with_required_field(
+            "density",
+            UiSchemaShape::string_enum(["compact", "normal", "spacious"]),
+        );
+
+        let valid = UiSchemaValue::object([("density", UiSchemaValue::string("compact"))]);
+
+        assert!(schema.validate(&valid).is_valid());
+
+        let invalid = UiSchemaValue::object([("density", UiSchemaValue::string("tiny"))]);
+
+        let report = schema.validate(&invalid);
+
+        assert!(!report.is_valid());
+        assert_eq!(
+            report.diagnostics[0].diagnostic_id.as_str(),
+            "ui.schema.string_value_not_allowed"
+        );
+        assert_eq!(report.diagnostics[0].field_path, ["density"]);
+    }
 }
