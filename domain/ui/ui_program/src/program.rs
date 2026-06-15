@@ -8,7 +8,7 @@ use crate::ids::UiProgramId;
 use crate::source_map::{UiProgramSource, UiProgramSourceMapEntry};
 use crate::version::UiProgramVersion;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Eq)]
 pub struct UiProgram {
     pub id: UiProgramId,
     pub version: UiProgramVersion,

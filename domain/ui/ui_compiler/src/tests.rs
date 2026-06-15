@@ -1,9 +1,7 @@
 use super::*;
 use std::{fs, path::PathBuf};
-use ui_definition::{
-    UiNodeDefinition, UiProgramFormationControlCatalog, UiProgramFormationControlContract,
-    form_ui_program_from_node_with_catalog,
-};
+use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
+use ui_definition::UiNodeDefinition;
 use ui_program::UiSchemaRef;
 use ui_program::{
     AccessibilityNode, AccessibilityNodeId, AccessibilityRole, BindingEdge, BindingEdgeId,
@@ -14,6 +12,7 @@ use ui_program::{
     UiProgramId, UiProgramSourceId, UiProgramSourceMapAttachment, UiProgramSourceMapEntry,
     UiProgramSourceSpan, UiProgramTargetId, UiProgramVersion, VisualOperator, VisualOperatorId,
 };
+use ui_program_lowering::form_ui_program_report_from_node_with_registry_snapshot;
 
 #[test]
 fn compiler_contract_resolves_packages_capabilities_cache_keys_and_source_maps() {
@@ -170,14 +169,25 @@ fn compiler_program(handler_capability: RouteCapability) -> UiProgram {
 fn compiler_lowers_authored_button_program_to_runtime_artifact() {
     let node = load_authored_node("assets/ui_gallery/button/selected.ron");
 
-    let program = form_ui_program_from_node_with_catalog(
+    let registry = ControlPackageRegistry::new()
+        .with_package(runenwerk_control_package())
+        .expect("runenwerk controls package should register");
+
+    let formation_report = form_ui_program_report_from_node_with_registry_snapshot(
         "ui_gallery.button.selected",
         "assets.ui_gallery.button.selected",
         &node,
-        &button_catalog(),
+        &registry.snapshot(),
     );
 
-    let report = UiCompiler.compile_report(&program);
+    assert!(
+        formation_report.passed(),
+        "{:?}",
+        formation_report.diagnostics
+    );
+    assert!(formation_report.diagnostics.is_empty());
+
+    let report = UiCompiler.compile_report(&formation_report.program);
 
     assert!(
         report.passed(),
@@ -302,20 +312,4 @@ fn load_authored_node(path: &str) -> UiNodeDefinition {
     });
 
     ron::from_str(&source).expect("fixture should parse as UiNodeDefinition")
-}
-
-fn button_catalog() -> UiProgramFormationControlCatalog {
-    UiProgramFormationControlCatalog::new().with_control_kind(
-        UiProgramFormationControlContract::new(
-            "runenwerk.ui.controls.button",
-            "runenwerk.ui.controls",
-            "Button",
-            UiSchemaRef::new("runenwerk.ui.controls.button.properties", 1),
-            UiSchemaRef::new("runenwerk.ui.controls.button.state", 1),
-            UiSchemaRef::new("runenwerk.ui.controls.button.event", 1),
-            ControlKernelRef::new("runenwerk.ui.controls.button.layout"),
-            ControlKernelRef::new("runenwerk.ui.controls.button.visual"),
-            RouteCapability::new("runenwerk.ui.controls.activate"),
-        ),
-    )
 }

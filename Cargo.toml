@@ -45,6 +45,7 @@ members = [
     "domain/ui/ui_tree",
     "domain/ui/ui_runtime",
     "domain/ui/ui_widgets",
+    "domain/ui/ui_program_lowering",
 
     "domain/editor/editor_core",
     "domain/editor/editor_definition",
@@ -116,6 +117,8 @@ ui_geometry = { path = "domain/ui/ui_geometry" }
 ui_tree = { path = "domain/ui/ui_tree" }
 ui_runtime = { path = "domain/ui/ui_runtime" }
 ui_widgets = { path = "domain/ui/ui_widgets" }
+ui_program_lowering = { path = "domain/ui/ui_program_lowering" }
+
 native_tablet_input = { path = "adapters/native_tablet_input" }
 
 editor_core = { path = "domain/editor/editor_core" }

@@ -3752,6 +3752,7 @@ dependencies = [
  "ui_controls",
  "ui_definition",
  "ui_program",
+ "ui_program_lowering",
 ]
 
 [[package]]
@@ -3843,6 +3844,16 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "ui_schema",
+]
+
+[[package]]
+name = "ui_program_lowering"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "ui_controls",
+ "ui_definition",
+ "ui_program",
 ]
 
 [[package]]

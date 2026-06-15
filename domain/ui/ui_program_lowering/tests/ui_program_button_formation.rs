@@ -3,24 +3,27 @@
 // Function: load_node
 
 use std::fs;
-
-use ui_definition::{
-    UiNodeDefinition, UiProgramFormationControlCatalog, UiProgramFormationControlContract,
-    form_ui_program_from_node, form_ui_program_from_node_with_catalog,
+use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
+use ui_definition::UiNodeDefinition;
+use ui_program::AccessibilityRole;
+use ui_program::{BindingEndpoint, InteractionTrigger, StateRequirementLifecycle};
+use ui_program_lowering::{
+    UiProgramFormationReport, form_ui_program_report_from_node_with_registry_snapshot,
 };
-use ui_program::{AccessibilityRole, ControlKernelRef};
-use ui_program::{BindingEndpoint, InteractionTrigger, RouteCapability, StateRequirementLifecycle};
-use ui_schema::UiSchemaRef;
 
 #[test]
 fn ui_gallery_button_basic_forms_control_graph_node() {
     let node = load_node("assets/ui_gallery/button/basic.ron");
 
-    let program = form_ui_program_from_node(
+    let report = form_report(
         "ui_gallery.button.basic",
         "assets.ui_gallery.button.basic",
         &node,
     );
+
+    assert!(report.passed(), "{:?}", report.diagnostics);
+
+    let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
 
@@ -34,29 +37,29 @@ fn ui_gallery_button_basic_forms_control_graph_node() {
     );
     assert!(control.source_map.is_some());
 
-    assert_eq!(program.graphs.layout.constraints.len(), 0);
-    assert_eq!(program.graphs.style.rules.len(), 0);
+    assert_eq!(program.graphs.layout.constraints.len(), 1);
+    assert_eq!(program.graphs.style.rules.len(), 1);
     assert_eq!(program.graphs.state.requirements.len(), 0);
-    assert_eq!(program.graphs.interaction.handlers.len(), 0);
+    assert_eq!(program.graphs.interaction.handlers.len(), 1);
     assert_eq!(program.graphs.binding.bindings.len(), 0);
-    assert_eq!(program.graphs.visual.operators.len(), 0);
-    assert_eq!(program.graphs.accessibility.nodes.len(), 0);
-    assert_eq!(program.graphs.inspection.entries.len(), 0);
+    assert_eq!(program.graphs.visual.operators.len(), 1);
+    assert_eq!(program.graphs.accessibility.nodes.len(), 1);
+    assert_eq!(program.graphs.inspection.entries.len(), 1);
 }
-
-// File: domain/ui/ui_definition/tests/ui_program_button_formation.rs
-// Test: ui_gallery_button_basic_route_forms_press_interaction_handler
 
 #[test]
 fn ui_gallery_button_basic_route_forms_press_interaction_handler() {
     let node = load_node("assets/ui_gallery/button/basic.ron");
 
-    let program = form_ui_program_from_node_with_catalog(
+    let report = form_report(
         "ui_gallery.button.basic",
         "assets.ui_gallery.button.basic",
         &node,
-        &button_catalog(),
     );
+
+    assert!(report.passed(), "{:?}", report.diagnostics);
+
+    let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
     assert_eq!(program.graphs.interaction.handlers.len(), 1);
@@ -104,12 +107,15 @@ fn ui_gallery_button_basic_route_forms_press_interaction_handler() {
 fn ui_gallery_button_selected_binding_forms_host_fed_state_and_binding_edge() {
     let node = load_node("assets/ui_gallery/button/selected.ron");
 
-    let program = form_ui_program_from_node_with_catalog(
-        "ui_gallery.button.selected",
-        "assets.ui_gallery.button.selected",
+    let report = form_report(
+        "ui_gallery.button.basic",
+        "assets.ui_gallery.button.basic",
         &node,
-        &button_catalog(),
     );
+
+    assert!(report.passed(), "{:?}", report.diagnostics);
+
+    let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
     assert_eq!(program.graphs.interaction.handlers.len(), 1);
@@ -170,12 +176,15 @@ fn ui_gallery_button_selected_binding_forms_host_fed_state_and_binding_edge() {
 fn ui_gallery_button_basic_forms_layout_style_and_visual_kernels() {
     let node = load_node("assets/ui_gallery/button/basic.ron");
 
-    let program = form_ui_program_from_node_with_catalog(
+    let report = form_report(
         "ui_gallery.button.basic",
         "assets.ui_gallery.button.basic",
         &node,
-        &button_catalog(),
     );
+
+    assert!(report.passed(), "{:?}", report.diagnostics);
+
+    let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
     assert_eq!(program.graphs.layout.constraints.len(), 1);
@@ -224,12 +233,15 @@ fn ui_gallery_button_basic_forms_layout_style_and_visual_kernels() {
 fn ui_gallery_button_basic_forms_accessibility_node() {
     let node = load_node("assets/ui_gallery/button/basic.ron");
 
-    let program = form_ui_program_from_node_with_catalog(
+    let report = form_report(
         "ui_gallery.button.basic",
         "assets.ui_gallery.button.basic",
         &node,
-        &button_catalog(),
     );
+
+    assert!(report.passed(), "{:?}", report.diagnostics);
+
+    let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
     assert_eq!(program.graphs.layout.constraints.len(), 1);
@@ -266,33 +278,40 @@ fn ui_gallery_button_unknown_accessibility_role_reports_diagnostic() {
 
     accessibility.role = "spellbook".to_owned();
 
-    let program = form_ui_program_from_node_with_catalog(
+    let report = form_report(
         "ui_gallery.button.basic.invalid_accessibility",
         "assets.ui_gallery.button.basic",
         &node,
-        &button_catalog(),
     );
 
-    assert_eq!(program.graphs.accessibility.nodes.len(), 0);
+    assert!(!report.passed());
+    assert!(report.catalog_report.passed());
+    assert_eq!(report.program.graphs.accessibility.nodes.len(), 0);
 
-    assert!(program.diagnostics.iter().any(|diagnostic| {
+    assert!(report.has_diagnostic("ui.program.accessibility.unknown_role"));
+    assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.code == "ui.program.accessibility.unknown_role"
             && diagnostic.message.contains("button_basic")
             && diagnostic.message.contains("spellbook")
             && diagnostic.source_map.is_some()
     }));
+
+    assert_eq!(report.diagnostics, report.program.diagnostics);
 }
 
 #[test]
 fn ui_gallery_button_basic_forms_inspection_entry() {
     let node = load_node("assets/ui_gallery/button/basic.ron");
 
-    let program = form_ui_program_from_node_with_catalog(
+    let report = form_report(
         "ui_gallery.button.basic",
         "assets.ui_gallery.button.basic",
         &node,
-        &button_catalog(),
     );
+
+    assert!(report.passed(), "{:?}", report.diagnostics);
+
+    let program = &report.program;
 
     assert_eq!(program.graphs.control.nodes.len(), 1);
     assert_eq!(program.graphs.layout.constraints.len(), 1);
@@ -319,29 +338,65 @@ fn ui_gallery_button_basic_forms_inspection_entry() {
     assert_eq!(program.graphs.binding.bindings.len(), 0);
 }
 
-fn button_catalog() -> UiProgramFormationControlCatalog {
-    UiProgramFormationControlCatalog::new().with_control_kind(
-        UiProgramFormationControlContract::new(
-            "runenwerk.ui.controls.button",
-            "runenwerk.ui.controls",
-            "Button",
-            UiSchemaRef::new("runenwerk.ui.controls.button.properties", 1),
-            UiSchemaRef::new("runenwerk.ui.controls.button.state", 1),
-            UiSchemaRef::new("runenwerk.ui.controls.button.event", 1),
-            ControlKernelRef::new("runenwerk.ui.controls.button.layout"),
-            ControlKernelRef::new("runenwerk.ui.controls.button.visual"),
-            RouteCapability::new("runenwerk.ui.controls.activate"),
-        ),
+#[test]
+fn ui_gallery_button_unknown_accessibility_role_reports_through_formation_report() {
+    let mut node = load_node("assets/ui_gallery/button/basic.ron");
+
+    let UiNodeDefinition::Control { accessibility, .. } = &mut node else {
+        panic!("expected generic Control node");
+    };
+
+    let accessibility = accessibility
+        .as_mut()
+        .expect("button basic fixture should have accessibility metadata");
+
+    accessibility.role = "spellbook".to_owned();
+
+    let report = form_report(
+        "ui_gallery.button.basic.invalid_accessibility",
+        "assets.ui_gallery.button.basic",
+        &node,
+    );
+
+    assert!(!report.passed());
+    assert!(report.has_diagnostic("ui.program.accessibility.unknown_role"));
+    assert_eq!(report.diagnostics, report.program.diagnostics);
+    assert!(report.catalog_report.passed());
+
+    assert!(!report.passed());
+    assert!(report.has_diagnostic("ui.program.accessibility.unknown_role"));
+    assert_eq!(report.diagnostics, report.program.diagnostics);
+}
+
+fn form_report(
+    program_id: &str,
+    source_id: &str,
+    node: &UiNodeDefinition,
+) -> UiProgramFormationReport {
+    let registry = ControlPackageRegistry::new()
+        .with_package(runenwerk_control_package())
+        .expect("runenwerk controls package should register");
+
+    form_ui_program_report_from_node_with_registry_snapshot(
+        program_id,
+        source_id,
+        node,
+        &registry.snapshot(),
     )
 }
 
 fn load_node(relative_repo_path: &str) -> UiNodeDefinition {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .join(relative_repo_path);
+    let repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|path| path.parent())
+        .and_then(|path| path.parent())
+        .expect("ui_program_lowering should live under domain/ui/ui_program_lowering")
+        .to_path_buf();
+
+    let path = repo_root.join(relative_repo_path);
 
     let source = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {:?}: {error}", path));
 
-    ron::from_str(&source).unwrap_or_else(|error| panic!("failed to parse {:?}: {error}", path))
+    ron::from_str(&source).expect("fixture should parse as UiNodeDefinition")
 }

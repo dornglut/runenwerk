@@ -1,127 +1,22 @@
-// File: domain/ui/ui_definition/src/program_form.rs
-// Functions: form_ui_program_from_node, form_control_nodes, control_package_from_kind, source_id_for_path
+//! File: domain/ui/ui_program_lowering/src/lower.rs
+//! Crate: ui_program_lowering
+//!
+//! Semantic lowering from authored UI nodes into typed UiProgram graph families.
 
-use std::collections::BTreeMap;
-
-use crate::{AuthoredUiNodePath, UiNodeDefinition};
+use ui_definition::{AuthoredUiNodePath, UiNodeDefinition};
 use ui_program::{
     AccessibilityNode, AccessibilityNodeId, AccessibilityRole, BindingEdge, BindingEdgeId,
-    BindingEndpoint, BindingEndpointId, ControlGraphNode, ControlKernelRef, ControlKindRef,
-    ControlNodeId, ControlPackageRef, InspectionEntry, InspectionEntryId, InteractionHandler,
-    InteractionHandlerId, InteractionTrigger, LayoutConstraintId, LayoutGraphNode, RouteCapability,
-    RouteId, StateRequirement, StateRequirementId, StateRequirementLifecycle, StyleRule,
-    StyleRuleId, StyleSlotId, UiProgram, UiProgramDiagnostic, UiProgramId, UiProgramSource,
-    UiProgramSourceId, UiProgramSourceMapAttachment, UiProgramSourceMapEntry, UiProgramTargetId,
-    UiProgramVersion, VisualOperator, VisualOperatorId,
+    BindingEndpoint, BindingEndpointId, ControlGraphNode, ControlKindRef, ControlNodeId,
+    ControlPackageRef, InspectionEntry, InspectionEntryId, InteractionHandler,
+    InteractionHandlerId, InteractionTrigger, LayoutConstraintId, LayoutGraphNode, RouteId,
+    StateRequirement, StateRequirementId, StateRequirementLifecycle, StyleRule, StyleRuleId,
+    StyleSlotId, UiProgram, UiProgramDiagnostic, VisualOperator, VisualOperatorId,
 };
-use ui_schema::UiSchemaRef;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct UiProgramFormationControlCatalog {
-    control_kinds: BTreeMap<String, UiProgramFormationControlContract>,
-}
+use crate::catalog::UiProgramFormationControlCatalog;
+use crate::source_map::source_map_for_path;
 
-impl UiProgramFormationControlCatalog {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_control_kind(mut self, contract: UiProgramFormationControlContract) -> Self {
-        self.control_kinds
-            .insert(contract.kind_id.clone(), contract);
-        self
-    }
-
-    fn control_kind(&self, kind_id: &str) -> Option<&UiProgramFormationControlContract> {
-        self.control_kinds.get(kind_id)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UiProgramFormationControlContract {
-    pub kind_id: String,
-    pub package_id: String,
-    pub display_name: String,
-    pub property_schema: UiSchemaRef,
-    pub state_schema: UiSchemaRef,
-    pub event_payload_schema: UiSchemaRef,
-    pub layout_kernel: ControlKernelRef,
-    pub visual_kernel: ControlKernelRef,
-    pub activation_capability: RouteCapability,
-}
-
-impl UiProgramFormationControlContract {
-    pub fn new(
-        kind_id: impl Into<String>,
-        package_id: impl Into<String>,
-        display_name: impl Into<String>,
-        property_schema: UiSchemaRef,
-        state_schema: UiSchemaRef,
-        event_payload_schema: UiSchemaRef,
-        layout_kernel: ControlKernelRef,
-        visual_kernel: ControlKernelRef,
-        activation_capability: RouteCapability,
-    ) -> Self {
-        Self {
-            kind_id: kind_id.into(),
-            package_id: package_id.into(),
-            display_name: display_name.into(),
-            event_payload_schema,
-            layout_kernel,
-            state_schema,
-            activation_capability,
-            property_schema,
-            visual_kernel,
-        }
-    }
-}
-
-pub fn form_ui_program_from_node(
-    program_id: impl Into<String>,
-    source_id: impl Into<String>,
-    root: &UiNodeDefinition,
-) -> UiProgram {
-    form_ui_program_from_node_with_catalog(
-        program_id,
-        source_id,
-        root,
-        &UiProgramFormationControlCatalog::default(),
-    )
-}
-
-pub fn form_ui_program_from_node_with_catalog(
-    program_id: impl Into<String>,
-    source_id: impl Into<String>,
-    root: &UiNodeDefinition,
-    catalog: &UiProgramFormationControlCatalog,
-) -> UiProgram {
-    let program_id = program_id.into();
-    let source_id = source_id.into();
-
-    let mut program = UiProgram::new(
-        UiProgramId::new(program_id.clone()),
-        UiProgramVersion::new(1),
-    )
-    .with_source(UiProgramSource::authored(
-        UiProgramSourceId::new(source_id.clone()),
-        "authored UI definition",
-    ))
-    .with_source_map_entry(UiProgramSourceMapEntry::new(
-        UiProgramSourceId::new(source_id),
-        UiProgramTargetId::new(format!("{program_id}.root")),
-    ));
-
-    form_control_nodes(
-        root,
-        &AuthoredUiNodePath::root(root.id()),
-        catalog,
-        &mut program,
-    );
-
-    program
-}
-
-fn form_control_nodes(
+pub(crate) fn lower_control_nodes(
     node: &UiNodeDefinition,
     path: &AuthoredUiNodePath,
     catalog: &UiProgramFormationControlCatalog,
@@ -307,7 +202,7 @@ fn form_control_nodes(
     }
 
     for child in node.children() {
-        form_control_nodes(child, &path.child(child.id()), catalog, program);
+        lower_control_nodes(child, &path.child(child.id()), catalog, program);
     }
 }
 
@@ -329,14 +224,4 @@ fn accessibility_role_from_authored(role: &str) -> Option<AccessibilityRole> {
         "prompt" => Some(AccessibilityRole::Prompt),
         _ => None,
     }
-}
-
-fn source_map_for_path(
-    path: &AuthoredUiNodePath,
-    target_id: impl Into<String>,
-) -> UiProgramSourceMapAttachment {
-    UiProgramSourceMapAttachment::new(UiProgramSourceMapEntry::new(
-        UiProgramSourceId::new(format!("definition.{}", path.as_str().replace('/', "."))),
-        UiProgramTargetId::new(target_id),
-    ))
 }
