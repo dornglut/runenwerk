@@ -245,7 +245,11 @@ Phase 8 leads WR-024. Shell polish may proceed only as retained UI implementatio
 
 ### Phase 9 - Artifact-Backed Runtime Rendering Pipeline
 
-Status: active implementation slice under WR-173 / PM-UI-RUNTIME-RENDERING-001.
+Status: deferred as a standalone implementation slice. WR-173 /
+PM-UI-RUNTIME-RENDERING-001 is retained only as temporary static-gallery
+evidence; runtime rendering proof must return through
+PM-UI-STORY-004 after the story manifest, registry, runner, report, and
+mount-eligibility contracts exist.
 
 Owning design:
 
@@ -329,21 +333,20 @@ Decision:
   UI, UI effects, and visual UI builder work must be story-gated platform
   capabilities.
 
-First implementation milestone to prepare through normal WR/production gates:
+First production milestone to prepare through normal WR/production gates:
 
 ```text
-PT-UI-001 - Story-Driven Golden Workflow
+PM-UI-STORY-001 - Story Workflow Authority And Track Activation
 ```
 
 Outcome:
 
-- convert the current hardcoded button gallery fixture path into
-  manifest-driven story execution;
-- add or designate a domain-level story runner;
-- move the primary gallery output to `UiStoryRunReport`;
-- preserve the existing visible button proof through the new workflow;
-- add one intentionally failing story to prove diagnostic expectations;
-- remove `UI_GALLERY_FIXTURES` as the production story registry.
+- activate `PT-UI-STORY-PLATFORM` as the story-first UI production track;
+- defer standalone static gallery rendering as a production growth path;
+- record the future `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
+  `UiStoryRunReport`, and `UiStoryMountEligibility` contracts;
+- keep runtime code, crate creation, gallery migration, and product mounting
+  blocked until their owning WR and production plan exist.
 
 Later implementation contract target files and functions:
 
@@ -382,8 +385,8 @@ Stop conditions:
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 - [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
-- [ ] Continue the artifact-backed runtime rendering roadmap in order. Status: WR-173 implements the first static visible gallery path for checked-in basic/selected button fixtures through `UiNodeDefinition -> UiProgramFormationReport -> UiCompilerReport -> UiRuntimeArtifact -> UiRuntimeView -> UiRenderPrimitiveReport -> UiFrame -> existing renderer UI composite`. Remaining roadmap work includes interaction hit testing, full state loop, accessibility runtime proof, broader control coverage, and production-readiness evidence.
-- [ ] Prepare the story-driven golden workflow through normal WR/production gates. Status: active design intake; `PT-UI-001` should convert the hardcoded button gallery path into manifest-driven story execution, introduce or designate a domain-owned story runner, and make `UiStoryRunReport` the primary gallery/CLI inspection object before mount eligibility claims.
+- [ ] Continue artifact-backed runtime rendering only through story gates. Status: WR-173 / PM-UI-RUNTIME-RENDERING-001 is blocked_deferred as a standalone static gallery path; the former evidence must be re-run through `UiStoryRunReport` under PM-UI-STORY-004 before gallery, CLI, static mount, or product mount eligibility can claim success.
+- [ ] Prepare the story-driven golden workflow through normal WR/production gates. Status: active design intake; `PM-UI-STORY-001` activates planning authority only, while later PM-UI-STORY milestones introduce the story runner, gallery/CLI execution, runtime rendering proof, and mount eligibility.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; generated production docs must remain outputs of their source files and must not be hand-edited.
 
 ## Non-Goals for This Track

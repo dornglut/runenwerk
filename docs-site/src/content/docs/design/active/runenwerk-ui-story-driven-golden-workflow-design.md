@@ -538,19 +538,21 @@ apps/runenwerk_editor/src/runtime/ui_gallery.rs::compile_fixture_button_report
 The final gallery resource must consume story reports, not button-specific
 reports.
 
-## First Implementation Milestone To Record
+## First Production Milestone To Record
 
-`PT-UI-001 - Story-Driven Golden Workflow`
+`PM-UI-STORY-001 - Story Workflow Authority And Track Activation`
 
 Outcome:
 
-- convert the current hardcoded button gallery fixture path into
-  manifest-driven story execution;
-- add or designate a domain-level story runner;
-- move the primary gallery output to `UiStoryRunReport`;
-- preserve the existing visible button proof through the new workflow;
-- add one intentionally failing story to prove diagnostic expectations;
-- remove `UI_GALLERY_FIXTURES` as the production story registry.
+- activate `PT-UI-STORY-PLATFORM` as the single story-first UI production
+  track;
+- defer the standalone static gallery rendering path as temporary evidence;
+- record `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
+  `UiStoryRunReport`, and `UiStoryMountEligibility` as future public
+  contracts;
+- keep runtime code, crate creation, gallery migration, and product mounting
+  forbidden until the owning WR and production plan exist;
+- sequence runtime rendering proof after story runner/report creation.
 
 Target files and functions for the later implementation contract:
 

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-01
+last_reviewed: 2026-06-16
 related:
   - ./roadmap-items.yaml
   - ./roadmap-archive.yaml
@@ -30,3 +30,4 @@ Blocked or policy-deferred WR roadmap rows archived out of active execution.
 | WR-081 | Renderer Perfectionist Verification Closeout | Discovery | blocked_deferred | not_applicable | L4 | Policy deferred pending intake approval | 2 | 5 | 0.2 | Intake proposal only; do not implement until applied and promoted by roadmap review. | New idea has not passed roadmap intake, architecture governance, and dependency review. |
 | WR-104 | Game Runtime UI Projection Governance And Track Activation | Product planning | blocked_deferred | not_applicable | L4 | Governance before game UI implementation | 4 | 4 | 1.3 | Intake proposal only; keep as blocked_deferred until accepted and explicitly promoted. | New game-runtime UI product track has not passed roadmap intake, architecture governance closeout, or dependency review. |
 | WR-106 | Viewport And Procedural Projection Contract Consolidation | Discovery | blocked_deferred | not_applicable | L4 | Policy deferred pending intake approval | 2 | 5 | 0.2 | Deferred intake proposal only. Preserve producer-owned camera truth, camera-free PreparedViewFrame, and camera-free UI primitives while deciding the long-term contract split. | New cross-boundary idea has not passed intake approval, accepted design review, ADR triage, and follow-on WR decomposition. |
+| WR-173 | Artifact-Backed Static UI Gallery Runtime Rendering | Product workflow | blocked_deferred | runtime_proven | L1 | Story-first UI platform supersession | 4 | 5 | 2.6 | Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run through UiStoryRunReport. | Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run through UiStoryRunReport. |

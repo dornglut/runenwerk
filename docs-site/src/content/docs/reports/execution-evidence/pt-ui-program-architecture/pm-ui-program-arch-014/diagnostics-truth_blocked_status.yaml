@@ -11,7 +11,7 @@ paths:
 subject_paths:
 - tools/workflow/track_control_cli.py
 subject_digests:
-  tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+  tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 validation_commands:
 - task:workflow:test (task workflow:test) -> exit 0
 - cargo:test (cargo test -p ui_program architecture_contract) -> exit 0
@@ -28,9 +28,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: c37011cbcfa91b8c7df4d686a738dda4e0882e9e3ff21f41c518fe44392366e5
+  validation_result_digest: 789d81d7a69732797599bba289fcf0b927ca729303ca5a0c0af3ac460d367d30
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 - command_id: cargo:test
   argv:
   - cargo
@@ -41,9 +41,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 43d97055505deb43f31b58c3c57946f716b3a198064dc193f51985de47e41d1d
+  validation_result_digest: d513cda2ae092c6d4a74815cdd6884025e10aea477e0556a678f632bf97e0b1e
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 - command_id: cargo:test
   argv:
   - cargo
@@ -54,9 +54,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: efceb89f51d67a0444d3a2c22509cfabc9798af930b2989a2b3cf0e6e4efaeb6
+  validation_result_digest: 3250ec49f02ab849ab38d31a420e1d01f9cfa21dbb1cfa2be7eaba4895c35f41
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 - command_id: cargo:test
   argv:
   - cargo
@@ -67,9 +67,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 94c0d0b34959fc4f102dd2905aa7da35cdfe2c5107e06fcb808a4131d5d5f4d1
+  validation_result_digest: be179c18ed3523b0eb43008927689a769d57aed3ef3bdf7fdbb580b54f4dfb91
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 - command_id: cargo:test
   argv:
   - cargo
@@ -80,9 +80,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 438a09776656b4ba3a51c4f5465f0fc983d5c70e5d5a53cd9a5c78b0ce042797
+  validation_result_digest: e7a0b8dbf50a95df0f77c9b46dfc5ee2e494ff67438898fb16ea83486f66c3d8
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 - command_id: cargo:test
   argv:
   - cargo
@@ -93,9 +93,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 709ed8c861e674aa9459709df2000213611dc3de890b66e036aa0e96f24741c6
+  validation_result_digest: 290373a0481830fef0aa6eb698b9591b19a3f2cb7a24f3365d500fdc37875c46
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7
 - command_id: cargo:test
   argv:
   - cargo
@@ -106,6 +106,6 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 052ec2214640809f3b163c01a9f585991db4cb68c2172f0a2e0bc51dee5769b0
+  validation_result_digest: 394700b9f397beceed8f269eeec7604959094b69a1f43c4dc70fa92b3176625a
   subject_digests:
-    tools/workflow/track_control_cli.py: f137d09aaae6c4da109b6f4729318159455d114c1fc47cadbc3e32b1ed7006ee
+    tools/workflow/track_control_cli.py: 22c3165e2413e3a9c18c46b290d5801ca481b698ab4092e29d675052ad2780e7

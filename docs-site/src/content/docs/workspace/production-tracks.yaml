@@ -5846,23 +5846,24 @@ tracks:
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
 - id: PT-UI-RUNTIME-RENDERING
   title: UI Runtime Rendering Pipeline
-  state: active
+  state: deferred
   owner: ui
   target_completion_quality: runtime_proven
-  strategic_goal: Prove artifact-backed UI runtime rendering through explicit formation, compiler, artifact, runtime-view, token/text-resolved primitive, static mount, and visible composite evidence without moving UI semantics into renderer, ECS, editor, or game code.
+  strategic_goal: Preserve artifact-backed static gallery rendering as temporary migration evidence while the story-first UI platform supersedes standalone runtime rendering as the production growth path.
   success_criteria:
-  - Checked-in gallery fixtures render only after formation, compiler, runtime-view, primitive generation, render-data adaptation, and static mount reports pass.
+  - Checked-in gallery fixtures remain useful evidence only after formation, compiler, runtime-view, primitive generation, render-data adaptation, and static mount reports pass.
+  - No new UI production path grows around standalone static gallery rendering; all future rendering proof must be re-run through `UiStoryRunReport`.
   - Renderer-facing code consumes `UiFrame`/backend-neutral primitives only and does not read authored `.ron` or control-package descriptors.
   - Text reaches the renderer as `GlyphRunPrimitive`, not placeholder diagnostics.
   - Host integration remains in app/editor code; domain UI crates own derived runtime and primitive contracts only.
-  - Interactivity and production-readiness claims remain separate milestones after the static gallery proof.
+  - Interactivity, production-readiness, and mount eligibility claims move to PT-UI-STORY-PLATFORM sequencing.
   milestones:
   - id: PM-UI-RUNTIME-RENDERING-001
     title: Artifact-Backed Static Button Gallery
     kind: implementation
-    state: active
-    goal: Render the checked-in basic and selected button gallery fixtures through artifacts, runtime views, backend-neutral primitives, `GlyphRunPrimitive` text, static mount, and the existing editor UI composite pass.
-    outcome: A standalone `runenwerk_ui_gallery` binary opens a visible static gallery while headless tests prove the submitted frame contains shaped label text and fails closed on upstream report errors.
+    state: deferred
+    goal: Keep the checked-in basic and selected button gallery path as historical migration evidence until story-derived rendering proof exists.
+    outcome: Standalone static gallery work is deferred; the evidence must be re-proven through `UiStoryRunReport` before any gallery, CLI, static mount, or product mount eligibility claim.
     dependencies:
     - PM-UI-PROGRAM-ARCH-014
     roadmap_links:
@@ -5882,7 +5883,313 @@ tracks:
     - The path fails closed if formation, compiler, runtime view, primitive generation, render-data adaptation, or static mount reports errors.
     completion_quality: runtime_proven
     known_quality_gaps:
+    - Story-first UI platform sequencing supersedes this standalone static gallery path.
+    - Rendering proof must be re-run through `UiStoryRunReport` before it can support production growth.
     - Interactivity, hover, pressed, focus, disabled state loops, gallery inspector, additional controls, and production-readiness hardening remain follow-on work.
+    completion_audit: ''
+- id: PT-UI-STORY-PLATFORM
+  title: UI Story Platform
+  state: active
+  owner: ui
+  target_completion_quality: perfectionist_verified
+  strategic_goal: Make `UiStory` the source of UI authoring, validation, inspection, preview, runtime proof, and mount eligibility before any expanded runtime rendering or product surface depends on UI behavior.
+  success_criteria:
+  - '`UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and `UiStoryMountEligibility` become the recorded public contracts before implementation starts.'
+  - '`UiStoryRunReport` is the required proof envelope before gallery preview, CLI inspection, static mount, or product mount eligibility can claim success.'
+  - Runtime rendering proof happens after story runner/report authority and is proven as a story stage, not as a standalone hardcoded gallery path.
+  - Renderer, ECS, editor, and game code never own UI semantics; they consume story-derived artifacts, runtime views, render primitives, or mount decisions through explicit boundaries.
+  - Perfectionist completion requires zero known gaps, zero known risks, current truth evidence, completed closeout evidence, and no parallel bypass paths.
+  milestones:
+  - id: PM-UI-STORY-001
+    title: Story Workflow Authority And Track Activation
+    kind: design
+    state: designing
+    goal: Establish the story-first production authority, sequencing rules, deferred standalone-rendering decision, future WR expansion policy, and no-runtime-code stop conditions.
+    outcome: PT-UI-STORY-PLATFORM exists as the single UI story production track with planning-only authority and explicit blockers against crate creation, runtime rendering expansion, gallery migration, and product mounting.
+    dependencies:
+    - PM-UI-PROGRAM-ARCH-014
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Story workflow authority must follow the active story-driven golden workflow design.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Track activation must follow the active UI platform sequencing roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - PT-UI-STORY-PLATFORM is recorded as the single master UI story platform track.
+    - PT-UI-RUNTIME-RENDERING and PM-UI-RUNTIME-RENDERING-001 are deferred as standalone production growth paths.
+    - WR-173 is blocked/deferred with evidence that rendering proof must be re-run through `UiStoryRunReport`.
+    - 'The track execution manifest is planning and sequencing authority only with `ai_executable: false`.'
+    - No runtime code, crate creation, gallery migration, or product mounting is authorized by this milestone.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - PM-UI-STORY-002 through PM-UI-STORY-012 remain future milestones and must not be inferred complete from track activation.
+    completion_audit: ''
+  - id: PM-UI-STORY-002
+    title: Story Manifest, Registry, Runner, And Report Contract
+    kind: implementation
+    state: designing
+    goal: Introduce the domain-owned story contract surface for `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and `UiStoryMountEligibility`.
+    outcome: Story execution has a public, domain-owned contract that can become the sole proof envelope for gallery, CLI, static mount, and product mount eligibility.
+    dependencies:
+    - PM-UI-STORY-001
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Story contracts must follow the active story-driven workflow design.
+    evidence_gates: []
+    acceptance_criteria:
+    - Exact `domain/ui/ui_story` ownership is accepted before crate creation.
+    - Story manifests define stable ids, source, host, theme, viewport, state, route, diagnostic, and mount policy inputs.
+    - Story registry discovery is deterministic and does not depend on renderer, ECS, editor, or game state.
+    - Story runner output is a complete `UiStoryRunReport` with stage reports and fail-closed diagnostics.
+    - Mount eligibility is derived only from `UiStoryRunReport`, never from renderer submission success alone.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Future WR and production plan required before product code or crate creation.
+    completion_audit: ''
+  - id: PM-UI-STORY-003
+    title: Gallery And CLI Story Execution
+    kind: implementation
+    state: designing
+    goal: Make gallery preview and CLI inspection consume story manifests and `UiStoryRunReport` instead of hardcoded button-gallery wiring.
+    outcome: Developers inspect the same story run evidence in CLI and gallery surfaces before any static mount or product host claims success.
+    dependencies:
+    - PM-UI-STORY-002
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Gallery and CLI execution must share the story runner/report contract.
+    evidence_gates: []
+    acceptance_criteria:
+    - CLI story runs load manifests through `UiStoryRegistry` and emit `UiStoryRunReport`.
+    - Gallery preview consumes `UiStoryRunReport` rather than button-specific fixtures or renderer-owned semantics.
+    - Failure stories are first-class and show source, stage, diagnostic, and eligibility verdicts.
+    - Story execution is deterministic across checked-in fixtures, themes, host profiles, and viewport matrices.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Runtime rendering proof remains blocked until PM-UI-STORY-004.
+    completion_audit: ''
+  - id: PM-UI-STORY-004
+    title: Story-Gated Runtime Rendering Proof
+    kind: implementation
+    state: designing
+    goal: Re-run static runtime rendering proof as a story stage after runner/report authority exists.
+    outcome: Visible UI rendering is proven through `UiStoryRunReport` and can no longer bypass story-derived mount eligibility.
+    dependencies:
+    - PM-UI-STORY-003
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+      required_status: active
+      reason: Runtime rendering proof must preserve artifact-backed rendering boundaries while moving behind story execution.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Rendering proof must be one story stage inside `UiStoryRunReport`.
+    evidence_gates: []
+    acceptance_criteria:
+    - Former static button gallery evidence is re-run through story manifest, registry, runner, and report stages.
+    - Static mount success requires story-derived mount eligibility.
+    - Renderer-facing code consumes backend-neutral primitives or frames without owning authored UI semantics.
+    - The path fails closed on formation, compiler, runtime view, primitive, render-data, static mount, or renderer submission errors.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Interactivity and broader component coverage remain later story platform milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-005
+    title: Base Component Story Matrix
+    kind: implementation
+    state: designing
+    goal: Cover base UI components with story manifests, fixture matrices, diagnostics, accessibility expectations, and mount policies.
+    outcome: Existing base controls are cheap to use because their accepted states, failures, visual outputs, and mount eligibility are story-proven.
+    dependencies:
+    - PM-UI-STORY-004
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Base component coverage must follow the UI platform sequencing roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - Button, label, input, panel, list, picker, and navigation controls have story matrices for normal, edge, failure, and accessibility states.
+    - Component stories exercise schema, tokens, state, route, diagnostics, source maps, layout, text, and mount policy.
+    - No component is accepted because it renders without its story report passing.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Advanced interaction, text, canvas, timeline, world-space, and builder work remain later milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-006
+    title: Interaction Platform
+    kind: implementation
+    state: designing
+    goal: Add story-proven interaction traces, hit testing, focus, hover, pressed, disabled, route proposal, and host intent boundaries.
+    outcome: Interactive UI behavior is deterministic, inspectable, replayable, and mount-eligible only through story-derived interaction evidence.
+    dependencies:
+    - PM-UI-STORY-005
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Interaction platform work must follow the story-driven platform roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - Interaction traces replay deterministically through `UiStoryRunner`.
+    - Hit testing, focus, hover, pressed, disabled, route, and capability decisions produce stage reports.
+    - Host intent proposals are explicit outputs and do not mutate host state from domain UI.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Text, advanced canvas, timeline, and world-space behaviors remain later milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-007
+    title: Text Platform
+    kind: implementation
+    state: designing
+    goal: Make text layout, shaping requests, editing behavior, accessibility labels, diagnostics, and render primitives story-proven.
+    outcome: Text-heavy UI is accepted through deterministic story reports rather than placeholder glyph or layout assumptions.
+    dependencies:
+    - PM-UI-STORY-006
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Text platform work must follow the UI platform sequencing roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - Static labels, dynamic labels, editable text, overflow, wrapping, truncation, and accessibility labels have story coverage.
+    - Text reaches renderer-facing contracts as explicit shaped text or glyph-run primitive evidence.
+    - Unsupported shaping, font, language, and editing paths fail closed with story diagnostics.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - GraphCanvas, Timeline, world-space UI, effects, and builder work remain later milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-008
+    title: GraphCanvas And Timeline
+    kind: implementation
+    state: designing
+    goal: Productize GraphCanvas and Timeline as story-proven advanced UI controls before editor workflows depend on them.
+    outcome: Graph and timeline surfaces have deterministic story coverage for rendering, interaction, scale, selection, editing, diagnostics, and host intent boundaries.
+    dependencies:
+    - PM-UI-STORY-007
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Advanced control work must follow the UI platform capability roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - GraphCanvas stories cover nodes, edges, ports, pan/zoom, selection, editing, invalid graph diagnostics, and large-scene budgets.
+    - Timeline stories cover tracks, clips, cursors, keyframes, selection, editing, scrubbing, invalid time data, and performance budgets.
+    - Host/editor workflows consume story-proven controls rather than private product-specific UI implementations.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - World-space UI, effects, and visual builder work remain later milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-009
+    title: World-Space UI And Effects
+    kind: implementation
+    state: designing
+    goal: Extend story proof to world-space UI, projected attachment UI, transitions, effects, and renderer-facing policy without renderer-owned UI semantics.
+    outcome: World-space and effectful UI surfaces have story-derived layout, visibility, projection, interaction, accessibility, render, and mount eligibility evidence.
+    dependencies:
+    - PM-UI-STORY-008
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: World-space UI and effects must follow the story platform roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - World-space UI stories cover spatial anchors, projection, culling, occlusion, safe-area, input, accessibility, and unsupported-feature diagnostics.
+    - UI effects are represented as explicit story stages or renderer-facing primitive/effect contracts.
+    - Renderer and world systems remain consumers of derived UI outputs, not owners of UI behavior.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Visual builder and final productization remain later milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-010
+    title: Visual UI Builder
+    kind: implementation
+    state: designing
+    goal: Build visual UI authoring around story manifests, story reports, diagnostics, previews, and mount eligibility.
+    outcome: Visual UI authoring edits story-backed source and shows the same proof envelope that CLI, gallery, tests, and product hosts consume.
+    dependencies:
+    - PM-UI-STORY-009
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Visual builder work must follow the UI platform capability roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - Builder previews are `UiStoryRunReport` views, not separate rendering shortcuts.
+    - Builder edits preserve manifest, source, state, route, diagnostic, and mount policy truth.
+    - Invalid edits produce story diagnostics and cannot claim mount eligibility.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Docs, training, API ergonomics, and no-gap closeout remain later milestones.
+    completion_audit: ''
+  - id: PM-UI-STORY-011
+    title: Docs, Training, Productization
+    kind: hardening
+    state: designing
+    goal: Harden public docs, examples, training material, API ergonomics, and product adoption paths around the story platform.
+    outcome: Developers can discover, author, validate, inspect, preview, and mount UI through the story platform without hidden renderer, app, or test-only shortcuts.
+    dependencies:
+    - PM-UI-STORY-010
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Productization must follow the accepted UI platform roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - Usage guides teach normal story authoring, CLI inspection, gallery preview, failure stories, and mount eligibility first.
+    - Examples demonstrate the preferred public story API and do not rely on internal shortcuts.
+    - Docs distinguish story workflow usage from architecture notes and historical static-rendering evidence.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Final no-gap audit and closeout remain PM-UI-STORY-012.
+    completion_audit: ''
+  - id: PM-UI-STORY-012
+    title: Perfectionist No-Gap Audit And Closeout
+    kind: release
+    state: designing
+    goal: Complete a no-gap audit proving the story platform has no known bypass paths, stale truth, undocumented risks, or deferred quality gaps inside the accepted scope.
+    outcome: PT-UI-STORY-PLATFORM can claim perfectionist_verified only after current evidence, audits, closeouts, and generated planning state all agree with zero known gaps and zero known risks.
+    dependencies:
+    - PM-UI-STORY-011
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Final closeout must audit the full accepted UI platform roadmap scope.
+    evidence_gates: []
+    acceptance_criteria:
+    - Every story platform milestone has completed closeout evidence and current validation.
+    - Truth certificates, post-completion audits, production validation, roadmap validation, docs validation, and planning validation pass.
+    - There are no known gaps, known risks, stale evidence records, stale generated docs, or parallel bypass paths.
+    - Static gallery, CLI, builder, static mount, product mount, and renderer-facing paths all require `UiStoryRunReport`.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - The no-gap audit is not complete until all preceding story platform milestones are complete.
     completion_audit: ''
 - id: PT-GAME-RUNTIME-UI
   title: Game Runtime UI Projection And HUD Platform

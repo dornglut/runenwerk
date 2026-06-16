@@ -15,7 +15,7 @@ subject_paths:
 - domain/ui/ui_artifacts/src/source_map.rs
 - domain/ui/ui_artifacts/src/source_map_attachment.rs
 subject_digests:
-  domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+  domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
   domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
   domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 validation_commands:
@@ -34,9 +34,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 0a3295173c5cc5389f4558f729ef8ba2466f7d0350e7f41950a481fedd02775a
+  validation_result_digest: 6074d5ac5f03e3eb48f8b3fa199de6c0d3220951d0a811a0f75600d70e004ced
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 - command_id: cargo:test
@@ -49,9 +49,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 19e9e56657154e00a30eb2f08cd37bfc6a5967400867252d4f3dbab3f0cdb485
+  validation_result_digest: 2d4223b2ae0b59f2420f0f13f45edbff5da08c49efa73dd1e97de87eb80616cd
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 - command_id: cargo:test
@@ -64,9 +64,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: f1552760b19a57bb356fdeba7d602125279436f4615b5ab9fd6967b12325288b
+  validation_result_digest: 20383aee4243168ef9ac8cb994e8af9c58d85934e5e3696b7533ec4874ec18f4
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 - command_id: cargo:test
@@ -79,9 +79,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: cc0daf9381083f97d7ad17bd515747c4adb5a0256bee0970df30f60434dfd3a2
+  validation_result_digest: 5408d145e3e6e3cb6bc0ef92a0e35978ea87c7216bbb924a50544c7e7bae45ec
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 - command_id: cargo:test
@@ -94,9 +94,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: 411a422759db8279385bb09c3f1217d050100d5dbc2ff06b915942365983bc68
+  validation_result_digest: 6b9f670299be442dffed194f8619a3549b5154636ce736fb190c6e555dc5f441
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 - command_id: cargo:test
@@ -109,9 +109,9 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: fd64f7246bd2e20bbc7bb638def51e37f48782b0ac903c033599fc7af670b072
+  validation_result_digest: 5d063c5102f3ca9441d373ca8a1ea017ab21e5ab6c9a3db27235b4e1a59807af
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb
 - command_id: cargo:test
@@ -124,8 +124,8 @@ validation_provenance:
   returncode: 0
   run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-program-architecture/pt-ui-program-architecture-20260602-200937z.yaml
   run_action_id: PT-UI-PROGRAM-ARCHITECTURE:PM-UI-PROGRAM-ARCH-014:WR-172
-  validation_result_digest: c44c99be0a11e91aa995ac577230e9055f3a88bcff250e09690db6db9bd46212
+  validation_result_digest: 141d007a258e59fdbf7be7fc8247cefec302454a9b17bab41f05034d90134734
   subject_digests:
-    domain/ui/ui_artifacts/src/source_map.rs: 2a92bc44cd798acd3ecca6530638814dd97b258d93fd4515bfd08973668439c7
+    domain/ui/ui_artifacts/src/source_map.rs: be0d5d93a0e90e4501702b822eecf713ac1cfb118356b25ae5a6d396fa61a236
     domain/ui/ui_artifacts/src/source_map_attachment.rs: 176472aaa4ddea58555f847ac2e3d75539ebfd8ed7c532f0f2e8abb05dd22ace
     domain/ui/ui_program/src/source_map.rs: cea64841ea8cdcb439ffb1190e6a817232982766b80d741af3441e64bfc866bb

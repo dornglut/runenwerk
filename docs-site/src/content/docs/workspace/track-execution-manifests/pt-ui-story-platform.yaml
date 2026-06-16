@@ -1,0 +1,839 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+authority_level: planning_and_sequencing_only
+accepted_design_dependencies:
+- path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+  required_status: active
+  reason: The story platform track must follow the active story-driven UI golden workflow design.
+- path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+  required_status: active
+  reason: The track sequence must follow the active UI platform capability roadmap.
+- path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  required_status: active
+  reason: Runtime rendering remains useful only as artifact-backed evidence after it is re-run through stories.
+- path: docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md
+  required_status: active
+  reason: Future story platform work must satisfy the accepted story acceptance checklist.
+- path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+  required_status: completed
+  reason: The story platform starts after completed UiProgram architecture behavior truth and extension-readiness closure.
+global_forbidden_scope: &global_forbidden_scope
+- no product code from this manifest alone
+- no product code until an owning WR and accepted production plan exist
+- no crate creation until exact `domain/ui/ui_story` authority exists
+- no renderer-owned UI semantics
+- no ECS-owned UI semantics
+- no editor-owned or game-owned UI product truth
+- no mountable surface without story-derived mount eligibility
+- no gallery migration until `UiStoryRunReport` is the gallery proof envelope
+- no standalone static gallery rendering as a production growth path
+- no generated docs hand edits
+global_validation_commands: &planning_validation_commands
+- task production:render
+- task production:validate
+- task production:check
+- task roadmap:render
+- task roadmap:validate
+- task roadmap:check
+- task docs:validate
+- task planning:validate
+global_stop_conditions:
+- stop if manifest data conflicts with production track or roadmap state
+- stop if a milestone lacks an owning WR or future WR candidate
+- stop if generated docs would require hand edits
+- stop before product code unless a dedicated active WR and accepted production plan authorize exact scope
+- stop before crate creation unless exact `domain/ui/ui_story` authority exists
+- stop before runtime rendering proof until `UiStoryRunner` and `UiStoryRunReport` exist
+- stop before static mount or product mount eligibility unless `UiStoryMountEligibility` is derived from `UiStoryRunReport`
+next_legal_action: Create or link the future WR for PM-UI-STORY-001 and keep execution planning-only; no runtime code, crate creation, gallery migration, or product mount work is authorized by this manifest.
+ai_executable: false
+full_automation_target: false
+truth_claims:
+- claim_id: ui-story-platform-perfectionist-readiness
+  claim_kind: product_behavior
+  claim_level: perfectionist_verified
+  claim_status: blocked
+  claim_statement: The UI story platform may claim perfectionist_verified only after every story platform milestone closes with current evidence, zero known gaps, zero known risks, and no bypass path around `UiStoryRunReport`.
+  required_docs: []
+  required_code_contracts: []
+  required_validations: []
+  required_closeout_evidence: []
+  known_gaps:
+  - PM-UI-STORY-001 through PM-UI-STORY-012 are not complete.
+  - '`UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and `UiStoryMountEligibility` are recorded here as future contracts, not implemented by this authority slice.'
+  - Runtime rendering proof has not yet been re-run as a story stage.
+  supersedes:
+  - PT-UI-RUNTIME-RENDERING standalone static gallery growth path
+  blocks_downstream:
+  - PM-UI-STORY-002
+  - PM-UI-STORY-003
+  - PM-UI-STORY-004
+  - PM-UI-STORY-005
+  - PM-UI-STORY-006
+  - PM-UI-STORY-007
+  - PM-UI-STORY-008
+  - PM-UI-STORY-009
+  - PM-UI-STORY-010
+  - PM-UI-STORY-011
+  - PM-UI-STORY-012
+milestones:
+- milestone_id: PM-UI-STORY-001
+  title: Story Workflow Authority And Track Activation
+  stage: Stage 0
+  authority_level: docs_governance_only
+  milestone_type: design_only
+  future_wr_candidate: WR-TBD-UI-STORY-001
+  predecessor_dependencies:
+  - PM-UI-PROGRAM-ARCH-014
+  write_scope:
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+  - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+  - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - PM-UI-STORY-001 is planning and sequencing authority only.
+  - '`UiStoryRunReport` is recorded as the future proof envelope before gallery, CLI, static mount, or product mount claims.'
+  - PT-UI-RUNTIME-RENDERING remains deferred as a standalone production growth path.
+  validation_commands: *planning_validation_commands
+  evidence_gates:
+  - production track metadata validates
+  - roadmap deferral validates
+  - docs validate
+  - planning validates
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+  stop_conditions:
+  - stop after planning metadata, manifest, and docs authority updates
+  - stop before runtime code
+  - stop before crate creation
+  - stop before gallery migration
+  - stop before product mount eligibility
+  next_legal_action: Allocate or link the owning WR for PM-UI-STORY-001 before writing a closeout.
+  may_create_code: false
+  may_create_crates: false
+  may_modify_production_behavior: false
+  execution_kind: design_contract
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - agent_closeout
+  required_evidence_categories:
+  - governance
+  auto_safe_contract: &auto_safe_contract
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - mount eligibility without `UiStoryRunReport`
+    validation_commands: *planning_validation_commands
+    stop_conditions:
+    - stop after one WR expansion action
+    - stop if generated metadata does not validate
+    template_key: ui_story_platform_auto_safe_expansion
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract: &governance_design_contract
+    source_documents:
+    - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+    - docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - forbidden scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - story-first sequencing remains authoritative
+    - runtime rendering proof happens after story runner/report creation
+    - product code and crate creation remain forbidden without an owning WR and production plan
+    acceptance_checklist:
+    - plan preserves planning-only authority
+    - plan does not authorize runtime code
+    - plan records `UiStoryRunReport` as the proof envelope
+    planning_write_scope:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-story-001-story-workflow-authority-and-track-activation/plan.md
+    validation_commands: *planning_validation_commands
+    stop_conditions:
+    - stop before implementation
+    - stop if validation fails
+    template_key: ui_story_platform_governance_design
+    generated_contract_marker: PT-UI-STORY-PLATFORM-GOVERNANCE-DESIGN
+    generated_from_template_version: v1
+  agent_closeout_contract: &agent_closeout_contract
+    evidence_files:
+    - docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+    validation_commands: *planning_validation_commands
+    completion_quality_allowed:
+    - bounded_contract
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+    production_roadmap_state_updates:
+    - mark only the current milestone complete when evidence exists
+    - do not promote downstream milestones without their own WRs
+    known_gap_reporting:
+    - list every unimplemented downstream story platform milestone
+    - keep runtime rendering proof deferred until PM-UI-STORY-004
+    next_action_update_rules:
+    - next action is PM-UI-STORY-002 WR expansion
+    template_key: ui_story_platform_agent_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AGENT-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-UI-STORY-002
+  title: Story Manifest, Registry, Runner, And Report Contract
+  stage: Stage 1
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-002
+  predecessor_dependencies:
+  - PM-UI-STORY-001
+  write_scope:
+  - 'new: domain/ui/ui_story/Cargo.toml'
+  - 'new: domain/ui/ui_story/src/lib.rs'
+  - 'new: domain/ui/ui_story/src/manifest.rs'
+  - 'new: domain/ui/ui_story/src/registry.rs'
+  - 'new: domain/ui/ui_story/src/runner.rs'
+  - 'new: domain/ui/ui_story/src/report.rs'
+  - 'new: domain/ui/ui_story/src/mount.rs'
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - record and implement `UiStoryManifest`
+  - record and implement `UiStoryRegistry`
+  - record and implement `UiStoryRunner`
+  - record and implement `UiStoryRunReport`
+  - record and implement `UiStoryMountEligibility`
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - artifact
+  - diagnostics
+  - source_maps
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
+  stop_conditions:
+  - stop without owning WR and accepted production plan
+  - stop before crate creation unless the plan names exact `domain/ui/ui_story` outputs
+  - stop if contracts are renderer-owned or app-owned
+  next_legal_action: Expand or link PM-UI-STORY-002 before creating `domain/ui/ui_story`.
+  may_create_code: true
+  may_create_crates: true
+  may_modify_production_behavior: false
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - diagnostics
+  - source_maps
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: &product_code_contract
+    required_active_wr_state: current_candidate or ready_next with accepted implementation plan
+    required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/<wr-id>/plan.md
+    exact_allowed_implementation_write_scopes:
+    - domain/ui/ui_story
+    required_function_method_scope:
+    - domain/ui/ui_story public contracts and tests only
+    forbidden_implementation_scopes:
+    - renderer-owned UI semantics
+    - ECS-owned UI semantics
+    - editor/game mount behavior without `UiStoryMountEligibility`
+    tests_to_add_change:
+    - cargo test -p ui_story
+    runtime_evidence_required:
+    - '`UiStoryRunReport` stage and diagnostic evidence'
+    validation_commands:
+    - cargo test -p ui_story
+    - cargo fmt --all --check
+    - task docs:validate
+    - task production:validate
+    - task roadmap:validate
+    rollback_compatibility_expectations:
+    - no existing UI renderer, editor, game, or ECS behavior changes without story migration evidence
+    closeout_evidence:
+    - resolver-backed runtime_test, artifact, diagnostics, and source_maps evidence
+    stop_conditions:
+    - stop if story contracts cannot remain domain-owned
+    - stop if mount eligibility is inferred outside `UiStoryRunReport`
+    template_key: ui_story_platform_product_code
+    generated_contract_marker: PT-UI-STORY-PLATFORM-PRODUCT-CODE
+    generated_from_template_version: v1
+  runtime_closeout_contract: &runtime_closeout_contract
+    runtime_test_evidence_required:
+    - focused story platform runtime tests
+    validation_commands:
+    - cargo test -p ui_story
+    - cargo fmt --all --check
+    - task docs:validate
+    - task production:validate
+    - task roadmap:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
+    files_changed_report:
+    - exact implementation files
+    - exact evidence files
+    known_gap_reporting:
+    - list all downstream story platform milestones not completed by this slice
+    production_roadmap_state_updates:
+    - complete only the owning WR and milestone
+    next_action_update_rules:
+    - next action is the next PM-UI-STORY milestone
+    template_key: ui_story_platform_runtime_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+- milestone_id: PM-UI-STORY-003
+  title: Gallery And CLI Story Execution
+  stage: Stage 2
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-003
+  predecessor_dependencies:
+  - PM-UI-STORY-002
+  write_scope:
+  - domain/ui/ui_story
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - gallery preview consumes `UiStoryRunReport`
+  - CLI inspection consumes `UiStoryRunReport`
+  - failure stories remain first-class
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo test -p runenwerk_editor ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - artifact
+  - diagnostics
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
+  stop_conditions:
+  - stop without owning WR and accepted production plan
+  - stop if gallery or CLI reads button-specific fixtures instead of story reports
+  next_legal_action: Expand or link PM-UI-STORY-003 after PM-UI-STORY-002 closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - diagnostics
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-004
+  title: Story-Gated Runtime Rendering Proof
+  stage: Stage 3
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-004
+  predecessor_dependencies:
+  - PM-UI-STORY-003
+  write_scope:
+  - domain/ui/ui_story
+  - domain/ui/ui_runtime_view
+  - domain/ui/ui_render_primitives
+  - domain/ui/ui_headless_render_data
+  - domain/ui/ui_static_mount
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - static rendering proof is a `UiStoryRunReport` stage
+  - static mount requires `UiStoryMountEligibility`
+  - renderer consumes derived primitives only
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo test -p ui_runtime_view
+  - cargo test -p ui_render_primitives
+  - cargo test -p ui_headless_render_data
+  - cargo test -p ui_static_mount
+  - cargo test -p runenwerk_editor ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - artifact
+  - diagnostics
+  - visual
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+  stop_conditions:
+  - stop if rendering proof bypasses `UiStoryRunReport`
+  - stop if renderer owns authored UI semantics
+  next_legal_action: Expand or link PM-UI-STORY-004 after story gallery and CLI execution closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - artifact
+  - diagnostics
+  - visual
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-005
+  title: Base Component Story Matrix
+  stage: Stage 4
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-005
+  predecessor_dependencies:
+  - PM-UI-STORY-004
+  write_scope:
+  - domain/ui/ui_story
+  - domain/ui/ui_controls
+  - docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - base control stories cover normal, edge, failure, and accessibility states
+  - component acceptance depends on story reports
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo test -p ui_controls
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - fixture
+  - diagnostics
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-005-base-component-story-matrix/closeout.md
+  stop_conditions:
+  - stop if a component is accepted from rendering alone
+  next_legal_action: Expand or link PM-UI-STORY-005 after story-gated rendering proof closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - fixture
+  - diagnostics
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-006
+  title: Interaction Platform
+  stage: Stage 5
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-006
+  predecessor_dependencies:
+  - PM-UI-STORY-005
+  write_scope:
+  - domain/ui/ui_story
+  - domain/ui/ui_interaction
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - interaction traces replay through `UiStoryRunner`
+  - host intents are explicit proposals
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - diagnostics
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-006-interaction-platform/closeout.md
+  stop_conditions:
+  - stop if domain UI mutates host state
+  next_legal_action: Expand or link PM-UI-STORY-006 after base component story coverage closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - diagnostics
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-007
+  title: Text Platform
+  stage: Stage 6
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-007
+  predecessor_dependencies:
+  - PM-UI-STORY-006
+  write_scope:
+  - domain/ui/ui_story
+  - domain/ui/ui_text
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - text layout and shaping requests are story-proven
+  - unsupported text paths fail closed with diagnostics
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - diagnostics
+  - visual
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-007-text-platform/closeout.md
+  stop_conditions:
+  - stop if text rendering uses placeholder proof
+  next_legal_action: Expand or link PM-UI-STORY-007 after interaction platform closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - diagnostics
+  - visual
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-008
+  title: GraphCanvas And Timeline
+  stage: Stage 7
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-008
+  predecessor_dependencies:
+  - PM-UI-STORY-007
+  write_scope:
+  - domain/ui/ui_story
+  - domain/ui/ui_graph_canvas
+  - domain/ui/ui_timeline
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - GraphCanvas stories cover rendering, interaction, diagnostics, and budgets
+  - Timeline stories cover rendering, editing, diagnostics, and budgets
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - diagnostics
+  - visual
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-008-graphcanvas-and-timeline/closeout.md
+  stop_conditions:
+  - stop if editor workflows consume private advanced-control behavior
+  next_legal_action: Expand or link PM-UI-STORY-008 after text platform closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - diagnostics
+  - visual
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-009
+  title: World-Space UI And Effects
+  stage: Stage 8
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-009
+  predecessor_dependencies:
+  - PM-UI-STORY-008
+  write_scope:
+  - domain/ui/ui_story
+  - domain/ui/ui_world_space
+  - domain/ui/ui_effects
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - world-space UI stories prove projection, visibility, input, accessibility, and mount eligibility
+  - UI effects remain explicit story or renderer-facing derived contracts
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - diagnostics
+  - visual
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-009-world-space-ui-and-effects/closeout.md
+  stop_conditions:
+  - stop if renderer or world systems own UI behavior
+  next_legal_action: Expand or link PM-UI-STORY-009 after GraphCanvas and Timeline close.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - diagnostics
+  - visual
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-010
+  title: Visual UI Builder
+  stage: Stage 9
+  authority_level: future_wr_and_plan_required
+  milestone_type: implementation
+  future_wr_candidate: WR-TBD-UI-STORY-010
+  predecessor_dependencies:
+  - PM-UI-STORY-009
+  write_scope:
+  - domain/ui/ui_story
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - builder previews are `UiStoryRunReport` views
+  - invalid edits cannot claim mount eligibility
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo test -p runenwerk_editor ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - runtime_test
+  - diagnostics
+  - visual
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-010-visual-ui-builder/closeout.md
+  stop_conditions:
+  - stop if builder preview bypasses story reports
+  next_legal_action: Expand or link PM-UI-STORY-010 after world-space UI and effects close.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - runtime_test
+  - diagnostics
+  - visual
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-011
+  title: Docs, Training, Productization
+  stage: Stage 10
+  authority_level: future_wr_and_plan_required
+  milestone_type: hardening
+  future_wr_candidate: WR-TBD-UI-STORY-011
+  predecessor_dependencies:
+  - PM-UI-STORY-010
+  write_scope:
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+  - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+  - examples
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - public docs teach story authoring, inspection, preview, failure stories, and mount eligibility
+  - examples use preferred public story APIs
+  validation_commands:
+  - cargo test -p ui_story
+  - cargo fmt --all --check
+  - task docs:validate
+  - task production:validate
+  - task roadmap:validate
+  evidence_gates:
+  - artifact
+  - reproducibility
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-011-docs-training-productization/closeout.md
+  stop_conditions:
+  - stop if docs teach bypass paths
+  next_legal_action: Expand or link PM-UI-STORY-011 after visual UI builder closes.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: false
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - auto_safe
+  - agent_design
+  - product_code
+  - product_implementation
+  - runtime_closeout
+  required_evidence_categories:
+  - artifact
+  - reproducibility
+  auto_safe_contract: *auto_safe_contract
+  agent_design_contract: *governance_design_contract
+  product_code_contract: *product_code_contract
+  runtime_closeout_contract: *runtime_closeout_contract
+- milestone_id: PM-UI-STORY-012
+  title: Perfectionist No-Gap Audit And Closeout
+  stage: Stage 11
+  authority_level: future_wr_and_plan_required
+  milestone_type: closeout
+  future_wr_candidate: WR-TBD-UI-STORY-012
+  predecessor_dependencies:
+  - PM-UI-STORY-011
+  write_scope:
+  - docs-site/src/content/docs/reports/closeouts/pt-ui-story-platform-perfectionist-closeout/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  forbidden_scope: *global_forbidden_scope
+  required_contracts:
+  - every prior story platform milestone is complete
+  - truth evidence is current
+  - zero known gaps and zero known risks are recorded
+  - no bypass path around `UiStoryRunReport` exists
+  validation_commands:
+  - task truth:audit -- --track PT-UI-STORY-PLATFORM
+  - task truth:post-completion-audit -- --track PT-UI-STORY-PLATFORM
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - completed closeout evidence for every prior milestone
+  - current truth certificates
+  - no known bypass paths
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pt-ui-story-platform-perfectionist-closeout/closeout.md
+  stop_conditions:
+  - stop if any known gap, risk, stale evidence, or bypass path remains
+  - stop if generated planning docs are stale
+  next_legal_action: Expand or link PM-UI-STORY-012 only after PM-UI-STORY-001 through PM-UI-STORY-011 close.
+  may_create_code: false
+  may_create_crates: false
+  may_modify_production_behavior: false
+  execution_kind: handoff_closeout
+  permission_classes_required:
+  - auto_safe
+  - agent_closeout
+  - handoff
+  required_evidence_categories:
+  - handoff
+  auto_safe_contract: *auto_safe_contract
+  agent_closeout_contract:
+    <<: *agent_closeout_contract
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pt-ui-story-platform-perfectionist-closeout/closeout.md
+  handoff_contract:
+    handoff_target: PT-UI-STORY-PLATFORM perfectionist_verified closeout
+    proof_path_rules:
+    - no implementation claim may bypass `UiStoryRunReport`
+    - static gallery evidence must be story-derived
+    - mount eligibility must be story-derived
+    forbidden_scopes:
+    - implementation without accepted WR and plan
+    - foundation/meta extraction
+    - renderer-owned UI semantics
+    validation_commands: *planning_validation_commands
+    stop_conditions:
+    - stop if any downstream implementation claim lacks story evidence
+    template_key: ui_story_platform_handoff
+    generated_contract_marker: PT-UI-STORY-PLATFORM-HANDOFF
+    generated_from_template_version: v1

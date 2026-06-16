@@ -69,12 +69,13 @@ New advanced control/platform feature:
 
 Do not hide real platform capability work behind fake simplicity.
 
-## PT-UI-001 - Story-Driven Golden Workflow
+## PM-UI-STORY-001 - Story Workflow Authority And Track Activation
 
 ### Goal
 
-Make `UiStory` the canonical unit for authoring, preview, validation,
-inspection, proof, and mount eligibility.
+Activate the story-first production track and record `UiStory` as the
+canonical future unit for authoring, preview, validation, inspection, proof,
+and mount eligibility.
 
 ### Owns
 
@@ -112,7 +113,7 @@ stories and a domain-owned story runner.
 - No new advanced component class.
 - No broad product/editor feature work.
 
-## PT-UI-002 - Base Component Foundation
+## PM-UI-STORY-005 - Base Component Story Matrix
 
 ### Goal
 
@@ -176,7 +177,7 @@ Every component has:
 - failure stories for missing required fields and invalid properties;
 - docs page.
 
-## PT-UI-003 - Interaction Platform
+## PM-UI-STORY-006 - Interaction Platform
 
 ### Goal
 
@@ -224,7 +225,7 @@ crate-creation procedure.
 - GraphCanvas and Timeline are blocked until this track provides their shared
   interaction primitives.
 
-## PT-UI-004 - Text Platform
+## PM-UI-STORY-007 - Text Platform
 
 ### Goal
 
@@ -265,7 +266,7 @@ assets/ui_gallery/stories/text/
 - Rich text and code editor are not started until text
   selection/cursor/clipboard primitives are proven.
 
-## PT-UI-005 - GraphCanvas Platform Component
+## PM-UI-STORY-008 - GraphCanvas And Timeline
 
 ### Goal
 
@@ -316,7 +317,7 @@ The `ui_graph_canvas` crate path is preferred only after accepted authority.
 - Host/domain owns graph mutation and validation.
 - No material-specific graph behavior is baked into generic UI.
 
-## PT-UI-006 - Timeline Platform Component
+### Timeline Platform Component
 
 ### Goal
 
@@ -365,7 +366,7 @@ The `ui_timeline` crate path is preferred only after accepted authority.
 - Drag/selection reuses the interaction platform.
 - Text measurement and layout are reused.
 
-## PT-UI-007 - World-Space UI
+## PM-UI-STORY-009 - World-Space UI And Effects
 
 ### Goal
 
@@ -403,7 +404,7 @@ The `ui_world_space` crate path is preferred only after accepted authority.
 - World-space differences are host projection/input/render-profile
   differences.
 
-## PT-UI-008 - UI Effects Platform
+### UI Effects Platform
 
 ### Goal
 
@@ -438,7 +439,7 @@ The `ui_effects` crate path is preferred only after accepted authority.
 - Unsupported effects fail with diagnostics or declared fallback policy.
 - Renderer adapter consumes effect primitives/contracts only.
 
-## PT-UI-009 - Visual UI Builder
+## PM-UI-STORY-010 - Visual UI Builder
 
 ### Goal
 
@@ -483,7 +484,7 @@ AuthoredUiTemplate / UiNodeDefinition source
 UiStoryManifest
 ```
 
-## PT-UI-010 - Docs, Training, And Productization
+## PM-UI-STORY-011 - Docs, Training, And Productization
 
 ### Goal
 
@@ -519,16 +520,18 @@ tools/ui/
 ## Recommended Implementation Order
 
 ```text
-PT-UI-001 Story-Driven Golden Workflow
-PT-UI-002 Base Component Foundation
-PT-UI-003 Interaction Platform
-PT-UI-004 Text Platform
-PT-UI-005 GraphCanvas
-PT-UI-006 Timeline
-PT-UI-007 World-Space UI
-PT-UI-008 UI Effects
-PT-UI-009 Visual UI Builder
-PT-UI-010 Docs/Training/Productization
+PM-UI-STORY-001 Story Workflow Authority And Track Activation
+PM-UI-STORY-002 Story Manifest, Registry, Runner, And Report Contract
+PM-UI-STORY-003 Gallery And CLI Story Execution
+PM-UI-STORY-004 Story-Gated Runtime Rendering Proof
+PM-UI-STORY-005 Base Component Story Matrix
+PM-UI-STORY-006 Interaction Platform
+PM-UI-STORY-007 Text Platform
+PM-UI-STORY-008 GraphCanvas And Timeline
+PM-UI-STORY-009 World-Space UI And Effects
+PM-UI-STORY-010 Visual UI Builder
+PM-UI-STORY-011 Docs, Training, Productization
+PM-UI-STORY-012 Perfectionist No-Gap Audit And Closeout
 ```
 
 Do not start GraphCanvas, Timeline, UI Builder, or world-space UI before the

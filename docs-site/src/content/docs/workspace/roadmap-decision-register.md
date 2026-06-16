@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-01
+last_reviewed: 2026-06-16
 related:
   - ./planning-methods.md
   - ./design-implementation-triage.md
@@ -72,7 +72,6 @@ Priority resolution order:
 | WR-040 | External Component Sandbox Design | Platform security | support_only | not_applicable | L3 | Policy deferred until sandbox/security design acceptance | 3 | 2 | 5 | 5 | 5 | 8 | 0.3 | 0.7 | Design-only row for future external components. | Basic | Accepted sandbox/security design before any external dynamic component implementation. | External components stay blocked until sandbox, package trust, permissions, unload/reload, and diagnostics are accepted. |
 | WR-046 | UI Designer doctrine and target boundary ratification | Product planning | support_only | not_applicable | L0 | Support-only doctrine evidence | 3 | 1 | 2 | 3 | 2 | 2 | 0.8 | 4.0 | N/A | Basic | PM-UI-DESIGN-001 closeout proving active UI Designer doctrine, target-profile boundaries, no runtime/code changes, and passing production, roadmap, docs, and planning validators. | Support-only planning row for PM-UI-DESIGN-001; link doctrine closeout to the production track without changing WR execution state. |
 | WR-103 | Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation | Render planning | ready_next | not_applicable | L4 | Governed shader-bound sparse SDF runtime track activation | 4 | 3 | 3 | 4 | 3 | 5 | 0.8 | 2.2 | N/A | Performance | Complete PM-RENDER-SDF-RUNTIME-001 with active shader-bound sparse SDF terrain runtime design, production track activation, WR-103 governance row, implementation contract, and follow-on runtime milestones before any engine or shader implementation starts. | WR-103 is a docs/governance row for PT-RENDER-SDF-RUNTIME. It may update planning docs, the active runtime integration design, and the implementation contract only. |
-| WR-173 | Artifact-Backed Static UI Gallery Runtime Rendering | Product workflow | ready_next | runtime_proven | L1 | Artifact-backed UI rendering slice | 4 | 3 | 4 | 4 | 4 | 5 | 0.8 | 2.6 | N/A | Basic | PM-UI-RUNTIME-RENDERING-001 closeout proving the static button gallery renders through artifacts, runtime views, backend-neutral primitives, GlyphRun text, static mount, and the existing renderer UI composite pass. | Implement the first visible static gallery slice without reopening completed PT-UI-PROGRAM-ARCHITECTURE and without adding a new app crate. |
 
 Active views omit completed and deferred rows. Use
 [roadmap-archive-register.md](./roadmap-archive-register.md) for

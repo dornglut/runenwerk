@@ -68,8 +68,6 @@ package "Level 1 - Near-Term Productization" {
 
   component "WR-024 Editor Shell Polish\nstate=ready_next\nscore=4.0 gate=after interaction v2 contract spine\nV4 B1\ncall=FPS stats\ncontrast, scroll, tab chrome" as SHELLPOLISH <<V4>>
 
-  component "WR-173 UI runtime gallery\nstate=ready_next\nscore=2.6 gate=artifact-backed ui rendering slice\nV4 B3\ncall=static artifact gallery\nGlyphRun labels\nexisting UI composite" as UIRUNTIMEGALLERY <<V4>>
-
 }
 
 package "Level 3 - Active Domain Tracks" {
