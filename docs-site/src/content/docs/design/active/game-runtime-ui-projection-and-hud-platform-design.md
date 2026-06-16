@@ -144,10 +144,11 @@ world-space/entity-attached UI.
 - `PM-GAME-RUNTIME-UI-007`: runtime-proven closeout and perfectionist-audit
   intake.
 
-World-space and screen-projected attachment UI is deferred. Nameplates, damage
-numbers, boss frames, entity-attached widgets, and split-screen attachment
-contracts must wait for explicit authored binding contracts and runtime
-formation seams.
+World-space and screen-projected attachment UI is deferred to
+`PT-GAME-WORLDSPACE-UI`. Nameplates, damage numbers, boss frames,
+entity-attached widgets, and split-screen attachment contracts must wait for
+explicit authored binding contracts, viewport/projection readiness, renderer
+readiness where needed, and runtime formation seams.
 
 ## Evidence Rules
 
@@ -176,7 +177,7 @@ Runtime proof must show that:
 - Engine render code starts owning game HUD semantics.
 - SDF proof changes become the architecture instead of a bounded consumer proof.
 - World-space/screen-projected attachment UI is folded into the first screen HUD
-  proof.
+  proof instead of `PT-GAME-WORLDSPACE-UI`.
 - The track claims `perfectionist_verified` before a separate completed no-gap
   audit with empty known gaps.
 

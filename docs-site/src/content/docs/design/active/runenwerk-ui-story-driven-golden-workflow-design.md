@@ -503,22 +503,26 @@ tools/ui new-surface-story
 
 No duplicate CLI-specific runner is allowed.
 
-## Advanced UI Platform Capabilities
+## Advanced UI Platform Consumers
 
-The following wanted features must be platform tracks, not ad-hoc editor
-features:
+The following wanted features must be owned by their bounded production tracks,
+not by ad-hoc editor features and not by `PT-UI-STORY-PLATFORM`.
 
 | Feature | Correct platform form |
 |---|---|
-| node graph editor | `GraphCanvas` package-backed platform component |
-| animation timeline | `Timeline` package-backed platform component |
-| rich text/code editor | `RichText` / `CodeEditor` text platform |
-| advanced drag/drop | `ui_drag_drop` interaction platform |
-| visual UI builder | `apps/runenwerk_ui_builder` editing authored source and stories |
-| shader-driven effects | `ui_effects` plus renderer contract |
-| world-space 3D UI | `ui_world_space_host` host/platform path |
+| base controls, interaction, text | `PT-UI-COMPONENT-PLATFORM` reusable component work |
+| node graph editor | `PT-UI-COMPONENT-PLATFORM` `GraphCanvas` package-backed component |
+| animation timeline | `PT-UI-COMPONENT-PLATFORM` `Timeline` package-backed component |
+| visual UI builder | Designer/Workbench tracks editing authored source and consuming story reports |
+| generic component transitions/effects | `PT-UI-COMPONENT-PLATFORM` only when component-scoped |
+| screen-space game HUD | `PT-GAME-RUNTIME-UI` |
+| world-space/entity-attached UI | deferred `PT-GAME-WORLDSPACE-UI` |
+| camera/projection/surface-fit contracts | `PT-VIEWPORT-PROJECTION` |
 
-These capabilities must use the same story workflow and story matrix gates.
+These capabilities must consume `UiStoryRunReport` where story-derived proof is
+relevant. Consuming story reports does not make the story platform the owner of
+component maturity, designer product authoring, game HUD behavior, world-space
+UI, or viewport projection contracts.
 
 ## Cutover Rule
 

@@ -458,21 +458,24 @@ package "PT-UI-STORY-PLATFORM UI Story Platform" {
 
   component "PM-UI-STORY-004 Story-Gated Runtime Rendering Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_004 <<designing>>
 
-  component "PM-UI-STORY-005 Base Component Story Matrix\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_005 <<designing>>
+  component "PM-UI-STORY-005 Story Platform No-Gap Audit And Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_STORY_005 <<designing>>
 
-  component "PM-UI-STORY-006 Interaction Platform\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_006 <<designing>>
+}
 
-  component "PM-UI-STORY-007 Text Platform\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_007 <<designing>>
+package "PT-UI-COMPONENT-PLATFORM UI Component Platform" {
+  component "PM-UI-COMPONENT-001 Component Platform Boundary And Track Activation\nkind=design\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_001 <<designing>>
 
-  component "PM-UI-STORY-008 GraphCanvas And Timeline\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_008 <<designing>>
+  component "PM-UI-COMPONENT-002 Base Component Story Matrix\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_002 <<designing>>
 
-  component "PM-UI-STORY-009 World-Space UI And Effects\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_009 <<designing>>
+  component "PM-UI-COMPONENT-003 Generic Interaction Platform\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_003 <<designing>>
 
-  component "PM-UI-STORY-010 Visual UI Builder\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_010 <<designing>>
+  component "PM-UI-COMPONENT-004 Generic Text Platform\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_004 <<designing>>
 
-  component "PM-UI-STORY-011 Docs, Training, Productization\nkind=hardening\nstate=designing\nWR=N/A" as PM_UI_STORY_011 <<designing>>
+  component "PM-UI-COMPONENT-005 GraphCanvas And Timeline Components\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_005 <<designing>>
 
-  component "PM-UI-STORY-012 Perfectionist No-Gap Audit And Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_STORY_012 <<designing>>
+  component "PM-UI-COMPONENT-006 Generic UI Transition And Effects Primitives\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_006 <<designing>>
+
+  component "PM-UI-COMPONENT-007 Component Platform Docs Evidence And Runtime-Proven Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_COMPONENT_007 <<designing>>
 
 }
 
@@ -491,7 +494,18 @@ package "PT-GAME-RUNTIME-UI Game Runtime UI Projection And HUD Platform" {
 
   component "PM-GAME-RUNTIME-UI-007 Runtime-Proven Closeout And Perfectionist Audit Intake\nkind=release\nstate=designing\nWR=N/A" as PM_GAME_RUNTIME_UI_007 <<designing>>
 
-  component "PM-GAME-RUNTIME-UI-008 World Space And Screen Projected Attachment UI\nkind=design\nstate=deferred\nWR=N/A" as PM_GAME_RUNTIME_UI_008 <<deferred>>
+}
+
+package "PT-GAME-WORLDSPACE-UI Game World-Space UI" {
+  component "PM-GAME-WORLDSPACE-UI-001 Deferred Ownership And Readiness Gate\nkind=design\nstate=deferred\nWR=N/A" as PM_GAME_WORLDSPACE_UI_001 <<deferred>>
+
+  component "PM-GAME-WORLDSPACE-UI-002 Spatial Attachment And Binding Contract\nkind=design\nstate=deferred\nWR=N/A" as PM_GAME_WORLDSPACE_UI_002 <<deferred>>
+
+  component "PM-GAME-WORLDSPACE-UI-003 Projection Visibility Culling And Occlusion Contract\nkind=design\nstate=deferred\nWR=N/A" as PM_GAME_WORLDSPACE_UI_003 <<deferred>>
+
+  component "PM-GAME-WORLDSPACE-UI-004 Entity-Attached UI Runtime Proof\nkind=implementation\nstate=deferred\nWR=N/A" as PM_GAME_WORLDSPACE_UI_004 <<deferred>>
+
+  component "PM-GAME-WORLDSPACE-UI-005 Evidence Docs And Runtime-Proven Closeout\nkind=release\nstate=deferred\nWR=N/A" as PM_GAME_WORLDSPACE_UI_005 <<deferred>>
 
 }
 
@@ -729,13 +743,13 @@ PM_UI_STORY_001 -down-> PM_UI_STORY_002 : production prerequisite
 PM_UI_STORY_002 -down-> PM_UI_STORY_003 : production prerequisite
 PM_UI_STORY_003 -down-> PM_UI_STORY_004 : production prerequisite
 PM_UI_STORY_004 -down-> PM_UI_STORY_005 : production prerequisite
-PM_UI_STORY_005 -down-> PM_UI_STORY_006 : production prerequisite
-PM_UI_STORY_006 -down-> PM_UI_STORY_007 : production prerequisite
-PM_UI_STORY_007 -down-> PM_UI_STORY_008 : production prerequisite
-PM_UI_STORY_008 -down-> PM_UI_STORY_009 : production prerequisite
-PM_UI_STORY_009 -down-> PM_UI_STORY_010 : production prerequisite
-PM_UI_STORY_010 -down-> PM_UI_STORY_011 : production prerequisite
-PM_UI_STORY_011 -down-> PM_UI_STORY_012 : production prerequisite
+PM_UI_STORY_004 -down-> PM_UI_COMPONENT_001 : production prerequisite
+PM_UI_COMPONENT_001 -down-> PM_UI_COMPONENT_002 : production prerequisite
+PM_UI_COMPONENT_002 -down-> PM_UI_COMPONENT_003 : production prerequisite
+PM_UI_COMPONENT_003 -down-> PM_UI_COMPONENT_004 : production prerequisite
+PM_UI_COMPONENT_004 -down-> PM_UI_COMPONENT_005 : production prerequisite
+PM_UI_COMPONENT_005 -down-> PM_UI_COMPONENT_006 : production prerequisite
+PM_UI_COMPONENT_006 -down-> PM_UI_COMPONENT_007 : production prerequisite
 PM_UI_DESIGN_010 -down-> PM_GAME_RUNTIME_UI_001 : production prerequisite
 PM_GAME_RUNTIME_UI_001 -down-> PM_GAME_RUNTIME_UI_002 : production prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_RUNTIME_UI_003 : production prerequisite
@@ -743,6 +757,13 @@ PM_GAME_RUNTIME_UI_003 -down-> PM_GAME_RUNTIME_UI_004 : production prerequisite
 PM_GAME_RUNTIME_UI_004 -down-> PM_GAME_RUNTIME_UI_005 : production prerequisite
 PM_GAME_RUNTIME_UI_005 -down-> PM_GAME_RUNTIME_UI_006 : production prerequisite
 PM_GAME_RUNTIME_UI_006 -down-> PM_GAME_RUNTIME_UI_007 : production prerequisite
-PM_GAME_RUNTIME_UI_007 -down-> PM_GAME_RUNTIME_UI_008 : production prerequisite
+PM_UI_STORY_004 -down-> PM_GAME_WORLDSPACE_UI_001 : production prerequisite
+PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_WORLDSPACE_UI_001 : production prerequisite
+PM_VIEWPORT_PROJECTION_001 -down-> PM_GAME_WORLDSPACE_UI_001 : production prerequisite
+PM_GAME_WORLDSPACE_UI_001 -down-> PM_GAME_WORLDSPACE_UI_002 : production prerequisite
+PM_GAME_WORLDSPACE_UI_002 -down-> PM_GAME_WORLDSPACE_UI_003 : production prerequisite
+PM_VIEWPORT_PROJECTION_003 -down-> PM_GAME_WORLDSPACE_UI_003 : production prerequisite
+PM_GAME_WORLDSPACE_UI_003 -down-> PM_GAME_WORLDSPACE_UI_004 : production prerequisite
+PM_GAME_WORLDSPACE_UI_004 -down-> PM_GAME_WORLDSPACE_UI_005 : production prerequisite
 
 @enduml

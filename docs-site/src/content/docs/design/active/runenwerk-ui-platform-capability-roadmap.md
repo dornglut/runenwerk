@@ -1,6 +1,6 @@
 ---
 title: Runenwerk UI Platform Capability Roadmap
-description: UI-only product roadmap for turning the story-driven golden workflow into an ergonomic platform covering base controls, interaction, text, graph canvas, timeline, world-space UI, effects, and visual authoring.
+description: Split UI production roadmap for story proof substrate, reusable components, visual designer work, game screen HUD, and deferred game world-space UI ownership.
 status: active
 owner: ui
 layer: domain
@@ -9,546 +9,313 @@ last_reviewed: 2026-06-16
 related_designs:
   - ./runenwerk-ui-story-driven-golden-workflow-design.md
   - ./ui-runtime-rendering-pipeline-roadmap.md
+  - ./game-runtime-ui-projection-and-hud-platform-design.md
+  - ./viewport-camera-and-projection-contract-platform-design.md
+  - ../accepted/ui-designer-workbench-product-design.md
   - ./ui-program-architecture.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
   - ../../domain/ui/story-acceptance-and-review-checklist.md
+  - ../../workspace/production-tracks.yaml
 ---
 
 # Runenwerk UI Platform Capability Roadmap
 
 ## Status
 
-This is an active UI-only productization roadmap. It sequences platform
-capabilities that must be story-gated before advanced editor, game, or product
-surfaces depend on them.
+This is an active UI planning roadmap. It corrects the UI production-track
+ownership split and does not authorize implementation, new crates, generated
+planning document edits, runtime UI behavior, renderer changes, ECS changes, or
+app/product behavior by itself.
 
-This roadmap does not authorize implementation, new crates, generated planning
-document edits, or production-track completion by itself. Each implementation
-slice still requires normal WR, production-track, validation, and closeout
-authority.
+Each implementation slice still requires normal WR, production-track,
+validation, and closeout authority.
 
 ## Decision
 
-Runenwerk UI must be perfected as a platform before advanced editor, game, or
-product surfaces depend on it.
+`UiStory` is the proof substrate, not the owner of every future UI feature.
 
-Correct order:
-
-```text
-Story-driven golden workflow
-  -> base component foundation
-  -> interaction platform
-  -> text platform
-  -> GraphCanvas
-  -> Timeline
-  -> world-space UI
-  -> UI effects
-  -> visual UI builder
-  -> docs/training/productization
-```
-
-This roadmap is UI-only. It does not define material, scene, render, gameplay,
-or editor product tracks except as future consumers of the UI platform.
-
-## Governing Rule
-
-Existing components should be cheap to use.
-
-New reusable component classes are platform work.
+Correct ownership order:
 
 ```text
-Normal surface with existing controls:
-  authored template + story manifest + host data/routes
+PT-UI-STORY-PLATFORM
+  -> story manifests, registry, runner, run report, mount eligibility
+  -> gallery/CLI story execution
+  -> story-gated static/runtime rendering proof
 
-New advanced control/platform feature:
-  domain crate/module work + schemas + runtime behavior + stories + tests
-  + renderer contract if needed
+PT-UI-COMPONENT-PLATFORM
+  -> reusable base components, interaction, text, GraphCanvas, Timeline
+  -> generic component transitions/effects only when component-scoped
+
+Designer/Workbench tracks
+  -> Visual UI Builder, authoring UX, editor/workbench product workflows
+
+PT-GAME-RUNTIME-UI
+  -> screen-space game HUD target profile, view-model packets, intents,
+     engine UI submission, SDF screen HUD runtime proof
+
+PT-GAME-WORLDSPACE-UI
+  -> deferred nameplates, damage numbers, boss frames, split-screen attachment,
+     entity-attached UI, world-space projection consumption, spatial anchors,
+     culling, occlusion, and world/game input policy
+
+PT-VIEWPORT-PROJECTION
+  -> camera, projection, viewport, and surface-fit contracts only
 ```
 
-Do not hide real platform capability work behind fake simplicity.
+Downstream UI work consumes `UiStoryRunReport` where story-derived eligibility,
+preview, diagnostics, or runtime proof is relevant. Consuming story proof does
+not move component, designer, game, world, or viewport ownership into
+`PT-UI-STORY-PLATFORM`.
 
-## PM-UI-STORY-001 - Story Workflow Authority And Track Activation
+## Governing Rules
 
-### Goal
+- Story proof comes before expanded rendering or product mounting claims.
+- Reusable component maturity starts after `PM-UI-STORY-004`, not after the
+  entire story track must close.
+- Visual authoring and product builder workflows stay in Designer/Workbench
+  tracks.
+- Screen-space game HUD behavior stays in `PT-GAME-RUNTIME-UI`.
+- World-space and entity-attached game UI stays deferred in
+  `PT-GAME-WORLDSPACE-UI`.
+- `PT-VIEWPORT-PROJECTION` remains the owner of camera/projection/surface-fit
+  contracts and never becomes a game UI feature owner.
 
-Activate the story-first production track and record `UiStory` as the
-canonical future unit for authoring, preview, validation, inspection, proof,
-and mount eligibility.
+## Story Proof Substrate Roadmap
 
-### Owns
+Owning track: `PT-UI-STORY-PLATFORM`.
+
+Scope:
 
 ```text
 domain/ui/ui_story/
-apps/runenwerk_editor/src/runtime/ui_gallery.rs
-assets/ui_gallery/stories/
-tools/ui/
-```
-
-### Required Outcome
-
-The current hardcoded button gallery path is converted to manifest-driven
-stories and a domain-owned story runner.
-
-### Acceptance Criteria
-
-- `domain/ui/ui_story` exists or an approved existing crate owns the same
-  public story contract.
-- Button basic and selected fixtures are represented by story manifests.
-- `apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES` is
-  removed.
-- Gallery discovery reads story manifests from assets.
-- `UiStoryRunReport` contains source, definition, formation, compiler, runtime
-  view, binding, routes, layout/style/text/accessibility, interaction, render,
-  static mount, preview, and verdict sections.
-- At least one intentionally failing story proves diagnostic expectation
-  matching.
-- Gallery preview consumes selected story report output.
-- No renderer-owned UI semantics are added.
-
-### Non-Goals
-
-- No visual UI builder.
-- No new advanced component class.
-- No broad product/editor feature work.
-
-## PM-UI-STORY-005 - Base Component Story Matrix
-
-### Goal
-
-Make existing and near-term basic controls complete under the story matrix.
-
-### Component Set
-
-```text
-Label
-Button
-Panel
-Row
-Column
-Stack
-Scroll
-Toggle
-Slider
-TextInput
-NumericInput
-Select
-Tabs
-ListView
-TreeView
-TableView
-InspectorField
-ColorPicker
-ActionPrompt
-Tooltip
-Popover
-Modal
-ContextMenu
-```
-
-### Owns
-
-```text
-domain/ui/ui_controls/
-domain/ui/ui_definition/
-domain/ui/ui_schema/
-domain/ui/ui_program_lowering/
-domain/ui/ui_runtime_view/
-domain/ui/ui_render_primitives/
-assets/ui_gallery/stories/controls/
-```
-
-### Acceptance Criteria
-
-Every component has:
-
-- property schema;
-- state schema;
-- event payload schema;
-- layout kernel;
-- interaction kernel;
-- visual kernel;
-- accessibility kernel;
-- inspection kernel;
-- runtime view projection;
-- render primitive lowering if visual;
-- default/hover/focused/disabled/invalid stories as applicable;
-- failure stories for missing required fields and invalid properties;
-- docs page.
-
-## PM-UI-STORY-006 - Interaction Platform
-
-### Goal
-
-Make interaction reusable across controls, GraphCanvas, Timeline, UI Builder,
-world-space UI, and game UI.
-
-### Owns
-
-```text
-domain/ui/ui_input/
-domain/ui/ui_runtime/
-domain/ui/ui_focus/
-domain/ui/ui_navigation/
-domain/ui/ui_drag_drop/
-```
-
-If `ui_focus`, `ui_navigation`, or `ui_drag_drop` do not exist yet, initial work
-must either stay inside authorized current owners or go through accepted
-crate-creation procedure.
-
-### Required Capabilities
-
-- pointer capture;
-- drag lifecycle;
-- drop target negotiation;
-- selection model;
-- keyboard focus;
-- gamepad focus;
-- shortcuts;
-- context menus;
-- popovers;
-- modal stack;
-- focus restore;
-- scroll plus focus interaction;
-- input ownership reports.
-
-### Acceptance Criteria
-
-- Pointer click and keyboard activation emit equivalent semantic route
-  proposals.
-- Disabled controls do not emit activation.
-- Drag/drop uses a reusable platform contract, not component-local ad hoc drag
-  state.
-- Interaction traces are replayable in stories.
-- GraphCanvas and Timeline are blocked until this track provides their shared
-  interaction primitives.
-
-## PM-UI-STORY-007 - Text Platform
-
-### Goal
-
-Make text robust enough for labels, inputs, rich text, code editor,
-localization, and accessibility.
-
-### Owns
-
-```text
-domain/ui/ui_text/
-domain/ui/ui_accessibility/
-domain/ui/ui_theme/
-domain/ui/ui_runtime_view/
-assets/ui_gallery/stories/text/
-```
-
-### Required Capabilities
-
-- shaping;
-- wrapping;
-- ellipsis;
-- glyph fallback;
-- selectable text;
-- cursor movement;
-- clipboard;
-- IME path where supported;
-- rich spans;
-- monospace/code layout;
-- syntax decoration hooks;
-- localization expansion;
-- source-mapped text diagnostics.
-
-### Acceptance Criteria
-
-- Text layout requests and results are visible in story reports.
-- Missing glyphs are diagnostic-bearing.
-- Text measurement affects layout.
-- Rich text and code editor are not started until text
-  selection/cursor/clipboard primitives are proven.
-
-## PM-UI-STORY-008 - GraphCanvas And Timeline
-
-### Goal
-
-Create a reusable `GraphCanvas` platform component for node-based authoring.
-
-### Consumers
-
-- material graph;
-- shader graph;
-- behavior graph;
-- dialogue graph;
-- state machine graph;
-- UI graph tooling if needed.
-
-### Owns
-
-```text
-domain/ui/ui_graph_canvas/
-domain/ui/ui_controls/
-domain/ui/ui_program_lowering/
-domain/ui/ui_runtime_view/
-domain/ui/ui_render_primitives/
-assets/ui_gallery/stories/platform/graph_canvas/
-```
-
-The `ui_graph_canvas` crate path is preferred only after accepted authority.
-
-### Required Capabilities
-
-- pan/zoom canvas;
-- node layout;
-- port rendering;
-- edge routing;
-- selection;
-- marquee selection;
-- drag node;
-- connect edge;
-- disconnect edge;
-- context menu;
-- keyboard shortcuts;
-- minimap later only if core proof is stable.
-
-### Acceptance Criteria
-
-- `GraphCanvas` is package-backed and story-gated.
-- Domain-specific graph semantics stay outside generic UI.
-- Generic UI owns canvas interaction and visuals.
-- Host/domain owns graph mutation and validation.
-- No material-specific graph behavior is baked into generic UI.
-
-### Timeline Platform Component
-
-### Goal
-
-Create a reusable timeline/sequencer UI platform.
-
-### Consumers
-
-- animation editor;
-- cutscene editor;
-- audio timeline;
-- keyframe editor;
-- event sequencing;
-- simulation playback tooling.
-
-### Owns
-
-```text
-domain/ui/ui_timeline/
-domain/ui/ui_controls/
-domain/ui/ui_runtime_view/
-domain/ui/ui_render_primitives/
-assets/ui_gallery/stories/platform/timeline/
-```
-
-The `ui_timeline` crate path is preferred only after accepted authority.
-
-### Required Capabilities
-
-- time ruler;
-- tracks;
-- clips;
-- keyframes;
-- playhead;
-- range selection;
-- zoom/pan;
-- snap policy;
-- drag keyframe/clip;
-- resize clip;
-- route proposals for edit actions.
-
-### Acceptance Criteria
-
-- Timeline is generic.
-- Animation/cutscene/audio semantics are host/domain data, not generic UI
-  truth.
-- Drag/selection reuses the interaction platform.
-- Text measurement and layout are reused.
-
-## PM-UI-STORY-009 - World-Space UI And Effects
-
-### Goal
-
-Make UI surfaces usable in world-space/diegetic 3D contexts without duplicating
-the UI system.
-
-### Owns
-
-```text
-domain/ui/ui_hosts/
-domain/ui/ui_runtime/
-domain/ui/ui_render_data/
-domain/ui/ui_world_space/
-engine/render integration adapters
-assets/ui_gallery/stories/platform/world_space/
-```
-
-The `ui_world_space` crate path is preferred only after accepted authority.
-
-### Required Capabilities
-
-- world-space host profile;
-- ray/pointer projection into UI plane;
-- depth and occlusion policy;
-- focus/selection policy;
-- scale policy;
-- controller/gamepad interaction;
-- readable text constraints;
-- route mapping through host/domain.
-
-### Acceptance Criteria
-
-- No separate world-space button system.
-- World-space UI consumes the same story-proven surface source.
-- World-space differences are host projection/input/render-profile
-  differences.
-
-### UI Effects Platform
-
-### Goal
-
-Support shader-driven or advanced visual effects without moving UI semantics
-into the renderer.
-
-### Owns
-
-```text
-domain/ui/ui_effects/
-domain/ui/ui_render_primitives/
-domain/ui/ui_render_data/
-engine/render UI adapter
-assets/ui_gallery/stories/platform/effects/
-```
-
-The `ui_effects` crate path is preferred only after accepted authority.
-
-### Required Capabilities
-
-- effect tokens;
-- effect parameters;
-- safe effect variants;
-- renderer capability checks;
-- fallback diagnostics;
-- snapshot-proofable output;
-- no component semantic ownership in renderer.
-
-### Acceptance Criteria
-
-- Effects are declared as UI visual policy, not renderer-authored controls.
-- Unsupported effects fail with diagnostics or declared fallback policy.
-- Renderer adapter consumes effect primitives/contracts only.
-
-## PM-UI-STORY-010 - Visual UI Builder
-
-### Goal
-
-Create a visual authoring product that edits the same authored UI source and
-story manifests.
-
-### Owns
-
-```text
-apps/runenwerk_ui_builder/
-domain/ui/ui_story/
-domain/ui/ui_definition/
-domain/ui/ui_schema/
-domain/ui/ui_controls/
-domain/ui/ui_layout/
-domain/ui/ui_theme/
-```
-
-### Required Capabilities
-
-- story browser;
-- component palette;
-- drag/drop component placement;
-- property editor;
-- token picker;
-- layout inspector;
-- focus inspector;
-- route/binding editor;
-- source preview;
-- live validation;
-- save authored UI and story manifests;
-- open story in UI gallery.
-
-### Non-Negotiable
-
-The builder must not create a second file format.
-
-It edits:
-
-```text
-AuthoredUiTemplate / UiNodeDefinition source
+story manifests/assets
 UiStoryManifest
+UiStoryRegistry
+UiStoryRunner
+UiStoryRunReport
+UiStoryMountEligibility
+gallery/CLI story execution
+story-gated static/runtime rendering proof
+story acceptance docs/checklists
 ```
 
-## PM-UI-STORY-011 - Docs, Training, And Productization
+### PM-UI-STORY-001 - Story Workflow Authority And Track Activation
 
-### Goal
+Activate the story-first production track as planning and sequencing authority
+only. This milestone records the bounded split, keeps `ai_executable: false`,
+defers the standalone static gallery rendering path, and forbids runtime code,
+crate creation, gallery migration, product mounting, component maturity,
+designer product work, game HUD behavior, and world-space UI.
 
-Make the UI platform learnable and maintainable.
+### PM-UI-STORY-002 - Story Manifest, Registry, Runner, And Report Contract
 
-### Owns
+Record and later implement the public story contracts:
+
+- `UiStoryManifest`
+- `UiStoryRegistry`
+- `UiStoryRunner`
+- `UiStoryRunReport`
+- `UiStoryMountEligibility`
+
+The output is the proof envelope used by gallery preview, CLI inspection, static
+mount, and product mount eligibility. This milestone does not own controls,
+text, GraphCanvas, Timeline, designer product UX, game HUD behavior, or
+world-space UI.
+
+### PM-UI-STORY-003 - Gallery And CLI Story Execution
+
+Gallery preview and CLI inspection consume story manifests and
+`UiStoryRunReport`. Failure stories are first-class and expose source, stage,
+diagnostic, and eligibility verdicts.
+
+This milestone may adapt gallery/CLI inspection to the story proof envelope; it
+does not implement Visual UI Builder product authoring.
+
+### PM-UI-STORY-004 - Story-Gated Runtime Rendering Proof
+
+The former static button-gallery rendering evidence is re-run as a story stage.
+Static mount success requires `UiStoryMountEligibility`, and renderer-facing code
+consumes backend-neutral primitives or frames without owning authored UI
+semantics.
+
+This milestone is the earliest dependency point for reusable component maturity.
+
+### PM-UI-STORY-005 - Story Platform No-Gap Audit And Closeout
+
+Close only the story proof substrate. The no-gap audit checks story contracts,
+reports, gallery/CLI proof, story-gated rendering proof, truth evidence,
+generated planning state, and bypass paths.
+
+Component maturity, visual builder/product authoring, screen HUD behavior, and
+world-space/entity-attached UI remain delegated to their own tracks and are not
+story-platform gaps.
+
+## Reusable UI Component Platform Roadmap
+
+Owning track: `PT-UI-COMPONENT-PLATFORM`.
+
+Dependency: starts after `PM-UI-STORY-004` so reusable components can be proven
+through story reports. It does not need to wait for story-platform no-gap
+closeout unless the future WR explicitly requires that.
+
+Scope:
 
 ```text
-docs-site/src/content/docs/domain/ui/
-docs-site/src/content/docs/design/active/
-docs-site/src/content/docs/tutorials/ui/
-apps/runenwerk_ui_gallery/
-tools/ui/
+domain/ui/ui_controls/
+domain/ui/ui_interaction/
+domain/ui/ui_text/
+domain/ui/ui_graph_canvas/
+domain/ui/ui_timeline/
+domain/ui/ui_effects/     # only generic component-level primitives
+component stories/assets
+component diagnostics/docs/examples
 ```
 
-### Required Docs
+### PM-UI-COMPONENT-001 - Component Platform Boundary And Track Activation
 
-- UI mental model;
-- story workflow;
-- create a component story;
-- create a surface story;
-- binding/action route workflow;
-- inspect layout;
-- inspect style/tokens;
-- inspect text;
-- inspect accessibility;
-- inspect render primitives;
-- story matrix requirements;
-- mount eligibility;
-- advanced platform component guide;
-- clean cutover guide from hardcoded gallery to story-driven gallery.
+Record reusable component ownership and stop conditions. This milestone blocks
+designer product authoring, screen HUD behavior, world-space/entity-attached UI,
+and viewport projection contract ownership from entering the component track.
 
-## Recommended Implementation Order
+### PM-UI-COMPONENT-002 - Base Component Story Matrix
 
-```text
-PM-UI-STORY-001 Story Workflow Authority And Track Activation
-PM-UI-STORY-002 Story Manifest, Registry, Runner, And Report Contract
-PM-UI-STORY-003 Gallery And CLI Story Execution
-PM-UI-STORY-004 Story-Gated Runtime Rendering Proof
-PM-UI-STORY-005 Base Component Story Matrix
-PM-UI-STORY-006 Interaction Platform
-PM-UI-STORY-007 Text Platform
-PM-UI-STORY-008 GraphCanvas And Timeline
-PM-UI-STORY-009 World-Space UI And Effects
-PM-UI-STORY-010 Visual UI Builder
-PM-UI-STORY-011 Docs, Training, Productization
-PM-UI-STORY-012 Perfectionist No-Gap Audit And Closeout
-```
+Cover button, label, input, panel, list, picker, and navigation controls with
+story matrices for normal, edge, failure, and accessibility states.
 
-Do not start GraphCanvas, Timeline, UI Builder, or world-space UI before the
-story workflow, interaction platform, and text platform are sufficient for them.
+### PM-UI-COMPONENT-003 - Generic Interaction Platform
+
+Own reusable interaction traces, hit testing, focus, hover, pressed, disabled,
+route proposal, and host intent boundaries for components. Game input policy,
+world input policy, and editor product workflow policy are not implemented here.
+
+### PM-UI-COMPONENT-004 - Generic Text Platform
+
+Own reusable text layout, shaping requests, editing behavior, accessibility
+labels, diagnostics, and render primitive evidence. Game HUD vocabulary,
+world-space label binding, and Designer/Workbench product copy workflows are
+out of scope.
+
+### PM-UI-COMPONENT-005 - GraphCanvas And Timeline Components
+
+Own reusable GraphCanvas and Timeline component maturity. Editor workflows may
+consume these components, but product-specific visual authoring surfaces remain
+Designer/Workbench ownership.
+
+### PM-UI-COMPONENT-006 - Generic UI Transition And Effects Primitives
+
+Own only reusable component-level transitions/effects that can be represented as
+story-report stages and renderer-facing primitive boundaries. Game damage
+numbers, nameplate effects, world-space visibility, product animation tools, and
+renderer-authored UI semantics are out of scope.
+
+### PM-UI-COMPONENT-007 - Component Platform Docs Evidence And Runtime-Proven Closeout
+
+Close component maturity at `runtime_proven` quality with honest known gaps and
+handoffs to Designer/Workbench, `PT-GAME-RUNTIME-UI`, and
+`PT-GAME-WORLDSPACE-UI`.
+
+## Visual Designer And Workbench Roadmap
+
+Owning tracks: existing Designer/Workbench tracks, including
+`PT-UI-DESIGNER-WORKBENCH` and related UI Designer productization tracks.
+
+Scope:
+
+- Visual UI Builder
+- authoring UX
+- editor/workbench authoring surfaces
+- UI Designer product workflows
+- app/editor product integration for designer workflows
+
+The story platform supplies proof reports, and the component platform supplies
+reusable controls. The builder consumes those contracts; it does not make
+`PT-UI-STORY-PLATFORM` the owner of visual authoring product work.
+
+## Game Runtime Screen HUD Roadmap
+
+Owning track: `PT-GAME-RUNTIME-UI`.
+
+Scope:
+
+- game-runtime target profile
+- runtime view-model packets
+- validated intent proposals
+- engine UI submission
+- SDF screen HUD proof
+- runtime-proven game HUD closeout
+
+The screen HUD track may consume story proof and reusable components where
+relevant, but it remains the owner of concrete screen-space game runtime UI.
+
+## Deferred Game World-Space UI Roadmap
+
+Owning track: `PT-GAME-WORLDSPACE-UI`.
+
+Deferred scope:
+
+- nameplates
+- damage numbers
+- boss frames
+- split-screen attachment UI
+- entity-attached UI
+- world-space projection consumption
+- spatial anchors
+- culling and occlusion
+- world/game input policy
+- gameplay/world/entity binding boundaries
+
+Dependencies before activation:
+
+- `PM-UI-STORY-004` for story-gated rendering proof and story-derived
+  eligibility where authored UI is relevant.
+- `PT-GAME-RUNTIME-UI` target/profile work for game runtime view-model and
+  intent boundaries.
+- `PT-VIEWPORT-PROJECTION` readiness where camera, projection, viewport, and
+  surface-fit contracts are required.
+- Renderer/projection readiness where rendering and visibility evidence is
+  required.
+
+This track must not be implemented as a patch to `PT-GAME-RUNTIME-UI` screen HUD
+proof, as a story-platform feature, or as a viewport-projection feature.
+
+## Viewport Projection Boundary
+
+Owning track: `PT-VIEWPORT-PROJECTION`.
+
+Scope:
+
+- camera contracts
+- projection contracts
+- viewport contracts
+- surface-fit contracts
+- projection diagnostics
+
+Non-scope:
+
+- game HUD behavior
+- world-space UI features
+- nameplates
+- damage numbers
+- boss frames
+- entity-attached UI
+- gameplay/world/entity binding
+
+World-space game UI consumes viewport projection contracts after those contracts
+are ready; it does not move feature ownership into `PT-VIEWPORT-PROJECTION`.
 
 ## Stop Conditions
 
-Stop and redesign if any implementation:
+Stop and replan if any future slice tries to:
 
-- renders directly from authored `.ron`;
-- keeps hardcoded gallery fixtures as a production path;
-- adds a button/control-specific gallery pipeline instead of story reports;
-- infers package truth from control-kind strings;
-- lets unknown control kinds pass formation;
-- allows renderer-owned component semantics;
-- allows app/editor/game state mutation from generic UI;
-- creates a second visual-builder UI format;
-- creates component-specific drag/drop/selection/focus systems instead of
-  platform interaction primitives;
-- mounts a surface before story mount eligibility passes.
+- implement reusable component maturity inside `PT-UI-STORY-PLATFORM`;
+- implement Visual UI Builder or product authoring UX inside
+  `PT-UI-STORY-PLATFORM` or `PT-UI-COMPONENT-PLATFORM`;
+- implement game HUD behavior inside story/component/designer tracks;
+- implement world-space, entity-attached, projected attachment, or
+  gameplay/world binding UI outside `PT-GAME-WORLDSPACE-UI`;
+- make `PT-VIEWPORT-PROJECTION` own game UI features;
+- claim mount eligibility, gallery preview, CLI inspection, or static/product
+  mount success without `UiStoryRunReport` where story proof is required;
+- hand-edit generated production or roadmap docs.

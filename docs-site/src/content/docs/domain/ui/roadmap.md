@@ -328,10 +328,21 @@ Decision:
 - Gallery inspection must consume `UiStoryRunReport`, not button-specific
   reports.
 - Normal surfaces using existing controls should be cheap to author, while new
-  reusable component classes are platform work.
-- GraphCanvas, Timeline, RichText/CodeEditor, advanced drag/drop, world-space
-  UI, UI effects, and visual UI builder work must be story-gated platform
-  capabilities.
+  reusable component classes are component-platform work after story proof
+  exists.
+- `PT-UI-STORY-PLATFORM` owns only the story proof substrate:
+  `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
+  `UiStoryRunReport`, `UiStoryMountEligibility`, gallery/CLI story execution,
+  and story-gated static/runtime rendering proof.
+- GraphCanvas, Timeline, RichText/CodeEditor, advanced drag/drop, and generic
+  component-level UI effects move to `PT-UI-COMPONENT-PLATFORM`.
+- Visual UI Builder and authoring product workflows remain in
+  Designer/Workbench tracks.
+- Screen-space game HUD behavior remains in `PT-GAME-RUNTIME-UI`.
+- World-space/entity-attached UI remains deferred in
+  `PT-GAME-WORLDSPACE-UI`.
+- Camera/projection/surface-fit contracts remain in
+  `PT-VIEWPORT-PROJECTION`.
 
 First production milestone to prepare through normal WR/production gates:
 
@@ -346,7 +357,10 @@ Outcome:
 - record the future `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`,
   `UiStoryRunReport`, and `UiStoryMountEligibility` contracts;
 - keep runtime code, crate creation, gallery migration, and product mounting
-  blocked until their owning WR and production plan exist.
+  blocked until their owning WR and production plan exist;
+- keep component maturity, visual authoring product work, screen HUD behavior,
+  world-space/entity-attached UI, and viewport projection contracts in their
+  owning tracks.
 
 Later implementation contract target files and functions:
 

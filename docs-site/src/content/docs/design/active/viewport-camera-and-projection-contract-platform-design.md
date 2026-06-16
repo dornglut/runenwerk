@@ -146,8 +146,9 @@ semantic population dynamics remain separate behavior-authoring work in the
 `WR-102` direction.
 
 This track does not own game runtime HUD, world-space attachment UI, screen-space
-nameplates, damage numbers, or gameplay UI projection. Those remain in the
-`WR-104` and `PT-GAME-RUNTIME-UI` direction.
+nameplates, damage numbers, or gameplay UI projection. Screen-space game HUD
+remains in `WR-104` and `PT-GAME-RUNTIME-UI`; world-space and entity-attached
+game UI remains deferred to `PT-GAME-WORLDSPACE-UI`.
 
 This track does not reopen `WR-101`. `WR-101` is completed renderer procedural
 camera evidence and remains an input dependency.

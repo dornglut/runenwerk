@@ -5892,20 +5892,21 @@ tracks:
   state: active
   owner: ui
   target_completion_quality: perfectionist_verified
-  strategic_goal: Make `UiStory` the source of UI authoring, validation, inspection, preview, runtime proof, and mount eligibility before any expanded runtime rendering or product surface depends on UI behavior.
+  strategic_goal: Make `UiStory` the source of UI authoring, validation, inspection, preview, runtime proof, and mount eligibility before expanded runtime rendering or product surfaces depend on UI behavior, while keeping component maturity, designer product work, game HUD behavior, and world-space UI in their owning tracks.
   success_criteria:
   - '`UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and `UiStoryMountEligibility` become the recorded public contracts before implementation starts.'
   - '`UiStoryRunReport` is the required proof envelope before gallery preview, CLI inspection, static mount, or product mount eligibility can claim success.'
   - Runtime rendering proof happens after story runner/report authority and is proven as a story stage, not as a standalone hardcoded gallery path.
   - Renderer, ECS, editor, and game code never own UI semantics; they consume story-derived artifacts, runtime views, render primitives, or mount decisions through explicit boundaries.
-  - Perfectionist completion requires zero known gaps, zero known risks, current truth evidence, completed closeout evidence, and no parallel bypass paths.
+  - Reusable component maturity is owned by PT-UI-COMPONENT-PLATFORM after PM-UI-STORY-004; Visual UI Builder and authoring UX stay in Designer/Workbench tracks; screen-space game HUD stays in PT-GAME-RUNTIME-UI; world-space and entity-attached UI stay deferred in PT-GAME-WORLDSPACE-UI.
+  - Perfectionist completion requires zero known gaps, zero known risks, current truth evidence, completed closeout evidence, and no parallel bypass paths inside the story proof substrate scope.
   milestones:
   - id: PM-UI-STORY-001
     title: Story Workflow Authority And Track Activation
     kind: design
     state: designing
-    goal: Establish the story-first production authority, sequencing rules, deferred standalone-rendering decision, future WR expansion policy, and no-runtime-code stop conditions.
-    outcome: PT-UI-STORY-PLATFORM exists as the single UI story production track with planning-only authority and explicit blockers against crate creation, runtime rendering expansion, gallery migration, and product mounting.
+    goal: Establish the story-first production authority, sequencing rules, deferred standalone-rendering decision, future WR expansion policy, bounded ownership split, and no-runtime-code stop conditions.
+    outcome: PT-UI-STORY-PLATFORM exists as the UI story proof-substrate track with planning-only authority and explicit blockers against crate creation, runtime rendering expansion, gallery migration, product mounting, component maturity, designer product work, game HUD behavior, and world-space UI.
     dependencies:
     - PM-UI-PROGRAM-ARCH-014
     roadmap_links: []
@@ -5917,17 +5918,18 @@ tracks:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: Track activation must follow the active UI platform sequencing roadmap.
+      reason: Track activation must follow the active UI platform sequencing roadmap and ownership split.
     evidence_gates: []
     acceptance_criteria:
-    - PT-UI-STORY-PLATFORM is recorded as the single master UI story platform track.
+    - PT-UI-STORY-PLATFORM is recorded as the story proof substrate track, not the owner of all UI capabilities.
     - PT-UI-RUNTIME-RENDERING and PM-UI-RUNTIME-RENDERING-001 are deferred as standalone production growth paths.
     - WR-173 is blocked/deferred with evidence that rendering proof must be re-run through `UiStoryRunReport`.
     - 'The track execution manifest is planning and sequencing authority only with `ai_executable: false`.'
-    - No runtime code, crate creation, gallery migration, or product mounting is authorized by this milestone.
+    - No runtime code, crate creation, gallery migration, product mounting, component maturity, Designer/Workbench product work, game HUD behavior, or world-space/entity-attached UI is authorized by this milestone.
     completion_quality: not_applicable
     known_quality_gaps:
-    - PM-UI-STORY-002 through PM-UI-STORY-012 remain future milestones and must not be inferred complete from track activation.
+    - PM-UI-STORY-002 through PM-UI-STORY-005 remain future story-substrate milestones and must not be inferred complete from track activation.
+    - Reusable components, visual designer product workflows, screen HUD runtime behavior, and game world-space UI are intentionally routed to separate production tracks.
     completion_audit: ''
   - id: PM-UI-STORY-002
     title: Story Manifest, Registry, Runner, And Report Contract
@@ -5947,7 +5949,7 @@ tracks:
     acceptance_criteria:
     - Exact `domain/ui/ui_story` ownership is accepted before crate creation.
     - Story manifests define stable ids, source, host, theme, viewport, state, route, diagnostic, and mount policy inputs.
-    - Story registry discovery is deterministic and does not depend on renderer, ECS, editor, or game state.
+    - Story registry discovery is deterministic and does not depend on renderer, ECS, editor, game, or designer product state.
     - Story runner output is a complete `UiStoryRunReport` with stage reports and fail-closed diagnostics.
     - Mount eligibility is derived only from `UiStoryRunReport`, never from renderer submission success alone.
     completion_quality: not_applicable
@@ -6002,16 +6004,17 @@ tracks:
     - Static mount success requires story-derived mount eligibility.
     - Renderer-facing code consumes backend-neutral primitives or frames without owning authored UI semantics.
     - The path fails closed on formation, compiler, runtime view, primitive, render-data, static mount, or renderer submission errors.
+    - The proof does not implement component maturity, game HUD behavior, world-space/entity-attached UI, or designer authoring product flows.
     completion_quality: not_applicable
     known_quality_gaps:
-    - Interactivity and broader component coverage remain later story platform milestones.
+    - Reusable component coverage moves to PT-UI-COMPONENT-PLATFORM after this proof substrate exists.
     completion_audit: ''
   - id: PM-UI-STORY-005
-    title: Base Component Story Matrix
-    kind: implementation
+    title: Story Platform No-Gap Audit And Closeout
+    kind: release
     state: designing
-    goal: Cover base UI components with story manifests, fixture matrices, diagnostics, accessibility expectations, and mount policies.
-    outcome: Existing base controls are cheap to use because their accepted states, failures, visual outputs, and mount eligibility are story-proven.
+    goal: Complete a no-gap audit proving the story proof substrate has no known bypass paths, stale truth, undocumented risks, or deferred quality gaps inside the accepted story scope.
+    outcome: PT-UI-STORY-PLATFORM can claim perfectionist_verified only after current evidence, audits, closeouts, and generated planning state all agree with zero known gaps and zero known risks inside the story proof substrate boundary.
     dependencies:
     - PM-UI-STORY-004
     roadmap_links: []
@@ -6019,177 +6022,200 @@ tracks:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: Base component coverage must follow the UI platform sequencing roadmap.
+      reason: Final closeout must audit the bounded story proof substrate roadmap, not downstream UI capability tracks.
+    evidence_gates: []
+    acceptance_criteria:
+    - Every story proof-substrate milestone has completed closeout evidence and current validation.
+    - Truth certificates, post-completion audits, production validation, roadmap validation, docs validation, and planning validation pass.
+    - There are no known gaps, known risks, stale evidence records, stale generated docs, or parallel bypass paths inside the story proof substrate boundary.
+    - Static gallery, CLI, static mount, product mount, and renderer-facing proof paths all require `UiStoryRunReport`.
+    - Component maturity, visual builder/product authoring, game HUD behavior, and world-space/entity-attached UI remain delegated to their owning tracks.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - The no-gap audit is not complete until all preceding story proof-substrate milestones are complete.
+    completion_audit: ''
+- id: PT-UI-COMPONENT-PLATFORM
+  title: UI Component Platform
+  state: active
+  owner: ui
+  target_completion_quality: runtime_proven
+  strategic_goal: Mature reusable UI controls, interaction, text, advanced component surfaces, and generic component-level transitions after story proof reports exist, without taking ownership of Designer/Workbench product authoring, game HUD behavior, or world-space/entity-attached UI.
+  success_criteria:
+  - Component work depends on PM-UI-STORY-004 so every accepted component capability can be proven through `UiStoryRunReport`.
+  - Base controls, interaction traces, text behavior, GraphCanvas, Timeline, and reusable component transitions have story matrices, diagnostics, accessibility expectations, and runtime proof where the platform supports them.
+  - Component platform APIs remain reusable domain UI behavior and do not encode game/runtime host behavior, editor product workflow truth, or world/entity binding semantics.
+  - Designer/Workbench tracks consume story-proven components for authoring surfaces; PT-GAME-RUNTIME-UI consumes only compatible screen-HUD contracts; PT-GAME-WORLDSPACE-UI owns world/game/entity attachment behavior after readiness gates.
+  milestones:
+  - id: PM-UI-COMPONENT-001
+    title: Component Platform Boundary And Track Activation
+    kind: design
+    state: designing
+    goal: Establish the reusable component platform boundary, dependency on story-gated rendering proof, future WR expansion policy, and stop conditions against designer, game, and world-space ownership leaks.
+    outcome: PT-UI-COMPONENT-PLATFORM is the owner of reusable component maturity after PM-UI-STORY-004, with Visual UI Builder, screen HUD, and world-space UI routed elsewhere.
+    dependencies:
+    - PM-UI-STORY-004
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Component platform activation must follow the split UI capability roadmap.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Component proof must consume `UiStoryRunReport` rather than bypassing the story substrate.
+    evidence_gates: []
+    acceptance_criteria:
+    - Component platform scope is limited to reusable domain UI component behavior and story-proven evidence.
+    - Visual UI Builder/product authoring UX is routed to Designer/Workbench tracks.
+    - Screen-space game HUD runtime behavior is routed to PT-GAME-RUNTIME-UI.
+    - World-space, entity-attached, projected attachment, and gameplay/world binding behavior is routed to PT-GAME-WORLDSPACE-UI.
+    - No product code starts until an owning WR and accepted production plan authorize the exact component slice.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - PM-UI-COMPONENT-002 through PM-UI-COMPONENT-007 remain future milestones.
+    completion_audit: ''
+  - id: PM-UI-COMPONENT-002
+    title: Base Component Story Matrix
+    kind: implementation
+    state: designing
+    goal: Cover base UI components with story manifests, fixture matrices, diagnostics, accessibility expectations, and mount policies.
+    outcome: Existing base controls are cheap to use because their accepted states, failures, visual outputs, and mount eligibility are story-proven.
+    dependencies:
+    - PM-UI-COMPONENT-001
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Base component coverage must follow the split UI platform sequencing roadmap.
     evidence_gates: []
     acceptance_criteria:
     - Button, label, input, panel, list, picker, and navigation controls have story matrices for normal, edge, failure, and accessibility states.
     - Component stories exercise schema, tokens, state, route, diagnostics, source maps, layout, text, and mount policy.
     - No component is accepted because it renders without its story report passing.
+    - The milestone does not introduce designer product flows, game HUD behavior, or world-space attachment behavior.
     completion_quality: not_applicable
     known_quality_gaps:
-    - Advanced interaction, text, canvas, timeline, world-space, and builder work remain later milestones.
+    - Advanced interaction, text, canvas, timeline, and generic component transition work remain later component milestones.
     completion_audit: ''
-  - id: PM-UI-STORY-006
-    title: Interaction Platform
+  - id: PM-UI-COMPONENT-003
+    title: Generic Interaction Platform
     kind: implementation
     state: designing
-    goal: Add story-proven interaction traces, hit testing, focus, hover, pressed, disabled, route proposal, and host intent boundaries.
-    outcome: Interactive UI behavior is deterministic, inspectable, replayable, and mount-eligible only through story-derived interaction evidence.
+    goal: Add story-proven interaction traces, hit testing, focus, hover, pressed, disabled, route proposal, and host intent boundaries for reusable components.
+    outcome: Interactive component behavior is deterministic, inspectable, replayable, and mount-eligible only through story-derived interaction evidence.
     dependencies:
-    - PM-UI-STORY-005
+    - PM-UI-COMPONENT-002
     roadmap_links: []
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: Interaction platform work must follow the story-driven platform roadmap.
+      reason: Interaction platform work must follow the reusable component roadmap.
     evidence_gates: []
     acceptance_criteria:
     - Interaction traces replay deterministically through `UiStoryRunner`.
     - Hit testing, focus, hover, pressed, disabled, route, and capability decisions produce stage reports.
     - Host intent proposals are explicit outputs and do not mutate host state from domain UI.
+    - Game input policy, world input policy, and editor product workflow decisions are not implemented here.
     completion_quality: not_applicable
     known_quality_gaps:
-    - Text, advanced canvas, timeline, and world-space behaviors remain later milestones.
+    - Text, advanced component surfaces, and generic component transitions remain later component milestones.
     completion_audit: ''
-  - id: PM-UI-STORY-007
-    title: Text Platform
+  - id: PM-UI-COMPONENT-004
+    title: Generic Text Platform
     kind: implementation
     state: designing
-    goal: Make text layout, shaping requests, editing behavior, accessibility labels, diagnostics, and render primitives story-proven.
-    outcome: Text-heavy UI is accepted through deterministic story reports rather than placeholder glyph or layout assumptions.
+    goal: Make text layout, shaping requests, editing behavior, accessibility labels, diagnostics, and render primitives story-proven for reusable components.
+    outcome: Text-heavy reusable UI is accepted through deterministic story reports rather than placeholder glyph or layout assumptions.
     dependencies:
-    - PM-UI-STORY-006
+    - PM-UI-COMPONENT-003
     roadmap_links: []
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: Text platform work must follow the UI platform sequencing roadmap.
+      reason: Text platform work must follow the reusable component roadmap.
     evidence_gates: []
     acceptance_criteria:
     - Static labels, dynamic labels, editable text, overflow, wrapping, truncation, and accessibility labels have story coverage.
     - Text reaches renderer-facing contracts as explicit shaped text or glyph-run primitive evidence.
     - Unsupported shaping, font, language, and editing paths fail closed with story diagnostics.
+    - Game HUD vocabulary, world-space label binding, and Designer/Workbench product copy workflows are not implemented here.
     completion_quality: not_applicable
     known_quality_gaps:
-    - GraphCanvas, Timeline, world-space UI, effects, and builder work remain later milestones.
+    - GraphCanvas, Timeline, and generic component transitions remain later component milestones.
     completion_audit: ''
-  - id: PM-UI-STORY-008
-    title: GraphCanvas And Timeline
+  - id: PM-UI-COMPONENT-005
+    title: GraphCanvas And Timeline Components
     kind: implementation
     state: designing
-    goal: Productize GraphCanvas and Timeline as story-proven advanced UI controls before editor workflows depend on them.
+    goal: Productize GraphCanvas and Timeline as reusable, story-proven advanced UI components before editor workflows depend on them.
     outcome: Graph and timeline surfaces have deterministic story coverage for rendering, interaction, scale, selection, editing, diagnostics, and host intent boundaries.
     dependencies:
-    - PM-UI-STORY-007
+    - PM-UI-COMPONENT-004
     roadmap_links: []
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: Advanced control work must follow the UI platform capability roadmap.
+      reason: Advanced component work must follow the split UI platform capability roadmap.
     evidence_gates: []
     acceptance_criteria:
     - GraphCanvas stories cover nodes, edges, ports, pan/zoom, selection, editing, invalid graph diagnostics, and large-scene budgets.
     - Timeline stories cover tracks, clips, cursors, keyframes, selection, editing, scrubbing, invalid time data, and performance budgets.
     - Host/editor workflows consume story-proven controls rather than private product-specific UI implementations.
+    - Visual builder product authoring remains owned by Designer/Workbench tracks.
     completion_quality: not_applicable
     known_quality_gaps:
-    - World-space UI, effects, and visual builder work remain later milestones.
+    - Generic component transition/effects primitives and closeout remain later component milestones.
     completion_audit: ''
-  - id: PM-UI-STORY-009
-    title: World-Space UI And Effects
+  - id: PM-UI-COMPONENT-006
+    title: Generic UI Transition And Effects Primitives
     kind: implementation
     state: designing
-    goal: Extend story proof to world-space UI, projected attachment UI, transitions, effects, and renderer-facing policy without renderer-owned UI semantics.
-    outcome: World-space and effectful UI surfaces have story-derived layout, visibility, projection, interaction, accessibility, render, and mount eligibility evidence.
+    goal: Define only reusable component-level transition and effect primitives that can be represented in story reports without becoming game, world-space, editor product, or renderer-owned UI semantics.
+    outcome: Component transitions and effects have story-derived timing, state, diagnostics, accessibility, and renderer-facing primitive boundaries suitable for reusable UI controls.
     dependencies:
-    - PM-UI-STORY-008
+    - PM-UI-COMPONENT-005
     roadmap_links: []
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: World-space UI and effects must follow the story platform roadmap.
+      reason: Generic effects work must stay inside reusable component behavior and story-report boundaries.
     evidence_gates: []
     acceptance_criteria:
-    - World-space UI stories cover spatial anchors, projection, culling, occlusion, safe-area, input, accessibility, and unsupported-feature diagnostics.
-    - UI effects are represented as explicit story stages or renderer-facing primitive/effect contracts.
-    - Renderer and world systems remain consumers of derived UI outputs, not owners of UI behavior.
+    - Effects are generic component behavior with story-stage evidence, diagnostics, reduced-motion policy, and renderer-facing primitive contracts.
+    - The milestone does not implement world-space visibility, entity-attached projection, game damage/nameplate effects, Designer/Workbench product animation tools, or renderer-authored UI semantics.
+    - Unsupported host-specific effects fail closed with story diagnostics.
     completion_quality: not_applicable
     known_quality_gaps:
-    - Visual builder and final productization remain later milestones.
+    - Runtime-proven closeout remains PM-UI-COMPONENT-007.
     completion_audit: ''
-  - id: PM-UI-STORY-010
-    title: Visual UI Builder
-    kind: implementation
-    state: designing
-    goal: Build visual UI authoring around story manifests, story reports, diagnostics, previews, and mount eligibility.
-    outcome: Visual UI authoring edits story-backed source and shows the same proof envelope that CLI, gallery, tests, and product hosts consume.
-    dependencies:
-    - PM-UI-STORY-009
-    roadmap_links: []
-    design_gates:
-    - kind: design
-      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
-      required_status: active
-      reason: Visual builder work must follow the UI platform capability roadmap.
-    evidence_gates: []
-    acceptance_criteria:
-    - Builder previews are `UiStoryRunReport` views, not separate rendering shortcuts.
-    - Builder edits preserve manifest, source, state, route, diagnostic, and mount policy truth.
-    - Invalid edits produce story diagnostics and cannot claim mount eligibility.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Docs, training, API ergonomics, and no-gap closeout remain later milestones.
-    completion_audit: ''
-  - id: PM-UI-STORY-011
-    title: Docs, Training, Productization
-    kind: hardening
-    state: designing
-    goal: Harden public docs, examples, training material, API ergonomics, and product adoption paths around the story platform.
-    outcome: Developers can discover, author, validate, inspect, preview, and mount UI through the story platform without hidden renderer, app, or test-only shortcuts.
-    dependencies:
-    - PM-UI-STORY-010
-    roadmap_links: []
-    design_gates:
-    - kind: design
-      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
-      required_status: active
-      reason: Productization must follow the accepted UI platform roadmap.
-    evidence_gates: []
-    acceptance_criteria:
-    - Usage guides teach normal story authoring, CLI inspection, gallery preview, failure stories, and mount eligibility first.
-    - Examples demonstrate the preferred public story API and do not rely on internal shortcuts.
-    - Docs distinguish story workflow usage from architecture notes and historical static-rendering evidence.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Final no-gap audit and closeout remain PM-UI-STORY-012.
-    completion_audit: ''
-  - id: PM-UI-STORY-012
-    title: Perfectionist No-Gap Audit And Closeout
+  - id: PM-UI-COMPONENT-007
+    title: Component Platform Docs Evidence And Runtime-Proven Closeout
     kind: release
     state: designing
-    goal: Complete a no-gap audit proving the story platform has no known bypass paths, stale truth, undocumented risks, or deferred quality gaps inside the accepted scope.
-    outcome: PT-UI-STORY-PLATFORM can claim perfectionist_verified only after current evidence, audits, closeouts, and generated planning state all agree with zero known gaps and zero known risks.
+    goal: Close reusable component platform work with runtime-proven evidence, docs, examples, and explicit downstream handoffs for Designer/Workbench, game runtime HUD, and world-space game UI.
+    outcome: PT-UI-COMPONENT-PLATFORM has runtime-proven reusable component evidence without claiming ownership of designer product work, screen HUD behavior, or world-space/entity-attached UI.
     dependencies:
-    - PM-UI-STORY-011
+    - PM-UI-COMPONENT-006
     roadmap_links: []
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
-      reason: Final closeout must audit the full accepted UI platform roadmap scope.
+      reason: Final component closeout must follow the split UI capability roadmap and downstream handoffs.
     evidence_gates: []
     acceptance_criteria:
-    - Every story platform milestone has completed closeout evidence and current validation.
-    - Truth certificates, post-completion audits, production validation, roadmap validation, docs validation, and planning validation pass.
-    - There are no known gaps, known risks, stale evidence records, stale generated docs, or parallel bypass paths.
-    - Static gallery, CLI, builder, static mount, product mount, and renderer-facing paths all require `UiStoryRunReport`.
+    - Runtime, story, diagnostics, accessibility, docs, examples, roadmap, and production evidence are current for all component platform milestones.
+    - Known gaps are listed truthfully and do not claim perfectionist/no-gap status unless a separate accepted audit exists.
+    - Designer/Workbench tracks consume reusable components for authoring product UX; PT-GAME-RUNTIME-UI owns screen HUD behavior; PT-GAME-WORLDSPACE-UI owns world/entity attachment behavior after readiness.
     completion_quality: not_applicable
     known_quality_gaps:
-    - The no-gap audit is not complete until all preceding story platform milestones are complete.
+    - Perfectionist verification would require a separate accepted no-gap audit after runtime_proven closeout.
     completion_audit: ''
 - id: PT-GAME-RUNTIME-UI
   title: Game Runtime UI Projection And HUD Platform
@@ -6350,22 +6376,157 @@ tracks:
     - Closeout links completed runtime proof, diagnostics, docs, examples, planning, roadmap, and production evidence.
     - Known quality gaps are listed truthfully and do not block runtime_proven completion unless they contradict the SDF screen-HUD proof.
     - Any perfectionist_verified claim is blocked behind a separate accepted no-gap audit intake with empty known gaps.
-  - id: PM-GAME-RUNTIME-UI-008
-    title: World Space And Screen Projected Attachment UI
+- id: PT-GAME-WORLDSPACE-UI
+  title: Game World-Space UI
+  state: deferred
+  owner: workspace
+  target_completion_quality: runtime_proven
+  strategic_goal: Own nameplates, damage numbers, boss frames, split-screen attachment UI, entity-attached UI, spatial anchors, world projection, visibility, culling, occlusion, and world/game input policy only after story proof, game-runtime target, viewport projection, and renderer readiness gates exist.
+  success_criteria:
+  - World-space and entity-attached UI is not implemented as part of PT-UI-STORY-PLATFORM, PT-UI-COMPONENT-PLATFORM, PT-GAME-RUNTIME-UI screen-HUD proof, or PT-VIEWPORT-PROJECTION.
+  - PT-VIEWPORT-PROJECTION remains the owner of camera, projection, viewport, and surface-fit contracts; this track consumes those contracts for game UI attachment behavior.
+  - PT-GAME-RUNTIME-UI remains the owner of game-runtime target profiles, view-model packets, intent proposals, engine UI submission, and SDF screen HUD proof.
+  - Story platform proof reaches at least PM-UI-STORY-004 before any world-space UI implementation can claim story-derived eligibility.
+  - Gameplay, world, entity, render, input, and accessibility boundaries are accepted before nameplates, damage numbers, boss frames, split-screen attachment, or entity-attached UI implementation starts.
+  milestones:
+  - id: PM-GAME-WORLDSPACE-UI-001
+    title: Deferred Ownership And Readiness Gate
     kind: design
     state: deferred
-    goal: Defer nameplates, damage numbers, boss frames, split-screen attachment, and entity-attached UI until authored binding contracts and runtime formation seams are accepted.
-    outcome: World-space and screen-projected attachment UI remains outside the SDF screen-HUD proof and gets its own accepted design before implementation.
+    goal: Record that world-space and entity-attached game UI owns its own deferred track and cannot be implemented through story, component, screen-HUD, or viewport-projection tracks.
+    outcome: A future activation plan must prove readiness from PM-UI-STORY-004, game-runtime target/profile work, viewport projection contracts, and renderer/projection readiness before implementation.
     dependencies:
-    - PM-GAME-RUNTIME-UI-007
+    - PM-UI-STORY-004
+    - PM-GAME-RUNTIME-UI-002
+    - PM-VIEWPORT-PROJECTION-001
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+      required_status: active
+      reason: World-space UI must stay separate from the screen HUD proof and consume game-runtime target/profile decisions.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+      required_status: active
+      reason: Camera, projection, viewport, and surface-fit contracts remain owned by PT-VIEWPORT-PROJECTION.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Deferred ownership must follow the split UI capability roadmap.
+    evidence_gates: []
+    acceptance_criteria:
+    - The activation plan names exact dependencies, write scopes, design gates, future WR ownership, and stop conditions.
+    - The plan keeps camera/projection/surface-fit authority in PT-VIEWPORT-PROJECTION.
+    - The plan keeps screen-space game HUD authority in PT-GAME-RUNTIME-UI.
+    - The plan keeps story proof authority in PT-UI-STORY-PLATFORM and reusable components in PT-UI-COMPONENT-PLATFORM.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - The track remains deferred until readiness gates and an accepted production plan exist.
+    completion_audit: ''
+  - id: PM-GAME-WORLDSPACE-UI-002
+    title: Spatial Attachment And Binding Contract
+    kind: design
+    state: deferred
+    goal: Define gameplay/world/entity binding, spatial anchor, screen-projection handoff, split-screen attachment, and read-only view-model boundaries before runtime behavior exists.
+    outcome: Nameplates, damage numbers, boss frames, and entity-attached UI have accepted ownership and binding contracts before implementation.
+    dependencies:
+    - PM-GAME-WORLDSPACE-UI-001
     roadmap_links: []
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
       required_status: accepted
-      reason: Attachment UI requires explicit authored binding contracts and runtime formation seams.
+      reason: World-space UI binding must consume accepted game-runtime UI target and intent boundaries.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+      required_status: accepted
+      reason: Spatial attachment and projection handoff must consume accepted viewport projection contracts.
     evidence_gates: []
     acceptance_criteria:
-    - Entity-attached UI is not treated as a follow-on patch to the SDF screen HUD proof.
-    - Authored binding, spatial anchor, visibility, culling, occlusion, safe-area, input, and accessibility contracts are accepted before implementation.
-    - Gameplay, world, entity, and render truth remain outside UI definition and projection ownership.
+    - Gameplay/world/entity truth remains outside UI definition ownership.
+    - Binding contracts are read-only until validated intent proposals cross the accepted game/runtime boundary.
+    - Split-screen and multi-viewport attachment behavior is explicit, not inferred from screen HUD behavior.
+    - No renderer, viewport projection, story, or component track owns gameplay UI semantics.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Implementation remains deferred until the contract is accepted and a WR production plan exists.
+    completion_audit: ''
+  - id: PM-GAME-WORLDSPACE-UI-003
+    title: Projection Visibility Culling And Occlusion Contract
+    kind: design
+    state: deferred
+    goal: Define how world-space UI consumes projection, visibility, culling, occlusion, safe-area, input, accessibility, and renderer readiness without owning camera/projection contracts.
+    outcome: World-space UI can request and consume projection/visibility evidence while PT-VIEWPORT-PROJECTION and renderer tracks retain their contract ownership.
+    dependencies:
+    - PM-GAME-WORLDSPACE-UI-002
+    - PM-VIEWPORT-PROJECTION-003
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+      required_status: accepted
+      reason: Projection, surface-fit, and viewport contracts must be accepted before world-space UI consumes them.
+    evidence_gates: []
+    acceptance_criteria:
+    - Camera/projection/surface-fit behavior remains in PT-VIEWPORT-PROJECTION.
+    - Renderer-facing readiness is named as an external dependency, not implemented by this design milestone.
+    - Culling, occlusion, safe-area, input, and accessibility decisions have typed diagnostics and fail-closed unsupported cases.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Runtime proof remains deferred until projection and renderer readiness exist.
+    completion_audit: ''
+  - id: PM-GAME-WORLDSPACE-UI-004
+    title: Entity-Attached UI Runtime Proof
+    kind: implementation
+    state: deferred
+    goal: Prove nameplates, damage numbers, boss frames, split-screen attachment, and entity-attached UI through accepted story, game-runtime, viewport, and renderer boundaries.
+    outcome: Game world-space UI has runtime evidence without bypassing story reports, screen-HUD ownership, camera/projection ownership, or gameplay/world/entity truth boundaries.
+    dependencies:
+    - PM-GAME-WORLDSPACE-UI-003
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+      required_status: accepted
+      reason: Runtime proof must preserve game-runtime UI mutation and target-profile boundaries.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+      required_status: accepted
+      reason: Runtime proof must consume accepted viewport projection contracts.
+    evidence_gates: []
+    acceptance_criteria:
+    - Runtime proof consumes `UiStoryRunReport` evidence where authored UI eligibility is relevant.
+    - Runtime proof consumes game-runtime view-model, target, intent, and engine submission contracts without owning screen-HUD proof.
+    - Runtime proof consumes viewport projection and renderer readiness without owning camera/projection/surface-fit contracts.
+    - Gameplay, world, entity, render, and input ownership boundaries are preserved.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Runtime proof remains deferred until all prior design gates and WR production plan are accepted.
+    completion_audit: ''
+  - id: PM-GAME-WORLDSPACE-UI-005
+    title: Evidence Docs And Runtime-Proven Closeout
+    kind: release
+    state: deferred
+    goal: Close world-space game UI with runtime evidence, docs, examples, diagnostics, and explicit known gaps.
+    outcome: PT-GAME-WORLDSPACE-UI can claim runtime_proven only after world-space/entity-attached UI behavior is proven through accepted dependencies and bounded ownership.
+    dependencies:
+    - PM-GAME-WORLDSPACE-UI-004
+    roadmap_links: []
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+      required_status: accepted
+      reason: Closeout must preserve game-runtime UI ownership and mutation boundaries.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/viewport-camera-and-projection-contract-platform-design.md
+      required_status: accepted
+      reason: Closeout must preserve viewport projection ownership boundaries.
+    evidence_gates: []
+    acceptance_criteria:
+    - Runtime, diagnostics, story, docs, examples, roadmap, and production evidence are current.
+    - Known gaps are listed truthfully and no perfectionist/no-gap claim is made without a separate accepted audit.
+    - Handoffs back to PT-UI-STORY-PLATFORM, PT-UI-COMPONENT-PLATFORM, PT-GAME-RUNTIME-UI, PT-VIEWPORT-PROJECTION, and renderer tracks are explicit.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - The track remains deferred until all previous milestones are implemented and closed with evidence.
+    completion_audit: ''
