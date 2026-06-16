@@ -371,10 +371,10 @@ dependency-checked execution graph.
 
 | ID | Milestone | Kind | State | Roadmap links | Outcome |
 |---|---|---|---|---|---|
-| PM-UI-STORY-001 | Story Workflow Authority And Track Activation | design | designing | N/A | PT-UI-STORY-PLATFORM exists as the UI story proof-substrate track with planning-only authority and explicit blockers against crate creation, runtime rendering expansion, gallery migration, product mounting, component maturity, designer product work, game HUD behavior, and world-space UI. |
-| PM-UI-STORY-002 | Story Manifest, Registry, Runner, And Report Contract | implementation | designing | N/A | Story execution has a public, domain-owned contract that can become the sole proof envelope for gallery, CLI, static mount, and product mount eligibility. |
-| PM-UI-STORY-003 | Gallery And CLI Story Execution | implementation | designing | N/A | Developers inspect the same story run evidence in CLI and gallery surfaces before any static mount or product host claims success. |
-| PM-UI-STORY-004 | Story-Gated Runtime Rendering Proof | implementation | designing | N/A | Visible UI rendering is proven through `UiStoryRunReport` and can no longer bypass story-derived mount eligibility. |
+| PM-UI-STORY-001 | Story Workflow Authority And Track Activation | design | completed | WR-174 | PT-UI-STORY-PLATFORM exists as the UI story proof-substrate track with planning-only authority and explicit blockers against crate creation, runtime rendering expansion, gallery migration, product mounting, component maturity, designer product work, game HUD behavior, and world-space UI. |
+| PM-UI-STORY-002 | Story Manifest, Registry, Runner, And Report Contract | implementation | completed | WR-175 | Story execution has a public, domain-owned contract that can become the sole proof envelope for gallery, CLI, static mount, and product mount eligibility. |
+| PM-UI-STORY-003 | Gallery And CLI Story Execution | implementation | completed | WR-176 | Developers inspect the same story run evidence in CLI and gallery surfaces before any static mount or product host claims success. |
+| PM-UI-STORY-004 | Story-Gated Runtime Rendering Proof | implementation | completed | WR-177 | Visible UI rendering is proven through `UiStoryRunReport` and can no longer bypass story-derived mount eligibility. |
 | PM-UI-STORY-005 | Story Platform No-Gap Audit And Closeout | release | designing | N/A | PT-UI-STORY-PLATFORM can claim perfectionist_verified only after current evidence, audits, closeouts, and generated planning state all agree with zero known gaps and zero known risks inside the story proof substrate boundary. |
 
 ### PT-UI-COMPONENT-PLATFORM - UI Component Platform

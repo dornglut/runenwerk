@@ -1,0 +1,100 @@
+version: 1
+status: accepted
+wr_id: WR-177
+milestone_id: PM-UI-STORY-004
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: future_wr_and_plan_required
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/mount.rs
+- domain/ui/ui_story/src/gallery.rs
+- domain/ui/ui_runtime_view/Cargo.toml
+- domain/ui/ui_runtime_view/src/lib.rs
+- domain/ui/ui_runtime_view/tests/runtime_view_contract.rs
+- domain/ui/ui_render_primitives/Cargo.toml
+- domain/ui/ui_render_primitives/src/lib.rs
+- domain/ui/ui_static_mount/Cargo.toml
+- domain/ui/ui_static_mount/src/lib.rs
+- domain/ui/ui_static_mount/tests/static_mount_contract.rs
+- apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+- apps/runenwerk_editor/src/runtime/ui_gallery.rs
+- docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+- docs-site/src/content/docs/domain/ui/roadmap.md
+new_outputs:
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/diagnostics-diagnostics.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/visual-visual.yaml
+forbidden_outputs:
+- domain/ui/ui_controls
+- domain/ui/ui_text
+- domain/ui/ui_interaction
+- domain/ui/ui_graph_canvas
+- domain/ui/ui_timeline
+- domain/ui/ui_world_space
+- domain/ui/ui_effects
+forbidden_patterns: []
+validation_commands:
+- cargo test -p ui_story
+- cargo test -p ui_runtime_view
+- cargo test -p ui_render_primitives
+- cargo test -p ui_static_mount
+- cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+- cargo fmt --all --check
+- task docs:validate
+- task production:validate
+- task roadmap:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - cargo:test
+- kind: artifact
+  name: artifact
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/artifact-artifact.yaml
+  subject_paths: &id001
+  - domain/ui/ui_story/src/runner.rs
+  - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/mount.rs
+  - domain/ui/ui_story/src/gallery.rs
+  - domain/ui/ui_runtime_view/Cargo.toml
+  - domain/ui/ui_runtime_view/src/lib.rs
+  - domain/ui/ui_runtime_view/tests/runtime_view_contract.rs
+  - domain/ui/ui_render_primitives/Cargo.toml
+  - domain/ui/ui_render_primitives/src/lib.rs
+  - domain/ui/ui_static_mount/Cargo.toml
+  - domain/ui/ui_static_mount/src/lib.rs
+  - domain/ui/ui_static_mount/tests/static_mount_contract.rs
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/diagnostics-diagnostics.yaml
+  subject_paths: *id001
+- kind: visual
+  name: visual
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-004/visual-visual.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop without owning WR and accepted production plan
+- stop if rendering proof bypasses story runner, report, or mount eligibility
+- stop if renderer-owned UI semantics are introduced
+- stop if component maturity, game HUD, world-space UI, or designer product authoring is implemented

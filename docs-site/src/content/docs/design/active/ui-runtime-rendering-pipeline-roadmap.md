@@ -55,16 +55,14 @@ This document is therefore an active design/roadmap source. It does not claim pr
 
 ## Story-First Supersession
 
-`PT-UI-STORY-PLATFORM` is now the production growth path for UI. The static
-gallery path described here remains useful temporary evidence, but standalone
-static gallery rendering is deferred and must not become the surface that new
-UI work grows around.
-
-Future rendering proof must be re-run through `UiStoryManifest`,
+`PT-UI-STORY-PLATFORM` is now the production growth path for UI. The former
+standalone static gallery path has been re-run through `UiStoryManifest`,
 `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and
-`UiStoryMountEligibility`. Gallery preview, CLI inspection, static mount, and
-product mount eligibility may claim success only from the story report, not
-from the hardcoded gallery path.
+`UiStoryMountEligibility`.
+
+Gallery preview, CLI inspection, and static mount proof may claim success only
+from the story report, not from a hardcoded gallery path. Product host mounting
+still requires its own future story-derived eligibility work.
 
 ## Current Code Truth
 
@@ -84,7 +82,7 @@ Current runtime-rendering code truth:
 - Authored button property validation and value carry-through are covered by checked-in `assets/ui_gallery/button/*.ron` fixtures.
 - `ui_runtime_view::ButtonRuntimeViewReport` derives label, route, capability, selected/disabled state, accessibility label, style axes, source-map indexes, and diagnostics from runtime artifacts plus supplied host data.
 - `ui_render_primitives` owns backend-neutral primitive generation, resolves `ThemeTokens`, shapes label text through `AtlasTextLayouter`, and emits `GlyphRunPrimitive` instead of placeholder text diagnostics.
-- `runenwerk_editor --bin runenwerk_ui_gallery` hosts the first static gallery path through the existing renderer UI composite pass; this is temporary evidence until it is re-run through `UiStoryRunReport`.
+- `runenwerk_editor --bin runenwerk_ui_gallery` hosts the static gallery path through the existing renderer UI composite pass only after checked-in stories report passing render primitive, render-data, static-mount, preview-frame, and mount-eligibility stages.
 
 Remaining code truth:
 
@@ -281,7 +279,10 @@ Target owner:
 domain/ui/ui_render_primitives/
 ```
 
-Standalone crate creation for the static button gallery slice is deferred with WR-173 / PM-UI-RUNTIME-RENDERING-001. Runtime rendering proof must return through PM-UI-STORY-004 after the story manifest, registry, runner, report, and mount-eligibility contracts exist.
+Standalone crate creation for the static button gallery slice is superseded by
+WR-177 / PM-UI-STORY-004. Runtime rendering proof now lives inside
+`UiStoryRunReport` stages after the story manifest, registry, runner, report,
+and mount-eligibility contracts exist.
 
 Acceptance criteria:
 

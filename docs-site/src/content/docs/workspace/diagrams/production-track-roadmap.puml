@@ -164,13 +164,7 @@ package "PT-UI-RUNTIME-RENDERING UI Runtime Rendering Pipeline" {
 }
 
 package "PT-UI-STORY-PLATFORM UI Story Platform" {
-  component "PM-UI-STORY-001 Story Workflow Authority And Track Activation\nkind=design\nstate=designing\nWR=N/A" as PM_UI_STORY_001 <<designing>>
-
-  component "PM-UI-STORY-002 Story Manifest, Registry, Runner, And Report Contract\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_002 <<designing>>
-
-  component "PM-UI-STORY-003 Gallery And CLI Story Execution\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_003 <<designing>>
-
-  component "PM-UI-STORY-004 Story-Gated Runtime Rendering Proof\nkind=implementation\nstate=designing\nWR=N/A" as PM_UI_STORY_004 <<designing>>
+  component "PT-UI-STORY-PLATFORM completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_UI_STORY_PLATFORM_COMPLETED <<completed>>
 
   component "PM-UI-STORY-005 Story Platform No-Gap Audit And Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_STORY_005 <<designing>>
 
@@ -265,12 +259,8 @@ PM_VIEWPORT_PROJECTION_002 -down-> PM_VIEWPORT_PROJECTION_004 : production prere
 PM_VIEWPORT_PROJECTION_003 -down-> PM_VIEWPORT_PROJECTION_004 : production prerequisite
 PM_VIEWPORT_PROJECTION_004 -down-> PM_VIEWPORT_PROJECTION_005 : production prerequisite
 PT_UI_PROGRAM_ARCHITECTURE_COMPLETED -down-> PM_UI_RUNTIME_RENDERING_001 : PT-UI-PROGRAM-ARCHITECTURE completed prerequisite
-PT_UI_PROGRAM_ARCHITECTURE_COMPLETED -down-> PM_UI_STORY_001 : PT-UI-PROGRAM-ARCHITECTURE completed prerequisite
-PM_UI_STORY_001 -down-> PM_UI_STORY_002 : production prerequisite
-PM_UI_STORY_002 -down-> PM_UI_STORY_003 : production prerequisite
-PM_UI_STORY_003 -down-> PM_UI_STORY_004 : production prerequisite
-PM_UI_STORY_004 -down-> PM_UI_STORY_005 : production prerequisite
-PM_UI_STORY_004 -down-> PM_UI_COMPONENT_001 : PT-UI-STORY-PLATFORM production prerequisite
+PT_UI_STORY_PLATFORM_COMPLETED -down-> PM_UI_STORY_005 : completed prerequisite
+PT_UI_STORY_PLATFORM_COMPLETED -down-> PM_UI_COMPONENT_001 : PT-UI-STORY-PLATFORM completed prerequisite
 PM_UI_COMPONENT_001 -down-> PM_UI_COMPONENT_002 : production prerequisite
 PM_UI_COMPONENT_002 -down-> PM_UI_COMPONENT_003 : production prerequisite
 PM_UI_COMPONENT_003 -down-> PM_UI_COMPONENT_004 : production prerequisite
@@ -284,7 +274,7 @@ PM_GAME_RUNTIME_UI_003 -down-> PM_GAME_RUNTIME_UI_004 : production prerequisite
 PM_GAME_RUNTIME_UI_004 -down-> PM_GAME_RUNTIME_UI_005 : production prerequisite
 PM_GAME_RUNTIME_UI_005 -down-> PM_GAME_RUNTIME_UI_006 : production prerequisite
 PM_GAME_RUNTIME_UI_006 -down-> PM_GAME_RUNTIME_UI_007 : production prerequisite
-PM_UI_STORY_004 -down-> PM_GAME_WORLDSPACE_UI_001 : PT-UI-STORY-PLATFORM production prerequisite
+PT_UI_STORY_PLATFORM_COMPLETED -down-> PM_GAME_WORLDSPACE_UI_001 : PT-UI-STORY-PLATFORM completed prerequisite
 PM_GAME_RUNTIME_UI_002 -down-> PM_GAME_WORLDSPACE_UI_001 : PT-GAME-RUNTIME-UI production prerequisite
 PM_VIEWPORT_PROJECTION_001 -down-> PM_GAME_WORLDSPACE_UI_001 : PT-VIEWPORT-PROJECTION production prerequisite
 PM_GAME_WORLDSPACE_UI_001 -down-> PM_GAME_WORLDSPACE_UI_002 : production prerequisite

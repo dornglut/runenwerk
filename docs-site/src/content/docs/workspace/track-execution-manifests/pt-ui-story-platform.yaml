@@ -17,7 +17,7 @@ accepted_design_dependencies:
 - path: docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
   required_status: completed
   reason: The story platform starts after completed UiProgram architecture behavior truth and extension-readiness closure.
-global_forbidden_scope: &global_forbidden_scope
+global_forbidden_scope:
 - no product code from this manifest alone
 - no product code until an owning WR and accepted production plan exist
 - no crate creation until exact `domain/ui/ui_story` authority exists
@@ -32,7 +32,7 @@ global_forbidden_scope: &global_forbidden_scope
 - no screen-space game HUD behavior in the story platform
 - no world-space, entity-attached, projected attachment, or gameplay/world binding UI in the story platform
 - no generated docs hand edits
-global_validation_commands: &planning_validation_commands
+global_validation_commands:
 - task production:render
 - task production:validate
 - task production:check
@@ -67,16 +67,12 @@ truth_claims:
   required_validations: []
   required_closeout_evidence: []
   known_gaps:
-  - PM-UI-STORY-001 through PM-UI-STORY-005 are not complete.
-  - '`UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and `UiStoryMountEligibility` are recorded here as future contracts, not implemented by this authority slice.'
-  - Runtime rendering proof has not yet been re-run as a story stage.
+  - PM-UI-STORY-005 is not complete.
+  - Final no-gap audit remains downstream story-platform work.
   - Reusable components, visual builder product work, screen-space game HUD behavior, and world-space/entity-attached UI are explicitly out of story-platform scope.
   supersedes:
   - PT-UI-RUNTIME-RENDERING standalone static gallery growth path
   blocks_downstream:
-  - PM-UI-STORY-002
-  - PM-UI-STORY-003
-  - PM-UI-STORY-004
   - PM-UI-STORY-005
 milestones:
 - milestone_id: PM-UI-STORY-001
@@ -84,7 +80,7 @@ milestones:
   stage: Stage 0
   authority_level: docs_governance_only
   milestone_type: design_only
-  future_wr_candidate: WR-TBD-UI-STORY-001
+  owning_wr: WR-174
   predecessor_dependencies:
   - PM-UI-PROGRAM-ARCH-014
   write_scope:
@@ -98,13 +94,35 @@ milestones:
   - docs-site/src/content/docs/domain/ui/roadmap.md
   - 'generated: production docs from task production:render'
   - 'generated: roadmap docs from task roadmap:render'
-  forbidden_scope: *global_forbidden_scope
+  forbidden_scope:
+  - no product code from this manifest alone
+  - no product code until an owning WR and accepted production plan exist
+  - no crate creation until exact `domain/ui/ui_story` authority exists
+  - no renderer-owned UI semantics
+  - no ECS-owned UI semantics
+  - no editor-owned or game-owned UI product truth
+  - no mountable surface without story-derived mount eligibility
+  - no gallery migration until `UiStoryRunReport` is the gallery proof envelope
+  - no standalone static gallery rendering as a production growth path
+  - no reusable component maturity in the story platform
+  - no Visual UI Builder, Designer Workbench, or product authoring UX implementation in the story platform
+  - no screen-space game HUD behavior in the story platform
+  - no world-space, entity-attached, projected attachment, or gameplay/world binding UI in the story platform
+  - no generated docs hand edits
   required_contracts:
   - PM-UI-STORY-001 is planning and sequencing authority only.
   - '`UiStoryRunReport` is recorded as the future proof envelope before gallery, CLI, static mount, or product mount claims.'
   - PT-UI-STORY-PLATFORM is bounded to story proof substrate only.
   - PT-UI-RUNTIME-RENDERING remains deferred as a standalone production growth path.
-  validation_commands: *planning_validation_commands
+  validation_commands:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
   evidence_gates:
   - production track metadata validates
   - roadmap deferral validates
@@ -121,10 +139,10 @@ milestones:
   - stop before Designer/Workbench product authoring
   - stop before game HUD behavior
   - stop before world-space or entity-attached UI
-  next_legal_action: Allocate or link the owning WR for PM-UI-STORY-001 before writing a closeout.
+  next_legal_action: PM-UI-STORY-001 closed as bounded_contract; recompile the Contract Pack for the next milestone.
   may_create_code: false
   may_create_crates: false
-  may_modify_production_behavior: false
+  may_modify_production_behavior: true
   execution_kind: design_contract
   permission_classes_required:
   - auto_safe
@@ -132,7 +150,7 @@ milestones:
   - agent_closeout
   required_evidence_categories:
   - governance
-  auto_safe_contract: &auto_safe_contract
+  auto_safe_contract:
     wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
     wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
     milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
@@ -154,14 +172,22 @@ milestones:
     - game HUD behavior
     - world-space or entity-attached UI
     - mount eligibility without `UiStoryRunReport`
-    validation_commands: *planning_validation_commands
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
     stop_conditions:
     - stop after one WR expansion action
     - stop if generated metadata does not validate
     template_key: ui_story_platform_auto_safe_expansion
     generated_contract_marker: PT-UI-STORY-PLATFORM-AUTO-SAFE
     generated_from_template_version: v1
-  agent_design_contract: &story_design_contract
+  agent_design_contract:
     source_documents:
     - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
     - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
@@ -195,42 +221,62 @@ milestones:
     - game HUD behavior
     - world-space or entity-attached UI
     expected_output_paths:
-    - docs-site/src/content/docs/reports/implementation-plans/wr-tbd-ui-story-001-story-workflow-authority-and-track-activation/plan.md
-    validation_commands: *planning_validation_commands
+    - docs-site/src/content/docs/reports/implementation-plans/wr-174-story-workflow-authority-and-track-activation/plan.md
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
     stop_conditions:
     - stop before implementation
     - stop if validation fails
     template_key: ui_story_platform_governance_design
     generated_contract_marker: PT-UI-STORY-PLATFORM-GOVERNANCE-DESIGN
     generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
   agent_closeout_contract:
-    <<: &story_closeout_contract_base
-      evidence_files:
-      - docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
-      validation_commands: *planning_validation_commands
-      completion_quality_allowed:
-      - bounded_contract
-      production_roadmap_state_updates:
-      - mark only the current milestone complete when evidence exists
-      - do not promote downstream milestones without their own WRs
-      known_gap_reporting:
-      - list every unimplemented downstream story proof-substrate milestone
-      - keep runtime rendering proof deferred until PM-UI-STORY-004
-      next_action_update_rules:
-      - next action is the next story proof-substrate WR expansion
-      template_key: ui_story_platform_agent_closeout
-      generated_contract_marker: PT-UI-STORY-PLATFORM-AGENT-CLOSEOUT
-      generated_from_template_version: v1
+    evidence_files:
+    - docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - bounded_contract
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+    production_roadmap_state_updates:
+    - mark only the current milestone complete when evidence exists
+    - do not promote downstream milestones without their own WRs
+    known_gap_reporting:
+    - list every unimplemented downstream story proof-substrate milestone
+    - keep runtime rendering proof deferred until PM-UI-STORY-004
+    next_action_update_rules:
+    - next action is the next story proof-substrate WR expansion
+    template_key: ui_story_platform_agent_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AGENT-CLOSEOUT
+    generated_from_template_version: v1
 - milestone_id: PM-UI-STORY-002
   title: Story Manifest, Registry, Runner, And Report Contract
   stage: Stage 1
   authority_level: future_wr_and_plan_required
   milestone_type: implementation
-  future_wr_candidate: WR-TBD-UI-STORY-002
+  owning_wr: WR-175
   predecessor_dependencies:
   - PM-UI-STORY-001
   write_scope:
+  - Cargo.toml
   - 'new: domain/ui/ui_story/Cargo.toml'
   - 'new: domain/ui/ui_story/src/lib.rs'
   - 'new: domain/ui/ui_story/src/manifest.rs'
@@ -239,7 +285,21 @@ milestones:
   - 'new: domain/ui/ui_story/src/report.rs'
   - 'new: domain/ui/ui_story/src/mount.rs'
   - docs-site/src/content/docs/domain/ui/roadmap.md
-  forbidden_scope: *global_forbidden_scope
+  forbidden_scope:
+  - no product code from this manifest alone
+  - no product code until an owning WR and accepted production plan exist
+  - no crate creation until exact `domain/ui/ui_story` authority exists
+  - no renderer-owned UI semantics
+  - no ECS-owned UI semantics
+  - no editor-owned or game-owned UI product truth
+  - no mountable surface without story-derived mount eligibility
+  - no gallery migration until `UiStoryRunReport` is the gallery proof envelope
+  - no standalone static gallery rendering as a production growth path
+  - no reusable component maturity in the story platform
+  - no Visual UI Builder, Designer Workbench, or product authoring UX implementation in the story platform
+  - no screen-space game HUD behavior in the story platform
+  - no world-space, entity-attached, projected attachment, or gameplay/world binding UI in the story platform
+  - no generated docs hand edits
   required_contracts:
   - record and implement `UiStoryManifest`
   - record and implement `UiStoryRegistry`
@@ -264,28 +324,119 @@ milestones:
   - stop before crate creation unless the plan names exact `domain/ui/ui_story` outputs
   - stop if contracts are renderer-owned, app-owned, editor-owned, game-owned, or component-owned
   - stop if implementation adds controls, interaction platform, text platform, GraphCanvas, Timeline, Visual UI Builder, game HUD, or world-space UI
-  next_legal_action: Expand or link PM-UI-STORY-002 before creating `domain/ui/ui_story`.
+  next_legal_action: PM-UI-STORY-002 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: true
-  may_modify_production_behavior: false
+  may_modify_production_behavior: true
   execution_kind: implementation_proof
   permission_classes_required:
   - auto_safe
   - agent_design
   - product_code
   - product_implementation
+  - crate_creation
   - runtime_closeout
   required_evidence_categories:
   - runtime_test
   - artifact
   - diagnostics
   - source_maps
-  auto_safe_contract: *auto_safe_contract
-  agent_design_contract: *story_design_contract
-  product_code_contract: &story_product_code_contract
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - reusable component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    - mount eligibility without `UiStoryRunReport`
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after one WR expansion action
+    - stop if generated metadata does not validate
+    template_key: ui_story_platform_auto_safe_expansion
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+    - docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - forbidden scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - story-first sequencing remains authoritative
+    - runtime rendering proof happens after story runner/report creation
+    - product code and crate creation remain forbidden without an owning WR and production plan
+    - component maturity, designer product work, game HUD behavior, and world-space UI are routed to their owning tracks
+    acceptance_checklist:
+    - plan preserves planning-only authority
+    - plan does not authorize runtime code
+    - plan records `UiStoryRunReport` as the proof envelope
+    - plan does not move component, designer, game HUD, or world-space ownership into the story track
+    planning_write_scope:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-175-story-manifest-registry-runner-and-report-contract/plan.md
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop before implementation
+    - stop if validation fails
+    template_key: ui_story_platform_governance_design
+    generated_contract_marker: PT-UI-STORY-PLATFORM-GOVERNANCE-DESIGN
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
+  product_code_contract:
     required_active_wr_state: active
     required_accepted_implementation_plan: task production:plan must approve the exact milestone scope before implementation
     exact_allowed_implementation_write_scopes:
+    - Cargo.toml
     - 'new: domain/ui/ui_story/Cargo.toml'
     - 'new: domain/ui/ui_story/src/lib.rs'
     - 'new: domain/ui/ui_story/src/manifest.rs'
@@ -334,51 +485,72 @@ milestones:
     generated_contract_marker: PT-UI-STORY-PLATFORM-PRODUCT-CODE
     generated_from_template_version: v1
   runtime_closeout_contract:
-    <<: &story_runtime_closeout_base
-      runtime_test_evidence_required:
-      - runtime story fixture evidence
-      - fail-closed diagnostics
-      validation_commands:
-      - cargo test -p ui_story
-      - cargo fmt --all --check
-      - task docs:validate
-      - task production:validate
-      - task roadmap:validate
-      completion_quality_allowed:
-      - runtime_proven
-      files_changed_report:
-      - domain/ui/ui_story
-      known_gap_reporting:
-      - report any unimplemented downstream story proof-substrate stage
-      - report component, designer, game HUD, and world-space scopes as explicitly out of milestone scope
-      production_roadmap_state_updates:
-      - mark only the current milestone complete when evidence exists
-      - do not promote downstream milestones without their own WRs
-      next_action_update_rules:
-      - next action is the next story proof-substrate WR expansion
-      template_key: ui_story_platform_runtime_closeout
-      generated_contract_marker: PT-UI-STORY-PLATFORM-RUNTIME-CLOSEOUT
-      generated_from_template_version: v1
+    runtime_test_evidence_required:
+    - runtime story fixture evidence
+    - fail-closed diagnostics
+    validation_commands:
+    - cargo test -p ui_story
+    - cargo fmt --all --check
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
+    files_changed_report:
+    - Cargo.toml
+    - domain/ui/ui_story
+    known_gap_reporting:
+    - report any unimplemented downstream story proof-substrate stage
+    - report component, designer, game HUD, and world-space scopes as explicitly out of milestone scope
+    production_roadmap_state_updates:
+    - mark only the current milestone complete when evidence exists
+    - do not promote downstream milestones without their own WRs
+    next_action_update_rules:
+    - next action is the next story proof-substrate WR expansion
+    template_key: ui_story_platform_runtime_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
 - milestone_id: PM-UI-STORY-003
   title: Gallery And CLI Story Execution
   stage: Stage 2
   authority_level: future_wr_and_plan_required
   milestone_type: implementation
-  future_wr_candidate: WR-TBD-UI-STORY-003
+  owning_wr: WR-176
   predecessor_dependencies:
   - PM-UI-STORY-002
   write_scope:
   - domain/ui/ui_story/src/registry.rs
   - domain/ui/ui_story/src/runner.rs
   - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/lib.rs
   - 'new: domain/ui/ui_story/src/gallery.rs'
   - 'new: domain/ui/ui_story/src/cli.rs'
+  - apps/runenwerk_editor/Cargo.toml
   - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
   - apps/runenwerk_editor/src/runtime/ui_gallery.rs
   - assets/ui_gallery
   - docs-site/src/content/docs/domain/ui/roadmap.md
-  forbidden_scope: *global_forbidden_scope
+  forbidden_scope:
+  - no product code from this manifest alone
+  - no product code until an owning WR and accepted production plan exist
+  - no crate creation until exact `domain/ui/ui_story` authority exists
+  - no renderer-owned UI semantics
+  - no ECS-owned UI semantics
+  - no editor-owned or game-owned UI product truth
+  - no mountable surface without story-derived mount eligibility
+  - no gallery migration until `UiStoryRunReport` is the gallery proof envelope
+  - no standalone static gallery rendering as a production growth path
+  - no reusable component maturity in the story platform
+  - no Visual UI Builder, Designer Workbench, or product authoring UX implementation in the story platform
+  - no screen-space game HUD behavior in the story platform
+  - no world-space, entity-attached, projected attachment, or gameplay/world binding UI in the story platform
+  - no generated docs hand edits
   required_contracts:
   - gallery preview consumes `UiStoryRunReport`
   - CLI story execution emits `UiStoryRunReport`
@@ -400,10 +572,10 @@ milestones:
   - stop if gallery or CLI bypasses `UiStoryRunReport`
   - stop if builder/product authoring UX is implemented here
   - stop if component maturity, game HUD, or world-space behavior is implemented here
-  next_legal_action: Expand or link PM-UI-STORY-003 after PM-UI-STORY-002 closes.
+  next_legal_action: PM-UI-STORY-003 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: false
-  may_modify_production_behavior: false
+  may_modify_production_behavior: true
   execution_kind: implementation_proof
   permission_classes_required:
   - auto_safe
@@ -415,16 +587,109 @@ milestones:
   - runtime_test
   - artifact
   - diagnostics
-  auto_safe_contract: *auto_safe_contract
-  agent_design_contract: *story_design_contract
+  - source_maps
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - reusable component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    - mount eligibility without `UiStoryRunReport`
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after one WR expansion action
+    - stop if generated metadata does not validate
+    template_key: ui_story_platform_auto_safe_expansion
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+    - docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - forbidden scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - story-first sequencing remains authoritative
+    - runtime rendering proof happens after story runner/report creation
+    - product code and crate creation remain forbidden without an owning WR and production plan
+    - component maturity, designer product work, game HUD behavior, and world-space UI are routed to their owning tracks
+    acceptance_checklist:
+    - plan preserves planning-only authority
+    - plan does not authorize runtime code
+    - plan records `UiStoryRunReport` as the proof envelope
+    - plan does not move component, designer, game HUD, or world-space ownership into the story track
+    planning_write_scope:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-176-gallery-and-cli-story-execution/plan.md
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop before implementation
+    - stop if validation fails
+    template_key: ui_story_platform_governance_design
+    generated_contract_marker: PT-UI-STORY-PLATFORM-GOVERNANCE-DESIGN
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
   product_code_contract:
-    <<: *story_product_code_contract
+    required_active_wr_state: active
+    required_accepted_implementation_plan: task production:plan must approve the exact milestone scope before implementation
     exact_allowed_implementation_write_scopes:
     - domain/ui/ui_story/src/registry.rs
     - domain/ui/ui_story/src/runner.rs
     - domain/ui/ui_story/src/report.rs
+    - domain/ui/ui_story/src/lib.rs
     - 'new: domain/ui/ui_story/src/gallery.rs'
     - 'new: domain/ui/ui_story/src/cli.rs'
+    - apps/runenwerk_editor/Cargo.toml
     - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
     - apps/runenwerk_editor/src/runtime/ui_gallery.rs
     - assets/ui_gallery
@@ -434,6 +699,17 @@ milestones:
     - '`UiStoryRunReport`'
     - gallery story report adapter
     - CLI story report output
+    forbidden_implementation_scopes:
+    - domain/ui/ui_controls
+    - domain/ui/ui_text
+    - domain/ui/ui_interaction
+    - domain/ui/ui_graph_canvas
+    - domain/ui/ui_timeline
+    - domain/ui/ui_world_space
+    - domain/ui/ui_effects
+    - apps/runenwerk_editor Visual UI Builder product work
+    - game-runtime HUD behavior
+    - world-space or entity-attached UI
     tests_to_add_change:
     - cargo test -p ui_story
     - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
@@ -441,35 +717,74 @@ milestones:
     - gallery story report artifact
     - CLI story report artifact
     - fail-closed diagnostics fixture
-    stop_conditions:
-    - stop if gallery or CLI bypasses `UiStoryRunReport`
-    - stop if Visual UI Builder, component maturity, game HUD, or world-space UI is implemented
-  runtime_closeout_contract:
-    <<: *story_runtime_closeout_base
     validation_commands:
     - cargo test -p ui_story
     - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
     - cargo fmt --all --check
+    - task production:render
     - task docs:validate
     - task production:validate
+    - task production:check
+    - task roadmap:render
     - task roadmap:validate
+    - task roadmap:check
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - existing static gallery and runtime rendering evidence remains historical until story-gated proof replaces it
+    closeout_evidence:
+    - closeout with runtime_test, artifact, diagnostics, and source_maps evidence
+    stop_conditions:
+    - stop if gallery or CLI bypasses `UiStoryRunReport`
+    - stop if Visual UI Builder, component maturity, game HUD, or world-space UI is implemented
+    template_key: ui_story_platform_product_code
+    generated_contract_marker: PT-UI-STORY-PLATFORM-PRODUCT-CODE
+    generated_from_template_version: v1
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - runtime story fixture evidence
+    - fail-closed diagnostics
+    validation_commands:
+    - cargo test -p ui_story
+    - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+    - cargo fmt --all --check
+    - task production:render
+    - task docs:validate
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
     files_changed_report:
     - domain/ui/ui_story
     - apps/runenwerk_editor UI story gallery/CLI adapters
     - assets/ui_gallery story manifests
-    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
+    known_gap_reporting:
+    - report any unimplemented downstream story proof-substrate stage
+    - report component, designer, game HUD, and world-space scopes as explicitly out of milestone scope
+    production_roadmap_state_updates:
+    - mark only the current milestone complete when evidence exists
+    - do not promote downstream milestones without their own WRs
+    next_action_update_rules:
+    - next action is the next story proof-substrate WR expansion
+    template_key: ui_story_platform_runtime_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
 - milestone_id: PM-UI-STORY-004
   title: Story-Gated Runtime Rendering Proof
   stage: Stage 3
   authority_level: future_wr_and_plan_required
   milestone_type: implementation
-  future_wr_candidate: WR-TBD-UI-STORY-004
   predecessor_dependencies:
   - PM-UI-STORY-003
   write_scope:
   - domain/ui/ui_story/src/runner.rs
   - domain/ui/ui_story/src/report.rs
   - domain/ui/ui_story/src/mount.rs
+  - domain/ui/ui_story/src/gallery.rs
   - domain/ui/ui_runtime_view
   - domain/ui/ui_render_primitives
   - domain/ui/ui_static_mount
@@ -477,7 +792,21 @@ milestones:
   - apps/runenwerk_editor/src/runtime/ui_gallery.rs
   - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
   - docs-site/src/content/docs/domain/ui/roadmap.md
-  forbidden_scope: *global_forbidden_scope
+  forbidden_scope:
+  - no product code from this manifest alone
+  - no product code until an owning WR and accepted production plan exist
+  - no crate creation until exact `domain/ui/ui_story` authority exists
+  - no renderer-owned UI semantics
+  - no ECS-owned UI semantics
+  - no editor-owned or game-owned UI product truth
+  - no mountable surface without story-derived mount eligibility
+  - no gallery migration until `UiStoryRunReport` is the gallery proof envelope
+  - no standalone static gallery rendering as a production growth path
+  - no reusable component maturity in the story platform
+  - no Visual UI Builder, Designer Workbench, or product authoring UX implementation in the story platform
+  - no screen-space game HUD behavior in the story platform
+  - no world-space, entity-attached, projected attachment, or gameplay/world binding UI in the story platform
+  - no generated docs hand edits
   required_contracts:
   - static runtime rendering proof is a `UiStoryRunReport` stage
   - static mount success requires `UiStoryMountEligibility`
@@ -503,7 +832,7 @@ milestones:
   - stop if rendering proof bypasses story runner, report, or mount eligibility
   - stop if renderer-owned UI semantics are introduced
   - stop if component maturity, game HUD, world-space UI, or designer product authoring is implemented
-  next_legal_action: Expand or link PM-UI-STORY-004 after PM-UI-STORY-003 closes.
+  next_legal_action: PM-UI-STORY-004 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: false
   may_modify_production_behavior: true
@@ -519,14 +848,105 @@ milestones:
   - artifact
   - diagnostics
   - visual
-  auto_safe_contract: *auto_safe_contract
-  agent_design_contract: *story_design_contract
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - reusable component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    - mount eligibility without `UiStoryRunReport`
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after one WR expansion action
+    - stop if generated metadata does not validate
+    template_key: ui_story_platform_auto_safe_expansion
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AUTO-SAFE
+    generated_from_template_version: v1
+  agent_design_contract:
+    source_documents:
+    - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+    - docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md
+    required_sections:
+    - status and authority
+    - exact write scope
+    - forbidden scope
+    - validation commands
+    - closeout evidence
+    required_decisions:
+    - story-first sequencing remains authoritative
+    - runtime rendering proof happens after story runner/report creation
+    - product code and crate creation remain forbidden without an owning WR and production plan
+    - component maturity, designer product work, game HUD behavior, and world-space UI are routed to their owning tracks
+    acceptance_checklist:
+    - plan preserves planning-only authority
+    - plan does not authorize runtime code
+    - plan records `UiStoryRunReport` as the proof envelope
+    - plan does not move component, designer, game HUD, or world-space ownership into the story track
+    planning_write_scope:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    allowed_write_scopes: []
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    expected_output_paths:
+    - docs-site/src/content/docs/reports/implementation-plans/wr-177-story-gated-runtime-rendering-proof/plan.md
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop before implementation
+    - stop if validation fails
+    template_key: ui_story_platform_governance_design
+    generated_contract_marker: PT-UI-STORY-PLATFORM-GOVERNANCE-DESIGN
+    generated_from_template_version: v1
+    authoring_strategy: template_contract_writer
+    agent_context_files: []
+    agent_required_outputs: []
+    agent_worktree_policy: isolated_action_workspace
   product_code_contract:
-    <<: *story_product_code_contract
+    required_active_wr_state: active
+    required_accepted_implementation_plan: task production:plan must approve the exact milestone scope before implementation
     exact_allowed_implementation_write_scopes:
     - domain/ui/ui_story/src/runner.rs
     - domain/ui/ui_story/src/report.rs
     - domain/ui/ui_story/src/mount.rs
+    - domain/ui/ui_story/src/gallery.rs
     - domain/ui/ui_runtime_view
     - domain/ui/ui_render_primitives
     - domain/ui/ui_static_mount
@@ -537,6 +957,17 @@ milestones:
     - '`UiStoryMountEligibility`'
     - story-gated runtime view adapter
     - story-gated static mount adapter
+    forbidden_implementation_scopes:
+    - domain/ui/ui_controls
+    - domain/ui/ui_text
+    - domain/ui/ui_interaction
+    - domain/ui/ui_graph_canvas
+    - domain/ui/ui_timeline
+    - domain/ui/ui_world_space
+    - domain/ui/ui_effects
+    - apps/runenwerk_editor Visual UI Builder product work
+    - game-runtime HUD behavior
+    - world-space or entity-attached UI
     tests_to_add_change:
     - cargo test -p ui_story
     - cargo test -p ui_runtime_view
@@ -547,11 +978,6 @@ milestones:
     - story-gated static rendering artifact
     - mount eligibility diagnostics
     - renderer-facing primitive evidence
-    stop_conditions:
-    - stop if runtime rendering bypasses `UiStoryRunReport`
-    - stop if component maturity, game HUD, world-space UI, or designer product authoring is implemented
-  runtime_closeout_contract:
-    <<: *story_runtime_closeout_base
     validation_commands:
     - cargo test -p ui_story
     - cargo test -p ui_runtime_view
@@ -559,16 +985,64 @@ milestones:
     - cargo test -p ui_static_mount
     - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
     - cargo fmt --all --check
+    - task production:render
     - task docs:validate
     - task production:validate
+    - task production:check
+    - task roadmap:render
     - task roadmap:validate
+    - task roadmap:check
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - existing static gallery and runtime rendering evidence remains historical until story-gated proof replaces it
+    closeout_evidence:
+    - closeout with runtime_test, artifact, diagnostics, and source_maps evidence
+    stop_conditions:
+    - stop if runtime rendering bypasses `UiStoryRunReport`
+    - stop if component maturity, game HUD, world-space UI, or designer product authoring is implemented
+    template_key: ui_story_platform_product_code
+    generated_contract_marker: PT-UI-STORY-PLATFORM-PRODUCT-CODE
+    generated_from_template_version: v1
+  runtime_closeout_contract:
+    runtime_test_evidence_required:
+    - runtime story fixture evidence
+    - fail-closed diagnostics
+    validation_commands:
+    - cargo test -p ui_story
+    - cargo test -p ui_runtime_view
+    - cargo test -p ui_render_primitives
+    - cargo test -p ui_static_mount
+    - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+    - cargo fmt --all --check
+    - task production:render
+    - task docs:validate
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task planning:validate
+    completion_quality_allowed:
+    - runtime_proven
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
     files_changed_report:
     - domain/ui/ui_story
     - domain/ui/ui_runtime_view
     - domain/ui/ui_render_primitives
     - domain/ui/ui_static_mount
     - apps/runenwerk_editor UI story rendering proof adapters
-    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+    known_gap_reporting:
+    - report any unimplemented downstream story proof-substrate stage
+    - report component, designer, game HUD, and world-space scopes as explicitly out of milestone scope
+    production_roadmap_state_updates:
+    - mark only the current milestone complete when evidence exists
+    - do not promote downstream milestones without their own WRs
+    next_action_update_rules:
+    - next action is the next story proof-substrate WR expansion
+    template_key: ui_story_platform_runtime_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-RUNTIME-CLOSEOUT
+    generated_from_template_version: v1
+  owning_wr: WR-177
 - milestone_id: PM-UI-STORY-005
   title: Story Platform No-Gap Audit And Closeout
   stage: Stage 4
@@ -584,12 +1058,34 @@ milestones:
   - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
   - 'generated: production docs from task production:render'
   - 'generated: roadmap docs from task roadmap:render'
-  forbidden_scope: *global_forbidden_scope
+  forbidden_scope:
+  - no product code from this manifest alone
+  - no product code until an owning WR and accepted production plan exist
+  - no crate creation until exact `domain/ui/ui_story` authority exists
+  - no renderer-owned UI semantics
+  - no ECS-owned UI semantics
+  - no editor-owned or game-owned UI product truth
+  - no mountable surface without story-derived mount eligibility
+  - no gallery migration until `UiStoryRunReport` is the gallery proof envelope
+  - no standalone static gallery rendering as a production growth path
+  - no reusable component maturity in the story platform
+  - no Visual UI Builder, Designer Workbench, or product authoring UX implementation in the story platform
+  - no screen-space game HUD behavior in the story platform
+  - no world-space, entity-attached, projected attachment, or gameplay/world binding UI in the story platform
+  - no generated docs hand edits
   required_contracts:
   - no-gap audit is bounded to story proof substrate only
   - no component, designer, game HUD, or world-space UI completion is required or claimed by this closeout
   - all story substrate truth evidence is current
-  validation_commands: *planning_validation_commands
+  validation_commands:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
   evidence_gates:
   - truth_certificate
   - closeout
@@ -611,13 +1107,61 @@ milestones:
   - handoff
   required_evidence_categories:
   - handoff
-  auto_safe_contract: *auto_safe_contract
+  auto_safe_contract:
+    wr_candidate_policy: create or link exactly one deferred WR candidate for the current production milestone
+    wr_id_allocation_behavior: allocate the next WR id through the repository roadmap workflow
+    milestone_to_wr_link_behavior: update only the current production milestone roadmap_links field
+    manifest_wr_reference_behavior: replace future_wr_candidate with the allocated owning_wr only for the current milestone
+    allowed_metadata_write_scopes:
+    - docs-site/src/content/docs/workspace/production-tracks.yaml
+    - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+    - docs-site/src/content/docs/workspace/roadmap-items.yaml
+    - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+    - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+    - 'generated: production docs from task production:render'
+    - 'generated: roadmap docs from task roadmap:render'
+    forbidden_scopes:
+    - product code
+    - crate creation
+    - renderer-owned UI semantics
+    - reusable component maturity
+    - Designer/Workbench product authoring
+    - game HUD behavior
+    - world-space or entity-attached UI
+    - mount eligibility without `UiStoryRunReport`
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    stop_conditions:
+    - stop after one WR expansion action
+    - stop if generated metadata does not validate
+    template_key: ui_story_platform_auto_safe_expansion
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AUTO-SAFE
+    generated_from_template_version: v1
   agent_closeout_contract:
-    <<: *story_closeout_contract_base
     evidence_files:
     - docs-site/src/content/docs/reports/closeouts/pm-ui-story-005-story-platform-no-gap-audit-and-closeout/closeout.md
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
     completion_quality_allowed:
     - perfectionist_verified
+    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-005-story-platform-no-gap-audit-and-closeout/closeout.md
+    production_roadmap_state_updates:
+    - mark only the current milestone complete when evidence exists
+    - do not promote downstream milestones without their own WRs
     known_gap_reporting:
     - no known story proof-substrate gaps may remain
     - downstream component, designer, game HUD, and world-space work remains separate ownership, not a story-platform gap
@@ -626,7 +1170,9 @@ milestones:
     - hand off visual authoring product work to Designer/Workbench tracks
     - hand off screen HUD runtime work to PT-GAME-RUNTIME-UI
     - hand off world-space game UI to PT-GAME-WORLDSPACE-UI
-    closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-005-story-platform-no-gap-audit-and-closeout/closeout.md
+    template_key: ui_story_platform_agent_closeout
+    generated_contract_marker: PT-UI-STORY-PLATFORM-AGENT-CLOSEOUT
+    generated_from_template_version: v1
   handoff_contract:
     handoff_target: PT-UI-COMPONENT-PLATFORM, Designer/Workbench tracks, PT-GAME-RUNTIME-UI, and PT-GAME-WORLDSPACE-UI
     proof_path_rules:
@@ -638,7 +1184,15 @@ milestones:
     - game HUD runtime behavior inside story-platform closeout
     - world-space/entity-attached UI implementation inside story-platform closeout
     - foundation/meta extraction
-    validation_commands: *planning_validation_commands
+    validation_commands:
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
     stop_conditions:
     - stop if downstream implementation is bundled into the story closeout
     - stop if foundation/meta extraction is required

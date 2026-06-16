@@ -47,6 +47,7 @@ ui_program_lowering.workspace = true
 ui_render_data.workspace = true
 ui_render_primitives.workspace = true
 ui_runtime_view.workspace = true
+ui_story.workspace = true
 ui_static_mount.workspace = true
 ui_surface.workspace = true
 ui_text.workspace = true

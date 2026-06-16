@@ -1,0 +1,89 @@
+version: 1
+status: accepted
+wr_id: WR-176
+milestone_id: PM-UI-STORY-003
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: future_wr_and_plan_required
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- domain/ui/ui_story/src/registry.rs
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/lib.rs
+- apps/runenwerk_editor/Cargo.toml
+- apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+- apps/runenwerk_editor/src/runtime/ui_gallery.rs
+- assets/ui_gallery/button/basic.ron
+- assets/ui_gallery/button/selected.ron
+- docs-site/src/content/docs/domain/ui/roadmap.md
+new_outputs:
+- domain/ui/ui_story/src/gallery.rs
+- domain/ui/ui_story/src/cli.rs
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/runtime_test-runtime_test.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/artifact-artifact.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/diagnostics-diagnostics.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/source_maps-source_maps.yaml
+forbidden_outputs:
+- domain/ui/ui_controls
+- domain/ui/ui_text
+- domain/ui/ui_interaction
+- domain/ui/ui_graph_canvas
+- domain/ui/ui_timeline
+- domain/ui/ui_world_space
+- domain/ui/ui_effects
+forbidden_patterns: []
+validation_commands:
+- cargo test -p ui_story
+- cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+- cargo fmt --all --check
+- task docs:validate
+- task production:validate
+- task roadmap:validate
+evidence_required: &id002
+- kind: runtime_test
+  name: runtime_test
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/runtime_test-runtime_test.yaml
+  validation_command_ids:
+  - cargo:test
+- kind: artifact
+  name: artifact
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/artifact-artifact.yaml
+  subject_paths: &id001
+  - domain/ui/ui_story/src/registry.rs
+  - domain/ui/ui_story/src/runner.rs
+  - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/lib.rs
+  - domain/ui/ui_story/src/gallery.rs
+  - domain/ui/ui_story/src/cli.rs
+  - apps/runenwerk_editor/Cargo.toml
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - assets/ui_gallery/button/basic.ron
+  - assets/ui_gallery/button/selected.ron
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/diagnostics-diagnostics.yaml
+  subject_paths: *id001
+- kind: source_maps
+  name: source_maps
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-story-platform/pm-ui-story-003/source_maps-source_maps.yaml
+  subject_paths: *id001
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *id002
+rollback_policy: reject import and leave repository unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop without owning WR and accepted production plan
+- stop if gallery or CLI bypasses `UiStoryRunReport`
+- stop if builder/product authoring UX is implemented here
+- stop if component maturity, game HUD, or world-space behavior is implemented here

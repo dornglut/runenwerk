@@ -52,7 +52,8 @@ Implemented and in use:
 - `ui_program_lowering/src/lower.rs::lower_control_nodes` now fails closed for unknown authored control kinds and emits no package-contract-derived graph rows;
 - `ui_runtime_view` exposes artifact-backed runtime views, including a button-specific report carrying label, route, capability, selected/disabled state, accessibility label, style axes, source-map indexes, and diagnostics;
 - `ui_render_primitives` owns backend-neutral button primitive generation from runtime views, resolves theme tokens and text layout through `ThemeTokens` and `AtlasTextLayouter`, and emits `GlyphRunPrimitive` label text before a `UiFrame` reaches renderer-facing code;
-- `runenwerk_editor` now has a standalone `runenwerk_ui_gallery` host that loads checked-in button fixtures outside renderer code, submits a prepared `UiFrame` through the existing editor UI composite pass, and fails closed if formation, compiler, runtime-view, primitive generation, render-data adaptation, or static mount reports errors.
+- `ui_story` owns the domain-level story manifest, checked-in gallery catalog, registry, runner, CLI summary, report, and mount-eligibility contracts; product host mounting remains downstream story-platform work;
+- `runenwerk_editor` now has a standalone `runenwerk_ui_gallery` host and CLI inspection path that consume checked-in `UiStoryRunReport` output with render primitive, render-data, static-mount, preview-frame, and mount-eligibility stages before submitting a prepared `UiFrame` through the existing editor UI composite pass.
 
 Evidence in code:
 
@@ -365,13 +366,14 @@ Outcome:
 Later implementation contract target files and functions:
 
 ```text
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::load_fixture_node
-apps/runenwerk_editor/src/runtime/ui_gallery.rs::compile_fixture_button_report
+domain/ui/ui_story/src/gallery.rs::checked_in_gallery_registry
+domain/ui/ui_story/src/cli.rs::UiStoryCliReport::from_reports
+apps/runenwerk_editor/src/runtime/ui_gallery.rs::run_checked_in_gallery_stories
+apps/runenwerk_editor/src/runtime/ui_gallery.rs::inspect_checked_in_gallery_stories
 apps/runenwerk_editor/src/runtime/ui_gallery.rs::submit_ui_gallery_frame_system
 domain/ui/ui_story/src/runner.rs::UiStoryRunner::run_story
+domain/ui/ui_story/src/runner.rs::UiStoryRunner::run_story_with_stage_reports
 domain/ui/ui_story/src/report.rs::UiStoryRunReport
-domain/ui/ui_story/src/registry.rs::UiStoryRegistry::discover
 domain/ui/ui_story/src/mount.rs::UiStoryMountEligibility::from_report
 ```
 
@@ -399,7 +401,7 @@ Stop conditions:
 - [x] Implement the promoted UI self-authoring workspace before M4. Status: complete as of 2026-05-06; `editor_definition` owns durable editor schemas and validation guards, `editor_shell` exposes the Editor Design workspace/profile and self-authoring surface kinds, and `runenwerk_editor` loads checked-in UI fixtures as editable documents with validation, retained preview, command diff summaries, retained authoring control routes, UI node/theme/workspace-layout draft edits, and explicit apply/rollback.
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 - [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
-- [ ] Continue artifact-backed runtime rendering only through story gates. Status: WR-173 / PM-UI-RUNTIME-RENDERING-001 is blocked_deferred as a standalone static gallery path; the former evidence must be re-run through `UiStoryRunReport` under PM-UI-STORY-004 before gallery, CLI, static mount, or product mount eligibility can claim success.
+- [x] Continue artifact-backed runtime rendering only through story gates. Status: WR-177 / PM-UI-STORY-004 re-runs the former static gallery proof through `UiStoryRunReport` render primitive, render-data, static-mount, preview-frame, and mount-eligibility stages. Product host mounting remains future story-platform work.
 - [ ] Prepare the story-driven golden workflow through normal WR/production gates. Status: active design intake; `PM-UI-STORY-001` activates planning authority only, while later PM-UI-STORY milestones introduce the story runner, gallery/CLI execution, runtime rendering proof, and mount eligibility.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; generated production docs must remain outputs of their source files and must not be hand-edited.
 

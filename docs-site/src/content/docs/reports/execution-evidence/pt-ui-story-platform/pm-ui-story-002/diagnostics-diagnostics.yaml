@@ -1,0 +1,139 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+milestone_id: PM-UI-STORY-002
+action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-002:WR-175
+evidence_kind: diagnostics
+name: diagnostics
+status: passed
+produced_at: '2026-06-16T17:39:55Z'
+paths:
+- Cargo.toml
+- domain/ui/ui_story/Cargo.toml
+- domain/ui/ui_story/src/lib.rs
+- domain/ui/ui_story/src/manifest.rs
+- domain/ui/ui_story/src/registry.rs
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/mount.rs
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_paths:
+- Cargo.toml
+- domain/ui/ui_story/Cargo.toml
+- domain/ui/ui_story/src/lib.rs
+- domain/ui/ui_story/src/manifest.rs
+- domain/ui/ui_story/src/registry.rs
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/mount.rs
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_digests:
+  Cargo.toml: 6a8f93301b991bfaf166db7f9f8e9a028fa8a898caba1c6b8a0dafb3407f96f9
+  docs-site/src/content/docs/domain/ui/roadmap.md: 8b5636effdd5233f542fab1c279f8fb515c2afa4392d4b4e2229e792626d28f0
+  domain/ui/ui_story/Cargo.toml: 414aa4c313633c87bc7bddb4cb8583fec5e8c6c3e89e07c00c3044b623044b1f
+  domain/ui/ui_story/src/lib.rs: 417b80c7592210b5c3309a3d071ec0636ef01eaca808c1c6617e38946b3d0f43
+  domain/ui/ui_story/src/manifest.rs: 2d5bf3b1bbb4e77859347956de5cbfcb9cba6881f43beab76e615ad784d41e00
+  domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+  domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+  domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+  domain/ui/ui_story/src/runner.rs: 2c122f24584cd7a4f4b4af7ac88243096c1a8635e357b05b9829b729fe160788
+validation_commands:
+- cargo:test (cargo test -p ui_story) -> exit 0
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_story
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-173906z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-002:WR-175
+  validation_result_digest: 11adad368fcd9b47b4795b661988b41af96f86150d985eb7bdcda3b456287f43
+  subject_digests:
+    Cargo.toml: 6a8f93301b991bfaf166db7f9f8e9a028fa8a898caba1c6b8a0dafb3407f96f9
+    docs-site/src/content/docs/domain/ui/roadmap.md: 8b5636effdd5233f542fab1c279f8fb515c2afa4392d4b4e2229e792626d28f0
+    domain/ui/ui_story/Cargo.toml: 414aa4c313633c87bc7bddb4cb8583fec5e8c6c3e89e07c00c3044b623044b1f
+    domain/ui/ui_story/src/lib.rs: 417b80c7592210b5c3309a3d071ec0636ef01eaca808c1c6617e38946b3d0f43
+    domain/ui/ui_story/src/manifest.rs: 2d5bf3b1bbb4e77859347956de5cbfcb9cba6881f43beab76e615ad784d41e00
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 2c122f24584cd7a4f4b4af7ac88243096c1a8635e357b05b9829b729fe160788
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-173906z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-002:WR-175
+  validation_result_digest: 817452797586ed44ca79551a6da4cecef2e9bcbc42a0cc02b488315a41798a40
+  subject_digests:
+    Cargo.toml: 6a8f93301b991bfaf166db7f9f8e9a028fa8a898caba1c6b8a0dafb3407f96f9
+    docs-site/src/content/docs/domain/ui/roadmap.md: 8b5636effdd5233f542fab1c279f8fb515c2afa4392d4b4e2229e792626d28f0
+    domain/ui/ui_story/Cargo.toml: 414aa4c313633c87bc7bddb4cb8583fec5e8c6c3e89e07c00c3044b623044b1f
+    domain/ui/ui_story/src/lib.rs: 417b80c7592210b5c3309a3d071ec0636ef01eaca808c1c6617e38946b3d0f43
+    domain/ui/ui_story/src/manifest.rs: 2d5bf3b1bbb4e77859347956de5cbfcb9cba6881f43beab76e615ad784d41e00
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 2c122f24584cd7a4f4b4af7ac88243096c1a8635e357b05b9829b729fe160788
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-173906z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-002:WR-175
+  validation_result_digest: 796e33f98e46194325c66d74d2bd261c513e4510271979251a2e2f6ad9dd940c
+  subject_digests:
+    Cargo.toml: 6a8f93301b991bfaf166db7f9f8e9a028fa8a898caba1c6b8a0dafb3407f96f9
+    docs-site/src/content/docs/domain/ui/roadmap.md: 8b5636effdd5233f542fab1c279f8fb515c2afa4392d4b4e2229e792626d28f0
+    domain/ui/ui_story/Cargo.toml: 414aa4c313633c87bc7bddb4cb8583fec5e8c6c3e89e07c00c3044b623044b1f
+    domain/ui/ui_story/src/lib.rs: 417b80c7592210b5c3309a3d071ec0636ef01eaca808c1c6617e38946b3d0f43
+    domain/ui/ui_story/src/manifest.rs: 2d5bf3b1bbb4e77859347956de5cbfcb9cba6881f43beab76e615ad784d41e00
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 2c122f24584cd7a4f4b4af7ac88243096c1a8635e357b05b9829b729fe160788
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-173906z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-002:WR-175
+  validation_result_digest: d57b3dcfd388ba1b335afb668bf715f8b13c3db11abe06651f15ee0bbc16d240
+  subject_digests:
+    Cargo.toml: 6a8f93301b991bfaf166db7f9f8e9a028fa8a898caba1c6b8a0dafb3407f96f9
+    docs-site/src/content/docs/domain/ui/roadmap.md: 8b5636effdd5233f542fab1c279f8fb515c2afa4392d4b4e2229e792626d28f0
+    domain/ui/ui_story/Cargo.toml: 414aa4c313633c87bc7bddb4cb8583fec5e8c6c3e89e07c00c3044b623044b1f
+    domain/ui/ui_story/src/lib.rs: 417b80c7592210b5c3309a3d071ec0636ef01eaca808c1c6617e38946b3d0f43
+    domain/ui/ui_story/src/manifest.rs: 2d5bf3b1bbb4e77859347956de5cbfcb9cba6881f43beab76e615ad784d41e00
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 2c122f24584cd7a4f4b4af7ac88243096c1a8635e357b05b9829b729fe160788
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-173906z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-002:WR-175
+  validation_result_digest: 1054f95f447d5bccbd16e71336c15006088e0d8e03f714e7b71ca668c9073b00
+  subject_digests:
+    Cargo.toml: 6a8f93301b991bfaf166db7f9f8e9a028fa8a898caba1c6b8a0dafb3407f96f9
+    docs-site/src/content/docs/domain/ui/roadmap.md: 8b5636effdd5233f542fab1c279f8fb515c2afa4392d4b4e2229e792626d28f0
+    domain/ui/ui_story/Cargo.toml: 414aa4c313633c87bc7bddb4cb8583fec5e8c6c3e89e07c00c3044b623044b1f
+    domain/ui/ui_story/src/lib.rs: 417b80c7592210b5c3309a3d071ec0636ef01eaca808c1c6617e38946b3d0f43
+    domain/ui/ui_story/src/manifest.rs: 2d5bf3b1bbb4e77859347956de5cbfcb9cba6881f43beab76e615ad784d41e00
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 2c122f24584cd7a4f4b4af7ac88243096c1a8635e357b05b9829b729fe160788

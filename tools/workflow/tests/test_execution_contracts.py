@@ -48,9 +48,15 @@ def test_execution_planning_expansion_creates_and_links_deferred_wr(tmp_path: Pa
     assert second_production_milestone["roadmap_links"] == ["WR-003"]
     assert second_manifest_milestone["owning_wr"] == "WR-003"
     assert "future_wr_candidate" not in second_manifest_milestone
+    assert second_manifest_milestone["agent_design_contract"]["expected_output_paths"] == [
+        "docs-site/src/content/docs/reports/implementation-plans/wr-003-pm-test-002-title/plan.md",
+    ]
     assert deferred_wr["id"] == "WR-003"
     assert deferred_wr["planning_state"] == "blocked_deferred"
     assert deferred_wr["completion_quality"] == "not_applicable"
+    assert "docs-site/src/content/docs/workspace/roadmap-items.yaml" in deferred_wr["write_scopes"]
+    assert "docs-site/src/content/docs/design/active/test-story-design.md" in deferred_wr["write_scopes"]
+    assert "docs-site/src/content/docs/domain/ui/test-roadmap.md" in deferred_wr["write_scopes"]
     assert "docs-site/src/content/docs/reports/implementation-plans/wr-003-pm-test-002-title/plan.md" in deferred_wr["write_scopes"]
     assert "docs-site/src/content/docs/reports/closeouts/pm-test-002/closeout.md" in deferred_wr["write_scopes"]
     assert all(path.is_relative_to(tmp_path) for path in result.written_paths)
@@ -515,6 +521,9 @@ def test_execution_cli_writes_run_ledger_after_successful_action(tmp_path: Path)
 
 def test_execution_validation_command_registry_rejects_unsafe_forms() -> None:
     action = execution_test_action()
+    assert validation_command_from_string("cargo fmt --all --check")["command_id"] == "cargo:fmt"
+    assert validation_command_from_string("cargo fmt --all -- --check")["command_id"] == "cargo:fmt"
+
     action.validation_commands = ["task docs:validate && task planning:validate"]
     assert any("shell metacharacters" in error for error in preflight_pack(ContractPack(
         track_id="PT-TEST",

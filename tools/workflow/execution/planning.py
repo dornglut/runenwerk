@@ -8,6 +8,13 @@ from production_plan import slugify
 from production_state import ProductionPlanningState, load_production_tracks
 from roadmap_state import RoadmapState, WorkflowError, combine_roadmap_data, load_roadmap, load_yaml, repo_path, split_source_paths
 from track_sources.manifest import load_track_execution_manifest, manifest_write_scope_path
+from truth.certificates import (
+    certificate_errors_for_claim,
+    load_certificate,
+    strong_claim_requires_certificate,
+    write_certificate,
+)
+from truth.verifiers import run_verifier
 
 from execution.contracts import ActionContract
 
@@ -89,8 +96,7 @@ def exact_planning_expansion_write_scopes(
         entry.expected_closeout_path,
         *production_generated_scopes(),
     ]
-    if entry.milestone_type in {"implementation", "hardening"}:
-        scopes.extend(manifest_write_scopes_for_entry(entry))
+    scopes.extend(manifest_write_scopes_for_entry(entry))
     return list(dict.fromkeys(scopes))
 
 
@@ -159,6 +165,18 @@ def roadmap_item_for_planning_expansion(
     }
 
 
+def replace_future_plan_output_paths(paths: list[str], *, future_wr_candidate: str, wr_id: str, milestone_title: str) -> list[str]:
+    replacement = implementation_plan_path(wr_id, milestone_title)
+    future_key = future_wr_candidate.lower()
+    updated: list[str] = []
+    for path in paths:
+        if "wr-tbd" in path.lower() or future_key in path.lower():
+            updated.append(replacement)
+        else:
+            updated.append(path)
+    return list(dict.fromkeys(updated))
+
+
 def workspace_contract_pack_root(*, contract_pack_root: Path, workspace_root: Path, repo_root: Path) -> Path:
     try:
         relative = contract_pack_root.resolve().relative_to(repo_root.resolve())
@@ -198,6 +216,49 @@ def refresh_existing_contract_packs(
             contract_pack_root=pack_root,
         )
         write_contract_pack(pack, root=pack_root)
+
+
+def refresh_stale_truth_certificates(
+    *,
+    planning: ProductionPlanningState,
+    manifest_root: Path,
+    workspace_root: Path,
+) -> list[Path]:
+    cert_root = workspace_root / "docs-site/src/content/docs/reports/truth-certificates"
+    written: list[Path] = []
+    for track in planning.tracks:
+        loaded = load_track_execution_manifest(track.id, root=manifest_root)
+        if loaded is None:
+            continue
+        for claim in loaded.manifest.truth_claims:
+            if not strong_claim_requires_certificate(claim):
+                continue
+            if load_certificate(track.id, claim.claim_id, root=cert_root) is None:
+                continue
+            errors = certificate_errors_for_claim(
+                track.id,
+                claim,
+                root=cert_root,
+                repo_root=workspace_root,
+            )
+            if not errors:
+                continue
+            verifier = claim.truth_verifier
+            if not verifier:
+                raise WorkflowError(f"{track.id}: truth claim {claim.claim_id} cannot be refreshed without truth_verifier")
+            certificate = run_verifier(
+                track_id=track.id,
+                claim_id=claim.claim_id,
+                verifier=verifier,
+                repo_root=workspace_root,
+            )
+            if certificate.status != "passed":
+                raise WorkflowError(
+                    f"{track.id}: truth verifier {verifier} failed for {claim.claim_id}; "
+                    "planning expansion cannot refresh a non-passing certificate"
+                )
+            written.append(write_certificate(certificate, root=cert_root))
+    return written
 
 
 def run_planning_expansion(
@@ -280,6 +341,16 @@ def run_planning_expansion(
                 f"Run task production:plan -- --milestone {action.milestone_id} --roadmap {wr_id}; "
                 "stop before implementation until the bounded contract is accepted."
             )
+            design_contract = milestone_data.get("agent_design_contract")
+            if isinstance(design_contract, dict):
+                output_paths = design_contract.get("expected_output_paths")
+                if isinstance(output_paths, list):
+                    design_contract["expected_output_paths"] = replace_future_plan_output_paths(
+                        [path for path in output_paths if isinstance(path, str)],
+                        future_wr_candidate=entry.future_wr_candidate,
+                        wr_id=wr_id,
+                        milestone_title=milestone.title,
+                    )
 
     ProductionPlanningState.model_validate(production_data)
     RoadmapState.model_validate(combine_roadmap_data(active_data, roadmap_source, archive_data=archive_data, deferred_data=deferred_data))
@@ -295,4 +366,9 @@ def run_planning_expansion(
         roadmap_source=roadmap_source,
         manifest_root=manifest_path.parent,
     )
-    return [production_source, deferred_source, loaded.path]
+    refreshed_certificates = refresh_stale_truth_certificates(
+        planning=load_production_tracks(production_source),
+        manifest_root=manifest_path.parent,
+        workspace_root=workspace_root,
+    )
+    return [production_source, deferred_source, loaded.path, *refreshed_certificates]

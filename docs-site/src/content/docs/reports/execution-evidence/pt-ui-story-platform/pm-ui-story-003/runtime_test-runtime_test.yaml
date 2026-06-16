@@ -1,0 +1,81 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+milestone_id: PM-UI-STORY-003
+action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+evidence_kind: runtime_test
+name: runtime_test
+status: passed
+produced_at: '2026-06-16T18:08:41Z'
+paths: []
+subject_paths: []
+subject_digests: {}
+validation_commands:
+- cargo:test (cargo test -p ui_story) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor --bin runenwerk_ui_gallery) -> exit 0
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_story
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 1ccb3a5723e69b9175c849acf06f731dcf7725b783c3992f0fb92936707ff1ad
+  subject_digests: {}
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - --bin
+  - runenwerk_ui_gallery
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 1da3fc96873982a3f06873d2e3204875da400711dc4533fefb97b3727404b962
+  subject_digests: {}
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: a377ab5e40d450f9ccf23b97b5b9e8ae28390f85a203b919ca33641313feadc2
+  subject_digests: {}
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 4a20c46b05c4647ad3a4efbeee20a39c16de385199e83d21e1068c5d181b0214
+  subject_digests: {}
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: bdb339cb253a262c0ee4291ebc517daeaabf39c291a745e6519747f006e0c1b6
+  subject_digests: {}
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 64d1b1faaae3a2b24fd0737fa84b5bf34cd593323f6722a039ea77bfd94cc108
+  subject_digests: {}

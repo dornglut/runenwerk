@@ -1,0 +1,137 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+milestone_id: PM-UI-STORY-001
+action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+evidence_kind: artifact
+name: governance
+status: passed
+produced_at: '2026-06-16T13:38:23Z'
+paths:
+- docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+- docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+- docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_paths:
+- docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+- docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+- docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_digests:
+  docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+  docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+  docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+  docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+validation_commands:
+- task:production:render (task production:render) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:production:check (task production:check) -> exit 0
+- task:roadmap:render (task roadmap:render) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:roadmap:check (task roadmap:check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: task:production:render
+  argv:
+  - task
+  - production:render
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: 5877b25ce2570db9ef013f8d339f7becf87a36db71a130d38447c754ed7a0782
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: 17c6675691edb58664191d10bfe98df8d972dba8947bc2a66ecff0e87903b55d
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:production:check
+  argv:
+  - task
+  - production:check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: 11b4879aeee209dc76f7971bc3658a3f16cc33338ce09e071b6ce3a4317cf1d3
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:roadmap:render
+  argv:
+  - task
+  - roadmap:render
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: ae87f4821503e7c5d74f6c5913ed0dbbcf962f3762e046d4276b5b3b2d4529a9
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: 50b7d1f68d13566fdf68e6d22edc595902042efcdf2092308fad1de0e42b9c05
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:roadmap:check
+  argv:
+  - task
+  - roadmap:check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: c0e9a1915fb40dfdb2c60ed22fc5305e44a40760210cac98cec91d8ee33a1020
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: cda18cfe514ddab04635ede78cc9fe9c0580ef03676f8d88c70287509591cb21
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-133702z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-174
+  validation_result_digest: 361ce8e8f9e0ff9d78fb1c2d1edd025e56ad1872617803e50963c0e901fddfb3
+  subject_digests:
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/roadmap.md: 6928b5cc2cff73a3fefafb89eb19907852a310dd0cd4e15eef68125be44d2cc1

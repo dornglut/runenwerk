@@ -11,7 +11,7 @@ from execution.compiler import first_action
 from execution.closeouts import run_runtime_closeout
 from execution.contracts import ActionContract, ContractPack, ValidationCommand
 from execution.evidence import EVIDENCE_ROOT, write_resolver_evidence_records
-from execution.planning import refresh_existing_contract_packs, run_planning_expansion
+from execution.planning import refresh_existing_contract_packs, refresh_stale_truth_certificates, run_planning_expansion
 from execution.compiler import CONTRACT_PACK_ROOT
 from execution.workspace import (
     changed_files,
@@ -169,6 +169,13 @@ def refresh_derived_contract_packs_for_action(
         production_source=production_source,
         roadmap_source=roadmap_source,
         manifest_root=manifest_path.parent,
+    )
+    from production_state import load_production_tracks
+
+    refresh_stale_truth_certificates(
+        planning=load_production_tracks(production_source),
+        manifest_root=manifest_path.parent,
+        workspace_root=workspace_root,
     )
 
 

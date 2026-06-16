@@ -11903,3 +11903,284 @@ items:
   adr_requirement: No new ADR unless PM-014 changes accepted architecture, crate-boundary policy, MaterialProgram gate, future-feature ownership, or foundation/meta extraction gate.
   fitness_function_requirement: Behavior-probe-backed truth verification, workflow test suite, targeted UI architecture crate tests, production/roadmap/docs/planning validation, and post-completion drift audit.
   ownership_mode: Stream-aligned UI architecture hardening with independent workflow truth certification.
+- id: WR-174
+  title: Story Workflow Authority And Track Activation
+  diagram_title: Story Workflow Authority And Track Activation
+  alias: WR174
+  lane: Product planning
+  dependency_level: L4
+  gate: Track Execution Harness planning expansion gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 4
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies: []
+  write_scopes:
+  - docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+  - docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+  - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-174-story-workflow-authority-and-track-activation/plan.md
+  - docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-story-platform/manifest.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-STORY-001 requires a dedicated production plan and closeout evidence before completion.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md.
+  current_call: Run task production:plan -- --milestone PM-UI-STORY-001 --roadmap WR-174.
+  first_move: Run task production:plan -- --milestone PM-UI-STORY-001 --roadmap WR-174.
+  main_blocker: Dedicated production plan and closeout evidence are still missing.
+  why_not_ready: Track Expansion linked WR authority mechanically; the milestone work itself has not started.
+  completion_quality: bounded_contract
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+  diagram_call:
+  - track expansion
+  - no implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: Production, roadmap, docs, and planning validation before closeout.
+  ownership_mode: Governance-owned sequencing; no product implementation authority.
+- id: WR-175
+  title: Story Manifest, Registry, Runner, And Report Contract
+  diagram_title: Story Manifest, Registry, Runner, And Report Con
+  alias: WR175
+  lane: Product planning
+  dependency_level: L4
+  gate: Accepted PM-UI-STORY-002 contract gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 2
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-174
+  write_scopes:
+  - Cargo.toml
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - 'new: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md'
+  - docs-site/src/content/docs/reports/implementation-plans/wr-175-story-manifest-registry-runner-and-report-contract/plan.md
+  - 'new: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-story-platform/manifest.md'
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - 'new: domain/ui/ui_story/Cargo.toml'
+  - 'new: domain/ui/ui_story/src/lib.rs'
+  - 'new: domain/ui/ui_story/src/manifest.rs'
+  - 'new: domain/ui/ui_story/src/mount.rs'
+  - 'new: domain/ui/ui_story/src/registry.rs'
+  - 'new: domain/ui/ui_story/src/report.rs'
+  - 'new: domain/ui/ui_story/src/runner.rs'
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Accepted PM-UI-STORY-002 contract at docs-site/src/content/docs/reports/implementation-plans/wr-175-story-manifest-registry-runner-and-report-contract/plan.md lowers WR-175 to B2 and bounds implementation to the ui_story contract crate, workspace registration, and UI roadmap note.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md.
+  current_call: Activate WR-175 as current_candidate and run task track:go -- --track PT-UI-STORY-PLATFORM.
+  first_move: Activate WR-175 as current_candidate.
+  main_blocker: Product implementation and closeout evidence are still missing.
+  why_not_ready: The accepted plan exists, but the implementation and evidence have not been produced yet.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
+  diagram_call:
+  - accepted contract
+  - story crate implementation
+  decision_gates: []
+  ddd_owner: workspace governance owns production sequencing for this planning expansion.
+  adr_requirement: No new ADR unless the owning design changes architecture or extraction gates.
+  fitness_function_requirement: '`cargo test -p ui_story`, `cargo fmt --all --check`, docs, production, roadmap, and planning validation before closeout.'
+  ownership_mode: Domain-owned UI story contract crate with bounded implementation authority.
+- id: WR-176
+  title: Gallery And CLI Story Execution
+  diagram_title: Gallery And CLI Story Execution
+  alias: WR176
+  lane: Product planning
+  dependency_level: L4
+  gate: Accepted PM-UI-STORY-003 contract gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 2
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-175
+  write_scopes:
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - assets/ui_gallery
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - 'new: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md'
+  - docs-site/src/content/docs/reports/implementation-plans/wr-176-gallery-and-cli-story-execution/plan.md
+  - 'new: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-story-platform/manifest.md'
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - 'new: domain/ui/ui_story/src/cli.rs'
+  - 'new: domain/ui/ui_story/src/gallery.rs'
+  - domain/ui/ui_story/src/lib.rs
+  - domain/ui/ui_story/src/registry.rs
+  - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/runner.rs
+  - apps/runenwerk_editor/Cargo.toml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Accepted PM-UI-STORY-003 plan at docs-site/src/content/docs/reports/implementation-plans/wr-176-gallery-and-cli-story-execution/plan.md.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md.
+  current_call: Run task roadmap:activate-deferred -- --id WR-176 --state current_candidate --evidence "Accepted PM-UI-STORY-003 plan at docs-site/src/content/docs/reports/implementation-plans/wr-176-gallery-and-cli-story-execution/plan.md."
+  first_move: Run task track:go -- --track PT-UI-STORY-PLATFORM after activation to execute the accepted product slice.
+  main_blocker: Closeout evidence is still missing.
+  why_not_ready: Accepted plan exists, but product implementation and closeout evidence have not run yet.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
+  diagram_call:
+  - accepted plan
+  - story report cutover
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Gallery and CLI execution must share the story runner/report contract.
+  ddd_owner: domain/ui story contracts with apps/runenwerk_editor gallery and CLI adapters.
+  adr_requirement: No new ADR unless ownership moves out of ui_story or app adapters, renderer/ECS semantics are introduced, or runtime rendering proof expands beyond PM003.
+  fitness_function_requirement: Focused ui_story and runenwerk_ui_gallery binary tests plus docs/production/roadmap validators before closeout.
+  ownership_mode: Stream-aligned UI owner with app-host integration boundary.
+- id: WR-177
+  title: Story-Gated Runtime Rendering Proof
+  diagram_title: Story-Gated Runtime Rendering Proof
+  alias: WR177
+  lane: Product planning
+  dependency_level: L4
+  gate: Accepted PM-UI-STORY-004 contract gate
+  planning_state: completed
+  priority: P2
+  value: 4
+  blocker: 2
+  tc: 2
+  rr_oe: 2
+  du: 2
+  effort: 5
+  confidence: 0.5
+  expected_score: 1.0
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-176
+  write_scopes:
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+  - docs-site/src/content/docs/domain/ui/roadmap.md
+  - 'new: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md'
+  - docs-site/src/content/docs/reports/implementation-plans/wr-177-story-gated-runtime-rendering-proof/plan.md
+  - 'new: docs-site/src/content/docs/reports/track-execution-manifests/pt-ui-story-platform/manifest.md'
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - domain/ui/ui_render_primitives
+  - domain/ui/ui_runtime_view
+  - domain/ui/ui_static_mount
+  - domain/ui/ui_story/src/gallery.rs
+  - domain/ui/ui_story/src/mount.rs
+  - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/runner.rs
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Accepted PM-UI-STORY-004 plan at docs-site/src/content/docs/reports/implementation-plans/wr-177-story-gated-runtime-rendering-proof/plan.md.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md.
+  current_call: Run task roadmap:activate-deferred -- --id WR-177 --state current_candidate --evidence "Accepted PM-UI-STORY-004 plan at docs-site/src/content/docs/reports/implementation-plans/wr-177-story-gated-runtime-rendering-proof/plan.md."
+  first_move: Run task track:go -- --track PT-UI-STORY-PLATFORM after activation to execute the accepted product slice.
+  main_blocker: Closeout evidence is still missing.
+  why_not_ready: Accepted plan exists, but product implementation and closeout evidence have not run yet.
+  completion_quality: runtime_proven
+  known_quality_gaps: []
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+  diagram_call:
+  - accepted plan
+  - story-gated rendering proof
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+    required_status: active
+    applies_to: implementation
+    reason: Runtime rendering proof must preserve artifact-backed rendering boundaries while moving behind story execution.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Rendering proof must be one story stage inside `UiStoryRunReport`.
+  ddd_owner: domain/ui story contracts and UI render proof crates with apps/runenwerk_editor gallery adapter.
+  adr_requirement: No new ADR unless ownership moves to renderer/ECS/editor/game semantics or static mount proof expands beyond the accepted story-gated slice.
+  fitness_function_requirement: Focused ui_story, ui_runtime_view, ui_render_primitives, ui_static_mount, runenwerk_ui_gallery binary tests plus docs/production/roadmap validators before closeout.
+  ownership_mode: Stream-aligned UI owner with app-host integration boundary.

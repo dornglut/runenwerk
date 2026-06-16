@@ -211,6 +211,90 @@ def test_execution_agent_writer_failure_carries_transcript_paths(tmp_path: Path)
     assert error.value.transcript_paths
     assert all(path.exists() for path in error.value.transcript_paths)
 
+def test_snapshot_mirrors_external_cargo_path_workspace(tmp_path: Path) -> None:
+    projects = tmp_path / "projects"
+    repo_root = projects / "game" / "repo"
+    external_root = projects / "spatial_streaming"
+    repo_spatial = repo_root / "domain" / "spatial"
+    external_spatial = external_root / "crates" / "spatial"
+    external_demo = external_root / "demos" / "chunk_streaming_demo"
+    grid_root = projects / "grid"
+    tile_topology = grid_root / "crates" / "tile_topology"
+    repo_spatial.mkdir(parents=True)
+    external_spatial.mkdir(parents=True)
+    external_demo.mkdir(parents=True)
+    tile_topology.mkdir(parents=True)
+    (repo_root / "Cargo.toml").write_text(
+        "[workspace]\n"
+        'members = ["domain/spatial"]\n',
+        encoding="utf-8",
+    )
+    (repo_spatial / "Cargo.toml").write_text(
+        "[package]\n"
+        'name = "spatial_wrapper"\n'
+        'version = "0.1.0"\n'
+        'edition = "2024"\n'
+        "\n"
+        "[dependencies]\n"
+        'spatial_core = { package = "spatial", path = "../../../../spatial_streaming/crates/spatial" }\n',
+        encoding="utf-8",
+    )
+    (external_root / "Cargo.toml").write_text(
+        "[workspace]\n"
+        'members = ["crates/spatial", "demos/chunk_streaming_demo"]\n'
+        "\n"
+        "[workspace.package]\n"
+        'version = "0.1.0"\n'
+        'edition = "2024"\n',
+        encoding="utf-8",
+    )
+    (external_spatial / "Cargo.toml").write_text(
+        "[package]\n"
+        'name = "spatial"\n'
+        "version.workspace = true\n"
+        "edition.workspace = true\n",
+        encoding="utf-8",
+    )
+    (external_demo / "Cargo.toml").write_text(
+        "[package]\n"
+        'name = "chunk_streaming_demo"\n'
+        "version.workspace = true\n"
+        "edition.workspace = true\n"
+        "\n"
+        "[dependencies]\n"
+        'tile_topology = { path = "../../../grid/crates/tile_topology" }\n',
+        encoding="utf-8",
+    )
+    (grid_root / "Cargo.toml").write_text(
+        "[workspace]\n"
+        'members = ["crates/tile_topology"]\n'
+        "\n"
+        "[workspace.package]\n"
+        'version = "0.1.0"\n'
+        'edition = "2024"\n',
+        encoding="utf-8",
+    )
+    (tile_topology / "Cargo.toml").write_text(
+        "[package]\n"
+        'name = "tile_topology"\n'
+        "version.workspace = true\n"
+        "edition.workspace = true\n",
+        encoding="utf-8",
+    )
+
+    from execution.workspace import create_full_snapshot, dispose_workspace
+
+    workspace = create_full_snapshot(execution_test_action(), repo_root=repo_root)
+    try:
+        mirrored = workspace.temp_root / "spatial_streaming" / "crates" / "spatial" / "Cargo.toml"
+        mirrored_grid = workspace.temp_root / "grid" / "crates" / "tile_topology" / "Cargo.toml"
+        assert mirrored.exists()
+        assert (workspace.temp_root / "spatial_streaming" / "Cargo.toml").exists()
+        assert mirrored_grid.exists()
+        assert (workspace.temp_root / "grid" / "Cargo.toml").exists()
+    finally:
+        dispose_workspace(workspace)
+
 def test_execution_agent_writer_rejects_out_of_scope_diff(tmp_path: Path) -> None:
     source = tmp_path / "src" / "lib.rs"
     source.parent.mkdir(parents=True)

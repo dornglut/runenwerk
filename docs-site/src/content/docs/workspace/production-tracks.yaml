@@ -5904,12 +5904,13 @@ tracks:
   - id: PM-UI-STORY-001
     title: Story Workflow Authority And Track Activation
     kind: design
-    state: designing
+    state: completed
     goal: Establish the story-first production authority, sequencing rules, deferred standalone-rendering decision, future WR expansion policy, bounded ownership split, and no-runtime-code stop conditions.
     outcome: PT-UI-STORY-PLATFORM exists as the UI story proof-substrate track with planning-only authority and explicit blockers against crate creation, runtime rendering expansion, gallery migration, product mounting, component maturity, designer product work, game HUD behavior, and world-space UI.
     dependencies:
     - PM-UI-PROGRAM-ARCH-014
-    roadmap_links: []
+    roadmap_links:
+    - WR-174
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
@@ -5919,76 +5920,84 @@ tracks:
       path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
       required_status: active
       reason: Track activation must follow the active UI platform sequencing roadmap and ownership split.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
+      required_status: completed
+      reason: PM-UI-STORY-001 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - PT-UI-STORY-PLATFORM is recorded as the story proof substrate track, not the owner of all UI capabilities.
     - PT-UI-RUNTIME-RENDERING and PM-UI-RUNTIME-RENDERING-001 are deferred as standalone production growth paths.
     - WR-173 is blocked/deferred with evidence that rendering proof must be re-run through `UiStoryRunReport`.
     - 'The track execution manifest is planning and sequencing authority only with `ai_executable: false`.'
     - No runtime code, crate creation, gallery migration, product mounting, component maturity, Designer/Workbench product work, game HUD behavior, or world-space/entity-attached UI is authorized by this milestone.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - PM-UI-STORY-002 through PM-UI-STORY-005 remain future story-substrate milestones and must not be inferred complete from track activation.
-    - Reusable components, visual designer product workflows, screen HUD runtime behavior, and game world-space UI are intentionally routed to separate production tracks.
-    completion_audit: ''
+    completion_quality: bounded_contract
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-001-story-workflow-authority-and-track-activation/closeout.md
   - id: PM-UI-STORY-002
     title: Story Manifest, Registry, Runner, And Report Contract
     kind: implementation
-    state: designing
+    state: completed
     goal: Introduce the domain-owned story contract surface for `UiStoryManifest`, `UiStoryRegistry`, `UiStoryRunner`, `UiStoryRunReport`, and `UiStoryMountEligibility`.
     outcome: Story execution has a public, domain-owned contract that can become the sole proof envelope for gallery, CLI, static mount, and product mount eligibility.
     dependencies:
     - PM-UI-STORY-001
-    roadmap_links: []
+    roadmap_links:
+    - WR-175
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
       required_status: active
       reason: Story contracts must follow the active story-driven workflow design.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
+      required_status: completed
+      reason: PM-UI-STORY-002 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Exact `domain/ui/ui_story` ownership is accepted before crate creation.
     - Story manifests define stable ids, source, host, theme, viewport, state, route, diagnostic, and mount policy inputs.
     - Story registry discovery is deterministic and does not depend on renderer, ECS, editor, game, or designer product state.
     - Story runner output is a complete `UiStoryRunReport` with stage reports and fail-closed diagnostics.
     - Mount eligibility is derived only from `UiStoryRunReport`, never from renderer submission success alone.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Future WR and production plan required before product code or crate creation.
-    completion_audit: ''
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-002-story-manifest-registry-runner-and-report-contract/closeout.md
   - id: PM-UI-STORY-003
     title: Gallery And CLI Story Execution
     kind: implementation
-    state: designing
+    state: completed
     goal: Make gallery preview and CLI inspection consume story manifests and `UiStoryRunReport` instead of hardcoded button-gallery wiring.
     outcome: Developers inspect the same story run evidence in CLI and gallery surfaces before any static mount or product host claims success.
     dependencies:
     - PM-UI-STORY-002
-    roadmap_links: []
+    roadmap_links:
+    - WR-176
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
       required_status: active
       reason: Gallery and CLI execution must share the story runner/report contract.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
+      required_status: completed
+      reason: PM-UI-STORY-003 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - CLI story runs load manifests through `UiStoryRegistry` and emit `UiStoryRunReport`.
     - Gallery preview consumes `UiStoryRunReport` rather than button-specific fixtures or renderer-owned semantics.
     - Failure stories are first-class and show source, stage, diagnostic, and eligibility verdicts.
     - Story execution is deterministic across checked-in fixtures, themes, host profiles, and viewport matrices.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Runtime rendering proof remains blocked until PM-UI-STORY-004.
-    completion_audit: ''
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-003-gallery-and-cli-story-execution/closeout.md
   - id: PM-UI-STORY-004
     title: Story-Gated Runtime Rendering Proof
     kind: implementation
-    state: designing
+    state: completed
     goal: Re-run static runtime rendering proof as a story stage after runner/report authority exists.
     outcome: Visible UI rendering is proven through `UiStoryRunReport` and can no longer bypass story-derived mount eligibility.
     dependencies:
     - PM-UI-STORY-003
-    roadmap_links: []
+    roadmap_links:
+    - WR-177
     design_gates:
     - kind: design
       path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
@@ -5998,17 +6007,19 @@ tracks:
       path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
       required_status: active
       reason: Rendering proof must be one story stage inside `UiStoryRunReport`.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+      required_status: completed
+      reason: PM-UI-STORY-004 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Former static button gallery evidence is re-run through story manifest, registry, runner, and report stages.
     - Static mount success requires story-derived mount eligibility.
     - Renderer-facing code consumes backend-neutral primitives or frames without owning authored UI semantics.
     - The path fails closed on formation, compiler, runtime view, primitive, render-data, static mount, or renderer submission errors.
     - The proof does not implement component maturity, game HUD behavior, world-space/entity-attached UI, or designer authoring product flows.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Reusable component coverage moves to PT-UI-COMPONENT-PLATFORM after this proof substrate exists.
-    completion_audit: ''
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
   - id: PM-UI-STORY-005
     title: Story Platform No-Gap Audit And Closeout
     kind: release

@@ -1,0 +1,13 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+updated_at: '2026-06-16T17:06:43Z'
+granted_permissions:
+  crate_creation:
+    by: human
+    at: '2026-06-16T17:06:43Z'
+    reason: WR-175 accepted PM-UI-STORY-002 contract authorizes only creating domain/ui/ui_story/Cargo.toml plus its named src files, root Cargo.toml workspace registration, and no gallery/runtime/product-host behavior.
+denied_permissions:
+  foundation_extraction:
+    by: human
+    at: '2026-06-16T17:06:43Z'
+    reason: Default strategic gate; requires a separate accepted extraction workflow.

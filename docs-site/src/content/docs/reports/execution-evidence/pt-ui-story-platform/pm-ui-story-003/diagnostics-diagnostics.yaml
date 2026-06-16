@@ -1,0 +1,189 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+milestone_id: PM-UI-STORY-003
+action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+evidence_kind: diagnostics
+name: diagnostics
+status: passed
+produced_at: '2026-06-16T18:08:41Z'
+paths:
+- domain/ui/ui_story/src/registry.rs
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/lib.rs
+- domain/ui/ui_story/src/gallery.rs
+- domain/ui/ui_story/src/cli.rs
+- apps/runenwerk_editor/Cargo.toml
+- apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+- apps/runenwerk_editor/src/runtime/ui_gallery.rs
+- assets/ui_gallery/button/basic.ron
+- assets/ui_gallery/button/selected.ron
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_paths:
+- domain/ui/ui_story/src/registry.rs
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/lib.rs
+- domain/ui/ui_story/src/gallery.rs
+- domain/ui/ui_story/src/cli.rs
+- apps/runenwerk_editor/Cargo.toml
+- apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+- apps/runenwerk_editor/src/runtime/ui_gallery.rs
+- assets/ui_gallery/button/basic.ron
+- assets/ui_gallery/button/selected.ron
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_digests:
+  apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+  apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+  apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+  assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+  assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+  docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+  domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+  domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+  domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+  domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+  domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+  domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+validation_commands:
+- cargo:test (cargo test -p ui_story) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor --bin runenwerk_ui_gallery) -> exit 0
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_story
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 8725e620cc859e9d59bb6ffce66c997c72ce2286076c9498ea1a9f6c2553f7ed
+  subject_digests:
+    apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+    assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+    assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+    docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+    domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+    domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+    domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - --bin
+  - runenwerk_ui_gallery
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 3f7c8d1405173aa0546b46cac01e654aefee69e457d09b3a56c0b6d1a1f0d827
+  subject_digests:
+    apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+    assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+    assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+    docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+    domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+    domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+    domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: f118bd97c13fdfdb31d8bb126c76d99f5bb7872713d43939bba47de0adc7c89a
+  subject_digests:
+    apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+    assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+    assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+    docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+    domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+    domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+    domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: e85d9d7df2a00ab588869318c5145b556ed9ae19bea05fb81db25b03571778a3
+  subject_digests:
+    apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+    assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+    assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+    docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+    domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+    domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+    domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: 89fb0ba95e61694dbe8bb1c3f264b19ca55d967366de1c914d7f3b8a4a910c69
+  subject_digests:
+    apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+    assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+    assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+    docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+    domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+    domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+    domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-180645z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-003:WR-176
+  validation_result_digest: ce50a742f0e98e99fa06354a4fba5b9c7c4d98d3c8e387efe6fbdeaa547ec1cd
+  subject_digests:
+    apps/runenwerk_editor/Cargo.toml: 560bff1f63d368e901045ada881587c7c1947a5071c2e57ccedee5429106a784
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: 23b4b445bfc608679301626259f4348c61a2e4df9bbf533b8615bf3e6dc75ce5
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: d632866ccde3091120b7a6b562eadfa6e4ea16a00728153cc7058fb149432746
+    assets/ui_gallery/button/basic.ron: 67434852477d3ca401b190ec95a14b83a3c576ebe2444191c89c39429f1bae15
+    assets/ui_gallery/button/selected.ron: 2f9376ca32bf19afd208c3f91e1847a6716fcc5a62829ec510280802b0aea516
+    docs-site/src/content/docs/domain/ui/roadmap.md: df595cb97b152cd8c229fa1f4b1e4c4772ae58570847cd81933d1ea8860e7539
+    domain/ui/ui_story/src/cli.rs: 229407b343f9ba9c1b2fb4c94c0ee77e268f133e819c0fcd610ff282307249ce
+    domain/ui/ui_story/src/gallery.rs: c9c2520e05654ab8eb0591aeaddfdc4f111f7f3230723e6bb819a257d4deab46
+    domain/ui/ui_story/src/lib.rs: b02cdee158d52e92919cf025b826659e971c23246e9a52937011c41430508fb0
+    domain/ui/ui_story/src/registry.rs: f4bc3211f0bce76ef2c554b26765673e006b1750207579d2ce70e9690f7890fd
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288

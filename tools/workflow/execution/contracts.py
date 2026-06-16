@@ -247,6 +247,13 @@ def validation_command_id(argv: list[str]) -> str | None:
         return truth_task_command_id(argv)
     if executable == "task" and len(argv) == 2 and argv[1] in SAFE_TASK_NAMES:
         return f"task:{argv[1]}"
+    if executable == "cargo" and argv[1:] in (
+        ["fmt"],
+        ["fmt", "--all"],
+        ["fmt", "--all", "--check"],
+        ["fmt", "--all", "--", "--check"],
+    ):
+        return "cargo:fmt"
     if executable == "cargo" and len(argv) >= 2 and argv[1] in {"test", "check", "clippy"}:
         return f"cargo:{argv[1]}"
     if executable == "uv" and len(argv) >= 3 and argv[1] == "run":

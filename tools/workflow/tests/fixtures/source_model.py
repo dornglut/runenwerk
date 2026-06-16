@@ -473,16 +473,18 @@ def valid_track_expansion_state() -> tuple[dict, dict, dict]:
     second_milestone["future_wr_candidate"] = "WR-TBD-TEST-002"
     second_milestone["milestone_type"] = "design_only"
     second_milestone["write_scope"] = [
-        "active design docs",
-        "implementation-plan report",
-        "roadmap and production metadata",
+        "docs-site/src/content/docs/workspace/roadmap-items.yaml",
+        "docs-site/src/content/docs/design/active/test-story-design.md",
+        "docs-site/src/content/docs/domain/ui/test-roadmap.md",
         "generated planning docs",
-        "closeout report",
     ]
     second_milestone["may_create_code"] = False
     second_milestone["may_create_crates"] = False
     second_milestone["may_modify_production_behavior"] = False
     second_milestone["next_legal_action"] = "Create or link the design WR for PM-TEST-002."
+    second_milestone["agent_design_contract"]["expected_output_paths"] = [
+        "docs-site/src/content/docs/reports/implementation-plans/wr-tbd-test-002-pm-test-002-title/plan.md",
+    ]
     add_test_auto_safe_contract(second_milestone)
     manifest_data["next_legal_action"] = "After PM-TEST-001, create or link the design WR for PM-TEST-002."
 
@@ -1175,4 +1177,3 @@ def write_stub_taskfile(root: Path) -> None:
         '  planning:validate:\n    cmds:\n      - "true"\n',
         encoding="utf-8",
     )
-

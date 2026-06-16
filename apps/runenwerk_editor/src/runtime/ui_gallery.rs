@@ -17,24 +17,14 @@ use ui_render_data::UiFrame;
 use ui_render_primitives::UiRenderPrimitiveReport;
 use ui_runtime_view::{ButtonRuntimeHostData, ButtonRuntimeViewReport, UiRuntimeView};
 use ui_static_mount::UiStaticMountReport;
+use ui_story::{
+    UiGalleryStorySpec, UiStoryCliReport, UiStoryDiagnostic, UiStoryDiagnosticSeverity,
+    UiStoryMountEligibility, UiStoryRunReport, UiStoryRunner, UiStoryStageKind, UiStoryStageReport,
+    UiStoryStageStatus, checked_in_gallery_registry, checked_in_gallery_story_specs, stage_label,
+};
 use ui_theme::ThemeTokens;
 
 pub const UI_GALLERY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(5_101);
-
-const UI_GALLERY_FIXTURES: &[UiGalleryFixtureSpec] = &[
-    UiGalleryFixtureSpec {
-        fixture_id: "ui_gallery.button.basic",
-        source_id: "assets.ui_gallery.button.basic",
-        path: "assets/ui_gallery/button/basic.ron",
-        host_bool: None,
-    },
-    UiGalleryFixtureSpec {
-        fixture_id: "ui_gallery.button.selected",
-        source_id: "assets.ui_gallery.button.selected",
-        path: "assets/ui_gallery/button/selected.ron",
-        host_bool: Some(("ui_gallery.button.selected.active", true)),
-    },
-];
 
 const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
     match UiFrameProducerId::try_from_raw(raw) {
@@ -55,6 +45,7 @@ impl Plugin for UiGalleryPlugin {
 #[derive(Clone, Debug, ecs::Component, ecs::Resource)]
 pub struct UiGalleryResource {
     button_report: ButtonRuntimeViewReport,
+    story_reports: Vec<UiStoryRunReport>,
     diagnostics: Vec<UiGalleryDiagnostic>,
     frame: Option<UiFrame>,
     prepared_size: Option<UiSize>,
@@ -63,58 +54,108 @@ pub struct UiGalleryResource {
 
 impl Default for UiGalleryResource {
     fn default() -> Self {
-        Self::from_checked_in_fixtures()
+        Self::from_checked_in_stories()
     }
 }
 
 impl UiGalleryResource {
     pub fn from_checked_in_fixtures() -> Self {
-        let mut diagnostics = Vec::new();
-        let registry = ControlPackageRegistry::new()
-            .with_package(runenwerk_control_package())
-            .expect("runenwerk controls package should register");
-        let snapshot = registry.snapshot();
-        let mut button_report = ButtonRuntimeViewReport::default();
+        Self::from_checked_in_stories()
+    }
 
-        for fixture in UI_GALLERY_FIXTURES {
-            let Some(report) = compile_fixture_button_report(fixture, &snapshot, &mut diagnostics)
-            else {
-                continue;
-            };
-            button_report.buttons.extend(report.buttons);
-            diagnostics.extend(report.diagnostics.into_iter().map(|diagnostic| {
-                UiGalleryDiagnostic {
-                    stage: UiGalleryStage::RuntimeView,
-                    fixture_id: Some(fixture.fixture_id.to_owned()),
-                    code: diagnostic.code,
-                    message: diagnostic.message,
-                    severity: match diagnostic.severity {
-                        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => {
-                            UiGalleryDiagnosticSeverity::Info
-                        }
-                        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Warning => {
-                            UiGalleryDiagnosticSeverity::Warning
-                        }
-                        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Error => {
-                            UiGalleryDiagnosticSeverity::Error
-                        }
-                    },
-                    source_map_index: diagnostic.source_map_index,
+    pub fn from_checked_in_stories() -> Self {
+        let atlas = UiFontAtlasResource::default();
+        Self::from_checked_in_stories_for_render_target(
+            default_gallery_proof_size(),
+            &ThemeTokens::default(),
+            &atlas,
+        )
+    }
+
+    pub fn from_checked_in_stories_for_render_target(
+        size: UiSize,
+        theme: &ThemeTokens,
+        atlas: &UiFontAtlasResource,
+    ) -> Self {
+        let executions = run_checked_in_gallery_stories_for_render_target(size, theme, atlas);
+        Self::from_story_executions(executions, Some(size))
+    }
+
+    pub fn from_story_executions(
+        executions: Vec<UiGalleryStoryExecution>,
+        prepared_size: Option<UiSize>,
+    ) -> Self {
+        let mut diagnostics = Vec::new();
+        let mut button_report = ButtonRuntimeViewReport::default();
+        let mut frame = UiFrame::new();
+        let mut story_reports = Vec::new();
+
+        for execution in executions {
+            let report_blocks_gallery = !execution.report.passed();
+            append_story_report_diagnostics(
+                &execution.report,
+                &mut diagnostics,
+                report_blocks_gallery,
+            );
+            if let Some(report) = execution.button_report {
+                button_report.buttons.extend(report.buttons);
+                diagnostics.extend(report.diagnostics.into_iter().map(|diagnostic| {
+                    UiGalleryDiagnostic {
+                        stage: UiGalleryStage::Story(UiStoryStageKind::RuntimeView),
+                        story_id: Some(execution.report.story_id.as_str().to_owned()),
+                        code: diagnostic.code,
+                        message: diagnostic.message,
+                        severity: match diagnostic.severity {
+                            ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => {
+                                UiGalleryDiagnosticSeverity::Info
+                            }
+                            ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Warning => {
+                                UiGalleryDiagnosticSeverity::Warning
+                            }
+                            ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Error => {
+                                UiGalleryDiagnosticSeverity::Error
+                            }
+                        },
+                        source_map_index: diagnostic.source_map_index,
+                        blocks_gallery: report_blocks_gallery,
+                    }
+                }));
+            }
+            let eligibility = UiStoryMountEligibility::from_report(&execution.report);
+            if eligibility.eligible {
+                if let Some(mounted_frame) = execution.mounted_frame {
+                    for surface in mounted_frame.surfaces {
+                        frame.push_surface(surface);
+                    }
+                } else {
+                    diagnostics.push(UiGalleryDiagnostic {
+                        stage: UiGalleryStage::Story(UiStoryStageKind::PreviewFrame),
+                        story_id: Some(execution.report.story_id.as_str().to_owned()),
+                        code: "ui_gallery.story.preview_frame.missing".to_owned(),
+                        message: "eligible story report did not carry a mounted preview frame"
+                            .to_owned(),
+                        severity: UiGalleryDiagnosticSeverity::Error,
+                        source_map_index: None,
+                        blocks_gallery: true,
+                    });
                 }
-            }));
+            }
+            story_reports.push(execution.report);
         }
+        let frame = (!frame.is_empty()).then_some(frame);
 
         Self {
             button_report,
+            story_reports,
             diagnostics,
-            frame: None,
-            prepared_size: None,
+            frame,
+            prepared_size,
             diagnostics_logged: false,
         }
     }
 
     pub fn passed(&self) -> bool {
-        !self.has_error_diagnostics()
+        !self.has_blocking_diagnostics()
     }
 
     pub fn frame(&self) -> Option<&UiFrame> {
@@ -125,14 +166,18 @@ impl UiGalleryResource {
         &self.diagnostics
     }
 
+    pub fn story_reports(&self) -> &[UiStoryRunReport] {
+        &self.story_reports
+    }
+
     pub fn button_count(&self) -> usize {
         self.button_report.buttons.len()
     }
 
-    fn has_error_diagnostics(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity == UiGalleryDiagnosticSeverity::Error)
+    fn has_blocking_diagnostics(&self) -> bool {
+        self.diagnostics.iter().any(|diagnostic| {
+            diagnostic.blocks_gallery && diagnostic.severity == UiGalleryDiagnosticSeverity::Error
+        })
     }
 
     fn prepare_frame_if_needed(
@@ -141,44 +186,11 @@ impl UiGalleryResource {
         theme: &ThemeTokens,
         atlas: &UiFontAtlasResource,
     ) {
-        if self.prepared_size == Some(size) && self.frame.is_some() {
+        if self.prepared_size == Some(size) {
             return;
         }
 
-        self.frame = None;
-        self.prepared_size = Some(size);
-        if self.has_error_diagnostics() {
-            return;
-        }
-
-        let primitive_report = UiRenderPrimitiveReport::from_button_report(
-            self.button_report.clone(),
-            size,
-            theme,
-            atlas,
-            DEFAULT_EDITOR_FONT_ID,
-        );
-        append_primitive_diagnostics(&primitive_report, &mut self.diagnostics);
-        if !primitive_report.passed() {
-            return;
-        }
-
-        let render_data_report =
-            UiHeadlessRenderDataReport::from_render_primitive_report(&primitive_report);
-        append_render_data_diagnostics(&render_data_report, &mut self.diagnostics);
-        if !render_data_report.passed() {
-            return;
-        }
-
-        let mount_report = UiStaticMountReport::from_render_data_report(&render_data_report);
-        append_static_mount_diagnostics(&mount_report, &mut self.diagnostics);
-        if !mount_report.passed() {
-            return;
-        }
-
-        self.frame = mount_report
-            .mounted_frame()
-            .map(|mounted| mounted.frame.clone());
+        *self = Self::from_checked_in_stories_for_render_target(size, theme, atlas);
     }
 
     fn log_diagnostics_once(&mut self) {
@@ -189,8 +201,9 @@ impl UiGalleryResource {
 
         if self.diagnostics.is_empty() {
             eprintln!(
-                "[ui_gallery] prepared {} buttons through artifact-backed primitive path",
-                self.button_count()
+                "[ui_gallery] prepared {} buttons from {} story reports",
+                self.button_count(),
+                self.story_reports.len()
             );
             return;
         }
@@ -202,9 +215,9 @@ impl UiGalleryResource {
                 diagnostic.severity.as_str(),
                 diagnostic.code,
                 diagnostic
-                    .fixture_id
+                    .story_id
                     .as_ref()
-                    .map(|id| format!(" fixture={id}"))
+                    .map(|id| format!(" story={id}"))
                     .unwrap_or_default(),
                 diagnostic
                     .source_map_index
@@ -216,22 +229,64 @@ impl UiGalleryResource {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct UiGalleryStoryExecution {
+    pub report: UiStoryRunReport,
+    pub button_report: Option<ButtonRuntimeViewReport>,
+    pub mounted_frame: Option<UiFrame>,
+}
+
+pub fn inspect_checked_in_gallery_stories() -> UiStoryCliReport {
+    let reports = run_checked_in_gallery_stories()
+        .into_iter()
+        .map(|execution| execution.report)
+        .collect::<Vec<_>>();
+    UiStoryCliReport::from_reports(reports.iter())
+}
+
+pub fn run_checked_in_gallery_stories() -> Vec<UiGalleryStoryExecution> {
+    let atlas = UiFontAtlasResource::default();
+    run_checked_in_gallery_stories_for_render_target(
+        default_gallery_proof_size(),
+        &ThemeTokens::default(),
+        &atlas,
+    )
+}
+
+pub fn run_checked_in_gallery_stories_for_render_target(
+    size: UiSize,
+    theme: &ThemeTokens,
+    atlas: &UiFontAtlasResource,
+) -> Vec<UiGalleryStoryExecution> {
+    let registry = checked_in_gallery_registry();
+    let runner = UiStoryRunner::new(&registry);
+    let control_registry = ControlPackageRegistry::new()
+        .with_package(runenwerk_control_package())
+        .expect("runenwerk controls package should register");
+    let snapshot = control_registry.snapshot();
+
+    checked_in_gallery_story_specs()
+        .iter()
+        .map(|story| {
+            execute_gallery_story(*story, &registry, &runner, &snapshot, size, theme, atlas)
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UiGalleryDiagnostic {
     pub stage: UiGalleryStage,
-    pub fixture_id: Option<String>,
+    pub story_id: Option<String>,
     pub code: String,
     pub message: String,
     pub severity: UiGalleryDiagnosticSeverity,
     pub source_map_index: Option<u32>,
+    pub blocks_gallery: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiGalleryStage {
-    FixtureLoad,
-    Formation,
-    Compiler,
-    RuntimeView,
+    Story(UiStoryStageKind),
     RenderPrimitives,
     RenderData,
     StaticMount,
@@ -240,10 +295,7 @@ pub enum UiGalleryStage {
 impl UiGalleryStage {
     fn as_str(self) -> &'static str {
         match self {
-            Self::FixtureLoad => "fixture_load",
-            Self::Formation => "formation",
-            Self::Compiler => "compiler",
-            Self::RuntimeView => "runtime_view",
+            Self::Story(stage) => stage_label(stage),
             Self::RenderPrimitives => "render_primitives",
             Self::RenderData => "render_data",
             Self::StaticMount => "static_mount",
@@ -268,14 +320,6 @@ impl UiGalleryDiagnosticSeverity {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct UiGalleryFixtureSpec {
-    fixture_id: &'static str,
-    source_id: &'static str,
-    path: &'static str,
-    host_bool: Option<(&'static str, bool)>,
-}
-
 pub fn submit_ui_gallery_frame_system(
     window: Res<WindowState>,
     atlas: Res<UiFontAtlasResource>,
@@ -298,128 +342,259 @@ pub fn submit_ui_gallery_frame_system(
     }
 }
 
-fn compile_fixture_button_report(
-    fixture: &UiGalleryFixtureSpec,
+fn execute_gallery_story(
+    story: UiGalleryStorySpec,
+    registry: &ui_story::UiStoryRegistry,
+    runner: &UiStoryRunner<'_>,
     snapshot: &ui_controls::ControlPackageRegistrySnapshot,
-    diagnostics: &mut Vec<UiGalleryDiagnostic>,
-) -> Option<ButtonRuntimeViewReport> {
-    let Some(node) = load_fixture_node(fixture, diagnostics) else {
-        return None;
+    size: UiSize,
+    theme: &ThemeTokens,
+    atlas: &UiFontAtlasResource,
+) -> UiGalleryStoryExecution {
+    let request = registry.run_request(story.story_id);
+    let mut stage_reports = Vec::new();
+    let mut button_report = None;
+    let mut mounted_frame = None;
+
+    let Some(source) = load_story_source(story, &mut stage_reports) else {
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
+    };
+
+    let Some(node) = parse_story_node(story, &source, &mut stage_reports) else {
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
     };
 
     let formation_report = form_ui_program_report_from_node_with_registry_snapshot(
-        fixture.fixture_id,
-        fixture.source_id,
+        story.program_id,
+        story.source_id,
         &node,
         snapshot,
     );
     if !formation_report.passed() {
-        diagnostics.extend(formation_report.diagnostics.into_iter().map(|diagnostic| {
-            UiGalleryDiagnostic {
-                stage: UiGalleryStage::Formation,
-                fixture_id: Some(fixture.fixture_id.to_owned()),
-                code: diagnostic.code,
-                message: diagnostic.message,
-                severity: UiGalleryDiagnosticSeverity::Error,
-                source_map_index: None,
-            }
-        }));
-        return None;
+        stage_reports.push(UiStoryStageReport::failed(
+            UiStoryStageKind::ProgramFormation,
+            formation_report
+                .diagnostics
+                .into_iter()
+                .map(|diagnostic| {
+                    UiStoryDiagnostic::new(
+                        diagnostic.code,
+                        diagnostic.message,
+                        UiStoryStageKind::ProgramFormation,
+                        UiStoryDiagnosticSeverity::Error,
+                    )
+                })
+                .collect(),
+        ));
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
     }
+    stage_reports.push(UiStoryStageReport::passed(
+        UiStoryStageKind::ProgramFormation,
+    ));
 
     let compiler_report = UiCompiler.compile_report(&formation_report.program);
     if !compiler_report.passed() {
-        diagnostics.extend(compiler_report.artifact.manifest.diagnostics.iter().map(
-            |diagnostic| UiGalleryDiagnostic {
-                stage: UiGalleryStage::Compiler,
-                fixture_id: Some(fixture.fixture_id.to_owned()),
-                code: diagnostic.code.clone(),
-                message: diagnostic.message.clone(),
-                severity: match diagnostic.severity {
-                    ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Info => {
-                        UiGalleryDiagnosticSeverity::Info
-                    }
-                    ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Warning => {
-                        UiGalleryDiagnosticSeverity::Warning
-                    }
-                    ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Error => {
-                        UiGalleryDiagnosticSeverity::Error
-                    }
-                },
-                source_map_index: None,
-            },
+        stage_reports.push(UiStoryStageReport::failed(
+            UiStoryStageKind::Compiler,
+            compiler_report
+                .artifact
+                .manifest
+                .diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    UiStoryDiagnostic::new(
+                        diagnostic.code.clone(),
+                        diagnostic.message.clone(),
+                        UiStoryStageKind::Compiler,
+                        runtime_artifact_severity(diagnostic.severity),
+                    )
+                })
+                .collect(),
         ));
-        return None;
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
     }
+    stage_reports.push(UiStoryStageReport::passed(UiStoryStageKind::Compiler));
 
     let runtime_report = UiRuntimeView::from_artifact_report(&compiler_report.artifact);
     if !runtime_report.passed() {
-        diagnostics.extend(runtime_report.view.diagnostics.iter().map(|diagnostic| {
-            UiGalleryDiagnostic {
-                stage: UiGalleryStage::RuntimeView,
-                fixture_id: Some(fixture.fixture_id.to_owned()),
-                code: diagnostic.code.clone(),
-                message: diagnostic.message.clone(),
-                severity: match diagnostic.severity {
-                    ui_runtime_view::UiRuntimeViewDiagnosticSeverity::Info => {
-                        UiGalleryDiagnosticSeverity::Info
-                    }
-                    ui_runtime_view::UiRuntimeViewDiagnosticSeverity::Warning => {
-                        UiGalleryDiagnosticSeverity::Warning
-                    }
-                    ui_runtime_view::UiRuntimeViewDiagnosticSeverity::Error => {
-                        UiGalleryDiagnosticSeverity::Error
-                    }
-                },
-                source_map_index: diagnostic.source_map_index,
-            }
-        }));
-        return None;
+        stage_reports.push(UiStoryStageReport::failed(
+            UiStoryStageKind::RuntimeView,
+            runtime_report
+                .view
+                .diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    UiStoryDiagnostic::new(
+                        diagnostic.code.clone(),
+                        diagnostic.message.clone(),
+                        UiStoryStageKind::RuntimeView,
+                        runtime_view_severity(diagnostic.severity),
+                    )
+                })
+                .collect(),
+        ));
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
     }
 
-    let host_data = fixture
-        .host_bool
-        .map(|(endpoint, value)| ButtonRuntimeHostData::new().with_bool(endpoint, value))
-        .unwrap_or_default();
-    Some(
-        ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(
-            &runtime_report,
-            &host_data,
-        ),
-    )
+    let host_data = story
+        .host_bools
+        .iter()
+        .fold(ButtonRuntimeHostData::new(), |host_data, host_bool| {
+            host_data.with_bool(host_bool.endpoint, host_bool.value)
+        });
+    let button_runtime_report = ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(
+        &runtime_report,
+        &host_data,
+    );
+    let button_diagnostics = button_runtime_report
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            UiStoryDiagnostic::new(
+                diagnostic.code.clone(),
+                diagnostic.message.clone(),
+                UiStoryStageKind::RuntimeView,
+                button_runtime_severity(diagnostic.severity),
+            )
+        })
+        .collect::<Vec<_>>();
+    if button_runtime_report.passed() {
+        stage_reports.push(UiStoryStageReport {
+            stage: UiStoryStageKind::RuntimeView,
+            status: UiStoryStageStatus::Passed,
+            diagnostics: button_diagnostics,
+            elapsed_micros: None,
+        });
+        button_report = Some(button_runtime_report.clone());
+    } else {
+        stage_reports.push(UiStoryStageReport::failed(
+            UiStoryStageKind::RuntimeView,
+            button_diagnostics,
+        ));
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
+    }
+
+    let primitive_report = UiRenderPrimitiveReport::from_button_report(
+        button_runtime_report.clone(),
+        size,
+        theme,
+        atlas,
+        DEFAULT_EDITOR_FONT_ID,
+    );
+    stage_reports.push(render_primitive_stage_report(&primitive_report));
+    if !primitive_report.passed() {
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
+    }
+
+    let render_data_report =
+        UiHeadlessRenderDataReport::from_render_primitive_report(&primitive_report);
+    stage_reports.push(render_data_stage_report(&render_data_report));
+    if !render_data_report.passed() {
+        return UiGalleryStoryExecution {
+            report: runner.run_story_with_stage_reports(&request, stage_reports),
+            button_report,
+            mounted_frame,
+        };
+    }
+
+    let mount_report = UiStaticMountReport::from_render_data_report(&render_data_report);
+    stage_reports.push(static_mount_stage_report(&mount_report));
+    if let Some(mounted) = mount_report.mounted_frame() {
+        mounted_frame = Some(mounted.frame.clone());
+        stage_reports.push(UiStoryStageReport::passed(UiStoryStageKind::PreviewFrame));
+    } else {
+        stage_reports.push(UiStoryStageReport::failed(
+            UiStoryStageKind::PreviewFrame,
+            vec![UiStoryDiagnostic::error(
+                "ui_gallery.story.preview_frame.missing",
+                "static mount did not produce a mounted preview frame",
+                UiStoryStageKind::PreviewFrame,
+            )],
+        ));
+    }
+
+    UiGalleryStoryExecution {
+        report: runner.run_story_with_stage_reports(&request, stage_reports),
+        button_report,
+        mounted_frame,
+    }
 }
 
-fn load_fixture_node(
-    fixture: &UiGalleryFixtureSpec,
-    diagnostics: &mut Vec<UiGalleryDiagnostic>,
-) -> Option<UiNodeDefinition> {
-    let path = repo_root().join(fixture.path);
-    let source = match fs::read_to_string(&path) {
-        Ok(source) => source,
-        Err(error) => {
-            diagnostics.push(UiGalleryDiagnostic {
-                stage: UiGalleryStage::FixtureLoad,
-                fixture_id: Some(fixture.fixture_id.to_owned()),
-                code: "ui_gallery.fixture.read_failed".to_owned(),
-                message: format!("failed to read {}: {error}", path.display()),
-                severity: UiGalleryDiagnosticSeverity::Error,
-                source_map_index: None,
-            });
-            return None;
-        }
-    };
+fn default_gallery_proof_size() -> UiSize {
+    UiSize::new(320.0, 128.0)
+}
 
-    match ron::from_str(&source) {
-        Ok(node) => Some(node),
+fn load_story_source(
+    story: UiGalleryStorySpec,
+    stage_reports: &mut Vec<UiStoryStageReport>,
+) -> Option<String> {
+    let path = repo_root().join(story.source_path);
+    match fs::read_to_string(&path) {
+        Ok(source) => {
+            stage_reports.push(UiStoryStageReport::passed(UiStoryStageKind::SourceLoad));
+            Some(source)
+        }
         Err(error) => {
-            diagnostics.push(UiGalleryDiagnostic {
-                stage: UiGalleryStage::FixtureLoad,
-                fixture_id: Some(fixture.fixture_id.to_owned()),
-                code: "ui_gallery.fixture.parse_failed".to_owned(),
-                message: format!("failed to parse {}: {error}", path.display()),
-                severity: UiGalleryDiagnosticSeverity::Error,
-                source_map_index: None,
-            });
+            stage_reports.push(UiStoryStageReport::failed(
+                UiStoryStageKind::SourceLoad,
+                vec![UiStoryDiagnostic::error(
+                    "ui_gallery.story.source.read_failed",
+                    format!("failed to read {}: {error}", path.display()),
+                    UiStoryStageKind::SourceLoad,
+                )],
+            ));
+            None
+        }
+    }
+}
+
+fn parse_story_node(
+    story: UiGalleryStorySpec,
+    source: &str,
+    stage_reports: &mut Vec<UiStoryStageReport>,
+) -> Option<UiNodeDefinition> {
+    match ron::from_str(source) {
+        Ok(node) => {
+            stage_reports.push(UiStoryStageReport::passed(UiStoryStageKind::SourceParse));
+            Some(node)
+        }
+        Err(error) => {
+            stage_reports.push(UiStoryStageReport::failed(
+                UiStoryStageKind::SourceParse,
+                vec![UiStoryDiagnostic::error(
+                    "ui_gallery.story.source.parse_failed",
+                    format!("failed to parse {}: {error}", story.source_path),
+                    UiStoryStageKind::SourceParse,
+                )],
+            ));
             None
         }
     }
@@ -433,89 +608,172 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn append_primitive_diagnostics(
-    report: &UiRenderPrimitiveReport,
+fn append_story_report_diagnostics(
+    report: &UiStoryRunReport,
     diagnostics: &mut Vec<UiGalleryDiagnostic>,
+    blocks_gallery: bool,
 ) {
     diagnostics.extend(
         report
-            .diagnostics()
+            .diagnostics
             .iter()
             .map(|diagnostic| UiGalleryDiagnostic {
-                stage: UiGalleryStage::RenderPrimitives,
-                fixture_id: None,
+                stage: UiGalleryStage::Story(diagnostic.stage),
+                story_id: Some(report.story_id.as_str().to_owned()),
                 code: diagnostic.code.clone(),
                 message: diagnostic.message.clone(),
-                severity: match diagnostic.severity {
+                severity: story_severity(diagnostic.severity),
+                source_map_index: None,
+                blocks_gallery,
+            }),
+    );
+}
+
+fn render_primitive_stage_report(report: &UiRenderPrimitiveReport) -> UiStoryStageReport {
+    let diagnostics = report
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| {
+            UiStoryDiagnostic::new(
+                diagnostic.code.clone(),
+                diagnostic.message.clone(),
+                UiStoryStageKind::RenderPrimitives,
+                match diagnostic.severity {
                     ui_render_primitives::UiRenderPrimitiveDiagnosticSeverity::Info => {
-                        UiGalleryDiagnosticSeverity::Info
+                        UiStoryDiagnosticSeverity::Info
                     }
                     ui_render_primitives::UiRenderPrimitiveDiagnosticSeverity::Warning => {
-                        UiGalleryDiagnosticSeverity::Warning
+                        UiStoryDiagnosticSeverity::Warning
                     }
                     ui_render_primitives::UiRenderPrimitiveDiagnosticSeverity::Error => {
-                        UiGalleryDiagnosticSeverity::Error
+                        UiStoryDiagnosticSeverity::Error
                     }
                 },
-                source_map_index: diagnostic.source_map_index,
-            }),
-    );
+            )
+        })
+        .collect::<Vec<_>>();
+    stage_report_from_result(
+        UiStoryStageKind::RenderPrimitives,
+        report.passed(),
+        diagnostics,
+    )
 }
 
-fn append_render_data_diagnostics(
-    report: &UiHeadlessRenderDataReport,
-    diagnostics: &mut Vec<UiGalleryDiagnostic>,
-) {
-    diagnostics.extend(
-        report
-            .diagnostics()
-            .iter()
-            .map(|diagnostic| UiGalleryDiagnostic {
-                stage: UiGalleryStage::RenderData,
-                fixture_id: None,
-                code: diagnostic.code.clone(),
-                message: diagnostic.message.clone(),
-                severity: match diagnostic.severity {
+fn render_data_stage_report(report: &UiHeadlessRenderDataReport) -> UiStoryStageReport {
+    let diagnostics = report
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| {
+            UiStoryDiagnostic::new(
+                diagnostic.code.clone(),
+                diagnostic.message.clone(),
+                UiStoryStageKind::RenderData,
+                match diagnostic.severity {
                     ui_headless_render_data::UiHeadlessRenderDataDiagnosticSeverity::Info => {
-                        UiGalleryDiagnosticSeverity::Info
+                        UiStoryDiagnosticSeverity::Info
                     }
                     ui_headless_render_data::UiHeadlessRenderDataDiagnosticSeverity::Warning => {
-                        UiGalleryDiagnosticSeverity::Warning
+                        UiStoryDiagnosticSeverity::Warning
                     }
                     ui_headless_render_data::UiHeadlessRenderDataDiagnosticSeverity::Error => {
-                        UiGalleryDiagnosticSeverity::Error
+                        UiStoryDiagnosticSeverity::Error
                     }
                 },
-                source_map_index: diagnostic.source_map_index,
-            }),
-    );
+            )
+        })
+        .collect::<Vec<_>>();
+    stage_report_from_result(UiStoryStageKind::RenderData, report.passed(), diagnostics)
 }
 
-fn append_static_mount_diagnostics(
-    report: &UiStaticMountReport,
-    diagnostics: &mut Vec<UiGalleryDiagnostic>,
-) {
-    diagnostics.extend(
-        report
-            .diagnostics()
-            .iter()
-            .map(|diagnostic| UiGalleryDiagnostic {
-                stage: UiGalleryStage::StaticMount,
-                fixture_id: None,
-                code: diagnostic.code.clone(),
-                message: diagnostic.message.clone(),
-                severity: match diagnostic.severity {
+fn static_mount_stage_report(report: &UiStaticMountReport) -> UiStoryStageReport {
+    let diagnostics = report
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| {
+            UiStoryDiagnostic::new(
+                diagnostic.code.clone(),
+                diagnostic.message.clone(),
+                UiStoryStageKind::StaticMount,
+                match diagnostic.severity {
                     ui_static_mount::UiStaticMountDiagnosticSeverity::Info => {
-                        UiGalleryDiagnosticSeverity::Info
+                        UiStoryDiagnosticSeverity::Info
                     }
                     ui_static_mount::UiStaticMountDiagnosticSeverity::Warning => {
-                        UiGalleryDiagnosticSeverity::Warning
+                        UiStoryDiagnosticSeverity::Warning
                     }
                     ui_static_mount::UiStaticMountDiagnosticSeverity::Error => {
-                        UiGalleryDiagnosticSeverity::Error
+                        UiStoryDiagnosticSeverity::Error
                     }
                 },
-                source_map_index: None,
-            }),
-    );
+            )
+        })
+        .collect::<Vec<_>>();
+    stage_report_from_result(UiStoryStageKind::StaticMount, report.passed(), diagnostics)
+}
+
+fn stage_report_from_result(
+    stage: UiStoryStageKind,
+    passed: bool,
+    diagnostics: Vec<UiStoryDiagnostic>,
+) -> UiStoryStageReport {
+    UiStoryStageReport {
+        stage,
+        status: if passed {
+            UiStoryStageStatus::Passed
+        } else {
+            UiStoryStageStatus::Failed
+        },
+        diagnostics,
+        elapsed_micros: None,
+    }
+}
+
+fn runtime_artifact_severity(
+    severity: ui_artifacts::UiRuntimeArtifactDiagnosticSeverity,
+) -> UiStoryDiagnosticSeverity {
+    match severity {
+        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Info => UiStoryDiagnosticSeverity::Info,
+        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Warning => {
+            UiStoryDiagnosticSeverity::Warning
+        }
+        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Error => {
+            UiStoryDiagnosticSeverity::Error
+        }
+    }
+}
+
+fn runtime_view_severity(
+    severity: ui_runtime_view::UiRuntimeViewDiagnosticSeverity,
+) -> UiStoryDiagnosticSeverity {
+    match severity {
+        ui_runtime_view::UiRuntimeViewDiagnosticSeverity::Info => UiStoryDiagnosticSeverity::Info,
+        ui_runtime_view::UiRuntimeViewDiagnosticSeverity::Warning => {
+            UiStoryDiagnosticSeverity::Warning
+        }
+        ui_runtime_view::UiRuntimeViewDiagnosticSeverity::Error => UiStoryDiagnosticSeverity::Error,
+    }
+}
+
+fn button_runtime_severity(
+    severity: ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity,
+) -> UiStoryDiagnosticSeverity {
+    match severity {
+        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => {
+            UiStoryDiagnosticSeverity::Info
+        }
+        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Warning => {
+            UiStoryDiagnosticSeverity::Warning
+        }
+        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Error => {
+            UiStoryDiagnosticSeverity::Error
+        }
+    }
+}
+
+fn story_severity(severity: UiStoryDiagnosticSeverity) -> UiGalleryDiagnosticSeverity {
+    match severity {
+        UiStoryDiagnosticSeverity::Info => UiGalleryDiagnosticSeverity::Info,
+        UiStoryDiagnosticSeverity::Warning => UiGalleryDiagnosticSeverity::Warning,
+        UiStoryDiagnosticSeverity::Error => UiGalleryDiagnosticSeverity::Error,
+    }
 }

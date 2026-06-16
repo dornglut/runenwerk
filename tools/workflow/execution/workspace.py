@@ -4,9 +4,11 @@ import shutil
 import tempfile
 import re
 import subprocess
+import tomllib
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from roadmap_state import REPO_ROOT, WorkflowError, normalize_repo_path, repo_path, path_within_scope
 
@@ -66,8 +68,10 @@ class ActionWorkspace:
 
 def create_full_snapshot(action: ActionContract, *, repo_root: Path = REPO_ROOT) -> ActionWorkspace:
     temp_root = Path(tempfile.mkdtemp(prefix=f"execution-{action.milestone_id.lower()}-"))
-    workspace = temp_root / "workspace"
+    workspace = temp_root / repo_root.parent.name / repo_root.name
+    workspace.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(repo_root, workspace, ignore=ignore_snapshot_entries)
+    mirror_external_cargo_path_workspaces(repo_root=repo_root, workspace=workspace, temp_root=temp_root)
     initialize_snapshot_git_index(workspace)
     outputs = importable_outputs(action)
     baseline = {output: optional_digest(repo_root / output) for output in outputs}
@@ -82,6 +86,124 @@ def create_full_snapshot(action: ActionContract, *, repo_root: Path = REPO_ROOT)
         baseline_content=baseline_content,
         tree_baseline=file_digests(workspace),
     )
+
+
+def mirror_external_cargo_path_workspaces(*, repo_root: Path, workspace: Path, temp_root: Path) -> None:
+    """Mirror external Cargo path dependencies so snapshots keep workspace-relative paths valid."""
+
+    repo_root = repo_root.resolve()
+    workspace = workspace.resolve()
+    source_roots: list[tuple[Path, Path]] = [(repo_root, workspace)]
+    copied_roots: set[tuple[Path, Path]] = set()
+    index = 0
+    while index < len(source_roots):
+        source_root, snapshot_source_root = source_roots[index]
+        index += 1
+        for manifest in cargo_manifests(source_root):
+            relative_manifest = manifest.relative_to(source_root)
+            for source_dep in cargo_path_dependencies(manifest):
+                if any(path_is_within(source_dep, known_source_root) for known_source_root, _ in source_roots):
+                    continue
+                external_root = cargo_workspace_root_for(source_dep)
+                relative_dep = source_dep.relative_to(external_root)
+                snapshot_dep = (
+                    snapshot_source_root / relative_manifest.parent / manifest_path_for(manifest, source_dep)
+                ).resolve()
+                snapshot_root = ancestor_for_relative(snapshot_dep, relative_dep)
+                if not path_is_within(snapshot_root, temp_root.resolve()):
+                    raise WorkflowError(
+                        f"external Cargo path dependency would copy outside snapshot root: {source_dep}"
+                    )
+                copy_key = (external_root, snapshot_root)
+                if copy_key in copied_roots:
+                    continue
+                if not snapshot_root.exists():
+                    snapshot_root.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(external_root, snapshot_root, ignore=ignore_snapshot_entries)
+                copied_roots.add(copy_key)
+                source_roots.append((external_root, snapshot_root))
+
+
+def cargo_manifests(root: Path) -> list[Path]:
+    return [
+        path
+        for path in root.rglob("Cargo.toml")
+        if not any(part in SNAPSHOT_EXCLUDES for part in path.relative_to(root).parts)
+    ]
+
+
+def cargo_path_dependencies(manifest: Path) -> list[Path]:
+    try:
+        data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        raise WorkflowError(f"failed to parse Cargo manifest {repo_path(manifest)}: {error}") from error
+    paths: list[Path] = []
+    for value in cargo_dependency_tables(data):
+        dependency_path = value.get("path")
+        if not isinstance(dependency_path, str):
+            continue
+        source_dep = (manifest.parent / dependency_path).resolve()
+        if source_dep.exists():
+            paths.append(source_dep)
+    return paths
+
+
+def cargo_dependency_tables(data: dict[str, Any]) -> list[dict[str, Any]]:
+    tables: list[dict[str, Any]] = []
+    for key in ("dependencies", "dev-dependencies", "build-dependencies"):
+        tables.extend(dependency_values(data.get(key)))
+    target = data.get("target")
+    if isinstance(target, dict):
+        for target_data in target.values():
+            if not isinstance(target_data, dict):
+                continue
+            for key in ("dependencies", "dev-dependencies", "build-dependencies"):
+                tables.extend(dependency_values(target_data.get(key)))
+    return tables
+
+
+def dependency_values(table: Any) -> list[dict[str, Any]]:
+    if not isinstance(table, dict):
+        return []
+    return [value for value in table.values() if isinstance(value, dict)]
+
+
+def manifest_path_for(manifest: Path, dependency: Path) -> Path:
+    data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    for value in cargo_dependency_tables(data):
+        dependency_path = value.get("path")
+        if isinstance(dependency_path, str) and (manifest.parent / dependency_path).resolve() == dependency:
+            return Path(dependency_path)
+    raise WorkflowError(f"missing Cargo dependency path for {repo_path(manifest)} -> {dependency}")
+
+
+def cargo_workspace_root_for(path_dependency: Path) -> Path:
+    for candidate in [path_dependency, *path_dependency.parents]:
+        manifest = candidate / "Cargo.toml"
+        if not manifest.exists():
+            continue
+        try:
+            data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError:
+            continue
+        if isinstance(data.get("workspace"), dict):
+            return candidate
+    return path_dependency
+
+
+def ancestor_for_relative(path: Path, relative: Path) -> Path:
+    result = path
+    for _part in relative.parts:
+        result = result.parent
+    return result
+
+
+def path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def initialize_snapshot_git_index(workspace: Path) -> None:

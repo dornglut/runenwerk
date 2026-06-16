@@ -1,0 +1,309 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+milestone_id: PM-UI-STORY-004
+action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+evidence_kind: diagnostics
+name: diagnostics
+status: passed
+produced_at: '2026-06-16T18:45:13Z'
+paths:
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/mount.rs
+- domain/ui/ui_story/src/gallery.rs
+- domain/ui/ui_runtime_view/Cargo.toml
+- domain/ui/ui_runtime_view/src/lib.rs
+- domain/ui/ui_runtime_view/tests/runtime_view_contract.rs
+- domain/ui/ui_render_primitives/Cargo.toml
+- domain/ui/ui_render_primitives/src/lib.rs
+- domain/ui/ui_static_mount/Cargo.toml
+- domain/ui/ui_static_mount/src/lib.rs
+- domain/ui/ui_static_mount/tests/static_mount_contract.rs
+- apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+- apps/runenwerk_editor/src/runtime/ui_gallery.rs
+- docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_paths:
+- domain/ui/ui_story/src/runner.rs
+- domain/ui/ui_story/src/report.rs
+- domain/ui/ui_story/src/mount.rs
+- domain/ui/ui_story/src/gallery.rs
+- domain/ui/ui_runtime_view/Cargo.toml
+- domain/ui/ui_runtime_view/src/lib.rs
+- domain/ui/ui_runtime_view/tests/runtime_view_contract.rs
+- domain/ui/ui_render_primitives/Cargo.toml
+- domain/ui/ui_render_primitives/src/lib.rs
+- domain/ui/ui_static_mount/Cargo.toml
+- domain/ui/ui_static_mount/src/lib.rs
+- domain/ui/ui_static_mount/tests/static_mount_contract.rs
+- apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+- apps/runenwerk_editor/src/runtime/ui_gallery.rs
+- docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+- docs-site/src/content/docs/domain/ui/roadmap.md
+subject_digests:
+  apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+  apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+  docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+  docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+  domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+  domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+  domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+  domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+  domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+  domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+  domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+  domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+  domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+  domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+  domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+  domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+validation_commands:
+- cargo:test (cargo test -p ui_story) -> exit 0
+- cargo:test (cargo test -p ui_runtime_view) -> exit 0
+- cargo:test (cargo test -p ui_render_primitives) -> exit 0
+- cargo:test (cargo test -p ui_static_mount) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor --bin runenwerk_ui_gallery) -> exit 0
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_story
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 8767cd95cba97b0d9a6eb79e0534e8821936ba906059dd20d1dbbf17ae7a3d10
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_runtime_view
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 17db670610086e1ff8ca2aec7b85ba925e1f3efb0ccd1d117bc3f8b53f624fd3
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_render_primitives
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 5b0779de2abc0010ac389596ec3c547d3c47816b78d1bbacc2c7ccdc4fbebcff
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_static_mount
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 6cc8d289253b44b6af6d9325828977899c6a4b830699f17d79a3f239f8a0822b
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - --bin
+  - runenwerk_ui_gallery
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 6d753e9a98f582b3dfd6c32d2e0450af5e7f81d7e4acddaa4f1094bef2c954d0
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 7f4126ebd58b1231b2cef756cbe8825c2714fa28cd40ba1359d64bfa7cbbba4b
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 3434cdb2a3926567c65f29c21c40756e6894f5d0ab7580596e7d793f6236fafd
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: 12ff7b8b01ab54e20ff0c16ffd8c89b6a6f928110268e1e86c1c4bff8cae8b64
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-story-platform/pt-ui-story-platform-20260616-184317z.yaml
+  run_action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-004:WR-177
+  validation_result_digest: d2ec7f6de284d85b4ad40a204ee087710c70d3d0a03fe5a9c496b1750cb03711
+  subject_digests:
+    apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs: b1121a9e5942a22432d5f14751916cd61a9744a99e8b3c944bac1c83f88cd2a1
+    apps/runenwerk_editor/src/runtime/ui_gallery.rs: 86f51d7b28ba261d12120ac0c9b33046a3476820b956d3fb82420d42bd917025
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
+    docs-site/src/content/docs/domain/ui/roadmap.md: e439ebb3d56d40c19690ad38d938e0ea07b91a06b7790ba3be199fb7621e3bf9
+    domain/ui/ui_render_primitives/Cargo.toml: d99db713b92fed83e65a5a2a2a64bb6e028838930dc15db0535a32fc0bd6bf0d
+    domain/ui/ui_render_primitives/src/lib.rs: 392e25a30d11ff31ad73b61db900e3c6f5a50466b181ff4a5c2f641e203b4d9e
+    domain/ui/ui_runtime_view/Cargo.toml: b4787e1ee882a6c95d733bbe718076889cc5f0799b7a8a1fe8ef0985f3414a8b
+    domain/ui/ui_runtime_view/src/lib.rs: 418e0424c39e808dcf485c7e1bb10356500bf35bed552b2470cca27918765635
+    domain/ui/ui_runtime_view/tests/runtime_view_contract.rs: f6fa3e0675577a49ac90261ad209fc782d2cfb3e7240473d5383460298a337db
+    domain/ui/ui_static_mount/Cargo.toml: 09ff1027e5fc33f29ce382e789ea0a087f43f5bbb2c44523d6108d17ef69e663
+    domain/ui/ui_static_mount/src/lib.rs: 5c9c5c88ab52878e91d5e412f91f066ef034f08ba807f9598565de2ff2f87e02
+    domain/ui/ui_static_mount/tests/static_mount_contract.rs: 4170971bbb60e4668ca30e49d04e6fbe99d70edacc6994a4dbc1ab4e0d3ae6e4
+    domain/ui/ui_story/src/gallery.rs: fa7e7c5d65c1b3d57478c6e539389034dad94ee54cf3fdf08daebc5c30de6e36
+    domain/ui/ui_story/src/mount.rs: 861725cd39d0e67c821116a41a4c66716b4183ee6e5df5a3f52df6f9b90c8a23
+    domain/ui/ui_story/src/report.rs: 293f3402d7dad7c674aa0e3ad746c357f83a7b784ce5cbb199234469cc45d1cf
+    domain/ui/ui_story/src/runner.rs: 9c9eba0eb505ad87b914ca93dc444087adbe8608ea465174f39b3f4bd54cb288

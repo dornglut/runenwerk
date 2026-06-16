@@ -1,0 +1,92 @@
+version: 1
+track_id: PT-UI-STORY-PLATFORM
+run_id: pt-ui-story-platform-20260616-132139z
+started_at: '2026-06-16T13:22:07Z'
+actions:
+- status: failed
+  action_id: PT-UI-STORY-PLATFORM:PM-UI-STORY-001:WR-TBD-UI-STORY-001
+  milestone_id: PM-UI-STORY-001
+  wr_id: WR-TBD-UI-STORY-001
+  execution_kind: design_contract
+  executor_kind: planning_expansion
+  writer_strategy: no_writer
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  transcript_paths: []
+  pre_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml: 86bd0b560efd6b6f875a054b2f6b631e94515a362d05b04f464a40cf99b1cd01
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 6d3e6bd6b586499259b2a0c44f0318dfdb6dd9b711f969c48e261fc02fdd48af
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 8b50bfc37d19e209a66f4b75b71262a7ec4d0da40dcd3260d1a8c55500d8f23d
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md: fecf45597d269408f2b5efb2be6b6e013864377b6f9a31fcea59a6183eeb94be
+    ? docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+    : 02a120e73e8da187842abaf24c87fc9c08fd54619fc3e20d506200a5df6d1ab5
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
+    tools/workflow/execution/compiler.py: b27457ceb26c5ef17539013466b485e25e32af3587a8d406e3411ae9b2c8aa68
+    tools/workflow/execution/contracts.py: dc8b88ab77b876e60fcda9ff907f60201c1753a1985766cd09e07c75ecaea5f5
+    tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
+    tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
+    tools/workflow/execution/preflight.py: 1eedd7ed9484f7e6a8f266bc3ad85500a3917091a8f9407f766f2a0016cdf6c4
+    tools/workflow/execution/runner.py: 9d72140a846154108afeb0d92bd51881219a849cdd707e800ee53e4d654cd40b
+    tools/workflow/execution/workspace.py: 1f719dbed43e8f513e8f50acd8b908cb7f47edb2292fc2ffb1d63b6b892450a5
+    tools/workflow/execution/writers.py: 9737945f60484ed069e68bfef38a68b32210cb35347f29cb2d783f75586e464a
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 010fd3e098d74e025dbdd86a51983cdf506a6c1088c0095ed1edf51470de19e0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  post_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml: 86bd0b560efd6b6f875a054b2f6b631e94515a362d05b04f464a40cf99b1cd01
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 6d3e6bd6b586499259b2a0c44f0318dfdb6dd9b711f969c48e261fc02fdd48af
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 8b50bfc37d19e209a66f4b75b71262a7ec4d0da40dcd3260d1a8c55500d8f23d
+    docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
+    docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
+    docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 32d9209a823f46a47ab3acf45d1327a97161f3b38a665fc2e7905c02fc96f600
+    docs-site/src/content/docs/domain/ui/story-acceptance-and-review-checklist.md: fecf45597d269408f2b5efb2be6b6e013864377b6f9a31fcea59a6183eeb94be
+    ? docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-014-architecture-behavior-truth-and-extension-readiness-closure/closeout.md
+    : 02a120e73e8da187842abaf24c87fc9c08fd54619fc3e20d506200a5df6d1ab5
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
+    tools/workflow/execution/compiler.py: b27457ceb26c5ef17539013466b485e25e32af3587a8d406e3411ae9b2c8aa68
+    tools/workflow/execution/contracts.py: dc8b88ab77b876e60fcda9ff907f60201c1753a1985766cd09e07c75ecaea5f5
+    tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
+    tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: c6ff2cbcbbdcf00e4c6c3dc1141574f850961b5b457321e7e3126f74dd9e6aa4
+    tools/workflow/execution/preflight.py: 1eedd7ed9484f7e6a8f266bc3ad85500a3917091a8f9407f766f2a0016cdf6c4
+    tools/workflow/execution/runner.py: 9d72140a846154108afeb0d92bd51881219a849cdd707e800ee53e4d654cd40b
+    tools/workflow/execution/workspace.py: 1f719dbed43e8f513e8f50acd8b908cb7f47edb2292fc2ffb1d63b6b892450a5
+    tools/workflow/execution/writers.py: 9737945f60484ed069e68bfef38a68b32210cb35347f29cb2d783f75586e464a
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 010fd3e098d74e025dbdd86a51983cdf506a6c1088c0095ed1edf51470de19e0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: "validation failed: task production:validate -> exit 201\nproduction track validation failed\n- PT-UI-PROGRAM-ARCHITECTURE: truth certificate \nui-program-architecture-implementation is stale for \ndocs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-arch\nitecture.yaml\n- PT-UI-PROGRAM-ARCHITECTURE: truth certificate \nui-program-architecture-implementation is stale for \ndocs-site/src/content/docs/workspace/production-tracks.yaml\n- PT-UI-PROGRAM-ARCHITECTURE: truth certificate retained-ui-compatibility is \nstale for \ndocs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-arch\nitecture.yaml\n- PT-UI-PROGRAM-ARCHITECTURE: truth certificate retained-ui-compatibility is \nstale for docs-site/src/content/docs/workspace/production-tracks.yaml\n- PT-UI-PROGRAM-ARCHITECTURE: truth certificate \nui-program-perfectionist-conformance is stale for \ndocs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-arch\nitecture.yaml\n- PT-UI-PROGRAM-ARCHITECTURE: truth certificate \nui-program-perfectionist-conformance is stale for \ndocs-site/src/content/docs/workspace/production-tracks.yaml\n- PM-UI-STORY-001: manifest write_scope \ndocs-site/src/content/docs/workspace/roadmap-items.yaml is not covered by owning\nWR WR-174 write_scopes\n- PM-UI-STORY-001: manifest write_scope \ndocs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workfl\now-design.md is not covered by owning WR WR-174 write_scopes\n- PM-UI-STORY-001: manifest write_scope \ndocs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadma\np.md is not covered by owning WR WR-174 write_scopes\n- PM-UI-STORY-001: manifest write_scope \ndocs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.m\nd is not covered by owning WR WR-174 write_scopes\n- PM-UI-STORY-001: manifest write_scope \ndocs-site/src/content/docs/domain/ui/roadmap.md is not covered by owning WR \nWR-174 write_scopes\ntask: [production:validate] uv run python tools/workflow/production_state.py validate\nwarning: `VIRTUAL_ENV=/Users/joshua/Projekte/gamedev/Runenwerk/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead\ntask: Failed to run task \"production:validate\": exit status 1"
+updated_at: '2026-06-16T13:22:07Z'

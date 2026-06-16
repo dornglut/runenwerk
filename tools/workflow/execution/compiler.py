@@ -24,7 +24,7 @@ from track_sources.plan_metadata import (
     load_plan_contract_metadata,
     structured_plan_contract_path,
 )
-from truth.certificates import digest_path
+from truth.certificates import digest_path, strong_claim_requires_certificate
 
 from execution.contracts import (
     ActionContract,
@@ -323,8 +323,6 @@ def planning_expansion_outputs(
     contract_pack_root: Path,
 ) -> tuple[list[str], list[str]]:
     _archive_source, deferred_source = split_source_paths(roadmap_source)
-    planning = load_production_tracks(production_source)
-    roadmap = load_roadmap(roadmap_source)
     allowed = [
         source_path_for_action(production_source, production_source=production_source),
         source_path_for_action(manifest_source, production_source=production_source),
@@ -342,6 +340,7 @@ def planning_expansion_outputs(
     allowed.extend(generated_allowed)
     new.extend(generated_new)
     allowed.extend(existing_contract_pack_outputs(track_id=track_id, contract_pack_root=contract_pack_root, production_source=production_source))
+    allowed.extend(existing_truth_certificate_outputs(production_source=production_source, manifest_root=manifest_source.parent))
     return list(dict.fromkeys(allowed)), list(dict.fromkeys(new))
 
 
@@ -355,6 +354,26 @@ def existing_contract_pack_outputs(*, track_id: str, contract_pack_root: Path, p
         source_path_for_action(pack_path, production_source=production_source)
         for pack_path in sorted(contract_pack_root.glob("*.yaml"))
     )
+    return list(dict.fromkeys(outputs))
+
+
+def existing_truth_certificate_outputs(*, production_source: Path, manifest_root: Path) -> list[str]:
+    planning = load_production_tracks(production_source)
+    source_root = source_root_for_action_paths(production_source)
+    outputs: list[str] = []
+    for track in planning.tracks:
+        manifest_path = manifest_root / f"{track.id.lower()}.yaml"
+        if not manifest_path.exists():
+            continue
+        loaded = load_track_execution_manifest(track.id, root=manifest_root)
+        if loaded is None:
+            continue
+        for claim in loaded.manifest.truth_claims:
+            if not strong_claim_requires_certificate(claim):
+                continue
+            output = truth_certificate_output(track.id, claim.claim_id)
+            if (source_root / output).exists():
+                outputs.append(output)
     return list(dict.fromkeys(outputs))
 
 
@@ -1392,7 +1411,11 @@ def compile_contract_pack(
             contract_pack_root=contract_pack_root,
             production_source=production_source,
         )
-        allowed_outputs = list(dict.fromkeys([*allowed_outputs, *derived_pack_outputs]))
+        derived_truth_certificate_outputs = existing_truth_certificate_outputs(
+            production_source=production_source,
+            manifest_root=loaded.path.parent,
+        )
+        allowed_outputs = list(dict.fromkeys([*allowed_outputs, *derived_pack_outputs, *derived_truth_certificate_outputs]))
         action_id = f"{track_id}:{entry.milestone_id}:{wr_id}"
         base_action_kwargs = {
             "track_id": track_id,

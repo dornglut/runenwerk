@@ -2816,6 +2816,7 @@ dependencies = [
  "ui_render_primitives",
  "ui_runtime_view",
  "ui_static_mount",
+ "ui_story",
  "ui_surface",
  "ui_text",
  "ui_theme",
@@ -3990,6 +3991,13 @@ dependencies = [
  "ui_runtime_view",
  "ui_text",
  "ui_theme",
+]
+
+[[package]]
+name = "ui_story"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
