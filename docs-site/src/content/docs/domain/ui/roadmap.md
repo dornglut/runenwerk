@@ -5,9 +5,12 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-15
+last_reviewed: 2026-06-16
 related:
   - ./architecture.md
+  - ./story-acceptance-and-review-checklist.md
+  - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+  - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
   - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../../design/active/ui-program-architecture.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
@@ -298,6 +301,72 @@ Stop conditions:
 - mutating editor/game/domain/app truth from generic UI code;
 - creating new crates without WR/production authority.
 
+### Phase 10 - Story-Driven Golden Workflow Productization
+
+Status: active design intake; implementation not authorized by this roadmap
+section alone.
+
+Owning designs:
+
+- `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md`
+- `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md`
+
+Decision:
+
+- `UiStory` is the canonical unit for UI authoring, preview, validation,
+  inspection, proof, and mount eligibility.
+- A story may wrap either a bare `UiNodeDefinition` or a full
+  `AuthoredUiTemplate`.
+- Story manifests live in assets, not hardcoded Rust constants.
+- The current hardcoded button gallery path is valid first-slice evidence, but
+  it is not the final gallery architecture.
+- Gallery and CLI must share the same domain-owned story runner.
+- Gallery inspection must consume `UiStoryRunReport`, not button-specific
+  reports.
+- Normal surfaces using existing controls should be cheap to author, while new
+  reusable component classes are platform work.
+- GraphCanvas, Timeline, RichText/CodeEditor, advanced drag/drop, world-space
+  UI, UI effects, and visual UI builder work must be story-gated platform
+  capabilities.
+
+First implementation milestone to prepare through normal WR/production gates:
+
+```text
+PT-UI-001 - Story-Driven Golden Workflow
+```
+
+Outcome:
+
+- convert the current hardcoded button gallery fixture path into
+  manifest-driven story execution;
+- add or designate a domain-level story runner;
+- move the primary gallery output to `UiStoryRunReport`;
+- preserve the existing visible button proof through the new workflow;
+- add one intentionally failing story to prove diagnostic expectations;
+- remove `UI_GALLERY_FIXTURES` as the production story registry.
+
+Later implementation contract target files and functions:
+
+```text
+apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES
+apps/runenwerk_editor/src/runtime/ui_gallery.rs::load_fixture_node
+apps/runenwerk_editor/src/runtime/ui_gallery.rs::compile_fixture_button_report
+apps/runenwerk_editor/src/runtime/ui_gallery.rs::submit_ui_gallery_frame_system
+domain/ui/ui_story/src/runner.rs::UiStoryRunner::run_story
+domain/ui/ui_story/src/report.rs::UiStoryRunReport
+domain/ui/ui_story/src/registry.rs::UiStoryRegistry::discover
+domain/ui/ui_story/src/mount.rs::UiStoryMountEligibility::from_report
+```
+
+Stop conditions:
+
+- do not implement `domain/ui/ui_story` before crate creation authority exists;
+- do not keep `apps/runenwerk_editor/src/runtime/ui_gallery.rs::UI_GALLERY_FIXTURES`
+  as a production story registry after cutover;
+- do not add renderer-owned UI semantics;
+- do not let generic UI mutate editor, game, domain, or app state directly;
+- do not mount a surface without story-derived mount eligibility.
+
 ## Current Now Tasks
 
 - [x] Finish docking/tab behavior on top of existing structural identity and binding contracts. Status: implemented and test-covered; automated coverage exists for tab reorder, rehome, floating host creation, split resizing, area split/duplicate/reset/close, dynamic split-area composition, and structural identity preservation.
@@ -314,6 +383,7 @@ Stop conditions:
 - [x] Keep UI Designer visible as the promoted self-authoring path. Status: complete/current; UI Designer is not a missing roadmap item, it is the Editor Design/self-authoring workspace tracked by `docs-site/src/content/docs/design/implemented/editor-self-authoring-and-final-ui-design.md`.
 - [ ] Continue popup/menu and tab chrome polish only under Interaction V2. Status: ready-next/supporting evidence; `docs-site/src/content/docs/design/active/editor-shell-menu-and-tab-chrome-polish-design.md` tracks immediate retained-UI symptoms, but WR-024 follows WR-025 and may only consume the named `IV2-*` contract slices or provide compatibility evidence. It may not own long-term popup, scroll, focus, menu sizing, chrome, docking-zone, status-overflow, or viewport-input contracts.
 - [ ] Continue the artifact-backed runtime rendering roadmap in order. Status: WR-173 implements the first static visible gallery path for checked-in basic/selected button fixtures through `UiNodeDefinition -> UiProgramFormationReport -> UiCompilerReport -> UiRuntimeArtifact -> UiRuntimeView -> UiRenderPrimitiveReport -> UiFrame -> existing renderer UI composite`. Remaining roadmap work includes interaction hit testing, full state loop, accessibility runtime proof, broader control coverage, and production-readiness evidence.
+- [ ] Prepare the story-driven golden workflow through normal WR/production gates. Status: active design intake; `PT-UI-001` should convert the hardcoded button gallery path into manifest-driven story execution, introduce or designate a domain-owned story runner, and make `UiStoryRunReport` the primary gallery/CLI inspection object before mount eligibility claims.
 - [ ] Keep cross-doc sequencing aligned so workspace index docs do not restate stale phase history. Status: active; generated production docs must remain outputs of their source files and must not be hand-edited.
 
 ## Non-Goals for This Track
