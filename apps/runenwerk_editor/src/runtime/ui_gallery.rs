@@ -11,9 +11,9 @@ use ui_compiler::UiCompiler;
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 use ui_definition::UiNodeDefinition;
 use ui_headless_render_data::UiHeadlessRenderDataReport;
-use ui_math::UiSize;
+use ui_math::{UiPoint, UiRect, UiSize};
 use ui_program_lowering::form_ui_program_report_from_node_with_registry_snapshot;
-use ui_render_data::UiFrame;
+use ui_render_data::{UiFrame, UiFrameFragment, UiFramePlacement, compose_frame_fragments};
 use ui_render_primitives::UiRenderPrimitiveReport;
 use ui_runtime_view::{ButtonRuntimeHostData, ButtonRuntimeViewReport, UiRuntimeView};
 use ui_static_mount::UiStaticMountReport;
@@ -26,6 +26,10 @@ use ui_story::{
 use ui_theme::ThemeTokens;
 
 pub const UI_GALLERY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(5_101);
+const GALLERY_PREVIEW_TILE_WIDTH: f32 = 320.0;
+const GALLERY_PREVIEW_TILE_HEIGHT: f32 = 128.0;
+const GALLERY_PREVIEW_PADDING: f32 = 16.0;
+const GALLERY_PREVIEW_GAP: f32 = 12.0;
 
 const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
     match UiFrameProducerId::try_from_raw(raw) {
@@ -78,7 +82,11 @@ impl UiGalleryResource {
         theme: &ThemeTokens,
         atlas: &UiFontAtlasResource,
     ) -> Self {
-        let executions = run_checked_in_gallery_stories_for_render_target(size, theme, atlas);
+        let executions = run_checked_in_gallery_stories_for_render_target(
+            default_gallery_proof_size(),
+            theme,
+            atlas,
+        );
         Self::from_story_executions(executions, Some(size))
     }
 
@@ -88,7 +96,7 @@ impl UiGalleryResource {
     ) -> Self {
         let mut diagnostics = Vec::new();
         let mut button_report = ButtonRuntimeViewReport::default();
-        let mut frame = UiFrame::new();
+        let mut mounted_previews = Vec::new();
         let mut story_reports = Vec::new();
 
         for execution in executions {
@@ -127,9 +135,7 @@ impl UiGalleryResource {
             let eligibility = UiStoryMountEligibility::from_report(&execution.report);
             if eligibility.eligible {
                 if let Some(mounted_frame) = execution.mounted_frame {
-                    for surface in mounted_frame.surfaces {
-                        frame.push_surface(surface);
-                    }
+                    mounted_previews.push(mounted_frame);
                 } else {
                     diagnostics.push(UiGalleryDiagnostic {
                         stage: UiGalleryStage::Story(UiStoryStageKind::PreviewFrame),
@@ -145,7 +151,10 @@ impl UiGalleryResource {
             }
             story_reports.push(execution.report);
         }
-        let frame = (!frame.is_empty()).then_some(frame);
+        let frame = compose_gallery_preview_frame(
+            prepared_size.unwrap_or_else(default_gallery_proof_size),
+            &mounted_previews,
+        );
 
         Self {
             button_report,
@@ -577,7 +586,39 @@ fn execute_gallery_story(
 }
 
 fn default_gallery_proof_size() -> UiSize {
-    UiSize::new(320.0, 128.0)
+    UiSize::new(GALLERY_PREVIEW_TILE_WIDTH, GALLERY_PREVIEW_TILE_HEIGHT)
+}
+
+fn compose_gallery_preview_frame(output_size: UiSize, previews: &[UiFrame]) -> Option<UiFrame> {
+    if previews.is_empty() {
+        return None;
+    }
+
+    let columns = gallery_preview_columns(output_size.width);
+    let fragments = previews.iter().enumerate().map(|(index, frame)| {
+        let column = index % columns;
+        let row = index / columns;
+        let x = GALLERY_PREVIEW_PADDING
+            + column as f32 * (GALLERY_PREVIEW_TILE_WIDTH + GALLERY_PREVIEW_GAP);
+        let y = GALLERY_PREVIEW_PADDING
+            + row as f32 * (GALLERY_PREVIEW_TILE_HEIGHT + GALLERY_PREVIEW_GAP);
+        let origin = UiPoint::new(x, y);
+        let clip = UiRect::new(
+            x,
+            y,
+            GALLERY_PREVIEW_TILE_WIDTH,
+            GALLERY_PREVIEW_TILE_HEIGHT,
+        );
+        UiFrameFragment::new(frame, UiFramePlacement::new(origin, clip, index as u32))
+    });
+    let frame = compose_frame_fragments(output_size, fragments);
+    (!frame.is_empty()).then_some(frame)
+}
+
+fn gallery_preview_columns(output_width: f32) -> usize {
+    let usable_width = (output_width - GALLERY_PREVIEW_PADDING * 2.0 + GALLERY_PREVIEW_GAP)
+        .max(GALLERY_PREVIEW_TILE_WIDTH);
+    ((usable_width / (GALLERY_PREVIEW_TILE_WIDTH + GALLERY_PREVIEW_GAP)).floor() as usize).max(1)
 }
 
 fn load_story_source(

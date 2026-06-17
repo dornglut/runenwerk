@@ -33,6 +33,7 @@ struct VsIn {
     @location(0) rect : vec4<f32>,
     @location(1) color : vec4<f32>,
     @location(2) radius : f32,
+    @location(3) border_width : f32,
 };
 
 struct VsOut {
@@ -41,6 +42,7 @@ struct VsOut {
     @location(1) half_size : vec2<f32>,
     @location(2) color : vec4<f32>,
     @location(3) radius : f32,
+    @location(4) border_width : f32,
 };
 
 struct ScreenUniform {
@@ -77,6 +79,7 @@ fn vs_main(input: VsIn, @builtin(vertex_index) vertex_index: u32) -> VsOut {
     out.half_size = half_size;
     out.color = input.color;
     out.radius = input.radius;
+    out.border_width = input.border_width;
     return out;
 }
 
@@ -92,6 +95,11 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
     let sdf = outside + inside - radius;
 
     if (sdf > 0.0) {
+        discard;
+    }
+
+    let border_width = max(input.border_width, 0.0);
+    if (border_width > 0.0 && sdf < -border_width) {
         discard;
     }
 
@@ -477,13 +485,16 @@ struct RectInstanceRaw {
     rect: [f32; 4],
     color: [f32; 4],
     radius: f32,
-    _pad: [f32; 3],
+    border_width: f32,
+    _pad: [f32; 2],
 }
 
 #[derive(Debug, Clone, Copy)]
 struct FlattenedUiRectInstance {
     raw: RectInstanceRaw,
     clip: Option<[f32; 4]>,
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     primitive_order: u32,
 }
@@ -502,6 +513,8 @@ struct StrokeSegmentInstanceRaw {
 struct FlattenedUiStrokeSegmentInstance {
     raw: StrokeSegmentInstanceRaw,
     clip: Option<[f32; 4]>,
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     primitive_order: u32,
 }
@@ -519,6 +532,8 @@ struct FlattenedUiGlyphInstance {
     raw: GlyphInstanceRaw,
     clip: Option<[f32; 4]>,
     texture_id: u64,
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     primitive_order: u32,
 }
@@ -537,6 +552,8 @@ struct FlattenedUiViewportEmbedInstance {
     clip: Option<[f32; 4]>,
     viewport_id: u64,
     slot: ViewportSurfaceEmbedSlotId,
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     primitive_order: u32,
 }
@@ -546,6 +563,8 @@ struct FlattenedUiProductSurfaceInstance {
     raw: ViewportEmbedInstanceRaw,
     clip: Option<[f32; 4]>,
     source: ProductSurfaceTextureBindingSource,
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     primitive_order: u32,
 }
@@ -600,6 +619,8 @@ struct ProductSurfacePass {
 
 #[derive(Debug, Clone)]
 struct UiRectBatch {
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     first_primitive_order: u32,
     last_primitive_order: u32,
@@ -610,6 +631,8 @@ struct UiRectBatch {
 
 #[derive(Debug, Clone)]
 struct UiStrokeBatch {
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     first_primitive_order: u32,
     last_primitive_order: u32,
@@ -620,6 +643,8 @@ struct UiStrokeBatch {
 
 #[derive(Debug, Clone)]
 struct UiGlyphBatch {
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     first_primitive_order: u32,
     last_primitive_order: u32,
@@ -631,6 +656,8 @@ struct UiGlyphBatch {
 
 #[derive(Debug, Clone)]
 struct UiViewportEmbedBatch {
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     first_primitive_order: u32,
     last_primitive_order: u32,
@@ -643,6 +670,8 @@ struct UiViewportEmbedBatch {
 
 #[derive(Debug, Clone)]
 struct UiProductSurfaceBatch {
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     first_primitive_order: u32,
     last_primitive_order: u32,

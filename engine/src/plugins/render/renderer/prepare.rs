@@ -6,31 +6,80 @@ use crate::plugins::render::texture_upload::load_material_ktx2_upload;
 use crate::plugins::{PreparedUiFrameContribution, RenderFeatureId};
 use std::hash::{Hash, Hasher};
 
-type ScissoredRectBatch = (u32, u32, u32, (u32, u32, u32, u32), Vec<RectInstanceRaw>);
-type ScissoredStrokeBatch = (
-    u32,
-    u32,
-    u32,
-    (u32, u32, u32, u32),
-    Vec<StrokeSegmentInstanceRaw>,
-);
-type ScissoredViewportEmbedBatch = (
-    u32,
-    u32,
-    u32,
-    (u32, u32, u32, u32),
-    u64,
-    ViewportSurfaceEmbedSlotId,
-    Vec<ViewportEmbedInstanceRaw>,
-);
-type ScissoredProductSurfaceBatch = (
-    u32,
-    u32,
-    u32,
-    (u32, u32, u32, u32),
-    ProductSurfaceTextureBindingSource,
-    Vec<ViewportEmbedInstanceRaw>,
-);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct UiBatchOrder {
+    submission_order: u32,
+    surface_order: u32,
+    layer_order: u32,
+    first_primitive_order: u32,
+    last_primitive_order: u32,
+}
+
+impl UiBatchOrder {
+    fn new(
+        submission_order: u32,
+        surface_order: u32,
+        layer_order: u32,
+        primitive_order: u32,
+    ) -> Self {
+        Self {
+            submission_order,
+            surface_order,
+            layer_order,
+            first_primitive_order: primitive_order,
+            last_primitive_order: primitive_order,
+        }
+    }
+
+    fn can_extend(self, submission_order: u32, surface_order: u32, layer_order: u32) -> bool {
+        self.submission_order == submission_order
+            && self.surface_order == surface_order
+            && self.layer_order == layer_order
+    }
+
+    fn sort_key(self, family_order: u8) -> (u32, u32, u32, u32, u32, u8) {
+        (
+            self.submission_order,
+            self.surface_order,
+            self.layer_order,
+            self.first_primitive_order,
+            self.last_primitive_order,
+            family_order,
+        )
+    }
+}
+
+#[derive(Debug)]
+struct ScissoredPrimitiveBatch<T> {
+    order: UiBatchOrder,
+    scissor: (u32, u32, u32, u32),
+    instances: Vec<T>,
+}
+
+#[derive(Debug)]
+struct ScissoredGlyphBatch {
+    order: UiBatchOrder,
+    scissor: (u32, u32, u32, u32),
+    texture_id: u64,
+    instances: Vec<GlyphInstanceRaw>,
+}
+
+#[derive(Debug)]
+struct ScissoredViewportEmbedBatch {
+    order: UiBatchOrder,
+    scissor: (u32, u32, u32, u32),
+    viewport_id: u64,
+    slot: ViewportSurfaceEmbedSlotId,
+    instances: Vec<ViewportEmbedInstanceRaw>,
+}
+
+#[derive(Debug)]
+struct ScissoredProductSurfaceBatch {
+    order: UiBatchOrder,
+    scissor: (u32, u32, u32, u32),
+    source: ProductSurfaceTextureBindingSource,
+    instances: Vec<ViewportEmbedInstanceRaw>,
+}
 
 impl Renderer {
     pub(super) fn prepare_ui_draws(
@@ -47,27 +96,46 @@ impl Renderer {
         let flattened_rect_instances = contribution
             .submissions
             .iter()
-            .flat_map(|submission| Self::extract_rect_instances(&submission.frame))
+            .enumerate()
+            .flat_map(|(submission_order, submission)| {
+                Self::extract_rect_instances(submission_order as u32, &submission.frame)
+            })
             .collect::<Vec<_>>();
         let flattened_stroke_instances = contribution
             .submissions
             .iter()
-            .flat_map(|submission| Self::extract_stroke_instances(&submission.frame))
+            .enumerate()
+            .flat_map(|(submission_order, submission)| {
+                Self::extract_stroke_instances(submission_order as u32, &submission.frame)
+            })
             .collect::<Vec<_>>();
         let flattened_glyph_instances = contribution
             .submissions
             .iter()
-            .flat_map(|submission| Self::extract_glyph_instances(&submission.frame, atlas_resource))
+            .enumerate()
+            .flat_map(|(submission_order, submission)| {
+                Self::extract_glyph_instances(
+                    submission_order as u32,
+                    &submission.frame,
+                    atlas_resource,
+                )
+            })
             .collect::<Vec<_>>();
         let flattened_viewport_embed_instances = contribution
             .submissions
             .iter()
-            .flat_map(|submission| Self::extract_viewport_embed_instances(&submission.frame))
+            .enumerate()
+            .flat_map(|(submission_order, submission)| {
+                Self::extract_viewport_embed_instances(submission_order as u32, &submission.frame)
+            })
             .collect::<Vec<_>>();
         let flattened_product_surface_instances = contribution
             .submissions
             .iter()
-            .flat_map(|submission| Self::extract_product_surface_instances(&submission.frame))
+            .enumerate()
+            .flat_map(|(submission_order, submission)| {
+                Self::extract_product_surface_instances(submission_order as u32, &submission.frame)
+            })
             .collect::<Vec<_>>();
 
         let rect_batches = group_rect_batches_ordered(
@@ -76,26 +144,26 @@ impl Renderer {
             surface_height_u32,
         )
         .into_iter()
-        .filter_map(
-            |(layer_order, first_order, last_order, scissor, instances)| {
-                if instances.is_empty() {
-                    return None;
-                }
-                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                    label: Some("engine_ui_rect_batch_instances"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: BufferUsages::VERTEX,
-                });
-                Some(UiRectBatch {
-                    layer_order,
-                    first_primitive_order: first_order,
-                    last_primitive_order: last_order,
-                    scissor,
-                    instance_count: instances.len() as u32,
-                    instance_buffer,
-                })
-            },
-        )
+        .filter_map(|batch| {
+            if batch.instances.is_empty() {
+                return None;
+            }
+            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("engine_ui_rect_batch_instances"),
+                contents: bytemuck::cast_slice(&batch.instances),
+                usage: BufferUsages::VERTEX,
+            });
+            Some(UiRectBatch {
+                submission_order: batch.order.submission_order,
+                surface_order: batch.order.surface_order,
+                layer_order: batch.order.layer_order,
+                first_primitive_order: batch.order.first_primitive_order,
+                last_primitive_order: batch.order.last_primitive_order,
+                scissor: batch.scissor,
+                instance_count: batch.instances.len() as u32,
+                instance_buffer,
+            })
+        })
         .collect::<Vec<_>>();
 
         let stroke_batches = group_stroke_batches_ordered(
@@ -104,36 +172,29 @@ impl Renderer {
             surface_height_u32,
         )
         .into_iter()
-        .filter_map(
-            |(layer_order, first_order, last_order, scissor, instances)| {
-                if instances.is_empty() {
-                    return None;
-                }
-                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                    label: Some("engine_ui_stroke_batch_instances"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: BufferUsages::VERTEX,
-                });
-                Some(UiStrokeBatch {
-                    layer_order,
-                    first_primitive_order: first_order,
-                    last_primitive_order: last_order,
-                    scissor,
-                    instance_count: instances.len() as u32,
-                    instance_buffer,
-                })
-            },
-        )
+        .filter_map(|batch| {
+            if batch.instances.is_empty() {
+                return None;
+            }
+            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("engine_ui_stroke_batch_instances"),
+                contents: bytemuck::cast_slice(&batch.instances),
+                usage: BufferUsages::VERTEX,
+            });
+            Some(UiStrokeBatch {
+                submission_order: batch.order.submission_order,
+                surface_order: batch.order.surface_order,
+                layer_order: batch.order.layer_order,
+                first_primitive_order: batch.order.first_primitive_order,
+                last_primitive_order: batch.order.last_primitive_order,
+                scissor: batch.scissor,
+                instance_count: batch.instances.len() as u32,
+                instance_buffer,
+            })
+        })
         .collect::<Vec<_>>();
 
-        let mut glyph_batches_by_scissor = Vec::<(
-            u32,
-            u32,
-            u32,
-            (u32, u32, u32, u32),
-            u64,
-            Vec<GlyphInstanceRaw>,
-        )>::new();
+        let mut glyph_batches_by_scissor = Vec::<ScissoredGlyphBatch>::new();
         for instance in flattened_glyph_instances {
             let scissor = instance
                 .clip
@@ -148,56 +209,57 @@ impl Renderer {
             {
                 continue;
             }
-            if let Some((
-                last_layer_order,
-                _first_order,
-                last_order,
-                last_scissor,
-                last_texture,
-                instances,
-            )) = glyph_batches_by_scissor.last_mut()
-                && *last_layer_order == instance.layer_order
-                && *last_scissor == scissor
-                && *last_texture == instance.texture_id
-                && (*last_order == instance.primitive_order
-                    || last_order.saturating_add(1) == instance.primitive_order)
-            {
-                instances.push(instance.raw);
-                *last_order = instance.primitive_order;
-            } else {
-                glyph_batches_by_scissor.push((
+            if let Some(batch) = glyph_batches_by_scissor.last_mut()
+                && batch.order.can_extend(
+                    instance.submission_order,
+                    instance.surface_order,
                     instance.layer_order,
-                    instance.primitive_order,
-                    instance.primitive_order,
+                )
+                && batch.scissor == scissor
+                && batch.texture_id == instance.texture_id
+                && (batch.order.last_primitive_order == instance.primitive_order
+                    || batch.order.last_primitive_order.saturating_add(1)
+                        == instance.primitive_order)
+            {
+                batch.instances.push(instance.raw);
+                batch.order.last_primitive_order = instance.primitive_order;
+            } else {
+                glyph_batches_by_scissor.push(ScissoredGlyphBatch {
+                    order: UiBatchOrder::new(
+                        instance.submission_order,
+                        instance.surface_order,
+                        instance.layer_order,
+                        instance.primitive_order,
+                    ),
                     scissor,
-                    instance.texture_id,
-                    vec![instance.raw],
-                ));
+                    texture_id: instance.texture_id,
+                    instances: vec![instance.raw],
+                });
             }
         }
         let glyph_batches = glyph_batches_by_scissor
             .into_iter()
-            .filter_map(
-                |(layer_order, first_order, last_order, scissor, texture_id, instances)| {
-                    if instances.is_empty() {
-                        return None;
-                    }
-                    let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                        label: Some("engine_ui_glyph_batch_instances"),
-                        contents: bytemuck::cast_slice(&instances),
-                        usage: BufferUsages::VERTEX,
-                    });
-                    Some(UiGlyphBatch {
-                        layer_order,
-                        first_primitive_order: first_order,
-                        last_primitive_order: last_order,
-                        scissor,
-                        instance_count: instances.len() as u32,
-                        instance_buffer,
-                        texture_id,
-                    })
-                },
-            )
+            .filter_map(|batch| {
+                if batch.instances.is_empty() {
+                    return None;
+                }
+                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("engine_ui_glyph_batch_instances"),
+                    contents: bytemuck::cast_slice(&batch.instances),
+                    usage: BufferUsages::VERTEX,
+                });
+                Some(UiGlyphBatch {
+                    submission_order: batch.order.submission_order,
+                    surface_order: batch.order.surface_order,
+                    layer_order: batch.order.layer_order,
+                    first_primitive_order: batch.order.first_primitive_order,
+                    last_primitive_order: batch.order.last_primitive_order,
+                    scissor: batch.scissor,
+                    instance_count: batch.instances.len() as u32,
+                    instance_buffer,
+                    texture_id: batch.texture_id,
+                })
+            })
             .collect::<Vec<_>>();
         let viewport_embed_batches = group_viewport_embed_batches_ordered(
             flattened_viewport_embed_instances,
@@ -205,28 +267,28 @@ impl Renderer {
             surface_height_u32,
         )
         .into_iter()
-        .filter_map(
-            |(layer_order, first_order, last_order, scissor, viewport_id, slot, instances)| {
-                if instances.is_empty() {
-                    return None;
-                }
-                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                    label: Some("engine_ui_viewport_embed_batch_instances"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: BufferUsages::VERTEX,
-                });
-                Some(UiViewportEmbedBatch {
-                    layer_order,
-                    first_primitive_order: first_order,
-                    last_primitive_order: last_order,
-                    scissor,
-                    instance_count: instances.len() as u32,
-                    instance_buffer,
-                    viewport_id,
-                    slot,
-                })
-            },
-        )
+        .filter_map(|batch| {
+            if batch.instances.is_empty() {
+                return None;
+            }
+            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("engine_ui_viewport_embed_batch_instances"),
+                contents: bytemuck::cast_slice(&batch.instances),
+                usage: BufferUsages::VERTEX,
+            });
+            Some(UiViewportEmbedBatch {
+                submission_order: batch.order.submission_order,
+                surface_order: batch.order.surface_order,
+                layer_order: batch.order.layer_order,
+                first_primitive_order: batch.order.first_primitive_order,
+                last_primitive_order: batch.order.last_primitive_order,
+                scissor: batch.scissor,
+                instance_count: batch.instances.len() as u32,
+                instance_buffer,
+                viewport_id: batch.viewport_id,
+                slot: batch.slot,
+            })
+        })
         .collect::<Vec<_>>();
         let product_surface_batches = group_product_surface_batches_ordered(
             flattened_product_surface_instances,
@@ -234,27 +296,27 @@ impl Renderer {
             surface_height_u32,
         )
         .into_iter()
-        .filter_map(
-            |(layer_order, first_order, last_order, scissor, source, instances)| {
-                if instances.is_empty() {
-                    return None;
-                }
-                let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                    label: Some("engine_ui_product_surface_batch_instances"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: BufferUsages::VERTEX,
-                });
-                Some(UiProductSurfaceBatch {
-                    layer_order,
-                    first_primitive_order: first_order,
-                    last_primitive_order: last_order,
-                    scissor,
-                    instance_count: instances.len() as u32,
-                    instance_buffer,
-                    source,
-                })
-            },
-        )
+        .filter_map(|batch| {
+            if batch.instances.is_empty() {
+                return None;
+            }
+            let instance_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("engine_ui_product_surface_batch_instances"),
+                contents: bytemuck::cast_slice(&batch.instances),
+                usage: BufferUsages::VERTEX,
+            });
+            Some(UiProductSurfaceBatch {
+                submission_order: batch.order.submission_order,
+                surface_order: batch.order.surface_order,
+                layer_order: batch.order.layer_order,
+                first_primitive_order: batch.order.first_primitive_order,
+                last_primitive_order: batch.order.last_primitive_order,
+                scissor: batch.scissor,
+                instance_count: batch.instances.len() as u32,
+                instance_buffer,
+                source: batch.source,
+            })
+        })
         .collect::<Vec<_>>();
 
         if let Some(rect_pass) = self.rect_pass.as_ref() {
@@ -600,8 +662,8 @@ fn group_rect_batches_ordered(
     flattened_rect_instances: Vec<FlattenedUiRectInstance>,
     surface_width_u32: u32,
     surface_height_u32: u32,
-) -> Vec<ScissoredRectBatch> {
-    let mut grouped = Vec::<ScissoredRectBatch>::new();
+) -> Vec<ScissoredPrimitiveBatch<RectInstanceRaw>> {
+    let mut grouped = Vec::<ScissoredPrimitiveBatch<RectInstanceRaw>>::new();
     for instance in flattened_rect_instances {
         let scissor = instance
             .clip
@@ -615,22 +677,28 @@ fn group_rect_batches_ordered(
         let Some(scissor) = scissor else {
             continue;
         };
-        if let Some((last_layer_order, _first_order, last_order, last_scissor, instances)) =
-            grouped.last_mut()
-            && *last_layer_order == instance.layer_order
-            && *last_scissor == scissor
-            && last_order.saturating_add(1) == instance.primitive_order
-        {
-            instances.push(instance.raw);
-            *last_order = instance.primitive_order;
-        } else {
-            grouped.push((
+        if let Some(batch) = grouped.last_mut()
+            && batch.order.can_extend(
+                instance.submission_order,
+                instance.surface_order,
                 instance.layer_order,
-                instance.primitive_order,
-                instance.primitive_order,
+            )
+            && batch.scissor == scissor
+            && batch.order.last_primitive_order.saturating_add(1) == instance.primitive_order
+        {
+            batch.instances.push(instance.raw);
+            batch.order.last_primitive_order = instance.primitive_order;
+        } else {
+            grouped.push(ScissoredPrimitiveBatch {
+                order: UiBatchOrder::new(
+                    instance.submission_order,
+                    instance.surface_order,
+                    instance.layer_order,
+                    instance.primitive_order,
+                ),
                 scissor,
-                vec![instance.raw],
-            ));
+                instances: vec![instance.raw],
+            });
         }
     }
     grouped
@@ -640,8 +708,8 @@ fn group_stroke_batches_ordered(
     flattened_instances: Vec<FlattenedUiStrokeSegmentInstance>,
     surface_width_u32: u32,
     surface_height_u32: u32,
-) -> Vec<ScissoredStrokeBatch> {
-    let mut grouped = Vec::<ScissoredStrokeBatch>::new();
+) -> Vec<ScissoredPrimitiveBatch<StrokeSegmentInstanceRaw>> {
+    let mut grouped = Vec::<ScissoredPrimitiveBatch<StrokeSegmentInstanceRaw>>::new();
     for instance in flattened_instances {
         let scissor = instance
             .clip
@@ -655,23 +723,29 @@ fn group_stroke_batches_ordered(
         let Some(scissor) = scissor else {
             continue;
         };
-        if let Some((last_layer_order, _first_order, last_order, last_scissor, instances)) =
-            grouped.last_mut()
-            && *last_layer_order == instance.layer_order
-            && *last_scissor == scissor
-            && (*last_order == instance.primitive_order
-                || last_order.saturating_add(1) == instance.primitive_order)
-        {
-            instances.push(instance.raw);
-            *last_order = instance.primitive_order;
-        } else {
-            grouped.push((
+        if let Some(batch) = grouped.last_mut()
+            && batch.order.can_extend(
+                instance.submission_order,
+                instance.surface_order,
                 instance.layer_order,
-                instance.primitive_order,
-                instance.primitive_order,
+            )
+            && batch.scissor == scissor
+            && (batch.order.last_primitive_order == instance.primitive_order
+                || batch.order.last_primitive_order.saturating_add(1) == instance.primitive_order)
+        {
+            batch.instances.push(instance.raw);
+            batch.order.last_primitive_order = instance.primitive_order;
+        } else {
+            grouped.push(ScissoredPrimitiveBatch {
+                order: UiBatchOrder::new(
+                    instance.submission_order,
+                    instance.surface_order,
+                    instance.layer_order,
+                    instance.primitive_order,
+                ),
                 scissor,
-                vec![instance.raw],
-            ));
+                instances: vec![instance.raw],
+            });
         }
     }
     grouped
@@ -696,33 +770,32 @@ fn group_viewport_embed_batches_ordered(
         let Some(scissor) = scissor else {
             continue;
         };
-        if let Some((
-            last_layer_order,
-            _first_order,
-            last_order,
-            last_scissor,
-            last_viewport_id,
-            last_slot,
-            instances,
-        )) = grouped.last_mut()
-            && *last_layer_order == instance.layer_order
-            && *last_scissor == scissor
-            && *last_viewport_id == instance.viewport_id
-            && *last_slot == instance.slot
-            && last_order.saturating_add(1) == instance.primitive_order
-        {
-            instances.push(instance.raw);
-            *last_order = instance.primitive_order;
-        } else {
-            grouped.push((
+        if let Some(batch) = grouped.last_mut()
+            && batch.order.can_extend(
+                instance.submission_order,
+                instance.surface_order,
                 instance.layer_order,
-                instance.primitive_order,
-                instance.primitive_order,
+            )
+            && batch.scissor == scissor
+            && batch.viewport_id == instance.viewport_id
+            && batch.slot == instance.slot
+            && batch.order.last_primitive_order.saturating_add(1) == instance.primitive_order
+        {
+            batch.instances.push(instance.raw);
+            batch.order.last_primitive_order = instance.primitive_order;
+        } else {
+            grouped.push(ScissoredViewportEmbedBatch {
+                order: UiBatchOrder::new(
+                    instance.submission_order,
+                    instance.surface_order,
+                    instance.layer_order,
+                    instance.primitive_order,
+                ),
                 scissor,
-                instance.viewport_id,
-                instance.slot,
-                vec![instance.raw],
-            ));
+                viewport_id: instance.viewport_id,
+                slot: instance.slot,
+                instances: vec![instance.raw],
+            });
         }
     }
     grouped
@@ -747,30 +820,30 @@ fn group_product_surface_batches_ordered(
         let Some(scissor) = scissor else {
             continue;
         };
-        if let Some((
-            last_layer_order,
-            _first_order,
-            last_order,
-            last_scissor,
-            last_source,
-            instances,
-        )) = grouped.last_mut()
-            && *last_layer_order == instance.layer_order
-            && *last_scissor == scissor
-            && *last_source == instance.source
-            && last_order.saturating_add(1) == instance.primitive_order
-        {
-            instances.push(instance.raw);
-            *last_order = instance.primitive_order;
-        } else {
-            grouped.push((
+        if let Some(batch) = grouped.last_mut()
+            && batch.order.can_extend(
+                instance.submission_order,
+                instance.surface_order,
                 instance.layer_order,
-                instance.primitive_order,
-                instance.primitive_order,
+            )
+            && batch.scissor == scissor
+            && batch.source == instance.source
+            && batch.order.last_primitive_order.saturating_add(1) == instance.primitive_order
+        {
+            batch.instances.push(instance.raw);
+            batch.order.last_primitive_order = instance.primitive_order;
+        } else {
+            grouped.push(ScissoredProductSurfaceBatch {
+                order: UiBatchOrder::new(
+                    instance.submission_order,
+                    instance.surface_order,
+                    instance.layer_order,
+                    instance.primitive_order,
+                ),
                 scissor,
-                instance.source,
-                vec![instance.raw],
-            ));
+                source: instance.source,
+                instances: vec![instance.raw],
+            });
         }
     }
     grouped
@@ -849,52 +922,62 @@ fn draw_command_sort_key(
     glyph_batches: &[UiGlyphBatch],
     viewport_embed_batches: &[UiViewportEmbedBatch],
     product_surface_batches: &[UiProductSurfaceBatch],
-) -> (u32, u32, u32, u8) {
+) -> (u32, u32, u32, u32, u32, u8) {
     match command {
         UiPreparedDrawCommand::Rect(index) => {
             let batch = &rect_batches[index];
-            (
-                batch.layer_order,
-                batch.first_primitive_order,
-                batch.last_primitive_order,
-                0,
-            )
+            UiBatchOrder {
+                submission_order: batch.submission_order,
+                surface_order: batch.surface_order,
+                layer_order: batch.layer_order,
+                first_primitive_order: batch.first_primitive_order,
+                last_primitive_order: batch.last_primitive_order,
+            }
+            .sort_key(0)
         }
         UiPreparedDrawCommand::Stroke(index) => {
             let batch = &stroke_batches[index];
-            (
-                batch.layer_order,
-                batch.first_primitive_order,
-                batch.last_primitive_order,
-                1,
-            )
+            UiBatchOrder {
+                submission_order: batch.submission_order,
+                surface_order: batch.surface_order,
+                layer_order: batch.layer_order,
+                first_primitive_order: batch.first_primitive_order,
+                last_primitive_order: batch.last_primitive_order,
+            }
+            .sort_key(1)
         }
         UiPreparedDrawCommand::ViewportEmbed(index) => {
             let batch = &viewport_embed_batches[index];
-            (
-                batch.layer_order,
-                batch.first_primitive_order,
-                batch.last_primitive_order,
-                2,
-            )
+            UiBatchOrder {
+                submission_order: batch.submission_order,
+                surface_order: batch.surface_order,
+                layer_order: batch.layer_order,
+                first_primitive_order: batch.first_primitive_order,
+                last_primitive_order: batch.last_primitive_order,
+            }
+            .sort_key(2)
         }
         UiPreparedDrawCommand::ProductSurface(index) => {
             let batch = &product_surface_batches[index];
-            (
-                batch.layer_order,
-                batch.first_primitive_order,
-                batch.last_primitive_order,
-                2,
-            )
+            UiBatchOrder {
+                submission_order: batch.submission_order,
+                surface_order: batch.surface_order,
+                layer_order: batch.layer_order,
+                first_primitive_order: batch.first_primitive_order,
+                last_primitive_order: batch.last_primitive_order,
+            }
+            .sort_key(2)
         }
         UiPreparedDrawCommand::Glyph(index) => {
             let batch = &glyph_batches[index];
-            (
-                batch.layer_order,
-                batch.first_primitive_order,
-                batch.last_primitive_order,
-                3,
-            )
+            UiBatchOrder {
+                submission_order: batch.submission_order,
+                surface_order: batch.surface_order,
+                layer_order: batch.layer_order,
+                first_primitive_order: batch.first_primitive_order,
+                last_primitive_order: batch.last_primitive_order,
+            }
+            .sort_key(3)
         }
     }
 }
@@ -1136,9 +1219,12 @@ mod tests {
                 rect: [0.0, 0.0, 10.0, 10.0],
                 color: [1.0, 1.0, 1.0, 1.0],
                 radius: 0.0,
-                _pad: [0.0; 3],
+                border_width: 0.0,
+                _pad: [0.0; 2],
             },
             clip: Some([0.0, 0.0, 10.0, 10.0]),
+            submission_order: 0,
+            surface_order: 0,
             layer_order: 0,
             primitive_order: 1,
         };
@@ -1147,9 +1233,12 @@ mod tests {
                 rect: [20.0, 0.0, 10.0, 10.0],
                 color: [1.0, 1.0, 1.0, 1.0],
                 radius: 0.0,
-                _pad: [0.0; 3],
+                border_width: 0.0,
+                _pad: [0.0; 2],
             },
             clip: Some([20.0, 0.0, 10.0, 10.0]),
+            submission_order: 0,
+            surface_order: 0,
             layer_order: 0,
             primitive_order: 3,
         };
@@ -1158,17 +1247,69 @@ mod tests {
                 rect: [1.0, 1.0, 8.0, 8.0],
                 color: [1.0, 1.0, 1.0, 1.0],
                 radius: 0.0,
-                _pad: [0.0; 3],
+                border_width: 0.0,
+                _pad: [0.0; 2],
             },
             clip: Some([0.0, 0.0, 10.0, 10.0]),
+            submission_order: 0,
+            surface_order: 0,
             layer_order: 0,
             primitive_order: 5,
         };
         let grouped = group_rect_batches_ordered(vec![a, b, c], 100, 100);
         assert_eq!(grouped.len(), 3);
-        assert_eq!(grouped[0].4.len(), 1);
-        assert_eq!(grouped[1].4.len(), 1);
-        assert_eq!(grouped[2].4.len(), 1);
+        assert_eq!(grouped[0].instances.len(), 1);
+        assert_eq!(grouped[1].instances.len(), 1);
+        assert_eq!(grouped[2].instances.len(), 1);
+    }
+
+    #[test]
+    fn rect_batch_grouping_splits_submission_and_surface_boundaries() {
+        let make_instance =
+            |submission_order, surface_order, primitive_order| FlattenedUiRectInstance {
+                raw: RectInstanceRaw {
+                    rect: [primitive_order as f32, 0.0, 10.0, 10.0],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    radius: 0.0,
+                    border_width: 0.0,
+                    _pad: [0.0; 2],
+                },
+                clip: Some([0.0, 0.0, 100.0, 100.0]),
+                submission_order,
+                surface_order,
+                layer_order: 0,
+                primitive_order,
+            };
+
+        let grouped = group_rect_batches_ordered(
+            vec![
+                make_instance(0, 0, 0),
+                make_instance(0, 0, 1),
+                make_instance(0, 1, 2),
+                make_instance(1, 1, 3),
+            ],
+            100,
+            100,
+        );
+
+        assert_eq!(grouped.len(), 3);
+        assert_eq!(grouped[0].order.submission_order, 0);
+        assert_eq!(grouped[0].order.surface_order, 0);
+        assert_eq!(grouped[0].instances.len(), 2);
+        assert_eq!(grouped[1].order.surface_order, 1);
+        assert_eq!(grouped[1].instances.len(), 1);
+        assert_eq!(grouped[2].order.submission_order, 1);
+        assert_eq!(grouped[2].instances.len(), 1);
+    }
+
+    #[test]
+    fn draw_order_key_prioritizes_submission_surface_and_layer_before_family() {
+        let glyph_before_later_surface_rect = UiBatchOrder::new(0, 0, 0, 8).sort_key(3);
+        let rect_on_later_surface = UiBatchOrder::new(0, 1, 0, 0).sort_key(0);
+        let rect_on_later_submission = UiBatchOrder::new(1, 0, 0, 0).sort_key(0);
+
+        assert!(glyph_before_later_surface_rect < rect_on_later_surface);
+        assert!(rect_on_later_surface < rect_on_later_submission);
     }
 
     #[test]

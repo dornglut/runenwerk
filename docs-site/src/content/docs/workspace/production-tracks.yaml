@@ -6060,6 +6060,42 @@ tracks:
     known_quality_gaps:
     - Does not perform deferred ui_definition crate decomposition, ui_surface semantic cleanup, render primitive registry redesign, or physical domain folder moves unless validation proves they are story-proof bypass paths.
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+  - id: PM-UI-STORY-HARDEN-002
+    title: Story Gallery Composition And Renderer Ordering Hardening
+    kind: hardening
+    state: completed
+    goal: Harden gallery preview composition and renderer UI draw ordering before the PM-005 no-gap audit by eliminating overlapping raw story surfaces, preserving submission and surface order through renderer batches, and preserving border width in the rect/border GPU path.
+    outcome: Eligible gallery story previews are composed into deterministic clipped tiles, UI renderer draw plans preserve submission, surface, layer, and primitive ordering before primitive-family tie-breaks, and border primitives reach the shader as outline rings instead of filled rectangles.
+    dependencies:
+    - PM-UI-STORY-HARDEN-001
+    roadmap_links:
+    - WR-179
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Gallery preview publication must remain story-report and mount-eligibility driven.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+      required_status: active
+      reason: Renderer hardening must preserve renderer-owned lowering and ordering without taking authored UI semantic ownership.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/implementation-plans/wr-179-story-gallery-composition-and-renderer-ordering-hardening/plan.md
+      required_status: active
+      reason: PM-UI-STORY-HARDEN-002 requires an accepted bounded implementation plan before product-code hardening.
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-002-story-gallery-composition-and-renderer-ordering-hardening/closeout.md
+      required_status: completed
+      reason: PM-UI-STORY-HARDEN-002 must close with composition, renderer-ordering, border, governance, and validation evidence before PM-005 starts.
+    acceptance_criteria:
+    - Asset-backed story execution still goes through `UiStoryRunReport` and `UiStoryMountEligibility`.
+    - Only mount-eligible story reports are composed into preview tiles; expected-failure stories remain non-mounted and failed reports cannot publish a preview frame.
+    - Gallery preview frames have one output surface, clipped tile slots, deterministic tile placement, and no raw duplicate source `UiSurfaceId(0)` leakage.
+    - UI renderer extraction and batching preserve submission order, composed surface order, layer order, and primitive order before primitive-family tie-breaks.
+    - Border primitives preserve `BorderPrimitive.width` into GPU instance data and render as outlines instead of filled rectangles.
+    completion_quality: runtime_proven
+    known_quality_gaps:
+    - Rich visible gallery labels/status, screenshot capture, GPU pixel-golden tests, broader component maturity, Designer/Workbench UI, and game/world UI remain out of this hardening slice.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-002-story-gallery-composition-and-renderer-ordering-hardening/closeout.md
   - id: PM-UI-STORY-005
     title: Story Platform No-Gap Audit And Closeout
     kind: release
@@ -6067,7 +6103,7 @@ tracks:
     goal: Complete a no-gap audit proving the story proof substrate has no known bypass paths, stale truth, undocumented risks, or deferred quality gaps inside the accepted story scope.
     outcome: PT-UI-STORY-PLATFORM can claim perfectionist_verified only after current evidence, audits, closeouts, and generated planning state all agree with zero known gaps and zero known risks inside the story proof substrate boundary.
     dependencies:
-    - PM-UI-STORY-HARDEN-001
+    - PM-UI-STORY-HARDEN-002
     roadmap_links: []
     design_gates:
     - kind: design

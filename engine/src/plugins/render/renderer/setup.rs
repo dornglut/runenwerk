@@ -178,6 +178,11 @@ impl Renderer {
                             offset: 32,
                             shader_location: 2,
                         },
+                        VertexAttribute {
+                            format: VertexFormat::Float32,
+                            offset: 36,
+                            shader_location: 3,
+                        },
                     ],
                 }],
             },

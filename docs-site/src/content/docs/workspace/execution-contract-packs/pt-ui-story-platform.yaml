@@ -1,10 +1,10 @@
 version: 1
 track_id: PT-UI-STORY-PLATFORM
-generated_at: '2026-06-17T07:01:25Z'
+generated_at: '2026-06-17T08:12:58Z'
 source_digests:
-  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml: fccf25930fb38366cebd41a7d05304e000c4006dacaa155584be079175d0edf4
-  docs-site/src/content/docs/workspace/production-tracks.yaml: d3d975fd07d0373507b694ee418030ea2e9c5073d3a2afdceda830a2e0248d0a
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 97d39e948a116a63ef3a8ef304bc58a8eec456557b143c3251ac6bef2f9b6913
+  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml: 12ba881b6c8733a1545d8d5bdc175af51ea43030d6ba488d046807ebf319abad
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 17b9f7bbba86106c1183b1c28d30300c71d0f01f8f3038696d9a047b3326dae4
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 85f9b6a532aac3c55e65f460b71316774e1f6c39445e2ae72c18fef3a5731cd9
   docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
   docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
   docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e

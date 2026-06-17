@@ -460,6 +460,8 @@ package "PT-UI-STORY-PLATFORM UI Story Platform" {
 
   component "PM-UI-STORY-HARDEN-001 Story Proof Contract And Asset Manifest Hardening\nkind=hardening\nstate=completed\nWR=WR-178" as PM_UI_STORY_HARDEN_001 <<completed>>
 
+  component "PM-UI-STORY-HARDEN-002 Story Gallery Composition And Renderer Ordering Hardening\nkind=hardening\nstate=completed\nWR=WR-179" as PM_UI_STORY_HARDEN_002 <<completed>>
+
   component "PM-UI-STORY-005 Story Platform No-Gap Audit And Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_STORY_005 <<designing>>
 
 }
@@ -745,7 +747,8 @@ PM_UI_STORY_001 -down-> PM_UI_STORY_002 : production prerequisite
 PM_UI_STORY_002 -down-> PM_UI_STORY_003 : production prerequisite
 PM_UI_STORY_003 -down-> PM_UI_STORY_004 : production prerequisite
 PM_UI_STORY_004 -down-> PM_UI_STORY_HARDEN_001 : production prerequisite
-PM_UI_STORY_HARDEN_001 -down-> PM_UI_STORY_005 : production prerequisite
+PM_UI_STORY_HARDEN_001 -down-> PM_UI_STORY_HARDEN_002 : production prerequisite
+PM_UI_STORY_HARDEN_002 -down-> PM_UI_STORY_005 : production prerequisite
 PM_UI_STORY_004 -down-> PM_UI_COMPONENT_001 : production prerequisite
 PM_UI_COMPONENT_001 -down-> PM_UI_COMPONENT_002 : production prerequisite
 PM_UI_COMPONENT_002 -down-> PM_UI_COMPONENT_003 : production prerequisite

@@ -1201,6 +1201,172 @@ milestones:
     template_key: ui_story_platform_product_code
     generated_contract_marker: PT-UI-STORY-PLATFORM-STORY-PROOF-HARDENING
     generated_from_template_version: v1
+- milestone_id: PM-UI-STORY-HARDEN-002
+  title: Story Gallery Composition And Renderer Ordering Hardening
+  stage: Stage 4B
+  authority_level: future_wr_and_plan_required
+  milestone_type: hardening
+  owning_wr: WR-179
+  predecessor_dependencies:
+  - PM-UI-STORY-HARDEN-001
+  write_scope:
+  - domain/ui/ui_render_data/src/frame/composition.rs
+  - domain/ui/ui_render_data/src/frame/mod.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - engine/src/plugins/render/renderer/mod.rs
+  - engine/src/plugins/render/renderer/extract.rs
+  - engine/src/plugins/render/renderer/prepare.rs
+  - engine/src/plugins/render/renderer/setup.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-179-story-gallery-composition-and-renderer-ordering-hardening/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-002-story-gallery-composition-and-renderer-ordering-hardening/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  forbidden_scope:
+  - no PM-UI-STORY-005 product code
+  - no new crates
+  - no gallery preview path that bypasses `UiStoryRunReport` or `UiStoryMountEligibility`
+  - no renderer-owned authored UI semantics
+  - no ECS-owned UI semantics
+  - no editor-owned or game-owned UI product truth
+  - no reusable component maturity
+  - no Designer/Workbench product authoring
+  - no game HUD behavior
+  - no world-space or entity-attached UI
+  - no screenshot capture or GPU pixel-golden framework in this slice
+  required_contracts:
+  - gallery previews compose mount-eligible stories into deterministic clipped tiles instead of appending raw mounted story surfaces
+  - expected-failure stories and failed reports never publish preview frames
+  - ui_render_data owns backend-neutral frame-fragment composition helpers
+  - renderer extraction and batching preserve submission, surface, layer, and primitive order before primitive-family tie-breaks
+  - BorderPrimitive width reaches rect GPU instance data and border rendering is an outline ring, not a filled rectangle
+  validation_commands:
+  - cargo fmt --check
+  - cargo check --workspace
+  - cargo test -p ui_render_data composition
+  - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+  - cargo test -p runenwerk_editor story
+  - cargo test -p engine extract_border_instances_preserves_border_width_and_order
+  - cargo test -p engine rect_batch_grouping_splits_submission_and_surface_boundaries
+  - cargo test -p engine draw_order_key_prioritizes_submission_surface_and_layer_before_family
+  - cargo test -p engine ui
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  evidence_gates:
+  - accepted_implementation_plan
+  - ui_render_data_composition_tests
+  - gallery_tile_composition_tests
+  - renderer_ordering_tests
+  - border_width_tests
+  - production_validation
+  - roadmap_validation
+  - docs_validation
+  - planning_validation
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-002-story-gallery-composition-and-renderer-ordering-hardening/closeout.md
+  stop_conditions:
+  - stop if story previews can overlap through duplicate raw source surface ids
+  - stop if any failed or expected-failure report becomes gallery mount eligible
+  - stop if draw-plan sorting can place glyphs from one surface after rects from a later surface
+  - stop if border primitives are lowered as filled rectangles
+  - stop if deferred component, designer, game HUD, world-space, screenshot, or GPU pixel-golden work becomes required
+  next_legal_action: PM-UI-STORY-005 no-gap audit can start only after WR-179 closeout evidence remains current.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - product_code
+  - docs_update
+  - validation
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/wr-179-story-gallery-composition-and-renderer-ordering-hardening/plan.md
+    exact_allowed_implementation_write_scopes:
+    - domain/ui/ui_render_data/src/frame/composition.rs
+    - domain/ui/ui_render_data/src/frame/mod.rs
+    - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+    - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+    - engine/src/plugins/render/renderer/mod.rs
+    - engine/src/plugins/render/renderer/extract.rs
+    - engine/src/plugins/render/renderer/prepare.rs
+    - engine/src/plugins/render/renderer/setup.rs
+    required_function_method_scope:
+    - '`compose_frame_fragments`'
+    - '`UiGalleryResource::from_story_executions`'
+    - '`UiGalleryResource::from_checked_in_stories_for_render_target`'
+    - '`Renderer::extract_rect_instances`'
+    - '`Renderer::extract_stroke_instances`'
+    - '`Renderer::extract_glyph_instances`'
+    - '`Renderer::extract_viewport_embed_instances`'
+    - '`Renderer::extract_product_surface_instances`'
+    - '`group_rect_batches_ordered`'
+    - '`group_stroke_batches_ordered`'
+    - '`group_viewport_embed_batches_ordered`'
+    - '`group_product_surface_batches_ordered`'
+    - '`build_ui_draw_plan`'
+    - '`DEFAULT_UI_RECT_SHADER`'
+    forbidden_implementation_scopes:
+    - domain/ui/ui_story proof semantics beyond consumption
+    - domain/ui/ui_definition crate decomposition
+    - domain/ui/ui_surface semantic redesign
+    - domain/ui/ui_controls maturity expansion
+    - apps/runenwerk_editor Visual UI Builder product work
+    - game-runtime HUD behavior
+    - world-space or entity-attached UI
+    tests_to_add_change:
+    - cargo test -p ui_render_data composition
+    - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+    - cargo test -p engine extract_border_instances_preserves_border_width_and_order
+    - cargo test -p engine rect_batch_grouping_splits_submission_and_surface_boundaries
+    - cargo test -p engine draw_order_key_prioritizes_submission_surface_and_layer_before_family
+    runtime_evidence_required:
+    - two passing button stories compose into non-overlapping preview tiles
+    - duplicate source `UiSurfaceId(0)` does not leak into the composed gallery frame
+    - expected-failure stories do not mount
+    - failed reports cannot publish preview frames
+    - renderer ordering preserves submission, surface, layer, and primitive order before primitive family
+    - border width is preserved into flattened renderer data
+    validation_commands:
+    - cargo fmt --check
+    - cargo check --workspace
+    - cargo test -p ui_render_data composition
+    - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+    - cargo test -p runenwerk_editor story
+    - cargo test -p engine extract_border_instances_preserves_border_width_and_order
+    - cargo test -p engine rect_batch_grouping_splits_submission_and_surface_boundaries
+    - cargo test -p engine draw_order_key_prioritizes_submission_surface_and_layer_before_family
+    - cargo test -p engine ui
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task docs:validate
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - story proof semantics remain report-driven through existing `UiStoryRunReport` and `UiStoryMountEligibility`
+    - renderer owns backend drawing order and primitive lowering only, not authored UI semantics
+    closeout_evidence:
+    - closeout with composition, renderer_ordering, border_width, gallery_no_bypass, and governance evidence
+    stop_conditions:
+    - stop if story previews can overlap through duplicate raw source surface ids
+    - stop if any failed or expected-failure report becomes gallery mount eligible
+    - stop if draw-plan sorting can place glyphs from one surface after rects from a later surface
+    - stop if border primitives are lowered as filled rectangles
+    - stop if deferred component, designer, game HUD, world-space, screenshot, or GPU pixel-golden work becomes required
+    template_key: ui_story_platform_product_code
+    generated_contract_marker: PT-UI-STORY-PLATFORM-GALLERY-RENDERER-HARDENING
+    generated_from_template_version: v1
 - milestone_id: PM-UI-STORY-005
   title: Story Platform No-Gap Audit And Closeout
   stage: Stage 4
@@ -1208,7 +1374,7 @@ milestones:
   milestone_type: closeout
   future_wr_candidate: WR-TBD-UI-STORY-005
   predecessor_dependencies:
-  - PM-UI-STORY-HARDEN-001
+  - PM-UI-STORY-HARDEN-002
   write_scope:
   - docs-site/src/content/docs/reports/closeouts/pm-ui-story-005-story-platform-no-gap-audit-and-closeout/closeout.md
   - docs-site/src/content/docs/reports/truth-certificates/pt-ui-story-platform
@@ -1254,7 +1420,7 @@ milestones:
   - stop if any story substrate milestone lacks current closeout evidence
   - stop if any known story substrate gap remains
   - stop if closeout claims component, designer, game HUD, or world-space completion
-  next_legal_action: Expand or link PM-UI-STORY-005 only after PM-UI-STORY-HARDEN-001 closeout evidence remains current.
+  next_legal_action: Expand or link PM-UI-STORY-005 only after PM-UI-STORY-HARDEN-002 closeout evidence remains current.
   may_create_code: false
   may_create_crates: false
   may_modify_production_behavior: false

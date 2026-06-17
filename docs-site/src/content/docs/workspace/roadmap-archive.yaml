@@ -12287,3 +12287,105 @@ items:
   adr_requirement: No ADR required for bounded proof/report/manifest hardening. Require ADR or accepted design update before changing durable UI definition ownership, dependency direction, renderer semantics, component platform ownership, or product authoring contracts.
   fitness_function_requirement: Focused ui_story manifest/proof/expected-failure tests, runenwerk_editor story no-bypass tests, workspace cargo check, and production/roadmap/docs/planning validators.
   ownership_mode: Domain UI proof-substrate hardening with editor adapter consumption.
+- id: WR-179
+  title: Story Gallery Composition And Renderer Ordering Hardening
+  diagram_title: Story gallery composition
+  alias: UISTORYHARDEN2
+  lane: UI story platform
+  dependency_level: L1
+  gate: PM-UI-STORY-HARDEN-002 prerequisite before PM-005
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 4
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: N/A
+  kano: Basic
+  dependencies:
+  - WR-178
+  write_scopes:
+  - domain/ui/ui_render_data/src/frame/composition.rs
+  - domain/ui/ui_render_data/src/frame/mod.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - engine/src/plugins/render/renderer/mod.rs
+  - engine/src/plugins/render/renderer/extract.rs
+  - engine/src/plugins/render/renderer/prepare.rs
+  - engine/src/plugins/render/renderer/setup.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-179-story-gallery-composition-and-renderer-ordering-hardening/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-002-story-gallery-composition-and-renderer-ordering-hardening/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt --check
+  - cargo check --workspace
+  - cargo test -p ui_render_data composition
+  - cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+  - cargo test -p runenwerk_editor story
+  - cargo test -p engine extract_border_instances_preserves_border_width_and_order
+  - cargo test -p engine rect_batch_grouping_splits_submission_and_surface_boundaries
+  - cargo test -p engine draw_order_key_prioritizes_submission_surface_and_layer_before_family
+  - cargo test -p engine ui
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-STORY-HARDEN-002 closed with tiled gallery composition, renderer draw-order preservation, border-width preservation, closeout evidence, and production/roadmap/docs/planning validation before PM-UI-STORY-005.
+  current_decision: WR-179 completed the bounded story-platform hardening row for ui_render_data frame composition, editor gallery adapters, and renderer UI lowering/order; PM-005 remains closeout-only.
+  current_call: Hardening is complete; PM-UI-STORY-005 remains the closeout-only no-gap audit after WR-179 evidence.
+  first_move: Follow PM-UI-STORY-005 closeout-only manifest authority before any further story-platform claims.
+  main_blocker: N/A; WR-179 closed the gallery composition and renderer ordering blocker before PM-005.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Rich visible gallery labels/status, screenshot capture, GPU pixel-golden tests, broader component maturity, Designer/Workbench UI, and game/world UI remain out of this hardening slice.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-002-story-gallery-composition-and-renderer-ordering-hardening/closeout.md
+  diagram_call:
+  - tiled story previews
+  - renderer UI order
+  - border width preserved
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: Gallery preview publication must remain story-report and mount-eligibility driven.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+    required_status: active
+    applies_to: implementation
+    reason: Renderer changes must remain backend lowering/order work and must not own authored UI semantics.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+    required_status: completed
+    applies_to: implementation
+    reason: WR-179 depended on the completed story proof contract and asset manifest hardening prerequisite.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-179-story-gallery-composition-and-renderer-ordering-hardening/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-179 followed the bounded hardening implementation contract.
+  ddd_owner: domain/ui/ui_render_data frame composition with apps/runenwerk_editor gallery adapter and engine render plugin UI lowering/order ownership
+  adr_requirement: No ADR for bounded frame composition, adapter tiling, renderer order fields, or border-width instance data. Require ADR or accepted design update before renderer owns authored UI semantics, before gallery bypasses story reports, or before broader UI component/designer/game/world ownership moves.
+  fitness_function_requirement: Focused ui_render_data composition tests, gallery no-overlap/no-bypass tests, renderer ordering tests, border-width tests, production/roadmap/docs/planning validators.
+  ownership_mode: UI story hardening with domain UI contracts, editor adapter composition, and renderer backend-order collaboration.

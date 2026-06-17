@@ -7,7 +7,10 @@ use ui_render_data::{
 };
 
 impl Renderer {
-    pub(super) fn extract_rect_instances(frame: &UiFrame) -> Vec<FlattenedUiRectInstance> {
+    pub(super) fn extract_rect_instances(
+        submission_order: u32,
+        frame: &UiFrame,
+    ) -> Vec<FlattenedUiRectInstance> {
         let mut instances = Vec::new();
         for surface in &frame.surfaces {
             for layer in &surface.layers {
@@ -26,23 +29,32 @@ impl Renderer {
                             let _ = clip_stack.pop();
                         }
                         UiPrimitive::Rect(rect) => {
-                            if let Some(entry) =
-                                flattened_rect(rect, current_clip_region(&clip_stack), None)
-                            {
+                            if let Some(entry) = flattened_rect(
+                                rect,
+                                submission_order,
+                                current_clip_region(&clip_stack),
+                                None,
+                            ) {
                                 instances.push(entry);
                             }
                         }
                         UiPrimitive::Border(border) => {
-                            if let Some(entry) =
-                                flattened_border(border, current_clip_region(&clip_stack), None)
-                            {
+                            if let Some(entry) = flattened_border(
+                                border,
+                                submission_order,
+                                current_clip_region(&clip_stack),
+                                None,
+                            ) {
                                 instances.push(entry);
                             }
                         }
                         UiPrimitive::Image(image) => {
-                            if let Some(entry) =
-                                flattened_image(image, current_clip_region(&clip_stack), None)
-                            {
+                            if let Some(entry) = flattened_image(
+                                image,
+                                submission_order,
+                                current_clip_region(&clip_stack),
+                                None,
+                            ) {
                                 instances.push(entry);
                             }
                         }
@@ -58,6 +70,7 @@ impl Renderer {
     }
 
     pub(super) fn extract_stroke_instances(
+        submission_order: u32,
         frame: &UiFrame,
     ) -> Vec<FlattenedUiStrokeSegmentInstance> {
         let mut instances = Vec::new();
@@ -80,6 +93,7 @@ impl Renderer {
                         UiPrimitive::Stroke(stroke) => {
                             flatten_stroke(
                                 stroke,
+                                submission_order,
                                 current_clip_region(&clip_stack),
                                 &mut instances,
                             );
@@ -98,6 +112,7 @@ impl Renderer {
     }
 
     pub(super) fn extract_glyph_instances(
+        submission_order: u32,
         frame: &UiFrame,
         atlas_resource: &UiFontAtlasResource,
     ) -> Vec<FlattenedUiGlyphInstance> {
@@ -121,6 +136,7 @@ impl Renderer {
                         UiPrimitive::GlyphRun(run) => {
                             flatten_glyph_run(
                                 run,
+                                submission_order,
                                 current_clip_region(&clip_stack),
                                 atlas_resource,
                                 &mut instances,
@@ -140,6 +156,7 @@ impl Renderer {
     }
 
     pub(super) fn extract_viewport_embed_instances(
+        submission_order: u32,
         frame: &UiFrame,
     ) -> Vec<FlattenedUiViewportEmbedInstance> {
         let mut instances = Vec::new();
@@ -162,6 +179,7 @@ impl Renderer {
                         UiPrimitive::ViewportSurfaceEmbed(embed) => {
                             if let Some(entry) = flattened_viewport_embed(
                                 embed,
+                                submission_order,
                                 current_clip_region(&clip_stack),
                                 None,
                             ) {
@@ -182,6 +200,7 @@ impl Renderer {
     }
 
     pub(super) fn extract_product_surface_instances(
+        submission_order: u32,
         frame: &UiFrame,
     ) -> Vec<FlattenedUiProductSurfaceInstance> {
         let mut instances = Vec::new();
@@ -204,6 +223,7 @@ impl Renderer {
                         UiPrimitive::ProductSurface(surface) => {
                             if let Some(entry) = flattened_product_surface(
                                 surface,
+                                submission_order,
                                 current_clip_region(&clip_stack),
                                 None,
                             ) {
@@ -226,6 +246,7 @@ impl Renderer {
 
 fn flatten_stroke(
     stroke: &StrokePrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     instances: &mut Vec<FlattenedUiStrokeSegmentInstance>,
 ) {
@@ -236,6 +257,7 @@ fn flatten_stroke(
     if stroke.points.len() == 1 {
         push_stroke_segment(
             stroke,
+            submission_order,
             stack_clip,
             stroke.points[0],
             stroke.points[0],
@@ -245,12 +267,20 @@ fn flatten_stroke(
     }
 
     for pair in stroke.points.windows(2) {
-        push_stroke_segment(stroke, stack_clip, pair[0], pair[1], instances);
+        push_stroke_segment(
+            stroke,
+            submission_order,
+            stack_clip,
+            pair[0],
+            pair[1],
+            instances,
+        );
     }
 }
 
 fn push_stroke_segment(
     stroke: &StrokePrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     start: ui_math::UiPoint,
     end: ui_math::UiPoint,
@@ -274,6 +304,8 @@ fn push_stroke_segment(
             _pad: [0.0; 3],
         },
         clip: clip.map(|value| [value.x, value.y, value.width, value.height]),
+        submission_order,
+        surface_order: stroke.sort_key.surface_order,
         layer_order: stroke.sort_key.layer_order,
         primitive_order: stroke.sort_key.primitive_order,
     });
@@ -291,6 +323,7 @@ fn stroke_segment_bounds(start: ui_math::UiPoint, end: ui_math::UiPoint, width: 
 
 fn flatten_glyph_run(
     run: &GlyphRunPrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     atlas_resource: &UiFontAtlasResource,
     instances: &mut Vec<FlattenedUiGlyphInstance>,
@@ -359,6 +392,8 @@ fn flatten_glyph_run(
                 clip: clip
                     .map(|clip_rect| [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height]),
                 texture_id,
+                submission_order,
+                surface_order: run.sort_key.surface_order,
                 layer_order: run.sort_key.layer_order,
                 primitive_order: run.sort_key.primitive_order,
             });
@@ -368,6 +403,7 @@ fn flatten_glyph_run(
 
 fn flattened_rect(
     rect: &RectPrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiRectInstance> {
@@ -376,7 +412,10 @@ fn flattened_rect(
         rect.rect,
         [rect.paint.r, rect.paint.g, rect.paint.b, rect.paint.a],
         rect.radius,
+        0.0,
         clip,
+        submission_order,
+        rect.sort_key.surface_order,
         rect.sort_key.layer_order,
         rect.sort_key.primitive_order,
     )
@@ -384,6 +423,7 @@ fn flattened_rect(
 
 fn flattened_border(
     border: &BorderPrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiRectInstance> {
@@ -397,7 +437,10 @@ fn flattened_border(
             border.paint.a,
         ],
         border.radius,
+        border.width,
         clip,
+        submission_order,
+        border.sort_key.surface_order,
         border.sort_key.layer_order,
         border.sort_key.primitive_order,
     )
@@ -405,6 +448,7 @@ fn flattened_border(
 
 fn flattened_image(
     image: &ImagePrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiRectInstance> {
@@ -413,7 +457,10 @@ fn flattened_image(
         image.rect,
         [image.tint.r, image.tint.g, image.tint.b, image.tint.a],
         0.0,
+        0.0,
         clip,
+        submission_order,
+        image.sort_key.surface_order,
         image.sort_key.layer_order,
         image.sort_key.primitive_order,
     )
@@ -421,6 +468,7 @@ fn flattened_image(
 
 fn flattened_viewport_embed(
     embed: &ViewportSurfaceEmbedPrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiViewportEmbedInstance> {
@@ -451,6 +499,8 @@ fn flattened_viewport_embed(
         clip: clip.map(|value| [value.x, value.y, value.width, value.height]),
         viewport_id: embed.viewport_id,
         slot: embed.slot,
+        submission_order,
+        surface_order: embed.sort_key.surface_order,
         layer_order: embed.sort_key.layer_order,
         primitive_order: embed.sort_key.primitive_order,
     })
@@ -458,6 +508,7 @@ fn flattened_viewport_embed(
 
 fn flattened_product_surface(
     surface: &ProductSurfacePrimitive,
+    submission_order: u32,
     stack_clip: ClipRegion,
     local_clip: Option<UiRect>,
 ) -> Option<FlattenedUiProductSurfaceInstance> {
@@ -492,6 +543,8 @@ fn flattened_product_surface(
         },
         clip: clip.map(|value| [value.x, value.y, value.width, value.height]),
         source: surface.source.clone(),
+        submission_order,
+        surface_order: surface.sort_key.surface_order,
         layer_order: surface.sort_key.layer_order,
         primitive_order: surface.sort_key.primitive_order,
     })
@@ -501,7 +554,10 @@ fn flattened_rect_raw(
     rect: UiRect,
     color: [f32; 4],
     radius: f32,
+    border_width: f32,
     clip: Option<UiRect>,
+    submission_order: u32,
+    surface_order: u32,
     layer_order: u32,
     primitive_order: u32,
 ) -> Option<FlattenedUiRectInstance> {
@@ -514,9 +570,12 @@ fn flattened_rect_raw(
             rect: [rect.x, rect.y, rect.width, rect.height],
             color,
             radius,
-            _pad: [0.0; 3],
+            border_width: border_width.max(0.0),
+            _pad: [0.0; 2],
         },
         clip: clip.map(|clip| [clip.x, clip.y, clip.width, clip.height]),
+        submission_order,
+        surface_order,
         layer_order,
         primitive_order,
     })
@@ -598,8 +657,8 @@ mod tests {
     use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
     use ui_math::UiSize;
     use ui_render_data::{
-        ClipPrimitive, GlyphRunPrimitive, RectPrimitive, StrokePrimitive, UiDrawKey, UiLayer,
-        UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
+        BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, RectPrimitive, StrokePrimitive,
+        UiDrawKey, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
     };
     use ui_text::{
         AtlasTextLayouter, TextAlign, TextLayoutRequest, TextLayouter, TextOverflow, TextStyle,
@@ -643,7 +702,7 @@ mod tests {
             vec![layer],
         )]);
 
-        let instances = Renderer::extract_rect_instances(&frame);
+        let instances = Renderer::extract_rect_instances(0, &frame);
         assert_eq!(instances.len(), 1);
         assert_eq!(instances[0].clip, Some([10.0, 10.0, 20.0, 20.0]));
     }
@@ -682,11 +741,40 @@ mod tests {
             vec![layer],
         )]);
 
-        let instances = Renderer::extract_rect_instances(&frame);
+        let instances = Renderer::extract_rect_instances(0, &frame);
         assert!(
             instances.is_empty(),
             "rect should be culled when nested clip intersection is empty",
         );
+    }
+
+    #[test]
+    fn extract_border_instances_preserves_border_width_and_order() {
+        let border = BorderPrimitive::new(
+            UiRect::new(4.0, 5.0, 40.0, 20.0),
+            6.0,
+            3.5,
+            UiPaint::rgba(0.2, 0.4, 0.6, 1.0),
+            UiDrawKey::new(2, None),
+            UiSortKey::new(4, 7, 9),
+        );
+        let layer = UiLayer::with_primitives(UiLayerId(0), vec![UiPrimitive::Border(border)]);
+        let frame = UiFrame::with_surfaces(vec![UiSurface::with_layers(
+            UiSurfaceId(0),
+            UiSize::new(128.0, 64.0),
+            vec![layer],
+        )]);
+
+        let instances = Renderer::extract_rect_instances(6, &frame);
+
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].raw.rect, [4.0, 5.0, 40.0, 20.0]);
+        assert_eq!(instances[0].raw.radius, 6.0);
+        assert_eq!(instances[0].raw.border_width, 3.5);
+        assert_eq!(instances[0].submission_order, 6);
+        assert_eq!(instances[0].surface_order, 4);
+        assert_eq!(instances[0].layer_order, 7);
+        assert_eq!(instances[0].primitive_order, 9);
     }
 
     #[test]
@@ -711,7 +799,7 @@ mod tests {
             vec![layer],
         )]);
 
-        let instances = Renderer::extract_stroke_instances(&frame);
+        let instances = Renderer::extract_stroke_instances(0, &frame);
         assert_eq!(instances.len(), 2);
         assert_eq!(instances[0].raw.width, 6.0);
         assert_eq!(instances[0].raw.start, [10.0, 10.0]);
@@ -763,7 +851,7 @@ mod tests {
             UiSortKey::new(0, 0, 0),
         );
         let mut instances = Vec::new();
-        flatten_glyph_run(&run, ClipRegion::Unbounded, &atlas, &mut instances);
+        flatten_glyph_run(&run, 0, ClipRegion::Unbounded, &atlas, &mut instances);
         assert_eq!(instances.len(), glyph_run.glyphs.len());
 
         let (atlas_metrics, _) = atlas
@@ -827,7 +915,7 @@ mod tests {
             UiSortKey::new(0, 0, 0),
         );
         let mut instances = Vec::new();
-        flatten_glyph_run(&run, ClipRegion::Unbounded, &atlas, &mut instances);
+        flatten_glyph_run(&run, 0, ClipRegion::Unbounded, &atlas, &mut instances);
         assert_eq!(instances.len(), glyph_run.glyphs.len());
 
         let mut by_char = std::collections::HashMap::new();
