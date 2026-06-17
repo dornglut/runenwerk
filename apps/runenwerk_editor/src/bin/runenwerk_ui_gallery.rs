@@ -54,4 +54,33 @@ mod tests {
             .count();
         assert_eq!(eligible_reports, 2);
     }
+
+    #[test]
+    fn story_gallery_resource_refuses_failed_report_even_with_mounted_frame() {
+        let valid_execution = runenwerk_editor::runtime::run_checked_in_gallery_stories()
+            .into_iter()
+            .find(|execution| execution.mounted_frame.is_some())
+            .expect("at least one checked-in story should produce a mounted frame");
+        let failed_report = ui_story::UiStoryRunReport::unknown_story(
+            ui_story::UiStoryId::new("ui.gallery.button.failed_bypass_attempt"),
+            ui_story::UiStoryDiagnostic::error(
+                "ui_gallery.story.synthetic_failure",
+                "failed report must block mounted frame publication",
+                ui_story::UiStoryStageKind::Manifest,
+            ),
+        );
+
+        let gallery = runenwerk_editor::runtime::UiGalleryResource::from_story_executions(
+            vec![runenwerk_editor::runtime::UiGalleryStoryExecution {
+                report: failed_report,
+                button_report: valid_execution.button_report,
+                mounted_frame: valid_execution.mounted_frame,
+            }],
+            None,
+        );
+
+        assert!(!gallery.passed());
+        assert_eq!(gallery.button_count(), 0);
+        assert!(gallery.frame().is_none());
+    }
 }

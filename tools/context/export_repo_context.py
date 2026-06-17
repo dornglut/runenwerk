@@ -17,6 +17,8 @@ DEFAULT_EXTENSIONS = {
     ".md",
     ".mdx",
     ".py",
+    ".ron",
+    ".wgsl",
 }
 
 DEFAULT_INCLUDE_FILENAMES = {

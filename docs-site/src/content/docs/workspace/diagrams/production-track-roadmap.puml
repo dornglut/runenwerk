@@ -164,7 +164,7 @@ package "PT-UI-RUNTIME-RENDERING UI Runtime Rendering Pipeline" {
 }
 
 package "PT-UI-STORY-PLATFORM UI Story Platform" {
-  component "PT-UI-STORY-PLATFORM completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_UI_STORY_PLATFORM_COMPLETED <<completed>>
+  component "PT-UI-STORY-PLATFORM completed prerequisites\nmilestones=2\nquality=runtime_proven=2" as PT_UI_STORY_PLATFORM_COMPLETED <<completed>>
 
   component "PM-UI-STORY-005 Story Platform No-Gap Audit And Closeout\nkind=release\nstate=designing\nWR=N/A" as PM_UI_STORY_005 <<designing>>
 

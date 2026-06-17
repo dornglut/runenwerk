@@ -1043,6 +1043,164 @@ milestones:
     generated_contract_marker: PT-UI-STORY-PLATFORM-RUNTIME-CLOSEOUT
     generated_from_template_version: v1
   owning_wr: WR-177
+- milestone_id: PM-UI-STORY-HARDEN-001
+  title: Story Proof Contract And Asset Manifest Hardening
+  stage: Stage 4A
+  authority_level: future_wr_and_plan_required
+  milestone_type: hardening
+  owning_wr: WR-178
+  predecessor_dependencies:
+  - PM-UI-STORY-004
+  write_scope:
+  - domain/ui/ui_story/src/lib.rs
+  - domain/ui/ui_story/src/proof.rs
+  - domain/ui/ui_story/src/manifest.rs
+  - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/runner.rs
+  - domain/ui/ui_story/src/mount.rs
+  - domain/ui/ui_story/src/gallery.rs
+  - domain/ui/ui_story/Cargo.toml
+  - assets/ui_gallery/stories
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-178-story-proof-contract-and-asset-manifest-hardening/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - 'generated: production docs from task production:render'
+  - 'generated: roadmap docs from task roadmap:render'
+  forbidden_scope:
+  - no PM-UI-STORY-005 product code
+  - no new crates
+  - no ui_definition crate decomposition
+  - no ui_surface semantic redesign
+  - no render primitive generic registry redesign
+  - no physical domain folder moves
+  - no reusable component maturity
+  - no Designer/Workbench product authoring
+  - no game HUD behavior
+  - no world-space or entity-attached UI
+  - 'no gallery preview path that bypasses `UiStoryRunReport`'
+  required_contracts:
+  - '`UiStoryStageKind` remains the compatibility/report view for this slice'
+  - story manifests are versioned and asset-backed
+  - expected-failure diagnostics are exact and fail closed on mismatch
+  - 'mount eligibility is derived from `UiStoryRunReport` plus `UiStoryMountEligibility`'
+  validation_commands:
+  - cargo fmt --check
+  - cargo check --workspace
+  - cargo test -p ui_story story_manifest
+  - cargo test -p ui_story expected_failure
+  - cargo test -p ui_story proof_contract
+  - cargo test -p runenwerk_editor story
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-STORY-PLATFORM --scope non-deferred
+  evidence_gates:
+  - accepted_implementation_plan
+  - focused_story_tests
+  - gallery_no_bypass_test
+  - production_validation
+  - roadmap_validation
+  - docs_validation
+  - planning_validation
+  expected_closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+  stop_conditions:
+  - stop if expected-failure diagnostics can pass without a declared exact diagnostic
+  - stop if any failed story report can publish a gallery preview frame
+  - stop if static mount success alone implies gallery or product mount eligibility
+  - stop if deferred component, designer, game HUD, world-space, or physical module-move work becomes required
+  next_legal_action: Execute WR-178 hardening plan before PM-UI-STORY-005 no-gap audit.
+  may_create_code: true
+  may_create_crates: false
+  may_modify_production_behavior: true
+  execution_kind: implementation_proof
+  permission_classes_required:
+  - product_code
+  - docs_update
+  - validation
+  product_code_contract:
+    required_active_wr_state: active
+    required_accepted_implementation_plan: task production:plan must approve the exact milestone scope before implementation
+    exact_allowed_implementation_write_scopes:
+    - domain/ui/ui_story/src/lib.rs
+    - domain/ui/ui_story/src/proof.rs
+    - domain/ui/ui_story/src/manifest.rs
+    - domain/ui/ui_story/src/report.rs
+    - domain/ui/ui_story/src/runner.rs
+    - domain/ui/ui_story/src/mount.rs
+    - domain/ui/ui_story/src/gallery.rs
+    - domain/ui/ui_story/Cargo.toml
+    - assets/ui_gallery/stories
+    - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+    - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+    required_function_method_scope:
+    - '`UiStoryManifest`'
+    - '`UiStoryProofContract`'
+    - '`UiStoryRunReport`'
+    - '`UiStoryMountEligibility`'
+    - checked-in gallery manifest loader
+    - editor gallery story execution adapter
+    forbidden_implementation_scopes:
+    - domain/ui/ui_definition crate decomposition
+    - domain/ui/ui_surface semantic redesign
+    - domain/ui/ui_render_primitives generic registry redesign
+    - physical domain folder moves
+    - domain/ui/ui_controls maturity expansion
+    - domain/ui/ui_text
+    - domain/ui/ui_interaction
+    - domain/ui/ui_graph_canvas
+    - domain/ui/ui_timeline
+    - domain/ui/ui_world_space
+    - domain/ui/ui_effects
+    - apps/runenwerk_editor Visual UI Builder product work
+    - game-runtime HUD behavior
+    - world-space or entity-attached UI
+    tests_to_add_change:
+    - cargo test -p ui_story story_manifest
+    - cargo test -p ui_story expected_failure
+    - cargo test -p ui_story proof_contract
+    - cargo test -p runenwerk_editor story
+    runtime_evidence_required:
+    - manifest round-trip and unsupported schema rejection
+    - exact expected-failure diagnostic matching
+    - expected-failure mount ineligibility
+    - failed-report gallery no-bypass behavior
+    validation_commands:
+    - cargo fmt --check
+    - cargo check --workspace
+    - cargo test -p ui_story story_manifest
+    - cargo test -p ui_story expected_failure
+    - cargo test -p ui_story proof_contract
+    - cargo test -p runenwerk_editor story
+    - task production:render
+    - task docs:validate
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
+    - task planning:validate
+    rollback_compatibility_expectations:
+    - '`UiStoryStageKind` remains the compatibility/report view for this slice.'
+    - existing button source assets stay under assets/ui_gallery/button for this slice.
+    closeout_evidence:
+    - closeout with manifest, runtime_test, diagnostics, gallery_no_bypass, and governance evidence
+    stop_conditions:
+    - stop if expected-failure diagnostics can pass without a declared exact diagnostic
+    - stop if any failed story report can publish a gallery preview frame
+    - stop if static mount success alone implies gallery or product mount eligibility
+    - stop if deferred component, designer, game HUD, world-space, or physical module-move work becomes required
+    template_key: ui_story_platform_product_code
+    generated_contract_marker: PT-UI-STORY-PLATFORM-STORY-PROOF-HARDENING
+    generated_from_template_version: v1
 - milestone_id: PM-UI-STORY-005
   title: Story Platform No-Gap Audit And Closeout
   stage: Stage 4
@@ -1050,7 +1208,7 @@ milestones:
   milestone_type: closeout
   future_wr_candidate: WR-TBD-UI-STORY-005
   predecessor_dependencies:
-  - PM-UI-STORY-004
+  - PM-UI-STORY-HARDEN-001
   write_scope:
   - docs-site/src/content/docs/reports/closeouts/pm-ui-story-005-story-platform-no-gap-audit-and-closeout/closeout.md
   - docs-site/src/content/docs/reports/truth-certificates/pt-ui-story-platform
@@ -1096,7 +1254,7 @@ milestones:
   - stop if any story substrate milestone lacks current closeout evidence
   - stop if any known story substrate gap remains
   - stop if closeout claims component, designer, game HUD, or world-space completion
-  next_legal_action: Expand or link PM-UI-STORY-005 after PM-UI-STORY-004 closes.
+  next_legal_action: Expand or link PM-UI-STORY-005 only after PM-UI-STORY-HARDEN-001 closeout evidence remains current.
   may_create_code: false
   may_create_crates: false
   may_modify_production_behavior: false

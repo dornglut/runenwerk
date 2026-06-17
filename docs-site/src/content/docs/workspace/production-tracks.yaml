@@ -6020,6 +6020,46 @@ tracks:
     completion_quality: runtime_proven
     known_quality_gaps: []
     completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-004-story-gated-runtime-rendering-proof/closeout.md
+  - id: PM-UI-STORY-HARDEN-001
+    title: Story Proof Contract And Asset Manifest Hardening
+    kind: hardening
+    state: completed
+    goal: Harden the story proof substrate before the PM-005 no-gap audit by making story manifests asset-backed, proof requirements machine-readable, expected-failure diagnostics exact, and gallery mount eligibility report-driven.
+    outcome: Story manifests are loaded from checked-in .story.ron assets, the ui_story public contract exposes versioned proof requirements and evidence, expected-failure stories pass only when their declared diagnostics match exactly, and editor gallery previews cannot be published from static mount success alone.
+    dependencies:
+    - PM-UI-STORY-004
+    roadmap_links:
+    - WR-178
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+      required_status: active
+      reason: Story proof hardening must follow the active story-driven workflow authority.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+      required_status: active
+      reason: Hardening is limited to story proof substrate gaps before downstream UI platform work.
+    - kind: design
+      path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+      required_status: active
+      reason: Gallery and static mount proof must preserve runtime rendering ownership boundaries.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/implementation-plans/wr-178-story-proof-contract-and-asset-manifest-hardening/plan.md
+      required_status: active
+      reason: PM-UI-STORY-HARDEN-001 requires an accepted implementation plan before product-code hardening.
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+      required_status: completed
+      reason: PM-UI-STORY-HARDEN-001 must close with focused story, gallery, governance, and validation evidence before PM-005 starts.
+    acceptance_criteria:
+    - ui_story exposes versioned manifest and proof-contract fields without replacing `UiStoryStageKind` as the compatibility report view.
+    - Button gallery stories basic, selected, and missing_source.failure are defined by .story.ron manifests under assets/ui_gallery/stories/controls/button.
+    - Expected-failure manifests declare exact diagnostics, and wrong stage/proof key, wrong code, wrong severity, missing diagnostics, or extra unexpected Error diagnostics fail the story report.
+    - Expected-failure stories may produce a passing story verdict for the declared failure but are never mount eligible.
+    - runenwerk_ui_gallery --inspect-stories and UiGalleryResource consume `UiStoryRunReport` plus `UiStoryMountEligibility`; no failed story report can publish a preview frame.
+    completion_quality: runtime_proven
+    known_quality_gaps:
+    - Does not perform deferred ui_definition crate decomposition, ui_surface semantic cleanup, render primitive registry redesign, or physical domain folder moves unless validation proves they are story-proof bypass paths.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
   - id: PM-UI-STORY-005
     title: Story Platform No-Gap Audit And Closeout
     kind: release
@@ -6027,7 +6067,7 @@ tracks:
     goal: Complete a no-gap audit proving the story proof substrate has no known bypass paths, stale truth, undocumented risks, or deferred quality gaps inside the accepted story scope.
     outcome: PT-UI-STORY-PLATFORM can claim perfectionist_verified only after current evidence, audits, closeouts, and generated planning state all agree with zero known gaps and zero known risks inside the story proof substrate boundary.
     dependencies:
-    - PM-UI-STORY-004
+    - PM-UI-STORY-HARDEN-001
     roadmap_links: []
     design_gates:
     - kind: design

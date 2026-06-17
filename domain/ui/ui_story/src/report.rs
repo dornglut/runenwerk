@@ -2,9 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manifest::{UiStoryExpectedVerdict, UiStoryId, UiStoryManifest};
+use crate::{
+    manifest::{UiStoryExpectedVerdict, UiStoryId, UiStoryManifest},
+    proof::UiStoryProofEvidence,
+};
 
 pub const DIAGNOSTIC_EXPECTED_FAILURE_PASSED: &str = "ui.story.verdict.expected_failure_passed";
+pub const DIAGNOSTIC_EXPECTED_FAILURE_EXPECTATION_MISSING: &str =
+    "ui.story.verdict.expected_failure_expectation_missing";
+pub const DIAGNOSTIC_EXPECTED_FAILURE_DIAGNOSTIC_MISSING: &str =
+    "ui.story.verdict.expected_failure_diagnostic_missing";
+pub const DIAGNOSTIC_EXPECTED_FAILURE_UNEXPECTED_ERROR: &str =
+    "ui.story.verdict.expected_failure_unexpected_error";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum UiStoryStageKind {
@@ -179,6 +188,8 @@ pub struct UiStoryRunReport {
     pub title: String,
     pub expected_verdict: UiStoryExpectedVerdict,
     pub stages: Vec<UiStoryStageReport>,
+    #[serde(default)]
+    pub proof_evidence: Vec<UiStoryProofEvidence>,
     pub diagnostics: Vec<UiStoryDiagnostic>,
     pub verdict: UiStoryVerdict,
 }
@@ -226,6 +237,10 @@ impl UiStoryRunReport {
             .iter()
             .flat_map(|stage| stage.diagnostics.iter().cloned())
             .collect::<Vec<_>>();
+        let proof_evidence = stages
+            .iter()
+            .map(UiStoryProofEvidence::from_stage_report)
+            .collect::<Vec<_>>();
         let first_failing_stage = stages
             .iter()
             .find(|stage| stage.blocks_verdict())
@@ -233,14 +248,8 @@ impl UiStoryRunReport {
         let verdict = match (expected_verdict.clone(), first_failing_stage) {
             (UiStoryExpectedVerdict::Pass, Some(stage)) => UiStoryVerdict::failed(stage),
             (UiStoryExpectedVerdict::Pass, None) => UiStoryVerdict::passed(),
-            (UiStoryExpectedVerdict::Fail, Some(_stage)) => UiStoryVerdict::passed(),
-            (UiStoryExpectedVerdict::Fail, None) => {
-                diagnostics.push(UiStoryDiagnostic::error(
-                    DIAGNOSTIC_EXPECTED_FAILURE_PASSED,
-                    "story was expected to fail but no failing stage was reported",
-                    UiStoryStageKind::Verdict,
-                ));
-                UiStoryVerdict::failed(UiStoryStageKind::Verdict)
+            (UiStoryExpectedVerdict::Fail, stage) => {
+                expected_failure_verdict(manifest.as_ref(), stage, &mut diagnostics)
             }
         };
 
@@ -250,8 +259,95 @@ impl UiStoryRunReport {
             title,
             expected_verdict,
             stages,
+            proof_evidence,
             diagnostics,
             verdict,
         }
+    }
+}
+
+fn expected_failure_verdict(
+    manifest: Option<&UiStoryManifest>,
+    first_failing_stage: Option<UiStoryStageKind>,
+    diagnostics: &mut Vec<UiStoryDiagnostic>,
+) -> UiStoryVerdict {
+    let Some(first_failing_stage) = first_failing_stage else {
+        diagnostics.push(UiStoryDiagnostic::error(
+            DIAGNOSTIC_EXPECTED_FAILURE_PASSED,
+            "story was expected to fail but no failing stage was reported",
+            UiStoryStageKind::Verdict,
+        ));
+        return UiStoryVerdict::failed(UiStoryStageKind::Verdict);
+    };
+
+    let Some(manifest) = manifest else {
+        diagnostics.push(UiStoryDiagnostic::error(
+            DIAGNOSTIC_EXPECTED_FAILURE_EXPECTATION_MISSING,
+            "expected-failure evaluation requires a parsed story manifest",
+            UiStoryStageKind::Verdict,
+        ));
+        return UiStoryVerdict::failed(UiStoryStageKind::Verdict);
+    };
+
+    if manifest.diagnostic_expectations.is_empty() {
+        diagnostics.push(UiStoryDiagnostic::error(
+            DIAGNOSTIC_EXPECTED_FAILURE_EXPECTATION_MISSING,
+            "expected-failure stories must declare exact diagnostic expectations",
+            UiStoryStageKind::Verdict,
+        ));
+        return UiStoryVerdict::failed(UiStoryStageKind::Verdict);
+    }
+
+    let existing_error_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == UiStoryDiagnosticSeverity::Error)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let mut failed = false;
+    for expectation in &manifest.diagnostic_expectations {
+        if diagnostics
+            .iter()
+            .any(|diagnostic| expectation.matches_diagnostic(diagnostic))
+        {
+            continue;
+        }
+        failed = true;
+        diagnostics.push(UiStoryDiagnostic::error(
+            DIAGNOSTIC_EXPECTED_FAILURE_DIAGNOSTIC_MISSING,
+            format!(
+                "expected diagnostic {} at stage {:?} from producer {} with proof key {} was not reported",
+                expectation.code,
+                expectation.stage,
+                expectation.producer.as_str(),
+                expectation.proof_key.as_str()
+            ),
+            UiStoryStageKind::Verdict,
+        ));
+    }
+
+    for diagnostic in existing_error_diagnostics {
+        if manifest
+            .diagnostic_expectations
+            .iter()
+            .any(|expectation| expectation.matches_diagnostic(&diagnostic))
+        {
+            continue;
+        }
+        failed = true;
+        diagnostics.push(UiStoryDiagnostic::error(
+            DIAGNOSTIC_EXPECTED_FAILURE_UNEXPECTED_ERROR,
+            format!(
+                "unexpected expected-failure error diagnostic {} at stage {:?}",
+                diagnostic.code, diagnostic.stage
+            ),
+            UiStoryStageKind::Verdict,
+        ));
+    }
+
+    if failed {
+        UiStoryVerdict::failed(first_failing_stage)
+    } else {
+        UiStoryVerdict::passed()
     }
 }

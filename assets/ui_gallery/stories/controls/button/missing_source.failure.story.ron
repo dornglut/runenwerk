@@ -1,0 +1,57 @@
+(
+    schema_version: 1,
+    story_revision: 1,
+    proof_contract_version: 1,
+    compatibility_policy: ExactVersion,
+    migration_policy: RejectUnsupported,
+    story_id: UiStoryId("ui.gallery.button.missing_source"),
+    category: UiStoryCategory("controls/button/failure"),
+    title: "Button / Missing Source",
+    source: (
+        kind: Node,
+        path: "assets/ui_gallery/button/missing.ron",
+        source_id: "assets.ui_gallery.button.missing",
+    ),
+    program_id: "ui.gallery.button.missing_source",
+    control_package: "runenwerk.ui.controls@1",
+    host_profile: (
+        kind: Headless,
+        route_policy: VisualUnmappedAllowed,
+    ),
+    viewport_matrix: [
+        (
+            id: "gallery-default",
+            width: 320,
+            height: 128,
+            scale: 1.0,
+        ),
+    ],
+    theme_profile: UiStoryThemeProfile("editor.dark"),
+    expected: (
+        verdict: Fail,
+        required_stages: [
+            Manifest,
+            SourceLoad,
+            MountEligibility,
+        ],
+    ),
+    mount_policy: Never,
+    diagnostic_expectations: [
+        (
+            producer: UiStoryProofProducerId("ui_story.stage.source_load"),
+            proof_key: UiStoryProofKey("source_load"),
+            stage: SourceLoad,
+            code: "ui_gallery.story.source.read_failed",
+            severity: Error,
+        ),
+    ],
+    host_inputs: [],
+    proof_contract: (
+        version: 1,
+        requirements: [
+            (producer: UiStoryProofProducerId("ui_story.stage.manifest"), proof_key: UiStoryProofKey("manifest"), stage: Manifest, subject: Story, required: true),
+            (producer: UiStoryProofProducerId("ui_story.stage.source_load"), proof_key: UiStoryProofKey("source_load"), stage: SourceLoad, subject: Source, required: true),
+            (producer: UiStoryProofProducerId("ui_story.stage.mount_eligibility"), proof_key: UiStoryProofKey("mount_eligibility"), stage: MountEligibility, subject: MountEligibility, required: true),
+        ],
+    ),
+)

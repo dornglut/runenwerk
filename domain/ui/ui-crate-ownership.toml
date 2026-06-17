@@ -1,0 +1,387 @@
+# Runenwerk UI crate ownership map.
+#
+# File: domain/ui/ui-crate-ownership.toml
+#
+# This file is consumed by tools/checks/check_ui_layer_dependencies.py.
+# It is intentionally TOML so the checker can use Python's standard tomllib.
+#
+# package = Cargo package name.
+# path = crate path relative to repository root.
+# layer = one of:
+#   foundation, definition, definition_adapter, program, render, proof, surface, retained, testing
+#
+# Stable dependencies:
+#   allowed_dependencies
+#
+# Transitional production dependencies:
+#   transitional_allowed_dependencies
+#
+# Test-only dependencies:
+#   allowed_dev_dependencies
+#   transitional_dev_dependencies
+#
+# Do not use allowed_dependencies for test-only fixtures. Do not use transitional dependencies
+# as a hiding place for unused Cargo.toml entries; remove unused dependencies instead.
+
+[policy]
+version = 2
+description = "UI crate ownership and dependency boundary map."
+
+hard_forbidden_packages = [
+  "runenwerk_editor",
+]
+
+hard_forbidden_prefixes = [
+  "apps/",
+]
+
+[crate.ui_math]
+package = "ui_math"
+path = "domain/ui/ui_math"
+layer = "foundation"
+owned_responsibility = "Primitive UI math/value contracts."
+allowed_dependencies = []
+
+[crate.ui_schema]
+package = "ui_schema"
+path = "domain/ui/ui_schema"
+layer = "foundation"
+owned_responsibility = "UI schema references, property/value schemas, and validation vocabulary."
+allowed_dependencies = ["ui_math"]
+
+[crate.ui_text]
+package = "ui_text"
+path = "domain/ui/ui_text"
+layer = "foundation"
+owned_responsibility = "Text model contracts and renderer-neutral text facts."
+allowed_dependencies = ["ui_math"]
+
+[crate.ui_theme]
+package = "ui_theme"
+path = "domain/ui/ui_theme"
+layer = "foundation"
+owned_responsibility = "Theme tokens and styling contracts."
+allowed_dependencies = ["ui_math", "ui_schema", "ui_text"]
+
+[crate.ui_input]
+package = "ui_input"
+path = "domain/ui/ui_input"
+layer = "foundation"
+owned_responsibility = "Input event/value contracts."
+allowed_dependencies = ["ui_math"]
+
+[crate.ui_layout]
+package = "ui_layout"
+path = "domain/ui/ui_layout"
+layer = "foundation"
+owned_responsibility = "Layout contracts and layout facts."
+allowed_dependencies = ["ui_math"]
+
+[crate.ui_tree]
+package = "ui_tree"
+path = "domain/ui/ui_tree"
+layer = "retained"
+owned_responsibility = "Retained UI tree compatibility substrate."
+allowed_dependencies = [
+  "ui_input",
+  "ui_layout",
+  "ui_math",
+  "ui_text",
+  "ui_theme",
+]
+transitional_allowed_dependencies = ["ui_graph_editor", "ui_render_data"]
+transitional_rationale = "Retained tree currently embeds graph-canvas view models and renderer-facing paint/surface identifiers. Later retained/runtime cleanup must split graph-editor payloads and render-data payloads behind adapter crates."
+
+[crate.ui_widgets]
+package = "ui_widgets"
+path = "domain/ui/ui_widgets"
+layer = "retained"
+owned_responsibility = "Retained widget compatibility substrate."
+allowed_dependencies = [
+  "ui_input",
+  "ui_layout",
+  "ui_math",
+  "ui_render_data",
+  "ui_text",
+  "ui_theme",
+  "ui_tree",
+]
+
+[crate.ui_runtime]
+package = "ui_runtime"
+path = "domain/ui/ui_runtime"
+layer = "retained"
+owned_responsibility = "Retained UI runtime compatibility substrate."
+allowed_dependencies = [
+  "ui_input",
+  "ui_layout",
+  "ui_math",
+  "ui_render_data",
+  "ui_text",
+  "ui_theme",
+  "ui_tree",
+  "ui_widgets",
+]
+transitional_allowed_dependencies = ["ui_graph_editor"]
+transitional_rationale = "Retained runtime currently owns graph-canvas input/output wiring. Later cleanup must move graph-editor-specific runtime behavior behind a graph-editor adapter instead of generic retained runtime."
+
+[crate.ui_graph_editor]
+package = "ui_graph_editor"
+path = "domain/ui/ui_graph_editor"
+layer = "retained"
+owned_responsibility = "Existing graph editor UI compatibility layer."
+allowed_dependencies = ["ui_runtime", "ui_tree", "ui_widgets"]
+
+[crate.ui_definition]
+package = "ui_definition"
+path = "domain/ui/ui_definition"
+layer = "definition"
+owned_responsibility = "Authored and normalized UI definition contracts."
+allowed_dependencies = [
+  "ui_input",
+  "ui_layout",
+  "ui_math",
+  "ui_schema",
+  "ui_text",
+  "ui_theme",
+]
+transitional_allowed_dependencies = ["ui_render_data", "ui_tree", "ui_widgets"]
+transitional_rationale = "UiDefinition currently bridges authored definitions into retained/runtime preview paths. Split into ui_definition_ops, ui_definition_readiness, and ui_retained_formation."
+allowed_dev_dependencies = ["ui_controls"]
+dev_dependency_rationale = "Dev dependencies are used only by integration tests that validate checked-in UI gallery control fixtures."
+
+[crate.ui_controls]
+package = "ui_controls"
+path = "domain/ui/ui_controls"
+layer = "program"
+owned_responsibility = "Control package definitions, control kinds, and control semantic contracts."
+allowed_dependencies = [
+  "ui_input",
+  "ui_layout",
+  "ui_program",
+  "ui_schema",
+  "ui_text",
+  "ui_theme",
+]
+
+[crate.ui_program]
+package = "ui_program"
+path = "domain/ui/ui_program"
+layer = "program"
+owned_responsibility = "UiProgram identity, typed graph families, and semantic program contracts."
+allowed_dependencies = ["ui_controls", "ui_schema"]
+
+[crate.ui_program_lowering]
+package = "ui_program_lowering"
+path = "domain/ui/ui_program_lowering"
+layer = "program"
+owned_responsibility = "Deterministic lowering from normalized UI definitions into UiProgram."
+allowed_dependencies = ["ui_controls", "ui_definition", "ui_program", "ui_schema"]
+
+[crate.ui_compiler]
+package = "ui_compiler"
+path = "domain/ui/ui_compiler"
+layer = "program"
+owned_responsibility = "UiProgram compiler checks, package/capability validation, and compiler reports."
+allowed_dependencies = ["ui_artifacts", "ui_controls", "ui_program", "ui_schema"]
+allowed_dev_dependencies = ["ui_controls", "ui_definition", "ui_program_lowering"]
+dev_dependency_rationale = "Dev dependencies are used only by compiler integration tests that form fixture UiPrograms from authored assets."
+
+[crate.ui_artifacts]
+package = "ui_artifacts"
+path = "domain/ui/ui_artifacts"
+layer = "program"
+owned_responsibility = "Runtime artifact manifests, tables, source maps, and artifact diagnostics."
+allowed_dependencies = ["ui_controls", "ui_program", "ui_schema"]
+
+[crate.ui_evaluator]
+package = "ui_evaluator"
+path = "domain/ui/ui_evaluator"
+layer = "program"
+owned_responsibility = "Evaluator facts, traces, and inspection output for UI domain programs."
+allowed_dependencies = [
+  "ui_artifacts",
+  "ui_binding",
+  "ui_program",
+  "ui_schema",
+  "ui_state",
+]
+
+[crate.ui_binding]
+package = "ui_binding"
+path = "domain/ui/ui_binding"
+layer = "program"
+owned_responsibility = "Binding contracts between UI artifacts/runtime facts and host-provided data."
+allowed_dependencies = ["ui_artifacts", "ui_program", "ui_schema"]
+
+[crate.ui_state]
+package = "ui_state"
+path = "domain/ui/ui_state"
+layer = "program"
+owned_responsibility = "UI state contracts and state transition facts."
+allowed_dependencies = ["ui_artifacts", "ui_binding", "ui_program", "ui_schema"]
+
+[crate.ui_hosts]
+package = "ui_hosts"
+path = "domain/ui/ui_hosts"
+layer = "program"
+owned_responsibility = "Generic UI host profile/capability/route contracts."
+allowed_dependencies = [
+  "ui_artifacts",
+  "ui_binding",
+  "ui_evaluator",
+  "ui_program",
+  "ui_schema",
+]
+
+[crate.ui_accessibility]
+package = "ui_accessibility"
+path = "domain/ui/ui_accessibility"
+layer = "program"
+owned_responsibility = "Accessibility facts and proof contracts."
+allowed_dependencies = ["ui_artifacts", "ui_program", "ui_schema", "ui_text"]
+
+[crate.ui_geometry]
+package = "ui_geometry"
+path = "domain/ui/ui_geometry"
+layer = "program"
+owned_responsibility = "UI geometry facts and geometry contracts."
+allowed_dependencies = ["ui_artifacts", "ui_layout", "ui_math", "ui_program"]
+
+[crate.ui_runtime_view]
+package = "ui_runtime_view"
+path = "domain/ui/ui_runtime_view"
+layer = "program"
+owned_responsibility = "Runtime read model over UI artifacts and host facts."
+allowed_dependencies = ["ui_artifacts", "ui_program", "ui_schema"]
+allowed_dev_dependencies = [
+  "ui_compiler",
+  "ui_controls",
+  "ui_definition",
+  "ui_program_lowering",
+]
+dev_dependency_rationale = "Dev dependencies are used only by integration tests that form fixture UiPrograms from checked-in UI assets."
+
+[crate.ui_render_data]
+package = "ui_render_data"
+path = "domain/ui/ui_render_data"
+layer = "render"
+owned_responsibility = "Renderer-neutral render data contracts."
+allowed_dependencies = ["ui_layout", "ui_math", "ui_text", "ui_theme"]
+
+[crate.ui_render_primitives]
+package = "ui_render_primitives"
+path = "domain/ui/ui_render_primitives"
+layer = "render"
+owned_responsibility = "Renderer-neutral primitive generation reports and provenance."
+allowed_dependencies = [
+  "ui_math",
+  "ui_render_data",
+  "ui_runtime_view",
+  "ui_text",
+  "ui_theme",
+]
+allowed_dev_dependencies = [
+  "ui_artifacts",
+  "ui_compiler",
+  "ui_controls",
+  "ui_definition",
+  "ui_program_lowering",
+]
+dev_dependency_rationale = "Dev dependencies are used only by integration tests that form a fixture UiProgram from checked-in UI assets."
+
+[crate.ui_headless_render]
+package = "ui_headless_render"
+path = "domain/ui/ui_headless_render"
+layer = "proof"
+owned_responsibility = "Headless rendering proof support."
+allowed_dependencies = ["ui_program", "ui_runtime_view", "ui_schema"]
+allowed_dev_dependencies = [
+  "ui_artifacts",
+  "ui_compiler",
+  "ui_controls",
+  "ui_definition",
+  "ui_program_lowering",
+]
+dev_dependency_rationale = "Dev dependencies are used only by integration tests that form fixture UiPrograms from checked-in UI assets."
+
+[crate.ui_headless_render_data]
+package = "ui_headless_render_data"
+path = "domain/ui/ui_headless_render_data"
+layer = "proof"
+owned_responsibility = "Headless render-data proof reports."
+allowed_dependencies = ["ui_headless_render", "ui_math", "ui_render_data", "ui_render_primitives"]
+allowed_dev_dependencies = [
+  "ui_artifacts",
+  "ui_compiler",
+  "ui_controls",
+  "ui_definition",
+  "ui_program_lowering",
+  "ui_runtime_view",
+  "ui_text",
+  "ui_theme",
+]
+dev_dependency_rationale = "Dev dependencies are used only by integration tests that form fixture UiPrograms and renderer-neutral style/text facts from checked-in UI assets."
+
+[crate.ui_static_mount]
+package = "ui_static_mount"
+path = "domain/ui/ui_static_mount"
+layer = "proof"
+owned_responsibility = "Static mount proof facts and reports."
+allowed_dependencies = ["ui_headless_render_data", "ui_render_data"]
+allowed_dev_dependencies = [
+  "ui_artifacts",
+  "ui_compiler",
+  "ui_controls",
+  "ui_definition",
+  "ui_headless_render",
+  "ui_math",
+  "ui_program_lowering",
+  "ui_render_primitives",
+  "ui_runtime_view",
+  "ui_text",
+  "ui_theme",
+]
+dev_dependency_rationale = "Dev dependencies are used only by integration tests that form fixture render proof inputs from checked-in UI assets."
+
+[crate.ui_story]
+package = "ui_story"
+path = "domain/ui/ui_story"
+layer = "proof"
+owned_responsibility = "Story manifest/report/proof/verdict/mount eligibility contracts."
+allowed_dependencies = ["ui_headless_render_data", "ui_render_primitives", "ui_runtime_view", "ui_static_mount"]
+forbidden_dependencies = [
+  "runenwerk_editor",
+  "editor_core",
+  "editor_shell",
+  "editor_preview",
+  "editor_scene",
+]
+
+[crate.ui_testing]
+package = "ui_testing"
+path = "domain/ui/ui_testing"
+layer = "testing"
+owned_responsibility = "UI conformance and test utilities."
+allowed_dependencies = [
+  "ui_accessibility",
+  "ui_artifacts",
+  "ui_binding",
+  "ui_compiler",
+  "ui_definition",
+  "ui_evaluator",
+  "ui_geometry",
+  "ui_hosts",
+  "ui_program",
+  "ui_schema",
+  "ui_state",
+  "ui_story",
+]
+
+[crate.ui_surface]
+package = "ui_surface"
+path = "domain/ui/ui_surface"
+layer = "surface"
+owned_responsibility = "Generic surface definition/mount/intent/observation/presentation envelopes."
+allowed_dependencies = ["ui_input", "ui_math", "ui_schema"]
+transitional_rationale = "Concrete entity/world prompt semantics must move to editor/game/world-space owner tracks."

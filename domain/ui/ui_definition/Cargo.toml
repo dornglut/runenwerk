@@ -15,7 +15,6 @@ ui_theme.workspace = true
 ui_tree.workspace = true
 ui_widgets.workspace = true
 ui_schema.workspace = true
-ui_program.workspace = true
 
 [dev-dependencies]
 ui_controls.workspace = true

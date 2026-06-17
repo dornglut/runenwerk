@@ -80,24 +80,24 @@ impl<'a> UiStoryRunner<'a> {
             stages.push(stage_report);
         }
 
-        for required_stage in &manifest.expected.required_stages {
-            if *required_stage == UiStoryStageKind::Manifest
-                || *required_stage == UiStoryStageKind::MountEligibility
+        for required_stage in manifest.required_stage_kinds() {
+            if required_stage == UiStoryStageKind::Manifest
+                || required_stage == UiStoryStageKind::MountEligibility
             {
                 continue;
             }
-            if proven_stages.contains(required_stage) {
+            if proven_stages.contains(&required_stage) {
                 continue;
             }
             stages.push(UiStoryStageReport::missing_proof(
-                *required_stage,
+                required_stage,
                 UiStoryDiagnostic::new(
                     DIAGNOSTIC_RUNNER_MISSING_STAGE_PROOF,
                     format!(
                         "stage {:?} has no proof producer in this runner slice",
                         required_stage
                     ),
-                    *required_stage,
+                    required_stage,
                     UiStoryDiagnosticSeverity::Error,
                 ),
             ));
@@ -125,11 +125,21 @@ fn manifest_diagnostic_to_story_diagnostic(
 mod tests {
     use crate::{
         manifest::{
-            UiStoryCategory, UiStoryExpectedOutcome, UiStoryHostProfile, UiStoryManifest,
-            UiStoryMountPolicy, UiStorySource, UiStoryThemeProfile, UiStoryViewportProfile,
+            UI_STORY_MANIFEST_SCHEMA_VERSION, UiStoryCategory, UiStoryCompatibilityPolicy,
+            UiStoryDiagnosticExpectation, UiStoryExpectedOutcome, UiStoryHostProfile,
+            UiStoryManifest, UiStoryMigrationPolicy, UiStoryMountPolicy, UiStorySource,
+            UiStoryThemeProfile, UiStoryViewportProfile,
         },
         mount::UiStoryMountEligibilityReason,
-        report::{UiStoryStageKind, UiStoryVerdictStatus},
+        proof::{
+            UI_STORY_PROOF_CONTRACT_VERSION, UiStoryProofContract, UiStoryProofRequirement,
+            UiStoryProofSubject,
+        },
+        report::{
+            DIAGNOSTIC_EXPECTED_FAILURE_DIAGNOSTIC_MISSING,
+            DIAGNOSTIC_EXPECTED_FAILURE_UNEXPECTED_ERROR, UiStoryDiagnostic,
+            UiStoryDiagnosticSeverity, UiStoryStageKind, UiStoryStageReport, UiStoryVerdictStatus,
+        },
     };
 
     use super::*;
@@ -206,8 +216,151 @@ mod tests {
         );
     }
 
+    #[test]
+    fn expected_failure_requires_declared_diagnostic() {
+        let mut manifest = expected_failure_manifest();
+        manifest.diagnostic_expectations.clear();
+        let registry = UiStoryRegistry::from_manifests([manifest]);
+        let runner = UiStoryRunner::new(&registry);
+
+        let report = runner.run_story_with_stage_reports(
+            &registry.run_request("ui.controls.button.missing_source"),
+            [source_load_failure(
+                "ui_gallery.story.source.read_failed",
+                UiStoryDiagnosticSeverity::Error,
+            )],
+        );
+
+        assert_eq!(report.verdict.status, UiStoryVerdictStatus::Failed);
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code
+                == crate::manifest::DIAGNOSTIC_MANIFEST_EXPECTED_FAILURE_EXPECTATION_MISSING
+        }));
+    }
+
+    #[test]
+    fn expected_failure_fails_on_wrong_code() {
+        let registry = UiStoryRegistry::from_manifests([expected_failure_manifest()]);
+        let runner = UiStoryRunner::new(&registry);
+
+        let report = runner.run_story_with_stage_reports(
+            &registry.run_request("ui.controls.button.missing_source"),
+            [source_load_failure(
+                "ui_gallery.story.source.other",
+                UiStoryDiagnosticSeverity::Error,
+            )],
+        );
+
+        assert_eq!(report.verdict.status, UiStoryVerdictStatus::Failed);
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == DIAGNOSTIC_EXPECTED_FAILURE_DIAGNOSTIC_MISSING
+        }));
+    }
+
+    #[test]
+    fn expected_failure_fails_on_wrong_stage_or_proof_key() {
+        let mut manifest = expected_failure_manifest();
+        manifest.diagnostic_expectations = vec![UiStoryDiagnosticExpectation::for_stage_error(
+            UiStoryStageKind::SourceParse,
+            "ui_gallery.story.source.read_failed",
+        )];
+        let registry = UiStoryRegistry::from_manifests([manifest]);
+        let runner = UiStoryRunner::new(&registry);
+
+        let report = runner.run_story_with_stage_reports(
+            &registry.run_request("ui.controls.button.missing_source"),
+            [source_load_failure(
+                "ui_gallery.story.source.read_failed",
+                UiStoryDiagnosticSeverity::Error,
+            )],
+        );
+
+        assert_eq!(report.verdict.status, UiStoryVerdictStatus::Failed);
+        assert!(
+            report.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == DIAGNOSTIC_EXPECTED_FAILURE_UNEXPECTED_ERROR
+            })
+        );
+    }
+
+    #[test]
+    fn expected_failure_fails_on_wrong_severity() {
+        let registry = UiStoryRegistry::from_manifests([expected_failure_manifest()]);
+        let runner = UiStoryRunner::new(&registry);
+
+        let report = runner.run_story_with_stage_reports(
+            &registry.run_request("ui.controls.button.missing_source"),
+            [source_load_failure(
+                "ui_gallery.story.source.read_failed",
+                UiStoryDiagnosticSeverity::Warning,
+            )],
+        );
+
+        assert_eq!(report.verdict.status, UiStoryVerdictStatus::Failed);
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == DIAGNOSTIC_EXPECTED_FAILURE_DIAGNOSTIC_MISSING
+        }));
+    }
+
+    #[test]
+    fn expected_failure_fails_on_extra_unexpected_error() {
+        let registry = UiStoryRegistry::from_manifests([expected_failure_manifest()]);
+        let runner = UiStoryRunner::new(&registry);
+
+        let report = runner.run_story_with_stage_reports(
+            &registry.run_request("ui.controls.button.missing_source"),
+            [
+                source_load_failure(
+                    "ui_gallery.story.source.read_failed",
+                    UiStoryDiagnosticSeverity::Error,
+                ),
+                UiStoryStageReport::failed(
+                    UiStoryStageKind::SourceParse,
+                    vec![UiStoryDiagnostic::error(
+                        "ui_gallery.story.source.parse_failed",
+                        "unexpected parse error",
+                        UiStoryStageKind::SourceParse,
+                    )],
+                ),
+            ],
+        );
+
+        assert_eq!(report.verdict.status, UiStoryVerdictStatus::Failed);
+        assert!(
+            report.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == DIAGNOSTIC_EXPECTED_FAILURE_UNEXPECTED_ERROR
+            })
+        );
+    }
+
+    #[test]
+    fn expected_failure_passes_only_declared_diagnostic_and_never_mounts() {
+        let registry = UiStoryRegistry::from_manifests([expected_failure_manifest()]);
+        let runner = UiStoryRunner::new(&registry);
+
+        let report = runner.run_story_with_stage_reports(
+            &registry.run_request("ui.controls.button.missing_source"),
+            [source_load_failure(
+                "ui_gallery.story.source.read_failed",
+                UiStoryDiagnosticSeverity::Error,
+            )],
+        );
+        let eligibility = crate::mount::UiStoryMountEligibility::from_report(&report);
+
+        assert_eq!(report.verdict.status, UiStoryVerdictStatus::Passed);
+        assert_eq!(
+            eligibility.reason,
+            UiStoryMountEligibilityReason::ExpectedFailureStory
+        );
+    }
+
     fn basic_manifest(mount_policy: UiStoryMountPolicy) -> UiStoryManifest {
         UiStoryManifest {
+            schema_version: UI_STORY_MANIFEST_SCHEMA_VERSION,
+            story_revision: 1,
+            proof_contract_version: UI_STORY_PROOF_CONTRACT_VERSION,
+            compatibility_policy: UiStoryCompatibilityPolicy::ExactVersion,
+            migration_policy: UiStoryMigrationPolicy::RejectUnsupported,
             story_id: UiStoryId::new("ui.controls.button.basic"),
             category: UiStoryCategory::new("controls/button"),
             title: "Button / Basic".to_owned(),
@@ -226,6 +379,79 @@ mod tests {
             ]),
             mount_policy,
             diagnostic_expectations: Vec::new(),
+            host_inputs: Vec::new(),
+            proof_contract: UiStoryProofContract::new([
+                UiStoryProofRequirement::required_stage(
+                    UiStoryStageKind::Manifest,
+                    UiStoryProofSubject::Story,
+                ),
+                UiStoryProofRequirement::required_stage(
+                    UiStoryStageKind::MountEligibility,
+                    UiStoryProofSubject::MountEligibility,
+                ),
+            ]),
         }
+    }
+
+    fn expected_failure_manifest() -> UiStoryManifest {
+        UiStoryManifest {
+            schema_version: UI_STORY_MANIFEST_SCHEMA_VERSION,
+            story_revision: 1,
+            proof_contract_version: UI_STORY_PROOF_CONTRACT_VERSION,
+            compatibility_policy: UiStoryCompatibilityPolicy::ExactVersion,
+            migration_policy: UiStoryMigrationPolicy::RejectUnsupported,
+            story_id: UiStoryId::new("ui.controls.button.missing_source"),
+            category: UiStoryCategory::new("controls/button/failure"),
+            title: "Button / Missing Source".to_owned(),
+            source: UiStorySource::node(
+                "assets/ui_gallery/button/missing.ron",
+                "assets.ui_gallery.button.missing",
+            ),
+            program_id: "ui.gallery.button.missing_source".to_owned(),
+            control_package: "runenwerk.ui.controls@1".to_owned(),
+            host_profile: UiStoryHostProfile::headless(),
+            viewport_matrix: vec![UiStoryViewportProfile::new("default", 240, 96, 1.0)],
+            theme_profile: UiStoryThemeProfile::new("editor.dark"),
+            expected: UiStoryExpectedOutcome::fail([
+                UiStoryStageKind::Manifest,
+                UiStoryStageKind::SourceLoad,
+                UiStoryStageKind::MountEligibility,
+            ]),
+            mount_policy: UiStoryMountPolicy::Never,
+            diagnostic_expectations: vec![UiStoryDiagnosticExpectation::for_stage_error(
+                UiStoryStageKind::SourceLoad,
+                "ui_gallery.story.source.read_failed",
+            )],
+            host_inputs: Vec::new(),
+            proof_contract: UiStoryProofContract::new([
+                UiStoryProofRequirement::required_stage(
+                    UiStoryStageKind::Manifest,
+                    UiStoryProofSubject::Story,
+                ),
+                UiStoryProofRequirement::required_stage(
+                    UiStoryStageKind::SourceLoad,
+                    UiStoryProofSubject::Source,
+                ),
+                UiStoryProofRequirement::required_stage(
+                    UiStoryStageKind::MountEligibility,
+                    UiStoryProofSubject::MountEligibility,
+                ),
+            ]),
+        }
+    }
+
+    fn source_load_failure(
+        code: &'static str,
+        severity: UiStoryDiagnosticSeverity,
+    ) -> UiStoryStageReport {
+        UiStoryStageReport::failed(
+            UiStoryStageKind::SourceLoad,
+            vec![UiStoryDiagnostic::new(
+                code,
+                "source fixture is intentionally absent",
+                UiStoryStageKind::SourceLoad,
+                severity,
+            )],
+        )
     }
 }

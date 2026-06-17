@@ -18,9 +18,10 @@ use ui_render_primitives::UiRenderPrimitiveReport;
 use ui_runtime_view::{ButtonRuntimeHostData, ButtonRuntimeViewReport, UiRuntimeView};
 use ui_static_mount::UiStaticMountReport;
 use ui_story::{
-    UiGalleryStorySpec, UiStoryCliReport, UiStoryDiagnostic, UiStoryDiagnosticSeverity,
-    UiStoryMountEligibility, UiStoryRunReport, UiStoryRunner, UiStoryStageKind, UiStoryStageReport,
-    UiStoryStageStatus, checked_in_gallery_registry, checked_in_gallery_story_specs, stage_label,
+    UiStoryCliReport, UiStoryDiagnostic, UiStoryDiagnosticSeverity, UiStoryHostInputValue,
+    UiStoryId, UiStoryManifest, UiStoryMountEligibility, UiStoryRunReport, UiStoryRunner,
+    UiStoryStageKind, UiStoryStageReport, UiStoryStageStatus, checked_in_gallery_registry,
+    stage_label,
 };
 use ui_theme::ThemeTokens;
 
@@ -98,7 +99,9 @@ impl UiGalleryResource {
                 report_blocks_gallery,
             );
             if let Some(report) = execution.button_report {
-                button_report.buttons.extend(report.buttons);
+                if !report_blocks_gallery {
+                    button_report.buttons.extend(report.buttons.clone());
+                }
                 diagnostics.extend(report.diagnostics.into_iter().map(|diagnostic| {
                     UiGalleryDiagnostic {
                         stage: UiGalleryStage::Story(UiStoryStageKind::RuntimeView),
@@ -259,16 +262,35 @@ pub fn run_checked_in_gallery_stories_for_render_target(
     atlas: &UiFontAtlasResource,
 ) -> Vec<UiGalleryStoryExecution> {
     let registry = checked_in_gallery_registry();
+    if !registry.is_valid() {
+        return registry
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| UiGalleryStoryExecution {
+                report: UiStoryRunReport::unknown_story(
+                    UiStoryId::new("checked_in_gallery_manifest"),
+                    UiStoryDiagnostic::error(
+                        diagnostic.code.clone(),
+                        diagnostic.message.clone(),
+                        UiStoryStageKind::Manifest,
+                    ),
+                ),
+                button_report: None,
+                mounted_frame: None,
+            })
+            .collect();
+    }
+
     let runner = UiStoryRunner::new(&registry);
     let control_registry = ControlPackageRegistry::new()
         .with_package(runenwerk_control_package())
         .expect("runenwerk controls package should register");
     let snapshot = control_registry.snapshot();
 
-    checked_in_gallery_story_specs()
-        .iter()
+    registry
+        .stories()
         .map(|story| {
-            execute_gallery_story(*story, &registry, &runner, &snapshot, size, theme, atlas)
+            execute_gallery_story(story, &registry, &runner, &snapshot, size, theme, atlas)
         })
         .collect()
 }
@@ -343,7 +365,7 @@ pub fn submit_ui_gallery_frame_system(
 }
 
 fn execute_gallery_story(
-    story: UiGalleryStorySpec,
+    story: &UiStoryManifest,
     registry: &ui_story::UiStoryRegistry,
     runner: &UiStoryRunner<'_>,
     snapshot: &ui_controls::ControlPackageRegistrySnapshot,
@@ -351,7 +373,7 @@ fn execute_gallery_story(
     theme: &ThemeTokens,
     atlas: &UiFontAtlasResource,
 ) -> UiGalleryStoryExecution {
-    let request = registry.run_request(story.story_id);
+    let request = registry.run_request(story.story_id.as_str());
     let mut stage_reports = Vec::new();
     let mut button_report = None;
     let mut mounted_frame = None;
@@ -373,8 +395,8 @@ fn execute_gallery_story(
     };
 
     let formation_report = form_ui_program_report_from_node_with_registry_snapshot(
-        story.program_id,
-        story.source_id,
+        story.program_id.as_str(),
+        story.source.source_id.as_str(),
         &node,
         snapshot,
     );
@@ -456,12 +478,18 @@ fn execute_gallery_story(
         };
     }
 
-    let host_data = story
-        .host_bools
-        .iter()
-        .fold(ButtonRuntimeHostData::new(), |host_data, host_bool| {
-            host_data.with_bool(host_bool.endpoint, host_bool.value)
-        });
+    let host_data =
+        story
+            .host_inputs
+            .iter()
+            .fold(
+                ButtonRuntimeHostData::new(),
+                |host_data, input| match input.value {
+                    UiStoryHostInputValue::Bool(value) => {
+                        host_data.with_bool(input.endpoint.as_str(), value)
+                    }
+                },
+            );
     let button_runtime_report = ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(
         &runtime_report,
         &host_data,
@@ -553,10 +581,10 @@ fn default_gallery_proof_size() -> UiSize {
 }
 
 fn load_story_source(
-    story: UiGalleryStorySpec,
+    story: &UiStoryManifest,
     stage_reports: &mut Vec<UiStoryStageReport>,
 ) -> Option<String> {
-    let path = repo_root().join(story.source_path);
+    let path = repo_root().join(&story.source.path);
     match fs::read_to_string(&path) {
         Ok(source) => {
             stage_reports.push(UiStoryStageReport::passed(UiStoryStageKind::SourceLoad));
@@ -577,7 +605,7 @@ fn load_story_source(
 }
 
 fn parse_story_node(
-    story: UiGalleryStorySpec,
+    story: &UiStoryManifest,
     source: &str,
     stage_reports: &mut Vec<UiStoryStageReport>,
 ) -> Option<UiNodeDefinition> {
@@ -591,7 +619,7 @@ fn parse_story_node(
                 UiStoryStageKind::SourceParse,
                 vec![UiStoryDiagnostic::error(
                     "ui_gallery.story.source.parse_failed",
-                    format!("failed to parse {}: {error}", story.source_path),
+                    format!("failed to parse {}: {error}", story.source.path),
                     UiStoryStageKind::SourceParse,
                 )],
             ));

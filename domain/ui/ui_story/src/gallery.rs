@@ -1,151 +1,88 @@
 //! Checked-in UI gallery story catalog.
 
 use crate::{
-    manifest::{
-        UiStoryCategory, UiStoryExpectedOutcome, UiStoryHostProfile, UiStoryManifest,
-        UiStoryMountPolicy, UiStorySource, UiStoryThemeProfile, UiStoryViewportProfile,
-    },
-    registry::UiStoryRegistry,
-    report::UiStoryStageKind,
+    manifest::{UiStoryId, UiStoryManifest, UiStoryManifestParseError},
+    registry::{UiStoryRegistry, UiStoryRegistryDiagnostic},
 };
 
 pub const RUNENWERK_CONTROL_PACKAGE_ID: &str = "runenwerk.ui.controls@1";
 pub const EDITOR_DARK_THEME_ID: &str = "editor.dark";
 
-const BUTTON_REQUIRED_STAGES: &[UiStoryStageKind] = &[
-    UiStoryStageKind::Manifest,
-    UiStoryStageKind::SourceLoad,
-    UiStoryStageKind::SourceParse,
-    UiStoryStageKind::ProgramFormation,
-    UiStoryStageKind::Compiler,
-    UiStoryStageKind::RuntimeView,
-    UiStoryStageKind::RenderPrimitives,
-    UiStoryStageKind::RenderData,
-    UiStoryStageKind::StaticMount,
-    UiStoryStageKind::PreviewFrame,
-    UiStoryStageKind::MountEligibility,
-];
-
-const MISSING_SOURCE_REQUIRED_STAGES: &[UiStoryStageKind] = &[
-    UiStoryStageKind::Manifest,
-    UiStoryStageKind::SourceLoad,
-    UiStoryStageKind::MountEligibility,
-];
-
-pub const CHECKED_IN_GALLERY_STORIES: &[UiGalleryStorySpec] = &[
-    UiGalleryStorySpec {
-        story_id: "ui.gallery.button.basic",
-        category: "controls/button",
-        title: "Button / Basic",
-        source_path: "assets/ui_gallery/button/basic.ron",
-        source_id: "assets.ui_gallery.button.basic",
-        program_id: "ui.gallery.button.basic",
-        required_stages: BUTTON_REQUIRED_STAGES,
-        expected_failure: false,
-        mount_policy: UiStoryMountPolicy::EligibleWhenPassed,
-        host_bools: &[],
+pub const CHECKED_IN_GALLERY_STORY_MANIFESTS: &[UiCheckedInGalleryStoryManifest] = &[
+    UiCheckedInGalleryStoryManifest {
+        path: "assets/ui_gallery/stories/controls/button/basic.story.ron",
+        source: include_str!(
+            "../../../../assets/ui_gallery/stories/controls/button/basic.story.ron"
+        ),
     },
-    UiGalleryStorySpec {
-        story_id: "ui.gallery.button.selected",
-        category: "controls/button",
-        title: "Button / Selected",
-        source_path: "assets/ui_gallery/button/selected.ron",
-        source_id: "assets.ui_gallery.button.selected",
-        program_id: "ui.gallery.button.selected",
-        required_stages: BUTTON_REQUIRED_STAGES,
-        expected_failure: false,
-        mount_policy: UiStoryMountPolicy::EligibleWhenPassed,
-        host_bools: &[UiGalleryHostBool {
-            endpoint: "ui_gallery.button.selected.active",
-            value: true,
-        }],
+    UiCheckedInGalleryStoryManifest {
+        path: "assets/ui_gallery/stories/controls/button/selected.story.ron",
+        source: include_str!(
+            "../../../../assets/ui_gallery/stories/controls/button/selected.story.ron"
+        ),
     },
-    UiGalleryStorySpec {
-        story_id: "ui.gallery.button.missing_source",
-        category: "controls/button/failure",
-        title: "Button / Missing Source",
-        source_path: "assets/ui_gallery/button/missing.ron",
-        source_id: "assets.ui_gallery.button.missing",
-        program_id: "ui.gallery.button.missing_source",
-        required_stages: MISSING_SOURCE_REQUIRED_STAGES,
-        expected_failure: true,
-        mount_policy: UiStoryMountPolicy::Never,
-        host_bools: &[],
+    UiCheckedInGalleryStoryManifest {
+        path: "assets/ui_gallery/stories/controls/button/missing_source.failure.story.ron",
+        source: include_str!(
+            "../../../../assets/ui_gallery/stories/controls/button/missing_source.failure.story.ron"
+        ),
     },
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct UiGalleryHostBool {
-    pub endpoint: &'static str,
-    pub value: bool,
+pub struct UiCheckedInGalleryStoryManifest {
+    pub path: &'static str,
+    pub source: &'static str,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct UiGalleryStorySpec {
-    pub story_id: &'static str,
-    pub category: &'static str,
-    pub title: &'static str,
-    pub source_path: &'static str,
-    pub source_id: &'static str,
-    pub program_id: &'static str,
-    pub required_stages: &'static [UiStoryStageKind],
-    pub expected_failure: bool,
-    pub mount_policy: UiStoryMountPolicy,
-    pub host_bools: &'static [UiGalleryHostBool],
-}
-
-impl UiGalleryStorySpec {
-    pub fn manifest(self) -> UiStoryManifest {
-        UiStoryManifest {
-            story_id: crate::manifest::UiStoryId::new(self.story_id),
-            category: UiStoryCategory::new(self.category),
-            title: self.title.to_owned(),
-            source: UiStorySource::node(self.source_path, self.source_id),
-            program_id: self.program_id.to_owned(),
-            control_package: RUNENWERK_CONTROL_PACKAGE_ID.to_owned(),
-            host_profile: UiStoryHostProfile::headless(),
-            viewport_matrix: vec![UiStoryViewportProfile::new(
-                "gallery-default",
-                320,
-                128,
-                1.0,
-            )],
-            theme_profile: UiStoryThemeProfile::new(EDITOR_DARK_THEME_ID),
-            expected: if self.expected_failure {
-                UiStoryExpectedOutcome::fail(self.required_stages.to_vec())
-            } else {
-                UiStoryExpectedOutcome::pass(self.required_stages.to_vec())
-            },
-            mount_policy: self.mount_policy,
-            diagnostic_expectations: Vec::new(),
-        }
+impl UiCheckedInGalleryStoryManifest {
+    pub fn parse(self) -> Result<UiStoryManifest, UiStoryManifestParseError> {
+        UiStoryManifest::from_ron_str(self.source)
     }
 }
 
-pub fn checked_in_gallery_story_specs() -> &'static [UiGalleryStorySpec] {
-    CHECKED_IN_GALLERY_STORIES
+pub fn checked_in_gallery_story_manifest_sources() -> &'static [UiCheckedInGalleryStoryManifest] {
+    CHECKED_IN_GALLERY_STORY_MANIFESTS
 }
 
 pub fn checked_in_gallery_manifests() -> Vec<UiStoryManifest> {
-    CHECKED_IN_GALLERY_STORIES
+    CHECKED_IN_GALLERY_STORY_MANIFESTS
         .iter()
-        .map(|story| story.manifest())
+        .map(|manifest| {
+            manifest.parse().unwrap_or_else(|error| {
+                panic!("failed to parse {}: {}", manifest.path, error.message)
+            })
+        })
         .collect()
 }
 
 pub fn checked_in_gallery_registry() -> UiStoryRegistry {
-    UiStoryRegistry::from_manifests(checked_in_gallery_manifests())
+    let mut registry = UiStoryRegistry::new();
+    for manifest_source in CHECKED_IN_GALLERY_STORY_MANIFESTS {
+        match manifest_source.parse() {
+            Ok(manifest) => registry.insert(manifest),
+            Err(error) => registry.push_diagnostic(UiStoryRegistryDiagnostic::new(
+                error.code,
+                format!(
+                    "failed to parse {}: {}",
+                    manifest_source.path, error.message
+                ),
+            )),
+        }
+    }
+    registry
 }
 
-pub fn checked_in_gallery_story_spec(story_id: &str) -> Option<&'static UiGalleryStorySpec> {
-    CHECKED_IN_GALLERY_STORIES
-        .iter()
-        .find(|story| story.story_id == story_id)
+pub fn checked_in_gallery_manifest(story_id: &str) -> Option<UiStoryManifest> {
+    checked_in_gallery_manifests()
+        .into_iter()
+        .find(|story| story.story_id == UiStoryId::new(story_id))
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
+        manifest::UiStoryMountPolicy,
         mount::{UiStoryMountEligibility, UiStoryMountEligibilityReason},
         report::{UiStoryStageKind, UiStoryVerdictStatus},
         runner::UiStoryRunner,
@@ -157,16 +94,18 @@ mod tests {
     fn checked_in_gallery_registry_is_deterministic_and_valid() {
         let registry = checked_in_gallery_registry();
 
-        assert!(registry.is_valid());
-        assert_eq!(registry.stories().count(), CHECKED_IN_GALLERY_STORIES.len());
+        assert!(registry.is_valid(), "{:?}", registry.diagnostics());
+        assert_eq!(
+            registry.stories().count(),
+            CHECKED_IN_GALLERY_STORY_MANIFESTS.len()
+        );
         assert!(registry.contains(&crate::manifest::UiStoryId::new("ui.gallery.button.basic")));
     }
 
     #[test]
     fn checked_in_pass_stories_require_rendering_proof_stages() {
-        let basic = checked_in_gallery_story_spec("ui.gallery.button.basic")
-            .expect("basic story should exist")
-            .manifest();
+        let basic = checked_in_gallery_manifest("ui.gallery.button.basic")
+            .expect("basic story should exist");
 
         assert!(
             basic
@@ -217,6 +156,31 @@ mod tests {
         assert_eq!(
             eligibility.reason,
             UiStoryMountEligibilityReason::ExpectedFailureStory
+        );
+    }
+
+    #[test]
+    fn checked_in_story_manifests_round_trip_and_reject_future_schema() {
+        for manifest_source in checked_in_gallery_story_manifest_sources() {
+            let manifest = manifest_source.parse().expect("manifest should parse");
+            let serialized = manifest
+                .to_ron_string_pretty()
+                .expect("manifest should serialize");
+            let reparsed =
+                UiStoryManifest::from_ron_str(&serialized).expect("manifest should reparse");
+
+            assert_eq!(manifest, reparsed, "{}", manifest_source.path);
+        }
+
+        let future_schema = checked_in_gallery_story_manifest_sources()[0]
+            .source
+            .replacen("schema_version: 1", "schema_version: 999", 1);
+        let error = UiStoryManifest::from_ron_str(&future_schema)
+            .expect_err("future schema should be rejected");
+
+        assert_eq!(
+            error.code,
+            crate::manifest::DIAGNOSTIC_MANIFEST_SCHEMA_UNSUPPORTED
         );
     }
 }

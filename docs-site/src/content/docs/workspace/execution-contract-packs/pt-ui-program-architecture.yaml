@@ -1,10 +1,10 @@
 version: 1
 track_id: PT-UI-PROGRAM-ARCHITECTURE
-generated_at: '2026-06-16T18:48:19Z'
+generated_at: '2026-06-17T06:58:07Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 42f31272b0db9b1a6468ebcdf051ce82ebcb80262b1c6a9f43c1779f3c22c25e
-  docs-site/src/content/docs/workspace/production-tracks.yaml: d5b95c87a70b345fa9d90d05becc14bcae3ac3f0915fb8c5d18b36a406748a36
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 60c9bbd28fcfe12f7de62a115b82a359c3daf38694fba92279b5dbcf49d0c17f
+  docs-site/src/content/docs/workspace/production-tracks.yaml: d3d975fd07d0373507b694ee418030ea2e9c5073d3a2afdceda830a2e0248d0a
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 97d39e948a116a63ef3a8ef304bc58a8eec456557b143c3251ac6bef2f9b6913
   docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
   docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
   docs-site/src/content/docs/design/active/ui-program-contract-design.md: 034194dfeb22dfc7cabc58aebd531f3dc9f3d04d48be81261c65f41d34fa12de

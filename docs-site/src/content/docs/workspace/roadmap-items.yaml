@@ -676,6 +676,9 @@ items:
   fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative, shader-binding, evidence, and benchmark tests before implementation closeout.
   ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
 edges:
+- source: WR-177
+  target: WR-178
+  label: story-gated rendering proof before hardening no-bypass substrate
 - source: WR-172
   target: WR-173
   label: static runtime rendering follows completed architecture behavior truth

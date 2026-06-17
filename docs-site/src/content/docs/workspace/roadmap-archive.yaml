@@ -12184,3 +12184,106 @@ items:
   adr_requirement: No new ADR unless ownership moves to renderer/ECS/editor/game semantics or static mount proof expands beyond the accepted story-gated slice.
   fitness_function_requirement: Focused ui_story, ui_runtime_view, ui_render_primitives, ui_static_mount, runenwerk_ui_gallery binary tests plus docs/production/roadmap validators before closeout.
   ownership_mode: Stream-aligned UI owner with app-host integration boundary.
+- id: WR-178
+  title: Story Proof Contract And Asset Manifest Hardening
+  diagram_title: Story proof hardening
+  alias: UISTORYHARDEN
+  lane: UI
+  dependency_level: L3
+  gate: PM-UI-STORY-HARDEN-001 hardening before PM-005 no-gap audit
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 5
+  tc: 4
+  rr_oe: 4
+  du: 4
+  effort: 5
+  confidence: 0.8
+  expected_score: 2.7
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-177
+  write_scopes:
+  - domain/ui/ui_story/src/lib.rs
+  - domain/ui/ui_story/src/proof.rs
+  - domain/ui/ui_story/src/manifest.rs
+  - domain/ui/ui_story/src/report.rs
+  - domain/ui/ui_story/src/runner.rs
+  - domain/ui/ui_story/src/mount.rs
+  - domain/ui/ui_story/src/gallery.rs
+  - domain/ui/ui_story/Cargo.toml
+  - assets/ui_gallery/stories
+  - apps/runenwerk_editor/src/bin/runenwerk_ui_gallery.rs
+  - apps/runenwerk_editor/src/runtime/ui_gallery.rs
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/workspace/roadmap-archive.yaml
+  - docs-site/src/content/docs/reports/implementation-plans/wr-178-story-proof-contract-and-asset-manifest-hardening/plan.md
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+  - docs-site/src/content/docs/workspace/production-track-index.md
+  - docs-site/src/content/docs/workspace/production-milestone-register.md
+  - docs-site/src/content/docs/workspace/roadmap-decision-register.md
+  - docs-site/src/content/docs/workspace/roadmap-archive-register.md
+  - docs-site/src/content/docs/workspace/design-implementation-triage.md
+  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml
+  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml
+  validations:
+  - cargo fmt --check
+  - cargo check --workspace
+  - cargo test -p ui_story story_manifest
+  - cargo test -p ui_story expected_failure
+  - cargo test -p ui_story proof_contract
+  - cargo test -p runenwerk_editor story
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  - task ai:goal -- --track PT-UI-STORY-PLATFORM --scope non-deferred
+  next_evidence: Completed PM-UI-STORY-HARDEN-001 with versioned proof contracts, asset-backed button story manifests, exact expected-failure diagnostics, and failed-report gallery no-bypass evidence before PM-UI-STORY-005 starts.
+  current_decision: WR-178 completed the bounded hardening prerequisite for PM-UI-STORY-005. It changed ui_story proof/report/manifest contracts, checked-in story assets, and editor gallery consumers without performing deferred UI decomposition, component maturity, Designer/Workbench, game HUD, or world-space UI work.
+  current_call: Hardening is complete; PM-UI-STORY-005 remains the closeout-only no-gap audit.
+  first_move: Follow PM-UI-STORY-005 closeout-only manifest authority before any further story-platform claims.
+  main_blocker: N/A; WR-178 closed the hardening blocker that prevented PM-005 no-gap audit.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Deferred ui_definition splitting, ui_surface semantic cleanup, render primitive generic registry redesign, and physical folder moves remain out of this WR unless proven direct story-proof bypasses.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-story-harden-001-story-proof-contract-and-asset-manifest-hardening/closeout.md
+  diagram_call:
+  - story proof substrate
+  - exact diagnostics
+  - no gallery bypass
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-178 hardened the active story-driven proof contract without changing downstream UI ownership.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-178 preserved bounded UI platform sequencing and deferred component/designer/game/world scopes.
+  - kind: design
+    path: docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+    required_status: active
+    applies_to: implementation
+    reason: Gallery and mount proof remain report-driven and renderer-neutral.
+  - kind: doc
+    path: docs-site/src/content/docs/reports/implementation-plans/wr-178-story-proof-contract-and-asset-manifest-hardening/plan.md
+    required_status: active
+    applies_to: implementation
+    reason: WR-178 followed the accepted hardening contract.
+  ddd_owner: domain/ui ui_story proof-substrate contracts with runenwerk_editor gallery as consuming adapter
+  adr_requirement: No ADR required for bounded proof/report/manifest hardening. Require ADR or accepted design update before changing durable UI definition ownership, dependency direction, renderer semantics, component platform ownership, or product authoring contracts.
+  fitness_function_requirement: Focused ui_story manifest/proof/expected-failure tests, runenwerk_editor story no-bypass tests, workspace cargo check, and production/roadmap/docs/planning validators.
+  ownership_mode: Domain UI proof-substrate hardening with editor adapter consumption.

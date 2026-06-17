@@ -42,6 +42,10 @@ impl UiStoryRegistry {
         self.stories.insert(story_id, manifest);
     }
 
+    pub fn push_diagnostic(&mut self, diagnostic: UiStoryRegistryDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
     pub fn get(&self, story_id: &UiStoryId) -> Option<&UiStoryManifest> {
         self.stories.get(story_id)
     }
