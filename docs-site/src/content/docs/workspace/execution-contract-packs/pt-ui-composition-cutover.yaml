@@ -1,6 +1,6 @@
 version: 1
 track_id: PT-UI-COMPOSITION-CUTOVER
-generated_at: '2026-06-19T07:42:46Z'
+generated_at: '2026-06-19T12:18:48Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: af4db6681dfe879f055880c7cfacb5eab5fdd8d32f353912899c5287fdf3f8ed
   docs-site/src/content/docs/workspace/production-tracks.yaml: d9e5837c000ae562845135a300a3648f6a9152d9396727026e81047732f0ed0d
@@ -10,7 +10,7 @@ source_digests:
   docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
   docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md: c3c252a21bc85147044d0cf7104bcd568292283ca458a47b86f6ed0c97605527
   ? docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate/plan.contract.yaml
-  : 67c3cf0a41b3b55c94bde5b7c2707b4eac0d24530a3172525898ff539b3f868e
+  : b52a20358d42bba79a4ac984d8d5ee9d3d08e0ded75ef1135fe710dcf43bf0ef
   ? docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate/plan.md
   : 1a0ff3c0d5aaaf5f3d18d39d2158732aab15f9759ab57bcc1288095712bfe73b
   tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
@@ -75,9 +75,10 @@ actions:
   - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
   - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
   new_outputs:
-  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1.png
-  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2.png
-  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3.png
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
   - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
   - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-001/artifact-governance-and-visual-direction.yaml
   forbidden_outputs: []
@@ -185,9 +186,10 @@ actions:
     - docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
     - docs-site/src/content/docs/workspace/production-tracks.yaml
     - docs-site/src/content/docs/workspace/roadmap-items.yaml
-    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1.png
-    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2.png
-    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3.png
+    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
+    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+    - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
     - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
     validation_command_ids: []
   closeout_contract:
@@ -205,9 +207,10 @@ actions:
       - docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
       - docs-site/src/content/docs/workspace/production-tracks.yaml
       - docs-site/src/content/docs/workspace/roadmap-items.yaml
-      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1.png
-      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2.png
-      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3.png
+      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
+      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+      - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
       - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
       validation_command_ids: []
   rollback_policy:
