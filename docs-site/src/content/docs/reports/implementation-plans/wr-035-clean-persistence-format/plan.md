@@ -9,7 +9,7 @@ last_reviewed: 2026-05-20
 related_designs:
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-items.yaml
@@ -47,7 +47,7 @@ persistence cleanup pass.
   The row is `ready_next`, blocker `B2`, depends on completed `WR-034`, and names
   deletion of V1-V4 migration loaders, V5 legacy fallback fields, unsupported
   old-schema tests, and stable-key-only round-trip tests as required evidence.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and explicitly rejects auto-migration of legacy Workbench
   layouts.
 - `docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md`

@@ -1,0 +1,93 @@
+version: 1
+idea: Govern and execute the app-neutral UI composition clean cutover through one production track, two accepted designs, one superseding ADR, ordered checkpoints, and a mandatory three-option visual-direction selection before runtime docking work.
+source_path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+owner: ui
+created_at: '2026-06-19'
+governance_notes:
+- The user approved the clean-cutover architecture and implementation-readiness amendments.
+- domain/ui/ui_composition owns app-neutral structural definition, state, transactions, promotion, deterministic persistence contracts, liveness vocabulary, and fixtures.
+- domain/ui/ui_adaptive_composition owns transient projection, reflow, proposals, previews, drag/resize sessions, and semantic docking mechanics.
+- Editor and Draw retain provider, extension, policy, content, windowing, and product semantics.
+- The cutover uses one branch and one final merge; legacy authorities are temporary compatibility input only.
+open_questions: []
+item:
+  id: WR-180
+  title: UI Composition Cutover Governance And Visual Direction Gate
+  diagram_title: UI composition cutover governance
+  alias: UICOMP01
+  lane: UI architecture
+  dependency_level: L4
+  gate: Accepted core/adaptive designs, ADR 0013, production track, and selected visual direction before implementation
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 3.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-164
+  - WR-178
+  - WR-179
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+  - docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+  - docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md
+  - docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+  - docs-site/src/content/docs/adr
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - new:docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-06-19-adopt-app-neutral-ui-composition-vocabul
+  - new:docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate
+  - new:docs-site/src/content/docs/reports/design/ui-composition-visual-direction
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  - task puml:validate
+  next_evidence: Accepted governance artifacts plus exactly three grounded visual directions and one recorded user selection.
+  current_decision: Execute checkpoint 1 only; no runtime, chrome, docking, composition crate, editor, or Draw implementation is authorized by WR-180.
+  current_call: Complete governance and stop at the visual-selection gate before WR-181 starts.
+  first_move: Validate accepted designs and ADR 0013, activate PT-UI-COMPOSITION-CUTOVER, then generate exactly three grounded visual directions.
+  main_blocker: Runtime implementation is blocked until the user selects one of the three visual directions.
+  why_not_ready: The visual-direction gate is not yet complete.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Visual direction remains unselected until the checkpoint produces three grounded alternatives.
+  completion_audit: ''
+  diagram_call:
+  - clean cutover governance
+  - visual selection gate
+  - no runtime implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Core composition implementation must follow the accepted deterministic structural contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Adaptive implementation and the visual gate must follow the accepted projection and UX contract.
+  - kind: adr
+    path: docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Durable ownership, clean cutover, and supersession require ADR authority.
+  ddd_owner: domain/ui composition mechanisms with editor and Draw stream-aligned consumers and app/windowing policy ownership
+  adr_requirement: Satisfied by accepted ADR 0013; any later extraction or network-collaboration expansion requires a separate ADR.
+  fitness_function_requirement: Governance validators and exact three-option visual evidence now; later rows add focused core, persistence, editor, Draw, adaptive, accessibility, performance, cleanup, and truth-certification checks.
+  ownership_mode: Complicated-subsystem UI composition platform with stream-aligned editor and Draw integration owners.
+edges: []

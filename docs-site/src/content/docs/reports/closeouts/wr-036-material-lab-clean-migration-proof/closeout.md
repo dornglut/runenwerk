@@ -12,7 +12,7 @@ related:
   - ../../../workspace/production-tracks.yaml
   - ../../implementation-plans/wr-036-material-lab-clean-migration-proof/plan.md
   - ../../closeouts/wr-035-clean-persistence-format/closeout.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
 ---
 

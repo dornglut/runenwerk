@@ -9,7 +9,7 @@ last_reviewed: 2026-05-20
 related_designs:
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-items.yaml
@@ -49,7 +49,7 @@ migration proof now that WR-035 clean persistence is complete.
   The row is `ready_next`, blocker `B2`, depends on completed `WR-035`, and
   names Material Lab full-editor and standalone Workbench tests as required
   evidence.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and forbids restoring legacy surface-kind identity as a
   compatibility bridge.
 - `docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md`

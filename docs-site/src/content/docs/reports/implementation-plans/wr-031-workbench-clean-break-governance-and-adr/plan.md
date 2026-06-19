@@ -10,7 +10,7 @@ related_designs:
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-items.yaml
@@ -52,7 +52,7 @@ before downstream WR-032 through WR-036 implementation can start.
   stable-key-only Workbench identity, stable-key-only persistence, and
   full-editor plus standalone Material Lab profiles from registry-backed
   composition data.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is the durable accepted decision. It says `ToolSurfaceKind` is not a
   Workbench identity, persistence, provider request, profile construction, or
   Material Lab routing authority.
@@ -220,7 +220,7 @@ Readiness conditions already satisfied:
 
 Owning files and exact change locations for a later WR-031 closeout pass:
 
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   module `ADR: Capability Workbench Clean Break`, sections `Status`,
   `Decision`, and `Consequences`. These sections own the durable decision to
   drop legacy Workbench compatibility. Update them only if the decision itself

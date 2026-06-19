@@ -10,7 +10,7 @@ related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
-  - ../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
   - ./ui-designer-canonical-ir-and-composition-design.md
   - ./ui-designer-target-projection-profiles-design.md

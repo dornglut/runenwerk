@@ -15,7 +15,7 @@ related_roadmaps:
   - ../../../workspace/production-track-index.md
   - ../../../workspace/roadmap-decision-register.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 ---
 
 # WR-032 Typed Suite, Surface, Profile, And Provider Handles Contract
@@ -53,7 +53,7 @@ legacy `ToolSurfaceKind` a suite/profile/provider authority.
   `ToolSuiteProfileDefinition` as the next evidence. WR-030 is a separate
   product-workflow model/mesh proof and is not a semantic prerequisite for
   typed Workbench handle implementation.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and makes the clean break mandatory. It forbids
   `ToolSurfaceKind` as Workbench identity, persistence, provider request,
   profile construction, or Material Lab routing authority.

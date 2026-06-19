@@ -1,0 +1,77 @@
+version: 1
+status: accepted
+wr_id: WR-180
+milestone_id: PM-UI-COMPOSITION-001
+execution_kind: design_contract
+executor_kind: design_authoring
+authority_level: docs_governance_only
+permissions_required:
+- agent_design
+writer_strategy: verification_writer
+allowed_outputs:
+- docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+- docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+- docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md
+- docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+- docs-site/src/content/docs/adr/README.md
+- docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+- docs-site/src/content/docs/adr/superseded/0006-editor-surface-provider-plugin-seam.md
+- docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md
+- docs-site/src/content/docs/workspace/production-tracks.yaml
+- docs-site/src/content/docs/workspace/roadmap-items.yaml
+- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml
+- docs-site/src/content/docs/reports/roadmap-intake/2026-06-19-adopt-app-neutral-ui-composition-vocabul/proposal.yaml
+- docs-site/src/content/docs/reports/roadmap-intake/2026-06-19-adopt-app-neutral-ui-composition-vocabul/proposal.md
+- docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate/plan.md
+- docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate/plan.contract.yaml
+new_outputs:
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-001/artifact-governance-and-visual-direction.yaml
+forbidden_outputs:
+- domain
+- apps
+- engine
+- foundation
+- net
+forbidden_patterns:
+- runtime implementation
+- docking implementation
+- composition crate creation
+validation_commands:
+- task production:render
+- task production:validate
+- task production:check
+- task roadmap:render
+- task roadmap:validate
+- task roadmap:check
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: artifact
+  name: governance_and_visual_direction
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-001/artifact-governance-and-visual-direction.yaml
+  subject_paths:
+  - docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+  - docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+  - docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1.png
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2.png
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3.png
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md
+  completion_quality: bounded_contract
+  evidence_required: *evidence
+rollback_policy: reject import and leave product/runtime source unchanged on validation, scope, or digest failure
+stop_conditions:
+- stop if governance validation fails
+- stop if actual Runenwerk visual references cannot be inspected and attached
+- stop after presenting exactly three directions until the user selects one
+- stop before runtime, chrome, docking, editor, Draw, or crate implementation
+- stop before closeout while selection.md is absent

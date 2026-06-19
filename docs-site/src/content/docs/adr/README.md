@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-06-19
 ---
 
 # ADR Index
@@ -26,13 +26,17 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0003: Ratification Is Domain-Specific](accepted/0003-ratification-is-domain-specific.md)
 - [0004: Separate Description From Execution](accepted/0004-separate-description-from-execution.md)
 - [0005: Projections Are Derived State](accepted/0005-projections-are-derived-state.md)
-- [0006: Editor Surface Provider Plugin Seam](accepted/0006-editor-surface-provider-plugin-seam.md)
 - [0007: External Runtime Preview Process](accepted/0007-external-runtime-preview-process.md)
 - [0008: Adopt SDF-First Field Product Architecture](accepted/0008-adopt-sdf-first-field-product-architecture.md)
 - [0009: UI Interaction Formation V2](accepted/0009-ui-interaction-formation-v2.md)
 - [0010: Graph Substrate Canvas Boundary](accepted/0010-graph-substrate-canvas-boundary.md)
 - [0011: Animated SDF Authoring Graphs Lower Before Runtime](accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md)
-- [0012: Capability Workbench Clean Break](accepted/0012-capability-workbench-clean-break.md)
+- [0013: App-Neutral UI Composition Clean Cutover](accepted/0013-app-neutral-ui-composition-clean-cutover.md)
+
+## Superseded ADRs
+
+- [0006: Editor Surface Provider Plugin Seam](superseded/0006-editor-surface-provider-plugin-seam.md)
+- [0012: Capability Workbench Clean Break](superseded/0012-capability-workbench-clean-break.md)
 
 ## Proposed ADRs
 

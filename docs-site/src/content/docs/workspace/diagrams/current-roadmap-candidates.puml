@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+  component "WR-180 UI composition cutover governance\nstate=current_candidate\nscore=3.0 V5 B2\ncall=clean cutover governance\nvisual selection gate\nno runtime implementation" as UICOMP01 <<candidate>>
 
 }
 

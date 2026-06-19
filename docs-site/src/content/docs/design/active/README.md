@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-16
+last_reviewed: 2026-06-19
 ---
 
 # Active Designs
@@ -72,7 +72,6 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Runenwerk Draw Tool Session Slice 3 Intent Input Path](runenwerk-draw-tool-session-slice-3-intent-input-path.md)
 
 ### Workspace / Cross-Domain
-
 - [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)

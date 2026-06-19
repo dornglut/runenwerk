@@ -34,7 +34,8 @@ items:
   - cargo test -p ecs
   next_evidence: domain/gameplay event, action, state, quest, authority, and lowering contracts.
   current_decision: Blocked until narrower gameplay contracts exist.
-  why_not_ready: Missing domain/gameplay/events, domain/gameplay/actions, domain/gameplay/state, and domain/gameplay/quests; SDF physics relation readiness and authority diagnostics also need owning contracts.
+  why_not_ready: Missing domain/gameplay/events, domain/gameplay/actions, domain/gameplay/state, and domain/gameplay/quests;
+    SDF physics relation readiness and authority diagnostics also need owning contracts.
   diagram_call:
   - first compiler and ECS lowering
   - after gameplay contracts
@@ -77,7 +78,8 @@ items:
   - cargo check --workspace
   next_evidence: Language-neutral runtime boundary and formed gameplay products.
   current_decision: Rhai can be first adapter only after the domain contract exists.
-  why_not_ready: It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai can be the first adapter only after the domain contract exists.
+  why_not_ready: It depends on M6 formed procedural/gameplay product contracts and a language-neutral runtime boundary. Rhai
+    can be the first adapter only after the domain contract exists.
   diagram_call:
   - language-neutral contract,
   - first adapter later
@@ -113,7 +115,8 @@ items:
   - cargo check --workspace
   next_evidence: Owning domain docs and formed product contracts.
   current_decision: Follow product-job, query snapshot, and publication substrate maturity.
-  why_not_ready: Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query snapshot/publication barrier substrate.
+  why_not_ready: Their domain docs and formed product contracts are still missing or deferred. They follow the product-job/query
+    snapshot/publication barrier substrate.
   diagram_call:
   - formed product contracts
   - and product substrate first
@@ -146,9 +149,11 @@ items:
   - docs-site/src/content/docs/design/deferred
   validations:
   - task docs:validate
-  next_evidence: Active design, ADR, or roadmap promotion. SDF prefab composition has moved to WR-022 and is no longer part of this deferred bucket.
+  next_evidence: Active design, ADR, or roadmap promotion. SDF prefab composition has moved to WR-022 and is no longer part
+    of this deferred bucket.
   current_decision: Keep remaining deferred drafts until product ownership and handoff contracts are promoted.
-  why_not_ready: These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership, renderer/runtime handoff, query policy, and authority contracts are promoted.
+  why_not_ready: These remaining detail drafts are explicitly deferred. Reactivate only after the relevant product ownership,
+    renderer/runtime handoff, query policy, and authority contracts are promoted.
   diagram_call:
   - character, vegetation,
   - atmosphere, water, VFX, AI
@@ -183,15 +188,19 @@ items:
   - docs-site/src/content/docs/design/deferred
   validations:
   - task docs:validate
-  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target, formation product, invalidation/debug model, command boundary, and guard suite.
-  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract layer for retained UI first, not permission to implement alternate execution.
-  why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts.
+  next_evidence: Separate accepted ADR or active design after Interaction V2 names a concrete alternate target, formation
+    product, invalidation/debug model, command boundary, and guard suite.
+  current_decision: Keep deferred; retained UI remains the active implementation path and Interaction V2 is a contract layer
+    for retained UI first, not permission to implement alternate execution.
+  why_not_ready: The current retained UI path is the active implementation. Alternative execution strategies require a new
+    active design or accepted ADR before code, and must consume normalized definitions plus formed interaction contracts.
   diagram_call:
   - compiled-reactive or ECS-driven
   - only after ADR/design promotion
   ddd_owner: domain/ui
   adr_requirement: Accepted ADR required to change UI execution default after Interaction V2 contracts exist.
-  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and Interaction V2 contract consumption checks required before implementation.
+  fitness_function_requirement: UI boundary fitness functions, command/ratification guards, source-map/debug guards, and Interaction
+    V2 contract consumption checks required before implementation.
   ownership_mode: Deferred architecture exploration.
 - id: WR-017
   title: Gameplay actions, powers, runtime, and power editor
@@ -222,7 +231,8 @@ items:
   - task docs:validate
   next_evidence: Narrower gameplay graph and domain contract sequence.
   current_decision: Keep deferred behind gameplay contract work.
-  why_not_ready: These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and domain contract sequence.
+  why_not_ready: These deferred designs still need remaining decisions and must not precede the narrower gameplay graph and
+    domain contract sequence.
   diagram_call:
   - runtime and editor power authoring
   - after narrower gameplay contracts
@@ -396,12 +406,16 @@ items:
   - task planning:validate
   - task puml:validate
   - task docs:validate
-  next_evidence: Complete PM-GAME-RUNTIME-UI-001 with active design, architecture governance findings, code-truth matrix, evidence matrix, hard blockers, and disjoint follow-on WR candidates.
+  next_evidence: Complete PM-GAME-RUNTIME-UI-001 with active design, architecture governance findings, code-truth matrix,
+    evidence matrix, hard blockers, and disjoint follow-on WR candidates.
   current_decision: Intake proposal only; keep as blocked_deferred until accepted and explicitly promoted.
-  current_call: Use WR-104 only for PT-GAME-RUNTIME-UI governance/design activation. Do not implement app, domain, engine, renderer, or SDF UI behavior in this row.
-  first_move: Run task production:plan -- --milestone PM-GAME-RUNTIME-UI-001 --roadmap WR-104 only after this intake is accepted and promoted.
+  current_call: Use WR-104 only for PT-GAME-RUNTIME-UI governance/design activation. Do not implement app, domain, engine,
+    renderer, or SDF UI behavior in this row.
+  first_move: Run task production:plan -- --milestone PM-GAME-RUNTIME-UI-001 --roadmap WR-104 only after this intake is accepted
+    and promoted.
   main_blocker: Missing accepted owner-boundary design, production-track activation, and follow-on WR contracts.
-  why_not_ready: New game-runtime UI product track has not passed roadmap intake, architecture governance closeout, or dependency review.
+  why_not_ready: New game-runtime UI product track has not passed roadmap intake, architecture governance closeout, or dependency
+    review.
   completion_quality: not_applicable
   known_quality_gaps: []
   completion_audit: ''
@@ -414,10 +428,14 @@ items:
     required_status: active
     applies_to: discovery
     reason: Game-runtime UI governance must be anchored by the active projection and HUD platform design.
-  ddd_owner: workspace governance for future game-runtime UI target owner, with domain/ui/ui_definition, engine runtime/render, and SDF example evidence support
-  adr_requirement: No ADR for governance setup; ADR or accepted design update required before adding a game-runtime UI owner crate, changing dependency direction, moving source-truth authority, or making projection output authoritative.
-  fitness_function_requirement: Production, roadmap, planning, PUML, and docs validators for governance; later WRs must add focused target-profile, view-model/intent, UI submission ordering, render-flow composite, and SDF runtime proof tests.
-  ownership_mode: Stream-aligned game runtime product work with complicated-subsystem support from UI definition and engine render/runtime owners.
+  ddd_owner: workspace governance for future game-runtime UI target owner, with domain/ui/ui_definition, engine runtime/render,
+    and SDF example evidence support
+  adr_requirement: No ADR for governance setup; ADR or accepted design update required before adding a game-runtime UI owner
+    crate, changing dependency direction, moving source-truth authority, or making projection output authoritative.
+  fitness_function_requirement: Production, roadmap, planning, PUML, and docs validators for governance; later WRs must add
+    focused target-profile, view-model/intent, UI submission ordering, render-flow composite, and SDF runtime proof tests.
+  ownership_mode: Stream-aligned game runtime product work with complicated-subsystem support from UI definition and engine
+    render/runtime owners.
 - id: WR-106
   title: Viewport And Procedural Projection Contract Consolidation
   diagram_title: Viewport projection contracts
@@ -466,16 +484,24 @@ items:
   - task roadmap:validate
   - task roadmap:check
   - task puml:validate
-  next_evidence: Review this intake, accept or revise the governance boundary, then write an accepted design update that splits renderer projection/surface-fit work from editor viewport camera hardening before any implementation promotion.
-  current_decision: Deferred intake proposal only. Preserve producer-owned camera truth, camera-free PreparedViewFrame, and camera-free UI primitives while deciding the long-term contract split.
-  current_call: Keep as one cross-boundary governance intake until ownership, ADR need, bounded follow-on WRs, and fitness functions are accepted.
-  first_move: Run task production:plan -- --milestone PM-VIEWPORT-PROJECTION-001 --roadmap WR-106 after this intake is applied and PT-VIEWPORT-PROJECTION has rendered successfully.
-  main_blocker: Cross-owner contract split, accepted design evidence, ADR need, and enforceable fitness functions are not yet settled.
-  why_not_ready: New cross-boundary idea has not passed intake approval, accepted design review, ADR triage, and follow-on WR decomposition.
+  next_evidence: Review this intake, accept or revise the governance boundary, then write an accepted design update that splits
+    renderer projection/surface-fit work from editor viewport camera hardening before any implementation promotion.
+  current_decision: Deferred intake proposal only. Preserve producer-owned camera truth, camera-free PreparedViewFrame, and
+    camera-free UI primitives while deciding the long-term contract split.
+  current_call: Keep as one cross-boundary governance intake until ownership, ADR need, bounded follow-on WRs, and fitness
+    functions are accepted.
+  first_move: Run task production:plan -- --milestone PM-VIEWPORT-PROJECTION-001 --roadmap WR-106 after this intake is applied
+    and PT-VIEWPORT-PROJECTION has rendered successfully.
+  main_blocker: Cross-owner contract split, accepted design evidence, ADR need, and enforceable fitness functions are not
+    yet settled.
+  why_not_ready: New cross-boundary idea has not passed intake approval, accepted design review, ADR triage, and follow-on
+    WR decomposition.
   completion_quality: not_applicable
   known_quality_gaps:
-  - Renderer examples still contain one-off shader-local or example-local surface/aspect decisions that need typed contract review before hardening.
-  - Editor viewport projection exposes a supported-looking Orthographic variant without end-to-end runtime/render/picking evidence.
+  - Renderer examples still contain one-off shader-local or example-local surface/aspect decisions that need typed contract
+    review before hardening.
+  - Editor viewport projection exposes a supported-looking Orthographic variant without end-to-end runtime/render/picking
+    evidence.
   - Editor CPU picking and GPU projection derivation are separate enough to require drift guards before long-term hardening.
   - UI viewport embedding must remain camera-free even if later typing improves viewport/product surface identity.
   completion_audit: ''
@@ -503,10 +529,16 @@ items:
     required_status: active
     applies_to: discovery
     reason: WR-101 procedural camera evidence came from the active renderer population hardening doctrine.
-  ddd_owner: Workspace governance coordinates; engine render owns derived renderer projection helpers, editor viewport owns camera semantics, runenwerk_editor owns adapter/uniform/picking integration, and UI owns camera-free surface embedding.
-  adr_requirement: ADR required before moving camera source truth into PreparedViewFrame, making UI own camera semantics, or introducing a shared cross-domain camera ABI. No ADR required if future work preserves producer-owned camera intent, renderer-derived uniforms, and camera-free UI embedding.
-  fitness_function_requirement: Define before promotion; must include renderer aspect/surface-fit evidence, editor CPU/GPU projection drift guards, example migration evidence after ownership is assigned, and guards proving no viewport-specific camera truth enters PreparedViewFrame or generic UI primitives.
-  ownership_mode: Complicated-subsystem governance with enabling-team coordination across engine render, editor viewport, app adapter, and UI substrate boundaries.
+  ddd_owner: Workspace governance coordinates; engine render owns derived renderer projection helpers, editor viewport owns
+    camera semantics, runenwerk_editor owns adapter/uniform/picking integration, and UI owns camera-free surface embedding.
+  adr_requirement: ADR required before moving camera source truth into PreparedViewFrame, making UI own camera semantics,
+    or introducing a shared cross-domain camera ABI. No ADR required if future work preserves producer-owned camera intent,
+    renderer-derived uniforms, and camera-free UI embedding.
+  fitness_function_requirement: Define before promotion; must include renderer aspect/surface-fit evidence, editor CPU/GPU
+    projection drift guards, example migration evidence after ownership is assigned, and guards proving no viewport-specific
+    camera truth enters PreparedViewFrame or generic UI primitives.
+  ownership_mode: Complicated-subsystem governance with enabling-team coordination across engine render, editor viewport,
+    app adapter, and UI substrate boundaries.
 - id: WR-173
   title: Artifact-Backed Static UI Gallery Runtime Rendering
   diagram_title: UI runtime gallery
@@ -553,12 +585,17 @@ items:
   - task production:check
   - task roadmap:validate
   - task roadmap:check
-  next_evidence: Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run through UiStoryRunReport.
-  current_decision: Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run through UiStoryRunReport.
-  current_call: Do not execute this standalone static gallery row. Reintroduce rendering only through PT-UI-STORY-PLATFORM after UiStoryManifest, UiStoryRegistry, UiStoryRunner, UiStoryRunReport, and UiStoryMountEligibility authority exists.
-  first_move: Create or activate the story-first WR and production plan before any runtime rendering proof; the former static gallery path can only return as UiStoryRunReport-backed migration evidence.
+  next_evidence: Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run
+    through UiStoryRunReport.
+  current_decision: Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be
+    re-run through UiStoryRunReport.
+  current_call: Do not execute this standalone static gallery row. Reintroduce rendering only through PT-UI-STORY-PLATFORM
+    after UiStoryManifest, UiStoryRegistry, UiStoryRunner, UiStoryRunReport, and UiStoryMountEligibility authority exists.
+  first_move: Create or activate the story-first WR and production plan before any runtime rendering proof; the former static
+    gallery path can only return as UiStoryRunReport-backed migration evidence.
   main_blocker: Standalone static gallery rendering is superseded by story-first UI platform sequencing.
-  why_not_ready: Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run through UiStoryRunReport.
+  why_not_ready: Story-first UI platform track supersedes standalone static gallery rendering; rendering proof must be re-run
+    through UiStoryRunReport.
   completion_quality: runtime_proven
   known_quality_gaps:
   - Interactivity and route proposal are intentionally out of scope.
@@ -581,6 +618,8 @@ items:
     applies_to: implementation
     reason: WR-173 follows completed UiProgram architecture behavior truth and must not reopen PT-UI-PROGRAM-ARCHITECTURE.
   ddd_owner: domain/ui runtime rendering with apps/runenwerk_editor host integration
-  adr_requirement: No new ADR for the static gallery slice. Require ADR or accepted design update before changing renderer ownership, ECS ownership, host mutation authority, or adding interactive runtime semantics.
-  fitness_function_requirement: Focused UI formation/compiler/artifact/runtime-view/render-primitive/render-data/static-mount tests, gallery headless submission test, and docs/production/roadmap validators.
+  adr_requirement: No new ADR for the static gallery slice. Require ADR or accepted design update before changing renderer
+    ownership, ECS ownership, host mutation authority, or adding interactive runtime semantics.
+  fitness_function_requirement: Focused UI formation/compiler/artifact/runtime-view/render-primitive/render-data/static-mount
+    tests, gallery headless submission test, and docs/production/roadmap validators.
   ownership_mode: Stream-aligned UI owner with app-host integration boundary.

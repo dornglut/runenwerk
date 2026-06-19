@@ -10,7 +10,7 @@ related_designs:
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-items.yaml
@@ -45,7 +45,7 @@ wire those primitives into proposal dispatch instead of recreating them.
 - `docs-site/src/content/docs/reports/closeouts/wr-036-material-lab-clean-migration-proof/closeout.md`
   records the completed clean Material Lab host proof that unblocks host
   policy.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and requires host capability policy to be the gate for command,
   product, and resource access.
 - `docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md`

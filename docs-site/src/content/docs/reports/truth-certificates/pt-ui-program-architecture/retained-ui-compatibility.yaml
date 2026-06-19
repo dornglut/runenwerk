@@ -3,7 +3,7 @@ track_id: PT-UI-PROGRAM-ARCHITECTURE
 claim_id: retained-ui-compatibility
 verifier: ui_program_architecture_conformance
 status: passed
-produced_at: '2026-06-17T08:13:30Z'
+produced_at: '2026-06-19T07:33:29Z'
 source_digests:
   docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
   docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
@@ -13,15 +13,15 @@ source_digests:
   docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure: acde66cbbed1d324cb1f7cc01cc1afdcd8f46e48ce5e1894be16984ea3147ff1
   docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture: 33b992a3638598eb42c4297372c88961f1421bef9900f96e6c7fda634576e047
   docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml: 2737738a387e682d058ed031bb6c8c8370f9ea05b1710b0bed79e0d2e65e2b14
-  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: f74fa22cf261f70621397093d6f2e8c0c71171e4d2bba07d0e3ab25bdb606ee4
-  docs-site/src/content/docs/workspace/production-tracks.yaml: 17b9f7bbba86106c1183b1c28d30300c71d0f01f8f3038696d9a047b3326dae4
-  docs-site/src/content/docs/workspace/roadmap-archive.yaml: 60b720f7eb03c7429f4991dfe99ae444bd0380526e178baafd2b3c511b83820c
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 85f9b6a532aac3c55e65f460b71316774e1f6c39445e2ae72c18fef3a5731cd9
+  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: f85aade6fd694f0e946ca9dd56234cc2336cf54facdc96f9aa73be3416a16f69
+  docs-site/src/content/docs/workspace/production-tracks.yaml: d9e5837c000ae562845135a300a3648f6a9152d9396727026e81047732f0ed0d
+  docs-site/src/content/docs/workspace/roadmap-archive.yaml: 5b7f9c4a25d17fd9f17cd01ad98f527f13ea712261f64e3f1167d1cafe3a31fd
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 1f0a786556e2e5278c7ad5e83ced92cbaff512a03545fbf3f438006fae248ae0
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 42f31272b0db9b1a6468ebcdf051ce82ebcb80262b1c6a9f43c1779f3c22c25e
   ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
   : 87ca47bb7a189082e6404d3225d2a4c3a8da6974ff5d7a6de1d81d51a4e68877
   docs-site/src/content/docs/workspace/truth-verifier-registry.yaml: 176d7f50117f3164968afbee6dacae79719051a7917ee20578a34d6bb941cb79
-  domain/ui: d13d309ecfcb65d3934b5edf7d69829ea3a2a0285c63ebe02dcee8d035af8921
+  domain/ui: 72db83946038b9f557c281371ed07a4e5fa946d4427bd8123aacd63d3dc4b8c6
   tools/workflow/truth: 046e441f3be25c603b76fb5ac9d69e38bc7db9193626e3225d15cbe38ec45cae
 findings: []
 known_gaps: []

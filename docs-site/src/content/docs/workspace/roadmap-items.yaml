@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-06-16'
+  last_reviewed: '2026-06-19'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -37,9 +37,11 @@ items:
   validations:
   - cargo test -p ecs
   - cargo test -p scheduler
-  next_evidence: 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed and F2 lifecycle/finalization remains.
+  next_evidence: 2026-05-14 L0 substrate pilot added ECS-owned runtime plan reporting; M5 diagnostics are landed and F2 lifecycle/finalization
+    remains.
   current_decision: Continue only where lifecycle/finalization unblocks product jobs or diagnostics.
-  current_call: Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 pilot landed M5 consumer lag/backpressure diagnostics and F3 plan reporting; F2 remains open.
+  current_call: Implement as supporting work only when it directly unblocks the SDF-first execution path. The 2026-05-14 pilot
+    landed M5 consumer lag/backpressure diagnostics and F3 plan reporting; F2 remains open.
   first_move: Close remaining lifecycle finalization from net/ecs-runtime-prioritized-roadmap.md.
   diagram_call:
   - F2 lifecycle and
@@ -75,10 +77,13 @@ items:
   validations:
   - cargo test -p engine render_product_selection
   - cargo test -p engine
-  next_evidence: 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source residency invalidation, and conflict rejection for selected source state.
+  next_evidence: 2026-05-14 L0 substrate pilot added view-ordered product selection snapshots, selected-source residency invalidation,
+    and conflict rejection for selected source state.
   current_decision: Continue as contract-following support, not renderer-owned world truth.
-  current_call: Implement only as contract-following FR-1 follow-up from the fully featured renderer roadmap, not as renderer-owned world truth. The 2026-05-14 pilot added prepared-view ownership guards plus selected-source residency derivation and invalidation.
-  first_move: Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md, engine/roadmaps/fully-featured-renderer-roadmap.md, and render-product-surface-foundation-bundle-design.md.
+  current_call: Implement only as contract-following FR-1 follow-up from the fully featured renderer roadmap, not as renderer-owned
+    world truth. The 2026-05-14 pilot added prepared-view ownership guards plus selected-source residency derivation and invalidation.
+  first_move: Continue current R4/R6/R7 support from engine/plugins/render/docs/roadmap.md, engine/roadmaps/fully-featured-renderer-roadmap.md,
+    and render-product-surface-foundation-bundle-design.md.
   diagram_call:
   - product selection and
   - runtime-derived residency only
@@ -114,7 +119,8 @@ items:
   - cargo test -p runenwerk_editor --test viewport_architecture_guards
   next_evidence: 2026-05-14 entity-table and SDF surface routing/capability guards landed.
   current_decision: Keep active in parallel; score does not make it the main roadmap.
-  current_call: Keep active while any editor surface work lands. The 2026-05-14 parallel batch added entity-table and SDF operation routing/capability guards.
+  current_call: Keep active while any editor surface work lands. The 2026-05-14 parallel batch added entity-table and SDF
+    operation routing/capability guards.
   first_move: Preserve structural routing, capability gating, and surface ownership guard coverage from domain/ui/roadmap.md.
   diagram_call:
   - structural routing,
@@ -152,16 +158,21 @@ items:
   - tools/docs/validate_docs.py
   validations:
   - task docs:validate
-  next_evidence: 2026-05-16 docs governance milestone moved implemented active designs into implemented lifecycle, aligned canonical ownership maps with workspace truth, indexed preserved batch artifacts, and hardened docs validation against lifecycle drift, missing crate coverage, stale prompt paths, and stale active-looking batches.
-  current_decision: Keep as an always-available docs governance support lane; the current no-shortcuts cleanup milestone is complete and future drift should fail through task docs:validate.
-  current_call: Use only for future lifecycle drift or source-of-truth cleanup. Current validation now rejects active designs that claim implementation without an explicit phase-evidence marker and rejects missing crate-doc coverage.
+  next_evidence: 2026-05-16 docs governance milestone moved implemented active designs into implemented lifecycle, aligned
+    canonical ownership maps with workspace truth, indexed preserved batch artifacts, and hardened docs validation against
+    lifecycle drift, missing crate coverage, stale prompt paths, and stale active-looking batches.
+  current_decision: Keep as an always-available docs governance support lane; the current no-shortcuts cleanup milestone is
+    complete and future drift should fail through task docs:validate.
+  current_call: Use only for future lifecycle drift or source-of-truth cleanup. Current validation now rejects active designs
+    that claim implementation without an explicit phase-evidence marker and rejects missing crate-doc coverage.
   first_move: Run task docs:validate, then inspect any reported governance drift before moving or rewriting docs.
   diagram_call:
   - implemented lifecycle promoted
   - strict docs validation
   ddd_owner: workspace documentation
   adr_requirement: No ADR; follow documentation lifecycle policy.
-  fitness_function_requirement: Strict docs validation, link checks, crate-doc coverage, batch manifest checks, and lifecycle status checks.
+  fitness_function_requirement: Strict docs validation, link checks, crate-doc coverage, batch manifest checks, and lifecycle
+    status checks.
   ownership_mode: Enabling documentation cleanup.
 - id: WR-008
   title: Native tablet input backend arbitration and diagnostics
@@ -232,9 +243,12 @@ items:
   - cargo test -p runenwerk_editor prefab
   next_evidence: Source/catalog prefab identity, descriptor diagnostics, and approved runtime instancing sequence.
   current_decision: Keep prefab composition active as design and catalog identity now; runtime instancing waits for V2 gates.
-  current_call: Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable; prefab renderer handoff must consume the fully featured renderer roadmap instead of adding a parallel scene path.
-  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted product ownership.
-  first_move: Continue from sdf-prefab-composition-system-design.md, source-backed asset core plus adapter evidence, and FR-4/FR-6 renderer handoff sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
+  current_call: Do not implement runtime prefab instances until rendered-world V1 and source-backed asset identity are stable;
+    prefab renderer handoff must consume the fully featured renderer roadmap instead of adding a parallel scene path.
+  main_blocker: Runtime prefab instancing waits for rendered-world V1, source-backed prefab identity adapters, and accepted
+    product ownership.
+  first_move: Continue from sdf-prefab-composition-system-design.md, source-backed asset core plus adapter evidence, and FR-4/FR-6
+    renderer handoff sequencing in engine/roadmaps/fully-featured-renderer-roadmap.md.
   diagram_call:
   - active design now
   - runtime instancing V2
@@ -276,10 +290,12 @@ items:
   validations:
   - cargo test -p ecs
   - cargo test -p scheduler
-  next_evidence: Accepted design for Send + Sync system constraints, access sharding, per-wave command queues, deterministic merges, and blocked-parallelism diagnostics.
+  next_evidence: Accepted design for Send + Sync system constraints, access sharding, per-wave command queues, deterministic
+    merges, and blocked-parallelism diagnostics.
   current_decision: Keep ECS execution serial during rendered-world V1; harden product jobs as the active multithreaded path.
   current_call: Design now, implement later after diagnostics and deterministic merge policy are accepted.
-  main_blocker: Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics, and serial equivalence tests.
+  main_blocker: Public parallel execution waits for accepted deterministic merge policy, blocked-parallelism diagnostics,
+    and serial equivalence tests.
   first_move: Continue from ecs-parallel-system-execution-design.md and engine runtime product-job executor evidence.
   diagram_call:
   - ECS remains serial now
@@ -292,7 +308,8 @@ items:
     reason: Public ECS parallel APIs or default parallel execution require an accepted deterministic merge design.
   ddd_owner: domain/ecs with engine runtime scheduler support
   adr_requirement: ADR required before public ECS parallel APIs or default parallel execution.
-  fitness_function_requirement: Parallel-plan diagnostics, blocked-wave reporting, deterministic merge, and serial equivalence tests.
+  fitness_function_requirement: Parallel-plan diagnostics, blocked-wave reporting, deterministic merge, and serial equivalence
+    tests.
   ownership_mode: Complicated-subsystem design work before implementation.
 - id: WR-024
   title: Editor Shell Polish
@@ -324,17 +341,25 @@ items:
   - cargo test -p editor_shell
   - cargo test -p ui_runtime layout_popup
   - cargo test -p runenwerk_editor viewport
-  next_evidence: Retained-UI slice evidence after the relevant named Interaction V2 contracts exist for IV2-menu-stack, IV2-scroll-ownership, IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration.
-  current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2 contract layer, not as a pile of isolated cosmetic fixes.
-  current_call: Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome, docking, and status overflow slices instead of defining local policy.
-  main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming those contracts or as explicitly bounded compatibility evidence.
-  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant named Interaction V2 slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep changes explicitly compatibility-scoped.
+  next_evidence: Retained-UI slice evidence after the relevant named Interaction V2 contracts exist for IV2-menu-stack, IV2-scroll-ownership,
+    IV2-menu-sizing, IV2-chrome-slots, IV2-dock-drop-zones, and IV2-status-and-viewport-arbitration.
+  current_decision: Treat editor shell polish as a retained-UI implementation slice under the broader Interaction V2 contract
+    layer, not as a pile of isolated cosmetic fixes.
+  current_call: Ready-next only after the WR-025 doctrine repair is committed; consume landed popup, scroll, chrome, docking,
+    and status overflow slices instead of defining local policy.
+  main_blocker: Interaction V2 contract/migration spine must lead; polish can only proceed as a retained-UI slice consuming
+    those contracts or as explicitly bounded compatibility evidence.
+  first_move: Continue from editor-shell-menu-and-tab-chrome-polish-design.md only after the relevant named Interaction V2
+    slice defines vocabulary, validation, formed model, retained adapter, runtime enforcement, and guards, or keep changes
+    explicitly compatibility-scoped.
   diagram_call:
   - FPS stats
   - contrast, scroll, tab chrome
   ddd_owner: domain/editor/editor_shell with domain/ui runtime layout support
-  adr_requirement: No ADR for narrow retained UI chrome/layout polish; WR-025 owns accepted ADR 0009 for durable interaction formation.
-  fitness_function_requirement: Popup layout, submenu anchor, active indicator, statistics projection, and named Interaction V2 slice-consumption guard tests.
+  adr_requirement: No ADR for narrow retained UI chrome/layout polish; WR-025 owns accepted ADR 0009 for durable interaction
+    formation.
+  fitness_function_requirement: Popup layout, submenu anchor, active indicator, statistics projection, and named Interaction
+    V2 slice-consumption guard tests.
   ownership_mode: Stream-aligned editor shell guardrail work.
 - id: WR-029
   title: Model Mesh Material Binding
@@ -393,12 +418,22 @@ items:
   - task production:validate
   - task planning:validate
   - cargo check -p runenwerk_editor
-  next_evidence: Phase 1-3 code evidence is accepted for model/mesh identity, persistence, workflow projection, prepared transport, shader lane, and pass provenance. Next evidence must come from WR-030 visible Mesh Preview model/mesh pixel proof plus refreshed WR-028 SDF non-regression.
-  current_decision: WR-029 is ready-next, not current, because Phase 4 depends on WR-030. Keep the accepted implementation contract active and preserve the landed Phase 1-3 code evidence, but do not close model/mesh material binding without source-backed visible pixel proof.
-  current_call: Ready-next only. Do not claim WR-029 complete until WR-030 produces visible source-backed model/mesh pixels through a material-consuming pass, WR-028 SDF non-regression proof is refreshed, and closeout evidence names the consuming renderer module.
-  main_blocker: WR-030 must prove visible model/mesh pixels from PreparedModelMeshMaterialSelection and the scene material table before WR-029 can close.
-  why_not_ready: Model/mesh material binding has accepted/code-backed identity, persistence, workflow, prepared transport, shader lane, and provenance evidence, but it is not closeable until WR-030 lands visible pixel proof and WR-028 SDF non-regression evidence.
-  first_move: Finish WR-030 Mesh Preview material-consuming pass pixel proof, refresh WR-028 SDF non-regression, then promote WR-029 for final closeout if model/mesh material pixels are proven.
+  next_evidence: Phase 1-3 code evidence is accepted for model/mesh identity, persistence, workflow projection, prepared transport,
+    shader lane, and pass provenance. Next evidence must come from WR-030 visible Mesh Preview model/mesh pixel proof plus
+    refreshed WR-028 SDF non-regression.
+  current_decision: WR-029 is ready-next, not current, because Phase 4 depends on WR-030. Keep the accepted implementation
+    contract active and preserve the landed Phase 1-3 code evidence, but do not close model/mesh material binding without
+    source-backed visible pixel proof.
+  current_call: Ready-next only. Do not claim WR-029 complete until WR-030 produces visible source-backed model/mesh pixels
+    through a material-consuming pass, WR-028 SDF non-regression proof is refreshed, and closeout evidence names the consuming
+    renderer module.
+  main_blocker: WR-030 must prove visible model/mesh pixels from PreparedModelMeshMaterialSelection and the scene material
+    table before WR-029 can close.
+  why_not_ready: Model/mesh material binding has accepted/code-backed identity, persistence, workflow, prepared transport,
+    shader lane, and provenance evidence, but it is not closeable until WR-030 lands visible pixel proof and WR-028 SDF non-regression
+    evidence.
+  first_move: Finish WR-030 Mesh Preview material-consuming pass pixel proof, refresh WR-028 SDF non-regression, then promote
+    WR-029 for final closeout if model/mesh material pixels are proven.
   diagram_call:
   - ready after WR-030
   - model mesh material closeout
@@ -410,8 +445,10 @@ items:
     applies_to: implementation
     reason: WR-029 must preserve WR-028 SDF boundaries while extending material binding to model/mesh renderables.
   ddd_owner: editor_scene model/mesh material assignment owner with app material workflow and engine render support
-  adr_requirement: Accepted implementation contract is required before model/mesh material binding implementation; ADR required if review changes source-truth ownership, dependency direction, or renderer ABI beyond the contract.
-  fitness_function_requirement: Save/reload material-region assignments, renderer ABI tests, generated shader selection by model/mesh material region, and GPU pixel proof.
+  adr_requirement: Accepted implementation contract is required before model/mesh material binding implementation; ADR required
+    if review changes source-truth ownership, dependency direction, or renderer ABI beyond the contract.
+  fitness_function_requirement: Save/reload material-region assignments, renderer ABI tests, generated shader selection by
+    model/mesh material region, and GPU pixel proof.
   ownership_mode: Current product workflow implementation over model/mesh source identity and engine render material binding.
 - id: WR-030
   title: Model Mesh Renderable Scene Contract
@@ -430,7 +467,8 @@ items:
   effort: 8
   confidence: 0.5
   expected_score: 1.0
-  rice: Provide the source-backed model/mesh preview surface required before WR-029 can honestly claim model/mesh material pixels.
+  rice: Provide the source-backed model/mesh preview surface required before WR-029 can honestly claim model/mesh material
+    pixels.
   kano: Basic
   dependencies:
   - WR-028
@@ -464,11 +502,17 @@ items:
   - task docs:validate
   - task roadmap:validate
   - task planning:validate
-  next_evidence: Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032; WR-030 remains valid ready-next work for WR-029 and is not a typed Workbench handle prerequisite.
-  current_decision: Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032; WR-030 remains valid ready-next work for WR-029 and is not a typed Workbench handle prerequisite.
-  current_call: 'Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance and WR-028 SDF non-regression.'
-  first_move: Wire the app-owned Mesh Preview packet into an actual material-consuming render pass, capture GPU/manual pixel evidence for a source-backed model/mesh material-region assignment change, and record the consuming pass evidence.
-  main_blocker: Needs visible Mesh Preview model/mesh pixels from the selected scene material table entry; descriptor/status rows and SDF pixels are not sufficient proof.
+  next_evidence: Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032; WR-030 remains valid ready-next
+    work for WR-029 and is not a typed Workbench handle prerequisite.
+  current_decision: Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032; WR-030 remains valid ready-next
+    work for WR-029 and is not a typed Workbench handle prerequisite.
+  current_call: 'Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must
+    resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance
+    and WR-028 SDF non-regression.'
+  first_move: Wire the app-owned Mesh Preview packet into an actual material-consuming render pass, capture GPU/manual pixel
+    evidence for a source-backed model/mesh material-region assignment change, and record the consuming pass evidence.
+  main_blocker: Needs visible Mesh Preview model/mesh pixels from the selected scene material table entry; descriptor/status
+    rows and SDF pixels are not sufficient proof.
   why_not_ready: ''
   completion_quality: not_applicable
   known_quality_gaps: []
@@ -494,8 +538,10 @@ items:
     applies_to: implementation
     reason: WR-030 must not accidentally expand the SDF-only authored scene contract into general mesh extraction.
   ddd_owner: editor_scene authored renderable contract with app runtime extraction and engine render support
-  adr_requirement: No ADR for the Mesh Preview product surface while source ownership and dependency direction remain unchanged; ADR required before general mesh scene extraction, renderer-owned scene truth, or broader renderer ABI semantics.
-  fitness_function_requirement: Source-backed Mesh Preview projection, material table selection, pass-consumption evidence, full-editor and standalone-workbench surface coverage, SDF non-regression, and GPU/manual pixel proof.
+  adr_requirement: No ADR for the Mesh Preview product surface while source ownership and dependency direction remain unchanged;
+    ADR required before general mesh scene extraction, renderer-owned scene truth, or broader renderer ABI semantics.
+  fitness_function_requirement: Source-backed Mesh Preview projection, material table selection, pass-consumption evidence,
+    full-editor and standalone-workbench surface coverage, SDF non-regression, and GPU/manual pixel proof.
   ownership_mode: Stream-aligned Material Lab product workflow with enabling app-runtime and engine-render support.
 - id: WR-040
   title: External Component Sandbox Design
@@ -526,10 +572,12 @@ items:
   - task docs:validate
   - task planning:validate
   next_evidence: Accepted sandbox/security design before any external dynamic component implementation.
-  current_decision: External components stay blocked until sandbox, package trust, permissions, unload/reload, and diagnostics are accepted.
+  current_decision: External components stay blocked until sandbox, package trust, permissions, unload/reload, and diagnostics
+    are accepted.
   current_call: Keep this as design-only future work.
   main_blocker: No accepted sandbox/security design exists.
-  first_move: Draft external component threat model, trust boundary, process/ABI options, permissions, diagnostics, and rollback design.
+  first_move: Draft external component threat model, trust boundary, process/ABI options, permissions, diagnostics, and rollback
+    design.
   diagram_call:
   - external components blocked
   - sandbox decision required
@@ -570,10 +618,14 @@ items:
   - task roadmap:check
   - task docs:validate
   - task planning:validate
-  next_evidence: PM-UI-DESIGN-001 closeout proving active UI Designer doctrine, target-profile boundaries, no runtime/code changes, and passing production, roadmap, docs, and planning validators.
-  current_decision: Support-only planning row for PM-UI-DESIGN-001; link doctrine closeout to the production track without changing WR execution state.
-  current_call: Use only for UI Designer doctrine and target-boundary planning evidence. Do not use this row as permission for UI Designer product implementation.
-  first_move: Close PM-UI-DESIGN-001 with active design evidence, architecture governance review, planning validation, and task ai:goal -- --track PT-UI-DESIGN.
+  next_evidence: PM-UI-DESIGN-001 closeout proving active UI Designer doctrine, target-profile boundaries, no runtime/code
+    changes, and passing production, roadmap, docs, and planning validators.
+  current_decision: Support-only planning row for PM-UI-DESIGN-001; link doctrine closeout to the production track without
+    changing WR execution state.
+  current_call: Use only for UI Designer doctrine and target-boundary planning evidence. Do not use this row as permission
+    for UI Designer product implementation.
+  first_move: Close PM-UI-DESIGN-001 with active design evidence, architecture governance review, planning validation, and
+    task ai:goal -- --track PT-UI-DESIGN.
   main_blocker: N/A; support-only doctrine row.
   why_not_ready: ''
   completion_quality: not_applicable
@@ -584,8 +636,10 @@ items:
   - no WR execution state change
   decision_gates: []
   ddd_owner: editor/UI planning with domain/ui and editor domain boundaries
-  adr_requirement: No new ADR for this planning-only doctrine row; ADR or accepted design required before changing durable UI definition ownership, dependency direction, or game-runtime UI crate ownership.
-  fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add focused domain/UI fitness functions before code.
+  adr_requirement: No new ADR for this planning-only doctrine row; ADR or accepted design required before changing durable
+    UI definition ownership, dependency direction, or game-runtime UI crate ownership.
+  fitness_function_requirement: Production, roadmap, docs, and planning validators; later implementation rows must add focused
+    domain/UI fitness functions before code.
   ownership_mode: Enabling support owned by editor/UI maintainers.
 - id: WR-103
   title: Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation
@@ -632,11 +686,16 @@ items:
   - task planning:validate
   - task puml:validate
   - task docs:validate
-  next_evidence: Complete PM-RENDER-SDF-RUNTIME-001 with active shader-bound sparse SDF terrain runtime design, production track activation, WR-103 governance row, implementation contract, and follow-on runtime milestones before any engine or shader implementation starts.
-  current_decision: WR-103 is a docs/governance row for PT-RENDER-SDF-RUNTIME. It may update planning docs, the active runtime integration design, and the implementation contract only.
-  current_call: Activate a follow-on shader-bound sparse SDF terrain runtime track without reopening completed PT-RENDER-SDF or adding Rust, shader, asset, or example implementation in this row.
+  next_evidence: Complete PM-RENDER-SDF-RUNTIME-001 with active shader-bound sparse SDF terrain runtime design, production
+    track activation, WR-103 governance row, implementation contract, and follow-on runtime milestones before any engine or
+    shader implementation starts.
+  current_decision: WR-103 is a docs/governance row for PT-RENDER-SDF-RUNTIME. It may update planning docs, the active runtime
+    integration design, and the implementation contract only.
+  current_call: Activate a follow-on shader-bound sparse SDF terrain runtime track without reopening completed PT-RENDER-SDF
+    or adding Rust, shader, asset, or example implementation in this row.
   first_move: Run task production:plan -- --milestone "PM-RENDER-SDF-RUNTIME-001" --roadmap "WR-103".
-  main_blocker: Awaiting explicit promotion or current-candidate switch after existing current governance candidates and after PM-RENDER-SDF-RUNTIME-001 documentation validates.
+  main_blocker: Awaiting explicit promotion or current-candidate switch after existing current governance candidates and after
+    PM-RENDER-SDF-RUNTIME-001 documentation validates.
   why_not_ready: ''
   completion_quality: not_applicable
   known_quality_gaps: []
@@ -672,10 +731,711 @@ items:
     applies_to: discovery
     reason: WR-103 execution must follow the docs-only governance and track activation contract.
   ddd_owner: engine render plugin with domain/world_sdf source-truth input ownership
-  adr_requirement: No ADR for docs-only governance. Require an ADR or accepted design update before a follow-on WR changes durable GPU ABI ownership, dependency direction, SDF source-truth authority, fallback legality, or cross-domain product contracts.
-  fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative, shader-binding, evidence, and benchmark tests before implementation closeout.
+  adr_requirement: No ADR for docs-only governance. Require an ADR or accepted design update before a follow-on WR changes
+    durable GPU ABI ownership, dependency direction, SDF source-truth authority, fallback legality, or cross-domain product
+    contracts.
+  fitness_function_requirement: Governance validators for docs, roadmap, production, planning, and PUML now; follow-on runtime
+    WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative,
+    shader-binding, evidence, and benchmark tests before implementation closeout.
   ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
+- id: WR-180
+  title: UI Composition Cutover Governance And Visual Direction Gate
+  diagram_title: UI composition cutover governance
+  alias: UICOMP01
+  lane: UI architecture
+  dependency_level: L4
+  gate: Accepted core/adaptive designs, ADR 0013, production track, and selected visual direction before implementation
+  planning_state: current_candidate
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 5
+  confidence: 0.8
+  expected_score: 3.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-164
+  - WR-178
+  - WR-179
+  write_scopes:
+  - docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+  - docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+  - docs-site/src/content/docs/design/active/editor-ui-workspace-tool-surface-architecture.md
+  - docs-site/src/content/docs/design/active/game-runtime-ui-projection-and-hud-platform-design.md
+  - docs-site/src/content/docs/adr
+  - docs-site/src/content/docs/workspace/production-tracks.yaml
+  - docs-site/src/content/docs/workspace/roadmap-items.yaml
+  - new:docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml
+  - docs-site/src/content/docs/reports/roadmap-intake/2026-06-19-adopt-app-neutral-ui-composition-vocabul
+  - new:docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate
+  - new:docs-site/src/content/docs/reports/design/ui-composition-visual-direction
+  validations:
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  - task puml:validate
+  next_evidence: User approved the implementation-ready clean-cutover plan on 2026-06-19; accepted core/adaptive designs,
+    ADR 0013, applied roadmap sequence, active production track, and WR-180 implementation contract are present. Visual selection
+    remains the checkpoint stop gate.
+  current_decision: User approved the implementation-ready clean-cutover plan on 2026-06-19; accepted core/adaptive designs,
+    ADR 0013, applied roadmap sequence, active production track, and WR-180 implementation contract are present. Visual selection
+    remains the checkpoint stop gate.
+  current_call: Complete governance and stop at the visual-selection gate before WR-181 starts.
+  first_move: Validate accepted designs and ADR 0013, activate PT-UI-COMPOSITION-CUTOVER, then generate exactly three grounded
+    visual directions.
+  main_blocker: Runtime implementation is blocked until the user selects one of the three visual directions.
+  why_not_ready: The visual-direction gate is not yet complete.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Visual direction remains unselected until the checkpoint produces three grounded alternatives.
+  completion_audit: ''
+  diagram_call:
+  - clean cutover governance
+  - visual selection gate
+  - no runtime implementation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Core composition implementation must follow the accepted deterministic structural contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Adaptive implementation and the visual gate must follow the accepted projection and UX contract.
+  - kind: adr
+    path: docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+    required_status: accepted
+    applies_to: discovery
+    reason: Durable ownership, clean cutover, and supersession require ADR authority.
+  ddd_owner: domain/ui composition mechanisms with editor and Draw stream-aligned consumers and app/windowing policy ownership
+  adr_requirement: Satisfied by accepted ADR 0013; any later extraction or network-collaboration expansion requires a separate
+    ADR.
+  fitness_function_requirement: Governance validators and exact three-option visual evidence now; later rows add focused core,
+    persistence, editor, Draw, adaptive, accessibility, performance, cleanup, and truth-certification checks.
+  ownership_mode: Complicated-subsystem UI composition platform with stream-aligned editor and Draw integration owners.
+- id: WR-181
+  title: UI Composition Core Contracts And Invariants
+  diagram_title: Composition core contracts
+  alias: UICOMP02
+  lane: UI architecture
+  dependency_level: L4
+  gate: WR-180 visual direction selected and checkpoint 1 closed
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-180
+  write_scopes:
+  - Cargo.toml
+  - new:domain/ui/ui_composition
+  - domain/ui/ui_testing
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p ui_composition
+  - python3 tools/checks/check_ui_layer_dependencies.py --root .
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Runtime-proven definition, state, transaction, diagnostic, liveness, promotion, fixture, invariant, and structural-history
+    contracts.
+  current_decision: Create the core crate without editing runtime chrome, editor docking, Draw projection, ui_surface, or
+    legacy workspace mutation paths.
+  current_call: Implement the smallest complete core authority; do not add adaptive or app semantics.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-002 and inspect exact existing ID, diagnostic, ratification,
+    and fixture patterns.
+  main_blocker: WR-180 must close with a selected visual direction and current governance validation.
+  why_not_ready: Depends on checkpoint 1.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Persistence storage and runtime consumers are owned by later checkpoints.
+  completion_audit: ''
+  diagram_call:
+  - deterministic core
+  - typed transactions
+  - no app semantics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Core contracts must implement the accepted structural authority.
+  ddd_owner: domain/ui/ui_composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Focused core tests, property invariants, atomic rejection, structural inverse revalidation,
+    fixtures, dependency checks, docs, and planning validation.
+  ownership_mode: Complicated-subsystem UI composition owner.
+- id: WR-182
+  title: Composition Persistence Envelopes And Deterministic Bundles
+  diagram_title: Composition persistence bundles
+  alias: UICOMP03
+  lane: UI architecture
+  dependency_level: L4
+  gate: Core composition contracts runtime-proven
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-181
+  write_scopes:
+  - domain/ui/ui_composition
+  - new:domain/ui/ui_composition/benches
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p ui_composition persistence
+  - cargo test -p ui_composition deterministic
+  - cargo bench -p ui_composition --bench composition_persistence --no-run
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Canonical RON, linked core/app envelopes, BLAKE3 mismatch detection, generation-pointer atomicity, last-good
+    recovery, and legacy rejection proofs.
+  current_decision: Implement generic persistence and promotion contracts without wiring editor or Draw storage.
+  current_call: Prove deterministic bytes and atomic bundle activation before consumer migration.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-003 and define golden/failure-injection fixtures.
+  main_blocker: WR-181 core identities, formation, revision, and promotion primitives must be runtime-proven.
+  why_not_ready: Depends on the completed core checkpoint.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Editor and Draw extension adapters are later checkpoints.
+  completion_audit: ''
+  diagram_call:
+  - canonical RON
+  - linked hashes
+  - atomic activation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Persistence must implement the accepted deterministic bundle contract.
+  ddd_owner: domain/ui/ui_composition persistence mechanism with app-owned storage adapters
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Byte-golden, insertion-order, round-trip, hash-link, mismatch, crash/failure, legacy rejection,
+    and benchmark tests.
+  ownership_mode: UI platform persistence mechanism with app adapter boundaries.
+- id: WR-183
+  title: Editor Static Composition Projection Cutover
+  diagram_title: Editor static projection
+  alias: UICOMP04
+  lane: Editor UI
+  dependency_level: L4
+  gate: Core and persistence checkpoints complete
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-182
+  write_scopes:
+  - new:domain/editor/editor_shell/src/composition
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/lib.rs
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - apps/runenwerk_editor/src/shell
+  - docs-site/src/content/docs/apps/runenwerk-editor
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p editor_shell composition
+  - cargo test -p editor_shell workspace
+  - cargo test -p runenwerk_editor composition
+  - python3 tools/checks/check_ui_layer_dependencies.py --root .
+  - task docs:validate
+  - task planning:validate
+  next_evidence: The existing editor arrangement renders from CompositionState and editor-owned extension/providers while
+    legacy WorkspaceState is read-only migration input.
+  current_decision: Convert editor static structure and persistence projection without implementing redesigned docking chrome.
+  current_call: At closeout, enforce compile-time/read-only guards on legacy workspace mutation.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-004 and inventory every WorkspaceState writer and projection
+    consumer.
+  main_blocker: WR-182 must prove persistence and promotion before editor authority moves.
+  why_not_ready: Depends on deterministic persistence.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Adaptive docking and full legacy deletion are later checkpoints.
+  completion_audit: ''
+  diagram_call:
+  - editor static projection
+  - legacy read-only
+  - no docking redesign yet
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Editor migration must consume generic composition without recreating workspace authority.
+  ddd_owner: editor_shell specialization over domain/ui composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Editor projection, provider liveness, extension bundle, legacy read-only, unsupported V1-V5,
+    dependency, docs, and planning tests.
+  ownership_mode: Stream-aligned editor integration over UI composition platform.
+- id: WR-184
+  title: Draw Static Composition Projection
+  diagram_title: Draw static projection
+  alias: UICOMP05
+  lane: Draw UI
+  dependency_level: L4
+  gate: Editor static projection and legacy read-only gate complete
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.9
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-183
+  write_scopes:
+  - apps/runenwerk_draw/src/app/workspace.rs
+  - apps/runenwerk_draw/src/app/presentation.rs
+  - apps/runenwerk_draw/src/app
+  - apps/runenwerk_draw/Cargo.toml
+  - docs-site/src/content/docs/apps
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p runenwerk_draw --test app_shell
+  - cargo test -p runenwerk_draw composition
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Draw wide layout renders from generic composition with app-owned content and extension state while drawing-document
+    authority remains unchanged.
+  current_decision: Prove a real non-editor consumer before adaptive behavior.
+  current_call: Replace static workspace projection naming and ownership without adding responsive drawers yet.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-005 and map current canvas/toolbar/panel projection into a definition
+    fixture.
+  main_blocker: WR-183 must prove the first runtime consumer and read-only legacy boundary.
+  why_not_ready: Depends on editor static projection.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Narrow responsive behavior belongs to WR-187.
+  completion_audit: ''
+  diagram_call:
+  - Draw static proof
+  - app-owned content
+  - no document authority move
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Draw must prove the same neutral structural contract.
+  ddd_owner: Runenwerk Draw app integration over domain/ui composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Draw composition, extension, liveness fallback, document-authority guard, docs, and planning
+    tests.
+  ownership_mode: Stream-aligned Draw consumer of UI composition platform.
+- id: WR-185
+  title: Adaptive Composition Headless Proposals And Semantic Input
+  diagram_title: Adaptive headless proposals
+  alias: UICOMP06
+  lane: UI architecture
+  dependency_level: L4
+  gate: Editor and Draw static projections prove neutral core
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-184
+  write_scopes:
+  - Cargo.toml
+  - new:domain/ui/ui_adaptive_composition
+  - domain/ui/ui_input
+  - domain/ui/ui_testing
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p ui_adaptive_composition
+  - cargo test -p ui_input semantic
+  - python3 tools/checks/check_ui_layer_dependencies.py --root .
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Headless projection, edit classification, docking proposals, semantic input, promotion deltas, fixtures,
+    accessibility metadata, and benchmark harness pass.
+  current_decision: Implement adaptive mechanism headlessly before editor chrome consumes it.
+  current_call: No app-specific docking semantics or direct structural mutation may enter the adaptive crate.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-006 and implement fixture-driven projection/proposal contracts.
+  main_blocker: WR-184 must prove editor and Draw can consume the core without adaptive coupling.
+  why_not_ready: Depends on both static runtime proofs.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Runtime editor and Draw interaction remain later checkpoints.
+  completion_audit: ''
+  diagram_call:
+  - derived projection
+  - proposal only
+  - semantic input
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Adaptive mechanism must follow the accepted proposal-only contract and selected visual direction.
+  ddd_owner: domain/ui/ui_adaptive_composition and domain/ui/ui_input semantic actions
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Fixture, projection, transient/structural/promotion classification, semantic parity, accessibility
+    metadata, allocation, clone, and benchmark tests.
+  ownership_mode: Complicated-subsystem adaptive UI mechanism owner.
+- id: WR-186
+  title: Editor Docking And Cross-Window Composition Runtime
+  diagram_title: Editor docking runtime
+  alias: UICOMP07
+  lane: Editor UI
+  dependency_level: L4
+  gate: Adaptive headless proposal contracts runtime-proven
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-185
+  write_scopes:
+  - domain/editor/editor_shell/src/composition
+  - domain/editor/editor_shell/src/workspace
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/src/runtime
+  - engine/src/runtime/window.rs
+  - engine/src/runtime/platform.rs
+  - docs-site/src/content/docs/apps/runenwerk-editor
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p editor_shell composition
+  - cargo test -p runenwerk_editor docking
+  - cargo test -p runenwerk_editor window
+  - cargo test -p engine window
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Selected docking UX, pointer/keyboard/touch/controller parity, real native-window movement, close veto/rehome,
+    accessibility, and transaction-only structural mutation pass.
+  current_decision: Complete the editor interaction proof and switch all structural writers to composition transactions.
+  current_call: At closeout, direct workspace structural mutation is forbidden and guarded.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-007 and convert selected visual direction into exact runtime
+    states.
+  main_blocker: WR-185 adaptive proposals and semantic input must be runtime-proven.
+  why_not_ready: Depends on adaptive headless contracts.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Draw adaptive runtime and legacy deletion remain later checkpoints.
+  completion_audit: ''
+  diagram_call:
+  - selected docking UX
+  - real cross-window move
+  - transaction-only mutation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Editor runtime must implement the selected visual direction and accepted adaptive contract.
+  ddd_owner: editor_shell and runenwerk_editor integration with engine windowing ownership
+  adr_requirement: Satisfied by ADR 0013 and preserved native-window ownership design.
+  fitness_function_requirement: Docking, focus, cancel, touch, controller, accessibility, cross-window lifecycle, OS veto,
+    rehome atomicity, transaction-only guard, visual comparison, and performance tests.
+  ownership_mode: Stream-aligned editor runtime with engine windowing support.
+- id: WR-187
+  title: Draw Adaptive Composition Runtime
+  diagram_title: Draw adaptive runtime
+  alias: UICOMP08
+  lane: Draw UI
+  dependency_level: L4
+  gate: Editor docking runtime and transaction-only mutation gate complete
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.9
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-186
+  write_scopes:
+  - apps/runenwerk_draw/src/app
+  - apps/runenwerk_draw/Cargo.toml
+  - docs-site/src/content/docs/apps
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo test -p runenwerk_draw --test app_shell
+  - cargo test -p runenwerk_draw adaptive
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Draw wide/narrow/restored projections, drawers, overflow, promotion behavior, accessibility, and primary-canvas
+    usability pass.
+  current_decision: Complete the second runtime adaptive proof without moving drawing-document authority.
+  current_call: Responsive substitutions remain transient unless explicitly promoted.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-008 and implement width/scale/accessibility scenario fixtures.
+  main_blocker: WR-186 must prove the runtime adaptive and transaction integration pattern.
+  why_not_ready: Depends on editor runtime proof.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Legacy cleanup and final certification remain later checkpoints.
+  completion_audit: ''
+  diagram_call:
+  - responsive Draw
+  - primary canvas preserved
+  - explicit promotion
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Draw responsive behavior must remain derived and policy-driven.
+  ddd_owner: Runenwerk Draw app integration over adaptive composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Wide/narrow/restore, drawers, overflow, promotion, content liveness, accessibility, semantic
+    input, document-authority, docs, and planning tests.
+  ownership_mode: Stream-aligned Draw adaptive consumer.
+- id: WR-188
+  title: UI Composition Legacy Authority Cleanup
+  diagram_title: Composition legacy cleanup
+  alias: UICOMP09
+  lane: UI architecture
+  dependency_level: L4
+  gate: Editor and Draw runtime proofs complete
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-187
+  write_scopes:
+  - Cargo.toml
+  - domain/ui/ui_surface
+  - domain/ui/ui_hosts
+  - new:domain/ui/ui_program_hosts
+  - domain/ui/ui_testing
+  - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/composition
+  - apps/runenwerk_editor
+  - docs-site/src/content/docs/design
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/apps/runenwerk-editor
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  validations:
+  - cargo fmt --check
+  - cargo check --workspace
+  - cargo test --workspace
+  - python3 tools/checks/check_ui_layer_dependencies.py --root .
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Public-symbol supersession inventory, ui_surface deletion, ui_program_hosts ownership proof, workspace authority
+    deletion, current-schema cleanup, and no active legacy terminology.
+  current_decision: Delete temporary compatibility inputs and rename the UiProgram host crate only after every responsibility
+    has proof.
+  current_call: No final merge while any writable legacy structural authority, alias, old schema, or unmapped ui_surface export
+    remains.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-009 and generate the complete public-symbol/consumer inventory.
+  main_blocker: WR-187 must complete both runtime consumers before compatibility input can be removed.
+  why_not_ready: Depends on complete runtime proof.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - Final independent audit and performance evidence remain WR-189.
+  completion_audit: ''
+  diagram_call:
+  - delete ui_surface
+  - delete workspace authority
+  - prove program-host boundary
+  decision_gates:
+  - kind: adr
+    path: docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Cleanup must follow the accepted clean-break and supersession rules.
+  ddd_owner: UI composition owner with editor/app migration consumers
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Symbol inventory, dependency checks, all affected tests, workspace check, schema/term searches,
+    docs lifecycle, and host ownership API guards.
+  ownership_mode: Coordinated platform cleanup with consumer owners.
+- id: WR-189
+  title: UI Composition Perfectionist Verification And Closeout
+  diagram_title: Composition perfectionist closeout
+  alias: UICOMP10
+  lane: UI architecture
+  dependency_level: L4
+  gate: Legacy authority cleanup complete
+  planning_state: ready_next
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-188
+  write_scopes:
+  - docs-site/src/content/docs/workspace
+  - docs-site/src/content/docs/reports/benchmarks
+  - docs-site/src/content/docs/reports/audits
+  - docs-site/src/content/docs/reports/closeouts
+  - domain/ui/ui_composition
+  - domain/ui/ui_adaptive_composition
+  - domain/ui/ui_program_hosts
+  - domain/editor/editor_shell
+  - apps/runenwerk_editor
+  - apps/runenwerk_draw
+  validations:
+  - cargo fmt --check
+  - cargo clippy --workspace --all-targets --all-features -- -D warnings
+  - cargo test --workspace
+  - python3 tools/checks/check_ui_layer_dependencies.py --root .
+  - task production:render
+  - task production:validate
+  - task production:check
+  - task roadmap:render
+  - task roadmap:validate
+  - task roadmap:check
+  - task docs:validate
+  - task planning:validate
+  - task puml:validate
+  next_evidence: Independent zero-finding audit, measured benchmark report, visual/accessibility evidence, fresh truth certificates,
+    completed closeout, and clean generated planning artifacts.
+  current_decision: Certify the full cutover only after requirement-by-requirement evidence proves every accepted contract.
+  current_call: Do not merge with any unowned, unexplained, or unaccepted risk.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-010 and perform the independent completion audit before changing
+    completion state.
+  main_blocker: WR-188 must prove all legacy authorities and mappings are removed.
+  why_not_ready: Depends on cleanup completion.
+  completion_quality: not_applicable
+  known_quality_gaps:
+  - This row starts with completion unproven and must close every discovered finding.
+  completion_audit: ''
+  diagram_call:
+  - independent audit
+  - measured evidence
+  - perfectionist closeout
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Final evidence must cover the complete core contract.
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Final evidence must cover adaptive UX, accessibility, and performance.
+  ddd_owner: UI composition platform with editor, Draw, app/windowing, and workspace governance evidence owners
+  adr_requirement: ADR 0013 must remain accepted; any discovered ownership change requires a new decision before closeout.
+  fitness_function_requirement: Full tests, clippy, dependency checks, deterministic/performance benchmarks, visual/accessibility
+    proof, docs/roadmap/production/planning/PUML validators, truth certification, and zero-finding audit.
+  ownership_mode: Independent perfectionist verification across platform and consumers.
 edges:
+- source: WR-180
+  target: WR-181
+  label: governance and visual selection before core contracts
+- source: WR-181
+  target: WR-182
+  label: core invariants before persistence bundles
+- source: WR-182
+  target: WR-183
+  label: deterministic persistence before editor projection
+- source: WR-183
+  target: WR-184
+  label: editor read-only legacy gate before Draw proof
+- source: WR-184
+  target: WR-185
+  label: two static consumers before adaptive contracts
+- source: WR-185
+  target: WR-186
+  label: headless proposals before editor docking runtime
+- source: WR-186
+  target: WR-187
+  label: transaction-only editor runtime before Draw adaptive runtime
+- source: WR-187
+  target: WR-188
+  label: both runtime proofs before legacy cleanup
+- source: WR-188
+  target: WR-189
+  label: cleanup before perfectionist closeout
 - source: WR-177
   target: WR-178
   label: story-gated rendering proof before hardening no-bypass substrate
