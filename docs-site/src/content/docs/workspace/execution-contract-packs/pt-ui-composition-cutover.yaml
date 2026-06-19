@@ -1,6 +1,6 @@
 version: 1
 track_id: PT-UI-COMPOSITION-CUTOVER
-generated_at: '2026-06-19T12:55:36Z'
+generated_at: '2026-06-19T13:11:40Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: 903c26d6b9047500d411d7c4105190d7b34647786036bd575694f6de479c5913
   docs-site/src/content/docs/workspace/production-tracks.yaml: 9adcd375bc66fde0d67498d95a4a5525cf436671ba40be8680de3b0fa52daaf2
@@ -16,7 +16,7 @@ source_digests:
   tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
   tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
   tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
-  tools/workflow/execution/compiler.py: d327c954fb4a0ee375a5c8c11b53985096f17dd0ca996109b711eee990faf685
+  tools/workflow/execution/compiler.py: dbe97100320329004d55a38b8ddb7d5c0f067f1ee75d476c8067604bb20b6b06
   tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
   tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
   tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
@@ -58,6 +58,10 @@ actions:
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-track-execution-harness/track-execution-harness-authority.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
   new_outputs:
   - domain/ui/ui_composition/Cargo.toml
   - domain/ui/ui_composition/src/lib.rs
@@ -186,6 +190,10 @@ actions:
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-track-execution-harness/track-execution-harness-authority.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
   new_outputs:
   - domain/ui/ui_composition/src/transaction/mod.rs
   - domain/ui/ui_composition/src/transaction/command.rs
@@ -300,6 +308,10 @@ actions:
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-track-execution-harness/track-execution-harness-authority.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
+  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
   new_outputs:
   - domain/ui/ui_composition/src/fixture/mod.rs
   - domain/ui/ui_composition/src/fixture/contract.rs

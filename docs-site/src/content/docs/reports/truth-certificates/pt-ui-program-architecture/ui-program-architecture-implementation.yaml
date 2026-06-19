@@ -3,7 +3,7 @@ track_id: PT-UI-PROGRAM-ARCHITECTURE
 claim_id: ui-program-architecture-implementation
 verifier: ui_program_architecture_conformance
 status: passed
-produced_at: '2026-06-19T12:55:52Z'
+produced_at: '2026-06-19T13:11:48Z'
 source_digests:
   docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
   docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
@@ -13,7 +13,7 @@ source_digests:
   docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure: acde66cbbed1d324cb1f7cc01cc1afdcd8f46e48ce5e1894be16984ea3147ff1
   docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture: 33b992a3638598eb42c4297372c88961f1421bef9900f96e6c7fda634576e047
   docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml: 2737738a387e682d058ed031bb6c8c8370f9ea05b1710b0bed79e0d2e65e2b14
-  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: c288139bdfc4317ca970dad4a004bfcb0d66d289edcdd1de4733f23a74b177f7
+  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: 63d503cccf0682524df8b3893cb236524b9b027722179758368b4d21bb2eaf21
   docs-site/src/content/docs/workspace/production-tracks.yaml: 9adcd375bc66fde0d67498d95a4a5525cf436671ba40be8680de3b0fa52daaf2
   docs-site/src/content/docs/workspace/roadmap-archive.yaml: d34a889ba43e6c62eaf98f597737764578a0fa3b03c811f503a6ba6cc6d977b2
   docs-site/src/content/docs/workspace/roadmap-items.yaml: 8da691197eba2f9b567fbfa88004554e0b3b767361cca13a8e556d4d79ac8aa0

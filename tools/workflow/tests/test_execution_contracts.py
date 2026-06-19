@@ -259,7 +259,6 @@ def test_execution_contract_compiler_uses_sidecar_executable_authority(
     sidecar["new_outputs"] = [evidence_output]
     write_yaml(plan_path.parent / "plan.contract.yaml", sidecar)
     monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
-
     pack = compile_contract_pack(
         "PT-TEST",
         production_source=production_path,
@@ -330,6 +329,10 @@ def test_execution_contract_compiler_expands_agent_subactions_as_resumable_actio
     ]
     write_yaml(plan_path.parent / "plan.contract.yaml", sidecar)
     monkeypatch.setattr("execution.compiler.default_contract_path", lambda _item: plan_path)
+    monkeypatch.setattr(
+        "execution.compiler.existing_truth_certificate_outputs",
+        lambda **_kwargs: ["docs-site/src/content/docs/reports/truth-certificates/pt-test/current.yaml"],
+    )
 
     pack = compile_contract_pack(
         "PT-TEST",
@@ -343,6 +346,7 @@ def test_execution_contract_compiler_expands_agent_subactions_as_resumable_actio
     assert pack.actions[0].action_id.endswith(":sub:contract-a")
     assert evidence_one in pack.actions[0].new_outputs
     assert evidence_two not in pack.actions[0].new_outputs
+    assert "docs-site/src/content/docs/reports/truth-certificates/pt-test/current.yaml" in pack.actions[0].allowed_outputs
 
     first_evidence = tmp_path / evidence_one
     first_evidence.parent.mkdir(parents=True, exist_ok=True)
