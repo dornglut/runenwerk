@@ -110,6 +110,7 @@ Blocker weight:
 
 | ID | Track | Priority | Value | Blocker | Score | Current call | First implementation move |
 |---|---|---:|---:|---:|---:|---|---|
+| WR-181 | UI Composition Core Contracts And Invariants | P0 | V5 | B2 | 2.0 | Implement the smallest complete core authority; do not add adaptive or app semantics. | Run task production:plan for PM-UI-COMPOSITION-002 and inspect exact existing ID, diagnostic, ratification, and fixture patterns. |
 
 ## Support Only
 
@@ -133,7 +134,6 @@ Blocker weight:
 | WR-029 | Model Mesh Material Binding | P1 | V4 | B3 | 1.1 | Ready-next only. Do not claim WR-029 complete until WR-030 produces visible source-backed model/mesh pixels through a material-consuming pass, WR-028 SDF non-regression proof is refreshed, and closeout evidence names the consuming renderer module. | WR-030 must prove visible model/mesh pixels from PreparedModelMeshMaterialSelection and the scene material table before WR-029 can close. |
 | WR-030 | Model Mesh Renderable Scene Contract | P0 | V4 | B2 | 1.0 | Implement the Mesh Preview material-consuming pass proof: source-backed model/mesh region selection must resolve through PreparedModelMeshMaterialSelection and the scene material table into visible pixels, with pass provenance and WR-028 SDF non-regression. | Needs visible Mesh Preview model/mesh pixels from the selected scene material table entry; descriptor/status rows and SDF pixels are not sufficient proof. |
 | WR-103 | Shader-Bound Sparse SDF Terrain Runtime Governance And Track Activation | P1 | V4 | B3 | 2.2 | Activate a follow-on shader-bound sparse SDF terrain runtime track without reopening completed PT-RENDER-SDF or adding Rust, shader, asset, or example implementation in this row. | Awaiting explicit promotion or current-candidate switch after existing current governance candidates and after PM-RENDER-SDF-RUNTIME-001 documentation validates. |
-| WR-181 | UI Composition Core Contracts And Invariants | P0 | V5 | B2 | 2.0 | Implement the smallest complete core authority; do not add adaptive or app semantics. | Checkpoint 1 must complete its transactional closeout. |
 | WR-182 | Composition Persistence Envelopes And Deterministic Bundles | P0 | V5 | B2 | 2.0 | Prove deterministic bytes and atomic bundle activation before consumer migration. | WR-181 core identities, formation, revision, and promotion primitives must be runtime-proven. |
 | WR-183 | Editor Static Composition Projection Cutover | P0 | V5 | B2 | 1.2 | At closeout, enforce compile-time/read-only guards on legacy workspace mutation. | WR-182 must prove persistence and promotion before editor authority moves. |
 | WR-184 | Draw Static Composition Projection | P0 | V5 | B2 | 1.9 | Replace static workspace projection naming and ownership without adding responsive drawers yet. | WR-183 must prove the first runtime consumer and read-only legacy boundary. |

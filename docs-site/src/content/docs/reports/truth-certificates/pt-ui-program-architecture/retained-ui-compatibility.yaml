@@ -3,7 +3,7 @@ track_id: PT-UI-PROGRAM-ARCHITECTURE
 claim_id: retained-ui-compatibility
 verifier: ui_program_architecture_conformance
 status: passed
-produced_at: '2026-06-19T12:43:09Z'
+produced_at: '2026-06-19T12:55:54Z'
 source_digests:
   docs-site/src/content/docs/design/active/ui-program-architecture-owner-map.md: de342326fae6adf0d85b479877726319a1fb1129c6931e7ae7914e84ddd1520f
   docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
@@ -13,10 +13,10 @@ source_digests:
   docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-012-perfectionist-conformance-hardening-closure: acde66cbbed1d324cb1f7cc01cc1afdcd8f46e48ce5e1894be16984ea3147ff1
   docs-site/src/content/docs/reports/execution-evidence/pt-ui-program-architecture: 33b992a3638598eb42c4297372c88961f1421bef9900f96e6c7fda634576e047
   docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml: 2737738a387e682d058ed031bb6c8c8370f9ea05b1710b0bed79e0d2e65e2b14
-  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: 8a1209452a2748e511fbd100d1f5930a32e1e316e078aae7277116482df319c7
+  docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml: c288139bdfc4317ca970dad4a004bfcb0d66d289edcdd1de4733f23a74b177f7
   docs-site/src/content/docs/workspace/production-tracks.yaml: 9adcd375bc66fde0d67498d95a4a5525cf436671ba40be8680de3b0fa52daaf2
   docs-site/src/content/docs/workspace/roadmap-archive.yaml: d34a889ba43e6c62eaf98f597737764578a0fa3b03c811f503a6ba6cc6d977b2
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 995cc5d2a55cc84f808040cdcac33e4d0a0fe4b1b239a7749f0d095621d076ba
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 8da691197eba2f9b567fbfa88004554e0b3b767361cca13a8e556d4d79ac8aa0
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml: 42f31272b0db9b1a6468ebcdf051ce82ebcb80262b1c6a9f43c1779f3c22c25e
   ? docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
   : 87ca47bb7a189082e6404d3225d2a4c3a8da6974ff5d7a6de1d81d51a4e68877

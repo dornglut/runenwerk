@@ -1,23 +1,23 @@
 version: 1
 track_id: PT-UI-COMPOSITION-CUTOVER
-generated_at: '2026-06-19T12:44:08Z'
+generated_at: '2026-06-19T12:55:36Z'
 source_digests:
-  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: 678c778d5bfe7ef6624a6ad7e9cb8502025133518b61c37bf9a2334b0348455a
+  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: 903c26d6b9047500d411d7c4105190d7b34647786036bd575694f6de479c5913
   docs-site/src/content/docs/workspace/production-tracks.yaml: 9adcd375bc66fde0d67498d95a4a5525cf436671ba40be8680de3b0fa52daaf2
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 995cc5d2a55cc84f808040cdcac33e4d0a0fe4b1b239a7749f0d095621d076ba
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 8da691197eba2f9b567fbfa88004554e0b3b767361cca13a8e556d4d79ac8aa0
   docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
   docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
   docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
   docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md: c3c252a21bc85147044d0cf7104bcd568292283ca458a47b86f6ed0c97605527
   ? docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.contract.yaml
-  : 58423836f626b5dee72d5f71fb78f912c4f3815c047b2e9b061e9bbb4c881a42
-  docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.md: f8bd8f98899a6f4b118389266fb8c81c489d42a7c7f581d5209e9fbef9aa5d84
+  : 543c9aa8474f2236e632590a9be446d6f226c77afe62767b24ff872ca819c591
+  docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.md: c5c6537b3ba9a4b1ca08a15468a0d0ec6ad4ea34e48169e67b440144a61ccd5e
   tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
   tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
   tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
   tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
   tools/workflow/execution/compiler.py: d327c954fb4a0ee375a5c8c11b53985096f17dd0ca996109b711eee990faf685
-  tools/workflow/execution/contracts.py: bbcb3633b829f5db9a4327fbcac544da06041695b99754f510271bf2ef8b084f
+  tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
   tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
   tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
   tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
@@ -39,54 +39,326 @@ source_digests:
   tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
   tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
 actions:
-- action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+- action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181:sub:core-model-and-formation
   track_id: PT-UI-COMPOSITION-CUTOVER
   milestone_id: PM-UI-COMPOSITION-002
   wr_id: WR-181
   execution_kind: implementation_proof
-  executor_kind: design_authoring
-  authority_level: planning_and_sequencing_only
+  executor_kind: product_implementation
+  authority_level: exact_core_contract_implementation
   permissions_required:
-  - agent_design
+  - product_code
+  - product_implementation
+  - crate_creation
   allowed_outputs:
-  - docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.md
-  - docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.contract.yaml
+  - Cargo.toml
+  - domain/ui/ui-crate-ownership.toml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-composition-cutover.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
   - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml
-  - docs-site/src/content/docs/reports/truth-certificates/pt-track-execution-harness/track-execution-harness-authority.yaml
-  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-architecture-implementation.yaml
-  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/retained-ui-compatibility.yaml
-  - docs-site/src/content/docs/reports/truth-certificates/pt-ui-program-architecture/ui-program-perfectionist-conformance.yaml
-  new_outputs: []
+  new_outputs:
+  - domain/ui/ui_composition/Cargo.toml
+  - domain/ui/ui_composition/src/lib.rs
+  - domain/ui/ui_composition/src/identity/mod.rs
+  - domain/ui/ui_composition/src/identity/structural.rs
+  - domain/ui/ui_composition/src/identity/reference.rs
+  - domain/ui/ui_composition/src/definition/mod.rs
+  - domain/ui/ui_composition/src/definition/model.rs
+  - domain/ui/ui_composition/src/definition/region.rs
+  - domain/ui/ui_composition/src/definition/fraction.rs
+  - domain/ui/ui_composition/src/content/mod.rs
+  - domain/ui/ui_composition/src/content/reference.rs
+  - domain/ui/ui_composition/src/content/liveness.rs
+  - domain/ui/ui_composition/src/diagnostic/mod.rs
+  - domain/ui/ui_composition/src/diagnostic/code.rs
+  - domain/ui/ui_composition/src/diagnostic/record.rs
+  - domain/ui/ui_composition/src/validation/mod.rs
+  - domain/ui/ui_composition/src/validation/definition.rs
+  - domain/ui/ui_composition/src/validation/transaction.rs
+  - domain/ui/ui_composition/src/state/mod.rs
+  - domain/ui/ui_composition/src/state/formation.rs
+  - domain/ui/ui_composition/src/state/snapshot.rs
+  - domain/ui/ui_composition/tests/formation_invariants.rs
+  - domain/ui/ui_composition/tests/property_invariants.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
   forbidden_outputs:
   - domain/ui/ui_surface
   - domain/ui/ui_adaptive_composition
   - domain/editor
   - foundation/meta
+  - foundation/id
+  - foundation/diagnostics
+  - foundation/ratification
   forbidden_patterns: []
-  writer_strategy: verification_writer
+  writer_strategy: agent_writer
   template_outputs: {}
   patches: []
   validation_commands:
-  - command_id: task:production:validate
+  - command_id: cargo:fmt
     argv:
-    - task
-    - production:validate
+    - cargo
+    - fmt
+    - --all
+    - --check
     cwd: .
     allowed_outputs: []
     timeout_seconds: 600
-    raw: task production:validate
-  - command_id: task:roadmap:validate
+    raw: cargo fmt --all --check
+  - command_id: cargo:test
     argv:
-    - task
-    - roadmap:validate
+    - cargo
+    - test
+    - -p
+    - ui_composition
+    - formation
     cwd: .
     allowed_outputs: []
     timeout_seconds: 600
-    raw: task roadmap:validate
+    raw: cargo test -p ui_composition formation
+  evidence_required:
+  - kind: runtime_test
+    name: core_model_and_formation
+    required: true
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/state/formation.rs
+    - domain/ui/ui_composition/tests/formation_invariants.rs
+    - domain/ui/ui_composition/tests/property_invariants.rs
+    validation_command_ids:
+    - cargo:test
+  closeout_contract:
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+    completion_quality: runtime_proven
+    evidence_required:
+    - kind: runtime_test
+      name: core_model_and_formation
+      required: true
+      paths:
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
+      subject_paths:
+      - domain/ui/ui_composition/src/state/formation.rs
+      - domain/ui/ui_composition/tests/formation_invariants.rs
+      - domain/ui/ui_composition/tests/property_invariants.rs
+      validation_command_ids:
+      - cargo:test
+  rollback_policy:
+    policy: reject checkpoint import and leave all current runtime consumers and legacy authorities unchanged
+  stop_conditions:
+  - stop if the core model depends on another UI crate or admits app semantics
+  - stop if formation can produce state without proving every declared invariant
+  required_prior_milestones: []
+  truth_claim_updates: []
+  parent_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  agent_subaction:
+    sub_action_id: core-model-and-formation
+    title: Core model, diagnostics, and formation
+    prompt: Implement typed identities, semantic references, definition/content contracts, diagnostics, invariant validation, ratified state formation, snapshots, and focused formation/property tests. Do not implement transactions, history, promotion, fixtures, persistence, adaptive behavior, or consumers.
+  production_source_path: docs-site/src/content/docs/workspace/production-tracks.yaml
+  roadmap_source_path: docs-site/src/content/docs/workspace/roadmap-items.yaml
+  manifest_source_path: docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml
+- action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181:sub:transaction-history-promotion
+  track_id: PT-UI-COMPOSITION-CUTOVER
+  milestone_id: PM-UI-COMPOSITION-002
+  wr_id: WR-181
+  execution_kind: implementation_proof
+  executor_kind: product_implementation
+  authority_level: exact_core_contract_implementation
+  permissions_required:
+  - product_code
+  - product_implementation
+  allowed_outputs:
+  - domain/ui/ui_composition/src/lib.rs
+  - domain/ui/ui_composition/src/definition/model.rs
+  - domain/ui/ui_composition/src/definition/region.rs
+  - domain/ui/ui_composition/src/diagnostic/code.rs
+  - domain/ui/ui_composition/src/diagnostic/record.rs
+  - domain/ui/ui_composition/src/validation/mod.rs
+  - domain/ui/ui_composition/src/validation/definition.rs
+  - domain/ui/ui_composition/src/validation/transaction.rs
+  - domain/ui/ui_composition/src/state/mod.rs
+  - domain/ui/ui_composition/src/state/formation.rs
+  - domain/ui/ui_composition/src/state/snapshot.rs
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-composition-cutover.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml
+  new_outputs:
+  - domain/ui/ui_composition/src/transaction/mod.rs
+  - domain/ui/ui_composition/src/transaction/command.rs
+  - domain/ui/ui_composition/src/transaction/policy.rs
+  - domain/ui/ui_composition/src/transaction/apply.rs
+  - domain/ui/ui_composition/src/history/mod.rs
+  - domain/ui/ui_composition/src/history/journal.rs
+  - domain/ui/ui_composition/src/promotion/mod.rs
+  - domain/ui/ui_composition/src/promotion/layout.rs
+  - domain/ui/ui_composition/tests/transaction_atomicity.rs
+  - domain/ui/ui_composition/tests/structural_history.rs
+  - domain/ui/ui_composition/tests/content_and_promotion.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+  forbidden_outputs:
+  - domain/ui/ui_surface
+  - domain/ui/ui_adaptive_composition
+  - domain/editor
+  - foundation/meta
+  - foundation/id
+  - foundation/diagnostics
+  - foundation/ratification
+  forbidden_patterns: []
+  writer_strategy: agent_writer
+  template_outputs: {}
+  patches: []
+  validation_commands:
+  - command_id: cargo:fmt
+    argv:
+    - cargo
+    - fmt
+    - --all
+    - --check
+    cwd: .
+    allowed_outputs: []
+    timeout_seconds: 600
+    raw: cargo fmt --all --check
+  - command_id: cargo:test
+    argv:
+    - cargo
+    - test
+    - -p
+    - ui_composition
+    cwd: .
+    allowed_outputs: []
+    timeout_seconds: 600
+    raw: cargo test -p ui_composition
+  evidence_required:
+  - kind: runtime_test
+    name: transaction_history_promotion
+    required: true
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/transaction/apply.rs
+    - domain/ui/ui_composition/src/history/journal.rs
+    - domain/ui/ui_composition/tests/transaction_atomicity.rs
+    - domain/ui/ui_composition/tests/structural_history.rs
+    validation_command_ids:
+    - cargo:test
+  closeout_contract:
+    path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+    completion_quality: runtime_proven
+    evidence_required:
+    - kind: runtime_test
+      name: transaction_history_promotion
+      required: true
+      paths:
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+      subject_paths:
+      - domain/ui/ui_composition/src/transaction/apply.rs
+      - domain/ui/ui_composition/src/history/journal.rs
+      - domain/ui/ui_composition/tests/transaction_atomicity.rs
+      - domain/ui/ui_composition/tests/structural_history.rs
+      validation_command_ids:
+      - cargo:test
+  rollback_policy:
+    policy: reject checkpoint import and leave all current runtime consumers and legacy authorities unchanged
+  stop_conditions:
+  - stop if policy authorization can be bypassed or altered after acceptance
+  - stop if any rejected transaction or history operation changes state or stacks
+  required_prior_milestones: []
+  truth_claim_updates: []
+  parent_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  agent_subaction:
+    sub_action_id: transaction-history-promotion
+    title: Atomic transactions, structural history, and promotion
+    prompt: Implement the complete typed command set, three narrow policy ports, opaque authorization, isolated candidate application, atomic commit, inverse derivation, journal, undo/redo revalidation, core-only promotion, and focused tests. Preserve the public model from the first sub-action and do not add persistence or consumers.
+  production_source_path: docs-site/src/content/docs/workspace/production-tracks.yaml
+  roadmap_source_path: docs-site/src/content/docs/workspace/roadmap-items.yaml
+  manifest_source_path: docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml
+- action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181:sub:fixtures-docs-and-evidence
+  track_id: PT-UI-COMPOSITION-CUTOVER
+  milestone_id: PM-UI-COMPOSITION-002
+  wr_id: WR-181
+  execution_kind: implementation_proof
+  executor_kind: product_implementation
+  authority_level: exact_core_contract_implementation
+  permissions_required:
+  - product_code
+  - product_implementation
+  allowed_outputs:
+  - domain/ui/ui_composition/src/lib.rs
+  - domain/ui/ui_testing/Cargo.toml
+  - domain/ui/ui_testing/src/lib.rs
+  - domain/ui/ui_testing/src/tests.rs
+  - docs-site/src/content/docs/domain/ui/README.md
+  - docs-site/src/content/docs/domain/ui/architecture.md
+  - docs-site/src/content/docs/domain/ui/crate-ownership.md
+  - docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-composition-cutover.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml
+  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml
+  new_outputs:
+  - domain/ui/ui_composition/src/fixture/mod.rs
+  - domain/ui/ui_composition/src/fixture/contract.rs
+  - domain/ui/ui_testing/src/composition_fixture.rs
+  - docs-site/src/content/docs/domain/ui/ui-composition-usage.md
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+  forbidden_outputs:
+  - domain/ui/ui_surface
+  - domain/ui/ui_adaptive_composition
+  - domain/editor
+  - foundation/meta
+  - foundation/id
+  - foundation/diagnostics
+  - foundation/ratification
+  forbidden_patterns: []
+  writer_strategy: agent_writer
+  template_outputs: {}
+  patches: []
+  validation_commands:
+  - command_id: cargo:fmt
+    argv:
+    - cargo
+    - fmt
+    - --all
+    - --check
+    cwd: .
+    allowed_outputs: []
+    timeout_seconds: 600
+    raw: cargo fmt --all --check
+  - command_id: cargo:test
+    argv:
+    - cargo
+    - test
+    - -p
+    - ui_composition
+    cwd: .
+    allowed_outputs: []
+    timeout_seconds: 600
+    raw: cargo test -p ui_composition
+  - command_id: cargo:test
+    argv:
+    - cargo
+    - test
+    - -p
+    - ui_testing
+    - composition_fixture
+    cwd: .
+    allowed_outputs: []
+    timeout_seconds: 600
+    raw: cargo test -p ui_testing composition_fixture
+  - command_id: task:ui:dependencies
+    argv:
+    - task
+    - ui:dependencies
+    cwd: .
+    allowed_outputs: []
+    timeout_seconds: 600
+    raw: task ui:dependencies
   - command_id: task:docs:validate
     argv:
     - task
@@ -103,18 +375,65 @@ actions:
     allowed_outputs: []
     timeout_seconds: 600
     raw: task planning:validate
-  evidence_required: []
+  evidence_required:
+  - kind: fixture
+    name: fixture
+    required: true
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/fixture/contract.rs
+    - domain/ui/ui_testing/src/composition_fixture.rs
+    validation_command_ids:
+    - cargo:test
+  - kind: diagnostics
+    name: diagnostics
+    required: true
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/diagnostic/code.rs
+    - domain/ui/ui_composition/src/diagnostic/record.rs
+    - domain/ui/ui_composition/src/validation/definition.rs
+    - domain/ui/ui_composition/src/validation/transaction.rs
+    validation_command_ids: []
   closeout_contract:
     path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
-    completion_quality: not_applicable
-    evidence_required: []
+    completion_quality: runtime_proven
+    evidence_required:
+    - kind: fixture
+      name: fixture
+      required: true
+      paths:
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+      subject_paths:
+      - domain/ui/ui_composition/src/fixture/contract.rs
+      - domain/ui/ui_testing/src/composition_fixture.rs
+      validation_command_ids:
+      - cargo:test
+    - kind: diagnostics
+      name: diagnostics
+      required: true
+      paths:
+      - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+      subject_paths:
+      - domain/ui/ui_composition/src/diagnostic/code.rs
+      - domain/ui/ui_composition/src/diagnostic/record.rs
+      - domain/ui/ui_composition/src/validation/definition.rs
+      - domain/ui/ui_composition/src/validation/transaction.rs
+      validation_command_ids: []
   rollback_policy:
-    policy: reject import and leave repository unchanged on validation, scope, or digest failure
+    policy: reject checkpoint import and leave all current runtime consumers and legacy authorities unchanged
   stop_conditions:
-  - plan.contract.yaml is draft authority and cannot execute product code
-  - accept only after exact scopes, evidence, validation commands, WR state, and manifest permissions align
+  - stop if any fixture imports or implements product behavior
+  - stop if ownership docs or dependency checks disagree with the implemented crate
   required_prior_milestones: []
   truth_claim_updates: []
+  parent_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  agent_subaction:
+    sub_action_id: fixtures-docs-and-evidence
+    title: Conformance fixtures, docs, and checkpoint evidence
+    prompt: Implement only the neutral fixture contract, five ui_testing conformance fixtures, ownership/dependency/usage docs, and resolver-backed checkpoint evidence. Run all final validations. Do not implement product behavior, adaptive behavior, persistence, or consumers.
   production_source_path: docs-site/src/content/docs/workspace/production-tracks.yaml
   roadmap_source_path: docs-site/src/content/docs/workspace/roadmap-items.yaml
   manifest_source_path: docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml
@@ -1371,8 +1690,8 @@ actions:
       '
     ? docs-site/src/content/docs/reports/implementation-plans/wr-189-ui-composition-perfectionist-verification-and-closeout/plan.contract.yaml
     : "version: 1\nstatus: draft\nwr_id: WR-189\nmilestone_id: PM-UI-COMPOSITION-010\nexecution_kind: handoff_closeout\nexecutor_kind: handoff_closeout\nauthority_level: planning_and_sequencing_only\npermissions_required:\n- agent_closeout\nwriter_strategy: verification_writer\nallowed_outputs:\n- docs-site/src/content/docs/workspace/agents.md\n- docs-site/src/content/docs/workspace/architecture-governance-review.md\n- docs-site/src/content/docs/workspace/crate-docs-status.md\n- docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml\n- docs-site/src/content/docs/workspace/design-implementation-triage.md\n- docs-site/src/content/docs/workspace/design-track-roadmap-governance.md\n- docs-site/src/content/docs/workspace/diagrams/codex-roadmap-orchestration-target.puml\n- docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml\n- docs-site/src/content/docs/workspace/diagrams/design-intake-roadmap-automation.puml\n- docs-site/src/content/docs/workspace/diagrams/parallel-roadmap-batch-automation.puml\n- docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml\n- docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml\n- docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml\n- docs-site/src/content/docs/workspace/docs-site-vercel-hosting-plan.md\n- docs-site/src/content/docs/workspace/documentation-structure.md\n- docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml\n- docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-composition-cutover.yaml\n- docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml\n- docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml\n- docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml\n- docs-site/src/content/docs/workspace/execution-locks/pt-track-execution-harness.yaml\n- docs-site/src/content/docs/workspace/execution-locks/pt-ui-composition-cutover.yaml\n- docs-site/src/content/docs/workspace/execution-locks/pt-ui-program-architecture.yaml\n- docs-site/src/content/docs/workspace/execution-locks/pt-ui-program.yaml\n- docs-site/src/content/docs/workspace/execution-locks/pt-ui-story-platform.yaml\n- docs-site/src/content/docs/workspace/overview.md\n- docs-site/src/content/docs/workspace/parallel-roadmap-batch-automation.md\n- docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md\n- docs-site/src/content/docs/workspace/planning-methods.md\n- docs-site/src/content/docs/workspace/production-milestone-register.md\n- docs-site/src/content/docs/workspace/production-track-index.md\n- docs-site/src/content/docs/workspace/production-track-planning-model.md\n- docs-site/src/content/docs/workspace/production-tracks.yaml\n- docs-site/src/content/docs/workspace/prompt-templates/README.md\n- docs-site/src/content/docs/workspace/prompt-templates/architecture-audit.md\n- docs-site/src/content/docs/workspace/prompt-templates/architecture-governance-review.md\n- docs-site/src/content/docs/workspace/prompt-templates/code-review.md\n- docs-site/src/content/docs/workspace/prompt-templates/commit-organization.md\n- docs-site/src/content/docs/workspace/prompt-templates/crate-design.md\n- docs-site/src/content/docs/workspace/prompt-templates/docs-refactor.md\n- docs-site/src/content/docs/workspace/prompt-templates/goal-execution.md\n- docs-site/src/content/docs/workspace/prompt-templates/implementation-batch.md\n- docs-site/src/content/docs/workspace/prompt-templates/new-design-intake.md\n- docs-site/src/content/docs/workspace/prompt-templates/parallel-roadmap-batch.md\n- docs-site/src/content/docs/workspace/prompt-templates/phase-completion-drift-check.md\n- docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md\n- docs-site/src/content/docs/workspace/prompt-templates/roadmap-milestone-kickoff.md\n- docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md\n\
-      - docs-site/src/content/docs/workspace/roadmap-archive-register.md\n- docs-site/src/content/docs/workspace/roadmap-archive.yaml\n- docs-site/src/content/docs/workspace/roadmap-decision-register.md\n- docs-site/src/content/docs/workspace/roadmap-deferred-register.md\n- docs-site/src/content/docs/workspace/roadmap-deferred.yaml\n- docs-site/src/content/docs/workspace/roadmap-index.md\n- docs-site/src/content/docs/workspace/roadmap-items.yaml\n- docs-site/src/content/docs/workspace/routines/README.md\n- docs-site/src/content/docs/workspace/routines/architecture-governance-review-routine.md\n- docs-site/src/content/docs/workspace/routines/code-refactor-routine.md\n- docs-site/src/content/docs/workspace/routines/commit-splitting-routine.md\n- docs-site/src/content/docs/workspace/routines/crate-implementation-routine.md\n- docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md\n- docs-site/src/content/docs/workspace/routines/parallel-roadmap-batch-routine.md\n- docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md\n- docs-site/src/content/docs/workspace/routines/public-api-review-routine.md\n- docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml\n- docs-site/src/content/docs/workspace/schemas/batch-manifest.schema.json\n- docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json\n- docs-site/src/content/docs/workspace/schemas/roadmap-item-source.schema.json\n- docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json\n- docs-site/src/content/docs/workspace/sdf-first-execution-roadmap.md\n- docs-site/src/content/docs/workspace/templates/README.md\n- docs-site/src/content/docs/workspace/templates/domain-module-template.md\n- docs-site/src/content/docs/workspace/toolchain-bootstrap.md\n- docs-site/src/content/docs/workspace/track-execution-locks/pt-ui-program.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifest.md\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-component-platform.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml\n- docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-program-architecture.yaml\n- docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-story-platform.yaml\n- docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml\n- docs-site/src/content/docs/workspace/truth-verifier-registry.yaml\n- docs-site/src/content/docs/reports/benchmarks/render/README.md\n- docs-site/src/content/docs/reports/benchmarks/render/mesh-material-production-evidence.md\n- docs-site/src/content/docs/reports/benchmarks/render/product-visual-evidence.md\n- docs-site/src/content/docs/reports/benchmarks/render/temporal-production-evidence.md\n- docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md\n- docs-site/src/content/docs/reports/audits/editor-ui-priority-code-audit-2026-05-05.md\n- docs-site/src/content/docs/reports/audits/general-software-development-principles-extraction-2026-05-29.md\n- docs-site/src/content/docs/reports/audits/perfectionist-conformance-worktree-classification.md\n- docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md\n- docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md\n- docs-site/src/content/docs/reports/audits/pt-ui-program-truth-claim-correction.md\n- docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md\n- docs-site/src/content/docs/reports/closeouts/docs-governance-cleanup-2026-05-16/closeout.md\n- docs-site/src/content/docs/reports/closeouts/drawing-phase-5/closeout.md\n\
-      - docs-site/src/content/docs/reports/closeouts/ecs-named-param-groups-diagnostics/closeout.md\n- docs-site/src/content/docs/reports/closeouts/ecs-phase6/benchmark-suite.md\n- docs-site/src/content/docs/reports/closeouts/ecs-phase6/final-decision-report.md\n- docs-site/src/content/docs/reports/closeouts/ecs-phase6/progress-report.md\n- docs-site/src/content/docs/reports/closeouts/m5-runtime-preview/closeout.md\n- docs-site/src/content/docs/reports/closeouts/m6-material-texture-descriptor-preview/closeout.md\n- docs-site/src/content/docs/reports/closeouts/material-lab-post-migration-polish/closeout.md\n- docs-site/src/content/docs/reports/closeouts/p1-sdf-modeling-core/closeout.md\n- docs-site/src/content/docs/reports/closeouts/p1-sdf-operation-layer/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/artifacts/editor-ux-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/artifacts/editor-ux-design-system-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/artifacts/editor-ux-workbench-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/artifacts/editor-ux-graph-canvas-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/artifacts/editor-ux-product-pattern-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/artifacts/editor-ux-registered-surface-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-001-render-product-graph-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md\n\
+      - docs-site/src/content/docs/workspace/roadmap-archive-register.md\n- docs-site/src/content/docs/workspace/roadmap-archive.yaml\n- docs-site/src/content/docs/workspace/roadmap-decision-register.md\n- docs-site/src/content/docs/workspace/roadmap-deferred-register.md\n- docs-site/src/content/docs/workspace/roadmap-deferred.yaml\n- docs-site/src/content/docs/workspace/roadmap-index.md\n- docs-site/src/content/docs/workspace/roadmap-items.yaml\n- docs-site/src/content/docs/workspace/routines/README.md\n- docs-site/src/content/docs/workspace/routines/architecture-governance-review-routine.md\n- docs-site/src/content/docs/workspace/routines/code-refactor-routine.md\n- docs-site/src/content/docs/workspace/routines/commit-splitting-routine.md\n- docs-site/src/content/docs/workspace/routines/crate-implementation-routine.md\n- docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md\n- docs-site/src/content/docs/workspace/routines/parallel-roadmap-batch-routine.md\n- docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md\n- docs-site/src/content/docs/workspace/routines/public-api-review-routine.md\n- docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml\n- docs-site/src/content/docs/workspace/schemas/batch-manifest.schema.json\n- docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json\n- docs-site/src/content/docs/workspace/schemas/roadmap-item-source.schema.json\n- docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json\n- docs-site/src/content/docs/workspace/sdf-first-execution-roadmap.md\n- docs-site/src/content/docs/workspace/templates/README.md\n- docs-site/src/content/docs/workspace/templates/domain-module-template.md\n- docs-site/src/content/docs/workspace/toolchain-bootstrap.md\n- docs-site/src/content/docs/workspace/track-execution-locks/pt-ui-program.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifest.md\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-component-platform.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml\n- docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml\n- docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-composition-cutover.yaml\n- docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-program-architecture.yaml\n- docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-story-platform.yaml\n- docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml\n- docs-site/src/content/docs/workspace/truth-verifier-registry.yaml\n- docs-site/src/content/docs/reports/benchmarks/render/README.md\n- docs-site/src/content/docs/reports/benchmarks/render/mesh-material-production-evidence.md\n- docs-site/src/content/docs/reports/benchmarks/render/product-visual-evidence.md\n- docs-site/src/content/docs/reports/benchmarks/render/temporal-production-evidence.md\n- docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md\n- docs-site/src/content/docs/reports/audits/editor-ui-priority-code-audit-2026-05-05.md\n- docs-site/src/content/docs/reports/audits/general-software-development-principles-extraction-2026-05-29.md\n- docs-site/src/content/docs/reports/audits/perfectionist-conformance-worktree-classification.md\n- docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md\n- docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md\n- docs-site/src/content/docs/reports/audits/pt-ui-program-truth-claim-correction.md\n- docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md\n- docs-site/src/content/docs/reports/closeouts/docs-governance-cleanup-2026-05-16/closeout.md\n\
+      - docs-site/src/content/docs/reports/closeouts/drawing-phase-5/closeout.md\n- docs-site/src/content/docs/reports/closeouts/ecs-named-param-groups-diagnostics/closeout.md\n- docs-site/src/content/docs/reports/closeouts/ecs-phase6/benchmark-suite.md\n- docs-site/src/content/docs/reports/closeouts/ecs-phase6/final-decision-report.md\n- docs-site/src/content/docs/reports/closeouts/ecs-phase6/progress-report.md\n- docs-site/src/content/docs/reports/closeouts/m5-runtime-preview/closeout.md\n- docs-site/src/content/docs/reports/closeouts/m6-material-texture-descriptor-preview/closeout.md\n- docs-site/src/content/docs/reports/closeouts/material-lab-post-migration-polish/closeout.md\n- docs-site/src/content/docs/reports/closeouts/p1-sdf-modeling-core/closeout.md\n- docs-site/src/content/docs/reports/closeouts/p1-sdf-operation-layer/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/artifacts/editor-ux-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/artifacts/editor-ux-design-system-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/artifacts/editor-ux-workbench-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/artifacts/editor-ux-graph-canvas-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/artifacts/editor-ux-product-pattern-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/artifacts/editor-ux-registered-surface-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/artifacts/runtime-proof.txt\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-001-render-product-graph-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md\n\
       - docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-product-visuals-001-product-visual-producer-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-rt-001-hardware-ray-query-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-scale-001-scale-residency-and-visibility-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-sdf-001-sparse-sdf-rendering-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-001-ui-designer-doctrine/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-002-canonical-ir-and-composition/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-003-target-projection-profiles/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-002-v1-package-document-session-and-evidence-model/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md\n\
       - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-001-productization-governance/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/artifacts/activation-reports.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/artifacts/project-package.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/accessibility-snapshot.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/activation-reports.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/diagnostics-snapshot.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/error-diagnostics.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/performance-snapshot.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/project-package.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/provider-snapshot.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/rollback-reports.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/unsupported-checks.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/api-ergonomics-review.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/activation-reports.ron\n\
       - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/diagnostics-snapshot.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/error-diagnostics.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/focus-traversal-report.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/no-gap-capability-results.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/no-gap-evidence-manifest.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/platform-impossible-results.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/project-package.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/provider-snapshot.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/rollback-reports.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/timing-report.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/artifacts/activation-reports.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/artifacts/project-package.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/artifacts/rollback-records.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/artifacts/structural-apply-review.ron\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-006-final-no-gap-certification-closeout/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-001-adr-design-promotion/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-002-ui-program-contract-design/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-003-control-package-proof-design/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-004-compiler-runtime-artifact-design/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-005-evaluator-host-design/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-006-retained-ui-migration-design/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-007-6a-label-structural-uiframe-text-proof/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-008-6b-button-route-event-host-command-proof/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-009-6c-inspectorfield-binding-state-proof/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-010-6d-colorpicker-controlpackage-proof/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-011-6e-world-space-host-boundary-proof/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-012-6f-headless-fixture-diagnostics-source-map-proof/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-013-runtime-proven-closeout-and-materialprogram-handoff/closeout.md\n- docs-site/src/content/docs/reports/closeouts/pm-ui-program-arch-001-governance-and-truth-claim-activation/closeout.md\n\
@@ -1389,7 +1708,7 @@ actions:
       - apps/runenwerk_editor/src/runtime/viewport/routing.rs\n- apps/runenwerk_editor/src/runtime/viewport/settings_hydration.rs\n- apps/runenwerk_editor/src/runtime/viewport/surface_mounts.rs\n- apps/runenwerk_editor/src/runtime/viewport/surface_set.rs\n- apps/runenwerk_editor/src/runtime/viewport/tool_surface_binding.rs\n- apps/runenwerk_editor/src/shell/applied_editor_definition/activation.rs\n- apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs\n- apps/runenwerk_editor/src/shell/applied_editor_definition/compatibility.rs\n- apps/runenwerk_editor/src/shell/applied_editor_definition.rs\n- apps/runenwerk_editor/src/shell/command_catalog/mod.rs\n- apps/runenwerk_editor/src/shell/command_resolution.rs\n- apps/runenwerk_editor/src/shell/compositions/full_editor.rs\n- apps/runenwerk_editor/src/shell/compositions/headless_validation.rs\n- apps/runenwerk_editor/src/shell/compositions/material_lab.rs\n- apps/runenwerk_editor/src/shell/compositions/mod.rs\n- apps/runenwerk_editor/src/shell/compositions/profiles.rs\n- apps/runenwerk_editor/src/shell/compositions/ui_designer.rs\n- apps/runenwerk_editor/src/shell/controller.rs\n- apps/runenwerk_editor/src/shell/dispatch/entity_table.rs\n- apps/runenwerk_editor/src/shell/dispatch/inspector.rs\n- apps/runenwerk_editor/src/shell/dispatch/mod.rs\n- apps/runenwerk_editor/src/shell/dispatch/outliner.rs\n- apps/runenwerk_editor/src/shell/dispatch/sdf_operations.rs\n- apps/runenwerk_editor/src/shell/dispatch/viewport.rs\n- apps/runenwerk_editor/src/shell/dispatch_shell_command.rs\n- apps/runenwerk_editor/src/shell/editor_lab_evidence/game_runtime.rs\n- apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs\n- apps/runenwerk_editor/src/shell/editor_lab_project/mod.rs\n- apps/runenwerk_editor/src/shell/editor_ux_lab/fixtures.rs\n- apps/runenwerk_editor/src/shell/editor_ux_lab/manifest.rs\n- apps/runenwerk_editor/src/shell/editor_ux_lab/mod.rs\n- apps/runenwerk_editor/src/shell/editor_ux_lab/runner.rs\n- apps/runenwerk_editor/src/shell/editor_ux_lab/visible_widget_scan.rs\n- apps/runenwerk_editor/src/shell/mod.rs\n- apps/runenwerk_editor/src/shell/providers/asset_browser.rs\n- apps/runenwerk_editor/src/shell/providers/common.rs\n- apps/runenwerk_editor/src/shell/providers/console/mod.rs\n- apps/runenwerk_editor/src/shell/providers/field_layer_stack.rs\n- apps/runenwerk_editor/src/shell/providers/field_product_viewer.rs\n- apps/runenwerk_editor/src/shell/providers/import_inspector.rs\n- apps/runenwerk_editor/src/shell/providers/m6_workspace.rs\n- apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs\n- apps/runenwerk_editor/src/shell/providers/material_inspector.rs\n- apps/runenwerk_editor/src/shell/providers/material_preview.rs\n- apps/runenwerk_editor/src/shell/providers/mod.rs\n- apps/runenwerk_editor/src/shell/providers/procgen_graph_canvas.rs\n- apps/runenwerk_editor/src/shell/providers/procgen_preview.rs\n- apps/runenwerk_editor/src/shell/providers/scene/entity_table.rs\n- apps/runenwerk_editor/src/shell/providers/scene/inspector.rs\n- apps/runenwerk_editor/src/shell/providers/scene/mod.rs\n- apps/runenwerk_editor/src/shell/providers/scene/outliner.rs\n- apps/runenwerk_editor/src/shell/providers/scene/viewport.rs\n- apps/runenwerk_editor/src/shell/providers/sdf_brush_browser.rs\n- apps/runenwerk_editor/src/shell/providers/sdf_graph_canvas.rs\n- apps/runenwerk_editor/src/shell/providers/self_authoring.rs\n- apps/runenwerk_editor/src/shell/providers/tests.rs\n- apps/runenwerk_editor/src/shell/providers/texture_viewer.rs\n- apps/runenwerk_editor/src/shell/providers/tool_suite_registry_inspector.rs\n- apps/runenwerk_editor/src/shell/providers/volume_texture_viewer.rs\n- apps/runenwerk_editor/src/shell/self_authoring/evidence.rs\n- apps/runenwerk_editor/src/shell/self_authoring/mod.rs\n- apps/runenwerk_editor/src/shell/self_authoring/operations.rs\n- apps/runenwerk_editor/src/shell/self_authoring/project_io.rs\n- apps/runenwerk_editor/src/shell/self_authoring/recipes.rs\n- apps/runenwerk_editor/src/shell/self_authoring/session.rs\n- apps/runenwerk_editor/src/shell/shortcut_resolution.rs\n\
       - apps/runenwerk_editor/src/shell/state.rs\n- apps/runenwerk_editor/src/shell/surface_session.rs\n- apps/runenwerk_editor/src/shell/tests.rs\n- apps/runenwerk_editor/src/shell/tool_suites/asset_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/core_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/diagnostics_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/editor_design_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/field_sdf_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/gameplay_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/graph_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/mod.rs\n- apps/runenwerk_editor/src/shell/tool_suites/procgen_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/simulation_tool_suite.rs\n- apps/runenwerk_editor/src/shell/tool_suites/texture_tool_suite.rs\n- apps/runenwerk_editor/src/shell/toolbar_adapter.rs\n- apps/runenwerk_editor/src/shell/ui_definition_assets.rs\n- apps/runenwerk_editor/src/shell/workbench_host.rs\n- apps/runenwerk_editor/src/texture_preview/mod.rs\n- apps/runenwerk_editor/tests/scene_authoring_workflow_smoke.rs\n- apps/runenwerk_editor/tests/startup_render_smoke.rs\n- apps/runenwerk_editor/tests/viewport_architecture_guards.rs\n- apps/runenwerk_editor/tests/viewport_branch_truth_smoke.rs\n- apps/runenwerk_editor/tests/viewport_gpu_truth_smoke.rs\n- apps/runenwerk_editor/tests/window.rs\n- apps/runenwerk_draw/Cargo.toml\n- apps/runenwerk_draw/src/app/document_factory.rs\n- apps/runenwerk_draw/src/app/ink/cache.rs\n- apps/runenwerk_draw/src/app/ink/gpu_validation.rs\n- apps/runenwerk_draw/src/app/ink/journal.rs\n- apps/runenwerk_draw/src/app/ink/mod.rs\n- apps/runenwerk_draw/src/app/ink/preview.rs\n- apps/runenwerk_draw/src/app/ink/publication.rs\n- apps/runenwerk_draw/src/app/ink/visibility.rs\n- apps/runenwerk_draw/src/app/input.rs\n- apps/runenwerk_draw/src/app/mod.rs\n- apps/runenwerk_draw/src/app/presentation.rs\n- apps/runenwerk_draw/src/app/state.rs\n- apps/runenwerk_draw/src/app/tool_session.rs\n- apps/runenwerk_draw/src/app/workspace.rs\n- apps/runenwerk_draw/src/lib.rs\n- apps/runenwerk_draw/src/main.rs\n- apps/runenwerk_draw/src/runtime/app.rs\n- apps/runenwerk_draw/src/runtime/gpu_ink.rs\n- apps/runenwerk_draw/src/runtime/ink.rs\n- apps/runenwerk_draw/src/runtime/ink_jobs.rs\n- apps/runenwerk_draw/src/runtime/mod.rs\n- apps/runenwerk_draw/src/runtime/plugin.rs\n- apps/runenwerk_draw/src/runtime/resources.rs\n- apps/runenwerk_draw/src/runtime/systems.rs\n- apps/runenwerk_draw/tests/app_shell.rs\nnew_outputs:\n- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-010/handoff-handoff.yaml\n- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-010/runtime_test-runtime_test.yaml\n- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-010/visual-visual.yaml\n- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-010/reproducibility-reproducibility.yaml\n- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-010/diagnostics-diagnostics.yaml\nforbidden_outputs: []\nforbidden_patterns: []\nvalidation_commands:\n- task production:validate\n- task roadmap:validate\n- task docs:validate\n- task planning:validate\nevidence_required: &id002\n- kind: handoff\n  name: handoff\n  paths:\n  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-010/handoff-handoff.yaml\n  subject_paths: &id001\n  - docs-site/src/content/docs/workspace/agents.md\n  - docs-site/src/content/docs/workspace/architecture-governance-review.md\n  - docs-site/src/content/docs/workspace/crate-docs-status.md\n  - docs-site/src/content/docs/workspace/design-conformance/pt-ui-program-architecture.requirements.yaml\n  - docs-site/src/content/docs/workspace/design-implementation-triage.md\n  - docs-site/src/content/docs/workspace/design-track-roadmap-governance.md\n\
       \  - docs-site/src/content/docs/workspace/diagrams/codex-roadmap-orchestration-target.puml\n  - docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml\n  - docs-site/src/content/docs/workspace/diagrams/design-intake-roadmap-automation.puml\n  - docs-site/src/content/docs/workspace/diagrams/parallel-roadmap-batch-automation.puml\n  - docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml\n  - docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml\n  - docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml\n  - docs-site/src/content/docs/workspace/docs-site-vercel-hosting-plan.md\n  - docs-site/src/content/docs/workspace/documentation-structure.md\n  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-track-execution-harness.yaml\n  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-composition-cutover.yaml\n  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program-architecture.yaml\n  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-program.yaml\n  - docs-site/src/content/docs/workspace/execution-contract-packs/pt-ui-story-platform.yaml\n  - docs-site/src/content/docs/workspace/execution-locks/pt-track-execution-harness.yaml\n  - docs-site/src/content/docs/workspace/execution-locks/pt-ui-composition-cutover.yaml\n  - docs-site/src/content/docs/workspace/execution-locks/pt-ui-program-architecture.yaml\n  - docs-site/src/content/docs/workspace/execution-locks/pt-ui-program.yaml\n  - docs-site/src/content/docs/workspace/execution-locks/pt-ui-story-platform.yaml\n  - docs-site/src/content/docs/workspace/overview.md\n  - docs-site/src/content/docs/workspace/parallel-roadmap-batch-automation.md\n  - docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md\n  - docs-site/src/content/docs/workspace/planning-methods.md\n  - docs-site/src/content/docs/workspace/production-milestone-register.md\n  - docs-site/src/content/docs/workspace/production-track-index.md\n  - docs-site/src/content/docs/workspace/production-track-planning-model.md\n  - docs-site/src/content/docs/workspace/production-tracks.yaml\n  - docs-site/src/content/docs/workspace/prompt-templates/README.md\n  - docs-site/src/content/docs/workspace/prompt-templates/architecture-audit.md\n  - docs-site/src/content/docs/workspace/prompt-templates/architecture-governance-review.md\n  - docs-site/src/content/docs/workspace/prompt-templates/code-review.md\n  - docs-site/src/content/docs/workspace/prompt-templates/commit-organization.md\n  - docs-site/src/content/docs/workspace/prompt-templates/crate-design.md\n  - docs-site/src/content/docs/workspace/prompt-templates/docs-refactor.md\n  - docs-site/src/content/docs/workspace/prompt-templates/goal-execution.md\n  - docs-site/src/content/docs/workspace/prompt-templates/implementation-batch.md\n  - docs-site/src/content/docs/workspace/prompt-templates/new-design-intake.md\n  - docs-site/src/content/docs/workspace/prompt-templates/parallel-roadmap-batch.md\n  - docs-site/src/content/docs/workspace/prompt-templates/phase-completion-drift-check.md\n  - docs-site/src/content/docs/workspace/prompt-templates/production-implementation-contract.md\n  - docs-site/src/content/docs/workspace/prompt-templates/roadmap-milestone-kickoff.md\n  - docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md\n  - docs-site/src/content/docs/workspace/roadmap-archive-register.md\n  - docs-site/src/content/docs/workspace/roadmap-archive.yaml\n  - docs-site/src/content/docs/workspace/roadmap-decision-register.md\n  - docs-site/src/content/docs/workspace/roadmap-deferred-register.md\n  - docs-site/src/content/docs/workspace/roadmap-deferred.yaml\n  - docs-site/src/content/docs/workspace/roadmap-index.md\n  - docs-site/src/content/docs/workspace/roadmap-items.yaml\n  - docs-site/src/content/docs/workspace/routines/README.md\n  - docs-site/src/content/docs/workspace/routines/architecture-governance-review-routine.md\n  - docs-site/src/content/docs/workspace/routines/code-refactor-routine.md\n\
-      \  - docs-site/src/content/docs/workspace/routines/commit-splitting-routine.md\n  - docs-site/src/content/docs/workspace/routines/crate-implementation-routine.md\n  - docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md\n  - docs-site/src/content/docs/workspace/routines/parallel-roadmap-batch-routine.md\n  - docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md\n  - docs-site/src/content/docs/workspace/routines/public-api-review-routine.md\n  - docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml\n  - docs-site/src/content/docs/workspace/schemas/batch-manifest.schema.json\n  - docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json\n  - docs-site/src/content/docs/workspace/schemas/roadmap-item-source.schema.json\n  - docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json\n  - docs-site/src/content/docs/workspace/sdf-first-execution-roadmap.md\n  - docs-site/src/content/docs/workspace/templates/README.md\n  - docs-site/src/content/docs/workspace/templates/domain-module-template.md\n  - docs-site/src/content/docs/workspace/toolchain-bootstrap.md\n  - docs-site/src/content/docs/workspace/track-execution-locks/pt-ui-program.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifest.md\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-component-platform.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml\n  - docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-program-architecture.yaml\n  - docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-story-platform.yaml\n  - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml\n  - docs-site/src/content/docs/workspace/truth-verifier-registry.yaml\n  - docs-site/src/content/docs/reports/benchmarks/render/README.md\n  - docs-site/src/content/docs/reports/benchmarks/render/mesh-material-production-evidence.md\n  - docs-site/src/content/docs/reports/benchmarks/render/product-visual-evidence.md\n  - docs-site/src/content/docs/reports/benchmarks/render/temporal-production-evidence.md\n  - docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md\n  - docs-site/src/content/docs/reports/audits/editor-ui-priority-code-audit-2026-05-05.md\n  - docs-site/src/content/docs/reports/audits/general-software-development-principles-extraction-2026-05-29.md\n  - docs-site/src/content/docs/reports/audits/perfectionist-conformance-worktree-classification.md\n  - docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md\n  - docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md\n  - docs-site/src/content/docs/reports/audits/pt-ui-program-truth-claim-correction.md\n  - docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md\n  - docs-site/src/content/docs/reports/closeouts/docs-governance-cleanup-2026-05-16/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/drawing-phase-5/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-named-param-groups-diagnostics/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-phase6/benchmark-suite.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-phase6/final-decision-report.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-phase6/progress-report.md\n  - docs-site/src/content/docs/reports/closeouts/m5-runtime-preview/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/m6-material-texture-descriptor-preview/closeout.md\n\
+      \  - docs-site/src/content/docs/workspace/routines/commit-splitting-routine.md\n  - docs-site/src/content/docs/workspace/routines/crate-implementation-routine.md\n  - docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md\n  - docs-site/src/content/docs/workspace/routines/parallel-roadmap-batch-routine.md\n  - docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md\n  - docs-site/src/content/docs/workspace/routines/public-api-review-routine.md\n  - docs-site/src/content/docs/workspace/run-ledger-retention-policy.yaml\n  - docs-site/src/content/docs/workspace/schemas/batch-manifest.schema.json\n  - docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json\n  - docs-site/src/content/docs/workspace/schemas/roadmap-item-source.schema.json\n  - docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json\n  - docs-site/src/content/docs/workspace/sdf-first-execution-roadmap.md\n  - docs-site/src/content/docs/workspace/templates/README.md\n  - docs-site/src/content/docs/workspace/templates/domain-module-template.md\n  - docs-site/src/content/docs/workspace/toolchain-bootstrap.md\n  - docs-site/src/content/docs/workspace/track-execution-locks/pt-ui-program.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifest.md\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-track-execution-harness.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-component-platform.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program-architecture.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml\n  - docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml\n  - docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-composition-cutover.yaml\n  - docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-program-architecture.yaml\n  - docs-site/src/content/docs/workspace/track-intent-locks/pt-ui-story-platform.yaml\n  - docs-site/src/content/docs/workspace/truth-conformance-specs/pt-ui-program-architecture/ui-program-architecture-implementation.yaml\n  - docs-site/src/content/docs/workspace/truth-verifier-registry.yaml\n  - docs-site/src/content/docs/reports/benchmarks/render/README.md\n  - docs-site/src/content/docs/reports/benchmarks/render/mesh-material-production-evidence.md\n  - docs-site/src/content/docs/reports/benchmarks/render/product-visual-evidence.md\n  - docs-site/src/content/docs/reports/benchmarks/render/temporal-production-evidence.md\n  - docs-site/src/content/docs/reports/audits/ecs-scheduler-job-system-audit-2026-05-21.md\n  - docs-site/src/content/docs/reports/audits/editor-ui-priority-code-audit-2026-05-05.md\n  - docs-site/src/content/docs/reports/audits/general-software-development-principles-extraction-2026-05-29.md\n  - docs-site/src/content/docs/reports/audits/perfectionist-conformance-worktree-classification.md\n  - docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-current-truth-gap.md\n  - docs-site/src/content/docs/reports/audits/pt-ui-program-architecture-truth-certification-correction.md\n  - docs-site/src/content/docs/reports/audits/pt-ui-program-truth-claim-correction.md\n  - docs-site/src/content/docs/reports/audits/roadmap-perfectionist-audit-2026-05-17.md\n  - docs-site/src/content/docs/reports/closeouts/docs-governance-cleanup-2026-05-16/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/drawing-phase-5/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-named-param-groups-diagnostics/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-phase6/benchmark-suite.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-phase6/final-decision-report.md\n  - docs-site/src/content/docs/reports/closeouts/ecs-phase6/progress-report.md\n  - docs-site/src/content/docs/reports/closeouts/m5-runtime-preview/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/m6-material-texture-descriptor-preview/closeout.md\n\
       \  - docs-site/src/content/docs/reports/closeouts/material-lab-post-migration-polish/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/p1-sdf-modeling-core/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/p1-sdf-operation-layer/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/artifacts/editor-ux-evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/artifacts/runtime-proof.txt\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/artifacts/editor-ux-design-system-evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/artifacts/runtime-proof.txt\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/artifacts/editor-ux-workbench-evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/artifacts/runtime-proof.txt\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/artifacts/editor-ux-graph-canvas-evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/artifacts/runtime-proof.txt\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/artifacts/editor-ux-product-pattern-evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/artifacts/runtime-proof.txt\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/artifacts/editor-ux-registered-surface-evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/artifacts/runtime-proof.txt\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-gpu-001-gpu-evidence-and-procedural-visuals-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-mesh-material-001-mesh-material-lighting-handoff-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-001-render-product-graph-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-002-render-contract-ergonomics/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-003-feature-owned-render-contributions/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-004-render-execution-graph-compiler-maturity/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-005-product-surface-platform-hardening/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-006-multi-surface-presentation/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-007-render-fragments-and-hot-reload/closeout.md\n\
       \  - docs-site/src/content/docs/reports/closeouts/pm-render-pg-008-production-readiness-and-inspection/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-product-visuals-001-product-visual-producer-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-rt-001-hardware-ray-query-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-scale-001-scale-residency-and-visibility-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-sdf-001-sparse-sdf-rendering-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-render-temporal-001-temporal-reconstruction-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-001-harness-governance-and-baseline/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-002-kernel-source-model-closure/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-003-contract-pack-and-plan-sidecar-authority/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-004-typed-validation-command-registry/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-005-transactional-executor-parity/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-006-semantic-evidence-resolver-model/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-007-runtime-closeout-and-truth-claim-state-machine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-008-agent-writer-scoped-diff-protocol/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-009-agent-track-orchestrator/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-010-public-command-cutover-and-legacy-runner-retirement/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-track-harness-011-harness-runtime-proven-closeout/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-001-ui-designer-doctrine/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-002-canonical-ir-and-composition/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-003-target-projection-profiles/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-004-visual-layout-and-interface-composition/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-005-theme-tokens-modes-skins-and-state-variants/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-006-component-surface-and-widget-recipe-library/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-007-view-model-capability-and-intent-binding/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-008-live-preview-fixtures-scenarios-and-target-matrix/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-009-persistence-migration-diff-and-activation/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-design-010-production-readiness-and-evidence/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-evidence-correction-001-runtime-evidence-source-revision-and-catalog-correction/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-001-governance-code-truth-and-track-activation/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-002-v1-package-document-session-and-evidence-model/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-003-standalone-app-shell-and-embedded-host-parity/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-004-catalog-hierarchy-canvas-inspector-v1/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-005-operation-diff-apply-and-rollback/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-006-scenario-evidence-and-performance-baselines/closeout.md\n\
       \  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-007-game-runtime-compatibility-seam/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-008-runtime-proven-closeout-and-handoff/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-001-governance-drift-audit-and-correction-contract/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-002-package-session-source-truth/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-003-recipe-catalog-insertion-and-authoring-surface/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-004-operation-diff-apply-rollback-parity/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-005-scenario-matrix-game-runtime-and-evidence-closure/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-designer-wb-v1-closure-006-runtime-proven-product-closeout-and-handoff/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-001-productization-governance/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-002-registry-and-command-source-of-truth/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/artifacts/activation-reports.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/artifacts/project-package.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-005-persistence-project-io-diff-apply-and-rollback/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/accessibility-snapshot.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/activation-reports.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/diagnostics-snapshot.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/error-diagnostics.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/evidence-manifest.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/performance-snapshot.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/project-package.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/provider-snapshot.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/rollback-reports.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/artifacts/unsupported-checks.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/api-ergonomics-review.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/activation-reports.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/diagnostics-snapshot.ron\n  - docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/artifacts/error-diagnostics.ron\n\

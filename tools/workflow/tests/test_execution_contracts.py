@@ -11,6 +11,15 @@ from execution.evidence import validation_result_digest
 from truth.certificates import digest_path
 
 
+def test_ui_dependency_task_is_a_safe_validation_command() -> None:
+    command = ValidationCommand.model_validate(
+        validation_command_from_string("task ui:dependencies")
+    )
+
+    assert command.command_id == "task:ui:dependencies"
+    assert command.argv == ["task", "ui:dependencies"]
+
+
 def test_execution_planning_expansion_creates_and_links_deferred_wr(tmp_path: Path) -> None:
     production_path = tmp_path / "production.yaml"
     roadmap_path = tmp_path / "roadmap.yaml"

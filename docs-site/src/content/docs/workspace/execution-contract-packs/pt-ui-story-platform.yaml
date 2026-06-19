@@ -1,10 +1,10 @@
 version: 1
 track_id: PT-UI-STORY-PLATFORM
-generated_at: '2026-06-19T12:43:08Z'
+generated_at: '2026-06-19T12:55:50Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-story-platform.yaml: 12ba881b6c8733a1545d8d5bdc175af51ea43030d6ba488d046807ebf319abad
   docs-site/src/content/docs/workspace/production-tracks.yaml: 9adcd375bc66fde0d67498d95a4a5525cf436671ba40be8680de3b0fa52daaf2
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 995cc5d2a55cc84f808040cdcac33e4d0a0fe4b1b239a7749f0d095621d076ba
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 8da691197eba2f9b567fbfa88004554e0b3b767361cca13a8e556d4d79ac8aa0
   docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md: f9a0e8995050c8afcc63f877aa45ae5c572c99540507a024536bfb7c2691fa59
   docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md: 23808dcc1119fc11b07e5dd7678a39babfe01f60e7db2c6f2bba839b48ce89e2
   docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md: 5955c3c7f8627d013ec87a8ce4bedd398a4daa3c0edf14470f225925a6b37f8e
@@ -16,7 +16,7 @@ source_digests:
   tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
   tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
   tools/workflow/execution/compiler.py: d327c954fb4a0ee375a5c8c11b53985096f17dd0ca996109b711eee990faf685
-  tools/workflow/execution/contracts.py: bbcb3633b829f5db9a4327fbcac544da06041695b99754f510271bf2ef8b084f
+  tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
   tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
   tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
   tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1

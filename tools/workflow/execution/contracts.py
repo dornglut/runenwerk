@@ -87,6 +87,7 @@ SAFE_TASK_NAMES = {
     "roadmap:check",
     "roadmap:render",
     "roadmap:validate",
+    "ui:dependencies",
     "workflow:test",
 }
 SAFE_TASK_NAMES_WITH_ARGS = {

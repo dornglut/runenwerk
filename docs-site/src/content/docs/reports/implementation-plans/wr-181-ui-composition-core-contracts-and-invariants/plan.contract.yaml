@@ -1,0 +1,283 @@
+version: 1
+status: accepted
+wr_id: WR-181
+milestone_id: PM-UI-COMPOSITION-002
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: exact_core_contract_implementation
+permissions_required:
+- product_code
+- product_implementation
+- crate_creation
+writer_strategy: agent_writer
+allowed_outputs:
+- Cargo.toml
+- domain/ui/ui-crate-ownership.toml
+- domain/ui/ui_testing/Cargo.toml
+- domain/ui/ui_testing/src/lib.rs
+- domain/ui/ui_testing/src/tests.rs
+- docs-site/src/content/docs/domain/ui/README.md
+- docs-site/src/content/docs/domain/ui/architecture.md
+- docs-site/src/content/docs/domain/ui/crate-ownership.md
+- docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+new_outputs:
+- domain/ui/ui_composition/Cargo.toml
+- domain/ui/ui_composition/src/lib.rs
+- domain/ui/ui_composition/src/identity/mod.rs
+- domain/ui/ui_composition/src/identity/structural.rs
+- domain/ui/ui_composition/src/identity/reference.rs
+- domain/ui/ui_composition/src/definition/mod.rs
+- domain/ui/ui_composition/src/definition/model.rs
+- domain/ui/ui_composition/src/definition/region.rs
+- domain/ui/ui_composition/src/definition/fraction.rs
+- domain/ui/ui_composition/src/content/mod.rs
+- domain/ui/ui_composition/src/content/reference.rs
+- domain/ui/ui_composition/src/content/liveness.rs
+- domain/ui/ui_composition/src/diagnostic/mod.rs
+- domain/ui/ui_composition/src/diagnostic/code.rs
+- domain/ui/ui_composition/src/diagnostic/record.rs
+- domain/ui/ui_composition/src/validation/mod.rs
+- domain/ui/ui_composition/src/validation/definition.rs
+- domain/ui/ui_composition/src/validation/transaction.rs
+- domain/ui/ui_composition/src/state/mod.rs
+- domain/ui/ui_composition/src/state/formation.rs
+- domain/ui/ui_composition/src/state/snapshot.rs
+- domain/ui/ui_composition/src/transaction/mod.rs
+- domain/ui/ui_composition/src/transaction/command.rs
+- domain/ui/ui_composition/src/transaction/policy.rs
+- domain/ui/ui_composition/src/transaction/apply.rs
+- domain/ui/ui_composition/src/history/mod.rs
+- domain/ui/ui_composition/src/history/journal.rs
+- domain/ui/ui_composition/src/promotion/mod.rs
+- domain/ui/ui_composition/src/promotion/layout.rs
+- domain/ui/ui_composition/src/fixture/mod.rs
+- domain/ui/ui_composition/src/fixture/contract.rs
+- domain/ui/ui_composition/tests/formation_invariants.rs
+- domain/ui/ui_composition/tests/transaction_atomicity.rs
+- domain/ui/ui_composition/tests/structural_history.rs
+- domain/ui/ui_composition/tests/content_and_promotion.rs
+- domain/ui/ui_composition/tests/property_invariants.rs
+- domain/ui/ui_testing/src/composition_fixture.rs
+- docs-site/src/content/docs/domain/ui/ui-composition-usage.md
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+forbidden_outputs:
+- domain/ui/ui_surface
+- domain/ui/ui_adaptive_composition
+- domain/editor
+- apps
+- engine
+- adapters
+- net
+- foundation/meta
+- foundation/id
+- foundation/diagnostics
+- foundation/ratification
+forbidden_patterns: []
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo fmt --all --check
+- cargo test -p ui_composition
+- cargo test -p ui_testing composition_fixture
+- task ui:dependencies
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: runtime_test
+  name: core_model_and_formation
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/state/formation.rs
+  - domain/ui/ui_composition/tests/formation_invariants.rs
+  - domain/ui/ui_composition/tests/property_invariants.rs
+  validation_command_ids:
+  - cargo:test
+- kind: runtime_test
+  name: transaction_history_promotion
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/transaction/apply.rs
+  - domain/ui/ui_composition/src/history/journal.rs
+  - domain/ui/ui_composition/tests/transaction_atomicity.rs
+  - domain/ui/ui_composition/tests/structural_history.rs
+  validation_command_ids:
+  - cargo:test
+- kind: fixture
+  name: fixture
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/fixture/contract.rs
+  - domain/ui/ui_testing/src/composition_fixture.rs
+  validation_command_ids:
+  - cargo:test
+- kind: diagnostics
+  name: diagnostics
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/diagnostic/code.rs
+  - domain/ui/ui_composition/src/diagnostic/record.rs
+  - domain/ui/ui_composition/src/validation/definition.rs
+  - domain/ui/ui_composition/src/validation/transaction.rs
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *evidence
+rollback_policy: reject checkpoint import and leave all current runtime consumers and legacy authorities unchanged
+stop_conditions:
+- stop if WR-181 is not current_candidate or crate_creation authority is absent
+- stop if app, editor, Draw, provider, session, native-window, adaptive, or persistence semantics enter the core
+- stop if policy acceptance can be bypassed or transaction rejection mutates state or history
+- stop if any fixture implements product behavior
+- stop before editing ui_surface, workspace authorities, apps, engine, adapters, net, or foundation
+agent_subactions:
+- sub_action_id: core-model-and-formation
+  title: Core model, diagnostics, and formation
+  prompt: Implement typed identities, semantic references, definition/content contracts, diagnostics, invariant validation, ratified state formation, snapshots, and focused formation/property tests. Do not implement transactions, history, promotion, fixtures, persistence, adaptive behavior, or consumers.
+  allowed_outputs:
+  - Cargo.toml
+  - domain/ui/ui-crate-ownership.toml
+  new_outputs:
+  - domain/ui/ui_composition/Cargo.toml
+  - domain/ui/ui_composition/src/lib.rs
+  - domain/ui/ui_composition/src/identity/mod.rs
+  - domain/ui/ui_composition/src/identity/structural.rs
+  - domain/ui/ui_composition/src/identity/reference.rs
+  - domain/ui/ui_composition/src/definition/mod.rs
+  - domain/ui/ui_composition/src/definition/model.rs
+  - domain/ui/ui_composition/src/definition/region.rs
+  - domain/ui/ui_composition/src/definition/fraction.rs
+  - domain/ui/ui_composition/src/content/mod.rs
+  - domain/ui/ui_composition/src/content/reference.rs
+  - domain/ui/ui_composition/src/content/liveness.rs
+  - domain/ui/ui_composition/src/diagnostic/mod.rs
+  - domain/ui/ui_composition/src/diagnostic/code.rs
+  - domain/ui/ui_composition/src/diagnostic/record.rs
+  - domain/ui/ui_composition/src/validation/mod.rs
+  - domain/ui/ui_composition/src/validation/definition.rs
+  - domain/ui/ui_composition/src/validation/transaction.rs
+  - domain/ui/ui_composition/src/state/mod.rs
+  - domain/ui/ui_composition/src/state/formation.rs
+  - domain/ui/ui_composition/src/state/snapshot.rs
+  - domain/ui/ui_composition/tests/formation_invariants.rs
+  - domain/ui/ui_composition/tests/property_invariants.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
+  validation_commands:
+  - cargo fmt --all --check
+  - cargo test -p ui_composition formation
+  evidence_required:
+  - kind: runtime_test
+    name: core_model_and_formation
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-core-model-and-formation.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/state/formation.rs
+    - domain/ui/ui_composition/tests/formation_invariants.rs
+    - domain/ui/ui_composition/tests/property_invariants.rs
+    validation_command_ids:
+    - cargo:test
+  stop_conditions:
+  - stop if the core model depends on another UI crate or admits app semantics
+  - stop if formation can produce state without proving every declared invariant
+- sub_action_id: transaction-history-promotion
+  title: Atomic transactions, structural history, and promotion
+  prompt: Implement the complete typed command set, three narrow policy ports, opaque authorization, isolated candidate application, atomic commit, inverse derivation, journal, undo/redo revalidation, core-only promotion, and focused tests. Preserve the public model from the first sub-action and do not add persistence or consumers.
+  allowed_outputs:
+  - domain/ui/ui_composition/src/lib.rs
+  - domain/ui/ui_composition/src/definition/model.rs
+  - domain/ui/ui_composition/src/definition/region.rs
+  - domain/ui/ui_composition/src/diagnostic/code.rs
+  - domain/ui/ui_composition/src/diagnostic/record.rs
+  - domain/ui/ui_composition/src/validation/mod.rs
+  - domain/ui/ui_composition/src/validation/definition.rs
+  - domain/ui/ui_composition/src/validation/transaction.rs
+  - domain/ui/ui_composition/src/state/mod.rs
+  - domain/ui/ui_composition/src/state/formation.rs
+  - domain/ui/ui_composition/src/state/snapshot.rs
+  new_outputs:
+  - domain/ui/ui_composition/src/transaction/mod.rs
+  - domain/ui/ui_composition/src/transaction/command.rs
+  - domain/ui/ui_composition/src/transaction/policy.rs
+  - domain/ui/ui_composition/src/transaction/apply.rs
+  - domain/ui/ui_composition/src/history/mod.rs
+  - domain/ui/ui_composition/src/history/journal.rs
+  - domain/ui/ui_composition/src/promotion/mod.rs
+  - domain/ui/ui_composition/src/promotion/layout.rs
+  - domain/ui/ui_composition/tests/transaction_atomicity.rs
+  - domain/ui/ui_composition/tests/structural_history.rs
+  - domain/ui/ui_composition/tests/content_and_promotion.rs
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+  validation_commands:
+  - cargo fmt --all --check
+  - cargo test -p ui_composition
+  evidence_required:
+  - kind: runtime_test
+    name: transaction_history_promotion
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/runtime_test-transaction-history-promotion.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/transaction/apply.rs
+    - domain/ui/ui_composition/src/history/journal.rs
+    - domain/ui/ui_composition/tests/transaction_atomicity.rs
+    - domain/ui/ui_composition/tests/structural_history.rs
+    validation_command_ids:
+    - cargo:test
+  stop_conditions:
+  - stop if policy authorization can be bypassed or altered after acceptance
+  - stop if any rejected transaction or history operation changes state or stacks
+- sub_action_id: fixtures-docs-and-evidence
+  title: Conformance fixtures, docs, and checkpoint evidence
+  prompt: Implement only the neutral fixture contract, five ui_testing conformance fixtures, ownership/dependency/usage docs, and resolver-backed checkpoint evidence. Run all final validations. Do not implement product behavior, adaptive behavior, persistence, or consumers.
+  allowed_outputs:
+  - domain/ui/ui_composition/src/lib.rs
+  - domain/ui/ui_testing/Cargo.toml
+  - domain/ui/ui_testing/src/lib.rs
+  - domain/ui/ui_testing/src/tests.rs
+  - docs-site/src/content/docs/domain/ui/README.md
+  - docs-site/src/content/docs/domain/ui/architecture.md
+  - docs-site/src/content/docs/domain/ui/crate-ownership.md
+  - docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+  new_outputs:
+  - domain/ui/ui_composition/src/fixture/mod.rs
+  - domain/ui/ui_composition/src/fixture/contract.rs
+  - domain/ui/ui_testing/src/composition_fixture.rs
+  - docs-site/src/content/docs/domain/ui/ui-composition-usage.md
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+  validation_commands:
+  - cargo fmt --all --check
+  - cargo test -p ui_composition
+  - cargo test -p ui_testing composition_fixture
+  - task ui:dependencies
+  - task docs:validate
+  - task planning:validate
+  evidence_required:
+  - kind: fixture
+    name: fixture
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/fixture-fixture.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/fixture/contract.rs
+    - domain/ui/ui_testing/src/composition_fixture.rs
+    validation_command_ids:
+    - cargo:test
+  - kind: diagnostics
+    name: diagnostics
+    paths:
+    - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-002/diagnostics-diagnostics.yaml
+    subject_paths:
+    - domain/ui/ui_composition/src/diagnostic/code.rs
+    - domain/ui/ui_composition/src/diagnostic/record.rs
+    - domain/ui/ui_composition/src/validation/definition.rs
+    - domain/ui/ui_composition/src/validation/transaction.rs
+  stop_conditions:
+  - stop if any fixture imports or implements product behavior
+  - stop if ownership docs or dependency checks disagree with the implemented crate

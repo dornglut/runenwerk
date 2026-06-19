@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+  component "WR-181 Composition core contracts\nstate=current_candidate\nscore=2.0 V5 B2\ncall=deterministic core\ntyped transactions\nno app semantics" as UICOMP02 <<candidate>>
 
 }
 

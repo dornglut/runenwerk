@@ -1,0 +1,13 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+updated_at: '2026-06-19T12:53:13Z'
+granted_permissions:
+  crate_creation:
+    by: human
+    at: '2026-06-19T12:53:13Z'
+    reason: WR-181 and accepted plan.contract.yaml authorize exact creation of domain/ui/ui_composition only
+denied_permissions:
+  foundation_extraction:
+    by: human
+    at: '2026-06-19T12:53:13Z'
+    reason: Default strategic gate; requires a separate accepted extraction workflow.
