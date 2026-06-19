@@ -26,6 +26,7 @@ allowed_outputs:
 - docs-site/src/content/docs/reports/implementation-plans/wr-180-ui-composition-cutover-governance-and-visual-direction-gate/plan.contract.yaml
 new_outputs:
 - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md
 - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
 - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
 - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
@@ -62,6 +63,7 @@ evidence_required: &evidence
   - docs-site/src/content/docs/workspace/production-tracks.yaml
   - docs-site/src/content/docs/workspace/roadmap-items.yaml
   - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md
   - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
   - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
   - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
