@@ -514,7 +514,7 @@ package "PT-GAME-WORLDSPACE-UI Game World-Space UI" {
 }
 
 package "PT-UI-COMPOSITION-CUTOVER App-Neutral UI Composition Clean Cutover" {
-  component "PM-UI-COMPOSITION-001 Governance And Visual Direction Gate\nkind=design\nstate=active\nWR=WR-180" as PM_UI_COMPOSITION_001 <<active>>
+  component "PM-UI-COMPOSITION-001 Governance And Visual Direction Gate\nkind=design\nstate=completed\nWR=WR-180" as PM_UI_COMPOSITION_001 <<completed>>
 
   component "PM-UI-COMPOSITION-002 Core Contracts And Invariants\nkind=implementation\nstate=ready_next\nWR=WR-181" as PM_UI_COMPOSITION_002 <<ready_next>>
 

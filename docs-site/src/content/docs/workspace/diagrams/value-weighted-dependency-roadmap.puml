@@ -86,9 +86,7 @@ package "Level 3 - Active Domain Tracks" {
 package "Level 4 - Active Discovery Context" {
   component "WR-103 Sparse SDF runtime governance\nstate=ready_next\nscore=2.2 gate=governed shader-bound sparse sdf runtime track activation\nV4 B3\ncall=shader-bound runtime\ngovernance only\nno engine code" as RENDERSDFRUNTIME <<V4>>
 
-  component "WR-180 UI composition cutover governance\nstate=current_candidate\nscore=3.0 gate=accepted core/adaptive designs, adr 0013, production track, and selected visual direction before implementation\nV5 B2\ncall=clean cutover governance\nvisual selection gate\nno runtime implementation" as UICOMP01 <<V5>>
-
-  component "WR-181 Composition core contracts\nstate=ready_next\nscore=2.0 gate=wr-180 visual direction selected and checkpoint 1 closed\nV5 B2\ncall=deterministic core\ntyped transactions\nno app semantics" as UICOMP02 <<V5>>
+  component "WR-181 Composition core contracts\nstate=ready_next\nscore=2.0 gate=region compass selected and checkpoint 1 closed\nV5 B2\ncall=deterministic core\ntyped transactions\nno app semantics" as UICOMP02 <<V5>>
 
   component "WR-182 Composition persistence bundles\nstate=ready_next\nscore=2.0 gate=core composition contracts runtime-proven\nV5 B2\ncall=canonical RON\nlinked hashes\natomic activation" as UICOMP03 <<V5>>
 
@@ -108,7 +106,6 @@ package "Level 4 - Active Discovery Context" {
 
 }
 
-UICOMP01 -down-> UICOMP02 : governance and visual selection before core contracts
 UICOMP02 -down-> UICOMP03 : core invariants before persistence bundles
 UICOMP03 -down-> UICOMP04 : deterministic persistence before editor projection
 UICOMP04 -down-> UICOMP05 : editor read-only legacy gate before Draw proof

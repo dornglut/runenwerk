@@ -6635,7 +6635,7 @@ tracks:
   - id: PM-UI-COMPOSITION-001
     title: Governance And Visual Direction Gate
     kind: design
-    state: active
+    state: completed
     goal: Accept core/adaptive architecture, ADR 0013, ordered production authority, and exactly three grounded visual directions before implementation.
     outcome: Checkpoint 1 closes only after governance validates and the user selects one visual direction.
     dependencies: []
@@ -6654,15 +6654,17 @@ tracks:
       path: docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
       required_status: accepted
       reason: Ownership, supersession, and clean cutover require accepted decision authority.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-001 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Roadmap and production sources contain the full ordered WR-180 through WR-189 sequence.
     - Exactly three grounded 1440x1024 design directions are generated from actual Runenwerk captures and one is selected.
     - No product/runtime code is changed by this milestone.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Visual selection and checkpoint closeout evidence remain open until the user chooses a direction.
-    completion_audit: ''
+    completion_quality: bounded_contract
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md
   - id: PM-UI-COMPOSITION-002
     title: Core Contracts And Invariants
     kind: implementation

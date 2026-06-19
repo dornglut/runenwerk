@@ -218,7 +218,7 @@ package "PT-GAME-WORLDSPACE-UI Game World-Space UI" {
 }
 
 package "PT-UI-COMPOSITION-CUTOVER App-Neutral UI Composition Clean Cutover" {
-  component "PM-UI-COMPOSITION-001 Governance And Visual Direction Gate\nkind=design\nstate=active\nWR=WR-180" as PM_UI_COMPOSITION_001 <<active>>
+  component "PT-UI-COMPOSITION-CUTOVER completed prerequisites\nmilestones=1\nquality=bounded_contract=1" as PT_UI_COMPOSITION_CUTOVER_COMPLETED <<completed>>
 
   component "PM-UI-COMPOSITION-002 Core Contracts And Invariants\nkind=implementation\nstate=ready_next\nWR=WR-181" as PM_UI_COMPOSITION_002 <<ready_next>>
 
@@ -305,7 +305,7 @@ PM_GAME_WORLDSPACE_UI_002 -down-> PM_GAME_WORLDSPACE_UI_003 : production prerequ
 PM_VIEWPORT_PROJECTION_003 -down-> PM_GAME_WORLDSPACE_UI_003 : PT-VIEWPORT-PROJECTION production prerequisite
 PM_GAME_WORLDSPACE_UI_003 -down-> PM_GAME_WORLDSPACE_UI_004 : production prerequisite
 PM_GAME_WORLDSPACE_UI_004 -down-> PM_GAME_WORLDSPACE_UI_005 : production prerequisite
-PM_UI_COMPOSITION_001 -down-> PM_UI_COMPOSITION_002 : production prerequisite
+PT_UI_COMPOSITION_CUTOVER_COMPLETED -down-> PM_UI_COMPOSITION_002 : completed prerequisite
 PM_UI_COMPOSITION_002 -down-> PM_UI_COMPOSITION_003 : production prerequisite
 PM_UI_COMPOSITION_003 -down-> PM_UI_COMPOSITION_004 : production prerequisite
 PM_UI_COMPOSITION_004 -down-> PM_UI_COMPOSITION_005 : production prerequisite

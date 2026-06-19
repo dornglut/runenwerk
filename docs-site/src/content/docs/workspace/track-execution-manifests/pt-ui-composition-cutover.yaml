@@ -25,7 +25,7 @@ global_validation_commands:
 - task planning:validate
 global_stop_conditions:
 - stop if manifest data conflicts with production or roadmap state
-next_legal_action: Complete PM-UI-COMPOSITION-001 governance validation and the three-option visual selection; stop before PM-002 until the user selects a direction.
+next_legal_action: Close PM-UI-COMPOSITION-001 transactionally, then plan PM-UI-COMPOSITION-002 before any core implementation.
 ai_executable: false
 full_automation_target: false
 truth_claims:
@@ -123,7 +123,7 @@ milestones:
   stop_conditions:
   - stop if validation fails
   - stop if WR or plan authority is missing
-  next_legal_action: Create or validate the owning WR and implementation plan before execution.
+  next_legal_action: PM-UI-COMPOSITION-001 closed as bounded_contract; recompile the Contract Pack for the next milestone.
   may_create_code: false
   may_create_crates: false
   may_modify_production_behavior: false

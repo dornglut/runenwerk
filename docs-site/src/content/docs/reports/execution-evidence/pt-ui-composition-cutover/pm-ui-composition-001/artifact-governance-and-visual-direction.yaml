@@ -1,0 +1,214 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-001
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+evidence_kind: artifact
+name: governance_and_visual_direction
+status: passed
+produced_at: '2026-06-19T12:39:36Z'
+paths:
+- docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+- docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+- docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+- docs-site/src/content/docs/workspace/production-tracks.yaml
+- docs-site/src/content/docs/workspace/roadmap-items.yaml
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
+subject_paths:
+- docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+- docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+- docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+- docs-site/src/content/docs/workspace/production-tracks.yaml
+- docs-site/src/content/docs/workspace/roadmap-items.yaml
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
+subject_digests:
+  docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+  docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+  docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+  docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+  docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+  docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+  docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+  docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+  docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+  docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+validation_commands:
+- task:production:render (task production:render) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:production:check (task production:check) -> exit 0
+- task:roadmap:render (task roadmap:render) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:roadmap:check (task roadmap:check) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: task:production:render
+  argv:
+  - task
+  - production:render
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 02f7ba79e32d939e75d0de9b31fb3a05c2396cdb4fb37d542ef5a82077ce6741
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 89f591edb9b11cbd78831d5bf62a3a6283a5f5c3849e772cb285683e8d9c02f5
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:production:check
+  argv:
+  - task
+  - production:check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 1775cb884fb051e39644506333f7d0638477d1e53b1fe7bedc4cc4e3a7271cee
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:roadmap:render
+  argv:
+  - task
+  - roadmap:render
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 9d94294714c7c2100f563a7be4896cbb15a1f01898851adbf8936db367ad4089
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 04c008b1ec6ec966f19cb49410e41466954f10d7b998bd0fde8be70fdd319051
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:roadmap:check
+  argv:
+  - task
+  - roadmap:check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 5abfe418f7ff15df91c92e85ee78f63c3723a57ecc23b9b98dc26205244c8408
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: a47a5e7a88f331f7bb59e767dc3d545c05ffe08a526fc30e53431a6254cbf921
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-123819z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-001:WR-180
+  validation_result_digest: 1bf520b4c6c457054a2a3f327a3b60b250e93c53443b2a08dd79f75e90f762d3
+  subject_digests:
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/decision-analysis.md: 6e2e44813d5c1a4188e362faad41bcaad16e3c00beff68cb80594c6ecefd19a7
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png: 2847d6b75be06f10a4ca6b06a2bfbf6c6cb3ae245804f40a56bf490cb16aef73
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png: 1292dbad621820390b6c9512630f90e84b8e8dfef36472dfe8963140df839a24
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png: 9073402beb73a48057b41fcb65f54c3ecfa05a64e8073e1eb2759c43d50f8a9f
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/options.md: 77274515f6fc57cd7dce6efead1a16b186ec9e283998122d869ee9e4e57d6813
+    docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md: 10723804bfbc0e16a6c1813df743aeca24dc4a33e38bb3fe83c6d5f965f03d3e
+    docs-site/src/content/docs/workspace/production-tracks.yaml: acafb2aa2bedebd88b6b7cd2b260ebd877fe90fa3a0c4371bfd4c13010e9c05c
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 6f234c9363150e366b84a7b0f11ad6ccb6d7d7099a4816a99dec61f56a808f82

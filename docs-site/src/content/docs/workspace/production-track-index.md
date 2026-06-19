@@ -418,7 +418,7 @@ dependency-checked execution graph.
 
 | ID | Milestone | Kind | State | Roadmap links | Outcome |
 |---|---|---|---|---|---|
-| PM-UI-COMPOSITION-001 | Governance And Visual Direction Gate | design | active | WR-180 | Checkpoint 1 closes only after governance validates and the user selects one visual direction. |
+| PM-UI-COMPOSITION-001 | Governance And Visual Direction Gate | design | completed | WR-180 | Checkpoint 1 closes only after governance validates and the user selects one visual direction. |
 | PM-UI-COMPOSITION-002 | Core Contracts And Invariants | implementation | ready_next | WR-181 | The app-neutral core exists without adaptive, editor, Draw, provider-session, or app semantics. |
 | PM-UI-COMPOSITION-003 | Persistence Envelopes And Deterministic Bundles | implementation | ready_next | WR-182 | Deterministic persistence is proven before editor or Draw state migrates. |
 | PM-UI-COMPOSITION-004 | Editor Static Projection | implementation | ready_next | WR-183 | CompositionState becomes editor structural source while legacy WorkspaceState is read-only migration input. |

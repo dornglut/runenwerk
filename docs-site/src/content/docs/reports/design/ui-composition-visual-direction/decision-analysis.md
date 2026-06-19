@@ -107,8 +107,7 @@ compass with Option 3's tab-strip insertion marker and Option 1's larger touch
 edge targets. That blend must be generated and selected as a new visual target
 before implementation.
 
-## Gate State
+## Gate Decision
 
-Recommendation is not selection. `selection.md` remains absent and runtime work
-remains blocked until the user explicitly chooses an option or requests a hybrid
-revision.
+The user selected **Option 2: Region Compass** on 2026-06-19. The selection is
+recorded in `selection.md`; no hybrid or material revision was requested.
