@@ -55,14 +55,8 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             })
         });
         let tool_state = context.app.viewport_tool_state();
-        let viewport_settings = context
-            .shell_state
-            .workspace_state()
-            .tool_surface(request.tool_surface_instance_id)
-            .and_then(|surface| surface.viewport_settings);
         let field_visualizer_settings = products
             .map(|products| products.field_visualizer_settings)
-            .or_else(|| viewport_settings.map(|settings| settings.field_visualizer_settings))
             .unwrap_or_default();
         let frame = build_viewport_observation_frame(
             products,
@@ -73,12 +67,8 @@ impl EditorSurfaceProvider for SceneViewportProvider {
             session
                 .viewport_tool_radial_session
                 .map(|radial| radial.anchor_position),
-            viewport_settings
-                .map(|settings| settings.debug_stage)
-                .unwrap_or(editor_viewport::ViewportDebugStage::Scene),
-            viewport_settings
-                .map(|settings| settings.root_background_opaque)
-                .unwrap_or(false),
+            editor_viewport::ViewportDebugStage::Scene,
+            false,
             field_visualizer_settings,
             context.app.runtime().selected_entity(),
             session.viewport_interaction_state.drag_in_progress(),

@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "No current_candidate items" as NO_CANDIDATES <<context>>
+  component "WR-186 Editor docking runtime\nstate=current_candidate\nscore=1.2 V5 B2\ncall=selected docking UX\nreal cross-window move\ntransaction-only mutation" as UICOMP07 <<candidate>>
 
 }
 

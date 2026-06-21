@@ -73,6 +73,7 @@ mod tests {
 
     fn structural_context(panel: u64, stack: u64, surface: u64) -> StructuralWidgetRoutingContext {
         StructuralWidgetRoutingContext {
+            mounted_unit_id: None,
             panel_instance_id: PanelInstanceId::try_from_raw(panel).unwrap(),
             active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(surface).unwrap()),
             tab_stack_id: TabStackId::try_from_raw(stack).unwrap(),

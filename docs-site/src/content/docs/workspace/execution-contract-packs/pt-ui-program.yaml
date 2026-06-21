@@ -1,10 +1,10 @@
 version: 1
 track_id: PT-UI-PROGRAM
-generated_at: '2026-06-17T08:12:18Z'
+generated_at: '2026-06-20T13:35:59Z'
 source_digests:
   docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-program.yaml: bbb13307d72a7752b55ace62d2da9cf1d0b04ba2382d7914bc1a3a7d5cc2d2b9
-  docs-site/src/content/docs/workspace/production-tracks.yaml: 17b9f7bbba86106c1183b1c28d30300c71d0f01f8f3038696d9a047b3326dae4
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 85f9b6a532aac3c55e65f460b71316774e1f6c39445e2ae72c18fef3a5731cd9
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 22b173be3164afc242f07aa56bdaee7673556a8245bd0fbd51f954a51ccb66ee
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 8edc0a90f31dcf94f098c74582a37bf681993b2e40af95c97e50566682e74efe
   docs-site/src/content/docs/design/active/runenwerk-domain-workbench-north-star.md: 75530b70a57a8ac7c3de395449bdd635bbf776e9719997392795525bd9c28692
   docs-site/src/content/docs/design/active/ui-program-architecture.md: 5d2b43c6acde4d151f4c7691bcef00516b12312a97e4233ae24543d40cc1547d
   docs-site/src/content/docs/design/active/ui-program-proof-slice-plan.md: 31dbd244ec71da1fd5dc1123772f36afd1c4f7968b0012958f2970e8e5959d82
@@ -14,8 +14,8 @@ source_digests:
   tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
   tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
   tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
-  tools/workflow/execution/compiler.py: d327c954fb4a0ee375a5c8c11b53985096f17dd0ca996109b711eee990faf685
-  tools/workflow/execution/contracts.py: bbcb3633b829f5db9a4327fbcac544da06041695b99754f510271bf2ef8b084f
+  tools/workflow/execution/compiler.py: dbe97100320329004d55a38b8ddb7d5c0f067f1ee75d476c8067604bb20b6b06
+  tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
   tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
   tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
   tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1

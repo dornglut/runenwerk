@@ -1,0 +1,152 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-004
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+evidence_kind: migration
+name: legacy_workspace_read_only
+status: passed
+produced_at: '2026-06-20T05:33:10Z'
+paths:
+- domain/editor/editor_shell/src/composition/structural/legacy_import.rs
+- domain/editor/editor_shell/src/workspace/projection.rs
+- apps/runenwerk_editor/src/persistence/workspace_layout.rs
+- apps/runenwerk_editor/tests/composition_architecture_guards.rs
+subject_paths:
+- domain/editor/editor_shell/src/composition/structural/legacy_import.rs
+- domain/editor/editor_shell/src/workspace/projection.rs
+- apps/runenwerk_editor/src/persistence/workspace_layout.rs
+- apps/runenwerk_editor/tests/composition_architecture_guards.rs
+subject_digests:
+  apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+  apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+  domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+  domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p editor_shell composition) -> exit 0
+- cargo:test (cargo test -p editor_shell workspace) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor composition) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor --test startup_render_smoke) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 32f938b405285a7c9ea9a3eee819a991ed02360b4bc52f022faafc25b3067379
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - editor_shell
+  - composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 3c12f069f96d742f3795b284f9ed6402a9e3fc66eb0dd537f9c2208440c375df
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - editor_shell
+  - workspace
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 6ca1677f42068bd42d07e943f0a09aa67e6ec68d87aa568f500dc1647715e9f0
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 40ec2500ca06f48cb93259c2efbb78ddf85282f04858a508aafc590f6e6644d1
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - --test
+  - startup_render_smoke
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 1a54dff5f615f033a58f43fad0d3c9676870406a8ad02e5b007b3a150e449c02
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: c0588c999580be056b455062153f87f2c1ba22ef77cbe11645973c4553d75e05
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: f1be8fa0d123e08e25ba3e6ccdeb381e24101eb62c42321e31da0902d331dc56
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: a777d89d0d532b65f3e6b728b3b6c6dc931137ff75434ed6f8560e400fa19eca
+  subject_digests:
+    apps/runenwerk_editor/src/persistence/workspace_layout.rs: dc80122f9ea87f8f2067ca7608bc1523fdc359f31aef6a4fd45d50aac428ace0
+    apps/runenwerk_editor/tests/composition_architecture_guards.rs: 8da8ab8332b4024e5caa9a6dc0334027c97f593c78a443ed38d8c38e551ef4a4
+    domain/editor/editor_shell/src/composition/structural/legacy_import.rs: 18db51d4cf2d55408e2149e225e33feb474bcead7485da1bb71b8a55799c66ac
+    domain/editor/editor_shell/src/workspace/projection.rs: eb48f8d8ae29c754cb86762fc1233db269d4392bd159847a6f31164181c20de9

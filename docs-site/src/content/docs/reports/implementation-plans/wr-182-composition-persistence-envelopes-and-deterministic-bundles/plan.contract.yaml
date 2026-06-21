@@ -1,0 +1,116 @@
+version: 1
+status: accepted
+wr_id: WR-182
+milestone_id: PM-UI-COMPOSITION-003
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: exact_persistence_contract_implementation
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- Cargo.lock
+- domain/ui/ui_composition/Cargo.toml
+- domain/ui/ui_composition/src/lib.rs
+- domain/ui/ui_composition/src/identity/mod.rs
+- domain/ui/ui_composition/src/identity/reference.rs
+- domain/ui/ui_composition/src/identity/structural.rs
+- domain/ui/ui_composition/src/definition/model.rs
+- domain/ui/ui_composition/src/fixture/contract.rs
+- domain/ui/ui_composition/src/history/journal.rs
+- domain/ui/ui_composition/src/promotion/mod.rs
+- domain/ui/ui_composition/src/promotion/layout.rs
+- docs-site/src/content/docs/domain/ui/README.md
+- docs-site/src/content/docs/domain/ui/architecture.md
+- docs-site/src/content/docs/domain/ui/ui-composition-usage.md
+new_outputs:
+- domain/ui/ui_composition/src/persistence/mod.rs
+- domain/ui/ui_composition/src/persistence/canonical.rs
+- domain/ui/ui_composition/src/persistence/digest.rs
+- domain/ui/ui_composition/src/persistence/envelope.rs
+- domain/ui/ui_composition/src/persistence/bundle.rs
+- domain/ui/ui_composition/src/persistence/generation.rs
+- domain/ui/ui_composition/src/persistence/repository.rs
+- domain/ui/ui_composition/src/persistence/scope.rs
+- domain/ui/ui_composition/src/persistence/legacy.rs
+- domain/ui/ui_composition/src/persistence/diagnostic.rs
+- domain/ui/ui_composition/tests/persistence_determinism.rs
+- domain/ui/ui_composition/tests/persistence_bundle.rs
+- domain/ui/ui_composition/tests/persistence_repository.rs
+- domain/ui/ui_composition/tests/persistence_legacy.rs
+- domain/ui/ui_composition/benches/composition_persistence.rs
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/runtime_test-persistence-bundle-and-repository.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/reproducibility-canonical-bytes-and-hashes.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/migration-legacy-rejection.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/artifact-persistence-benchmark.yaml
+forbidden_outputs:
+- apps
+- engine
+- adapters
+- net
+- domain/editor
+- domain/ui/ui_surface
+- domain/ui/ui_adaptive_composition
+- foundation
+forbidden_patterns: []
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo fmt --all --check
+- cargo test -p ui_composition persistence
+- cargo test -p ui_composition deterministic
+- cargo test -p ui_composition --bench composition_persistence --no-run
+- task ui:dependencies
+- task production:validate
+- task roadmap:validate
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: runtime_test
+  name: persistence_bundle_and_repository
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/runtime_test-persistence-bundle-and-repository.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/persistence/bundle.rs
+  - domain/ui/ui_composition/src/persistence/repository.rs
+  - domain/ui/ui_composition/tests/persistence_bundle.rs
+  - domain/ui/ui_composition/tests/persistence_repository.rs
+  validation_command_ids:
+  - cargo:test
+- kind: reproducibility
+  name: canonical_bytes_and_hashes
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/reproducibility-canonical-bytes-and-hashes.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/persistence/canonical.rs
+  - domain/ui/ui_composition/src/persistence/digest.rs
+  - domain/ui/ui_composition/src/persistence/envelope.rs
+  - domain/ui/ui_composition/tests/persistence_determinism.rs
+- kind: migration
+  name: legacy_rejection
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/migration-legacy-rejection.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/persistence/legacy.rs
+  - domain/ui/ui_composition/tests/persistence_legacy.rs
+- kind: artifact
+  name: persistence_benchmark
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-003/artifact-persistence-benchmark.yaml
+  subject_paths:
+  - domain/ui/ui_composition/benches/composition_persistence.rs
+  - docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *evidence
+rollback_policy: reject checkpoint import and preserve the previous active generation, existing runtime consumers, and all legacy files unchanged
+stop_conditions:
+- stop if WR-182 is not current_candidate or PM-UI-COMPOSITION-002 is not runtime_proven
+- stop if canonical bytes or digests depend on insertion order display labels debug formatting or platform line endings
+- stop if core and extension metadata can mismatch or a partial bundle can load save or promote
+- stop if any failure before pointer replacement can change the active generation
+- stop if scope precedence silently falls through a present invalid higher-scope layout
+- stop if V1-V5 input is changed migrated deleted or accepted
+- stop before app editor Draw adaptive provider session engine windowing ui_surface or foundation work

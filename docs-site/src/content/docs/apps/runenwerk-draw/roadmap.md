@@ -182,7 +182,7 @@ Target modules:
 
 - `apps/runenwerk_draw/src/runtime/systems.rs::submit_draw_frame_system`
 - `apps/runenwerk_draw/src/runtime/app.rs::register_draw_render_flow`
-- `apps/runenwerk_draw/src/app/presentation.rs::build_workspace_frame_with_ink`
+- `apps/runenwerk_draw/src/app/presentation.rs::build_composition_frame_with_ink`
 
 Implementation requirements:
 

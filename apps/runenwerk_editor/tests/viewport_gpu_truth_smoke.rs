@@ -1187,6 +1187,8 @@ fn wr028_texture_surface_request(
         _ => DocumentKind::ProceduralTexture,
     };
     editor_shell::SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::TEXTURE_WORKSPACE_PROFILE_ID,
         document_context: editor_shell::SurfaceDocumentContext::Resolved {
             document_id: DocumentId(28),

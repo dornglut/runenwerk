@@ -7,6 +7,9 @@ use winit::keyboard::KeyCode;
 pub enum PlatformEvent {
     Resumed,
     CloseRequested,
+    Focused {
+        focused: bool,
+    },
     Resized {
         width: u32,
         height: u32,
@@ -52,6 +55,25 @@ pub struct PlatformWindowEvent {
     pub event: PlatformEvent,
 }
 
+#[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
+pub struct PlatformWindowEventQueueResource {
+    events: Vec<PlatformWindowEvent>,
+}
+
+impl PlatformWindowEventQueueResource {
+    pub fn publish(&mut self, event: PlatformWindowEvent) {
+        self.events.push(event);
+    }
+
+    pub fn events(&self) -> &[PlatformWindowEvent] {
+        &self.events
+    }
+
+    pub fn drain(&mut self) -> Vec<PlatformWindowEvent> {
+        std::mem::take(&mut self.events)
+    }
+}
+
 impl PlatformWindowEvent {
     pub fn new(native_window_id: NativeWindowId, event: PlatformEvent) -> Self {
         Self {
@@ -71,7 +93,12 @@ pub fn apply_platform_event(
             window.redraw_requested = true;
         }
         PlatformEvent::CloseRequested => {
-            window.request_close();
+            window.receive_close_intent();
+            window.request_redraw();
+        }
+        PlatformEvent::Focused { focused } => {
+            window.focused = *focused;
+            window.request_redraw();
         }
         PlatformEvent::Resized { width, height } => {
             window.size_px = (*width, *height);
@@ -133,7 +160,12 @@ pub fn apply_platform_window_event(
                 record.redraw_requested = true;
             }
             PlatformEvent::CloseRequested => {
-                record.request_close();
+                record.receive_close_intent();
+                record.request_redraw();
+            }
+            PlatformEvent::Focused { focused } => {
+                record.focused = *focused;
+                record.request_redraw();
             }
             PlatformEvent::Resized { width, height } => {
                 record.size_px = (*width, *height);
@@ -175,6 +207,7 @@ pub fn apply_platform_window_event(
         }
         PlatformEvent::Resumed
         | PlatformEvent::CloseRequested
+        | PlatformEvent::Focused { .. }
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
         | PlatformEvent::RedrawRequested => {}
@@ -329,5 +362,60 @@ mod tests {
                 .map(|record| record.size_px),
             Some((1024, 768))
         );
+    }
+
+    #[test]
+    fn close_and_focus_events_remain_pending_for_app_policy() {
+        let mut legacy = WindowState::windowed("Runtime");
+        let mut registry = WindowStateRegistryResource::from_legacy(&legacy);
+        let mut input = InputState::new();
+
+        apply_platform_window_event(
+            &mut registry,
+            &mut legacy,
+            &mut input,
+            &PlatformWindowEvent::new(
+                NativeWindowId::primary(),
+                PlatformEvent::Focused { focused: false },
+            ),
+        );
+        apply_platform_window_event(
+            &mut registry,
+            &mut legacy,
+            &mut input,
+            &PlatformWindowEvent::new(NativeWindowId::primary(), PlatformEvent::CloseRequested),
+        );
+
+        assert!(!legacy.focused);
+        assert!(legacy.close_intent_pending);
+        assert!(!legacy.close_requested);
+        assert_eq!(
+            registry
+                .record(NativeWindowId::primary())
+                .map(|record| record.lifecycle_state),
+            Some(crate::runtime::window::NativeWindowLifecycleState::CloseIntentPending)
+        );
+    }
+
+    #[test]
+    fn platform_window_event_queue_preserves_window_identity_and_order() {
+        let mut queue = super::PlatformWindowEventQueueResource::default();
+        let primary = NativeWindowId::primary();
+        let secondary = NativeWindowId::try_from_raw(2).expect("secondary id");
+
+        queue.publish(PlatformWindowEvent::new(
+            secondary,
+            PlatformEvent::Focused { focused: true },
+        ));
+        queue.publish(PlatformWindowEvent::new(
+            primary,
+            PlatformEvent::CloseRequested,
+        ));
+
+        let events = queue.drain();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].native_window_id, secondary);
+        assert_eq!(events[1].native_window_id, primary);
+        assert!(queue.events().is_empty());
     }
 }

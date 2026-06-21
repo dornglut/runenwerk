@@ -13,7 +13,7 @@ related:
   - ../../implementation-plans/wr-039-multi-host-presets/plan.md
   - ../../closeouts/wr-037-host-capability-policy/closeout.md
   - ../../closeouts/wr-038-product-and-service-capability-declarations/closeout.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 ---

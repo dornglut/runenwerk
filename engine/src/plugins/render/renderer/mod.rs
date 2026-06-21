@@ -807,8 +807,37 @@ impl Gfx {
         })
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.ctx.resize(width, height);
+    pub fn attach_surface(
+        &mut self,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        window: Arc<Window>,
+        target_size_px: (u32, u32),
+    ) -> Result<()> {
+        self.ctx
+            .attach_surface(render_surface_id, window, target_size_px)
+    }
+
+    pub fn detach_surface(
+        &mut self,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    ) -> bool {
+        self.ctx.detach_surface(render_surface_id)
+    }
+
+    pub fn has_surface(
+        &self,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    ) -> bool {
+        self.ctx.has_surface(render_surface_id)
+    }
+
+    pub fn resize(
+        &mut self,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        width: u32,
+        height: u32,
+    ) -> bool {
+        self.ctx.resize(render_surface_id, width, height)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -825,8 +854,9 @@ impl Gfx {
         debug_config: &RenderDebugConfigResource,
     ) -> Result<GfxFrameTimings> {
         let mut timings = GfxFrameTimings::default();
+        let render_surface_id = prepared_frame.surface.render_surface_id;
         let acquire_start = Instant::now();
-        let frame = self.ctx.get_current_texture()?;
+        let frame = self.ctx.get_current_texture(render_surface_id)?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
         let view = frame.texture.create_view(&Default::default());
         let gpu_timing_capability = if self.ctx.timing_capabilities().timestamp_query {
@@ -845,7 +875,10 @@ impl Gfx {
             ui_rect_shader,
             ui_font_atlas,
             viewport_surface_bindings,
-            self.ctx.surface_config.format,
+            self.ctx
+                .surface_config(render_surface_id)
+                .ok_or_else(|| anyhow::anyhow!("render surface is not attached"))?
+                .format,
             preflight_config,
             debug_control,
             debug_config,

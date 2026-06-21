@@ -1,23 +1,25 @@
 use editor_shell::{
-    BODY_ROOT_WIDGET_ID, CONSOLE_SCROLL_WIDGET_ID, CommandCapabilityKey, ComputedLayoutMap,
-    DockDropCandidate, DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope,
-    DockSplitSide, DockingPreviewDropTarget, EditorShellFrameModel, HostCapabilityPolicy,
-    HostCapabilityRequirements, PanelHostId, PanelKind, ProjectedTabStackSlot,
-    ProjectedWorkspaceHostSlot, ShellCommand, ShellUiExpressionFrame, SurfaceCommandProposal,
-    TOOLBAR_ADD_WORKSPACE_WIDGET_ID, TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID,
-    TOOLBAR_MENU_POPUP_WIDGET_ID, TOOLBAR_WINDOW_MENU_WIDGET_ID, TabDropDestination,
-    ToolSurfaceMount, ToolSurfaceStableKey, UiInputOutcome, UiInteractionResults, UiTree,
+    CONSOLE_SCROLL_WIDGET_ID, CommandCapabilityKey, ComputedLayoutMap, DockDropCandidate,
+    DockDropCandidateState, DockDropInvalidTargetReason, DockDropScope, DockSplitSide,
+    DockingPreviewDropTarget, EditorShellFrameModel, HostCapabilityPolicy,
+    HostCapabilityRequirements, RegionCompassAccessibility, RegionCompassViewModel, ShellCommand,
+    ShellUiExpressionFrame, SurfaceCommandProposal, TOOLBAR_ADD_WORKSPACE_WIDGET_ID,
+    TOOLBAR_EDIT_MENU_WIDGET_ID, TOOLBAR_FILE_MENU_WIDGET_ID, TOOLBAR_MENU_POPUP_WIDGET_ID,
+    TOOLBAR_WINDOW_MENU_WIDGET_ID, UiInputOutcome, UiInteractionResults, UiTree,
     VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
     VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOL_RADIAL_MENU_WIDGET_ID,
-    VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
-    build_editor_shell_frame_with_docking_visual_state, map_interactions_to_shell_commands,
-    surface_widget_id, tab_stack_container_widget_id, tab_stack_popup_menu_widget_id,
-    viewport_tool_radial_item_widget_id,
+    VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId,
+    build_editor_shell_frame_for_target_from_composition_projection_with_docking_visual_state,
+    build_editor_shell_frame_from_composition_projection_with_docking_visual_state,
+    map_interactions_to_shell_commands, surface_widget_id, tab_stack_container_widget_id,
+    tab_stack_popup_menu_widget_id, viewport_tool_radial_item_widget_id,
 };
 use editor_viewport::ArtifactObservationFrame;
+use ui_adaptive_composition::DockZone;
+use ui_composition::PresentationTargetId;
 use ui_input::{
-    EventPropagation, FocusChange, InputResponse, Key, KeyState, PointerCapture, PointerEvent,
-    PointerEventKind, UiInputEvent,
+    EventPropagation, FocusChange, InputResponse, PointerCapture, PointerEventKind,
+    SemanticActionEvent, SemanticDirection, UiInputEvent, UiSemanticAction,
 };
 use ui_math::{Axis, UiRect};
 use ui_render_data::UiFrame;
@@ -28,46 +30,22 @@ use crate::editor_app::RunenwerkEditorApp;
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportInstanceRegistryResource, ViewportPresentationStateResource,
-    ViewportRenderStateCommandQueueResource, is_viewport_tool_surface,
+    ViewportRenderStateCommandQueueResource,
 };
 use crate::shell::tool_suites::EDITOR_CONSOLE_SURFACE_KEY;
 use crate::shell::{
-    CornerAreaSplitSession, CornerSplitResizeSession, EditorShellFrameMetrics,
-    EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderDispatchContext,
-    active_document_context, build_editor_shell_frame_model_with_frame_metrics,
-    dispatch_shell_command, dispatch_shell_command_with_viewport_commands,
-    mounted_surface_requests,
+    EditorShellFrameMetrics, EditorSurfaceProviderRegistry, RunenwerkEditorShellState,
+    SurfaceProviderDispatchContext, active_document_context,
+    build_editor_shell_frame_model_with_frame_metrics,
+    dispatch_shell_command_with_viewport_commands, mounted_surface_requests,
 };
-use editor_shell::TabStackPopupMenuKind;
 
 const CONSOLE_FOLLOW_BOTTOM_EPSILON: f32 = 1.0;
-const SPLIT_HIT_SLOP_PX: f32 = 12.0;
-const SPLIT_BORDER_ROUTE_OVERRIDE_PX: f32 = 3.0;
-const SPLIT_MIN_FRACTION: f32 = 0.08;
-const SPLIT_MAX_FRACTION: f32 = 0.92;
-const CORNER_AREA_SPLIT_THRESHOLD_PX: f32 = 18.0;
-const SIDE_DOCK_DROP_TARGET_EDGE_PX: f32 = 48.0;
 const SURFACE_SESSION_MUTATION_COMMAND_CAPABILITY: &str = "runenwerk.surface.session_mutation";
 const EDITOR_DOMAIN_MUTATION_COMMAND_CAPABILITY: &str = "runenwerk.editor.domain_mutation";
 const SHELL_COMMAND_PROPOSAL_COMMAND_CAPABILITY: &str = "runenwerk.shell.command";
 const HOST_POLICY_DENIED_PROVIDER_PROPOSAL: &str =
     "host capability policy denied provider proposal";
-
-#[derive(Debug, Clone, PartialEq)]
-struct ResolvedTabDropPreview {
-    target: Option<DockingPreviewDropTarget>,
-    candidates: Vec<DockDropCandidate>,
-    active_side: Option<DockSplitSide>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct TabDropPreviewRequest {
-    pointer_position: ui_math::UiPoint,
-    source_tab_stack_id: Option<editor_shell::TabStackId>,
-    explicit_float: bool,
-    cycle_index: usize,
-    cycle_side: Option<DockSplitSide>,
-}
 
 pub struct RunenwerkEditorShellController;
 
@@ -108,12 +86,13 @@ impl RunenwerkEditorShellController {
             None,
         );
         let docking_visual_state = shell_state.docking_visual_state();
-        let build_result = build_editor_shell_frame_with_docking_visual_state(
-            &frame_model,
-            theme,
-            shell_state.workspace_state(),
-            Some(&docking_visual_state),
-        );
+        let build_result =
+            build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+                &frame_model,
+                theme,
+                shell_state.composition_projection(),
+                Some(&docking_visual_state),
+            );
         let tree = build_result.tree;
         shell_state.cache_projection_artifacts(build_result.projection_artifacts);
         shell_state.set_last_tree(tree.clone());
@@ -202,16 +181,64 @@ impl RunenwerkEditorShellController {
             viewport_instances,
         );
         let docking_visual_state = shell_state.docking_visual_state();
-        let build_result = build_editor_shell_frame_with_docking_visual_state(
-            &frame_model,
-            theme,
-            shell_state.workspace_state(),
-            Some(&docking_visual_state),
-        );
+        let build_result =
+            build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+                &frame_model,
+                theme,
+                shell_state.composition_projection(),
+                Some(&docking_visual_state),
+            );
         let tree = build_result.tree;
         shell_state.cache_projection_artifacts(build_result.projection_artifacts);
         shell_state.set_last_tree(tree.clone());
         Self::finish_expression_frame(app, shell_state, bounds, atlas_source, tree)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_expression_frame_for_target_with_surface_resources(
+        app: &RunenwerkEditorApp,
+        shell_state: &mut RunenwerkEditorShellState,
+        target_id: PresentationTargetId,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        frame_metrics: Option<EditorShellFrameMetrics>,
+    ) -> Option<ShellUiExpressionFrame> {
+        let frame_model = Self::rebuild_frame_model_with_provider_context(
+            app,
+            shell_state,
+            theme,
+            app.surface_provider_registry(),
+            frame_metrics,
+            viewport_observations,
+            tool_surface_bindings,
+            viewport_instances,
+        );
+        let docking_visual_state = shell_state.docking_visual_state_for_target(target_id);
+        let build_result = build_editor_shell_frame_for_target_from_composition_projection_with_docking_visual_state(
+            &frame_model,
+            theme,
+            shell_state.composition_projection(),
+            target_id,
+            Some(&docking_visual_state),
+        )?;
+        let tree = build_result.tree;
+        shell_state
+            .cache_projection_artifacts_for_target(target_id, build_result.projection_artifacts);
+        shell_state.set_last_tree_for_target(target_id, tree.clone());
+        shell_state.set_last_bounds_for_target(target_id, bounds);
+        let frame = {
+            let runtime = shell_state.runtime_for_target_mut(target_id);
+            runtime.state_mut().advance_frame();
+            runtime.build_frame(&tree, bounds, atlas_source)
+        };
+        Some(ShellUiExpressionFrame::new(
+            app.runtime().current_scene_reality_version(),
+            frame,
+        ))
     }
 
     fn finish_expression_frame(
@@ -316,12 +343,13 @@ impl RunenwerkEditorShellController {
             viewport_instances,
         );
         let docking_visual_state = shell_state.docking_visual_state();
-        let build_result = build_editor_shell_frame_with_docking_visual_state(
-            &frame_model,
-            theme,
-            shell_state.workspace_state(),
-            Some(&docking_visual_state),
-        );
+        let build_result =
+            build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+                &frame_model,
+                theme,
+                shell_state.composition_projection(),
+                Some(&docking_visual_state),
+            );
         let tree = build_result.tree.clone();
         let projection_artifacts =
             shell_state.cache_projection_artifacts(build_result.projection_artifacts);
@@ -329,6 +357,31 @@ impl RunenwerkEditorShellController {
         shell_state.set_last_bounds(bounds);
 
         let layouts = shell_state.runtime().compute_layout(&tree, bounds);
+        let focused_widget = shell_state
+            .runtime()
+            .state()
+            .focused_target
+            .map(|target| WidgetId(target.0));
+        let primary_target_id = shell_state.primary_composition_target_id();
+        let (split_resize_handled, split_resize_command) = update_composition_split_resize(
+            shell_state,
+            primary_target_id,
+            event,
+            &layouts,
+            &projection_artifacts,
+        );
+        let docking_command = (!split_resize_handled)
+            .then(|| {
+                update_region_compass_docking(
+                    shell_state,
+                    primary_target_id,
+                    event,
+                    &layouts,
+                    &projection_artifacts,
+                    focused_widget,
+                )
+            })
+            .flatten();
         let console_scroll_widget_id = active_console_scroll_widget(shell_state);
         let pre_at_bottom = console_scroll_widget_id
             .map(|widget_id| {
@@ -343,61 +396,46 @@ impl RunenwerkEditorShellController {
             })
             .unwrap_or(true);
 
-        if let Some(outcome) = Self::handle_corner_area_split_event(
-            app,
-            shell_state,
-            event,
-            &layouts,
-            &projection_artifacts,
-        )? {
-            return Ok(outcome);
-        }
-
-        if let Some(outcome) =
-            Self::handle_split_resize_event(shell_state, event, &layouts, &projection_artifacts)
+        if !split_resize_handled
+            && let Some(outcome) =
+                Self::handle_tab_popup_dismiss_event(shell_state, event, &layouts)
         {
             return Ok(outcome);
         }
-        if let Some(outcome) =
-            Self::handle_tab_context_menu_event(shell_state, event, &layouts, &projection_artifacts)
+        if !split_resize_handled
+            && let Some(outcome) =
+                Self::handle_toolbar_menu_dismiss_event(shell_state, event, &layouts)
         {
             return Ok(outcome);
         }
-        if let Some(outcome) = Self::handle_tab_popup_dismiss_event(shell_state, event, &layouts) {
-            return Ok(outcome);
-        }
-        if let Some(outcome) = Self::handle_toolbar_menu_dismiss_event(shell_state, event, &layouts)
+        if !split_resize_handled
+            && let Some(outcome) =
+                Self::handle_viewport_options_menu_dismiss_event(app, shell_state, event, &layouts)
         {
             return Ok(outcome);
         }
-        if let Some(outcome) =
-            Self::handle_viewport_options_menu_dismiss_event(app, shell_state, event, &layouts)
+        if !split_resize_handled
+            && let Some(outcome) = Self::handle_viewport_tool_radial_menu_dismiss_event(
+                app,
+                shell_state,
+                event,
+                &layouts,
+            )
         {
             return Ok(outcome);
         }
-        if let Some(outcome) =
-            Self::handle_viewport_tool_radial_menu_dismiss_event(app, shell_state, event, &layouts)
-        {
-            return Ok(outcome);
-        }
-        if let Some(outcome) = Self::handle_tab_drag_scope_cycle_event(
-            shell_state,
-            event,
-            &tree,
-            &layouts,
-            &projection_artifacts,
-        ) {
-            return Ok(outcome);
-        }
-
-        let outcome = shell_state
-            .runtime_mut()
-            .dispatch_input(&tree, &layouts, event);
+        let outcome = if split_resize_handled {
+            consumed_pointer_outcome(None, true)
+        } else {
+            shell_state
+                .runtime_mut()
+                .dispatch_input(&tree, &layouts, event)
+        };
 
         if is_console_scroll_event(event, &outcome, console_scroll_widget_id) {
             let post_layouts = shell_state.runtime().compute_layout(&tree, bounds);
-            if let (Some(surface_id), Some(console_scroll_widget_id)) = (
-                active_console_surface(shell_state),
+            if let (Some((mounted_unit_id, _surface_id)), Some(console_scroll_widget_id)) = (
+                active_console_binding(shell_state),
                 console_scroll_widget_id,
             ) {
                 let post_offset = shell_state
@@ -415,44 +453,24 @@ impl RunenwerkEditorShellController {
                 let post_at_bottom = is_at_bottom(post_offset, post_max);
                 if post_at_bottom {
                     app.surface_sessions_mut()
-                        .session_mut(surface_id)
+                        .session_mut(mounted_unit_id)
                         .console_follow_enabled = true;
                 } else if pre_at_bottom {
                     app.surface_sessions_mut()
-                        .session_mut(surface_id)
+                        .session_mut(mounted_unit_id)
                         .console_follow_enabled = false;
                 }
             }
         }
 
-        let (mut docking_commands, suppress_tab_activation) = Self::collect_docking_commands(
-            shell_state,
-            event,
-            &tree,
-            &layouts,
-            &projection_artifacts,
-        );
-        if !suppress_tab_activation
-            && let UiInputEvent::Pointer(pointer) = event
-            && pointer.kind == PointerEventKind::Up
-            && pointer.button == Some(ui_input::PointerButton::Primary)
-            && let Some(route) =
-                tab_button_route_at_pointer(&projection_artifacts, &layouts, pointer.position)
-        {
-            docking_commands.push(ShellCommand::SetTabStackActivePanel {
-                tab_stack_id: route.tab_stack_id,
-                panel_instance_id: route.panel_instance_id,
-                projection_epoch: projection_artifacts.projection_epoch,
-            });
-        }
-
         let mut commands =
             map_interactions_to_shell_commands(&outcome.interactions, &projection_artifacts);
-        if suppress_tab_activation {
-            commands
-                .retain(|command| !matches!(command, ShellCommand::SetTabStackActivePanel { .. }));
+        if let Some(command) = docking_command {
+            commands.push(command);
         }
-        commands.append(&mut docking_commands);
+        if let Some(command) = split_resize_command {
+            commands.push(command);
+        }
 
         Self::dispatch_commands_with_viewport_commands(
             app,
@@ -468,28 +486,101 @@ impl RunenwerkEditorShellController {
         Ok(outcome)
     }
 
-    fn handle_tab_context_menu_event(
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_input_for_target_with_viewport_products(
+        app: &mut RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
+        target_id: PresentationTargetId,
+        bounds: UiRect,
+        theme: &ThemeTokens,
         event: &UiInputEvent,
-        layouts: &ComputedLayoutMap,
-        projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    ) -> Option<UiInputOutcome> {
-        let UiInputEvent::Pointer(pointer) = event else {
-            return None;
-        };
-        if !matches!(pointer.kind, PointerEventKind::Down)
-            || pointer.button != Some(ui_input::PointerButton::Secondary)
-        {
-            return None;
-        }
-        let (anchor_widget_id, route) =
-            tab_button_hit_at_pointer(projection_artifacts, layouts, pointer.position)?;
-        shell_state.open_tab_stack_popup_menu(
-            TabStackPopupMenuKind::AreaActions,
-            route.tab_stack_id,
-            anchor_widget_id,
+        viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
+    ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
+        let registry = app.surface_provider_registry_handle();
+        let frame_model = Self::rebuild_frame_model_with_provider_context(
+            app,
+            shell_state,
+            theme,
+            registry.as_ref(),
+            None,
+            viewport_observations,
+            tool_surface_bindings,
+            viewport_instances,
         );
-        Some(consumed_pointer_outcome(Some(anchor_widget_id), true))
+        let docking_visual_state = shell_state.docking_visual_state_for_target(target_id);
+        let build_result = build_editor_shell_frame_for_target_from_composition_projection_with_docking_visual_state(
+            &frame_model,
+            theme,
+            shell_state.composition_projection(),
+            target_id,
+            Some(&docking_visual_state),
+        )
+        .ok_or_else(|| {
+            editor_core::EditorMutationError::runtime_rejected(
+                "composition target has no editor shell projection",
+            )
+        })?;
+        let tree = build_result.tree;
+        let projection_artifacts = shell_state
+            .cache_projection_artifacts_for_target(target_id, build_result.projection_artifacts);
+        shell_state.set_last_tree_for_target(target_id, tree.clone());
+        shell_state.set_last_bounds_for_target(target_id, bounds);
+        let layouts = shell_state
+            .runtime_for_target_mut(target_id)
+            .compute_layout(&tree, bounds);
+        let focused_widget = shell_state
+            .runtime_for_target(target_id)
+            .and_then(|runtime| runtime.state().focused_target)
+            .map(|target| WidgetId(target.0));
+        let (split_resize_handled, split_resize_command) = update_composition_split_resize(
+            shell_state,
+            target_id,
+            event,
+            &layouts,
+            &projection_artifacts,
+        );
+        let docking_command = (!split_resize_handled)
+            .then(|| {
+                update_region_compass_docking(
+                    shell_state,
+                    target_id,
+                    event,
+                    &layouts,
+                    &projection_artifacts,
+                    focused_widget,
+                )
+            })
+            .flatten();
+        let outcome = if split_resize_handled {
+            consumed_pointer_outcome(None, true)
+        } else {
+            shell_state
+                .runtime_for_target_mut(target_id)
+                .dispatch_input(&tree, &layouts, event)
+        };
+        let mut commands =
+            map_interactions_to_shell_commands(&outcome.interactions, &projection_artifacts);
+        if let Some(command) = docking_command {
+            commands.push(command);
+        }
+        if let Some(command) = split_resize_command {
+            commands.push(command);
+        }
+        Self::dispatch_commands_with_viewport_commands(
+            app,
+            shell_state,
+            commands,
+            registry.as_ref(),
+            viewport_presentations,
+            viewport_observations,
+            tool_surface_bindings,
+            viewport_render_commands,
+        )?;
+        Ok(outcome)
     }
 
     fn handle_tab_popup_dismiss_event(
@@ -576,17 +667,15 @@ impl RunenwerkEditorShellController {
             return None;
         }
 
-        let open_viewport_surfaces = shell_state
-            .workspace_state()
-            .tool_surfaces()
-            .filter(|surface| is_viewport_tool_surface(surface))
-            .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
-            .filter(|surface| {
+        let open_viewport_surfaces = mounted_content_bindings(shell_state)
+            .into_iter()
+            .filter(|(_, _, stable_key)| is_viewport_content_key(stable_key))
+            .filter(|(mounted_unit_id, _, _)| {
                 app.surface_sessions()
-                    .session(surface.id)
+                    .session(*mounted_unit_id)
                     .is_some_and(|session| session.viewport_options_menu_open)
             })
-            .map(|surface| surface.id)
+            .map(|(_, surface_id, _)| surface_id)
             .collect::<Vec<_>>();
         if open_viewport_surfaces.is_empty() {
             return None;
@@ -632,20 +721,18 @@ impl RunenwerkEditorShellController {
             return None;
         }
 
-        let open_viewport_surfaces = shell_state
-            .workspace_state()
-            .tool_surfaces()
-            .filter(|surface| is_viewport_tool_surface(surface))
-            .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
-            .filter(|surface| {
+        let open_viewport_surfaces = mounted_content_bindings(shell_state)
+            .into_iter()
+            .filter(|(_, _, stable_key)| is_viewport_content_key(stable_key))
+            .filter(|(mounted_unit_id, _, _)| {
                 app.surface_sessions()
-                    .session(surface.id)
+                    .session(*mounted_unit_id)
                     .is_some_and(|session| {
                         session.viewport_tools_menu_open
                             || session.viewport_tool_radial_session.is_some()
                     })
             })
-            .map(|surface| surface.id)
+            .map(|(_, surface_id, _)| surface_id)
             .collect::<Vec<_>>();
         if open_viewport_surfaces.is_empty() {
             return None;
@@ -679,271 +766,7 @@ impl RunenwerkEditorShellController {
         Some(consumed_pointer_outcome(None, changed))
     }
 
-    fn handle_tab_drag_scope_cycle_event(
-        shell_state: &mut RunenwerkEditorShellState,
-        event: &UiInputEvent,
-        _tree: &UiTree,
-        _layouts: &ComputedLayoutMap,
-        _projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    ) -> Option<UiInputOutcome> {
-        let UiInputEvent::Keyboard(keyboard) = event else {
-            return None;
-        };
-        if keyboard.key != Key::Tab
-            || !matches!(keyboard.state, KeyState::Pressed | KeyState::Repeated)
-            || shell_state.docking_visual_state().active_tab_drag.is_none()
-        {
-            return None;
-        }
-        if !shell_state.cycle_active_tab_drag_preview_candidate() {
-            return None;
-        }
-        Some(consumed_keyboard_outcome(true))
-    }
-
-    fn handle_corner_area_split_event(
-        app: &mut RunenwerkEditorApp,
-        shell_state: &mut RunenwerkEditorShellState,
-        event: &UiInputEvent,
-        layouts: &ComputedLayoutMap,
-        projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    ) -> Result<Option<UiInputOutcome>, editor_core::EditorMutationError> {
-        let UiInputEvent::Pointer(pointer) = event else {
-            return Ok(None);
-        };
-
-        if let Some(session) = shell_state.active_corner_area_split_session() {
-            return match pointer.kind {
-                PointerEventKind::Move | PointerEventKind::Enter => {
-                    let delta = pointer.position - session.pointer_down;
-                    let distance = (delta.x * delta.x + delta.y * delta.y).sqrt();
-                    if distance < CORNER_AREA_SPLIT_THRESHOLD_PX {
-                        return Ok(Some(consumed_pointer_outcome(None, false)));
-                    }
-                    let axis = if delta.x.abs() >= delta.y.abs() {
-                        WorkspaceSplitAxis::Horizontal
-                    } else {
-                        WorkspaceSplitAxis::Vertical
-                    };
-                    let Some(command) = split_tab_stack_area_command_for_active_surface_pending_c6(
-                        shell_state,
-                        session.tab_stack_id,
-                        axis,
-                        session.projection_epoch,
-                    ) else {
-                        shell_state.clear_corner_area_split();
-                        return Ok(Some(consumed_pointer_outcome(None, false)));
-                    };
-                    shell_state.clear_corner_area_split();
-                    dispatch_shell_command(
-                        app,
-                        Some(shell_state),
-                        command,
-                        None,
-                        None,
-                        None,
-                        Some(session.projection_epoch),
-                    )?;
-                    Ok(Some(consumed_pointer_outcome(None, true)))
-                }
-                PointerEventKind::Up | PointerEventKind::Leave => {
-                    shell_state.clear_corner_area_split();
-                    Ok(Some(consumed_pointer_outcome(None, false)))
-                }
-                PointerEventKind::Down | PointerEventKind::Scroll => {
-                    Ok(Some(consumed_pointer_outcome(None, false)))
-                }
-            };
-        }
-
-        if !matches!(pointer.kind, PointerEventKind::Down)
-            || pointer.button != Some(ui_input::PointerButton::Primary)
-            || !pointer.modifiers.shift
-        {
-            return Ok(None);
-        }
-        let Some(tab_stack) =
-            tab_stack_corner_at_pointer(pointer.position, layouts, projection_artifacts)
-        else {
-            return Ok(None);
-        };
-        shell_state.begin_corner_area_split(CornerAreaSplitSession {
-            tab_stack_id: tab_stack.tab_stack_id,
-            pointer_down: pointer.position,
-            projection_epoch: projection_artifacts.projection_epoch,
-        });
-        Ok(Some(consumed_pointer_outcome(
-            Some(tab_stack_container_widget_id(tab_stack.tab_stack_id)),
-            false,
-        )))
-    }
-
-    fn collect_docking_commands(
-        shell_state: &mut RunenwerkEditorShellState,
-        event: &UiInputEvent,
-        tree: &UiTree,
-        layouts: &ComputedLayoutMap,
-        projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    ) -> (Vec<ShellCommand>, bool) {
-        let mut commands = Vec::new();
-        let mut suppress_tab_activation = false;
-
-        let UiInputEvent::Pointer(pointer) = event else {
-            return (commands, suppress_tab_activation);
-        };
-
-        match pointer.kind {
-            PointerEventKind::Down => {
-                if pointer.button != Some(ui_input::PointerButton::Primary) {
-                    return (commands, suppress_tab_activation);
-                }
-                let pressed = shell_state.runtime().state().pressed_widget;
-                let route =
-                    tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position)
-                        .or_else(|| {
-                            pressed.and_then(|pressed_widget| {
-                                projection_artifacts
-                                    .workspace
-                                    .tab_button_route_by_widget_id
-                                    .get(&pressed_widget)
-                                    .copied()
-                            })
-                        });
-                if let Some(route) = route {
-                    shell_state.begin_tab_drag_candidate(
-                        route.panel_instance_id,
-                        route.tab_stack_id,
-                        pointer.position,
-                        projection_artifacts.projection_epoch,
-                    );
-                } else {
-                    shell_state.clear_tab_drag();
-                }
-            }
-            PointerEventKind::Move | PointerEventKind::Enter => {
-                let became_active = shell_state.update_tab_drag_pointer(
-                    pointer.position,
-                    projection_artifacts.projection_epoch,
-                );
-                if became_active || shell_state.docking_visual_state().active_tab_drag.is_some() {
-                    suppress_tab_activation = true;
-                    let (cycle_index, cycle_side) = shell_state.tab_drag_drop_candidate_cycle();
-                    let source_tab_stack_id = shell_state
-                        .docking_visual_state()
-                        .active_tab_drag
-                        .map(|drag| drag.source_tab_stack_id);
-                    let preview = resolve_tab_drop_preview_target(
-                        projection_artifacts,
-                        tree,
-                        layouts,
-                        TabDropPreviewRequest {
-                            pointer_position: pointer.position,
-                            source_tab_stack_id,
-                            explicit_float: pointer.modifiers.alt,
-                            cycle_index,
-                            cycle_side,
-                        },
-                    );
-                    shell_state.set_tab_drag_preview(
-                        preview.target,
-                        preview.candidates,
-                        preview.active_side,
-                        projection_artifacts.projection_epoch,
-                    );
-                }
-            }
-            PointerEventKind::Leave => {
-                shell_state.set_tab_drag_preview(
-                    None,
-                    Vec::new(),
-                    None,
-                    projection_artifacts.projection_epoch,
-                );
-            }
-            PointerEventKind::Up => {
-                let click_candidate = shell_state.tab_drag_candidate();
-                let (cycle_index, cycle_side) = shell_state.tab_drag_drop_candidate_cycle();
-                let preview = resolve_tab_drop_preview_target(
-                    projection_artifacts,
-                    tree,
-                    layouts,
-                    TabDropPreviewRequest {
-                        pointer_position: pointer.position,
-                        source_tab_stack_id: shell_state
-                            .docking_visual_state()
-                            .active_tab_drag
-                            .map(|drag| drag.source_tab_stack_id),
-                        explicit_float: pointer.modifiers.alt,
-                        cycle_index,
-                        cycle_side,
-                    },
-                );
-                shell_state.set_tab_drag_preview(
-                    preview.target,
-                    preview.candidates,
-                    preview.active_side,
-                    projection_artifacts.projection_epoch,
-                );
-                let finished = shell_state.finish_tab_drag(projection_artifacts.projection_epoch);
-                if let Some((panel_instance_id, source_tab_stack_id, preview_target, drag_epoch)) =
-                    finished
-                {
-                    suppress_tab_activation = true;
-                    if let Some(destination) = preview_target.map(|target| match target {
-                        DockingPreviewDropTarget::TabStack {
-                            tab_stack_id,
-                            insert_index,
-                        } => TabDropDestination::TabStack {
-                            tab_stack_id,
-                            insert_index,
-                        },
-                        DockingPreviewDropTarget::SplitIntoArea {
-                            target_tab_stack_id,
-                            side,
-                        } => TabDropDestination::SplitIntoArea {
-                            target_tab_stack_id,
-                            side,
-                        },
-                        DockingPreviewDropTarget::SplitIntoHost {
-                            target_host_id,
-                            side,
-                        } => TabDropDestination::SplitIntoHost {
-                            target_host_id,
-                            side,
-                        },
-                        DockingPreviewDropTarget::SplitIntoRoot { side } => {
-                            TabDropDestination::SplitIntoRoot { side }
-                        }
-                        DockingPreviewDropTarget::NewFloatingHost => {
-                            TabDropDestination::NewFloatingHost
-                        }
-                    }) {
-                        commands.push(ShellCommand::CommitTabDrop {
-                            panel_instance_id,
-                            source_tab_stack_id,
-                            destination,
-                            projection_epoch: drag_epoch,
-                        });
-                    }
-                } else if let Some((panel_instance_id, tab_stack_id, _drag_epoch, false)) =
-                    click_candidate
-                {
-                    commands.push(ShellCommand::SetTabStackActivePanel {
-                        tab_stack_id,
-                        panel_instance_id,
-                        projection_epoch: projection_artifacts.projection_epoch,
-                    });
-                    suppress_tab_activation = true;
-                }
-            }
-            PointerEventKind::Scroll => {}
-        }
-
-        (commands, suppress_tab_activation)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn dispatch_commands(
+    pub fn dispatch_commands(
         app: &mut RunenwerkEditorApp,
         shell_state: &mut RunenwerkEditorShellState,
         commands: Vec<ShellCommand>,
@@ -1104,35 +927,10 @@ impl RunenwerkEditorShellController {
     }
 
     pub fn cursor_intent_for_pointer(
-        shell_state: &RunenwerkEditorShellState,
-        pointer: ui_math::UiPoint,
+        _shell_state: &RunenwerkEditorShellState,
+        _pointer: ui_math::UiPoint,
     ) -> ShellCursorIntent {
-        if shell_state.active_corner_split_resize_session().is_some() {
-            return ShellCursorIntent::ResizeNwse;
-        }
-        if let Some((_, _, axis)) = shell_state.active_split_resize_session() {
-            return split_cursor_intent(axis);
-        }
-        if shell_state.docking_visual_state().active_tab_drag.is_some() {
-            return ShellCursorIntent::Grabbing;
-        }
-
-        let (Some(tree), Some(bounds), Some(projection_artifacts)) = (
-            shell_state.last_tree(),
-            shell_state.last_bounds(),
-            shell_state.last_projection_artifacts(),
-        ) else {
-            return ShellCursorIntent::Default;
-        };
-        let layouts = shell_state.runtime().compute_layout(tree, bounds);
-        if let Some(corner) =
-            resolve_split_corner_resize_target(pointer, &layouts, projection_artifacts)
-        {
-            return corner.cursor_intent;
-        }
-        resolve_split_resize_target(pointer, &layouts, projection_artifacts)
-            .map(|target| split_cursor_intent(target.axis))
-            .unwrap_or(ShellCursorIntent::Default)
+        ShellCursorIntent::Default
     }
 }
 
@@ -1186,500 +984,590 @@ fn shell_command_from_surface_proposal(proposal: SurfaceCommandProposal) -> Opti
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct SplitResizeTarget {
-    split_host_id: PanelHostId,
-    widget_id: WidgetId,
-    axis: WorkspaceSplitAxis,
+#[derive(Clone, Copy)]
+struct ProjectedSplitResizeTarget {
+    host: editor_shell::PanelHostId,
+    widget: WidgetId,
+    axis: editor_shell::WorkspaceSplitAxis,
     fraction: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct SplitCornerResizeTarget {
-    horizontal: SplitResizeTarget,
-    vertical: SplitResizeTarget,
-    cursor_intent: ShellCursorIntent,
-    aspect_ratio: f32,
-}
+fn update_composition_split_resize(
+    shell_state: &mut RunenwerkEditorShellState,
+    target_id: PresentationTargetId,
+    event: &UiInputEvent,
+    layouts: &ComputedLayoutMap,
+    projection: &editor_shell::ShellProjectionArtifacts,
+) -> (bool, Option<ShellCommand>) {
+    let UiInputEvent::Pointer(pointer) = event else {
+        if matches!(
+            event,
+            UiInputEvent::Semantic(SemanticActionEvent {
+                action: UiSemanticAction::Cancel | UiSemanticAction::Rollback,
+                ..
+            })
+        ) && shell_state
+            .active_split_resize_session_for_target(target_id)
+            .is_some()
+        {
+            shell_state.clear_split_resize_for_target(target_id);
+            return (true, None);
+        }
+        return (false, None);
+    };
 
-impl RunenwerkEditorShellController {
-    fn handle_split_resize_event(
-        shell_state: &mut RunenwerkEditorShellState,
-        event: &UiInputEvent,
-        layouts: &ComputedLayoutMap,
-        projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    ) -> Option<UiInputOutcome> {
-        let UiInputEvent::Pointer(pointer) = event else {
-            return None;
-        };
-
-        if let Some(session) = shell_state.active_corner_split_resize_session() {
-            match pointer.kind {
-                PointerEventKind::Move | PointerEventKind::Enter => {
-                    let Some(horizontal_target) = split_resize_target_by_host(
-                        projection_artifacts,
-                        session.horizontal_split_host_id,
-                    ) else {
-                        shell_state.clear_split_resize();
-                        return Some(consumed_pointer_outcome(
-                            Some(session.horizontal_split_widget_id),
-                            false,
-                        ));
-                    };
-                    let Some(vertical_target) = split_resize_target_by_host(
-                        projection_artifacts,
-                        session.vertical_split_host_id,
-                    ) else {
-                        shell_state.clear_split_resize();
-                        return Some(consumed_pointer_outcome(
-                            Some(session.horizontal_split_widget_id),
-                            false,
-                        ));
-                    };
-                    let horizontal_layout = layouts.get(&session.horizontal_split_widget_id)?;
-                    let vertical_layout = layouts.get(&session.vertical_split_widget_id)?;
-                    let mut horizontal_fraction = split_fraction_from_pointer(
-                        WorkspaceSplitAxis::Horizontal,
-                        horizontal_layout.bounds,
-                        pointer,
-                    )
-                    .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
-                    let mut vertical_fraction = split_fraction_from_pointer(
-                        WorkspaceSplitAxis::Vertical,
-                        vertical_layout.bounds,
-                        pointer,
-                    )
-                    .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
-                    if pointer.modifiers.shift && session.aspect_ratio > 0.0 {
-                        let width = horizontal_layout.bounds.width * horizontal_fraction;
-                        let height = width / session.aspect_ratio;
-                        vertical_fraction = (height / vertical_layout.bounds.height.max(1.0))
-                            .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
-                        horizontal_fraction = (width / horizontal_layout.bounds.width.max(1.0))
-                            .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
-                    }
-                    let horizontal_changed =
-                        (horizontal_fraction - horizontal_target.fraction).abs() > 0.001;
-                    let vertical_changed =
-                        (vertical_fraction - vertical_target.fraction).abs() > 0.001;
-                    if horizontal_changed {
-                        let _ = shell_state.set_workspace_split_host_fraction(
-                            session.horizontal_split_host_id,
-                            horizontal_fraction,
-                        );
-                    }
-                    if vertical_changed {
-                        let _ = shell_state.set_workspace_split_host_fraction(
-                            session.vertical_split_host_id,
-                            vertical_fraction,
-                        );
-                    }
-                    return Some(consumed_pointer_outcome(
-                        Some(session.horizontal_split_widget_id),
-                        horizontal_changed || vertical_changed,
-                    ));
-                }
-                PointerEventKind::Up => {
-                    shell_state.clear_split_resize();
-                    return Some(consumed_pointer_outcome(
-                        Some(session.horizontal_split_widget_id),
-                        false,
-                    ));
-                }
-                PointerEventKind::Down | PointerEventKind::Leave | PointerEventKind::Scroll => {
-                    return Some(consumed_pointer_outcome(
-                        Some(session.horizontal_split_widget_id),
-                        false,
-                    ));
-                }
+    match pointer.kind {
+        PointerEventKind::Down if pointer.button == Some(ui_input::PointerButton::Primary) => {
+            let Some(split) =
+                nearest_split_boundary(&projection.workspace.root_host, layouts, pointer.position)
+            else {
+                return (false, None);
+            };
+            shell_state.begin_workspace_split_resize_for_target(
+                target_id,
+                split.host,
+                split.widget,
+                split.axis,
+            );
+            (true, None)
+        }
+        PointerEventKind::Move => {
+            let Some((_, widget, axis)) =
+                shell_state.active_split_resize_session_for_target(target_id)
+            else {
+                return (false, None);
+            };
+            let Some(layout) = layouts.get(&widget) else {
+                shell_state.clear_split_resize_for_target(target_id);
+                return (true, None);
+            };
+            let fraction = split_fraction_from_pointer(layout.bounds, axis, pointer.position);
+            shell_state.update_split_resize_preview_for_target(target_id, fraction);
+            (true, None)
+        }
+        PointerEventKind::Up if pointer.button == Some(ui_input::PointerButton::Primary) => {
+            if let Some((_, widget, axis)) =
+                shell_state.active_split_resize_session_for_target(target_id)
+                && let Some(layout) = layouts.get(&widget)
+            {
+                let fraction = split_fraction_from_pointer(layout.bounds, axis, pointer.position);
+                shell_state.update_split_resize_preview_for_target(target_id, fraction);
             }
+            let Some((split, fraction, expected_revision)) =
+                shell_state.finish_split_resize_for_target(target_id)
+            else {
+                return (false, None);
+            };
+            (
+                true,
+                Some(ShellCommand::ResizeCompositionSplit {
+                    split,
+                    fraction,
+                    expected_revision,
+                    projection_epoch: projection.projection_epoch,
+                }),
+            )
         }
-
-        if let Some((split_host_id, split_widget_id, split_axis)) =
-            shell_state.active_split_resize_session()
-        {
-            match pointer.kind {
-                PointerEventKind::Move | PointerEventKind::Enter => {
-                    let Some(active_target) =
-                        split_resize_target_by_host(projection_artifacts, split_host_id)
-                    else {
-                        shell_state.clear_split_resize();
-                        return Some(consumed_pointer_outcome(Some(split_widget_id), false));
-                    };
-                    let split_layout = layouts.get(&split_widget_id)?;
-                    let next_fraction =
-                        split_fraction_from_pointer(split_axis, split_layout.bounds, pointer)
-                            .clamp(SPLIT_MIN_FRACTION, SPLIT_MAX_FRACTION);
-                    let current_fraction = active_target.fraction;
-                    let changed = (next_fraction - current_fraction).abs() > 0.001;
-                    if changed {
-                        let _ = shell_state
-                            .set_workspace_split_host_fraction(split_host_id, next_fraction);
-                    }
-                    return Some(consumed_pointer_outcome(Some(split_widget_id), changed));
-                }
-                PointerEventKind::Up => {
-                    shell_state.clear_split_resize();
-                    return Some(consumed_pointer_outcome(Some(split_widget_id), false));
-                }
-                PointerEventKind::Down | PointerEventKind::Leave | PointerEventKind::Scroll => {
-                    return Some(consumed_pointer_outcome(Some(split_widget_id), false));
-                }
-            }
-        }
-
-        if !matches!(pointer.kind, PointerEventKind::Down)
-            || pointer.button != Some(ui_input::PointerButton::Primary)
-        {
-            return None;
-        }
-        if pointer.modifiers.shift {
-            return None;
-        }
-
-        if let Some(corner) =
-            resolve_split_corner_resize_target(pointer.position, layouts, projection_artifacts)
-        {
-            shell_state.begin_workspace_corner_split_resize(CornerSplitResizeSession {
-                horizontal_split_host_id: corner.horizontal.split_host_id,
-                horizontal_split_widget_id: corner.horizontal.widget_id,
-                vertical_split_host_id: corner.vertical.split_host_id,
-                vertical_split_widget_id: corner.vertical.widget_id,
-                aspect_ratio: corner.aspect_ratio,
-            });
-            return Some(consumed_pointer_outcome(
-                Some(corner.horizontal.widget_id),
-                false,
-            ));
-        }
-
-        let candidate =
-            resolve_split_resize_target(pointer.position, layouts, projection_artifacts)?;
-        let split_distance = split_resize_distance(pointer.position, layouts, candidate);
-        let routed_widget_under_pointer =
-            tab_button_route_at_pointer(projection_artifacts, layouts, pointer.position).is_some()
-                || routed_action_widget_at_pointer(projection_artifacts, layouts, pointer.position)
-                    .is_some();
-        if routed_widget_under_pointer && split_distance > SPLIT_BORDER_ROUTE_OVERRIDE_PX {
-            return None;
-        }
-        shell_state.begin_workspace_split_resize(
-            candidate.split_host_id,
-            candidate.widget_id,
-            candidate.axis,
-        );
-        Some(consumed_pointer_outcome(Some(candidate.widget_id), false))
+        _ => (false, None),
     }
 }
 
-fn resolve_split_resize_target(
-    cursor: ui_math::UiPoint,
+fn nearest_split_boundary(
+    host: &editor_shell::ProjectedWorkspaceHostSlot,
     layouts: &ComputedLayoutMap,
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-) -> Option<SplitResizeTarget> {
-    split_resize_targets(projection_artifacts)
+    pointer: ui_math::UiPoint,
+) -> Option<ProjectedSplitResizeTarget> {
+    let mut targets = Vec::new();
+    collect_projected_split_targets(host, &mut targets);
+    targets
         .into_iter()
         .filter_map(|target| {
-            let layout = layouts.get(&target.widget_id)?;
-            let bounds = layout.bounds;
-            if !bounds.contains(cursor) {
-                return None;
-            }
-            let boundary = split_boundary_position(target.axis, bounds, target.fraction);
-            let distance = match workspace_axis_to_ui_axis(target.axis) {
-                ui_math::Axis::Horizontal => (cursor.x - boundary).abs(),
-                ui_math::Axis::Vertical => (cursor.y - boundary).abs(),
+            let bounds = layouts.get(&target.widget)?.bounds;
+            let (distance, inside_cross_axis) = match target.axis {
+                editor_shell::WorkspaceSplitAxis::Horizontal => (
+                    (pointer.x - (bounds.x + bounds.width * target.fraction)).abs(),
+                    pointer.y >= bounds.y - 6.0 && pointer.y <= bounds.y + bounds.height + 6.0,
+                ),
+                editor_shell::WorkspaceSplitAxis::Vertical => (
+                    (pointer.y - (bounds.y + bounds.height * target.fraction)).abs(),
+                    pointer.x >= bounds.x - 6.0 && pointer.x <= bounds.x + bounds.width + 6.0,
+                ),
             };
-            (distance <= SPLIT_HIT_SLOP_PX).then_some((distance, target))
+            (inside_cross_axis && distance <= 6.0).then_some((distance, target))
         })
-        .min_by(|(left, _), (right, _)| left.total_cmp(right))
+        .min_by(|left, right| left.0.total_cmp(&right.0))
         .map(|(_, target)| target)
 }
 
-fn resolve_split_corner_resize_target(
-    cursor: ui_math::UiPoint,
-    layouts: &ComputedLayoutMap,
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-) -> Option<SplitCornerResizeTarget> {
-    let targets = split_resize_targets(projection_artifacts);
-    let mut best: Option<(f32, SplitCornerResizeTarget)> = None;
-    for horizontal in targets
-        .iter()
-        .copied()
-        .filter(|target| target.axis == WorkspaceSplitAxis::Horizontal)
-    {
-        let Some(horizontal_layout) = layouts.get(&horizontal.widget_id) else {
-            continue;
-        };
-        if !horizontal_layout.bounds.contains(cursor) {
-            continue;
-        }
-        let horizontal_boundary = split_boundary_position(
-            horizontal.axis,
-            horizontal_layout.bounds,
-            horizontal.fraction,
-        );
-        let horizontal_distance = (cursor.x - horizontal_boundary).abs();
-        if horizontal_distance > SPLIT_HIT_SLOP_PX {
-            continue;
-        }
-
-        for vertical in targets
-            .iter()
-            .copied()
-            .filter(|target| target.axis == WorkspaceSplitAxis::Vertical)
-        {
-            let Some(vertical_layout) = layouts.get(&vertical.widget_id) else {
-                continue;
-            };
-            if !vertical_layout.bounds.contains(cursor) {
-                continue;
-            }
-            let vertical_boundary =
-                split_boundary_position(vertical.axis, vertical_layout.bounds, vertical.fraction);
-            let vertical_distance = (cursor.y - vertical_boundary).abs();
-            if vertical_distance > SPLIT_HIT_SLOP_PX {
-                continue;
-            }
-            let width = (horizontal_boundary - horizontal_layout.bounds.x).max(1.0);
-            let height = (vertical_boundary - vertical_layout.bounds.y).max(1.0);
-            let corner = SplitCornerResizeTarget {
-                horizontal,
-                vertical,
-                cursor_intent: if cursor.x <= horizontal_boundary && cursor.y <= vertical_boundary {
-                    ShellCursorIntent::ResizeNwse
-                } else {
-                    ShellCursorIntent::ResizeNesw
-                },
-                aspect_ratio: width / height,
-            };
-            let distance = horizontal_distance.max(vertical_distance);
-            if best
-                .as_ref()
-                .is_none_or(|(best_distance, _)| distance < *best_distance)
-            {
-                best = Some((distance, corner));
-            }
-        }
-    }
-    best.map(|(_, target)| target)
-}
-
-fn tab_stack_corner_at_pointer<'a>(
-    cursor: ui_math::UiPoint,
-    layouts: &ComputedLayoutMap,
-    projection_artifacts: &'a editor_shell::ShellProjectionArtifacts,
-) -> Option<&'a ProjectedTabStackSlot> {
-    projected_tab_stacks_for_controller(&projection_artifacts.workspace.root_host)
-        .into_iter()
-        .find(|stack| {
-            let Some(layout) = layouts.get(&tab_stack_container_widget_id(stack.tab_stack_id))
-            else {
-                return false;
-            };
-            let bounds = layout.bounds;
-            if !bounds.contains(cursor) {
-                return false;
-            }
-            let near_left = (cursor.x - bounds.x).abs() <= SPLIT_HIT_SLOP_PX;
-            let near_right = (cursor.x - (bounds.x + bounds.width)).abs() <= SPLIT_HIT_SLOP_PX;
-            let near_top = (cursor.y - bounds.y).abs() <= SPLIT_HIT_SLOP_PX;
-            let near_bottom = (cursor.y - (bounds.y + bounds.height)).abs() <= SPLIT_HIT_SLOP_PX;
-            (near_left || near_right) && (near_top || near_bottom)
-        })
-}
-
-fn projected_tab_stacks_for_controller(
-    host: &ProjectedWorkspaceHostSlot,
-) -> Vec<&ProjectedTabStackSlot> {
-    let mut stacks = Vec::new();
-    collect_projected_tab_stacks_for_controller(host, &mut stacks);
-    stacks
-}
-
-fn collect_projected_tab_stacks_for_controller<'a>(
-    host: &'a ProjectedWorkspaceHostSlot,
-    stacks: &mut Vec<&'a ProjectedTabStackSlot>,
+fn collect_projected_split_targets(
+    host: &editor_shell::ProjectedWorkspaceHostSlot,
+    targets: &mut Vec<ProjectedSplitResizeTarget>,
 ) {
-    match host {
-        ProjectedWorkspaceHostSlot::Split {
-            first_child,
-            second_child,
-            ..
-        } => {
-            collect_projected_tab_stacks_for_controller(first_child, stacks);
-            collect_projected_tab_stacks_for_controller(second_child, stacks);
-        }
-        ProjectedWorkspaceHostSlot::TabStack { tab_stack, .. } => stacks.push(tab_stack),
-        ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => {}
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TabStackChromeSurfaceTarget {
-    panel_kind: PanelKind,
-    stable_surface_key: ToolSurfaceStableKey,
-}
-
-fn tab_stack_chrome_surface_target_pending_c6(
-    shell_state: &RunenwerkEditorShellState,
-    tab_stack_id: editor_shell::TabStackId,
-) -> Option<TabStackChromeSurfaceTarget> {
-    // C6D repair: corner split is still app-shell chrome, but it must preserve
-    // stable-key identity instead of inventing viewport legacy fallback.
-    let tab_stack = shell_state.workspace_state().tab_stack(tab_stack_id)?;
-    let panel_id = tab_stack
-        .active_panel
-        .or_else(|| tab_stack.ordered_panels.first().copied())?;
-    let panel = shell_state.workspace_state().panel(panel_id)?;
-    let surface = panel
-        .active_tool_surface
-        .and_then(|surface_id| shell_state.workspace_state().tool_surface(surface_id))?;
-    Some(TabStackChromeSurfaceTarget {
-        panel_kind: panel.panel_kind,
-        stable_surface_key: surface.stable_surface_key().clone(),
-    })
-}
-
-fn split_tab_stack_area_command_for_active_surface_pending_c6(
-    shell_state: &RunenwerkEditorShellState,
-    tab_stack_id: editor_shell::TabStackId,
-    axis: WorkspaceSplitAxis,
-    projection_epoch: u64,
-) -> Option<ShellCommand> {
-    let target = tab_stack_chrome_surface_target_pending_c6(shell_state, tab_stack_id)?;
-    Some(ShellCommand::SplitTabStackAreaStableKey {
-        tab_stack_id,
+    let editor_shell::ProjectedWorkspaceHostSlot::Split {
+        host_id,
+        widget_id,
         axis,
-        panel_kind: target.panel_kind,
-        stable_surface_key: target.stable_surface_key,
-        projection_epoch,
-    })
-}
-
-fn split_boundary_position(
-    axis: WorkspaceSplitAxis,
-    bounds: ui_math::UiRect,
-    fraction: f32,
-) -> f32 {
-    match workspace_axis_to_ui_axis(axis) {
-        ui_math::Axis::Horizontal => bounds.x + bounds.width * fraction,
-        ui_math::Axis::Vertical => bounds.y + bounds.height * fraction,
-    }
-}
-
-fn split_resize_distance(
-    cursor: ui_math::UiPoint,
-    layouts: &ComputedLayoutMap,
-    target: SplitResizeTarget,
-) -> f32 {
-    let Some(layout) = layouts.get(&target.widget_id) else {
-        return f32::MAX;
+        fraction,
+        first_child,
+        second_child,
+        ..
+    } = host
+    else {
+        return;
     };
-    let boundary = split_boundary_position(target.axis, layout.bounds, target.fraction);
-    match workspace_axis_to_ui_axis(target.axis) {
-        ui_math::Axis::Horizontal => (cursor.x - boundary).abs(),
-        ui_math::Axis::Vertical => (cursor.y - boundary).abs(),
-    }
-}
-
-fn routed_action_widget_at_pointer(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    cursor: ui_math::UiPoint,
-) -> Option<WidgetId> {
-    projection_artifacts
-        .widget_actions_by_id
-        .keys()
-        .copied()
-        .filter(|widget_id| {
-            layouts
-                .get(widget_id)
-                .is_some_and(|layout| layout.bounds.contains(cursor))
-        })
-        .min_by(|left, right| {
-            let left_bounds = layouts
-                .get(left)
-                .expect("filtered routed widget should have layout")
-                .bounds;
-            let right_bounds = layouts
-                .get(right)
-                .expect("filtered routed widget should have layout")
-                .bounds;
-            let left_area = left_bounds.width * left_bounds.height;
-            let right_area = right_bounds.width * right_bounds.height;
-            left_area.total_cmp(&right_area)
-        })
+    targets.push(ProjectedSplitResizeTarget {
+        host: *host_id,
+        widget: *widget_id,
+        axis: *axis,
+        fraction: *fraction,
+    });
+    collect_projected_split_targets(first_child, targets);
+    collect_projected_split_targets(second_child, targets);
 }
 
 fn split_fraction_from_pointer(
-    axis: WorkspaceSplitAxis,
-    bounds: ui_math::UiRect,
-    pointer: &PointerEvent,
-) -> f32 {
-    match workspace_axis_to_ui_axis(axis) {
-        ui_math::Axis::Horizontal => (pointer.position.x - bounds.x) / bounds.width.max(1.0),
-        ui_math::Axis::Vertical => (pointer.position.y - bounds.y) / bounds.height.max(1.0),
-    }
-}
-
-fn split_resize_target_by_host(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    split_host_id: PanelHostId,
-) -> Option<SplitResizeTarget> {
-    split_resize_targets(projection_artifacts)
-        .into_iter()
-        .find(|target| target.split_host_id == split_host_id)
-}
-
-fn split_resize_targets(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-) -> Vec<SplitResizeTarget> {
-    let mut targets = Vec::new();
-    collect_split_resize_targets(&projection_artifacts.workspace.root_host, &mut targets);
-    targets
-}
-
-fn collect_split_resize_targets(
-    host: &ProjectedWorkspaceHostSlot,
-    targets: &mut Vec<SplitResizeTarget>,
-) {
-    match host {
-        ProjectedWorkspaceHostSlot::Split {
-            host_id,
-            widget_id,
-            axis,
-            fraction,
-            first_child,
-            second_child,
-            ..
-        } => {
-            targets.push(SplitResizeTarget {
-                split_host_id: *host_id,
-                widget_id: *widget_id,
-                axis: *axis,
-                fraction: *fraction,
-            });
-            collect_split_resize_targets(first_child, targets);
-            collect_split_resize_targets(second_child, targets);
+    bounds: UiRect,
+    axis: editor_shell::WorkspaceSplitAxis,
+    pointer: ui_math::UiPoint,
+) -> ui_composition::SplitFraction {
+    let raw = match axis {
+        editor_shell::WorkspaceSplitAxis::Horizontal => {
+            (pointer.x - bounds.x) / bounds.width.max(1.0)
         }
-        ProjectedWorkspaceHostSlot::TabStack { .. }
-        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => {}
+        editor_shell::WorkspaceSplitAxis::Vertical => {
+            (pointer.y - bounds.y) / bounds.height.max(1.0)
+        }
+    };
+    let basis_points = (raw.clamp(0.1, 0.9) * 10_000.0).round() as u16;
+    ui_composition::SplitFraction::try_new(basis_points)
+        .expect("clamped composition split fraction is valid")
+}
+
+fn update_region_compass_docking(
+    shell_state: &mut RunenwerkEditorShellState,
+    target_id: PresentationTargetId,
+    event: &UiInputEvent,
+    layouts: &ComputedLayoutMap,
+    projection: &editor_shell::ShellProjectionArtifacts,
+    focused_widget: Option<WidgetId>,
+) -> Option<ShellCommand> {
+    let epoch = projection.projection_epoch;
+    match event {
+        UiInputEvent::Pointer(pointer)
+            if pointer.kind == PointerEventKind::Down
+                && pointer.button == Some(ui_input::PointerButton::Secondary) =>
+        {
+            let (widget_id, route) = projection
+                .workspace
+                .tab_button_route_by_widget_id
+                .iter()
+                .filter_map(|(widget_id, route)| {
+                    layouts
+                        .get(widget_id)
+                        .filter(|layout| layout.bounds.contains(pointer.position))
+                        .map(|layout| {
+                            (
+                                layout.bounds.width * layout.bounds.height,
+                                *widget_id,
+                                route,
+                            )
+                        })
+                })
+                .min_by(|left, right| left.0.total_cmp(&right.0))
+                .map(|(_, widget_id, route)| (widget_id, route))?;
+            Some(ShellCommand::ToggleTabStackActionMenu {
+                tab_stack_id: route.tab_stack_id,
+                anchor_widget_id: widget_id,
+            })
+        }
+        UiInputEvent::Pointer(pointer)
+            if pointer.kind == PointerEventKind::Down
+                && pointer.button == Some(ui_input::PointerButton::Primary) =>
+        {
+            let route = projection
+                .workspace
+                .tab_button_route_by_widget_id
+                .iter()
+                .filter_map(|(widget_id, route)| {
+                    layouts
+                        .get(widget_id)
+                        .filter(|layout| layout.bounds.contains(pointer.position))
+                        .map(|layout| (layout.bounds.width * layout.bounds.height, route))
+                })
+                .min_by(|left, right| left.0.total_cmp(&right.0))
+                .map(|(_, route)| route)?;
+            shell_state.begin_tab_drag_candidate_for_target(
+                target_id,
+                route.panel_instance_id,
+                route.tab_stack_id,
+                pointer.position,
+                epoch,
+            );
+            None
+        }
+        UiInputEvent::Pointer(pointer) if pointer.kind == PointerEventKind::Move => {
+            if !shell_state.update_tab_drag_pointer_for_target(target_id, pointer.position, epoch) {
+                return None;
+            }
+            update_region_compass_preview(
+                shell_state,
+                target_id,
+                pointer.position,
+                layouts,
+                projection,
+            );
+            None
+        }
+        UiInputEvent::Pointer(pointer)
+            if pointer.kind == PointerEventKind::Up
+                && pointer.button == Some(ui_input::PointerButton::Primary) =>
+        {
+            finish_region_compass_docking(shell_state, target_id, epoch)
+        }
+        UiInputEvent::Keyboard(keyboard)
+            if matches!(
+                keyboard.state,
+                ui_input::KeyState::Pressed | ui_input::KeyState::Repeated
+            ) =>
+        {
+            let action = if keyboard.modifiers.alt
+                && keyboard.modifiers.shift
+                && keyboard.key == ui_input::Key::Character("d".to_owned())
+            {
+                Some(UiSemanticAction::EnterMoveMode)
+            } else {
+                match keyboard.key {
+                    ui_input::Key::Escape => Some(UiSemanticAction::Cancel),
+                    ui_input::Key::Enter => Some(UiSemanticAction::Commit),
+                    ui_input::Key::Tab if keyboard.modifiers.shift => {
+                        Some(UiSemanticAction::Focus(SemanticDirection::Previous))
+                    }
+                    ui_input::Key::Tab => Some(UiSemanticAction::Focus(SemanticDirection::Next)),
+                    ui_input::Key::Left => Some(UiSemanticAction::Focus(SemanticDirection::Left)),
+                    ui_input::Key::Right => Some(UiSemanticAction::Focus(SemanticDirection::Right)),
+                    ui_input::Key::Up => Some(UiSemanticAction::Focus(SemanticDirection::Up)),
+                    ui_input::Key::Down => Some(UiSemanticAction::Focus(SemanticDirection::Down)),
+                    _ => None,
+                }
+            }?;
+            handle_region_compass_semantic_action(
+                shell_state,
+                target_id,
+                SemanticActionEvent::new(ui_input::SemanticInputSource::Keyboard, action)
+                    .repeated(keyboard.state == ui_input::KeyState::Repeated),
+                layouts,
+                projection,
+                focused_widget,
+            )
+        }
+        UiInputEvent::Semantic(action) => handle_region_compass_semantic_action(
+            shell_state,
+            target_id,
+            *action,
+            layouts,
+            projection,
+            focused_widget,
+        ),
+        _ => None,
     }
 }
 
-fn workspace_axis_to_ui_axis(axis: WorkspaceSplitAxis) -> ui_math::Axis {
-    match axis {
-        WorkspaceSplitAxis::Horizontal => ui_math::Axis::Horizontal,
-        WorkspaceSplitAxis::Vertical => ui_math::Axis::Vertical,
+fn handle_region_compass_semantic_action(
+    shell_state: &mut RunenwerkEditorShellState,
+    target_id: PresentationTargetId,
+    event: SemanticActionEvent,
+    layouts: &ComputedLayoutMap,
+    projection: &editor_shell::ShellProjectionArtifacts,
+    focused_widget: Option<WidgetId>,
+) -> Option<ShellCommand> {
+    let epoch = projection.projection_epoch;
+    match event.action {
+        UiSemanticAction::EnterMoveMode => {
+            let focused_widget = focused_widget?;
+            let route = projection
+                .workspace
+                .tab_button_route_by_widget_id
+                .get(&focused_widget)?;
+            let anchor = tab_stack_container_widget_id(route.tab_stack_id);
+            let bounds = layouts.get(&anchor)?.bounds;
+            let center = ui_math::UiPoint::new(
+                bounds.x + bounds.width * 0.5,
+                bounds.y + bounds.height * 0.5,
+            );
+            shell_state.begin_tab_drag_candidate_for_target(
+                target_id,
+                route.panel_instance_id,
+                route.tab_stack_id,
+                center,
+                epoch,
+            );
+            shell_state.update_tab_drag_pointer_for_target(
+                target_id,
+                ui_math::UiPoint::new(center.x + 7.0, center.y),
+                epoch,
+            );
+            set_region_compass_zone(
+                shell_state,
+                target_id,
+                route.tab_stack_id,
+                DockZone::Center,
+                projection,
+                epoch,
+            );
+            None
+        }
+        UiSemanticAction::Cancel | UiSemanticAction::Rollback => {
+            shell_state.clear_tab_drag_for_target(target_id);
+            None
+        }
+        UiSemanticAction::Commit | UiSemanticAction::Activate => {
+            finish_region_compass_docking(shell_state, target_id, epoch)
+        }
+        UiSemanticAction::Focus(SemanticDirection::Next) => {
+            shell_state.focus_region_compass_detach_for_target(target_id);
+            shell_state.set_tab_drag_preview_for_target(
+                target_id,
+                Some(DockingPreviewDropTarget::NewFloatingHost),
+                Vec::new(),
+                None,
+                epoch,
+            );
+            None
+        }
+        UiSemanticAction::Focus(direction) => {
+            let compass = shell_state.region_compass_for_target(target_id)?;
+            let target_stack = shell_state.tab_stack_id_for_region(compass.region)?;
+            let zone = semantic_direction_to_dock_zone(direction)?;
+            set_region_compass_zone(
+                shell_state,
+                target_id,
+                target_stack,
+                zone,
+                projection,
+                epoch,
+            );
+            None
+        }
+        UiSemanticAction::CycleTab(_) | UiSemanticAction::EnterResizeMode(_) => None,
     }
 }
 
-fn split_cursor_intent(axis: WorkspaceSplitAxis) -> ShellCursorIntent {
-    match workspace_axis_to_ui_axis(axis) {
-        ui_math::Axis::Horizontal => ShellCursorIntent::ResizeColumn,
-        ui_math::Axis::Vertical => ShellCursorIntent::ResizeRow,
+fn semantic_direction_to_dock_zone(direction: SemanticDirection) -> Option<DockZone> {
+    match direction {
+        SemanticDirection::Previous => Some(DockZone::Center),
+        SemanticDirection::Left => Some(DockZone::Left),
+        SemanticDirection::Right => Some(DockZone::Right),
+        SemanticDirection::Up => Some(DockZone::Top),
+        SemanticDirection::Down => Some(DockZone::Bottom),
+        SemanticDirection::Next => None,
     }
+}
+
+fn update_region_compass_preview(
+    shell_state: &mut RunenwerkEditorShellState,
+    target_id: PresentationTargetId,
+    pointer: ui_math::UiPoint,
+    layouts: &ComputedLayoutMap,
+    projection: &editor_shell::ShellProjectionArtifacts,
+) {
+    let epoch = projection.projection_epoch;
+    let visual = shell_state.docking_visual_state_for_target(target_id);
+    if let Some(anchor) = visual
+        .active_tab_drag
+        .as_ref()
+        .and_then(|drag| drag.region_compass_anchor)
+        && layouts
+            .get(&editor_shell::region_compass_detach_button_widget_id(
+                anchor,
+            ))
+            .is_some_and(|layout| layout.bounds.contains(pointer))
+    {
+        shell_state.focus_region_compass_detach_for_target(target_id);
+        shell_state.set_tab_drag_preview_for_target(
+            target_id,
+            Some(DockingPreviewDropTarget::NewFloatingHost),
+            Vec::new(),
+            None,
+            epoch,
+        );
+        return;
+    }
+
+    let target = projected_tab_stacks(&projection.workspace)
+        .into_iter()
+        .filter_map(|stack| {
+            let anchor = tab_stack_container_widget_id(stack.tab_stack_id);
+            layouts
+                .get(&anchor)
+                .filter(|layout| layout.bounds.contains(pointer))
+                .map(|layout| {
+                    (
+                        layout.bounds.width * layout.bounds.height,
+                        stack.tab_stack_id,
+                        layout.bounds,
+                    )
+                })
+        })
+        .min_by(|left, right| left.0.total_cmp(&right.0));
+    let Some((_, tab_stack_id, bounds)) = target else {
+        shell_state.clear_region_compass_for_target(target_id);
+        return;
+    };
+    let zone = compass_zone(bounds, pointer);
+    set_region_compass_zone(
+        shell_state,
+        target_id,
+        tab_stack_id,
+        zone,
+        projection,
+        epoch,
+    );
+}
+
+fn set_region_compass_zone(
+    shell_state: &mut RunenwerkEditorShellState,
+    target_id: PresentationTargetId,
+    target_tab_stack_id: editor_shell::TabStackId,
+    zone: DockZone,
+    projection: &editor_shell::ShellProjectionArtifacts,
+    epoch: u64,
+) {
+    let Some(target_stack) = projected_tab_stacks(&projection.workspace)
+        .into_iter()
+        .find(|stack| stack.tab_stack_id == target_tab_stack_id)
+    else {
+        return;
+    };
+    let source_stack = shell_state
+        .docking_visual_state_for_target(target_id)
+        .active_tab_drag
+        .map(|drag| drag.source_tab_stack_id);
+    let source_unit = shell_state
+        .docking_visual_state_for_target(target_id)
+        .active_tab_drag
+        .and_then(|drag| shell_state.mounted_unit_id_for_panel(drag.panel_instance_id));
+    let Some(source_unit) = source_unit else {
+        shell_state.clear_region_compass_for_target(target_id);
+        return;
+    };
+    let Some(target_region) = shell_state.region_id_for_tab_stack(target_tab_stack_id) else {
+        shell_state.clear_region_compass_for_target(target_id);
+        return;
+    };
+    let anchor_widget_id = tab_stack_container_widget_id(target_tab_stack_id);
+    let sides = [
+        (DockZone::Left, DockSplitSide::Left),
+        (DockZone::Right, DockSplitSide::Right),
+        (DockZone::Top, DockSplitSide::Top),
+        (DockZone::Bottom, DockSplitSide::Bottom),
+    ];
+    let mut candidates = sides
+        .into_iter()
+        .map(|(candidate_zone, side)| {
+            let invalid = source_stack == Some(target_tab_stack_id) && target_stack.tabs.len() == 1;
+            DockDropCandidate {
+                target: DockingPreviewDropTarget::SplitIntoArea {
+                    target_tab_stack_id,
+                    side,
+                },
+                scope: DockDropScope::Area,
+                side,
+                anchor_widget_id,
+                state: if invalid {
+                    DockDropCandidateState::Invalid {
+                        reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea,
+                    }
+                } else {
+                    DockDropCandidateState::selectable(candidate_zone == zone)
+                },
+            }
+        })
+        .collect::<Vec<_>>();
+    let preview = if zone == DockZone::Center {
+        Some(DockingPreviewDropTarget::TabStack {
+            tab_stack_id: target_tab_stack_id,
+            insert_index: target_stack.tabs.len(),
+        })
+    } else {
+        candidates
+            .iter()
+            .find(|candidate| candidate.state.is_active())
+            .map(|candidate| candidate.target)
+    };
+    let active_side = candidates
+        .iter()
+        .find(|candidate| candidate.state.is_active())
+        .map(|candidate| candidate.side);
+    if zone == DockZone::Center {
+        for candidate in &mut candidates {
+            if candidate.state.is_selectable() {
+                candidate.state = DockDropCandidateState::Candidate;
+            }
+        }
+    }
+    shell_state.set_tab_drag_preview_for_target(target_id, preview, candidates, active_side, epoch);
+    let invalid_zones = if source_stack == Some(target_tab_stack_id) && target_stack.tabs.len() == 1
+    {
+        vec![
+            DockZone::Left,
+            DockZone::Right,
+            DockZone::Top,
+            DockZone::Bottom,
+        ]
+    } else {
+        Vec::new()
+    };
+    let compass = RegionCompassViewModel::active_with_invalid_zones(
+        target_id,
+        target_region,
+        source_unit,
+        zone,
+        "content",
+        "region",
+        RegionCompassAccessibility::default(),
+        &invalid_zones,
+    )
+    .with_ordinal(target_stack.tabs.len());
+    shell_state.set_region_compass_for_target(target_id, anchor_widget_id, compass, epoch);
+}
+
+fn projected_tab_stacks(
+    projection: &editor_shell::WorkspaceProjectionArtifact,
+) -> Vec<&editor_shell::ProjectedTabStackSlot> {
+    let mut stacks = editor_shell::projected_host_tab_stacks(&projection.root_host);
+    stacks.extend(projection.floating_hosts.iter().map(|host| &host.tab_stack));
+    stacks
+}
+
+fn compass_zone(bounds: UiRect, pointer: ui_math::UiPoint) -> DockZone {
+    let x = ((pointer.x - bounds.x) / bounds.width.max(1.0)).clamp(0.0, 1.0);
+    let y = ((pointer.y - bounds.y) / bounds.height.max(1.0)).clamp(0.0, 1.0);
+    if (0.35..=0.65).contains(&x) && (0.35..=0.65).contains(&y) {
+        return DockZone::Center;
+    }
+    let distances = [
+        (x, DockZone::Left),
+        (1.0 - x, DockZone::Right),
+        (y, DockZone::Top),
+        (1.0 - y, DockZone::Bottom),
+    ];
+    distances
+        .into_iter()
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, zone)| zone)
+        .unwrap_or(DockZone::Center)
+}
+
+fn finish_region_compass_docking(
+    shell_state: &mut RunenwerkEditorShellState,
+    target_id: PresentationTargetId,
+    epoch: u64,
+) -> Option<ShellCommand> {
+    let intent = shell_state.finish_region_compass_for_target(target_id, epoch)?;
+    Some(ShellCommand::CommitCompositionDock {
+        intent,
+        projection_epoch: epoch,
+    })
 }
 
 fn consumed_pointer_outcome(
@@ -1706,60 +1594,128 @@ fn consumed_pointer_outcome(
 }
 
 #[cfg(test)]
-mod tests {
+mod region_compass_semantic_tests {
     use super::*;
+    use engine::plugins::render::UiFontAtlasResource;
 
     #[test]
-    fn invalid_dock_drop_candidate_does_not_resolve_commit_target() {
-        let source_tab_stack_id = editor_shell::TabStackId::try_from_raw(7).unwrap();
-        let invalid_target = DockingPreviewDropTarget::SplitIntoArea {
-            target_tab_stack_id: source_tab_stack_id,
-            side: DockSplitSide::Left,
-        };
+    fn keyboard_touch_and_controller_share_region_compass_direction_semantics() {
+        for source in [
+            ui_input::SemanticInputSource::Keyboard,
+            ui_input::SemanticInputSource::Touch,
+            ui_input::SemanticInputSource::Controller,
+        ] {
+            let event =
+                SemanticActionEvent::new(source, UiSemanticAction::Focus(SemanticDirection::Right));
+            let UiSemanticAction::Focus(direction) = event.action else {
+                unreachable!()
+            };
+            assert_eq!(
+                semantic_direction_to_dock_zone(direction),
+                Some(DockZone::Right)
+            );
+        }
+    }
 
-        let resolved = activate_dock_drop_candidate(
-            vec![DockDropCandidate {
-                target: invalid_target,
-                scope: DockDropScope::Area,
-                side: DockSplitSide::Left,
-                anchor_widget_id: WidgetId(99),
-                state: DockDropCandidateState::Invalid {
-                    reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea,
-                },
-            }],
-            0,
-            None,
+    #[test]
+    fn split_resize_previews_transiently_and_commits_one_composition_transaction() {
+        let mut app = RunenwerkEditorApp::new();
+        let mut shell_state = RunenwerkEditorShellState::new();
+        let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
+        let theme = ThemeTokens::default();
+        let atlas = UiFontAtlasResource::default();
+        let _ = RunenwerkEditorShellController::build_frame(
+            &app,
+            &mut shell_state,
+            bounds,
+            &theme,
+            &atlas,
+        );
+        let projection = shell_state.last_projection_artifacts().unwrap().clone();
+        let tree = shell_state.last_tree().unwrap().clone();
+        let layouts = shell_state.runtime().compute_layout(&tree, bounds);
+        let mut splits = Vec::new();
+        collect_projected_split_targets(&projection.workspace.root_host, &mut splits);
+        let split = splits.first().copied().expect("default composition split");
+        let split_bounds = layouts.get(&split.widget).unwrap().bounds;
+        let boundary = match split.axis {
+            editor_shell::WorkspaceSplitAxis::Horizontal => ui_math::UiPoint::new(
+                split_bounds.x + split_bounds.width * split.fraction,
+                split_bounds.y + split_bounds.height * 0.5,
+            ),
+            editor_shell::WorkspaceSplitAxis::Vertical => ui_math::UiPoint::new(
+                split_bounds.x + split_bounds.width * 0.5,
+                split_bounds.y + split_bounds.height * split.fraction,
+            ),
+        };
+        let moved = match split.axis {
+            editor_shell::WorkspaceSplitAxis::Horizontal => {
+                ui_math::UiPoint::new(boundary.x + 24.0, boundary.y)
+            }
+            editor_shell::WorkspaceSplitAxis::Vertical => {
+                ui_math::UiPoint::new(boundary.x, boundary.y + 24.0)
+            }
+        };
+        let revision_before = shell_state.composition_runtime().composition().revision();
+
+        for (kind, position) in [
+            (PointerEventKind::Down, boundary),
+            (PointerEventKind::Move, moved),
+        ] {
+            RunenwerkEditorShellController::dispatch_input(
+                &mut app,
+                &mut shell_state,
+                bounds,
+                &theme,
+                &UiInputEvent::Pointer(ui_input::PointerEvent {
+                    kind,
+                    position,
+                    button: (kind == PointerEventKind::Down)
+                        .then_some(ui_input::PointerButton::Primary),
+                    ..ui_input::PointerEvent::default()
+                }),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            shell_state.composition_runtime().composition().revision(),
+            revision_before,
+            "drag-frame preview must remain transient"
+        );
+        assert!(
+            shell_state
+                .docking_visual_state()
+                .active_split_preview_fraction
+                .is_some()
         );
 
-        assert_eq!(resolved.target, None);
-        assert_eq!(resolved.active_side, None);
-        assert_eq!(resolved.candidates[0].target, invalid_target);
-        assert!(matches!(
-            resolved.candidates[0].state,
-            DockDropCandidateState::Invalid {
-                reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea
-            }
-        ));
-    }
-}
-
-fn consumed_keyboard_outcome(changed_layout: bool) -> UiInputOutcome {
-    UiInputOutcome {
-        dispatch: editor_shell::UiInputDispatchResult {
-            target: None,
-            response: InputResponse {
-                propagation: EventPropagation::Stop,
-                capture: PointerCapture::None,
-                focus_change: FocusChange::None,
-                repaint: changed_layout,
-                relayout: changed_layout,
-            },
-        },
-        interactions: UiInteractionResults::new(),
-        invalidation: editor_shell::UiInvalidation {
-            repaint: changed_layout,
-            relayout: changed_layout,
-        },
+        RunenwerkEditorShellController::dispatch_input(
+            &mut app,
+            &mut shell_state,
+            bounds,
+            &theme,
+            &UiInputEvent::Pointer(ui_input::PointerEvent {
+                kind: PointerEventKind::Up,
+                position: moved,
+                button: Some(ui_input::PointerButton::Primary),
+                ..ui_input::PointerEvent::default()
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            shell_state
+                .composition_runtime()
+                .composition()
+                .revision()
+                .raw(),
+            revision_before.raw() + 1
+        );
+        assert!(
+            shell_state
+                .docking_visual_state()
+                .active_split_preview_fraction
+                .is_none()
+        );
     }
 }
 
@@ -1779,10 +1735,10 @@ fn console_follow_enabled_for_active_surface(
     app: &RunenwerkEditorApp,
     shell_state: &RunenwerkEditorShellState,
 ) -> bool {
-    active_console_surface(shell_state)
-        .map(|surface_id| {
+    active_console_binding(shell_state)
+        .map(|(mounted_unit_id, _)| {
             app.surface_sessions()
-                .session_or_default(surface_id)
+                .session_or_default(mounted_unit_id)
                 .console_follow_enabled
         })
         .unwrap_or(true)
@@ -1791,646 +1747,58 @@ fn console_follow_enabled_for_active_surface(
 fn active_console_surface(
     shell_state: &RunenwerkEditorShellState,
 ) -> Option<editor_shell::ToolSurfaceInstanceId> {
+    active_console_binding(shell_state).map(|(_, surface_id)| surface_id)
+}
+
+fn active_console_binding(
+    shell_state: &RunenwerkEditorShellState,
+) -> Option<(
+    ui_composition::MountedUnitId,
+    editor_shell::ToolSurfaceInstanceId,
+)> {
+    mounted_content_bindings(shell_state).into_iter().find_map(
+        |(mounted_unit_id, surface_id, stable_key)| {
+            (stable_key == EDITOR_CONSOLE_SURFACE_KEY).then_some((mounted_unit_id, surface_id))
+        },
+    )
+}
+
+fn mounted_content_bindings(
+    shell_state: &RunenwerkEditorShellState,
+) -> Vec<(
+    ui_composition::MountedUnitId,
+    editor_shell::ToolSurfaceInstanceId,
+    String,
+)> {
     shell_state
-        .workspace_state()
-        .panels()
-        .filter_map(|panel| {
-            let surface_id = panel.active_tool_surface?;
-            let surface = shell_state.workspace_state().tool_surface(surface_id)?;
-            (surface.stable_surface_key().as_str() == EDITOR_CONSOLE_SURFACE_KEY)
-                .then_some(surface_id)
+        .composition_runtime()
+        .extension()
+        .mounted_units()
+        .iter()
+        .filter_map(|record| {
+            editor_shell::ToolSurfaceInstanceId::try_from_raw(record.compatibility_surface_raw)
+                .ok()
+                .map(|surface_id| {
+                    (
+                        record.mounted_unit_id,
+                        surface_id,
+                        record.stable_content_key.clone(),
+                    )
+                })
         })
-        .next()
+        .collect()
+}
+
+fn is_viewport_content_key(stable_key: &str) -> bool {
+    editor_shell::ToolSurfaceStableKey::new(stable_key)
+        .ok()
+        .and_then(|key| editor_shell::tool_surface_kind_for_stable_key(&key))
+        == Some(editor_shell::ToolSurfaceKind::Viewport)
 }
 
 fn active_console_scroll_widget(shell_state: &RunenwerkEditorShellState) -> Option<WidgetId> {
     active_console_surface(shell_state)
         .map(|surface_id| surface_widget_id(surface_id, CONSOLE_SCROLL_WIDGET_ID))
-}
-
-fn resolve_tab_drop_preview_target(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    tree: &UiTree,
-    layouts: &ComputedLayoutMap,
-    request: TabDropPreviewRequest,
-) -> ResolvedTabDropPreview {
-    if let Some(route) = tab_insertion_route_at_pointer(
-        projection_artifacts,
-        tree,
-        layouts,
-        request.pointer_position,
-    ) {
-        return ResolvedTabDropPreview {
-            target: Some(map_projected_tab_drop_target(route)),
-            candidates: Vec::new(),
-            active_side: None,
-        };
-    }
-
-    if request.explicit_float
-        && let Some(route) = new_floating_host_route_at_pointer(layouts, request.pointer_position)
-    {
-        return ResolvedTabDropPreview {
-            target: Some(map_projected_tab_drop_target(route)),
-            candidates: Vec::new(),
-            active_side: None,
-        };
-    }
-
-    let candidates = collect_dock_drop_candidates(
-        projection_artifacts,
-        layouts,
-        request.pointer_position,
-        request.source_tab_stack_id,
-    );
-    if !candidates.is_empty() {
-        return activate_dock_drop_candidate(candidates, request.cycle_index, request.cycle_side);
-    }
-
-    ResolvedTabDropPreview {
-        target: None,
-        candidates: Vec::new(),
-        active_side: None,
-    }
-}
-
-fn tab_insertion_route_at_pointer(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    tree: &UiTree,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Option<editor_shell::ProjectedTabDropRoute> {
-    editor_shell::hit_test_widget(tree, layouts, pointer_position)
-        .and_then(|widget_id| {
-            projection_artifacts
-                .workspace
-                .tab_drop_route_by_widget_id
-                .get(&widget_id)
-                .copied()
-        })
-        .or_else(|| {
-            containing_tab_drop_route_at_pointer(projection_artifacts, layouts, pointer_position)
-        })
-}
-
-fn containing_tab_drop_route_at_pointer(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Option<editor_shell::ProjectedTabDropRoute> {
-    projection_artifacts
-        .workspace
-        .tab_drop_route_by_widget_id
-        .iter()
-        .filter_map(|(widget_id, route)| {
-            let layout = layouts.get(widget_id)?;
-            layout.bounds.contains(pointer_position).then(|| {
-                let center_x = layout.bounds.x + layout.bounds.width * 0.5;
-                let center_y = layout.bounds.y + layout.bounds.height * 0.5;
-                let distance =
-                    (center_x - pointer_position.x).abs() + (center_y - pointer_position.y).abs();
-                (distance, *route)
-            })
-        })
-        .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, route)| route)
-}
-
-fn new_floating_host_route_at_pointer(
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Option<editor_shell::ProjectedTabDropRoute> {
-    let body = layouts.get(&BODY_ROOT_WIDGET_ID)?;
-    let bounds = body.bounds;
-    if !bounds.contains(pointer_position) {
-        return None;
-    }
-    let edge_start = bounds.x + bounds.width - SIDE_DOCK_DROP_TARGET_EDGE_PX;
-    (pointer_position.x >= edge_start).then_some(editor_shell::ProjectedTabDropRoute {
-        target: editor_shell::ProjectedTabDropTarget::NewFloatingHost,
-    })
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct ScoredDockDropCandidate {
-    candidate: DockDropCandidate,
-    edge_distance: f32,
-    anchor_area: f32,
-    pointer_inside_anchor: bool,
-}
-
-fn collect_dock_drop_candidates(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-    source_tab_stack_id: Option<editor_shell::TabStackId>,
-) -> Vec<DockDropCandidate> {
-    let mut candidates = Vec::new();
-    candidates.extend(area_dock_drop_candidates(
-        projection_artifacts,
-        layouts,
-        pointer_position,
-    ));
-    candidates.extend(group_dock_drop_candidates(
-        projection_artifacts,
-        layouts,
-        pointer_position,
-    ));
-    candidates.extend(workspace_dock_drop_candidate(layouts, pointer_position));
-    let source_context = source_tab_stack_id.and_then(|tab_stack_id| {
-        source_dock_drag_context(&projection_artifacts.workspace, tab_stack_id)
-    });
-    rank_dock_drop_candidates(candidates)
-        .into_iter()
-        .map(|candidate| {
-            classify_dock_drop_candidate(candidate, source_tab_stack_id, source_context.as_ref())
-        })
-        .collect()
-}
-
-fn area_dock_drop_candidates(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Vec<ScoredDockDropCandidate> {
-    projected_tab_stacks_for_docking(&projection_artifacts.workspace)
-        .into_iter()
-        .filter_map(|stack| {
-            let anchor_widget_id = editor_shell::tab_stack_container_widget_id(stack.tab_stack_id);
-            let container = layouts.get(&anchor_widget_id)?;
-            let side = tab_stack_split_side_for_pointer(container.bounds, pointer_position)?;
-            Some(ScoredDockDropCandidate {
-                candidate: DockDropCandidate {
-                    target: DockingPreviewDropTarget::SplitIntoArea {
-                        target_tab_stack_id: stack.tab_stack_id,
-                        side,
-                    },
-                    scope: DockDropScope::Area,
-                    side,
-                    anchor_widget_id,
-                    state: DockDropCandidateState::Candidate,
-                },
-                edge_distance: dock_split_side_priority(container.bounds, pointer_position, side),
-                anchor_area: container.bounds.width * container.bounds.height,
-                pointer_inside_anchor: container.bounds.contains(pointer_position),
-            })
-        })
-        .collect()
-}
-
-fn group_dock_drop_candidates(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Vec<ScoredDockDropCandidate> {
-    let root_host_id = projected_host_id(&projection_artifacts.workspace.root_host);
-    split_resize_targets(projection_artifacts)
-        .into_iter()
-        .filter(|target| Some(target.split_host_id) != root_host_id)
-        .filter_map(|target| {
-            let layout = layouts.get(&target.widget_id)?;
-            let side = dock_split_side_for_pointer(layout.bounds, pointer_position)?;
-            Some(ScoredDockDropCandidate {
-                candidate: DockDropCandidate {
-                    target: DockingPreviewDropTarget::SplitIntoHost {
-                        target_host_id: target.split_host_id,
-                        side,
-                    },
-                    scope: DockDropScope::Group,
-                    side,
-                    anchor_widget_id: target.widget_id,
-                    state: DockDropCandidateState::Candidate,
-                },
-                edge_distance: dock_split_side_priority(layout.bounds, pointer_position, side),
-                anchor_area: layout.bounds.width * layout.bounds.height,
-                pointer_inside_anchor: layout.bounds.contains(pointer_position),
-            })
-        })
-        .collect()
-}
-
-fn projected_host_id(host: &ProjectedWorkspaceHostSlot) -> Option<PanelHostId> {
-    match host {
-        ProjectedWorkspaceHostSlot::Split { host_id, .. }
-        | ProjectedWorkspaceHostSlot::TabStack { host_id, .. }
-        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { host_id, .. } => Some(*host_id),
-    }
-}
-
-fn workspace_dock_drop_candidate(
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Option<ScoredDockDropCandidate> {
-    let layout = layouts.get(&BODY_ROOT_WIDGET_ID)?;
-    let side = dock_split_side_for_pointer(layout.bounds, pointer_position)?;
-    Some(ScoredDockDropCandidate {
-        candidate: DockDropCandidate {
-            target: DockingPreviewDropTarget::SplitIntoRoot { side },
-            scope: DockDropScope::Workspace,
-            side,
-            anchor_widget_id: BODY_ROOT_WIDGET_ID,
-            state: DockDropCandidateState::Candidate,
-        },
-        edge_distance: dock_split_side_priority(layout.bounds, pointer_position, side),
-        anchor_area: layout.bounds.width * layout.bounds.height,
-        pointer_inside_anchor: layout.bounds.contains(pointer_position),
-    })
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SourceDockDragContext {
-    tab_count: usize,
-    ancestor_split_hosts: Vec<PanelHostId>,
-}
-
-fn source_dock_drag_context(
-    projection: &editor_shell::WorkspaceProjectionArtifact,
-    source_tab_stack_id: editor_shell::TabStackId,
-) -> Option<SourceDockDragContext> {
-    source_dock_drag_context_in_host(&projection.root_host, source_tab_stack_id, &mut Vec::new())
-        .or_else(|| {
-            projection
-                .floating_hosts
-                .iter()
-                .find(|host| host.tab_stack.tab_stack_id == source_tab_stack_id)
-                .map(|host| SourceDockDragContext {
-                    tab_count: host.tab_stack.tabs.len(),
-                    ancestor_split_hosts: Vec::new(),
-                })
-        })
-}
-
-fn source_dock_drag_context_in_host(
-    host: &ProjectedWorkspaceHostSlot,
-    source_tab_stack_id: editor_shell::TabStackId,
-    ancestors: &mut Vec<PanelHostId>,
-) -> Option<SourceDockDragContext> {
-    match host {
-        ProjectedWorkspaceHostSlot::Split {
-            host_id,
-            first_child,
-            second_child,
-            ..
-        } => {
-            ancestors.push(*host_id);
-            let found =
-                source_dock_drag_context_in_host(first_child, source_tab_stack_id, ancestors)
-                    .or_else(|| {
-                        source_dock_drag_context_in_host(
-                            second_child,
-                            source_tab_stack_id,
-                            ancestors,
-                        )
-                    });
-            ancestors.pop();
-            found
-        }
-        ProjectedWorkspaceHostSlot::TabStack { tab_stack, .. }
-            if tab_stack.tab_stack_id == source_tab_stack_id =>
-        {
-            Some(SourceDockDragContext {
-                tab_count: tab_stack.tabs.len(),
-                ancestor_split_hosts: ancestors.clone(),
-            })
-        }
-        ProjectedWorkspaceHostSlot::TabStack { .. }
-        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => None,
-    }
-}
-
-fn classify_dock_drop_candidate(
-    mut candidate: DockDropCandidate,
-    source_tab_stack_id: Option<editor_shell::TabStackId>,
-    source_context: Option<&SourceDockDragContext>,
-) -> DockDropCandidate {
-    let Some(source_tab_stack_id) = source_tab_stack_id else {
-        return candidate;
-    };
-    let Some(source_context) = source_context else {
-        return candidate;
-    };
-    if source_context.tab_count > 1 {
-        return candidate;
-    }
-
-    let reason = match candidate.target {
-        DockingPreviewDropTarget::SplitIntoArea {
-            target_tab_stack_id,
-            ..
-        } if target_tab_stack_id == source_tab_stack_id => {
-            Some(DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea)
-        }
-        DockingPreviewDropTarget::SplitIntoHost { target_host_id, .. }
-            if source_context
-                .ancestor_split_hosts
-                .contains(&target_host_id) =>
-        {
-            Some(DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnHost)
-        }
-        _ => None,
-    };
-
-    if let Some(reason) = reason {
-        candidate.state = DockDropCandidateState::Invalid { reason };
-    }
-    candidate
-}
-
-fn rank_dock_drop_candidates(
-    mut candidates: Vec<ScoredDockDropCandidate>,
-) -> Vec<DockDropCandidate> {
-    let area_interior = candidates.iter().any(|candidate| {
-        candidate.candidate.scope == DockDropScope::Area && candidate.pointer_inside_anchor
-    });
-    let group_available = candidates
-        .iter()
-        .any(|candidate| candidate.candidate.scope == DockDropScope::Group);
-    candidates.sort_by(|left, right| {
-        dock_drop_scope_priority(left, area_interior, group_available)
-            .cmp(&dock_drop_scope_priority(
-                right,
-                area_interior,
-                group_available,
-            ))
-            .then_with(|| left.edge_distance.total_cmp(&right.edge_distance))
-            .then_with(|| left.anchor_area.total_cmp(&right.anchor_area))
-    });
-    candidates
-        .into_iter()
-        .map(|candidate| candidate.candidate)
-        .collect()
-}
-
-fn dock_drop_scope_priority(
-    candidate: &ScoredDockDropCandidate,
-    area_interior: bool,
-    group_available: bool,
-) -> u8 {
-    match candidate.candidate.scope {
-        DockDropScope::Workspace
-            if candidate.edge_distance <= SPLIT_HIT_SLOP_PX
-                && (!group_available
-                    || matches!(
-                        candidate.candidate.side,
-                        DockSplitSide::Top | DockSplitSide::Bottom
-                    )) =>
-        {
-            0
-        }
-        DockDropScope::Area if candidate.pointer_inside_anchor => 1,
-        DockDropScope::Group => 2,
-        DockDropScope::Workspace if !area_interior && !group_available => 1,
-        DockDropScope::Workspace => 2,
-        DockDropScope::Area => 3,
-    }
-}
-
-fn activate_dock_drop_candidate(
-    mut candidates: Vec<DockDropCandidate>,
-    cycle_index: usize,
-    cycle_side: Option<DockSplitSide>,
-) -> ResolvedTabDropPreview {
-    let Some(default_side) = candidates
-        .iter()
-        .find(|candidate| candidate.state.is_selectable())
-        .map(|candidate| candidate.side)
-    else {
-        return ResolvedTabDropPreview {
-            target: None,
-            candidates,
-            active_side: None,
-        };
-    };
-    let active_side = cycle_side.filter(|side| {
-        candidates
-            .iter()
-            .any(|candidate| candidate.state.is_selectable() && candidate.side == *side)
-    });
-    let active_side = active_side.unwrap_or(default_side);
-    let same_side_indices = candidates
-        .iter()
-        .enumerate()
-        .filter_map(|(index, candidate)| {
-            (candidate.state.is_selectable() && candidate.side == active_side).then_some(index)
-        })
-        .collect::<Vec<_>>();
-    let active_index = same_side_indices[cycle_index % same_side_indices.len()];
-    for (index, candidate) in candidates.iter_mut().enumerate() {
-        if candidate.state.is_selectable() {
-            candidate.state = DockDropCandidateState::selectable(index == active_index);
-        }
-    }
-    ResolvedTabDropPreview {
-        target: Some(candidates[active_index].target),
-        candidates,
-        active_side: Some(active_side),
-    }
-}
-
-fn dock_split_side_for_pointer(
-    bounds: ui_math::UiRect,
-    pointer_position: ui_math::UiPoint,
-) -> Option<DockSplitSide> {
-    let left = bounds.x;
-    let right = bounds.x + bounds.width;
-    let top = bounds.y;
-    let bottom = bounds.y + bounds.height;
-    let side_slop = SPLIT_HIT_SLOP_PX;
-    let within_vertical_band =
-        pointer_position.y >= top - side_slop && pointer_position.y <= bottom + side_slop;
-    let within_horizontal_band =
-        pointer_position.x >= left - side_slop && pointer_position.x <= right + side_slop;
-
-    let mut candidates = Vec::with_capacity(4);
-    let left_delta = pointer_position.x - left;
-    if within_vertical_band
-        && left_delta >= -side_slop
-        && left_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
-    {
-        candidates.push((left_delta.abs(), DockSplitSide::Left));
-    }
-    let right_delta = pointer_position.x - right;
-    if within_vertical_band
-        && right_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
-        && right_delta <= side_slop
-    {
-        candidates.push((right_delta.abs(), DockSplitSide::Right));
-    }
-    let top_delta = pointer_position.y - top;
-    if within_horizontal_band
-        && top_delta >= -side_slop
-        && top_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
-    {
-        candidates.push((top_delta.abs(), DockSplitSide::Top));
-    }
-    let bottom_delta = pointer_position.y - bottom;
-    if within_horizontal_band
-        && bottom_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
-        && bottom_delta <= side_slop
-    {
-        candidates.push((bottom_delta.abs(), DockSplitSide::Bottom));
-    }
-
-    candidates
-        .into_iter()
-        .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, side)| side)
-}
-
-fn tab_stack_split_side_for_pointer(
-    bounds: ui_math::UiRect,
-    pointer_position: ui_math::UiPoint,
-) -> Option<DockSplitSide> {
-    let left = bounds.x;
-    let right = bounds.x + bounds.width;
-    let top = bounds.y;
-    let bottom = bounds.y + bounds.height;
-    let side_slop = SPLIT_HIT_SLOP_PX;
-    let within_vertical_band = pointer_position.y >= top && pointer_position.y <= bottom;
-    let within_horizontal_band = pointer_position.x >= left && pointer_position.x <= right;
-
-    let mut candidates = Vec::with_capacity(4);
-    let left_delta = pointer_position.x - left;
-    if within_vertical_band
-        && left_delta >= -side_slop
-        && left_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
-    {
-        candidates.push((left_delta.abs(), DockSplitSide::Left));
-    }
-    let right_delta = pointer_position.x - right;
-    if within_vertical_band
-        && right_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
-        && right_delta <= side_slop
-    {
-        candidates.push((right_delta.abs(), DockSplitSide::Right));
-    }
-    let top_delta = pointer_position.y - top;
-    if within_horizontal_band
-        && top_delta >= -side_slop
-        && top_delta <= SIDE_DOCK_DROP_TARGET_EDGE_PX
-    {
-        candidates.push((top_delta.abs(), DockSplitSide::Top));
-    }
-    let bottom_delta = pointer_position.y - bottom;
-    if within_horizontal_band
-        && bottom_delta >= -SIDE_DOCK_DROP_TARGET_EDGE_PX
-        && bottom_delta <= side_slop
-    {
-        candidates.push((bottom_delta.abs(), DockSplitSide::Bottom));
-    }
-
-    candidates
-        .into_iter()
-        .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, side)| side)
-}
-
-fn dock_split_side_priority(
-    bounds: ui_math::UiRect,
-    pointer_position: ui_math::UiPoint,
-    side: DockSplitSide,
-) -> f32 {
-    match side {
-        DockSplitSide::Left => (pointer_position.x - bounds.x).abs(),
-        DockSplitSide::Right => (pointer_position.x - (bounds.x + bounds.width)).abs(),
-        DockSplitSide::Top => (pointer_position.y - bounds.y).abs(),
-        DockSplitSide::Bottom => (pointer_position.y - (bounds.y + bounds.height)).abs(),
-    }
-}
-
-fn projected_tab_stacks_for_docking(
-    projection: &editor_shell::WorkspaceProjectionArtifact,
-) -> Vec<&editor_shell::ProjectedTabStackSlot> {
-    let mut stacks = editor_shell::projected_host_tab_stacks(&projection.root_host);
-    stacks.extend(projection.floating_hosts.iter().map(|host| &host.tab_stack));
-    stacks
-}
-
-fn tab_button_route_at_pointer(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Option<editor_shell::ProjectedTabButtonRoute> {
-    tab_button_hit_at_pointer(projection_artifacts, layouts, pointer_position)
-        .map(|(_, route)| route)
-}
-
-fn tab_button_hit_at_pointer(
-    projection_artifacts: &editor_shell::ShellProjectionArtifacts,
-    layouts: &ComputedLayoutMap,
-    pointer_position: ui_math::UiPoint,
-) -> Option<(WidgetId, editor_shell::ProjectedTabButtonRoute)> {
-    let containing = projection_artifacts
-        .workspace
-        .tab_button_route_by_widget_id
-        .iter()
-        .filter_map(|(widget_id, route)| {
-            let layout = layouts.get(widget_id)?;
-            layout.bounds.contains(pointer_position).then(|| {
-                let center_x = layout.bounds.x + layout.bounds.width * 0.5;
-                let center_y = layout.bounds.y + layout.bounds.height * 0.5;
-                let distance =
-                    (center_x - pointer_position.x).abs() + (center_y - pointer_position.y).abs();
-                (distance, *widget_id, *route)
-            })
-        })
-        .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, widget_id, route)| (widget_id, route));
-    if containing.is_some() {
-        return containing;
-    }
-
-    projection_artifacts
-        .workspace
-        .tab_button_route_by_widget_id
-        .iter()
-        .filter_map(|(widget_id, route)| {
-            let layout = layouts.get(widget_id)?;
-            let y_min = layout.bounds.y - 4.0;
-            let y_max = layout.bounds.y + layout.bounds.height + 4.0;
-            if pointer_position.y < y_min || pointer_position.y > y_max {
-                return None;
-            }
-            let center_x = layout.bounds.x + layout.bounds.width * 0.5;
-            let distance = (center_x - pointer_position.x).abs();
-            (distance <= 48.0).then_some((distance, *widget_id, *route))
-        })
-        .min_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(_, widget_id, route)| (widget_id, route))
-}
-
-fn map_projected_tab_drop_target(
-    route: editor_shell::ProjectedTabDropRoute,
-) -> DockingPreviewDropTarget {
-    match route.target {
-        editor_shell::ProjectedTabDropTarget::TabStack {
-            tab_stack_id,
-            insert_index,
-        } => DockingPreviewDropTarget::TabStack {
-            tab_stack_id,
-            insert_index,
-        },
-        editor_shell::ProjectedTabDropTarget::SplitIntoArea {
-            target_tab_stack_id,
-            side,
-        } => DockingPreviewDropTarget::SplitIntoArea {
-            target_tab_stack_id,
-            side,
-        },
-        editor_shell::ProjectedTabDropTarget::SplitIntoHost {
-            target_host_id,
-            side,
-        } => DockingPreviewDropTarget::SplitIntoHost {
-            target_host_id,
-            side,
-        },
-        editor_shell::ProjectedTabDropTarget::SplitIntoRoot { side } => {
-            DockingPreviewDropTarget::SplitIntoRoot { side }
-        }
-        editor_shell::ProjectedTabDropTarget::NewFloatingHost => {
-            DockingPreviewDropTarget::NewFloatingHost
-        }
-    }
 }
 
 fn is_at_bottom(offset: f32, max_offset: f32) -> bool {

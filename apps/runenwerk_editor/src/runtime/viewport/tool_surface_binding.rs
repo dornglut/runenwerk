@@ -335,6 +335,7 @@ mod tests {
             viewport_id,
             host_widget_id: WidgetId(widget_id),
             structural_context: StructuralWidgetRoutingContext {
+                mounted_unit_id: None,
                 panel_instance_id: PanelInstanceId::try_from_raw(panel).unwrap(),
                 active_tool_surface: surface
                     .map(|id| ToolSurfaceInstanceId::try_from_raw(id).unwrap()),
@@ -418,6 +419,7 @@ mod tests {
     fn resolve_command_target_fails_when_runtime_binding_missing() {
         let registry = ToolSurfaceRuntimeBindingRegistryResource::default();
         let target = StructuralCommandTarget {
+            mounted_unit_id: None,
             panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
             active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(31).unwrap()),
             tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
@@ -447,6 +449,7 @@ mod tests {
             generation: 1,
         });
         let target = StructuralCommandTarget {
+            mounted_unit_id: None,
             panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
             active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(31).unwrap()),
             tab_stack_id: TabStackId::try_from_raw(21).unwrap(),
@@ -478,6 +481,7 @@ mod tests {
             generation: 1,
         });
         let target = StructuralCommandTarget {
+            mounted_unit_id: None,
             panel_instance_id: PanelInstanceId::try_from_raw(11).unwrap(),
             active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(31).unwrap()),
             tab_stack_id: TabStackId::try_from_raw(21).unwrap(),

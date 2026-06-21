@@ -5,12 +5,14 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-06-19
 related:
   - ../implemented/ui-definition-formation-foundation-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
   - ../implemented/editor-workspace-document-mode-panel-architecture.md
 related_designs:
+  - ../accepted/app-neutral-ui-composition-design.md
+  - ../accepted/adaptive-ui-composition-design.md
   - ./editor-tool-suite-registry-and-workbench-host-design.md
 ---
 
@@ -62,6 +64,24 @@ may configure and replace allowed products only through validation,
 compatibility checks, formed products, and ratified shell/app command paths.
 
 Renderer output is derived product data. It must not become UI authority.
+
+### App-neutral cutover boundary
+
+The accepted app-neutral composition design supersedes this document as the
+target structural authority. This document remains current-code migration input
+until the clean cutover removes the old workspace and tool-surface authorities:
+
+```text
+WorkspaceState and split/tab/floating records -> CompositionState and region graph
+ToolSurfaceInstanceId                    -> MountedUnitId
+EditorSurfaceProvider                    -> EditorUnitProvider
+native editor window binding             -> PresentationTargetId adapter
+```
+
+Existing state remains temporary compatibility input only. After the editor
+static-projection checkpoint it is read-only; after the docking checkpoint all
+structural mutation goes through `ui_composition` transactions. Provider and
+content semantics remain editor-owned.
 
 ---
 
@@ -964,6 +984,11 @@ The architecture serves editor, runtime/debug tooling, and in-game UI, but not e
 
 ### Principle
 Do not force ordinary in-game HUD/menu UI to depend on editor workspace semantics just because both use the same substrate.
+
+The accepted app-neutral composition design makes this separation explicit: game UI
+may share `Region`, `MountedUnit`, `UiComposition`, and proposal-only adaptive
+layout contracts, but it must not import editor `Workspace`, `SurfaceSlot`,
+`ToolSurfaceInstance`, or editor provider policy.
 
 ---
 

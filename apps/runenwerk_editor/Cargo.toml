@@ -38,6 +38,8 @@ world_sdf.workspace = true
 ui_input.workspace = true
 ui_artifacts.workspace = true
 ui_compiler.workspace = true
+ui_composition.workspace = true
+ui_adaptive_composition.workspace = true
 ui_controls.workspace = true
 ui_definition.workspace = true
 ui_graph_editor.workspace = true
@@ -65,3 +67,9 @@ tokio = { version = "1.48.0", features = ["macros", "rt", "sync", "time"] }
 [dev-dependencies]
 ktx2.workspace = true
 naga = { version = "27.0.3", features = ["wgsl-in"] }
+tempfile = "3.25.0"
+
+[[test]]
+name = "region_compass_visual_capture"
+path = "tests/region_compass_visual_capture.rs"
+harness = false

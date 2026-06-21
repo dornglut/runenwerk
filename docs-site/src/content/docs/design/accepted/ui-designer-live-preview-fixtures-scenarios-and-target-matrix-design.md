@@ -9,8 +9,8 @@ last_reviewed: 2026-05-22
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
-  - ../../adr/accepted/0006-editor-surface-provider-plugin-seam.md
-  - ../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
+  - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
   - ./ui-designer-canonical-ir-and-composition-design.md
   - ./ui-designer-target-projection-profiles-design.md

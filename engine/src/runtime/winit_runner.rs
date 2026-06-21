@@ -9,7 +9,9 @@ use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, decide_frame_pacing,
 };
 use crate::runtime::native_window_hooks::with_native_window_hooks;
-use crate::runtime::platform::{PlatformEvent, apply_platform_event};
+use crate::runtime::platform::{
+    PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource, apply_platform_event,
+};
 use crate::runtime::window::{
     NativeWindowCreationRequest, NativeWindowId, WindowCursorIcon, WindowState,
     WindowStateRegistryResource,
@@ -85,6 +87,13 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         event: PlatformEvent,
     ) -> Result<()> {
+        if let Ok(queue) = self
+            .state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()
+        {
+            queue.publish(PlatformWindowEvent::new(native_window_id, event.clone()));
+        }
         if native_window_id != NativeWindowId::primary() {
             self.apply_secondary_window_event(native_window_id, event);
             return Ok(());
@@ -92,6 +101,7 @@ impl WinitRunner {
         match &event {
             PlatformEvent::Resumed
             | PlatformEvent::CloseRequested
+            | PlatformEvent::Focused { .. }
             | PlatformEvent::Resized { .. }
             | PlatformEvent::ScaleFactorChanged { .. }
             | PlatformEvent::RedrawRequested => {
@@ -144,6 +154,7 @@ impl WinitRunner {
             }
             PlatformEvent::Resumed
             | PlatformEvent::CloseRequested
+            | PlatformEvent::Focused { .. }
             | PlatformEvent::Resized { .. }
             | PlatformEvent::ScaleFactorChanged { .. }
             | PlatformEvent::RedrawRequested => {
@@ -155,7 +166,14 @@ impl WinitRunner {
                 {
                     match event {
                         PlatformEvent::Resumed => record.redraw_requested = true,
-                        PlatformEvent::CloseRequested => record.request_close(),
+                        PlatformEvent::CloseRequested => {
+                            record.receive_close_intent();
+                            record.request_redraw();
+                        }
+                        PlatformEvent::Focused { focused } => {
+                            record.focused = focused;
+                            record.request_redraw();
+                        }
                         PlatformEvent::Resized { width, height } => {
                             record.size_px = (width, height);
                             record.request_redraw();
@@ -257,17 +275,58 @@ impl WinitRunner {
                 request.size_px.0,
                 request.size_px.1,
             ));
-        let window = Arc::new(event_loop.create_window(attrs).with_context(|| {
-            format!(
-                "failed to create native window {}",
-                request.native_window_id.raw()
-            )
-        })?);
+        let window = match event_loop.create_window(attrs) {
+            Ok(window) => Arc::new(window),
+            Err(err) => {
+                self.mark_window_creation_failed(
+                    request.native_window_id,
+                    format!("native window creation failed: {err}"),
+                );
+                return Ok(());
+            }
+        };
 
         let mut snapshot = WindowState::windowed(request.title);
         snapshot.size_px = request.size_px;
         snapshot.scale_factor = window.scale_factor();
         snapshot.set_headless(false);
+        let render_surface_id = self
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .ok()
+            .map(|registry| {
+                registry.ensure_surface_for_native_window(request.native_window_id, request.size_px)
+            });
+        let Some(render_surface_id) = render_surface_id else {
+            self.mark_window_creation_failed(
+                request.native_window_id,
+                "render surface registry is unavailable",
+            );
+            return Ok(());
+        };
+        let attach_result = self
+            .state
+            .world
+            .resource_mut::<Gfx>()
+            .context("runtime gfx is unavailable")
+            .and_then(|gfx| {
+                gfx.attach_surface(render_surface_id, Arc::clone(&window), request.size_px)
+            });
+        if let Err(err) = attach_result {
+            if let Ok(surface_registry) = self
+                .state
+                .world
+                .resource_mut::<RenderSurfaceRegistryResource>()
+            {
+                surface_registry.retire_surface_for_native_window(request.native_window_id);
+            }
+            self.mark_window_creation_failed(
+                request.native_window_id,
+                format!("GPU surface attachment failed: {err:#}"),
+            );
+            return Ok(());
+        }
         if let Ok(registry) = self
             .state
             .world
@@ -275,19 +334,26 @@ impl WinitRunner {
         {
             registry.register_created_window(request.native_window_id, &snapshot);
         }
-        if let Ok(surface_registry) = self
-            .state
-            .world
-            .resource_mut::<RenderSurfaceRegistryResource>()
-        {
-            surface_registry
-                .ensure_surface_for_native_window(request.native_window_id, request.size_px);
-        }
 
         self.attach_native_window_hooks(&window);
         window.request_redraw();
         self.register_runtime_window(request.native_window_id, window);
         Ok(())
+    }
+
+    fn mark_window_creation_failed(
+        &mut self,
+        native_window_id: NativeWindowId,
+        reason: impl Into<String>,
+    ) {
+        if let Ok(registry) = self
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            && let Some(record) = registry.record_mut(native_window_id)
+        {
+            record.mark_creation_failed(reason);
+        }
     }
 
     fn dispatch_native_window_event(&mut self, window: &Window, event: &WindowEvent) {
@@ -336,6 +402,31 @@ impl WinitRunner {
                 if native_window_id == NativeWindowId::primary() {
                     event_loop.exit();
                     return Ok(());
+                }
+                let render_surface_id = self
+                    .state
+                    .world
+                    .resource::<RenderSurfaceRegistryResource>()
+                    .ok()
+                    .and_then(|registry| registry.surface_for_native_window(native_window_id));
+                if let Some(render_surface_id) = render_surface_id
+                    && let Ok(gfx) = self.state.world.resource_mut::<Gfx>()
+                {
+                    gfx.detach_surface(render_surface_id);
+                }
+                if let Ok(surface_registry) = self
+                    .state
+                    .world
+                    .resource_mut::<RenderSurfaceRegistryResource>()
+                {
+                    surface_registry.retire_surface_for_native_window(native_window_id);
+                }
+                if let Ok(window_registry) = self
+                    .state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()
+                {
+                    window_registry.remove_window(native_window_id);
                 }
                 self.windows.remove(&window.id());
                 self.native_windows_by_winit.remove(&window.id());
@@ -558,6 +649,10 @@ impl ApplicationHandler for WinitRunner {
             WindowEvent::CloseRequested => {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
+            WindowEvent::Focused(focused) => self.apply_event_for_native_window(
+                native_window_id,
+                PlatformEvent::Focused { focused },
+            ),
             WindowEvent::Resized(size) => self.apply_event_for_native_window(
                 native_window_id,
                 PlatformEvent::Resized {

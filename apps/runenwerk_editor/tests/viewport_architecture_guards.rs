@@ -754,6 +754,7 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
         viewport_id: ViewportId(1),
         host_widget_id: WidgetId(1001),
         structural_context: StructuralWidgetRoutingContext {
+            mounted_unit_id: None,
             panel_instance_id,
             active_tool_surface: Some(tool_surface_id),
             tab_stack_id,
@@ -769,6 +770,7 @@ fn runtime_tool_surface_binding_tracks_rebind_without_mutating_structural_identi
         viewport_id: ViewportId(2),
         host_widget_id: WidgetId(1002),
         structural_context: StructuralWidgetRoutingContext {
+            mounted_unit_id: None,
             panel_instance_id,
             active_tool_surface: Some(tool_surface_id),
             tab_stack_id,
@@ -808,6 +810,7 @@ fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_mat
     let error = bindings
         .resolve_command_target(
             StructuralCommandTarget {
+                mounted_unit_id: None,
                 panel_instance_id: PanelInstanceId::try_from_raw(99).unwrap(),
                 active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(7).unwrap()),
                 tab_stack_id: TabStackId::try_from_raw(199).unwrap(),

@@ -12,7 +12,7 @@ related:
   - ../../../workspace/production-tracks.yaml
   - ../../implementation-plans/wr-037-host-capability-policy/plan.md
   - ../../closeouts/wr-036-material-lab-clean-migration-proof/closeout.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 ---

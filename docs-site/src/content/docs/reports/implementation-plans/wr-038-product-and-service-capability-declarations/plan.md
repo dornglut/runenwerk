@@ -10,7 +10,7 @@ related_designs:
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-items.yaml
@@ -50,7 +50,7 @@ declaration shape and validation for product/service needs.
 - `docs-site/src/content/docs/design/active/runenwerk-capability-workbench-target-architecture.md`
   is active and defines the long-term rule: tools request, hosts allow, and
   domains validate.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and forbids restoring legacy Workbench identity.
 
 Readiness checks completed for this contract:

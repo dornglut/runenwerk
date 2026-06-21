@@ -1478,7 +1478,13 @@ def compile_contract_pack(
                 if evidence_requirements_satisfied(subaction_evidence_required, production_source=production_source):
                     continue
                 subaction_allowed_outputs = list(
-                    dict.fromkeys([*scoped_subaction_allowed_outputs, *derived_pack_outputs])
+                    dict.fromkeys(
+                        [
+                            *scoped_subaction_allowed_outputs,
+                            *derived_pack_outputs,
+                            *derived_truth_certificate_outputs,
+                        ]
+                    )
                 )
                 subaction_permissions = list(permissions_required)
                 if "crate_creation" in subaction_permissions and not any(

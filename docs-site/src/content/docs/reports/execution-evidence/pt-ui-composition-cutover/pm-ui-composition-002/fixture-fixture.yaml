@@ -1,0 +1,122 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-002
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+evidence_kind: fixture
+name: fixture
+status: passed
+produced_at: '2026-06-19T13:45:25Z'
+paths:
+- domain/ui/ui_composition/src/fixture/contract.rs
+- domain/ui/ui_testing/src/composition_fixture.rs
+subject_paths:
+- domain/ui/ui_composition/src/fixture/contract.rs
+- domain/ui/ui_testing/src/composition_fixture.rs
+subject_digests:
+  domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+  domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_composition) -> exit 0
+- cargo:test (cargo test -p ui_testing composition_fixture) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: fc85aaee39c605ef16c1db7dca5142da8d3dbbd8344b3ee4051e6076b92e28da
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 3c3c03e10a9fe6859ac079137b1c7c80c1296ee77b6f79b945ff6585b1be1a68
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - composition_fixture
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: ac0c40d3ef929ba9732ff24f6dfa40698f05d7befe6a44d1124366f69feb5c1e
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 68a22374611ef602de7ae0966f4c76fb7978fd1d0d4518eb9db3f8232548c97e
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 6d15c7dddb61cdaf4792aa1ec7e2cd5a0c8700ab438774f99f7a81e5fb8f8609
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: b2e968b67c2c61d4a0b6dd914fa974946f3c0e2402f4337bda6ea0e613cd79c2
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: de81e1bedd3c49f1dab9adac46b87dfd52786ebc690646d4f75657830aa8bdd6
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 1aabb8b529c033ede276e19e3f3f61605b28993b261b58cb3ed7f47c34957cad
+  subject_digests:
+    domain/ui/ui_composition/src/fixture/contract.rs: 276de33e4ab2cdecce67e5d765a536c177e102ee022438b6820f3523797ad636
+    domain/ui/ui_testing/src/composition_fixture.rs: 91ca623acfca75d5edaf890ee9d98e50e37e5bd6ff69735da1775a9f742ef8ad

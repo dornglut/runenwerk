@@ -2,6 +2,10 @@
 title: UI Dependency Boundaries
 description: Dependency direction and enforcement policy for Runenwerk UI crates.
 status: active
+owner: ui
+layer: domain
+canonical: true
+last_reviewed: 2026-06-20
 ---
 
 # UI Dependency Boundaries
@@ -21,6 +25,7 @@ definition_adapter
 program
 render
 proof
+composition
 surface
 retained
 testing
@@ -68,6 +73,8 @@ ui_program -> ui_story
 ui_compiler -> ui_story
 ui_artifacts -> ui_story
 ui_runtime_view -> ui_story
+ui_composition -> any other production UI crate
+ui_adaptive_composition -> app/editor/engine/ui_surface crates
 ui_surface -> game/editor/world concrete semantic crates
 ```
 
@@ -155,6 +162,41 @@ ui_story
 ```
 
 It aggregates proof evidence and determines verdict/mount eligibility. It does not own the semantic meaning of compiler/runtime/render stages.
+
+### Structural composition
+
+Owned by:
+
+```text
+ui_composition
+```
+
+`ui_composition` is a leaf app-neutral domain authority. It depends only on
+approved foundation primitives and serialization support; it may not depend on
+`ui_program`, retained runtime crates, `ui_surface`, editor/Draw/game crates,
+apps, engine, adapters, windowing, or provider/session owners.
+
+`ui_adaptive_composition` may depend only on `ui_composition`, `ui_input`, and
+`ui_math`. It derives transient state from immutable snapshots and emits typed
+proposals. It may not hold mutable composition state, execute transactions,
+persist canonical definitions, redefine structural identity, or depend on
+editor/Draw/game/app/engine/windowing/provider/session owners.
+
+`ui_testing` may depend on `ui_composition` and
+`ui_adaptive_composition` to execute headless structural and adaptive fixtures.
+Browser, terminal, dashboard, mobile, and game fixture names are profiles only
+and must not bring product imports or behavior into any of these crates.
+
+The enforced direction is:
+
+```text
+ui_composition + ui_input + ui_math
+  <- ui_adaptive_composition
+  <- ui_testing
+```
+
+Only an app/host owner may inspect a proposal, apply policy, form a typed
+`ui_composition` transaction, and submit it against the current revision.
 
 ### App orchestration
 

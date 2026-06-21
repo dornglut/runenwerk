@@ -56,6 +56,13 @@ pub fn dispatch_editor_input_system(
     mut viewport_render_commands: ResMut<ViewportRenderStateCommandQueueResource>,
 ) {
     sync_active_editor_shortcut_bindings(&mut input, &host, &mut bridge);
+    if !window.focused {
+        host.shell_state.runtime_mut().set_focused_widget(None);
+        host.shell_state.clear_tab_drag();
+        bridge.pointer_owner = EditorPointerOwner::None;
+        bridge.active_camera_viewport = None;
+        return;
+    }
     let bounds = window_bounds(&window);
     let shell_theme = scaled_shell_theme(&host.theme, window.scale_factor);
     let viewport_products = resolve_structural_viewport_products(
@@ -260,7 +267,13 @@ pub fn dispatch_editor_input_system(
     }
 
     if input.left_mouse_down()
-        && let Some(tool_surface_id) = host.app.surface_sessions().active_viewport_drag_surface()
+        && let Some(mounted_unit_id) = host
+            .app
+            .surface_sessions()
+            .active_viewport_drag_mounted_unit()
+        && let Some(tool_surface_id) = host
+            .shell_state
+            .tool_surface_id_for_mounted_unit(mounted_unit_id)
         && matches!(
             bridge.pointer_owner,
             EditorPointerOwner::ViewportTool {
@@ -276,8 +289,8 @@ pub fn dispatch_editor_input_system(
     {
         let amount = position.x - previous.x;
         if amount != 0.0
-            && let Err(error) = host.app.dispatch_viewport_interaction_for_surface(
-                tool_surface_id,
+            && let Err(error) = host.app.dispatch_viewport_interaction_for_mounted_unit(
+                mounted_unit_id,
                 ViewportInteractionCommand::PointerDragAxis { amount },
             )
         {
@@ -344,7 +357,10 @@ pub fn dispatch_editor_input_system(
             Some(&viewport_instances),
             Some(&mut *viewport_render_commands),
         );
-        let captured_surface = host.app.surface_sessions().active_viewport_drag_surface();
+        let captured_mounted_unit = host
+            .app
+            .surface_sessions()
+            .active_viewport_drag_mounted_unit();
         let routed_release_surface = outcome
             .as_ref()
             .and_then(|value| {
@@ -357,7 +373,10 @@ pub fn dispatch_editor_input_system(
             })
             .map(|route| route.tool_surface_id);
 
-        if let Some(tool_surface_id) = captured_surface
+        if let Some(mounted_unit_id) = captured_mounted_unit
+            && let Some(tool_surface_id) = host
+                .shell_state
+                .tool_surface_id_for_mounted_unit(mounted_unit_id)
             && routed_release_surface
                 .map(|release_surface| release_surface == tool_surface_id)
                 .unwrap_or_else(|| {
@@ -365,8 +384,8 @@ pub fn dispatch_editor_input_system(
                         .binding_for_tool_surface(tool_surface_id)
                         .is_some()
                 })
-            && let Err(error) = host.app.dispatch_viewport_interaction_for_surface(
-                tool_surface_id,
+            && let Err(error) = host.app.dispatch_viewport_interaction_for_mounted_unit(
+                mounted_unit_id,
                 ViewportInteractionCommand::PointerUp,
             )
         {
@@ -876,6 +895,9 @@ fn handle_viewport_tool_radial_shortcut(
     };
 
     let target = editor_shell::StructuralCommandTarget {
+        mounted_unit_id: host
+            .shell_state
+            .mounted_unit_id_for_tool_surface(binding.tool_surface_id),
         panel_instance_id: binding.panel_instance_id,
         active_tool_surface: Some(binding.tool_surface_id),
         tab_stack_id: binding.tab_stack_id,
@@ -1053,6 +1075,7 @@ fn viewport_pointer_route(
     let host_widget_id = binding.host_widget_id;
     let structural_context = structural_context_for_widget(shell_state, host_widget_id).unwrap_or(
         editor_shell::StructuralWidgetRoutingContext {
+            mounted_unit_id: shell_state.mounted_unit_id_for_tool_surface(binding.tool_surface_id),
             panel_instance_id: binding.panel_instance_id,
             active_tool_surface: Some(binding.tool_surface_id),
             tab_stack_id: binding.tab_stack_id,
@@ -1188,8 +1211,11 @@ fn dispatch_viewport_pointer_down(
         ));
     }
 
-    let result = host.app.dispatch_viewport_interaction_for_surface(
-        route.tool_surface_id,
+    let Some(mounted_unit_id) = route.structural_context.mounted_unit_id else {
+        return;
+    };
+    let result = host.app.dispatch_viewport_interaction_for_mounted_unit(
+        mounted_unit_id,
         ViewportInteractionCommand::PointerDown { hit },
     );
     if let Err(error) = result {

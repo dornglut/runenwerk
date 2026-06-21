@@ -10,7 +10,7 @@ related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
-  - ../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../adr/superseded/0012-capability-workbench-clean-break.md
 related_designs:
   - ./ui-designer-interface-lab-platform-design.md
   - ../accepted/ui-designer-target-projection-profiles-design.md

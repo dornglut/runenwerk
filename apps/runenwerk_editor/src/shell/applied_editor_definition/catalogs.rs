@@ -9,13 +9,13 @@ use editor_definition::{
     EditorToolSurfaceRegistryDefinition, editor_definition_has_blocking_diagnostics,
     validate_editor_bindings,
 };
-use editor_shell::{ToolSurfaceStableKey, WorkspaceState};
+use editor_shell::{EditorCompositionRuntime, ToolSurfaceStableKey};
 use ui_definition::{NormalizedUiTemplate, UiDefinitionDiagnostic, UiTemplateId};
 
 use super::compatibility::{
     known_panel_kinds_in_authored_order, known_tool_surface_keys_in_authored_order,
-    panel_registry_compatible_with_tool_surfaces, panel_registry_covers_workspace,
-    tool_surface_registry_covers_panel_defaults, tool_surface_registry_covers_workspace,
+    panel_registry_compatible_with_tool_surfaces, panel_registry_covers_composition,
+    tool_surface_registry_covers_composition, tool_surface_registry_covers_panel_defaults,
 };
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -139,9 +139,9 @@ impl ActiveEditorDefinitionCatalogs {
     pub fn install_panel_registry(
         &mut self,
         registry: EditorPanelRegistryDefinition,
-        workspace: &WorkspaceState,
+        runtime: &EditorCompositionRuntime,
     ) -> Result<(), UiDefinitionDiagnostic> {
-        panel_registry_covers_workspace(&registry, workspace)?;
+        panel_registry_covers_composition(&registry, runtime)?;
         panel_registry_compatible_with_tool_surfaces(
             &registry,
             self.tool_surface_registry.as_ref(),
@@ -153,9 +153,9 @@ impl ActiveEditorDefinitionCatalogs {
     pub fn install_tool_surface_registry(
         &mut self,
         registry: EditorToolSurfaceRegistryDefinition,
-        workspace: &WorkspaceState,
+        runtime: &EditorCompositionRuntime,
     ) -> Result<(), UiDefinitionDiagnostic> {
-        tool_surface_registry_covers_workspace(&registry, workspace)?;
+        tool_surface_registry_covers_composition(&registry, runtime)?;
         if let Some(panel_registry) = self.panel_registry.as_ref() {
             tool_surface_registry_covers_panel_defaults(&registry, panel_registry)?;
         }

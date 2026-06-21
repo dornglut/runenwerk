@@ -3,10 +3,9 @@
 
 use editor_definition::{EditorPanelRegistryDefinition, EditorToolSurfaceRegistryDefinition};
 use editor_shell::{
-    PanelKind, ToolSurfaceStableKey, WorkspaceState, panel_kind_definition_key,
-    panel_kind_for_tool_surface_kind, stable_key_for_tool_surface_kind,
-    tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
-    tool_surface_kind_from_definition_key,
+    EditorCompositionRuntime, PanelKind, ToolSurfaceStableKey, panel_kind_for_tool_surface_kind,
+    stable_key_for_tool_surface_kind, tool_surface_kind_definition_key,
+    tool_surface_kind_for_stable_key, tool_surface_kind_from_definition_key,
 };
 use ui_definition::UiDefinitionDiagnostic;
 
@@ -44,20 +43,20 @@ pub fn known_panel_kinds_in_authored_order(
     kinds
 }
 
-pub fn panel_registry_covers_workspace(
+pub fn panel_registry_covers_composition(
     registry: &EditorPanelRegistryDefinition,
-    workspace: &WorkspaceState,
+    runtime: &EditorCompositionRuntime,
 ) -> Result<(), UiDefinitionDiagnostic> {
-    for panel in workspace.panels() {
-        let key = panel_kind_definition_key(panel.panel_kind);
+    for mounted_unit in runtime.extension().mounted_units() {
+        let key = mounted_unit.panel_kind_key.as_str();
         if !registry
             .panels
             .iter()
             .any(|definition| definition.id == key)
         {
             return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.panel_registry.active_workspace_missing_panel",
-                format!("active workspace uses panel '{key}' missing from panel registry"),
+                "editor.definition.panel_registry.active_composition_missing_panel",
+                format!("active composition uses panel '{key}' missing from panel registry"),
             ));
         }
     }
@@ -119,20 +118,25 @@ pub fn tool_surface_registry_covers_panel_defaults(
     Ok(())
 }
 
-pub fn tool_surface_registry_covers_workspace(
+pub fn tool_surface_registry_covers_composition(
     registry: &EditorToolSurfaceRegistryDefinition,
-    workspace: &WorkspaceState,
+    runtime: &EditorCompositionRuntime,
 ) -> Result<(), UiDefinitionDiagnostic> {
-    for surface in workspace.tool_surfaces() {
-        let Some(tool_surface_kind) =
-            tool_surface_kind_for_stable_key(surface.stable_surface_key())
-        else {
+    for mounted_unit in runtime.extension().mounted_units() {
+        let stable_key = ToolSurfaceStableKey::new(mounted_unit.stable_content_key.clone())
+            .map_err(|_| {
+                UiDefinitionDiagnostic::error(
+                    "editor.definition.tool_surface_registry.active_composition_invalid_stable_key",
+                    "active composition contains an invalid stable content key",
+                )
+            })?;
+        let Some(tool_surface_kind) = tool_surface_kind_for_stable_key(&stable_key) else {
             return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.tool_surface_registry.active_workspace_missing_stable_mapping",
+                "editor.definition.tool_surface_registry.active_composition_missing_stable_mapping",
                 format!(
-                    "active workspace surface '{}' has stable key '{}' without an authored registry mapping",
-                    surface.id.raw(),
-                    surface.stable_surface_key()
+                    "active composition mounted unit '{}' has stable key '{}' without an authored registry mapping",
+                    mounted_unit.mounted_unit_id.raw(),
+                    stable_key
                 ),
             ));
         };
@@ -143,9 +147,9 @@ pub fn tool_surface_registry_covers_workspace(
             .any(|definition| definition.id == key)
         {
             return Err(UiDefinitionDiagnostic::error(
-                "editor.definition.tool_surface_registry.active_workspace_missing_surface",
+                "editor.definition.tool_surface_registry.active_composition_missing_surface",
                 format!(
-                    "active workspace uses tool surface '{key}' missing from tool-surface registry"
+                    "active composition uses tool surface '{key}' missing from tool-surface registry"
                 ),
             ));
         }

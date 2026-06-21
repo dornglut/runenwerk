@@ -810,27 +810,27 @@ def test_generated_roadmap_diagrams_separate_dependency_truth_from_candidates() 
     assert "Immediate Dependency Context" not in candidates
     assert "WR-001" not in candidates
 
-def test_current_repository_has_no_next_batch_after_ui_program_architecture_conformance() -> None:
+def test_current_repository_roadmap_truth_and_generated_diagrams_conform() -> None:
     roadmap = load_roadmap()
     selected = select_batch_candidates(roadmap)
     dependency_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml").read_text(encoding="utf-8")
     candidates_puml = (REPO_ROOT / "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml").read_text(encoding="utf-8")
 
     current_ids = [item.id for item in selected]
-    wr172 = roadmap.by_id.get("WR-172")
-    wr171 = roadmap.by_id.get("WR-171")
+    expected_current_ids = [
+        item.id
+        for item in sorted(
+            (item for item in roadmap.active_items if item.can_enter_implementation_batch),
+            key=lambda item: (item.level_number, item.lane, -item.score, item.id),
+        )
+    ]
+
+    assert current_ids == expected_current_ids
+    for item_id in current_ids:
+        assert item_id in candidates_puml
     wr170 = roadmap.by_id.get("WR-170")
-    if wr172 is not None and wr172.planning_state == "current_candidate":
-        assert current_ids == ["WR-172"]
-    elif wr171 is not None and wr171.planning_state == "current_candidate":
-        assert current_ids == ["WR-171"]
-    elif wr170 is not None and wr170.planning_state == "current_candidate":
-        assert current_ids == ["WR-170"]
-    else:
-        assert current_ids == []
-        if wr170 is not None:
-            assert wr170.planning_state == "completed"
-            assert wr170.completion_quality == "perfectionist_verified"
+    if wr170 is not None and wr170.planning_state == "completed":
+        assert wr170.completion_quality == "perfectionist_verified"
     assert roadmap.by_id["WR-169"].planning_state == "completed"
     assert roadmap.by_id["WR-169"].blocker_label == "B2"
     assert roadmap.by_id["WR-169"].completion_quality == "perfectionist_verified"

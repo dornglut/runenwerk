@@ -145,6 +145,7 @@ struct DummyProvider {
     supports: bool,
     support_mode: Option<SurfaceProviderSupportMode>,
     fail: bool,
+    provides_unavailable_projection: bool,
 }
 
 impl EditorSurfaceProvider for DummyProvider {
@@ -176,7 +177,7 @@ impl EditorSurfaceProvider for DummyProvider {
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
         if self.fail {
             return Err(SurfaceProviderDiagnostic::new(
-                "test.provider.failed",
+                "editor_composition.provider.test_failed",
                 "provider failed",
             ));
         }
@@ -189,6 +190,25 @@ impl EditorSurfaceProvider for DummyProvider {
             )),
             routes: SurfaceRouteTable::empty(),
         })
+    }
+
+    fn build_unavailable_frame(
+        &self,
+        _context: &SurfaceProviderBuildContext<'_>,
+        _request: &SurfaceProviderRequest,
+        _session: &SurfaceSessionState,
+        liveness: ui_composition::ContentLiveness,
+    ) -> Option<ProviderSurfaceFrame> {
+        self.provides_unavailable_projection
+            .then(|| ProviderSurfaceFrame {
+                title: format!("provider unavailable: {liveness:?}"),
+                artifact: SurfacePresentationArtifact::provider(editor_shell::label(
+                    WidgetId(100),
+                    "app unavailable projection",
+                    ThemeTokens::default().body_small_text_style(FontId(1)),
+                )),
+                routes: SurfaceRouteTable::empty(),
+            })
     }
 
     fn map_action(
@@ -211,6 +231,7 @@ fn dummy(id: u64, priority: u16, supports: bool) -> Box<dyn EditorSurfaceProvide
         supports,
         support_mode: None,
         fail: false,
+        provides_unavailable_projection: false,
     })
 }
 
@@ -228,6 +249,7 @@ fn dummy_with_support_mode(
         supports: support_mode.is_supported(),
         support_mode: Some(support_mode),
         fail: false,
+        provides_unavailable_projection: false,
     })
 }
 
@@ -241,12 +263,29 @@ fn failing(id: u64) -> Box<dyn EditorSurfaceProvider> {
         supports: true,
         support_mode: None,
         fail: true,
+        provides_unavailable_projection: false,
+    })
+}
+
+fn dummy_with_unavailable_projection(id: u64) -> Box<dyn EditorSurfaceProvider> {
+    Box::new(DummyProvider {
+        descriptor: SurfaceProviderDescriptor::new(
+            SurfaceProviderId::try_from_raw(id).unwrap(),
+            "unavailable-aware",
+            SurfaceProviderPriority::DEFAULT,
+        ),
+        supports: true,
+        support_mode: None,
+        fail: false,
+        provides_unavailable_projection: true,
     })
 }
 
 fn request() -> SurfaceProviderRequest {
     let tool_surface_kind = ToolSurfaceKind::Viewport;
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: LAYOUT_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
             document_id: editor_core::DocumentId(1),
@@ -290,6 +329,8 @@ fn request_with_stable_key(
 
 fn self_authoring_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::NoActiveDocument,
         panel_instance_id: PanelInstanceId::try_from_raw(10).unwrap(),
@@ -305,6 +346,8 @@ fn self_authoring_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProvider
 
 fn m6_material_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
             document_id: editor_core::DocumentId(6),
@@ -326,6 +369,8 @@ fn stable_key_only_material_request(
     route: ToolSurfaceRoute,
 ) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
             document_id: editor_core::DocumentId(6),
@@ -348,6 +393,8 @@ fn m6_texture_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
         _ => DocumentKind::ProceduralTexture,
     };
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::TEXTURE_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
             document_id: editor_core::DocumentId(7),
@@ -366,6 +413,8 @@ fn m6_texture_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequ
 
 fn m6_procgen_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::PROCGEN_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
             document_id: editor_core::DocumentId(9),
@@ -387,6 +436,8 @@ fn m6_sdf_request(
     document_kind: DocumentKind,
 ) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::FIELD_WORLD_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::Resolved {
             document_id: editor_core::DocumentId(8),
@@ -405,6 +456,8 @@ fn m6_sdf_request(
 
 fn asset_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: editor_shell::FIELD_WORLD_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::NoActiveDocument,
         panel_instance_id: PanelInstanceId::try_from_raw(30).unwrap(),
@@ -420,6 +473,8 @@ fn asset_request(tool_surface_kind: ToolSurfaceKind) -> SurfaceProviderRequest {
 
 fn inspector_request() -> SurfaceProviderRequest {
     SurfaceProviderRequest {
+        mounted_unit_id: ui_composition::MountedUnitId::new(1),
+        unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
         workspace_profile_id: RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
         document_context: SurfaceDocumentContext::NoActiveDocument,
         panel_instance_id: PanelInstanceId::try_from_raw(31).unwrap(),
@@ -1457,7 +1512,7 @@ fn unresolved_mounted_surface_reports_diagnostic_without_mutation() {
     );
     assert_eq!(observation.selected_provider_id, None);
     assert!(observation.diagnostic.is_some_and(|diagnostic| {
-        diagnostic.code == "editor.surface.unassigned_provider_family"
+        diagnostic.code == "editor_composition.provider.unassigned_family"
     }));
     assert_eq!(
         host.provider_registry().provider_ids().count(),
@@ -2206,6 +2261,119 @@ fn explicit_priority_resolves_deterministically() {
 }
 
 #[test]
+fn composition_content_liveness_states_are_structurally_neutral_and_diagnostic() {
+    let registry =
+        EditorSurfaceProviderRegistry::new(vec![dummy(1, 10, true)]).expect("id is unique");
+    let app = RunenwerkEditorApp::new();
+    let shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+    let request = request();
+    let structure_before = shell_state.composition_runtime().clone();
+
+    let resolved = registry.resolve_frame(
+        &context(&app, &shell_state, &theme),
+        &request,
+        &SurfaceSessionState::default(),
+    );
+    assert_eq!(resolved.content_liveness, ContentLiveness::Resolved);
+    assert_eq!(
+        resolved.content_fallback,
+        ContentProjectionFallback::ResolvedContent
+    );
+
+    for (liveness, expected_code) in [
+        (
+            ContentLiveness::Missing,
+            "editor_composition.content.missing",
+        ),
+        (
+            ContentLiveness::Loading,
+            "editor_composition.content.loading",
+        ),
+        (
+            ContentLiveness::Suspended,
+            "editor_composition.content.suspended",
+        ),
+        (ContentLiveness::Denied, "editor_composition.content.denied"),
+        (
+            ContentLiveness::UnsupportedProfile,
+            "editor_composition.content.unsupported_profile",
+        ),
+        (
+            ContentLiveness::Crashed,
+            "editor_composition.content.crashed",
+        ),
+    ] {
+        let session = SurfaceSessionState {
+            content_liveness: liveness,
+            ..Default::default()
+        };
+        let frame =
+            registry.resolve_frame(&context(&app, &shell_state, &theme), &request, &session);
+
+        assert_eq!(frame.mounted_unit_id, request.mounted_unit_id);
+        assert_eq!(frame.panel_instance_id, request.panel_instance_id);
+        assert_eq!(frame.tab_stack_id, request.tab_stack_id);
+        assert_eq!(frame.surface_instance_id, request.tool_surface_instance_id);
+        assert_eq!(frame.content_liveness, liveness);
+        assert_eq!(
+            frame.content_fallback,
+            ContentProjectionFallback::NeutralDiagnosticPlaceholder
+        );
+        assert!(frame.routes.is_empty());
+        let diagnostic = frame
+            .artifact
+            .diagnostics
+            .first()
+            .expect("unavailable content should emit one diagnostic");
+        assert_eq!(diagnostic.code, expected_code);
+        assert_eq!(
+            diagnostic.severity,
+            ui_composition::CompositionDiagnosticSeverity::Error
+        );
+        assert_eq!(
+            diagnostic.stage,
+            editor_shell::EditorCompositionDiagnosticStage::Provider
+        );
+        assert_eq!(
+            diagnostic.subject,
+            editor_shell::EditorCompositionDiagnosticSubject::MountedUnit(
+                request.mounted_unit_id.raw()
+            )
+        );
+        assert!(!diagnostic.message.is_empty());
+        assert_eq!(shell_state.composition_runtime(), &structure_before);
+    }
+}
+
+#[test]
+fn composition_content_liveness_prefers_app_unavailable_projection() {
+    let registry = EditorSurfaceProviderRegistry::new(vec![dummy_with_unavailable_projection(1)])
+        .expect("id is unique");
+    let app = RunenwerkEditorApp::new();
+    let shell_state = RunenwerkEditorShellState::new();
+    let theme = ThemeTokens::default();
+    let session = SurfaceSessionState {
+        content_liveness: ContentLiveness::Loading,
+        ..Default::default()
+    };
+
+    let frame = registry.resolve_frame(&context(&app, &shell_state, &theme), &request(), &session);
+
+    assert_eq!(frame.content_liveness, ContentLiveness::Loading);
+    assert_eq!(
+        frame.content_fallback,
+        ContentProjectionFallback::AppProvidedUnavailable
+    );
+    assert_eq!(
+        frame.provider_id,
+        Some(SurfaceProviderId::try_from_raw(1).unwrap())
+    );
+    assert!(frame.artifact.diagnostics.is_empty());
+    assert!(provider_frame_text(&frame).contains("app unavailable projection"));
+}
+
+#[test]
 fn provider_error_artifact_has_diagnostic_and_zero_routes() {
     let registry = EditorSurfaceProviderRegistry::new(vec![failing(1)]).expect("id is unique");
     let app = RunenwerkEditorApp::new();
@@ -2219,6 +2387,11 @@ fn provider_error_artifact_has_diagnostic_and_zero_routes() {
     );
 
     assert_eq!(frame.availability, SurfaceProviderAvailability::Error);
+    assert_eq!(frame.content_liveness, ContentLiveness::Crashed);
+    assert_eq!(
+        frame.content_fallback,
+        ContentProjectionFallback::NeutralDiagnosticPlaceholder
+    );
     assert!(!frame.artifact.diagnostics.is_empty());
     assert!(frame.routes.is_empty());
 }

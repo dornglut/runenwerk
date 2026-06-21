@@ -17,8 +17,8 @@ related_adrs:
   - ../../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../../adr/accepted/0004-separate-description-from-execution.md
   - ../../../adr/accepted/0005-projections-are-derived-state.md
-  - ../../../adr/accepted/0006-editor-surface-provider-plugin-seam.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0006-editor-surface-provider-plugin-seam.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/roadmap-items.yaml
   - ../../../workspace/production-tracks.yaml

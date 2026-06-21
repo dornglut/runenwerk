@@ -12,7 +12,7 @@ related:
   - ../../../workspace/production-tracks.yaml
   - ../../implementation-plans/wr-038-product-and-service-capability-declarations/plan.md
   - ../../closeouts/wr-037-host-capability-policy/closeout.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 ---
 

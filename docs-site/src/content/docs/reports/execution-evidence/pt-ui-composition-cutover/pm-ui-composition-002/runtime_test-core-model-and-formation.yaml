@@ -1,0 +1,133 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-002
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+evidence_kind: runtime_test
+name: core_model_and_formation
+status: passed
+produced_at: '2026-06-19T13:45:25Z'
+paths:
+- domain/ui/ui_composition/src/state/formation.rs
+- domain/ui/ui_composition/tests/formation_invariants.rs
+- domain/ui/ui_composition/tests/property_invariants.rs
+subject_paths:
+- domain/ui/ui_composition/src/state/formation.rs
+- domain/ui/ui_composition/tests/formation_invariants.rs
+- domain/ui/ui_composition/tests/property_invariants.rs
+subject_digests:
+  domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+  domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+  domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_composition) -> exit 0
+- cargo:test (cargo test -p ui_testing composition_fixture) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: fd55a524ff2660440124e911bdccfc4031f4b91887c14f280c194186bd5320b3
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: dd425694011dca2f57f10ea657e36e3635770b5619e9c65c55dc48e38eb34256
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - composition_fixture
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 08125c68b4b2599d8dc703f61c0bc0dea2b6ea4288953458a3ce26e4cedfafe8
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 83997dd24b4116282d38a3fa7fd0b6d9e007f940ae5420e42e9224cf7819acb9
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: fa87f480b23f286a9b9d1aad754e6f2635e0ce6c2ad8253e0ff8f46cd6ac25ec
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 3f9f261932f497984461112077fda0d2054bf699335ddc1968773a6b8c30fbf3
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: d247f60c2f389566c5340cbf6a22ac55d42394644f10ab930c890e66e783f99c
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: fafe92898b20c96a802e4228117a1b93c497c7303759eaa5b4a78795ae62e2e9
+  subject_digests:
+    domain/ui/ui_composition/src/state/formation.rs: 72850a6e5067fb298bc3bee2955956bda1fbec8e43a132cbedafd734f641aa73
+    domain/ui/ui_composition/tests/formation_invariants.rs: 9b375bb52a413656f19e246d148a88ead1971078d0ef2ec73d76b6cd4ae77992
+    domain/ui/ui_composition/tests/property_invariants.rs: 7387c82b19d974222432af5dc7bba5306806d6224c64ddd56fed430ee0b6fd02

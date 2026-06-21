@@ -27,6 +27,8 @@ pub struct WindowState {
     pub size_px: (u32, u32),
     pub scale_factor: f64,
     pub close_requested: bool,
+    pub close_intent_pending: bool,
+    pub focused: bool,
     pub redraw_requested: bool,
     pub cursor_icon: WindowCursorIcon,
     headless: bool,
@@ -39,6 +41,8 @@ impl WindowState {
             size_px: (1280, 720),
             scale_factor: 1.0,
             close_requested: false,
+            close_intent_pending: false,
+            focused: true,
             redraw_requested: true,
             cursor_icon: WindowCursorIcon::Default,
             headless: false,
@@ -51,6 +55,8 @@ impl WindowState {
             size_px: (1280, 720),
             scale_factor: 1.0,
             close_requested: false,
+            close_intent_pending: false,
+            focused: true,
             redraw_requested: false,
             cursor_icon: WindowCursorIcon::Default,
             headless: true,
@@ -59,6 +65,17 @@ impl WindowState {
 
     pub fn request_close(&mut self) {
         self.close_requested = true;
+        self.close_intent_pending = false;
+    }
+
+    pub fn receive_close_intent(&mut self) {
+        self.close_requested = false;
+        self.close_intent_pending = true;
+    }
+
+    pub fn veto_close(&mut self) {
+        self.close_requested = false;
+        self.close_intent_pending = false;
     }
 
     pub fn request_redraw(&mut self) {
@@ -90,7 +107,9 @@ impl WindowState {
 pub enum NativeWindowLifecycleState {
     Requested,
     Created,
-    CloseRequested,
+    CreationFailed,
+    CloseIntentPending,
+    CloseApproved,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,10 +140,13 @@ pub struct NativeWindowRecord {
     pub size_px: (u32, u32),
     pub scale_factor: f64,
     pub close_requested: bool,
+    pub close_intent_pending: bool,
+    pub focused: bool,
     pub redraw_requested: bool,
     pub cursor_icon: WindowCursorIcon,
     pub headless: bool,
     pub lifecycle_state: NativeWindowLifecycleState,
+    pub failure_reason: Option<String>,
 }
 
 impl NativeWindowRecord {
@@ -135,10 +157,19 @@ impl NativeWindowRecord {
             size_px: window.size_px,
             scale_factor: window.scale_factor,
             close_requested: window.close_requested,
+            close_intent_pending: window.close_intent_pending,
+            focused: window.focused,
             redraw_requested: window.redraw_requested,
             cursor_icon: window.cursor_icon,
             headless: window.is_headless(),
-            lifecycle_state: NativeWindowLifecycleState::Created,
+            lifecycle_state: if window.close_requested {
+                NativeWindowLifecycleState::CloseApproved
+            } else if window.close_intent_pending {
+                NativeWindowLifecycleState::CloseIntentPending
+            } else {
+                NativeWindowLifecycleState::Created
+            },
+            failure_reason: None,
         }
     }
 
@@ -147,8 +178,32 @@ impl NativeWindowRecord {
     }
 
     pub fn request_close(&mut self) {
+        self.approve_close();
+    }
+
+    pub fn receive_close_intent(&mut self) {
+        self.close_requested = false;
+        self.close_intent_pending = true;
+        self.lifecycle_state = NativeWindowLifecycleState::CloseIntentPending;
+    }
+
+    pub fn approve_close(&mut self) {
         self.close_requested = true;
-        self.lifecycle_state = NativeWindowLifecycleState::CloseRequested;
+        self.close_intent_pending = false;
+        self.lifecycle_state = NativeWindowLifecycleState::CloseApproved;
+    }
+
+    pub fn veto_close(&mut self) {
+        self.close_requested = false;
+        self.close_intent_pending = false;
+        self.lifecycle_state = NativeWindowLifecycleState::Created;
+    }
+
+    pub fn mark_creation_failed(&mut self, reason: impl Into<String>) {
+        self.close_requested = false;
+        self.close_intent_pending = false;
+        self.lifecycle_state = NativeWindowLifecycleState::CreationFailed;
+        self.failure_reason = Some(reason.into());
     }
 
     pub fn copy_to_legacy(&self, window: &mut WindowState) {
@@ -156,6 +211,8 @@ impl NativeWindowRecord {
         window.size_px = self.size_px;
         window.scale_factor = self.scale_factor;
         window.close_requested = self.close_requested;
+        window.close_intent_pending = self.close_intent_pending;
+        window.focused = self.focused;
         window.redraw_requested = self.redraw_requested;
         window.cursor_icon = self.cursor_icon;
         window.set_headless(self.headless);
@@ -233,10 +290,13 @@ impl WindowStateRegistryResource {
                 size_px: request.size_px,
                 scale_factor: 1.0,
                 close_requested: false,
+                close_intent_pending: false,
+                focused: false,
                 redraw_requested: true,
                 cursor_icon: WindowCursorIcon::Default,
                 headless: false,
                 lifecycle_state: NativeWindowLifecycleState::Requested,
+                failure_reason: None,
             },
         );
         self.pending_creation_requests.push(request.clone());
@@ -265,6 +325,19 @@ impl WindowStateRegistryResource {
 
     pub fn pending_creation_requests(&self) -> &[NativeWindowCreationRequest] {
         &self.pending_creation_requests
+    }
+
+    pub fn remove_window(
+        &mut self,
+        native_window_id: NativeWindowId,
+    ) -> Option<NativeWindowRecord> {
+        self.pending_creation_requests
+            .retain(|request| request.native_window_id != native_window_id);
+        let removed = self.records.remove(&native_window_id);
+        if self.primary_window_id == Some(native_window_id) {
+            self.primary_window_id = self.records.keys().next().copied();
+        }
+        removed
     }
 
     fn allocate_window_id(&mut self) -> NativeWindowId {

@@ -3,7 +3,7 @@
 
 use crate::{
     Key, KeyState, Modifiers, PointerButton, PointerDelta, PointerEventKind, PointerPacket,
-    PointerPosition,
+    PointerPosition, SemanticActionEvent,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,5 +73,6 @@ pub struct TextInputEvent {
 pub enum UiInputEvent {
     Pointer(PointerEvent),
     Keyboard(KeyboardEvent),
+    Semantic(SemanticActionEvent),
     Text(TextInputEvent),
 }

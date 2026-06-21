@@ -1,3 +1,4 @@
+use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedUiFrameContribution,
     PreparedUiFrameSubmission, UiFrameSubmissionRegistryResource,
@@ -209,6 +210,8 @@ pub struct PreparedUiFrameResource {
     pub status: FeatureContributionStatus,
     pub fallback_policy: FeatureFallbackPolicy,
     pub payload: PreparedUiFrameContribution,
+    payload_by_surface: std::collections::BTreeMap<RenderSurfaceId, PreparedUiFrameContribution>,
+    status_by_surface: std::collections::BTreeMap<RenderSurfaceId, FeatureContributionStatus>,
 }
 
 impl Default for PreparedUiFrameResource {
@@ -217,24 +220,67 @@ impl Default for PreparedUiFrameResource {
             status: FeatureContributionStatus::Missing,
             fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
             payload: PreparedUiFrameContribution::default(),
+            payload_by_surface: std::collections::BTreeMap::new(),
+            status_by_surface: std::collections::BTreeMap::new(),
         }
+    }
+}
+
+impl PreparedUiFrameResource {
+    pub fn payload_for_surface(
+        &self,
+        render_surface_id: RenderSurfaceId,
+    ) -> &PreparedUiFrameContribution {
+        self.payload_by_surface
+            .get(&render_surface_id)
+            .unwrap_or(&self.payload)
+    }
+
+    pub fn status_for_surface(
+        &self,
+        render_surface_id: RenderSurfaceId,
+    ) -> FeatureContributionStatus {
+        self.status_by_surface
+            .get(&render_surface_id)
+            .copied()
+            .unwrap_or(self.status)
     }
 }
 
 pub fn prepare_ui_feature_resource_system(
     submissions: Res<UiFrameSubmissionRegistryResource>,
+    surfaces: Res<RenderSurfaceRegistryResource>,
     mut prepared: ResMut<PreparedUiFrameResource>,
 ) {
     let ordered = submissions.ordered_submissions();
-    if ordered.is_empty() {
-        prepared.status = FeatureContributionStatus::Missing;
-        prepared.payload = PreparedUiFrameContribution::default();
-        return;
+    let (status, payload) = prepare_submissions(ordered);
+    prepared.status = status;
+    prepared.payload = payload;
+    prepared.payload_by_surface.clear();
+    prepared.status_by_surface.clear();
+    for surface in surfaces.records() {
+        let (status, payload) = prepare_submissions(
+            submissions.ordered_submissions_for_surface(surface.render_surface_id),
+        );
+        prepared
+            .payload_by_surface
+            .insert(surface.render_surface_id, payload);
+        prepared
+            .status_by_surface
+            .insert(surface.render_surface_id, status);
     }
+}
 
-    prepared.status = FeatureContributionStatus::Ready;
-    prepared.payload = PreparedUiFrameContribution {
-        submissions: ordered
+fn prepare_submissions(
+    submissions: Vec<&crate::plugins::render::features::UiFrameSubmission>,
+) -> (FeatureContributionStatus, PreparedUiFrameContribution) {
+    let status = if submissions.is_empty() {
+        FeatureContributionStatus::Missing
+    } else {
+        FeatureContributionStatus::Ready
+    };
+    let payload = PreparedUiFrameContribution {
+        submissions: submissions
             .into_iter()
             .map(|submission| PreparedUiFrameSubmission {
                 producer_id: submission.producer_id,
@@ -246,6 +292,7 @@ pub fn prepare_ui_feature_resource_system(
             })
             .collect(),
     };
+    (status, payload)
 }
 
 #[derive(Debug, Clone, ecs::Component, ecs::Resource, Default)]

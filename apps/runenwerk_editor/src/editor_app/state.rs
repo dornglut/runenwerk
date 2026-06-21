@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use editor_definition::EditorDefinitionDocument;
 use editor_preview::{PreviewMode, PreviewSessionId};
-use editor_shell::WorkspaceState;
+use editor_shell::EditorCompositionRuntime;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::{
@@ -213,8 +213,8 @@ impl RunenwerkEditorApp {
         &mut self.surface_sessions
     }
 
-    pub fn prune_surface_sessions_for_workspace(&mut self, workspace: &WorkspaceState) {
-        self.surface_sessions.prune_for_workspace(workspace);
+    pub fn prune_surface_sessions_for_composition(&mut self, runtime: &EditorCompositionRuntime) {
+        self.surface_sessions.prune_for_composition(runtime);
     }
 
     pub fn surface_provider_registry(&self) -> &EditorSurfaceProviderRegistry {

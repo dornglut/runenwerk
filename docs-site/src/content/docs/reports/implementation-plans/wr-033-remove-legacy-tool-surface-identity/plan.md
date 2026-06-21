@@ -15,7 +15,7 @@ related_roadmaps:
   - ../../../workspace/production-track-index.md
   - ../../../workspace/roadmap-decision-register.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_reports:
   - ../wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
   - ../../closeouts/wr-033-remove-legacy-tool-surface-identity/closeout.md
@@ -58,7 +58,7 @@ old persisted layouts or reports unsupported-schema diagnostics.
   and
   `docs-site/src/content/docs/reports/closeouts/wr-032-typed-suite-surface-profile-and-provider-handles/closeout.md`
   record the completed prerequisite typed-handle implementation.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and explicitly forbids `ToolSurfaceKind` as Workbench identity,
   persistence, provider request, profile construction, or Material Lab routing
   authority.

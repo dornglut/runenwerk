@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-29
+last_reviewed: 2026-06-20
 ---
 
 # Runenwerk Editor
@@ -16,6 +16,7 @@ last_reviewed: 2026-05-29
 
 ## Product Guides
 
+- [`composition-layouts.md`](./composition-layouts.md)
 - [`ui-designer-workbench.md`](./ui-designer-workbench.md)
 
 ## MVP

@@ -858,7 +858,7 @@ mod tests {
     }
 
     fn screen_point_for_canvas(app: &RunenwerkDrawApp, x: f64, y: f64) -> UiPoint {
-        app.workspace()
+        app.composition_projection()
             .canvas_view
             .canvas_to_screen(CanvasCoordinate::new(x, y))
             .expect("test canvas point should be visible")

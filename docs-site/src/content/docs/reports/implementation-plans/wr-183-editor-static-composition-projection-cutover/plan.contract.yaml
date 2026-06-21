@@ -1,0 +1,151 @@
+version: 1
+status: accepted
+wr_id: WR-183
+milestone_id: PM-UI-COMPOSITION-004
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: exact_editor_static_composition_cutover
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- Cargo.lock
+- domain/editor/editor_shell/Cargo.toml
+- domain/editor/editor_shell/src/lib.rs
+- domain/editor/editor_shell/src/composition/mod.rs
+- domain/editor/editor_shell/src/composition/build_editor_shell.rs
+- domain/editor/editor_shell/src/commands/map_interactions.rs
+- domain/editor/editor_shell/src/commands/shell_command.rs
+- domain/editor/editor_shell/src/surface_provider.rs
+- domain/editor/editor_shell/src/tests.rs
+- domain/editor/editor_shell/src/workspace/mod.rs
+- domain/editor/editor_shell/src/workspace/persisted.rs
+- domain/editor/editor_shell/src/workspace/profile.rs
+- domain/editor/editor_shell/src/workspace/projection.rs
+- domain/editor/editor_shell/src/workspace/projection_ratification.rs
+- domain/editor/editor_shell/src/workspace/reducer.rs
+- domain/editor/editor_shell/src/workspace/state.rs
+- apps/runenwerk_editor/Cargo.toml
+- apps/runenwerk_editor/src/editor_app/facade.rs
+- apps/runenwerk_editor/src/editor_app/state.rs
+- apps/runenwerk_editor/src/persistence/workspace_layout.rs
+- apps/runenwerk_editor/src/runtime/resources.rs
+- apps/runenwerk_editor/src/runtime/systems/frame_submit.rs
+- apps/runenwerk_editor/src/runtime/systems/input_bridge.rs
+- apps/runenwerk_editor/src/runtime/systems/picking.rs
+- apps/runenwerk_editor/src/runtime/systems/viewport_lifecycle.rs
+- apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs
+- apps/runenwerk_editor/src/runtime/viewport/layout_map.rs
+- apps/runenwerk_editor/src/runtime/viewport/surface_mounts.rs
+- apps/runenwerk_editor/src/runtime/viewport/tool_surface_binding.rs
+- apps/runenwerk_editor/src/shell/mod.rs
+- apps/runenwerk_editor/src/shell/applied_editor_definition/catalogs.rs
+- apps/runenwerk_editor/src/shell/applied_editor_definition/compatibility.rs
+- apps/runenwerk_editor/src/shell/controller.rs
+- apps/runenwerk_editor/src/shell/dispatch/entity_table.rs
+- apps/runenwerk_editor/src/shell/dispatch/inspector.rs
+- apps/runenwerk_editor/src/shell/dispatch/mod.rs
+- apps/runenwerk_editor/src/shell/dispatch/sdf_operations.rs
+- apps/runenwerk_editor/src/shell/dispatch/viewport.rs
+- apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+- apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs
+- apps/runenwerk_editor/src/shell/providers/mod.rs
+- apps/runenwerk_editor/src/shell/providers/common.rs
+- apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs
+- apps/runenwerk_editor/src/shell/providers/scene/viewport.rs
+- apps/runenwerk_editor/src/shell/providers/self_authoring.rs
+- apps/runenwerk_editor/src/shell/providers/tests.rs
+- apps/runenwerk_editor/src/shell/providers/tool_suite_registry_inspector.rs
+- apps/runenwerk_editor/src/shell/self_authoring/mod.rs
+- apps/runenwerk_editor/src/shell/state.rs
+- apps/runenwerk_editor/src/shell/surface_session.rs
+- apps/runenwerk_editor/src/shell/tests.rs
+- apps/runenwerk_editor/src/shell/workbench_host.rs
+- apps/runenwerk_editor/tests/scene_authoring_workflow_smoke.rs
+- apps/runenwerk_editor/tests/startup_render_smoke.rs
+- apps/runenwerk_editor/tests/viewport_architecture_guards.rs
+- apps/runenwerk_editor/tests/viewport_gpu_truth_smoke.rs
+- docs-site/src/content/docs/apps/runenwerk-editor/README.md
+- docs-site/src/content/docs/apps/runenwerk-editor/current-architecture.md
+new_outputs:
+- domain/editor/editor_shell/src/composition/structural/mod.rs
+- domain/editor/editor_shell/src/composition/structural/diagnostic.rs
+- domain/editor/editor_shell/src/composition/structural/extension.rs
+- domain/editor/editor_shell/src/composition/structural/legacy_import.rs
+- domain/editor/editor_shell/src/composition/structural/projection.rs
+- domain/editor/editor_shell/src/composition/structural/runtime.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/mod.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/provider_projection.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/target_binding.rs
+- apps/runenwerk_editor/tests/composition_architecture_guards.rs
+- docs-site/src/content/docs/apps/runenwerk-editor/composition-layouts.md
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-004/runtime_test-editor-static-composition-projection.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-004/migration-legacy-workspace-read-only.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-004/diagnostics-editor-content-liveness.yaml
+forbidden_outputs:
+- domain/ui/ui_surface
+- domain/ui/ui_adaptive_composition
+- engine
+- adapters
+- net
+- apps/runenwerk_draw
+forbidden_patterns: []
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo fmt --all --check
+- cargo test -p editor_shell composition
+- cargo test -p editor_shell workspace
+- cargo test -p runenwerk_editor composition
+- cargo test -p runenwerk_editor --test startup_render_smoke
+- task ui:dependencies
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: runtime_test
+  name: editor_static_composition_projection
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-004/runtime_test-editor-static-composition-projection.yaml
+  subject_paths:
+  - domain/editor/editor_shell/src/composition/structural/runtime.rs
+  - domain/editor/editor_shell/src/composition/structural/projection.rs
+  - apps/runenwerk_editor/src/shell/state.rs
+  - apps/runenwerk_editor/src/runtime/viewport/instance_registry.rs
+  - apps/runenwerk_editor/tests/startup_render_smoke.rs
+  - apps/runenwerk_editor/tests/composition_architecture_guards.rs
+  validation_command_ids:
+  - cargo:test
+- kind: migration
+  name: legacy_workspace_read_only
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-004/migration-legacy-workspace-read-only.yaml
+  subject_paths:
+  - domain/editor/editor_shell/src/composition/structural/legacy_import.rs
+  - domain/editor/editor_shell/src/workspace/projection.rs
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - apps/runenwerk_editor/tests/composition_architecture_guards.rs
+- kind: diagnostics
+  name: editor_content_liveness
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-004/diagnostics-editor-content-liveness.yaml
+  subject_paths:
+  - domain/editor/editor_shell/src/composition/structural/diagnostic.rs
+  - domain/editor/editor_shell/src/surface_provider.rs
+  - apps/runenwerk_editor/src/shell/providers/common.rs
+  - apps/runenwerk_editor/src/shell/providers/mod.rs
+  - apps/runenwerk_editor/src/shell/providers/tests.rs
+  - apps/runenwerk_editor/src/shell/surface_session.rs
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *evidence
+rollback_policy: reject the checkpoint without restoring dual writes; preserve PM-003 persistence evidence and leave all V1-V5 files untouched
+stop_conditions:
+- stop if live shell or runtime state retains WorkspaceState after import
+- stop if active app code invokes WorkspaceMutation reduce_workspace replace_workspace_state or a V5 writer
+- stop if projection reconstructs WorkspaceState from CompositionState
+- stop if core and editor extension can install partially
+- stop if provider session route viewport binding or pruning identity remains keyed only by ToolSurfaceInstanceId
+- stop if V1-V5 input is changed migrated deleted or accepted
+- stop before ui_surface adaptive engine windowing Region Compass runtime or Draw changes

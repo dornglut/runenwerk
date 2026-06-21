@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-26
+last_reviewed: 2026-06-19
 ---
 
 # Accepted Designs
@@ -15,6 +15,11 @@ Use this folder for designs whose architectural direction is approved.
 Move a design to `implemented/` only after code has been checked against it and known divergences are resolved or documented.
 
 ## Current Designs
+
+### UI Domain
+
+- [App-Neutral UI Composition Clean Cutover Design](app-neutral-ui-composition-design.md)
+- [Adaptive UI Composition And Docking Design](adaptive-ui-composition-design.md)
 
 ### Foundation
 

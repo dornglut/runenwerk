@@ -10,7 +10,7 @@ related_designs:
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/roadmap-items.yaml
   - ../../../workspace/roadmap-archive.yaml
@@ -37,7 +37,7 @@ profiles, change persistence, or prove Material Lab routing.
 
 ## Completion Evidence
 
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and states that `ToolSurfaceKind` is not Workbench identity,
   persistence, provider request, profile construction, or Material Lab routing
   authority.

@@ -1,0 +1,164 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-003
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+evidence_kind: runtime_test
+name: persistence_bundle_and_repository
+status: passed
+produced_at: '2026-06-19T19:18:09Z'
+paths:
+- domain/ui/ui_composition/src/persistence/bundle.rs
+- domain/ui/ui_composition/src/persistence/repository.rs
+- domain/ui/ui_composition/tests/persistence_bundle.rs
+- domain/ui/ui_composition/tests/persistence_repository.rs
+subject_paths:
+- domain/ui/ui_composition/src/persistence/bundle.rs
+- domain/ui/ui_composition/src/persistence/repository.rs
+- domain/ui/ui_composition/tests/persistence_bundle.rs
+- domain/ui/ui_composition/tests/persistence_repository.rs
+subject_digests:
+  domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+  domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+  domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+  domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_composition persistence) -> exit 0
+- cargo:test (cargo test -p ui_composition deterministic) -> exit 0
+- cargo:test (cargo test -p ui_composition --bench composition_persistence --no-run) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 000f893594d6c77444e7311a9fbe70beffa8a2bcf172952d4feebc40a015b27b
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - persistence
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: b3561580d7ccec6f6db7c62050993213ccde8e46bae65f284257851460eb2624
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - deterministic
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 68617c23de94b23be94689e1dcfc194b12648595fd06ce55131b28056da71780
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - --bench
+  - composition_persistence
+  - --no-run
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 181e7b4d39c26d0197406720b3ccc3bc5fb3f9694522b25565b0253e1e3bd711
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 6967cc292bcd85550032913b4a39d26cf73974850803986fbb20181e13d739f8
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 3b43a19a517ddf901363ee76e9469e1813738a39dd28f4f83e7099b9f5c5e3bc
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 74c8f31975ea25fd9a6b66ba0a39a767fb8fa9b0a5fbdfb6602ba9f31c404036
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 582ae02869273f603daeb0d6f993dc781c43598508804c44d41a386dc76ef55f
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 8de10dba84a216e8f9775a93d1a9a31f0ca9948c55a10dcc32c454286697a95f
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/bundle.rs: 1f9c53a5afab3156a9f387379b154db1d36664da2d792d90733b229690ff3b5f
+    domain/ui/ui_composition/src/persistence/repository.rs: 25e7f3e106c638f6b0355dbbfa85b0c2b38be78af3bf29fc48f162b9a703a5c0
+    domain/ui/ui_composition/tests/persistence_bundle.rs: 1c40ab6fdd5250b83065e0d01957bfe0852383d3f110eddcbe1287fe14ac36d5
+    domain/ui/ui_composition/tests/persistence_repository.rs: ed4a51c96d4dcef5593b045f55f67c9effc2ec3cf31705bdc3bf73efffb77e4a

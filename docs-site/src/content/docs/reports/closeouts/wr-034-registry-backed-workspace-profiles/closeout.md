@@ -13,7 +13,7 @@ related:
   - ../../implementation-plans/wr-034-registry-backed-workspace-profiles/plan.md
   - ../../implementation-plans/wr-033-remove-legacy-tool-surface-identity/plan.md
   - ../../implementation-plans/wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
 ---
 

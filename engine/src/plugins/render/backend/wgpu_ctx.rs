@@ -4,14 +4,24 @@ use super::{
 };
 use anyhow::Result;
 use pollster::block_on;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use wgpu::*;
 use winit::window::Window;
 
+use super::RenderSurfaceId;
+
+#[derive(Debug)]
+struct WgpuSurfaceState<'window> {
+    surface: Surface<'window>,
+    config: SurfaceConfiguration,
+}
+
 #[derive(Debug)]
 pub struct WgpuCtx<'window> {
-    pub surface: Surface<'window>,
-    pub surface_config: SurfaceConfiguration,
+    instance: Instance,
+    adapter: Adapter,
+    surfaces: BTreeMap<RenderSurfaceId, WgpuSurfaceState<'window>>,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
     pub timing_capabilities: RenderBackendTimingCapabilities,
@@ -40,8 +50,15 @@ impl<'window> WgpuCtx<'window> {
         configure_surface(&surface, &device, &surface_config);
 
         Ok(Self {
-            surface,
-            surface_config,
+            instance,
+            adapter,
+            surfaces: BTreeMap::from([(
+                RenderSurfaceId::primary(),
+                WgpuSurfaceState {
+                    surface,
+                    config: surface_config,
+                },
+            )]),
             device,
             queue,
             timing_capabilities,
@@ -52,14 +69,63 @@ impl<'window> WgpuCtx<'window> {
         block_on(Self::new_async(window))
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.surface_config.width = width.max(1);
-        self.surface_config.height = height.max(1);
-        configure_surface(&self.surface, &self.device, &self.surface_config);
+    pub fn attach_surface(
+        &mut self,
+        render_surface_id: RenderSurfaceId,
+        window: Arc<Window>,
+        target_size_px: (u32, u32),
+    ) -> Result<()> {
+        let surface = self.instance.create_surface(window)?;
+        let caps = surface.get_capabilities(&self.adapter);
+        let format = preferred_surface_format(&caps);
+        let config = build_surface_config(
+            target_size_px.0,
+            target_size_px.1,
+            format,
+            caps.alpha_modes[0],
+        );
+        configure_surface(&surface, &self.device, &config);
+        self.surfaces
+            .insert(render_surface_id, WgpuSurfaceState { surface, config });
+        Ok(())
     }
 
-    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        self.surface.get_current_texture()
+    pub fn detach_surface(&mut self, render_surface_id: RenderSurfaceId) -> bool {
+        self.surfaces.remove(&render_surface_id).is_some()
+    }
+
+    pub fn has_surface(&self, render_surface_id: RenderSurfaceId) -> bool {
+        self.surfaces.contains_key(&render_surface_id)
+    }
+
+    pub fn surface_config(
+        &self,
+        render_surface_id: RenderSurfaceId,
+    ) -> Option<&SurfaceConfiguration> {
+        self.surfaces
+            .get(&render_surface_id)
+            .map(|state| &state.config)
+    }
+
+    pub fn resize(&mut self, render_surface_id: RenderSurfaceId, width: u32, height: u32) -> bool {
+        let Some(state) = self.surfaces.get_mut(&render_surface_id) else {
+            return false;
+        };
+        state.config.width = width.max(1);
+        state.config.height = height.max(1);
+        configure_surface(&state.surface, &self.device, &state.config);
+        true
+    }
+
+    pub fn get_current_texture(
+        &self,
+        render_surface_id: RenderSurfaceId,
+    ) -> Result<SurfaceTexture, SurfaceError> {
+        self.surfaces
+            .get(&render_surface_id)
+            .ok_or(SurfaceError::Lost)?
+            .surface
+            .get_current_texture()
     }
 
     pub fn timing_capabilities(&self) -> RenderBackendTimingCapabilities {

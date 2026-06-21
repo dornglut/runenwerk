@@ -50,7 +50,7 @@ pub(crate) fn dispatch_session_mutation(
             return Ok(());
         }
     }
-    let Some(surface_id) = target.active_tool_surface else {
+    let Some(mounted_unit_id) = target.mounted_unit_id else {
         app.append_console_line(
             "[entity_table] session mutation ignored (missing tool-surface session target)"
                 .to_string(),
@@ -59,7 +59,7 @@ pub(crate) fn dispatch_session_mutation(
     };
     let state = &mut app
         .surface_sessions_mut()
-        .session_mut(surface_id)
+        .session_mut(mounted_unit_id)
         .entity_table_ui_state;
     match mutation {
         EntityTableSessionMutation::AppendSearchText { text } => {
@@ -128,14 +128,14 @@ pub(crate) fn dispatch_domain_mutation(
                 }
             }
 
-            let Some(surface_id) = target.active_tool_surface else {
+            let Some(mounted_unit_id) = target.mounted_unit_id else {
                 app.append_console_line(
                     "[entity_table] selection ignored (missing tool-surface session target)"
                         .to_string(),
                 );
                 return Ok(());
             };
-            let session = app.surface_sessions().session_or_default(surface_id);
+            let session = app.surface_sessions().session_or_default(mounted_unit_id);
             let table_state = EntityTablePanelPresenter::build_state(
                 app.runtime(),
                 &session.entity_table_ui_state,
@@ -240,33 +240,24 @@ impl RatificationAdapter for EntityTableSelectionRatificationAdapter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::{PanelInstanceId, TabStackId, ToolSurfaceInstanceId};
+    use editor_shell::{PanelInstanceId, TabStackId};
 
     fn target_for_surface_kind(
         shell_state: &RunenwerkEditorShellState,
         kind: ToolSurfaceKind,
     ) -> StructuralCommandTarget {
-        let (panel_instance_id, tool_surface_id) = shell_state
-            .workspace_state()
-            .panels()
-            .filter_map(|panel| {
-                let tool_surface_id = panel.active_tool_surface?;
-                let surface = shell_state
-                    .workspace_state()
-                    .tool_surface(tool_surface_id)?;
-                editor_shell::stable_key_for_tool_surface_kind(kind)
-                    .as_ref()
-                    .is_some_and(|key| surface.stable_surface_key() == key)
-                    .then_some((panel.id, tool_surface_id))
-            })
-            .next()
+        let stable_key = editor_shell::stable_key_for_tool_surface_kind(kind).unwrap();
+        let mounted_unit_id = shell_state
+            .composition_runtime()
+            .extension()
+            .mounted_units()
+            .iter()
+            .find(|unit| unit.stable_content_key == stable_key.as_str())
+            .map(|unit| unit.mounted_unit_id)
             .expect("default shell state should contain requested surface kind");
-
-        StructuralCommandTarget {
-            panel_instance_id,
-            active_tool_surface: Some(tool_surface_id),
-            tab_stack_id: TabStackId::try_from_raw(1).unwrap(),
-        }
+        shell_state
+            .structural_command_target_for_mounted_unit(mounted_unit_id)
+            .expect("mounted unit should have a complete structural command target")
     }
 
     #[test]
@@ -274,9 +265,7 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         let shell_state = RunenwerkEditorShellState::new();
         let console_target = target_for_surface_kind(&shell_state, ToolSurfaceKind::Console);
-        let console_surface = console_target
-            .active_tool_surface
-            .expect("target should carry a concrete surface");
+        let console_unit = console_target.mounted_unit_id.unwrap();
 
         dispatch_session_mutation(
             &mut app,
@@ -289,7 +278,7 @@ mod tests {
         .expect("wrong surface kind should fail closed without mutation error");
 
         assert!(
-            app.surface_sessions().session(console_surface).is_none(),
+            app.surface_sessions().session(console_unit).is_none(),
             "entity-table session mutation must not create or mutate a console surface session",
         );
     }
@@ -300,9 +289,7 @@ mod tests {
         let shell_state = RunenwerkEditorShellState::new();
         let entity_table_target =
             target_for_surface_kind(&shell_state, ToolSurfaceKind::EntityTable);
-        let entity_table_surface = entity_table_target
-            .active_tool_surface
-            .expect("target should carry a concrete surface");
+        let entity_table_unit = entity_table_target.mounted_unit_id.unwrap();
 
         dispatch_session_mutation(
             &mut app,
@@ -316,7 +303,7 @@ mod tests {
 
         assert_eq!(
             app.surface_sessions()
-                .session(entity_table_surface)
+                .session(entity_table_unit)
                 .expect("entity table session should be created")
                 .entity_table_ui_state
                 .search_query(),
@@ -332,6 +319,7 @@ mod tests {
             &mut app,
             None,
             StructuralCommandTarget {
+                mounted_unit_id: None,
                 panel_instance_id: PanelInstanceId::try_from_raw(1).unwrap(),
                 active_tool_surface: None,
                 tab_stack_id: TabStackId::try_from_raw(1).unwrap(),
@@ -344,7 +332,7 @@ mod tests {
 
         assert!(
             app.surface_sessions()
-                .session(ToolSurfaceInstanceId::try_from_raw(1).unwrap())
+                .session(ui_composition::MountedUnitId::new(1))
                 .is_none(),
             "missing structural target must not create a fallback surface session",
         );

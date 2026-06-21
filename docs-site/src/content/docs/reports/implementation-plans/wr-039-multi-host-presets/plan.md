@@ -10,7 +10,7 @@ related_designs:
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../../../design/active/runenwerk-capability-workbench-target-architecture.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_roadmaps:
   - ../../../workspace/production-tracks.yaml
   - ../../../workspace/roadmap-items.yaml
@@ -51,7 +51,7 @@ by installed suites, profiles, provider-family mappings, and capability policy.
 - `docs-site/src/content/docs/reports/closeouts/wr-038-product-and-service-capability-declarations/closeout.md`
   records completed declarative product and service needs without moving
   semantic authority into `editor_shell`.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   is accepted and blocks reintroducing legacy surface-kind identity in host
   presets.
 

@@ -1,0 +1,140 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-003
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+evidence_kind: migration
+name: legacy_rejection
+status: passed
+produced_at: '2026-06-19T19:18:09Z'
+paths:
+- domain/ui/ui_composition/src/persistence/legacy.rs
+- domain/ui/ui_composition/tests/persistence_legacy.rs
+subject_paths:
+- domain/ui/ui_composition/src/persistence/legacy.rs
+- domain/ui/ui_composition/tests/persistence_legacy.rs
+subject_digests:
+  domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+  domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_composition persistence) -> exit 0
+- cargo:test (cargo test -p ui_composition deterministic) -> exit 0
+- cargo:test (cargo test -p ui_composition --bench composition_persistence --no-run) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 504c2abf6d7a64e65fa21b29234f77654978051f51725c94da642e6545995fca
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - persistence
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 6ec5cee4830c1b0bd376814b2397e4373f0d3871ae883e248b490e3f68163259
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - deterministic
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 4e935dd0fc1c0f6e6a93ef78bbdf36f6d8e5496de7e11f1facfd65b309ae9a4a
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - --bench
+  - composition_persistence
+  - --no-run
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 0cf0fba97a780aa1a90029de3dacd97a109a28060f1c7cd2757ab043edf1f82d
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 831c2d09f87f871f15060ec9a1acb4bee7f3f1be7daf94f118a04928283562b3
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: ce07e23b52d03e031ed6e01a7859b38039f1907ff54b1df3a1247f722eefb1b8
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 14c4d7b43c7c38e622ac3cb5c6112a07c4835b6f33c68b42c6524bc6ccf2f55d
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 39bddd7fc3d0e60f0a6d470639a050abe027c94d151e56684f2acaf388951743
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 88fc69cd4bbfbcdca848755e6e7c6ec36d0644efab2a4e0775fded7dc29bf5f8
+  subject_digests:
+    domain/ui/ui_composition/src/persistence/legacy.rs: 3fd468eab7cd1a232cd624d186ab74d1fe089af0acd3044ef24b6fde1585d7fe
+    domain/ui/ui_composition/tests/persistence_legacy.rs: 69bc72bab7bebd742fabe4bce7785b37f854727e77c6e853327db84b4a959b90

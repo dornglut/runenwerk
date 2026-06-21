@@ -14,7 +14,7 @@ related_adrs:
   - ../accepted/0001-use-domain-owned-commands.md
   - ../accepted/0004-separate-description-from-execution.md
   - ../accepted/0005-projections-are-derived-state.md
-  - ../accepted/0006-editor-surface-provider-plugin-seam.md
+  - ../superseded/0006-editor-surface-provider-plugin-seam.md
   - ../accepted/0010-graph-substrate-canvas-boundary.md
 ---
 
@@ -23,7 +23,7 @@ related_adrs:
 ## Status
 
 Superseded by
-[`../accepted/0012-capability-workbench-clean-break.md`](../accepted/0012-capability-workbench-clean-break.md).
+[`../superseded/0012-capability-workbench-clean-break.md`](../superseded/0012-capability-workbench-clean-break.md).
 
 ## Context
 

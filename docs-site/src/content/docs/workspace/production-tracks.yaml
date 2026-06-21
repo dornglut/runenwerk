@@ -448,8 +448,8 @@ tracks:
     - WR-036
     design_gates:
     - kind: adr
-      path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
-      required_status: accepted
+      path: docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md
+      required_status: superseded
       reason: The clean break intentionally drops legacy persisted workspace support.
     - kind: design
       path: docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md
@@ -498,8 +498,8 @@ tracks:
     - WR-037
     design_gates:
     - kind: adr
-      path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
-      required_status: accepted
+      path: docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md
+      required_status: superseded
       reason: Host policy depends on registry-owned identity and stable declarations.
     evidence_gates:
     - path: docs-site/src/content/docs/reports/closeouts/wr-037-host-capability-policy/closeout.md
@@ -558,8 +558,8 @@ tracks:
     - WR-039
     design_gates:
     - kind: adr
-      path: docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md
-      required_status: accepted
+      path: docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md
+      required_status: superseded
       reason: Multi-host modes must not restore legacy surface-kind identity.
     evidence_gates:
     - path: docs-site/src/content/docs/reports/closeouts/wr-039-multi-host-presets/closeout.md
@@ -6616,4 +6616,294 @@ tracks:
     completion_quality: not_applicable
     known_quality_gaps:
     - The track remains deferred until all previous milestones are implemented and closed with evidence.
+    completion_audit: ''
+- id: PT-UI-COMPOSITION-CUTOVER
+  title: App-Neutral UI Composition Clean Cutover
+  state: active
+  owner: ui
+  target_completion_quality: perfectionist_verified
+  strategic_goal: Replace editor workspace and ui_surface structural authority with deterministic app-neutral composition and derived adaptive behavior, proven by editor, Draw, headless fixtures, cleanup, and independent closeout.
+  success_criteria:
+  - '`ui_composition` is the only app-neutral structural definition, state, transaction, promotion, persistence-contract, liveness, and fixture authority.'
+  - '`ui_adaptive_composition` owns derived projection and proposal mechanics only and never commits structural or app state directly.'
+  - Editor and Draw are runtime consumers while browser, terminal, dashboard, mobile, and game examples remain headless conformance fixtures.
+  - The three-option visual-direction gate is selected before runtime chrome or docking implementation.
+  - Legacy workspace state becomes read-only after the editor static checkpoint and all structural mutation uses composition transactions after editor docking runtime.
+  - '`ui_surface`, writable workspace authority, old schemas, aliases, and transitional dependencies are deleted before final merge.'
+  - Final completion has no unowned, unexplained, or unaccepted risk and is backed by current validation, benchmark, visual, accessibility, and truth evidence.
+  milestones:
+  - id: PM-UI-COMPOSITION-001
+    title: Governance And Visual Direction Gate
+    kind: design
+    state: completed
+    goal: Accept core/adaptive architecture, ADR 0013, ordered production authority, and exactly three grounded visual directions before implementation.
+    outcome: Checkpoint 1 closes only after governance validates and the user selects one visual direction.
+    dependencies: []
+    roadmap_links:
+    - WR-180
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+      required_status: accepted
+      reason: Core architecture is accepted before track activation.
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+      required_status: accepted
+      reason: Adaptive architecture and visual gate are accepted before runtime work.
+    - kind: adr
+      path: docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+      required_status: accepted
+      reason: Ownership, supersession, and clean cutover require accepted decision authority.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-001 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - Roadmap and production sources contain the full ordered WR-180 through WR-189 sequence.
+    - Exactly three grounded 1440x1024 design directions are generated from actual Runenwerk captures and one is selected.
+    - No product/runtime code is changed by this milestone.
+    completion_quality: bounded_contract
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-001-governance-and-visual-direction-gate/closeout.md
+  - id: PM-UI-COMPOSITION-002
+    title: Core Contracts And Invariants
+    kind: implementation
+    state: completed
+    goal: Implement deterministic composition definitions, ratified state, typed transactions, diagnostics, liveness, promotion primitives, fixtures, and structural history.
+    outcome: The app-neutral core exists without adaptive, editor, Draw, provider-session, or app semantics.
+    dependencies:
+    - PM-UI-COMPOSITION-001
+    roadmap_links:
+    - WR-181
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+      required_status: accepted
+      reason: Core code follows the accepted structural contract.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-002 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - Formation, invariant, transaction, rejection, revision, inverse, liveness, diagnostic, and fixture contracts pass focused tests.
+    - No app-specific enum, provider session, arbitrary payload, or UiProgram coupling enters the core.
+    - Runtime/chrome/docking implementation remains untouched.
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+  - id: PM-UI-COMPOSITION-003
+    title: Persistence Envelopes And Deterministic Bundles
+    kind: implementation
+    state: completed
+    goal: Implement canonical RON, stable ordering, linked core/app hashes, atomic generation activation, promotion, last-good recovery, and legacy rejection.
+    outcome: Deterministic persistence is proven before editor or Draw state migrates.
+    dependencies:
+    - PM-UI-COMPOSITION-002
+    roadmap_links:
+    - WR-182
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+      required_status: accepted
+      reason: Persistence implements the accepted bundle contract.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-003 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - Repeated and insertion-order-varied serialization is byte-identical and hash-stable.
+    - Core/extension mismatch and interrupted writes preserve last-good state with stable diagnostics.
+    - V1-V5 workspace files are left untouched and explicitly rejected.
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
+  - id: PM-UI-COMPOSITION-004
+    title: Editor Static Projection
+    kind: implementation
+    state: completed
+    goal: Render the editor static arrangement from composition and editor-owned extension/provider state.
+    outcome: CompositionState becomes editor structural source while legacy WorkspaceState is read-only migration input.
+    dependencies:
+    - PM-UI-COMPOSITION-003
+    roadmap_links:
+    - WR-183
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+      required_status: accepted
+      reason: Editor projection must consume, not duplicate, the core authority.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-004 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - Static editor projection, provider resolution, liveness fallback, and extension persistence pass.
+    - Legacy workspace mutation is compile-time or dependency guarded as read-only after closeout.
+    - Redesigned docking chrome remains out of this milestone.
+    completion_quality: runtime_proven
+    known_quality_gaps:
+    - Adaptive docking and full legacy workspace/surface deletion remain later governed checkpoints.
+    - The static cutover state is branch-local and cannot merge before the remaining cleanup and final closeout gates.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
+  - id: PM-UI-COMPOSITION-005
+    title: Draw Static Projection
+    kind: implementation
+    state: completed
+    goal: Prove Runenwerk Draw as a real non-editor composition consumer without moving drawing-document truth.
+    outcome: Draw wide layout renders from generic composition and app-owned extension/provider state.
+    dependencies:
+    - PM-UI-COMPOSITION-004
+    roadmap_links:
+    - WR-184
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+      required_status: accepted
+      reason: Draw proves the same neutral core contract.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-005 requires its completed runtime closeout evidence.
+    acceptance_criteria:
+    - Canvas, toolbar, and support panels project from composition.
+    - Drawing document, stroke history, and product semantics remain app/domain-owned.
+    - No responsive drawer implementation lands yet.
+    completion_quality: runtime_proven
+    known_quality_gaps:
+    - Adaptive Draw reflow, narrow-target drawers, and Region Compass integration remain later governed checkpoints.
+    - The clean-cutover branch cannot merge before the legacy cleanup and final perfectionist closeout gates pass.
+    - Repository-wide Clippy is blocked by pre-existing ui_composition and ui_artifacts warnings; WR-189 can own ui_composition cleanup, while ui_artifacts requires an owning-track fix or explicit final-gate scope amendment before merge.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
+  - id: PM-UI-COMPOSITION-006
+    title: Adaptive Headless Proposals
+    kind: implementation
+    state: completed
+    goal: Implement transient adaptive projection, edit classification, reflow, docking proposals, previews, semantic input, promotion deltas, fixtures, and benchmark harnesses.
+    outcome: Adaptive mechanics are proven headlessly before product chrome consumes them.
+    dependencies:
+    - PM-UI-COMPOSITION-005
+    roadmap_links:
+    - WR-185
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+      required_status: accepted
+      reason: Adaptive code follows proposal-only ownership and the selected direction.
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-006 requires completed runtime and benchmark closeout evidence.
+    acceptance_criteria:
+    - Transient, structural, and promotion-candidate edits are classified deterministically.
+    - Pointer, keyboard, touch, and controller map through semantic actions.
+    - Browser, terminal, dashboard, mobile, and game fixtures contain no product behavior or forbidden imports.
+    completion_quality: runtime_proven
+    known_quality_gaps:
+    - Region Compass runtime chrome, editor transaction materialization, and native-window coordination remain governed by WR-186.
+    - Draw adaptive runtime, legacy-authority deletion, and independent perfectionist verification remain later checkpoints.
+    - Repository-wide Clippy findings in ui_composition, ui_artifacts, and ui_story remain explicit final-gate blockers requiring owning scope.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
+  - id: PM-UI-COMPOSITION-007
+    title: Editor Docking And Cross-Window Runtime
+    kind: implementation
+    state: ready_next
+    goal: Implement the selected editor docking UX, accessibility, semantic input parity, real native-window movement, close veto/rehome, and transaction-only mutation.
+    outcome: The editor proves complete adaptive docking and all structural mutation passes through composition transactions.
+    dependencies:
+    - PM-UI-COMPOSITION-006
+    roadmap_links:
+    - WR-186
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+      required_status: accepted
+      reason: Runtime UX follows the selected accepted adaptive target.
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md
+      required_status: accepted
+      reason: Native windows, render surfaces, and app bindings retain existing ownership.
+    evidence_gates: []
+    acceptance_criteria:
+    - Keyboard-only, pointer, touch, controller, focus, high contrast, text scale, reduced motion, labels, and cancel behavior pass.
+    - Cross-window moves and target close/rehome are atomic across app/window and composition policy.
+    - Direct legacy structural mutation is forbidden after closeout.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Draw adaptive proof and cleanup remain later.
+    completion_audit: ''
+  - id: PM-UI-COMPOSITION-008
+    title: Draw Adaptive Runtime
+    kind: implementation
+    state: ready_next
+    goal: Implement Draw responsive regions, drawers, overflow, restoration, accessibility, and explicit promotion.
+    outcome: Draw proves policy-driven adaptive composition while preserving a usable primary canvas and drawing truth boundaries.
+    dependencies:
+    - PM-UI-COMPOSITION-007
+    roadmap_links:
+    - WR-187
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+      required_status: accepted
+      reason: Draw responsive behavior remains transient and policy-driven.
+    evidence_gates: []
+    acceptance_criteria:
+    - Wide, narrow, scaled, drawer, overflow, restore, and promotion scenarios pass.
+    - Primary canvas remains usable and drawing-document authority is unchanged.
+    - Input and accessibility behavior follows the semantic contract.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Legacy deletion and independent audit remain later.
+    completion_audit: ''
+  - id: PM-UI-COMPOSITION-009
+    title: Legacy Authority Cleanup
+    kind: hardening
+    state: ready_next
+    goal: Map and delete ui_surface, rename and constrain ui_program_hosts, delete writable workspace authority and old schemas, and supersede active legacy documentation.
+    outcome: No compatibility authority or unmapped surface responsibility survives.
+    dependencies:
+    - PM-UI-COMPOSITION-008
+    roadmap_links:
+    - WR-188
+    design_gates:
+    - kind: adr
+      path: docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
+      required_status: accepted
+      reason: Cleanup follows accepted supersession and clean-break policy.
+    evidence_gates: []
+    acceptance_criteria:
+    - Every ui_surface public export maps to a replacement, historical status, or accepted deferred non-goal before deletion.
+    - ui_program_hosts owns only UiProgram lifecycle/event/output contracts.
+    - Active source, APIs, schemas, docs, and guides contain no legacy structural authority; historical evidence may retain terminology.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Independent final audit remains later.
+    completion_audit: ''
+  - id: PM-UI-COMPOSITION-010
+    title: Perfectionist Verification And Closeout
+    kind: release
+    state: ready_next
+    goal: Independently audit every accepted requirement, close findings, run measured benchmarks and full validation, refresh truth evidence, and close the track.
+    outcome: The cutover is merge-ready only with current zero-finding evidence and no unowned, unexplained, or unaccepted risk.
+    dependencies:
+    - PM-UI-COMPOSITION-009
+    roadmap_links:
+    - WR-189
+    design_gates:
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+      required_status: accepted
+      reason: Final audit covers the complete core contract.
+    - kind: design
+      path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+      required_status: accepted
+      reason: Final audit covers adaptive UX, accessibility, and performance.
+    evidence_gates: []
+    acceptance_criteria:
+    - Deterministic, invariant, persistence, fixture, editor, Draw, adaptive, accessibility, multi-window, cleanup, and diagnostic evidence is current.
+    - Separate benchmark paths meet p95 budgets and pointer movement performs no full graph clone.
+    - Full tests, Clippy, dependency, docs, roadmap, production, planning, PUML, and truth checks pass.
+    completion_quality: not_applicable
+    known_quality_gaps:
+    - Completion is unproven until the independent audit closes every finding.
     completion_audit: ''

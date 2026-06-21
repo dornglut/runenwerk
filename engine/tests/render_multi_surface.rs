@@ -1,8 +1,8 @@
 use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::inspect::inspect_prepared_render_frame;
 use engine::plugins::render::{
-    PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot,
-    PreparedSurfaceInfo, PreparedViewFrame,
+    PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame,
+    PreparedRenderFrameResource, PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedViewFrame,
 };
 use engine::runtime::NativeWindowId;
 use std::collections::BTreeMap;
@@ -94,4 +94,30 @@ fn render_multi_surface_registry_reserves_primary_surface_for_primary_native_win
         registry.surface_for_native_window(secondary_window),
         Some(secondary)
     );
+}
+
+#[test]
+fn render_multi_surface_prepared_frame_set_is_surface_keyed_and_deterministic() {
+    let primary = frame(PreparedSurfaceInfo::primary((1280, 720)));
+    let secondary_window = native_window(2);
+    let secondary_surface = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+    let secondary = frame(PreparedSurfaceInfo::for_surface(
+        secondary_surface,
+        secondary_window,
+        (900, 600),
+    ));
+    let mut resource = PreparedRenderFrameResource::default();
+
+    resource.publish_set([secondary, primary]);
+
+    let ordered_surface_ids = resource
+        .frames()
+        .map(|prepared| prepared.surface.render_surface_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ordered_surface_ids,
+        vec![RenderSurfaceId::primary(), secondary_surface]
+    );
+    assert_eq!(resource.take_all().len(), 2);
+    assert!(resource.frame().is_none());
 }

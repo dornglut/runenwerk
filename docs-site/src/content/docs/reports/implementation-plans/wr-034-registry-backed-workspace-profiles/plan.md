@@ -15,7 +15,7 @@ related_roadmaps:
   - ../../../workspace/production-track-index.md
   - ../../../workspace/roadmap-decision-register.md
 related_adrs:
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
 related_reports:
   - ../wr-032-typed-suite-surface-profile-and-provider-handles/plan.md
   - ../wr-033-remove-legacy-tool-surface-identity/plan.md
@@ -63,7 +63,7 @@ lists as the source of default workspace composition.
   provider requests, shell commands, create candidates, frame artifacts,
   Material Lab routing, and runtime bridge targeting now use stable surface
   keys instead of `ToolSurfaceKind`.
-- `docs-site/src/content/docs/adr/accepted/0012-capability-workbench-clean-break.md`
+- `docs-site/src/content/docs/adr/superseded/0012-capability-workbench-clean-break.md`
   requires profile construction to stop treating `ToolSurfaceKind` as
   Workbench identity.
 - `docs-site/src/content/docs/design/active/editor-tool-suite-registry-and-workbench-host-design.md`

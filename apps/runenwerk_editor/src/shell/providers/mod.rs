@@ -47,7 +47,6 @@ use editor_shell::{
     build_outliner_panel, build_self_authoring_control_panel, build_viewport_panel,
     editor_domain_proposal, entity_table_sort_button_widget_id, inspector_field_focus_widget_id,
     inspector_field_widget_id, surface_session_proposal, surface_widget_id,
-    tool_surface_capabilities_from_registry_or_legacy, tool_surface_definition_id,
     tool_surface_kind_for_stable_key, viewport_debug_stage_button_widget_id,
     viewport_field_color_ramp_button_widget_id, viewport_field_component_button_widget_id,
     viewport_field_debug_mode_button_widget_id, viewport_product_button_widget_id,
@@ -57,8 +56,12 @@ use editor_viewport::{
     ArtifactObservationFrame, ProducerHealth, ProductAvailabilityState,
     ViewportFieldVisualizerSettings,
 };
+use ui_composition::{ContentLiveness, ContentProjectionFallback};
 use ui_text::FontId;
 use ui_theme::ThemeTokens;
+
+#[cfg(test)]
+use editor_shell::tool_surface_definition_id;
 
 use crate::editor_app::{ConsoleMessage, ConsoleMessageKind, RunenwerkEditorApp};
 use crate::editor_panels::{
@@ -70,6 +73,7 @@ use crate::runtime::viewport::{
     ViewportInstanceRegistryResource,
 };
 use crate::shell::active_route_actions_by_target;
+use crate::shell::composition_surface_provider_requests;
 use crate::shell::tool_suites::{
     ASSET_BROWSER_SURFACE_KEY, DIAGNOSTICS_SURFACE_KEYS, EDITOR_CONSOLE_SURFACE_KEY,
     EDITOR_DESIGN_SURFACE_KEYS, FIELD_LAYER_STACK_SURFACE_KEY, FIELD_PRODUCT_VIEWER_SURFACE_KEY,
@@ -191,6 +195,15 @@ pub trait EditorSurfaceProvider: Send + Sync {
         request: &SurfaceProviderRequest,
         session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic>;
+    fn build_unavailable_frame(
+        &self,
+        _context: &SurfaceProviderBuildContext<'_>,
+        _request: &SurfaceProviderRequest,
+        _session: &SurfaceSessionState,
+        _liveness: ContentLiveness,
+    ) -> Option<ProviderSurfaceFrame> {
+        None
+    }
     fn map_action(
         &self,
         context: &SurfaceProviderDispatchContext<'_>,
@@ -381,10 +394,13 @@ impl EditorSurfaceProviderRegistry {
                 support_modes,
                 selected_provider_id: None,
                 availability: SurfaceProviderAvailability::Unsupported,
-                diagnostic: Some(SurfaceProviderDiagnostic::new(
-                    "editor.surface.unsupported_document",
-                    "workspace profile does not allow the active document kind",
-                )),
+                diagnostic: Some(
+                    SurfaceProviderDiagnostic::new(
+                        "editor_composition.provider.document_denied",
+                        "workspace profile does not allow the active document kind",
+                    )
+                    .for_mounted_unit(request.mounted_unit_id),
+                ),
             };
         }
 
@@ -404,10 +420,13 @@ impl EditorSurfaceProviderRegistry {
                 support_modes,
                 selected_provider_id: None,
                 availability: SurfaceProviderAvailability::Unsupported,
-                diagnostic: Some(SurfaceProviderDiagnostic::new(
-                    "editor.surface.unsupported_provider",
-                    "no provider supports this surface request",
-                )),
+                diagnostic: Some(
+                    SurfaceProviderDiagnostic::new(
+                        "editor_composition.provider.unsupported_profile",
+                        "no provider supports this surface request",
+                    )
+                    .for_mounted_unit(request.mounted_unit_id),
+                ),
             };
         }
 
@@ -426,10 +445,13 @@ impl EditorSurfaceProviderRegistry {
                 support_modes,
                 selected_provider_id: None,
                 availability: SurfaceProviderAvailability::Ambiguous,
-                diagnostic: Some(SurfaceProviderDiagnostic::new(
-                    "editor.surface.ambiguous_provider",
-                    "multiple providers support this request at the same priority",
-                )),
+                diagnostic: Some(
+                    SurfaceProviderDiagnostic::new(
+                        "editor_composition.provider.ambiguous",
+                        "multiple providers support this request at the same priority",
+                    )
+                    .for_mounted_unit(request.mounted_unit_id),
+                ),
             };
         };
 
@@ -469,27 +491,35 @@ impl EditorSurfaceProviderRegistry {
         session: &SurfaceSessionState,
         provider_family_map: Option<&ProviderFamilyProviderMap>,
     ) -> ResolvedSurfaceFrame {
+        if session.content_liveness != ContentLiveness::Resolved {
+            let provider = deterministic_provider(
+                self.providers
+                    .iter()
+                    .map(|provider| provider.as_ref())
+                    .filter(|provider| provider.supports(request))
+                    .collect(),
+            );
+            let app_projection = provider.and_then(|provider| {
+                provider
+                    .build_unavailable_frame(context, request, session, session.content_liveness)
+                    .map(|frame| (provider.descriptor(), frame))
+            });
+            return unavailable_content_frame(request, session.content_liveness, app_projection);
+        }
         if !workspace_allows_document(
             request,
             context.app.workbench_host().workspace_profile_registry(),
         ) {
-            return unsupported_frame(
-                request,
-                "Unsupported Document",
-                "editor.surface.unsupported_document",
-                "workspace profile does not allow the active document kind",
-            );
+            return unavailable_content_frame(request, ContentLiveness::Denied, None);
         }
 
         let candidate_providers =
             match self.candidate_providers_for_request(request, provider_family_map) {
                 Ok(candidate_providers) => candidate_providers,
                 Err(diagnostic) => {
-                    return diagnostic_frame(
+                    return unavailable_content_frame_with_diagnostic(
                         request,
-                        "Unsupported Surface",
-                        SurfaceProviderAvailability::Unsupported,
-                        SurfacePresentationArtifactKind::Unsupported,
+                        ContentLiveness::UnsupportedProfile,
                         diagnostic,
                     );
                 }
@@ -506,12 +536,7 @@ impl EditorSurfaceProviderRegistry {
             })
             .collect::<Vec<_>>();
         if supported.is_empty() {
-            return unsupported_frame(
-                request,
-                "Unsupported Surface",
-                "editor.surface.unsupported_provider",
-                "no provider supports this surface request",
-            );
+            return unavailable_content_frame(request, ContentLiveness::UnsupportedProfile, None);
         }
         let preferred_support_mode = supported.iter().fold(
             SurfaceProviderSupportMode::Unsupported,
@@ -525,11 +550,13 @@ impl EditorSurfaceProviderRegistry {
         let Some(provider) = deterministic_provider(supported) else {
             return diagnostic_frame(
                 request,
-                "Ambiguous Surface",
+                "Ambiguous Content Provider",
                 SurfaceProviderAvailability::Ambiguous,
                 SurfacePresentationArtifactKind::Ambiguous,
+                ContentLiveness::UnsupportedProfile,
+                ContentProjectionFallback::NeutralDiagnosticPlaceholder,
                 SurfaceProviderDiagnostic::new(
-                    "editor.surface.ambiguous_provider",
+                    "editor_composition.provider.ambiguous",
                     "multiple providers support this request at the same priority",
                 ),
             );
@@ -537,6 +564,9 @@ impl EditorSurfaceProviderRegistry {
         let descriptor = provider.descriptor();
         match provider.build_frame(context, request, session) {
             Ok(frame) => ResolvedSurfaceFrame {
+                mounted_unit_id: request.mounted_unit_id,
+                content_liveness: ui_composition::ContentLiveness::Resolved,
+                content_fallback: ui_composition::ContentProjectionFallback::ResolvedContent,
                 surface_instance_id: request.tool_surface_instance_id,
                 panel_instance_id: request.panel_instance_id,
                 tab_stack_id: request.tab_stack_id,
@@ -553,6 +583,8 @@ impl EditorSurfaceProviderRegistry {
                 descriptor.label,
                 SurfaceProviderAvailability::Error,
                 SurfacePresentationArtifactKind::Error,
+                ContentLiveness::Crashed,
+                ContentProjectionFallback::NeutralDiagnosticPlaceholder,
                 diagnostic,
             ),
         }
@@ -576,7 +608,7 @@ impl EditorSurfaceProviderRegistry {
             .collect::<BTreeSet<_>>();
         if provider_ids.is_empty() {
             return Err(SurfaceProviderDiagnostic::new(
-                "editor.surface.unassigned_provider_family",
+                "editor_composition.provider.unassigned_family",
                 format!(
                     "no providers are assigned to provider family `{}`",
                     provider_family_id.as_str()
@@ -709,26 +741,13 @@ pub fn build_editor_shell_frame_model_with_frame_metrics(
     ) {
         let session = app
             .surface_sessions()
-            .session_or_default(request.tool_surface_instance_id);
-        let frame = if request.provider_family_id.is_none() {
-            diagnostic_frame(
-                &request,
-                "Unsupported Surface",
-                SurfaceProviderAvailability::Unsupported,
-                SurfacePresentationArtifactKind::Unsupported,
-                SurfaceProviderDiagnostic::new(
-                    "editor.surface.unresolved_provider_family",
-                    "stable surface metadata did not resolve to a provider family",
-                ),
-            )
-        } else {
-            registry.resolve_frame_with_provider_family_map(
-                &context,
-                &request,
-                &session,
-                Some(app.workbench_host().provider_family_provider_map()),
-            )
-        };
+            .session_or_default(request.mounted_unit_id);
+        let frame = registry.resolve_frame_with_provider_family_map(
+            &context,
+            &request,
+            &session,
+            Some(app.workbench_host().provider_family_provider_map()),
+        );
         surfaces.insert(request.tool_surface_instance_id, frame);
     }
 
@@ -815,49 +834,7 @@ pub fn mounted_surface_requests_with_registry(
     document_context: SurfaceDocumentContext,
     tool_surface_registry: Option<&ToolSurfaceRegistry>,
 ) -> Vec<SurfaceProviderRequest> {
-    shell_state
-        .workspace_state()
-        .panels()
-        .filter_map(|panel| {
-            let surface_id = panel.active_tool_surface?;
-            let surface = shell_state.workspace_state().tool_surface(surface_id)?;
-            let tab_stack_id = shell_state
-                .workspace_state()
-                .tab_stacks()
-                .find(|stack| stack.ordered_panels.contains(&panel.id))
-                .map(|stack| stack.id)?;
-            let stable_surface_key = surface.stable_surface_key().clone();
-            let registered_surface =
-                tool_surface_registry.and_then(|registry| registry.get(&stable_surface_key));
-            let stable_key_kind = tool_surface_kind_for_stable_key(&stable_surface_key);
-            let surface_definition_id = stable_key_kind
-                .map(tool_surface_definition_id)
-                .unwrap_or(editor_shell::PLACEHOLDER_SURFACE_DEFINITION_ID);
-            let capabilities = stable_key_kind
-                .map(|kind| {
-                    tool_surface_capabilities_from_registry_or_legacy(
-                        kind,
-                        Some(&stable_surface_key),
-                        tool_surface_registry,
-                    )
-                })
-                .or_else(|| registered_surface.map(|definition| definition.capabilities))
-                .unwrap_or_default();
-            Some(SurfaceProviderRequest {
-                workspace_profile_id: shell_state.active_workspace_profile_id(),
-                document_context: document_context.clone(),
-                panel_instance_id: panel.id,
-                tab_stack_id,
-                tool_surface_instance_id: surface.id,
-                stable_surface_key,
-                provider_family_id: registered_surface
-                    .map(|definition| definition.provider_family.clone()),
-                surface_route: registered_surface.map(|definition| definition.route),
-                surface_definition_id,
-                capabilities,
-            })
-        })
-        .collect()
+    composition_surface_provider_requests(shell_state, document_context, tool_surface_registry)
 }
 
 pub fn active_document_context(app: &RunenwerkEditorApp) -> SurfaceDocumentContext {
@@ -1407,5 +1384,8 @@ mod self_authoring;
 #[cfg(test)]
 mod tests;
 
-use common::{deterministic_provider, diagnostic_frame, unsupported_frame};
+use common::{
+    deterministic_provider, diagnostic_frame, unavailable_content_frame,
+    unavailable_content_frame_with_diagnostic,
+};
 use self_authoring::SelfAuthoringProvider;

@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use editor_shell::{
-    ToolSurfaceInstanceId, ToolSurfaceMount, ToolSurfaceStableKey, ToolSurfaceState, WorkspaceState,
-};
+#[cfg(test)]
+use editor_shell::ToolSurfaceStableKey;
+use editor_shell::{EditorCompositionRuntime, ToolSurfaceInstanceId};
 use editor_viewport::ViewportId;
+use ui_composition::MountedUnitId;
 use ui_math::UiPoint;
 
 use crate::editor_features::viewport::ViewportInteractionState;
@@ -17,6 +18,7 @@ use crate::shell::tool_suites::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceSessionState {
+    pub content_liveness: ui_composition::ContentLiveness,
     pub entity_table_ui_state: EntityTablePanelUiState,
     pub inspector_ui_state: EditorInspectorUiState,
     pub viewport_interaction_state: ViewportInteractionState,
@@ -39,6 +41,7 @@ pub struct ViewportToolRadialSession {
 impl Default for SurfaceSessionState {
     fn default() -> Self {
         Self {
+            content_liveness: ui_composition::ContentLiveness::Resolved,
             entity_table_ui_state: EntityTablePanelUiState::new(),
             inspector_ui_state: EditorInspectorUiState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
@@ -54,84 +57,187 @@ impl Default for SurfaceSessionState {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SurfaceSessionStore {
-    sessions_by_surface: BTreeMap<ToolSurfaceInstanceId, SurfaceSessionState>,
+    sessions_by_mounted_unit: BTreeMap<MountedUnitId, SurfaceSessionState>,
+}
+
+#[cfg(test)]
+pub trait SurfaceSessionTestKey {
+    fn mounted_unit_id(self) -> MountedUnitId;
+}
+
+#[cfg(test)]
+impl SurfaceSessionTestKey for MountedUnitId {
+    fn mounted_unit_id(self) -> MountedUnitId {
+        self
+    }
+}
+
+#[cfg(test)]
+impl SurfaceSessionTestKey for ToolSurfaceInstanceId {
+    fn mounted_unit_id(self) -> MountedUnitId {
+        MountedUnitId::try_from_raw(self.raw()).expect("test surface IDs must be non-zero")
+    }
 }
 
 impl SurfaceSessionStore {
-    pub fn session(&self, surface_id: ToolSurfaceInstanceId) -> Option<&SurfaceSessionState> {
-        self.sessions_by_surface.get(&surface_id)
+    #[cfg(not(test))]
+    pub fn session(&self, mounted_unit_id: MountedUnitId) -> Option<&SurfaceSessionState> {
+        self.sessions_by_mounted_unit.get(&mounted_unit_id)
     }
 
-    pub fn session_or_default(&self, surface_id: ToolSurfaceInstanceId) -> SurfaceSessionState {
-        self.session(surface_id).cloned().unwrap_or_default()
+    #[cfg(test)]
+    pub fn session(&self, key: impl SurfaceSessionTestKey) -> Option<&SurfaceSessionState> {
+        self.sessions_by_mounted_unit.get(&key.mounted_unit_id())
     }
 
-    pub fn session_mut(&mut self, surface_id: ToolSurfaceInstanceId) -> &mut SurfaceSessionState {
-        self.sessions_by_surface.entry(surface_id).or_default()
+    #[cfg(not(test))]
+    pub fn session_or_default(&self, mounted_unit_id: MountedUnitId) -> SurfaceSessionState {
+        self.session(mounted_unit_id).cloned().unwrap_or_default()
     }
 
+    #[cfg(test)]
+    pub fn session_or_default(&self, key: impl SurfaceSessionTestKey) -> SurfaceSessionState {
+        self.session(key).cloned().unwrap_or_default()
+    }
+
+    #[cfg(not(test))]
+    pub fn session_mut(&mut self, mounted_unit_id: MountedUnitId) -> &mut SurfaceSessionState {
+        self.sessions_by_mounted_unit
+            .entry(mounted_unit_id)
+            .or_default()
+    }
+
+    #[cfg(test)]
+    pub fn session_mut(&mut self, key: impl SurfaceSessionTestKey) -> &mut SurfaceSessionState {
+        self.sessions_by_mounted_unit
+            .entry(key.mounted_unit_id())
+            .or_default()
+    }
+
+    #[cfg(not(test))]
     pub fn viewport_interaction_state(
         &self,
-        surface_id: ToolSurfaceInstanceId,
+        mounted_unit_id: MountedUnitId,
     ) -> Option<&ViewportInteractionState> {
-        self.session(surface_id)
+        self.session(mounted_unit_id)
             .map(|session| &session.viewport_interaction_state)
     }
 
+    #[cfg(test)]
+    pub fn viewport_interaction_state(
+        &self,
+        key: impl SurfaceSessionTestKey,
+    ) -> Option<&ViewportInteractionState> {
+        self.session(key)
+            .map(|session| &session.viewport_interaction_state)
+    }
+
+    #[cfg(not(test))]
     pub fn viewport_interaction_state_mut(
         &mut self,
-        surface_id: ToolSurfaceInstanceId,
+        mounted_unit_id: MountedUnitId,
     ) -> &mut ViewportInteractionState {
-        &mut self.session_mut(surface_id).viewport_interaction_state
+        &mut self.session_mut(mounted_unit_id).viewport_interaction_state
     }
 
+    #[cfg(test)]
+    pub fn viewport_interaction_state_mut(
+        &mut self,
+        key: impl SurfaceSessionTestKey,
+    ) -> &mut ViewportInteractionState {
+        &mut self.session_mut(key).viewport_interaction_state
+    }
+
+    #[cfg(not(test))]
     pub fn take_viewport_interaction_state(
         &mut self,
-        surface_id: ToolSurfaceInstanceId,
+        mounted_unit_id: MountedUnitId,
     ) -> ViewportInteractionState {
-        core::mem::take(&mut self.session_mut(surface_id).viewport_interaction_state)
+        core::mem::take(&mut self.session_mut(mounted_unit_id).viewport_interaction_state)
     }
 
+    #[cfg(test)]
+    pub fn take_viewport_interaction_state(
+        &mut self,
+        key: impl SurfaceSessionTestKey,
+    ) -> ViewportInteractionState {
+        core::mem::take(&mut self.session_mut(key).viewport_interaction_state)
+    }
+
+    #[cfg(not(test))]
     pub fn replace_viewport_interaction_state(
         &mut self,
-        surface_id: ToolSurfaceInstanceId,
+        mounted_unit_id: MountedUnitId,
         state: ViewportInteractionState,
     ) {
-        self.session_mut(surface_id).viewport_interaction_state = state;
+        self.session_mut(mounted_unit_id).viewport_interaction_state = state;
     }
 
-    pub fn active_viewport_drag_surface(&self) -> Option<ToolSurfaceInstanceId> {
-        let mut active = self
-            .sessions_by_surface
-            .iter()
-            .filter_map(|(surface_id, session)| {
-                session
-                    .viewport_interaction_state
-                    .drag_in_progress()
-                    .then_some(*surface_id)
-            });
+    #[cfg(test)]
+    pub fn replace_viewport_interaction_state(
+        &mut self,
+        key: impl SurfaceSessionTestKey,
+        state: ViewportInteractionState,
+    ) {
+        self.session_mut(key).viewport_interaction_state = state;
+    }
+
+    pub fn active_viewport_drag_mounted_unit(&self) -> Option<MountedUnitId> {
+        let mut active =
+            self.sessions_by_mounted_unit
+                .iter()
+                .filter_map(|(mounted_unit_id, session)| {
+                    session
+                        .viewport_interaction_state
+                        .drag_in_progress()
+                        .then_some(*mounted_unit_id)
+                });
         let first = active.next()?;
         active.next().is_none().then_some(first)
     }
 
-    pub fn prune_for_workspace(&mut self, workspace: &WorkspaceState) {
+    pub fn prune_for_composition(&mut self, runtime: &EditorCompositionRuntime) {
+        let live = runtime
+            .extension()
+            .mounted_units()
+            .iter()
+            .filter(|record| retains_live_session_key_str(&record.stable_content_key))
+            .map(|record| record.mounted_unit_id)
+            .collect::<BTreeSet<_>>();
+        self.sessions_by_mounted_unit
+            .retain(|mounted_unit_id, _| live.contains(mounted_unit_id));
+    }
+
+    #[cfg(test)]
+    pub fn prune_for_workspace(&mut self, workspace: &editor_shell::WorkspaceState) {
         let live = workspace
             .tool_surfaces()
-            .filter(|surface| retains_live_session(surface))
-            .filter(|surface| matches!(surface.mount, ToolSurfaceMount::Mounted { .. }))
-            .map(|surface| surface.id)
+            .filter(|surface| retains_live_session_key(surface.stable_surface_key()))
+            .filter(|surface| {
+                matches!(
+                    surface.mount,
+                    editor_shell::ToolSurfaceMount::Mounted { .. }
+                )
+            })
+            .filter_map(|surface| MountedUnitId::try_from_raw(surface.id.raw()).ok())
             .collect::<BTreeSet<_>>();
-        self.sessions_by_surface
-            .retain(|surface_id, _| live.contains(surface_id));
+        self.sessions_by_mounted_unit
+            .retain(|mounted_unit_id, _| live.contains(mounted_unit_id));
+    }
+
+    #[cfg(test)]
+    pub fn active_viewport_drag_surface(&self) -> Option<ToolSurfaceInstanceId> {
+        self.active_viewport_drag_mounted_unit()
+            .and_then(|id| ToolSurfaceInstanceId::try_from_raw(id.raw()).ok())
     }
 
     pub fn clear_transient(&mut self) {
-        self.sessions_by_surface.clear();
+        self.sessions_by_mounted_unit.clear();
     }
 
     pub fn close_all_viewport_options_menus(&mut self) -> bool {
         let mut changed = false;
-        for session in self.sessions_by_surface.values_mut() {
+        for session in self.sessions_by_mounted_unit.values_mut() {
             if session.viewport_options_menu_open {
                 session.viewport_options_menu_open = false;
                 changed = true;
@@ -142,7 +248,7 @@ impl SurfaceSessionStore {
 
     pub fn close_all_viewport_tool_radial_menus(&mut self) -> bool {
         let mut changed = false;
-        for session in self.sessions_by_surface.values_mut() {
+        for session in self.sessions_by_mounted_unit.values_mut() {
             if session.viewport_tool_radial_session.take().is_some() {
                 changed = true;
             }
@@ -152,7 +258,7 @@ impl SurfaceSessionStore {
 
     pub fn close_all_viewport_tools_menus(&mut self) -> bool {
         let mut changed = false;
-        for session in self.sessions_by_surface.values_mut() {
+        for session in self.sessions_by_mounted_unit.values_mut() {
             if session.viewport_tools_menu_open {
                 session.viewport_tools_menu_open = false;
                 changed = true;
@@ -163,7 +269,7 @@ impl SurfaceSessionStore {
 
     pub fn close_tab_hold_viewport_radial_menus(&mut self) -> bool {
         let mut changed = false;
-        for session in self.sessions_by_surface.values_mut() {
+        for session in self.sessions_by_mounted_unit.values_mut() {
             if session
                 .viewport_tool_radial_session
                 .is_some_and(|radial| radial.opened_by_tab_hold)
@@ -176,21 +282,22 @@ impl SurfaceSessionStore {
     }
 
     pub fn len(&self) -> usize {
-        self.sessions_by_surface.len()
+        self.sessions_by_mounted_unit.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.sessions_by_surface.is_empty()
+        self.sessions_by_mounted_unit.is_empty()
     }
 }
 
-fn retains_live_session(surface: &ToolSurfaceState) -> bool {
-    retains_live_session_key(surface.stable_surface_key())
+#[cfg(test)]
+fn retains_live_session_key(key: &ToolSurfaceStableKey) -> bool {
+    retains_live_session_key_str(key.as_str())
 }
 
-fn retains_live_session_key(key: &ToolSurfaceStableKey) -> bool {
+fn retains_live_session_key_str(key: &str) -> bool {
     matches!(
-        key.as_str(),
+        key,
         SCENE_OUTLINER_SURFACE_KEY
             | SCENE_ENTITY_TABLE_SURFACE_KEY
             | SCENE_VIEWPORT_SURFACE_KEY
@@ -206,7 +313,9 @@ fn retains_live_session_key(key: &ToolSurfaceStableKey) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::{WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation};
+    use editor_shell::{
+        WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
+    };
 
     #[test]
     fn prune_for_workspace_removes_unmounted_surface_sessions() {

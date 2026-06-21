@@ -189,6 +189,10 @@ pub enum WorkspaceProfileRegistryBackedBuildError {
         profile_id: WorkspaceProfileId,
         error: Box<WorkspaceDefinitionFormationError>,
     },
+    CompositionImport {
+        profile_id: WorkspaceProfileId,
+        error: Box<crate::EditorCompositionRejection>,
+    },
 }
 
 impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
@@ -236,6 +240,11 @@ impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
             Self::WorkspaceDefinitionFormation { profile_id, error } => write!(
                 f,
                 "workspace profile {} failed to form authored workspace layout: {error:?}",
+                profile_id.raw()
+            ),
+            Self::CompositionImport { profile_id, error } => write!(
+                f,
+                "workspace profile {} failed one-way composition import: {error}",
                 profile_id.raw()
             ),
         }

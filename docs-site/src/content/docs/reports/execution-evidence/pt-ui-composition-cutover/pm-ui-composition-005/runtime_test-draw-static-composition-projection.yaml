@@ -1,0 +1,156 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-005
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+evidence_kind: runtime_test
+name: draw_static_composition_projection
+status: passed
+produced_at: '2026-06-20T07:37:13Z'
+paths:
+- apps/runenwerk_draw/src/app/composition/runtime.rs
+- apps/runenwerk_draw/src/app/composition/projection.rs
+- apps/runenwerk_draw/src/app/state.rs
+- apps/runenwerk_draw/src/app/presentation.rs
+- apps/runenwerk_draw/tests/app_shell.rs
+- apps/runenwerk_draw/tests/composition_architecture_guards.rs
+subject_paths:
+- apps/runenwerk_draw/src/app/composition/runtime.rs
+- apps/runenwerk_draw/src/app/composition/projection.rs
+- apps/runenwerk_draw/src/app/state.rs
+- apps/runenwerk_draw/src/app/presentation.rs
+- apps/runenwerk_draw/tests/app_shell.rs
+- apps/runenwerk_draw/tests/composition_architecture_guards.rs
+subject_digests:
+  apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+  apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+  apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+  apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+  apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+  apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p runenwerk_draw --test app_shell) -> exit 0
+- cargo:test (cargo test -p runenwerk_draw --test composition_architecture_guards) -> exit 0
+- cargo:test (cargo test -p runenwerk_draw composition) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: b747ff974b0847e1be011473a5eb232464ab9586aa4258eda71a23529f31f37d
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_draw
+  - --test
+  - app_shell
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: aad71d89aa7fc9e27fd01359e5fe87042574f138a7abdb5ea8f9a03c453e3e54
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_draw
+  - --test
+  - composition_architecture_guards
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: 6e1ff876dd37fcbbc8aae1784a816a04653cb5951336841fe96435329aedb557
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_draw
+  - composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: 84c58436d83b3f4539803e700882a5fadb4405555381bf7cc1a3d3a06e5971bc
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: e329086ab30d0ba7a45106c63e7e8806ced4cf8ca11cf2ced5cb90ee89a4de53
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: bd3adf718b678ebf5aeeb35889fede8f3e0b6c3d9255b8440f3a76c85e4e9f19
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-073523z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  validation_result_digest: 76d726834de355e781ee593be7f80016729567ce320b680556995ed85d7581bd
+  subject_digests:
+    apps/runenwerk_draw/src/app/composition/projection.rs: 50c8e804ee4026340999659d2a052215383846d3bf3f4cd9e8d054c9801c2e4f
+    apps/runenwerk_draw/src/app/composition/runtime.rs: 902f58f4b5781e71cedfa578cdc2c3152bf11e171da7f147a07a8afbd7eb69e8
+    apps/runenwerk_draw/src/app/presentation.rs: c524ed4d18333fd3e52377e1fc7bfcb87c58569f7f8911bc9839bb04948593fa
+    apps/runenwerk_draw/src/app/state.rs: 3cd111b6bf495338547dfd995ed0559cc0a07867eec0b31102146e7f8bf8955a
+    apps/runenwerk_draw/tests/app_shell.rs: 47598f798a0ba2427acdb000aa7fc15eb9360121eb34a8d940772cc92e853aa5
+    apps/runenwerk_draw/tests/composition_architecture_guards.rs: ddddba6891c677e226d70d54e17a17fd408f2250fcf74436ddbb2741cf64fd87

@@ -513,6 +513,29 @@ package "PT-GAME-WORLDSPACE-UI Game World-Space UI" {
 
 }
 
+package "PT-UI-COMPOSITION-CUTOVER App-Neutral UI Composition Clean Cutover" {
+  component "PM-UI-COMPOSITION-001 Governance And Visual Direction Gate\nkind=design\nstate=completed\nWR=WR-180" as PM_UI_COMPOSITION_001 <<completed>>
+
+  component "PM-UI-COMPOSITION-002 Core Contracts And Invariants\nkind=implementation\nstate=completed\nWR=WR-181" as PM_UI_COMPOSITION_002 <<completed>>
+
+  component "PM-UI-COMPOSITION-003 Persistence Envelopes And Deterministic Bundles\nkind=implementation\nstate=completed\nWR=WR-182" as PM_UI_COMPOSITION_003 <<completed>>
+
+  component "PM-UI-COMPOSITION-004 Editor Static Projection\nkind=implementation\nstate=completed\nWR=WR-183" as PM_UI_COMPOSITION_004 <<completed>>
+
+  component "PM-UI-COMPOSITION-005 Draw Static Projection\nkind=implementation\nstate=completed\nWR=WR-184" as PM_UI_COMPOSITION_005 <<completed>>
+
+  component "PM-UI-COMPOSITION-006 Adaptive Headless Proposals\nkind=implementation\nstate=completed\nWR=WR-185" as PM_UI_COMPOSITION_006 <<completed>>
+
+  component "PM-UI-COMPOSITION-007 Editor Docking And Cross-Window Runtime\nkind=implementation\nstate=ready_next\nWR=WR-186" as PM_UI_COMPOSITION_007 <<ready_next>>
+
+  component "PM-UI-COMPOSITION-008 Draw Adaptive Runtime\nkind=implementation\nstate=ready_next\nWR=WR-187" as PM_UI_COMPOSITION_008 <<ready_next>>
+
+  component "PM-UI-COMPOSITION-009 Legacy Authority Cleanup\nkind=hardening\nstate=ready_next\nWR=WR-188" as PM_UI_COMPOSITION_009 <<ready_next>>
+
+  component "PM-UI-COMPOSITION-010 Perfectionist Verification And Closeout\nkind=release\nstate=ready_next\nWR=WR-189" as PM_UI_COMPOSITION_010 <<ready_next>>
+
+}
+
 PM_SDF_OW_001 -down-> PM_SDF_OW_002 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_003 : production prerequisite
 PM_SDF_OW_002 -down-> PM_SDF_OW_004 : production prerequisite
@@ -771,5 +794,14 @@ PM_GAME_WORLDSPACE_UI_002 -down-> PM_GAME_WORLDSPACE_UI_003 : production prerequ
 PM_VIEWPORT_PROJECTION_003 -down-> PM_GAME_WORLDSPACE_UI_003 : production prerequisite
 PM_GAME_WORLDSPACE_UI_003 -down-> PM_GAME_WORLDSPACE_UI_004 : production prerequisite
 PM_GAME_WORLDSPACE_UI_004 -down-> PM_GAME_WORLDSPACE_UI_005 : production prerequisite
+PM_UI_COMPOSITION_001 -down-> PM_UI_COMPOSITION_002 : production prerequisite
+PM_UI_COMPOSITION_002 -down-> PM_UI_COMPOSITION_003 : production prerequisite
+PM_UI_COMPOSITION_003 -down-> PM_UI_COMPOSITION_004 : production prerequisite
+PM_UI_COMPOSITION_004 -down-> PM_UI_COMPOSITION_005 : production prerequisite
+PM_UI_COMPOSITION_005 -down-> PM_UI_COMPOSITION_006 : production prerequisite
+PM_UI_COMPOSITION_006 -down-> PM_UI_COMPOSITION_007 : production prerequisite
+PM_UI_COMPOSITION_007 -down-> PM_UI_COMPOSITION_008 : production prerequisite
+PM_UI_COMPOSITION_008 -down-> PM_UI_COMPOSITION_009 : production prerequisite
+PM_UI_COMPOSITION_009 -down-> PM_UI_COMPOSITION_010 : production prerequisite
 
 @enduml

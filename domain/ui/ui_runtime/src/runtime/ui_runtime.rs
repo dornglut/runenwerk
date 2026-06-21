@@ -117,6 +117,9 @@ impl UiRuntime {
             UiInputEvent::Keyboard(keyboard) => {
                 self.dispatch_keyboard_event(tree, layouts, keyboard)
             }
+            // Semantic actions are resolved by the owning interaction domain because
+            // retained widgets cannot infer move, resize, or composition policy.
+            UiInputEvent::Semantic(_) => UiInputOutcome::ignored(),
             UiInputEvent::Text(text) => self.dispatch_text_event(tree, text),
         }
     }

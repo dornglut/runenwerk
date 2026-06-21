@@ -1,0 +1,93 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+run_id: pt-ui-composition-cutover-20260620-073318z
+started_at: '2026-06-20T07:34:47Z'
+actions:
+- status: failed
+  action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-005:WR-184
+  milestone_id: PM-UI-COMPOSITION-005
+  wr_id: WR-184
+  execution_kind: implementation_proof
+  executor_kind: product_implementation
+  writer_strategy: verification_writer
+  files_changed: []
+  validation_results: []
+  evidence_paths: []
+  transcript_paths: []
+  pre_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: a1bdd47e9bfc207d39a98fd921c89990e13b7c807f5361deba99b2a30fbe71e4
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 5c54848bb64bf54eaf6b93f0a9eea618b5a75124ebe4de8d0e912fb3c614a06b
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 65fa37827041e5bba3c3ed38a2b84c08333e176761fb000d8ec6ceb904a53202
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md: c3c252a21bc85147044d0cf7104bcd568292283ca458a47b86f6ed0c97605527
+    docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection/plan.contract.yaml: bd11cf8503bb4564a131bc41bc5cd99badb1cb6641476a93295af8af6167da78
+    docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection/plan.md: a16b5dc1d46e15c3e55895e2fb313b9fee55b6154e4879a72d76c23eda6b1213
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
+    tools/workflow/execution/compiler.py: dbe97100320329004d55a38b8ddb7d5c0f067f1ee75d476c8067604bb20b6b06
+    tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
+    tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
+    tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: 19e6f2e540e6a5c06daba03367d47d12a9bb23b1ef30c441b783a467d43d4c02
+    tools/workflow/execution/preflight.py: 1eedd7ed9484f7e6a8f266bc3ad85500a3917091a8f9407f766f2a0016cdf6c4
+    tools/workflow/execution/runner.py: f3712ac03ea35468c10c263e66911735df0a2feb91346ac86155c6ea43714ea8
+    tools/workflow/execution/workspace.py: 58a6d263e3eaec4e9dd0ac5e8631dc01401f02cbf5c9d6bcd3a78dab796fef6e
+    tools/workflow/execution/writers.py: 9737945f60484ed069e68bfef38a68b32210cb35347f29cb2d783f75586e464a
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 010fd3e098d74e025dbdd86a51983cdf506a6c1088c0095ed1edf51470de19e0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  post_action_digests:
+    docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: a1bdd47e9bfc207d39a98fd921c89990e13b7c807f5361deba99b2a30fbe71e4
+    docs-site/src/content/docs/workspace/production-tracks.yaml: 5c54848bb64bf54eaf6b93f0a9eea618b5a75124ebe4de8d0e912fb3c614a06b
+    docs-site/src/content/docs/workspace/roadmap-items.yaml: 65fa37827041e5bba3c3ed38a2b84c08333e176761fb000d8ec6ceb904a53202
+    docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
+    docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
+    docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
+    docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md: c3c252a21bc85147044d0cf7104bcd568292283ca458a47b86f6ed0c97605527
+    docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection/plan.contract.yaml: bd11cf8503bb4564a131bc41bc5cd99badb1cb6641476a93295af8af6167da78
+    docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection/plan.md: a16b5dc1d46e15c3e55895e2fb313b9fee55b6154e4879a72d76c23eda6b1213
+    tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
+    tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
+    tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
+    tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
+    tools/workflow/execution/compiler.py: dbe97100320329004d55a38b8ddb7d5c0f067f1ee75d476c8067604bb20b6b06
+    tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
+    tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
+    tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
+    tools/workflow/execution/locks.py: 9cb0156c3c63cb0840547033037437edd7eb9fd0fdc01e0de391b611ff41c9a1
+    tools/workflow/execution/planning.py: 19e6f2e540e6a5c06daba03367d47d12a9bb23b1ef30c441b783a467d43d4c02
+    tools/workflow/execution/preflight.py: 1eedd7ed9484f7e6a8f266bc3ad85500a3917091a8f9407f766f2a0016cdf6c4
+    tools/workflow/execution/runner.py: f3712ac03ea35468c10c263e66911735df0a2feb91346ac86155c6ea43714ea8
+    tools/workflow/execution/workspace.py: 58a6d263e3eaec4e9dd0ac5e8631dc01401f02cbf5c9d6bcd3a78dab796fef6e
+    tools/workflow/execution/writers.py: 9737945f60484ed069e68bfef38a68b32210cb35347f29cb2d783f75586e464a
+    tools/workflow/track_sources/__init__.py: 904202d049782ed7a43cb4cbc49b62e5734610977bb2f66d083db7c61766aa09
+    tools/workflow/track_sources/audit.py: 010fd3e098d74e025dbdd86a51983cdf506a6c1088c0095ed1edf51470de19e0
+    tools/workflow/track_sources/manifest.py: 6f5e1e47c0939802b72455d25ce8cef260be36336223c3d1bc88eefc3235384c
+    tools/workflow/track_sources/plan_metadata.py: 08148a040442692bd4e1c40953424a631bfa37aaa3ebda14adb82bf9c2cd2523
+    tools/workflow/track_sources/reports.py: 41faac7ffb8b3e21bd91ecee3410d49a08fd7389af075f29011d1a051e7df20c
+    tools/workflow/track_sources/scaffold.py: 2679f3d950bb9c14aa67b7a6f95f384861bdc2e96eca6b1e0bd0366bc39f7b08
+    tools/workflow/track_sources/scopes.py: 41a20bb59bcad86902486db925f260e2a1322b94bb4e64ce62469f1521fb133a
+    tools/workflow/track_sources/truth_claims.py: a5a847e7e79d49212cd427de464175b4709815dcb64ac69b30704fcb11460329
+    tools/workflow/production_track_cli.py: 84f99362af94111247b1568f78884f4871d8ee707627e2cc9940383775bf3861
+    tools/workflow/production_goal.py: f4736d09879fd68761ac28d23486c97e0d5621151f2a25a8f5f17cc6b3166634
+    tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
+    tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
+  next_legal_action: blocked; repair the failure and rerun the harness.
+  stop_reason: workflow error
+  error: "validation failed: task docs:validate -> exit 201\ntask: [docs:validate] uv run python tools/docs/validate_docs.py\nwarning: `VIRTUAL_ENV=/Users/joshua/Projekte/gamedev/Runenwerk/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead\nUsing CPython 3.14.6 interpreter at: /opt/homebrew/opt/python@3.14/bin/python3.14\nCreating virtual environment at: .venv\nWARN Retry attempt #0. Sleeping 1.787163992s before the next attempt\nWARN Retry attempt #0. Sleeping 1.574723621s before the next attempt\nWARN Retry attempt #0. Sleeping 1.592420188s before the next attempt\nWARN Retry attempt #0. Sleeping 1.4473914s before the next attempt\nWARN Retry attempt #0. Sleeping 1.337344173s before the next attempt\nWARN Retry attempt #0. Sleeping 1.012085511s before the next attempt\nWARN Retry attempt #0. Sleeping 1.758809938s before the next attempt\nWARN Retry attempt #0. Sleeping 1.055133907s before the next attempt\nWARN Retry attempt #0. Sleeping 1.803678948s before the next attempt\nWARN Retry attempt #0. Sleeping 1.485475283s before the next attempt\nWARN Retry attempt #0. Sleeping 1.824787842s before the next attempt\nWARN Retry attempt #0. Sleeping 1.659470186s before the next attempt\nWARN Retry attempt #0. Sleeping 1.686124753s before the next attempt\nWARN Retry attempt #0. Sleeping 1.804709945s before the next attempt\nWARN Retry attempt #0. Sleeping 1.114662406s before the next attempt\nWARN Retry attempt #0. Sleeping 1.729832238s before the next attempt\nWARN Retry attempt #0. Sleeping 1.754606661s before the next attempt\nWARN Retry attempt #0. Sleeping 1.984964367s before the next attempt\nWARN Retry attempt #0. Sleeping 1.127623096s before the next attempt\nWARN Retry attempt #0. Sleeping 1.128945366s before the next attempt\nWARN Retry attempt #0. Sleeping 1.729277853s before the next attempt\nWARN Retry attempt #0. Sleeping 1.308384148s before the next attempt\nWARN Retry attempt #0. Sleeping 1.113145599s before the next attempt\nWARN Retry attempt #0. Sleeping 1.707940713s before the next attempt\nWARN Retry attempt #1. Sleeping 1.674798446s before the next attempt\nWARN Retry attempt #1. Sleeping 1.623622614s before the next attempt\nWARN Retry attempt #1. Sleeping 3.155968558s before the next attempt\nWARN Retry attempt #1. Sleeping 3.258865394s before the next attempt\nWARN Retry attempt #1. Sleeping 1.160986048s before the next attempt\nWARN Retry attempt #1. Sleeping 2.291920616s before the next attempt\nWARN Retry attempt #1. Sleeping 3.830779076s before the next attempt\nWARN Retry attempt #1. Sleeping 2.094976098s before the next attempt\nWARN Retry attempt #1. Sleeping 3.584622646s before the next attempt\nWARN Retry attempt #1. Sleeping 2.039261201s before the next attempt\nWARN Retry attempt #1. Sleeping 3.959775916s before the next attempt\nWARN Retry attempt #1. Sleeping 3.8642359s before the next attempt\nWARN Retry attempt #1. Sleeping 1.027543096s before the next attempt\nWARN Retry attempt #1. Sleeping 3.809284264s before the next attempt\nWARN Retry attempt #1. Sleeping 3.588060469s before the next attempt\nWARN Retry attempt #1. Sleeping 1.119270376s before the next attempt\nWARN Retry attempt #1. Sleeping 2.880675607s before the next attempt\nWARN Retry attempt #1. Sleeping 1.210799835s before the next attempt\nWARN Retry attempt #1. Sleeping 1.492327703s before the next attempt\nWARN Retry attempt #1. Sleeping 1.423451498s before the next attempt\nWARN Retry attempt #1. Sleeping 1.204733698s before the next attempt\nWARN Retry attempt #1. Sleeping 1.701034052s before the next attempt\nWARN Retry attempt #1. Sleeping 3.337333208s before the next attempt\nWARN Retry attempt #1. Sleeping 2.10681751s before the next attempt\nWARN Retry attempt #2. Sleeping 1.800792151s before the next attempt\nWARN Retry attempt #2. Sleeping 3.039172334s before the next attempt\nWARN Retry attempt #2. Sleeping 1.729644761s before the next attempt\nWARN Retry attempt #2. Sleeping 5.957669108s before the next attempt\nWARN Retry attempt\
+    \ #2. Sleeping 7.306440213s before the next attempt\nWARN Retry attempt #2. Sleeping 5.390482041s before the next attempt\nWARN Retry attempt #2. Sleeping 2.301371512s before the next attempt\nWARN Retry attempt #2. Sleeping 1.692274646s before the next attempt\nWARN Retry attempt #2. Sleeping 7.392769667s before the next attempt\nWARN Retry attempt #2. Sleeping 6.926452001s before the next attempt\nWARN Retry attempt #2. Sleeping 3.298865445s before the next attempt\nWARN Retry attempt #2. Sleeping 5.03768037s before the next attempt\nWARN Retry attempt #2. Sleeping 4.713865048s before the next attempt\nWARN Retry attempt #2. Sleeping 3.81527538s before the next attempt\n  \xD7 Failed to download `pyyaml==6.0.3`\n  \u251C\u2500\u25B6 Request failed after 3 retries in 4.1s\n  \u251C\u2500\u25B6 Failed to fetch:\n  \u2502   `https://files.pythonhosted.org/packages/bd/9c/4d95bb87eb2063d20db7b60faa3840c1b18025517ae857371c4dd55a6b3a/pyyaml-6.0.3-cp314-cp314-macosx_11_0_arm64.whl`\n  \u251C\u2500\u25B6 error sending request for url\n  \u2502   (https://files.pythonhosted.org/packages/bd/9c/4d95bb87eb2063d20db7b60faa3840c1b18025517ae857371c4dd55a6b3a/pyyaml-6.0.3-cp314-cp314-macosx_11_0_arm64.whl)\n  \u251C\u2500\u25B6 client error (Connect)\n  \u251C\u2500\u25B6 dns error\n  \u2570\u2500\u25B6 failed to lookup address information: nodename nor servname provided, or\n      not known\n\nhint: `pyyaml` (v6.0.3) was included because `runenwerk-workflow` (v0.1.0) depends on `pyyaml`task: Failed to run task \"docs:validate\": exit status 1"
+updated_at: '2026-06-20T07:34:47Z'

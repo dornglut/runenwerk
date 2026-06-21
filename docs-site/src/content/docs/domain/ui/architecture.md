@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-06-20
 ---
 
 # UI Substrate Architecture
@@ -20,7 +20,7 @@ This document covers:
 
 - `domain/ui/*` crates
 - retained UI runtime crates under `domain/ui/*`
-- workspace/tool-surface host ownership in `editor_shell`
+- temporary workspace/tool-surface host ownership in `editor_shell`
 - runtime/app glue in `apps/runenwerk_editor`
 - engine render/UI integration paths used to submit and draw UI frames
 - general UI definition/formation contracts where they clarify `domain/ui` ownership
@@ -31,6 +31,21 @@ This document does not define visual design direction, docking product UX, or au
 As of the audited repository state:
 
 - `domain/ui/*` now owns both primitive crates and retained runtime crates (`ui_tree`, `ui_runtime`, `ui_widgets`).
+- `domain/ui/ui_composition` now owns the first app-neutral structural
+  composition and persistence checkpoints: versioned definitions, ratified
+  structural state, typed policy-authorized transactions, structural-only
+  history, explicit promotion, content-liveness vocabulary, neutral fixture
+  contracts, canonical linked bundles, and atomic generation activation.
+- Editor and Draw now form and project static structure through
+  `ui_composition`; legacy editor workspace structure is read-only
+  compatibility input until docking runtime completes.
+- `domain/ui/ui_adaptive_composition` now derives headless projection, reflow,
+  hit-test, preview, drag/resize-session, proposal, accessibility, and explicit
+  promotion-delta products from immutable composition snapshots. It has no
+  structural commit authority and no editor, Draw, engine, windowing, or
+  product semantics.
+- `ui_surface` remains temporary compatibility input for later mapped
+  replacement. It is not a parallel target authority.
 - Workspace identity/projection/reducer/tool-surface host infrastructure is implemented and belongs to `editor_shell`.
 - `apps/runenwerk_editor` owns app runtime bridging and viewport runtime resources/bindings.
 - Engine render integration for UI frame submission/extraction is implemented.
@@ -51,6 +66,21 @@ As of the audited repository state:
 - Substrate output now has baseline snapshot tests and a lightweight gallery harness example (`domain/ui/ui_runtime/examples/substrate_gallery.rs`).
 
 ## Current Crate Map
+
+- `domain/ui/ui_composition`
+  - app-neutral targets, roots, region graphs, opaque mounted-content
+    references, ratified structural state, typed transactions, structural
+    undo/redo, liveness/fallback vocabulary, promotion candidates, deterministic
+    core/app-extension envelopes, immutable generation activation/recovery,
+    stable diagnostics, and headless conformance fixtures. It has no production
+    dependency on another UI crate.
+- `domain/ui/ui_adaptive_composition`
+  - transient adaptive projection, constraints, hit testing, snap/dock
+    proposals and previews, drag/resize sessions, semantic-input handling,
+    accessibility/inspection metadata, explicit promotion deltas, neutral
+    fixtures, and performance probes. It consumes immutable
+    `ui_composition` snapshots and emits proposals; it never commits or
+    persists structural state.
 
 - `domain/ui/ui_math`
   - UI math/geometry primitives (`UiRect`, `UiSize`, `UiPoint`, `UiVector`, `UiInsets`, axis types).
@@ -207,6 +237,14 @@ Related non-`domain/ui` owners currently in the runtime path:
 
 ## What `domain/ui/*` Currently Owns
 
+- app-neutral structural composition through `ui_composition`, without
+  app/editor/provider/native-window semantics
+- deterministic composition documents, linked core/app-extension envelopes,
+  compare-and-swap generation activation, and explicit last-good recovery
+- transient adaptive composition projection, reflow, hit testing, previews,
+  drag/resize sessions, proposal classification, semantic input parity,
+  accessibility metadata, and explicit promotion deltas through
+  `ui_adaptive_composition`
 - reusable primitive contracts for UI math, input, layout, text, theme, and render-data payloads
 - stylus-capable pointer vocabulary for pressure, tilt, twist, tangential
   pressure, eraser/tool kind, device id, timestamped raw/coalesced/predicted
@@ -221,21 +259,32 @@ Related non-`domain/ui` owners currently in the runtime path:
 
 ## What `domain/ui/*` Does Not Yet Own
 
+- editor runtime chrome or docking integration onto the adaptive mechanism;
+  that remains the next governed checkpoint
+- Draw runtime interaction integration onto `ui_composition`; its static
+  structural projection is complete
 - fully converged app-side usage of all reusable controls in editor shell surfaces
-- shell workspace host semantics (correctly owned by `editor_shell`)
+- product-facing editor workspace wording and app extension semantics
+  (correctly editor/app-owned); legacy structural workspace state is now
+  read-only compatibility input until the docking-runtime gate
 - app/runtime glue and viewport product orchestration (correctly owned by `runenwerk_editor`)
 
 ## Relationship Between `domain/ui`, `editor_shell`, `runenwerk_editor`, and Engine Render Integration
 
 ### `domain/ui`
-Provides reusable engine-agnostic UI primitives/contracts and renderer-facing frame data contracts.
+Provides reusable engine-agnostic UI primitives/contracts, app-neutral
+structural composition, and renderer-facing frame data contracts.
 
 ### `editor_shell`
-Correct owner for:
+Currently owns:
 
-- workspace structural identity and graph state
-- host/panel/tab/tool-surface composition logic
+- legacy workspace structural identity and graph state as read-only
+  compatibility input until the docking-runtime gate
+- product-facing workspace wording, editor extension state, and
+  host/panel/tab/tool-surface semantics
 - shell command routing from UI interactions
+
+It is not the target owner of generic structural composition.
 
 ### `runenwerk_editor`
 Owns app/runtime glue:
@@ -261,6 +310,10 @@ This layer should continue consuming UI frame contracts, not owning UI semantics
    `apps/runenwerk_editor/src/runtime/viewport/routing.rs::resolve_structural_viewport_products`
    before first structural tool-surface binding generation. New viewport and
    product work must use structural viewport binding.
+4. Editor structural workspace state and `ui_surface` still predate the
+   accepted composition authority. Editor workspace structure is read-only;
+   `ui_surface` remains live only where its supersession map has not completed.
+   No new independent mutation path may be added to either boundary.
 
 ## Target Ownership Model
 Target ownership (partially implemented):
@@ -270,17 +323,37 @@ Target ownership (partially implemented):
   - reusable control runtime
   - input/focus/invalidation behavior
   - shared testing harness
+- `domain/ui/ui_composition` owns generic saved and ratified structural
+  composition, typed structural transactions, structural-only history, neutral
+  persistence envelopes, and atomic generation activation.
+- `domain/ui/ui_adaptive_composition` owns transient projection and interaction
+  mechanism over immutable composition snapshots and emits proposals for a
+  host policy to accept or reject. It does not own structural commits.
 - `domain/ui/ui_definition` owns general authored UI definition and formation contracts, while `domain/ui` runtime crates consume formed products.
-- `editor_shell` owns workspace host semantics and shell-specific composition/command routing only.
+- `editor_shell` owns product-facing workspace wording, editor-specific
+  extension semantics, and shell command routing; structural changes flow
+  through `ui_composition` after cutover.
 - `runenwerk_editor` owns app/runtime wiring and viewport/editor-specific runtime integrations.
 - engine render layer continues to own rendering integration and consumes UI frame contracts as data.
 
 ## Migration Direction
-The migration direction should remain dependency-aware and incremental:
+The accepted composition migration is a single-branch clean cutover with
+reviewable checkpoint gates, not indefinite dual authority:
 
-1. complete broader adoption of reusable controls across editor surfaces where ad hoc assembly remains.
-2. keep render-data embed slot IDs opaque and generic while preserving semantic slot taxonomy in `editor_viewport`, with explicit mapping at integration edges.
-3. keep substrate docs and tests aligned with implemented behavior per phase completion, including surface-flow tracing from observation to ratification.
+1. complete core contracts and invariants (complete);
+2. add deterministic persistence envelopes and atomic core/app extension
+   linking (complete);
+3. project editor and Draw static structure, then make legacy editor workspace
+   state read-only (complete);
+4. add adaptive headless proposals (implemented in WR-185), then integrate the
+   selected Region Compass direction in editor runtime (WR-186);
+5. route all structural mutation through `ui_composition` transactions after
+   the editor docking runtime gate;
+6. delete mapped legacy authorities at cleanup and run final truth closeout.
+
+Reusable retained controls and opaque render-data slot mapping continue as
+orthogonal substrate work; they must not reintroduce a second composition
+authority.
 
 ## Testing and Verification Expectations
 

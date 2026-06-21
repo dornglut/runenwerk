@@ -12,7 +12,7 @@ related:
   - ../../../workspace/production-tracks.yaml
   - ../../implementation-plans/wr-035-clean-persistence-format/plan.md
   - ../../implementation-plans/wr-034-registry-backed-workspace-profiles/plan.md
-  - ../../../adr/accepted/0012-capability-workbench-clean-break.md
+  - ../../../adr/superseded/0012-capability-workbench-clean-break.md
   - ../../../design/active/editor-tool-suite-registry-and-workbench-host-design.md
 ---
 

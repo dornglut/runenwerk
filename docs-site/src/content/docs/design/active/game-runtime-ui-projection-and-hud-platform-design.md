@@ -5,13 +5,14 @@ status: active
 owner: workspace
 layer: domain/ui-definition / engine-runtime
 canonical: true
-last_reviewed: 2026-05-24
+last_reviewed: 2026-06-19
 related_adrs:
   - ../../adr/accepted/0001-use-domain-owned-commands.md
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
   - ../../adr/accepted/0009-ui-interaction-formation-v2.md
 related_designs:
+  - ../accepted/app-neutral-ui-composition-design.md
   - ./ui-designer-interface-lab-platform-design.md
   - ../accepted/ui-designer-target-projection-profiles-design.md
   - ../accepted/ui-designer-view-model-capability-and-intent-binding-design.md
@@ -90,6 +91,24 @@ Governance findings for this design:
 - Unsupported target-profile features, denied capabilities, missing view-model
   packages, stale data, invalid intents, and unsafe editor/game coupling fail
   closed with typed diagnostics.
+
+### App-neutral composition boundary
+
+The accepted composition design provides reusable structure without promoting
+game HUD or world-space semantics into the current cutover:
+
+```text
+GameViewportTarget -> PresentationTarget profile
+GameScreen / HudRoot -> future app-owned composition definition
+HudRegion -> future region profile
+HudInstance -> future MountedContentRef profile
+```
+
+This does not resolve the future game-domain owner and does not authorize
+`domain/game_ui`, world-space UI, or runtime implementation. Concrete
+game state, entity anchors, culling, occlusion, input policy, and gameplay
+commands remain outside generic UI. Game runtime work must not consume editor
+workspace/tool-surface vocabulary.
 
 ## Current Code Truth
 

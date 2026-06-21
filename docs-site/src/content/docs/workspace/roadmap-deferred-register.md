@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-16
+last_reviewed: 2026-06-20
 related:
   - ./roadmap-items.yaml
   - ./roadmap-archive.yaml

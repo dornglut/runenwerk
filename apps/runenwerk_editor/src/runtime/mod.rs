@@ -1,4 +1,5 @@
 pub mod app;
+pub mod composition;
 pub mod expression;
 pub mod plugin;
 pub mod preview_process;

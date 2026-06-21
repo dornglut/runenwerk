@@ -1,0 +1,98 @@
+version: 1
+status: accepted
+wr_id: WR-185
+milestone_id: PM-UI-COMPOSITION-006
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: exact_adaptive_headless_proposal_cutover
+permissions_required: [crate_creation, product_code, product_implementation]
+writer_strategy: verification_writer
+allowed_outputs:
+- Cargo.toml
+- Cargo.lock
+- domain/ui/ui-crate-ownership.toml
+- domain/ui/ui_composition/src/transaction/apply.rs
+- domain/ui/ui_composition/src/history/journal.rs
+- domain/ui/ui_composition/tests/transaction_atomicity.rs
+- domain/ui/ui_input/Cargo.toml
+- domain/ui/ui_input/src/lib.rs
+- domain/ui/ui_testing/Cargo.toml
+- domain/ui/ui_testing/src/lib.rs
+- domain/ui/ui_testing/src/composition_fixture.rs
+- docs-site/src/content/docs/domain/ui/README.md
+- docs-site/src/content/docs/domain/ui/architecture.md
+- docs-site/src/content/docs/domain/ui/crate-ownership.md
+- docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+new_outputs:
+- domain/ui/ui_adaptive_composition/Cargo.toml
+- domain/ui/ui_adaptive_composition/src/lib.rs
+- domain/ui/ui_adaptive_composition/src/projection/mod.rs
+- domain/ui/ui_adaptive_composition/src/projection/model.rs
+- domain/ui/ui_adaptive_composition/src/projection/policy.rs
+- domain/ui/ui_adaptive_composition/src/interaction/mod.rs
+- domain/ui/ui_adaptive_composition/src/interaction/hit_index.rs
+- domain/ui/ui_adaptive_composition/src/interaction/session.rs
+- domain/ui/ui_adaptive_composition/src/proposal/mod.rs
+- domain/ui/ui_adaptive_composition/src/proposal/model.rs
+- domain/ui/ui_adaptive_composition/src/promotion/mod.rs
+- domain/ui/ui_adaptive_composition/src/accessibility/mod.rs
+- domain/ui/ui_adaptive_composition/src/diagnostic/mod.rs
+- domain/ui/ui_adaptive_composition/src/fixture/mod.rs
+- domain/ui/ui_adaptive_composition/benches/adaptive_composition.rs
+- domain/ui/ui_adaptive_composition/benchmark-artifacts/reference-desktop-2026-06-20.txt
+- domain/ui/ui_input/src/semantic.rs
+- domain/ui/ui_testing/src/adaptive_composition_fixture.rs
+- docs-site/src/content/docs/domain/ui/ui-adaptive-composition-usage.md
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/runtime_test-adaptive-proposals-and-semantic-input.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/fixture-neutral-adaptive-conformance.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/visual-accessibility-headless-metadata.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/diagnostics-performance-and-clone-probes.yaml
+forbidden_outputs:
+- domain/editor
+- apps
+- engine
+- domain/ui/ui_surface
+forbidden_patterns: []
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo fmt --all --check
+- cargo test -p ui_adaptive_composition
+- cargo test -p ui_input semantic
+- cargo test -p ui_testing adaptive_composition
+- cargo test -p ui_composition
+- task ui:dependencies
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: runtime_test
+  name: adaptive_proposals_and_semantic_input
+  paths: [docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/runtime_test-adaptive-proposals-and-semantic-input.yaml]
+  subject_paths: [domain/ui/ui_adaptive_composition/src/projection/model.rs, domain/ui/ui_adaptive_composition/src/interaction/session.rs, domain/ui/ui_adaptive_composition/src/proposal/model.rs, domain/ui/ui_input/src/semantic.rs]
+  validation_command_ids: [cargo:test]
+- kind: fixture
+  name: neutral_adaptive_conformance
+  paths: [docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/fixture-neutral-adaptive-conformance.yaml]
+  subject_paths: [domain/ui/ui_adaptive_composition/src/fixture/mod.rs, domain/ui/ui_testing/src/adaptive_composition_fixture.rs, domain/ui/ui_testing/src/composition_fixture.rs]
+- kind: visual
+  name: accessibility_headless_metadata
+  paths: [docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/visual-accessibility-headless-metadata.yaml]
+  subject_paths: [domain/ui/ui_adaptive_composition/src/accessibility/mod.rs, domain/ui/ui_input/src/semantic.rs]
+- kind: diagnostics
+  name: performance_and_clone_probes
+  paths: [docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-006/diagnostics-performance-and-clone-probes.yaml]
+  subject_paths: [domain/ui/ui_adaptive_composition/src/diagnostic/mod.rs, domain/ui/ui_adaptive_composition/src/interaction/hit_index.rs, domain/ui/ui_adaptive_composition/src/interaction/session.rs, domain/ui/ui_adaptive_composition/benches/adaptive_composition.rs, domain/ui/ui_composition/src/transaction/apply.rs, domain/ui/ui_composition/src/history/journal.rs, domain/ui/ui_composition/tests/transaction_atomicity.rs]
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *evidence
+rollback_policy: reject the checkpoint without changing editor or Draw runtime behavior and without granting adaptive mutation authority
+stop_conditions:
+- stop if adaptive code can mutate CompositionState or app state directly
+- stop if adaptive proposal intent fabricates topology-dependent CompositionCommand values
+- stop if raw gamepad app product editor engine or ui_surface semantics enter the crate
+- stop if cancel rollback changes canonical state
+- stop if pointer updates clone the full composition or region graph
+- stop if per-frame allocation scales with total graph size
+- stop if the 64-command large-layout mutation exceeds the accepted 1.50 ms p95 budget
+- stop if accessibility semantic parity fixture diagnostics or benchmark contracts are incomplete

@@ -686,6 +686,10 @@ fn layout_popup(
                     anchor.x,
                     anchor.y + anchor.height - popup_height - popup.offset,
                 ),
+                PopupPlacement::InsideCenter => (
+                    anchor.x + (anchor.width - popup_width) * 0.5,
+                    anchor.y + (anchor.height - popup_height) * 0.5,
+                ),
                 PopupPlacement::Outside { .. } => unreachable!(),
             };
             (target_x, target_y, popup_width, popup_height)
@@ -929,6 +933,10 @@ fn layout_overlay_adornment(
                 PopupPlacement::TopStart => {
                     (anchor.x + adornment.offset, anchor.y + adornment.offset)
                 }
+                PopupPlacement::InsideCenter => (
+                    anchor.x + (anchor.width - adornment_width) * 0.5,
+                    anchor.y + (anchor.height - adornment_height) * 0.5,
+                ),
                 PopupPlacement::InsideLeft
                 | PopupPlacement::InsideRight
                 | PopupPlacement::InsideTop
